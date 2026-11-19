@@ -286,5 +286,16 @@ export function capabilitySkillFiles(): Array<{ path: string; content: string }>
   return [{ path: CAPABILITY_SKILL_PATH, content: capabilitySkillBody() }];
 }
 
-/** Exported so the test can compare the switch's coverage against the enum, not a copy of it. */
-export const COVERED_STAGES: ReadonlyArray<string> = CANDIDATE_STAGES;
+/**
+ * There is deliberately NO re-export of the stage list here.
+ *
+ * An earlier version exported `COVERED_STAGES = CANDIDATE_STAGES` with the comment "exported so
+ * the test can compare the switch's coverage against the enum". Nothing imported it: the test
+ * imports `CANDIDATE_STAGES` from `./candidateStages` directly, which is the right source. So the
+ * export was dead and its comment named a consumer that did not exist.
+ *
+ * Removed rather than wired up, because a re-export is the weaker option either way: a test
+ * comparing this module's switch against a list THIS module publishes could be satisfied by
+ * trimming both together. Reading the enum from its own module is what makes the coverage
+ * assertion mean something.
+ */
