@@ -51,7 +51,7 @@ All commands below run from the repo root. `S=.claude/skills/plan-live-session/s
 | `out` | path | `docs/live-sessions/` | Where blueprints are written. |
 | `history` | path | `docs/live-sessions/history.json` | Testing only: point at a scratch history so test runs never pollute the real one. |
 
-**Parsing.** Accept `key=value` pairs (quote values with spaces) **and** plain sentences. Map a
+**Parsing.** Ignore every line that starts with `#` (the copy-paste skeleton in `docs/live-sessions/README.md` uses them for help text and sample values; a key whose value is empty, e.g. `week=`, means "use the default"). Accept `key=value` pairs (quote values with spaces) **and** plain sentences. Map a
 sentence onto the same parameters: "plan next week's live on subagents, students are on week 7" →
 `topic="subagents" students_on=7`; "a 90 minute public one about the FDE academy news" →
 `length=90 audience=public source=news topic="FDE academy"`. "next week" with no date → the default
