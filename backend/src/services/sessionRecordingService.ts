@@ -209,7 +209,11 @@ async function attachRecording(
   // Refusing returns `not_found`, which every caller already treats as "recording
   // is not available", and the file is removed so a retry does not accumulate
   // copies. `not_found` is honest here: no recording of this session arrived.
-  const substance = judgeRecordingSubstance({ durationSeconds: geometry?.durationSeconds });
+  const substance = judgeRecordingSubstance({
+    durationSeconds: geometry?.durationSeconds,
+    videoHeight: geometry?.height,
+    recordingType: (metadata as Record<string, unknown> | undefined)?.recording_type as string | undefined,
+  });
   if (!substance.substantive) {
     log('warn', 'recording_too_short_to_attach', {
       room_id: roomId,

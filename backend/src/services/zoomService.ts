@@ -749,8 +749,13 @@ export async function findRecordingInstancesByMeetingId(
     // The check is here, on the listing, rather than after the download: Zoom's
     // own per-file timings already answer it, so a clip we will refuse never costs
     // a download, a disk write, or a row. See recordingSubstance for the rule.
+    // Zoom's listing carries timings and a composition but no resolution, so the
+    // composition is this vantage point's evidence of content: a short
+    // `shared_screen*` recording is somebody rehearsing a presentation, which is
+    // real however brief. See recordingSubstance for why duration alone is unsafe.
     const verdict = judgeRecordingSubstance({
       durationSeconds: durationSecondsBetween(timing.startedAt, timing.endedAt),
+      recordingType: match.recordingType,
     });
     if (!verdict.substantive) {
       console.error(JSON.stringify({

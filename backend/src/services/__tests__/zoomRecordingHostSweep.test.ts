@@ -250,6 +250,35 @@ describe('the substance floor, applied at selection so a clip is never downloade
     expect(instances).toEqual([]);
   });
 
+  it('keeps a short instance that shared a screen, because that is a real rehearsal', async () => {
+    // Production holds three of these: 1080p shared_screen_with_speaker_view at
+    // 63, 71 and 79 seconds, students rehearsing in a practice room. Zoom's
+    // listing carries no resolution, so the composition is what saves them here.
+    mockHostPoolFailure('no pool in this test');
+    const { findRecordingInstancesByMeetingId } = loadZoomService();
+
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'tok-1', expires_in: 3600 }))
+      .mockResolvedValueOnce(jsonResponse({
+        meetings: [{
+          id: 83508993324,
+          uuid: 'practice-rehearsal',
+          topic: 'Practice: Regional Medical Courier System',
+          recording_files: [{
+            file_type: 'MP4',
+            file_size: 9432401,
+            download_url: 'https://zoom.us/rec/practice',
+            recording_type: 'shared_screen_with_speaker_view',
+            recording_start: '2026-10-09T19:00:00Z',
+            recording_end: '2026-10-09T19:01:19Z',
+          }],
+        }],
+      })) as any;
+
+    const instances = await findRecordingInstancesByMeetingId('83508993324', '2026-10-09', '2026-10-10');
+    expect(instances.map((i) => i.uuid)).toEqual(['practice-rehearsal']);
+  });
+
   it('keeps an instance Zoom gave no timings for, because unknown is not short', async () => {
     // A recording still being processed carries no per-file timings; withholding
     // it would lose a real session to a missing field.

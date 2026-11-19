@@ -32,7 +32,7 @@ import { ROOM_RECORDING_DIR } from '../config/upload';
 import { probeRecording } from '../services/communityRooms/recordingProbe';
 import {
   judgeRecordingSubstance,
-  durationFromResourceMetadata,
+  substanceFromResourceMetadata,
   MIN_SUBSTANTIVE_RECORDING_SECONDS,
 } from '../services/recordingSubstance';
 
@@ -66,7 +66,7 @@ async function main(): Promise<void> {
   for (const row of rows) {
     if (LIMIT && measured >= LIMIT) break;
 
-    if (durationFromResourceMetadata(row.metadata) !== null) {
+    if (substanceFromResourceMetadata(row.metadata).durationSeconds != null) {
       skippedHasDuration += 1;
       continue;
     }
@@ -87,7 +87,13 @@ async function main(): Promise<void> {
       continue;
     }
 
-    const verdict = judgeRecordingSubstance({ durationSeconds: geometry.durationSeconds });
+    // The same three inputs the listing will judge on, so this report says exactly
+    // what the Recordings tab will do rather than approximating it.
+    const verdict = judgeRecordingSubstance({
+      durationSeconds: geometry.durationSeconds,
+      videoHeight: geometry.height,
+      recordingType: (row.metadata || {}).recording_type as string | undefined,
+    });
     if (!verdict.substantive) belowFloor += 1;
 
     const seconds = geometry.durationSeconds === null ? 'unknown' : geometry.durationSeconds.toFixed(1);
