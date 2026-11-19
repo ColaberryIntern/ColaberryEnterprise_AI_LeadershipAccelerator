@@ -1,6 +1,6 @@
 # Sources: Your Know-How Is Now a Product
 
-Air date 2026-11-24. Every URL fetched while planning, with access date.
+Air date 2026-11-23. Every URL fetched while planning, with access date.
 
 | Title | Publisher | Published | Accessed | Fetched this run | Used for |
 |---|---|---|---|---|---|

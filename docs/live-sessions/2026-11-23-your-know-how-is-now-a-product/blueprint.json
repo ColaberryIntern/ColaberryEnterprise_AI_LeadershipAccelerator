@@ -13,7 +13,7 @@
       "news": null,
       "audience": "students",
       "length": 60,
-      "date": "2026-11-24",
+      "date": "2026-11-23",
       "last_session": null,
       "series": null,
       "guest": null,
@@ -29,7 +29,7 @@
     "belowPassMark": false,
     "stoppedAfter": "blueprint",
     "assumptions": [
-      "Air date 2026-11-24 is the default next open slot from history.js next-date: Tuesday 6:30 pm Central (CST), the schedule Ali confirmed on 2026-11-19 in history.json.",
+      "Air date 2026-11-23 is the next open slot from history.js next-date: Monday 6:30 pm Central (CST), the schedule Ali confirmed on 2026-11-19 in history.json.",
       "Planning ran on 2026-11-19, five days before air. News was searched for 2026-11-05 to 2026-11-19 only; ageDays is counted to the air date, so the Fable 5.2 launch (2026-11-09) is 15 days old on air and scored as a 14-90 day story.",
       "No previous session exists in history (this is Episode 1). The callback is to the student's current week: 'you just finished Week 1'. It says 'last session' nowhere and claims nothing about a prior live.",
       "students_on is unknown, so every week scored closeness 3 of 5.",
@@ -41,14 +41,15 @@
       "dayKind is architecture (day=architecture, Ali's choice): the session teaches Week 2's Architecture Day incident (monday.tension, realExample and microBuild: data-quality-gate, then executive-dashboard-brief), so the deck uses the Architecture Day template and renders no checkpoint slides.",
       "Next session is assumed to cover Week 3: Build Your First AI Workflow Assistant (load_curriculum.js next); the 2 AM question is kept as the tease. It is not yet planned.",
       "No proof= was given, so the Idea proof line is capped at 2 and the session's proof is the live build itself.",
-      "The CTA carries the air time (Tuesday, 6:30 pm Central): schedule values (air date, next air date, air time, episode, length) are exempt from the public-number check."
+      "The CTA carries the air time (Monday, 6:30 pm Central): schedule values (air date, next air date, air time, episode, length) are exempt from the public-number check.",
+      "Ali moved the weekly slot to Mondays 6:30 pm CST on 2026-11-19 after planning; air date shifted from 2026-11-24 to 2026-11-23 and news ages recomputed to the new date."
     ]
   },
   "header": {
     "title": "Your Know-How Is Now a Product",
     "openingLine": "Your company is about to package what you know into AI skills.",
     "promise": "Turn one routine check that lives in one person's head into a Claude skill that fires when someone asks in plain words, then chain it to a second skill that writes the update leadership needs.",
-    "airDate": "2026-11-24",
+    "airDate": "2026-11-23",
     "audience": "students",
     "lengthMinutes": 60,
     "series": "Weekly Live · Episode 1",
@@ -259,7 +260,7 @@
     ],
     "airTime": "18:30",
     "timezone": "America/Chicago",
-    "nextAirDate": "2026-12-01"
+    "nextAirDate": "2026-11-30"
   },
   "angles": [
     {
@@ -1144,7 +1145,7 @@
     },
     {
       "id": "f17",
-      "claim": "Air date Tuesday 2026-11-24, 6:30 pm Central (CST); next session Tuesday 2026-12-01.",
+      "claim": "Air date Monday 2026-11-23, 6:30 pm Central (CST); next session Monday 2026-11-30.",
       "usedIn": [
         "header.airDate",
         "checklist",
@@ -1456,7 +1457,7 @@
       "subject": "Your know-how, written down once",
       "recap": "We turned a morning data check that lived in one analyst's head into a Claude skill, broke it with a vague description, fixed it, and chained it to a brief leadership can act on. Your build-along: write the missing diagnosis skill and draft the description for one check from your own job."
     },
-    "nextLiveCta": "Next live, Tuesday, 6:30 pm Central (December 1): Week 3, Build Your First AI Workflow Assistant. It's 2 AM and nobody is at the keyboard. Does anything happen at all? Bring the check you named tonight."
+    "nextLiveCta": "Next live, Monday, 6:30 pm Central (November 30): Week 3, Build Your First AI Workflow Assistant. It's 2 AM and nobody is at the keyboard. Does anything happen at all? Bring the check you named tonight."
   },
   "scores": {
     "idea": 79,
@@ -1523,7 +1524,7 @@
     "Sandbox reset: morning-check holds only the two prepared skills, and the sample data is regenerated with obviously fictional names",
     "Sandbox prepared: etl-failure-triage and csv-summary created in the morning-check skills folder before the show (the teardown's routing competitors), and no other skills",
     "Both announcement pages (Claude for Manufacturing, Xforce by Xero) open in tabs for slide s3",
-    "Zoom/YouTube link posted; Tuesday 2026-11-24, 6:30 pm Central (CST)"
+    "Zoom/YouTube link posted; Monday 2026-11-23, 6:30 pm Central (CST)"
   ],
   "risks": [
     "The teardown can silently succeed: if 'Helps with data.' still fires with data-quality-gate, etl-failure-triage and csv-summary in the folder, say so out loud, read the two descriptions side by side, and name the trigger the vague one lacks.",
@@ -1953,42 +1954,42 @@
       "publisher": "Anthropic (claude.com)",
       "url": "https://claude.com/blog/claude-for-manufacturing",
       "publishedAt": "2026-11-12",
-      "ageDays": 12
+      "ageDays": 11
     },
     {
       "headline": "Xforce by Xero: Forward-Deployed Engineers & Partner Consultants to Help Accountants Put AI to Work",
       "publisher": "Xero",
       "url": "https://www.xero.com/media-releases/xforce-by-xero-forward-deployed-engineers-partner-consultants-help-accountants-put-ai-to-work/",
       "publishedAt": "2026-11-12",
-      "ageDays": 12
+      "ageDays": 11
     },
     {
       "headline": "Operate Claude Managed Agents inside your security perimeter",
       "publisher": "Anthropic (claude.com)",
       "url": "https://claude.com/resources/articles/self-hosted-claude-managed-agents",
       "publishedAt": "2026-11-12",
-      "ageDays": 12
+      "ageDays": 11
     },
     {
       "headline": "Anthropic launches Claude Meetings to turn workplace discussions into plans and tasks",
       "publisher": "TechCrunch",
       "url": "https://techcrunch.com/2026/11/10/anthropic-launches-claude-meetings-to-turn-workplace-discussions-into-plans-and-tasks/",
       "publishedAt": "2026-11-10",
-      "ageDays": 14
+      "ageDays": 13
     },
     {
       "headline": "Avochato Launches Claude Connector for Agentic Business Texting",
       "publisher": "PR Newswire",
       "url": "https://www.prnewswire.com/news-releases/avochato-launches-claude-connector-for-agentic-business-texting-302941601.html",
       "publishedAt": "2026-11-17",
-      "ageDays": 7
+      "ageDays": 6
     },
     {
       "headline": "Rule Launches an MCP Server So AI Assistants Can Draft Campaigns and Automations",
       "publisher": "SMTPedia",
       "url": "https://smtpedia.com/rule-mcp-server-launch/",
       "publishedAt": "2026-11-16",
-      "ageDays": 8
+      "ageDays": 7
     }
   ],
   "demand": [

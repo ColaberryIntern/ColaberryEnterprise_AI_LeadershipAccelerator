@@ -7,7 +7,7 @@
 | | |
 |---|---|
 | **Promise** | Turn one routine check that lives in one person's head into a Claude skill that fires when someone asks in plain words, then chain it to a second skill that writes the update leadership needs. |
-| **Air date** | 2026-11-24 |
+| **Air date** | 2026-11-23 |
 | **Audience** | students |
 | **Length** | 60 minutes |
 | **Curriculum** | Week 2: Agent Skills (build 3 skills) |
@@ -22,7 +22,7 @@
 
 **Assumptions made (no question was asked):**
 
-- Air date 2026-11-24 is the default next open slot from history.js next-date: Tuesday 6:30 pm Central (CST), the schedule Ali confirmed on 2026-11-19 in history.json.
+- Air date 2026-11-23 is the next open slot from history.js next-date: Monday 6:30 pm Central (CST), the schedule Ali confirmed on 2026-11-19 in history.json.
 - Planning ran on 2026-11-19, five days before air. News was searched for 2026-11-05 to 2026-11-19 only; ageDays is counted to the air date, so the Fable 5.2 launch (2026-11-09) is 15 days old on air and scored as a 14-90 day story.
 - No previous session exists in history (this is Episode 1). The callback is to the student's current week: 'you just finished Week 1'. It says 'last session' nowhere and claims nothing about a prior live.
 - students_on is unknown, so every week scored closeness 3 of 5.
@@ -34,7 +34,8 @@
 - dayKind is architecture (day=architecture, Ali's choice): the session teaches Week 2's Architecture Day incident (monday.tension, realExample and microBuild: data-quality-gate, then executive-dashboard-brief), so the deck uses the Architecture Day template and renders no checkpoint slides.
 - Next session is assumed to cover Week 3: Build Your First AI Workflow Assistant (load_curriculum.js next); the 2 AM question is kept as the tease. It is not yet planned.
 - No proof= was given, so the Idea proof line is capped at 2 and the session's proof is the live build itself.
-- The CTA carries the air time (Tuesday, 6:30 pm Central): schedule values (air date, next air date, air time, episode, length) are exempt from the public-number check.
+- The CTA carries the air time (Monday, 6:30 pm Central): schedule values (air date, next air date, air time, episode, length) are exempt from the public-number check.
+- Ali moved the weekly slot to Mondays 6:30 pm CST on 2026-11-19 after planning; air date shifted from 2026-11-24 to 2026-11-23 and news ages recomputed to the new date.
 
 ### Why this topic (data pick)
 
@@ -69,12 +70,12 @@ Picked week 2: Top-ranked row (82/100), two points clear of week 5. It is the on
 
 ### News and demand behind it
 
-- **Introducing Claude for Manufacturing**, Anthropic (claude.com), 2026-11-12 (12 days old): https://claude.com/blog/claude-for-manufacturing
-- **Xforce by Xero: Forward-Deployed Engineers & Partner Consultants to Help Accountants Put AI to Work**, Xero, 2026-11-12 (12 days old): https://www.xero.com/media-releases/xforce-by-xero-forward-deployed-engineers-partner-consultants-help-accountants-put-ai-to-work/
-- **Operate Claude Managed Agents inside your security perimeter**, Anthropic (claude.com), 2026-11-12 (12 days old): https://claude.com/resources/articles/self-hosted-claude-managed-agents
-- **Anthropic launches Claude Meetings to turn workplace discussions into plans and tasks**, TechCrunch, 2026-11-10 (14 days old): https://techcrunch.com/2026/11/10/anthropic-launches-claude-meetings-to-turn-workplace-discussions-into-plans-and-tasks/
-- **Avochato Launches Claude Connector for Agentic Business Texting**, PR Newswire, 2026-11-17 (7 days old): https://www.prnewswire.com/news-releases/avochato-launches-claude-connector-for-agentic-business-texting-302941601.html
-- **Rule Launches an MCP Server So AI Assistants Can Draft Campaigns and Automations**, SMTPedia, 2026-11-16 (8 days old): https://smtpedia.com/rule-mcp-server-launch/
+- **Introducing Claude for Manufacturing**, Anthropic (claude.com), 2026-11-12 (11 days old): https://claude.com/blog/claude-for-manufacturing
+- **Xforce by Xero: Forward-Deployed Engineers & Partner Consultants to Help Accountants Put AI to Work**, Xero, 2026-11-12 (11 days old): https://www.xero.com/media-releases/xforce-by-xero-forward-deployed-engineers-partner-consultants-help-accountants-put-ai-to-work/
+- **Operate Claude Managed Agents inside your security perimeter**, Anthropic (claude.com), 2026-11-12 (11 days old): https://claude.com/resources/articles/self-hosted-claude-managed-agents
+- **Anthropic launches Claude Meetings to turn workplace discussions into plans and tasks**, TechCrunch, 2026-11-10 (13 days old): https://techcrunch.com/2026/11/10/anthropic-launches-claude-meetings-to-turn-workplace-discussions-into-plans-and-tasks/
+- **Avochato Launches Claude Connector for Agentic Business Texting**, PR Newswire, 2026-11-17 (6 days old): https://www.prnewswire.com/news-releases/avochato-launches-claude-connector-for-agentic-business-texting-302941601.html
+- **Rule Launches an MCP Server So AI Assistants Can Draft Campaigns and Automations**, SMTPedia, 2026-11-16 (7 days old): https://smtpedia.com/rule-mcp-server-launch/
 - ▶ CLAUDE SKILLS FULL COURSE 2.5 HOURS (Beginner to Expert): @princeeliot, 109221 views vs channel median 24000: https://www.youtube.com/watch?v=-DawhgUKiOg
 - ▶ The ONLY Claude Skills Tutorial Beginners Need in 2026 (110 days old, outside the 90-day window, not scored): @100xEngineers, 135903 views vs channel median 25700: https://www.youtube.com/watch?v=TyB7kLZPVKo
 - ▶ MCP Servers Explained & Built: @TechWithTim, 134547 views vs channel median 82000: https://www.youtube.com/watch?v=He8tUwLzLnU
@@ -414,7 +415,7 @@ flowchart LR
 | f14 | Week 3's 2 AM question: 'It's 2 AM and nobody is at the keyboard. Does anything happen at all?' | ✔ checked 2026-11-19: `docs/training-program-2026-q3/TWELVE_WEEK_STORY_ARC.md:70` | docs/training-program-2026-q3/TWELVE_WEEK_STORY_ARC.md | — | n/a Curriculum device; next session's topic is an assumption. | students.openQuestion, runOfShow.recap, slides.s12, contentYield.nextLiveCta |
 | f15 | Trust ladder, Weeks 1-2: 'You approve every single action'. | ✔ checked 2026-11-19: `docs/training-program-2026-q3/TWELVE_WEEK_STORY_ARC.md:90` | docs/training-program-2026-q3/TWELVE_WEEK_STORY_ARC.md | — | n/a Curriculum device. | participation.storyBeats.b4, slides.s12, runOfShow.recap |
 | f16 | Series name 'Weekly Live · Episode 1'. | ✔ checked 2026-11-19: `.claude/skills/plan-live-session/SKILL.md:94`, `.claude/skills/plan-live-session/scripts/history.js:93` | Skill default series name: plan-live-session SKILL.md (series default) and history.js episode = 1 | — | n/a Out of registry scope; an internal series label. | header.series, slides.s1 |
-| f17 | Air date Tuesday 2026-11-24, 6:30 pm Central (CST); next session Tuesday 2026-12-01. | ✔ checked 2026-11-19: `Ali confirmed 2026-11-19` | history.json schedule (confirmed by Ali 2026-11-19) and history.js next-date | — | n/a Schedule, not a public claim. | header.airDate, checklist, contentYield.nextLiveCta |
+| f17 | Air date Monday 2026-11-23, 6:30 pm Central (CST); next session Monday 2026-11-30. | ✔ checked 2026-11-19: `Ali confirmed 2026-11-19` | history.json schedule (confirmed by Ali 2026-11-19) and history.js next-date | — | n/a Schedule, not a public claim. | header.airDate, checklist, contentYield.nextLiveCta |
 | f18 | The program is the Forward Deployed AI Engineer Accelerator. | ✔ checked 2026-11-19: `backend/src/data/canonicalCourse.ts:145` | backend/src/data/canonicalCourse.ts (curriculum engine prompt) | — | **not registered** not registered. Program name kept out of public copy until registered. | students.applyToOwnPlan |
 | f19 | Claude Code is an Anthropic product (named in the Fable 5.2 announcement as a surface where fast mode is available); we build on Claude and Claude Code. | sourced | [Anthropic: Introducing Claude Fable 5.2 and Claude Mythos 5.2](https://www.anthropic.com/news/claude-fable-and-mythos-5-2) | 2026-11-09 | `anthropic.capability` VERIFIED, approved for all routes ('We build on Claude and Claude Code.'). Never phrase as a partnership: anthropic.partner is DO_NOT_PUBLISH. | slides, demo, contentYield |
 | f20 | The sample orders file, the morning-check folder, the planted problems, the prepared competitor skill csv-summary and the month-end invoice fallback example are fictional teaching material created for the demo. | ✔ checked 2026-11-19: `blueprint:demo.claudeCodeInstructions[0]`, `blueprint:slides[10].speakerNote` · _illustrative_ | This blueprint's own sandbox design (demo instruction 1, hot-seat fallback note) | — | n/a Illustrative; shown on air under a visible SAMPLE DATA label. | demo, slides.s5, slides.s11 |
@@ -537,7 +538,7 @@ Bring one check from your own job that would stop running if you were out tomorr
 
 We turned a morning data check that lived in one analyst's head into a Claude skill, broke it with a vague description, fixed it, and chained it to a brief leadership can act on. Your build-along: write the missing diagnosis skill and draft the description for one check from your own job.
 
-**Next live CTA:** Next live, Tuesday, 6:30 pm Central (December 1): Week 3, Build Your First AI Workflow Assistant. It's 2 AM and nobody is at the keyboard. Does anything happen at all? Bring the check you named tonight.
+**Next live CTA:** Next live, Monday, 6:30 pm Central (November 30): Week 3, Build Your First AI Workflow Assistant. It's 2 AM and nobody is at the keyboard. Does anything happen at all? Bring the check you named tonight.
 
 ## 10. Scores
 
@@ -559,7 +560,7 @@ We turned a morning data check that lived in one analyst's head into a Claude sk
 - [ ] Sandbox reset: morning-check holds only the two prepared skills, and the sample data is regenerated with obviously fictional names
 - [ ] Sandbox prepared: etl-failure-triage and csv-summary created in the morning-check skills folder before the show (the teardown's routing competitors), and no other skills
 - [ ] Both announcement pages (Claude for Manufacturing, Xforce by Xero) open in tabs for slide s3
-- [ ] Zoom/YouTube link posted; Tuesday 2026-11-24, 6:30 pm Central (CST)
+- [ ] Zoom/YouTube link posted; Monday 2026-11-23, 6:30 pm Central (CST)
 
 **Risks:**
 

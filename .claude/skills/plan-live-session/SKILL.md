@@ -1,6 +1,6 @@
 ---
 name: plan-live-session
-description: Plan Ali's weekly live session end to end. Picks the topic from the 12-week curriculum, this fortnight's AI news and proven YouTube demand; writes and scores story angles; tightens the best one until it passes the Idea rubric; then writes a complete session blueprint (run-of-show, sound bites, slides, sourced facts, participation, live Claude Code demo, student build-along, content yield for an 18–24 minute avatar video plus Shorts/quote cards/LinkedIn/email, scores, checklist, and a build-class-deck handoff). Runs with no arguments and never asks a question unless interactive=true. Invoke on "/plan-live-session", "plan next week's live", "plan the live session on X", "what should this week's live be", "blueprint for Tuesday's live". It never builds the deck; build-class-deck does that from the blueprint.
+description: Plan Ali's weekly live session end to end. Picks the topic from the 12-week curriculum, this fortnight's AI news and proven YouTube demand; writes and scores story angles; tightens the best one until it passes the Idea rubric; then writes a complete session blueprint (run-of-show, sound bites, slides, sourced facts, participation, live Claude Code demo, student build-along, content yield for an 18–24 minute avatar video plus Shorts/quote cards/LinkedIn/email, scores, checklist, and a build-class-deck handoff). Runs with no arguments and never asks a question unless interactive=true. Invoke on "/plan-live-session", "plan next week's live", "plan the live session on X", "what should this week's live be", "blueprint for Monday's live". It never builds the deck; build-class-deck does that from the blueprint.
 user-invocable: true
 ---
 
@@ -365,7 +365,7 @@ prompts). **Where the two disagree, `build-class-deck` wins**: the arc's rule 2 
    December 1", "Dec. 1", "12/1"), the air time from `header.airTime` / history.json
    `schedule.time` ("6:30 pm Central"), the episode number in `header.series`, `lengthMinutes`
    ("60 minutes") and run-of-show minute stamps ("minute 20", "the first 20 minutes"). So the CTA
-   can say "Tuesday, December 1, 6:30 pm Central".
+   can say "Monday, November 30, 6:30 pm Central".
    A claim whose registry entry is `DO_NOT_PUBLISH` or `NEEDS_VERIFICATION` does not appear in
    public-facing copy (LinkedIn, video, Shorts, quote cards, public segments) at all. Neither does
    a `verify` number. A number from a labeled teaching scenario (the curriculum's made-up

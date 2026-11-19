@@ -1,14 +1,14 @@
 {
   "about": "Every live-session blueprint written by the plan-live-session skill. Append-only via history.js; fill `results` by hand after the session airs.",
   "schedule": {
-    "weekday": "Tuesday",
+    "weekday": "Monday",
     "time": "18:30",
     "timezone": "America/Chicago",
-    "note": "Confirmed by Ali 2026-11-19: Tuesdays 6:30 pm Central. Used when no date= is given."
+    "note": "Confirmed by Ali 2026-11-19: Mondays 6:30 pm Central (changed from Tuesdays the same day). Used when no date= is given."
   },
   "sessions": [
     {
-      "date": "2026-11-24",
+      "date": "2026-11-23",
       "week": 2,
       "title": "Your Know-How Is Now a Product",
       "lens": "news-consequence",
@@ -22,8 +22,8 @@
       },
       "belowPassMark": false,
       "covered": "Turn one routine check that lives in one person's head into a Claude skill that fires when someone asks in plain words, then chain it to a second skill that writes the update leadership needs.",
-      "blueprint": "docs/live-sessions/2026-11-24-your-know-how-is-now-a-product/blueprint.json",
-      "createdAt": "2026-11-19T09:22:58.704Z",
+      "blueprint": "docs/live-sessions/2026-11-23-your-know-how-is-now-a-product/blueprint.json",
+      "createdAt": "2026-11-19T18:18:25.413Z",
       "results": null
     }
   ]

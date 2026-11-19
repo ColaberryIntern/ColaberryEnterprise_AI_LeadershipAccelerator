@@ -54,7 +54,7 @@ audience=students
 length=60
 # 60 | 90 | 120 minutes
 date=
-# e.g. date=2026-12-01   (blank = next open Tuesday, 6:30 pm Central)
+# e.g. date=2026-12-01   (blank = next open Monday, 6:30 pm Central)
 series=""
 # e.g. series="Forward Deployed Live, Episode 4"   (blank = "Weekly Live · Episode N")
 guest=""
@@ -89,7 +89,7 @@ stop_after=blueprint
 
 ## history.json
 
-- `schedule` sets the default air date: the next `weekday` with no blueprint yet. (Tuesday 6:30 pm Central,
+- `schedule` sets the default air date: the next `weekday` with no blueprint yet. (Monday 6:30 pm Central,
   confirmed by Ali 2026-11-19). Change it here if the slot moves.
 - `sessions[]` is appended by `scripts/history.js append` after a blueprint validates.
 - After a session airs, fill its `results` by hand, for example
