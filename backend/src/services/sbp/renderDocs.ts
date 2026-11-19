@@ -30,6 +30,10 @@ import {
 } from './commandCenterStory';
 import type { RepoWriteAccess } from './repoConnect/connectionAccess';
 import {
+  BUILDER_PATH_CHECKLIST_PATH,
+  builderPathChecklist,
+} from '../agentDomain/builderPathChecklist';
+import {
   byKey, renderClaudeMd, renderRequirements, renderStories, renderStoryFile, renderTraceability,
 } from './planDocSections';
 
@@ -121,6 +125,15 @@ export interface RenderContext {
    * is what every ordinary student build takes.
    */
   commandCenterOverride?: CommandCenterOverride | null;
+  /**
+   * The paths already in the repository, when the caller knows them.
+   *
+   * Read ONLY by the builder-path checklist, which ticks a stage when its artifact is
+   * present. Optional so every existing caller compiles unchanged, and null or absent renders
+   * as NOT RECORDED rather than as not done: "I have not looked" and "you have not done it"
+   * are different statements and only one of them is about the builder.
+   */
+  existingRepoPaths?: ReadonlyArray<string> | null;
 }
 
 /**
@@ -186,6 +199,20 @@ export function renderDocs(plan: BuildPlan, ctx: RenderContext = {}): RenderedFi
     // against a schema they cannot read guesses — and three of them have.
     { path: STUDENT_DATA_CONTRACT_PATH, content: renderStudentDataContract() },
     { path: 'CLAUDE.md', content: renderClaudeMd(plan, ctx) },
+    // The builder-path entry point and its checklist.
+    //
+    // HERE, not in `docsBundle.ts`: that is the ZIP DOWNLOAD path, which takes whatever this
+    // function returns and adds one notice. The repo-write path is this function into
+    // `repoWriter.ts`, driven by `refreshRepoDocuments.ts`. Editing the bundle would have
+    // shipped the file to the download and to no repository at all.
+    //
+    // The path satisfies PATH_ALLOWLIST below via the docs/ rule, so this cannot throw. A
+    // `.claude/skills/...` path would have raised a RenderError and broken document sync for
+    // every builder on the first run after deploy.
+    {
+      path: BUILDER_PATH_CHECKLIST_PATH,
+      content: builderPathChecklist(ctx.existingRepoPaths ?? null),
+    },
   ];
 
   for (const story of byKey(plan.stories, (s) => s.id)) {
