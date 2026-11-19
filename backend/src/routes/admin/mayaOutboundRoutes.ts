@@ -141,7 +141,13 @@ router.get('/api/admin/maya/outbound/:id', requireAdmin, async (req: Request, re
   try {
     const row = await MayaOutboundApproval.findByPk(id.data);
     if (!row) { res.status(404).json({ error: 'No such queued message', error_class: 'NotFound' }); return; }
-    res.json(projectDetail(row));
+    // OH1o: an Explorer Growth email shows what the brain passed (profile, content piece, memory, screen).
+    let explorerSnapshot: Record<string, unknown> | null = null;
+    if (String(row.composed_by || '').startsWith('explorer_growth:')) {
+      const { loadExplorerSnapshot } = await import('../../services/explorerGrowth/drafts/explorerApproval');
+      explorerSnapshot = await loadExplorerSnapshot(row.correlation_id).catch(() => null);
+    }
+    res.json({ ...projectDetail(row), ...(explorerSnapshot ? { explorer_snapshot: explorerSnapshot } : {}) });
   } catch (err) {
     fail(res, 'maya_outbound_read_failed', err);
   }

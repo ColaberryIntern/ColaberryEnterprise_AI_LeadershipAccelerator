@@ -4,6 +4,7 @@ import {
   approveOutboundMessage, getOutboundMessage, listOutboundQueue, mayaErrorMessage,
   rejectOutboundMessage, type MayaOutboundDetail, type MayaOutboundSummary,
 } from '../../../services/mayaConsoleApi';
+import { SnapshotDetails } from '../../explorerGrowth/BrainTab';
 
 /**
  * "Outbound approvals". Every message the agent composed for a real person, waiting on a
@@ -271,6 +272,15 @@ export default function AgentOutboundTab(): React.ReactElement {
           >
             {open.body}
           </pre>
+
+          {/* OH1o: an Explorer Growth email shows what the brain passed (profile, content piece, memory,
+              screen result, overlap), recorded on its draft when it was written. */}
+          {open.explorer_snapshot && (
+            <div className="border rounded p-3 mt-2">
+              <div className="small fw-semibold mb-1">What the brain passed (Explorer Growth)</div>
+              <SnapshotDetails s={open.explorer_snapshot} />
+            </div>
+          )}
 
           <label className="form-label small fw-medium mt-3" htmlFor="maya-decision-note">
             Note (required to reject)

@@ -26,14 +26,33 @@ import {
 } from './draftCopyGuards';
 import { draftSkipReason, selectStepIndex } from './draftEligibility';
 import {
-  EXPLORER_MAYA_PROMPT,
+  allowBrainDates,
   allowBrainLinks,
   brainPickHeld,
   chooseBrainPick,
+  explorerMayaPrompt,
   renderBrainPickBlock,
   type BrainGather,
   type BrainPickRecord,
 } from '../explorerBrainPick';
+import { DEFAULT_BRAIN_RULES, enabledRotation, type MayaBrainRules } from '../brainRules';
+import { screenMayaCopy } from '../../openHouseCountdown';
+
+/** OH1o: one earlier Explorer email to this person, full text (for the prompt and the repetition screen). */
+export interface EarlierEmail { subject: string; body: string; date: string | null }
+
+/** OH1o: the signals the countdown gets, for an Explorer email. Each may be '' (none on record). */
+export interface ExplorerSignals { profile: string; memory: string }
+
+/** OH1o: what goes to the Outbound approvals queue when Explorer sending is switched on. */
+export interface ExplorerApprovalInput {
+  scheduledEmailId: string;
+  decisionId: string;
+  leadId: number;
+  toEmail: string;
+  subject: string;
+  body: string;
+}
 
 /**
  * Explorer Growth OS — render ONE decision into a draft.
@@ -125,6 +144,19 @@ export interface DraftRenderDeps {
    * stop, because a countdown can start between the Governor's run and this one.
    */
   inOpenHouseCountdown: (leadId: number) => Promise<boolean>;
+  /** OH1o: the brain rules in force (brainRules.ts). Absent = the code defaults. */
+  loadBrainRules?: () => Promise<MayaBrainRules>;
+  /** OH1o: the 360 profile and the one memory, the same signals the countdown email gets. */
+  loadSignals?: (leadId: number, email: string, firstName: string | null) => Promise<ExplorerSignals>;
+  /** OH1o: this person's earlier Explorer emails, newest first, full bodies (shadow drafts included). */
+  loadEarlierEmails?: (leadId: number, excludeDecisionId: string) => Promise<EarlierEmail[]>;
+  /** OH1o: the campaign subject-line check (validateSubjectLine). */
+  validateSubject?: (subject: string, context: CompositeContext) => { subject: string; issues: string[] };
+  /**
+   * OH1o: put a passing draft in the Outbound approvals queue. Returns null when Explorer sending is
+   * off (explorer_growth_send_enabled). A queued message leaves only when a person approves it.
+   */
+  enqueueForApproval?: (input: ExplorerApprovalInput) => Promise<{ id: string; deduped: boolean } | null>;
 }
 
 /** How this render differs from the nightly one. */
@@ -251,14 +283,22 @@ export type DraftPlan =
       totalSteps: number;
       /** OH1j: earlier brain picks on other decisions, newest first. */
       brainHistory: BrainPickRecord[];
+      /** OH1o: the brain rules this draft was planned under. */
+      rules: MayaBrainRules;
     }
   | { ok: false; reason: NonNullable<DraftOutcome['reason']> };
 
 /** The read-only half of the deps — enough to plan, not enough to spend money. */
 export type DraftPlanDeps = Pick<
   DraftRenderDeps,
-  'loadSequenceSteps' | 'countPriorDrafted' | 'loadRecipientEmail' | 'loadBrainHistory' | 'inOpenHouseCountdown'
+  'loadSequenceSteps' | 'countPriorDrafted' | 'loadRecipientEmail' | 'loadBrainHistory' | 'inOpenHouseCountdown' | 'loadBrainRules'
 >;
+
+/** The rules in force; a loader that throws is the code defaults (today's behavior). */
+async function rulesFrom(deps: Pick<DraftRenderDeps, 'loadBrainRules'>): Promise<MayaBrainRules> {
+  if (!deps.loadBrainRules) return DEFAULT_BRAIN_RULES;
+  try { return await deps.loadBrainRules(); } catch { return DEFAULT_BRAIN_RULES; }
+}
 
 /**
  * Resolve everything a draft needs, WITHOUT generating anything.
@@ -290,7 +330,8 @@ export async function planDecisionDraft(
   } catch {
     return { ok: false, reason: 'brain_cadence' };
   }
-  if (brainPickHeld(decision.decision_date, brainHistory).held) return { ok: false, reason: 'brain_cadence' };
+  const rules = await rulesFrom(deps);
+  if (brainPickHeld(decision.decision_date, brainHistory, rules.brainPickMinHours).held) return { ok: false, reason: 'brain_cadence' };
 
   const steps = await deps.loadSequenceSteps(campaignId);
   const stepIndex = selectStepIndex(
@@ -311,6 +352,7 @@ export async function planDecisionDraft(
     toEmail,
     totalSteps: steps.length,
     brainHistory,
+    rules,
   };
 }
 
@@ -339,16 +381,23 @@ export async function renderDecisionDraft(
 
   const plan = await planDecisionDraft(planFrom, deps);
   if (!plan.ok) return skipped(decision, plan.reason);
-  const { leadId, campaignId, stepIndex, step, toEmail, totalSteps, brainHistory } = plan;
+  const { leadId, campaignId, stepIndex, step, toEmail, totalSteps, brainHistory, rules } = plan;
 
   // OH1j: the one piece of the shared brain this email is written around. Never throws: a
   // shelf that fails is passed over, and no shelf at all means no piece (never an invented one).
+  // OH1o: the rotation, the week-ahead email and the cadence come from the brain rules.
   const brainPick = await chooseBrainPick(decision, brainHistory, deps.gatherBrainPiece, {
     email: toEmail,
     leadId,
     enrollmentId: decision.enrollment_id,
-  });
+  }, { rotation: enabledRotation(rules), weekAhead: rules.weekAhead, minHours: rules.brainPickMinHours });
   const brainBlock = renderBrainPickBlock(brainPick);
+
+  // OH1o: the signals the countdown email gets - the 360 profile, the one memory, and the earlier
+  // emails in full. Each fails on its own to '' / [] and the draft is still written (and judged).
+  const earlier: EarlierEmail[] = deps.loadEarlierEmails
+    ? await deps.loadEarlierEmails(leadId, decision.id).catch(() => [])
+    : [];
 
   const briefLine = regenerate?.brief?.trim()
     ? `\n\nTHIS IS A REVISION. The reviewer asked for: ${regenerate.brief.trim()}`
@@ -373,9 +422,26 @@ export async function renderDecisionDraft(
   // What the model was actually told. Persisted as-sent, so a reviewer reading the draft
   // beside its citations sees the same facts the generator saw.
   let groundedInstructions = instructions;
+  let signals: ExplorerSignals = { profile: '', memory: '' };
   try {
     context = await deps.buildContext(leadId, campaignId, stepIndex);
     brandVoice = await deps.resolveBrandVoice();
+    if (deps.loadSignals) {
+      const firstName = (context.lead?.firstName || String(context.lead?.name || '').trim().split(/\s+/)[0] || '').trim() || null;
+      signals = await deps.loadSignals(leadId, toEmail, firstName && !firstName.includes('@') ? firstName : null)
+        .catch(() => ({ profile: '', memory: '' }));
+    }
+    // OH1o: facts about the person come ONLY from the 360 profile (WHO THEY ARE). The lead record's
+    // title, industry and company are CRM guesses - the Nov 18 sample turned them into "your data
+    // analytics background" for people who never said so - so they are not handed to the model.
+    context = { ...context, lead: { ...context.lead, title: '', industry: '', company: '' } as any };
+    // OH1o: the validator's repetition check reads previousMessages; give it the full earlier bodies.
+    if (earlier.length) {
+      context = {
+        ...context,
+        previousMessages: earlier.map((e) => ({ channel: 'email', subject: e.subject, bodyPreview: e.body, sentAt: e.date ?? '' })) as any,
+      };
+    }
 
     // Its own try/catch: a knowledge-base outage must degrade this message to ungrounded
     // copy, which the fact guard still judges, rather than being reported as
@@ -406,6 +472,14 @@ export async function renderDecisionDraft(
     // not on a builder's name. Omitted entirely when there is no piece.
     if (brainBlock !== '') {
       groundedInstructions = `${groundedInstructions}\n\n${brainBlock}`;
+    }
+
+    // OH1o: who they are, what has been said, and what Maya already wrote them - the same signals the
+    // countdown email is written from. Facts about the person come ONLY from WHO THEY ARE.
+    // Added whenever the signals are wired (production always is; liveDeps), even when both are empty,
+    // so the model is told not to guess about the person.
+    if (deps.loadSignals || earlier.length) {
+      groundedInstructions = `${groundedInstructions}\n\n${explorerSignalBlock(signals, earlier)}`;
     }
 
     // LAST, AND DELIBERATELY NOT PART OF `instructions`.
@@ -439,7 +513,8 @@ export async function renderDecisionDraft(
         step_number: stepIndex + 1,
         total_steps: totalSteps,
         // OH1j: written as Maya (never sells, never the banned word, never a price).
-        system_prompt: EXPLORER_MAYA_PROMPT,
+        // OH1o: the voice is the Brain tab's; the hard rules after it are code and cannot be edited.
+        system_prompt: explorerMayaPrompt(rules.explorerVoice),
       },
       tone: step.ai_tone,
       brandVoice,
@@ -486,16 +561,35 @@ export async function renderDecisionDraft(
   // still cannot reach a person. Two layers, because the asset filter is a door and this is
   // the wall.
   const linkFixed = absolutizeHrefs(verdict.content, baseUrl);
+  // OH1o: THE SAME SCREEN THE CAMPAIGN AND COUNTDOWN EMAILS PASS (screenMayaCopy), with the idiom
+  // rewrite first (the Nov 18 sample had "feel ..." with the banned word twice: the shared matcher
+  // exempts that idiom, the countdown rewrites it - Explorer now does what the countdown does), the
+  // brain rules' never-say phrases, and repetition against this person's earlier emails (body,
+  // subject and opening). Then the Explorer-only guards on top.
+  const subjectChecked = deps.validateSubject
+    ? deps.validateSubject(generated.subject || step.subject || '', context)
+    : { subject: generated.subject || step.subject || '', issues: [] as string[] };
+  const screen = screenMayaCopy({
+    subject: subjectChecked.subject,
+    body: linkFixed.html,
+    allowedLinks: brainPick.allowedLinks,
+    allowedPrefixes: [`${baseUrl.replace(/\/+$/, '')}/`],
+    earlier: earlier.map((e) => ({ subject: e.subject, body: e.body })),
+    extraNeverSay: rules.neverSay,
+    soften: true,
+  });
+  const body = screen.body;
   const copyIssues = [
-    ...bannedCopyIssues(linkFixed.html),
-    ...emailLinkIssues(linkFixed.html, baseUrl),
+    ...screen.problems,
+    ...bannedCopyIssues(body),
+    ...emailLinkIssues(body, baseUrl),
     // OH1j: Maya never sells to an Explorer. The prompt says so; this is the wall behind it.
-    ...salesPushIssues(linkFixed.html),
+    ...salesPushIssues(body),
   ];
-  const body = linkFixed.html;
   // OH1j: the piece's own links (a builder's case study, a fact's public source) are not on
   // the validator's two-host list; exactly those, and nothing else, are let through.
-  const verdictIssues = allowBrainLinks(verdict.issues, brainPick.allowedLinks);
+  // OH1o: and a date the piece itself supplied (the live event's date) is a resolved fact.
+  const verdictIssues = allowBrainDates(allowBrainLinks(verdict.issues, brainPick.allowedLinks), brainPick.block);
   const verdictValid = verdict.valid || (verdict.issues.length > 0 && verdictIssues.length === 0);
   const issues = [...verdictIssues, ...copyIssues];
   // A relative link is REPAIRED, not refused: there is exactly one correct absolute form and
@@ -519,7 +613,7 @@ export async function renderDecisionDraft(
       // The seeded subject is real copy and is the fallback when the model
       // returns none — `explorerSequenceDefinitions.ts` writes a genuine
       // subject on all 24 steps even though every body_template is empty.
-      subject: generated.subject || step.subject || 'Colaberry Enterprise AI',
+      subject: screen.subject || step.subject || 'Colaberry Enterprise AI',
       body,
       to_email: toEmail,
       ai_instructions: groundedInstructions,
@@ -582,6 +676,9 @@ export async function renderDecisionDraft(
           empty: brainPick.empty,
           allowed_links: brainPick.allowedLinks,
         },
+        // OH1o (Ali, D): what the brain passed, stored at creation so the sample and the Outbound
+        // approvals screen show exactly what this draft was written from and how it was judged.
+        brain_snapshot: brainSnapshot({ signals, brainPick, earlier, issues, overlap: screen.overlap, rules }),
         sender_persona: 'maya',
         model: generated.model,
         tokens_used: generated.tokens_used,
@@ -596,6 +693,22 @@ export async function renderDecisionDraft(
     ? await deps.recommitDraft(persistInput, decision.id, regenerate.previousScheduledEmailId)
     : { id: await deps.commitDraft(persistInput, decision.id), supersededId: null };
 
+  // OH1o: a draft that passed every screen goes to the Outbound approvals queue when Explorer sending
+  // is on. It is NOT sent here: it leaves only when a person approves that exact message, and every
+  // guard is checked again at that moment (explorerSendGuards). A queue failure never loses the draft.
+  let approvalId: string | null = null;
+  if (valid && deps.enqueueForApproval) {
+    try {
+      const q = await deps.enqueueForApproval({
+        scheduledEmailId: written.id, decisionId: decision.id, leadId, toEmail,
+        subject: persistInput.subject, body,
+      });
+      approvalId = q?.id ?? null;
+    } catch (err: any) {
+      console.warn(`[ExplorerDraft] approval queue failed for decision ${decision.id}: ${err?.name || 'Error'}`);
+    }
+  }
+
   return {
     decision_id: decision.id,
     enrollment_id: decision.enrollment_id,
@@ -605,5 +718,42 @@ export async function renderDecisionDraft(
     step_index: stepIndex,
     issues,
     superseded_scheduled_email_id: written.supersededId,
+    ...(approvalId ? { outbound_approval_id: approvalId } : {}),
+  };
+}
+
+/** OH1o: the prompt sections the countdown email is written from, for an Explorer email. */
+export function explorerSignalBlock(signals: ExplorerSignals, earlier: readonly EarlierEmail[]): string {
+  const lines: string[] = [];
+  lines.push('WHO THEY ARE (the only facts you may use about this person; never assume a background, role or industry)');
+  lines.push(signals.profile.trim() || '- Nothing on record beyond their first name. Do not guess anything about them.');
+  if (signals.memory.trim()) {
+    lines.push('', 'THE CONVERSATION SO FAR (every channel, both directions; stay consistent and never repeat yourself)', signals.memory.trim());
+  }
+  if (earlier.length) {
+    lines.push('', 'EARLIER EMAILS YOU ALREADY SENT THEM (newest first; open differently, use a different subject, say something new)');
+    for (const e of earlier.slice(0, 4)) {
+      const text = e.body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 900);
+      lines.push(`- ${e.date ? `${e.date}: ` : ''}"${e.subject}" - ${text}`);
+    }
+  }
+  return lines.join('\n');
+}
+
+/** OH1o: the snapshot stored on the draft (metadata.brain_snapshot). Bounded so a row never balloons. */
+export function brainSnapshot(input: {
+  signals: ExplorerSignals; brainPick: { piece: string; itemId: string | null; block: string; allowedLinks: string[]; empty: boolean };
+  earlier: readonly EarlierEmail[]; issues: readonly string[]; overlap: number; rules: MayaBrainRules;
+}): Record<string, unknown> {
+  return {
+    profile: input.signals.profile.slice(0, 4000),
+    memory_excerpt: input.signals.memory.slice(0, 1500),
+    piece: {
+      shelf: input.brainPick.piece, item_id: input.brainPick.itemId, empty: input.brainPick.empty,
+      block: input.brainPick.block.slice(0, 3000), allowed_links: input.brainPick.allowedLinks,
+    },
+    earlier_emails: input.earlier.slice(0, 4).map((e) => ({ subject: e.subject, date: e.date })),
+    screen: { passed: input.issues.length === 0, issues: [...input.issues], overlap_pct: Math.round(input.overlap * 100) },
+    rules: { rotation: enabledRotation(input.rules), min_hours: input.rules.brainPickMinHours, never_say: input.rules.neverSay.length },
   };
 }

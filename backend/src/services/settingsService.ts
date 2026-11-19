@@ -74,6 +74,12 @@ const DEFAULTS: Record<string, any> = {
   // (maya_outbound_approvals) and leaves only when a person approves it. ON = the draft is delivered at once
   // through the same delivery path (still consent-checked, never for Explorers). Only Ali flips this.
   maya_email_autoreply_enabled: false,
+  // OH1o: Explorer Growth drafts that pass every screen go to the Outbound approvals queue
+  // (maya_outbound_approvals), and leave ONLY when a person approves that exact message. OFF = no
+  // Explorer draft is queued at all (they stay shadow drafts). Never an auto-send. Only Ali flips this.
+  explorer_growth_send_enabled: false,
+  // OH1o: the brain's rules as data (explorerGrowth/brainRules.ts). Null = the code defaults.
+  maya_brain_rules: null,
 };
 
 export async function getSetting(key: string): Promise<any> {

@@ -67,9 +67,18 @@ describe('auth', () => {
   it('every registered route has a guard before its handler', () => {
     const stack = (mayaBrainRoutes as any).stack as any[];
     const routes = stack.filter((l) => l.route);
-    expect(routes.length).toBe(5);
-    const writes = routes.filter((l) => l.route.methods.post);
+    // OH1o added the Brain tab's three: GET /control, PUT /rules, POST /sample.
+    expect(routes.length).toBe(8);
+    const writes = routes.filter((l) => l.route.methods.post || l.route.methods.put);
+    expect(writes).toHaveLength(6);
     for (const w of writes) expect(w.route.stack.length).toBeGreaterThanOrEqual(2);
+  });
+  it('OH1o: a scoped management role may read the Brain tab but not save its rules or run a sample', async () => {
+    const put = await request(app()).put('/api/admin/maya-brain/rules').set('Authorization', `Bearer ${token('support')}`).send({});
+    expect(put.status).toBe(403);
+    const sample = await request(app()).post('/api/admin/maya-brain/sample').set('Authorization', `Bearer ${token('support')}`).send({});
+    expect(sample.status).toBe(403);
+    expect((await request(app()).put('/api/admin/maya-brain/rules').send({})).status).toBe(401);
   });
 });
 

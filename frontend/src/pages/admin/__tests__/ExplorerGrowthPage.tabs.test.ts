@@ -33,10 +33,10 @@ describe('tab order', () => {
     expect(TABS.map((t) => t.key)).toContain(DEFAULT_TAB);
   });
 
-  it('still offers all seven tabs — the reorder removed nothing', () => {
-    expect(TABS).toHaveLength(7);
+  it('offers all eight tabs — the reorder removed nothing, and OH1o added the Brain tab', () => {
+    expect(TABS).toHaveLength(8);
     expect(TABS.map((t) => t.key).sort()).toEqual(
-      ['campus', 'content', 'decisions', 'journey', 'overview', 'settings', 'shadow'],
+      ['brain', 'campus', 'content', 'decisions', 'journey', 'overview', 'settings', 'shadow'],
     );
   });
 

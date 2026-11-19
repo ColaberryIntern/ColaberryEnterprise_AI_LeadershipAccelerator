@@ -191,4 +191,6 @@ export interface ContactPolicyInput {
    * NaN is treated as "too recent" (fail closed).
    */
   hoursSinceLastBrainPick?: number | null;
+  /** OH1o: the brain rules' cadence (Brain tab). Absent = BRAIN_PICK_MIN_HOURS. Never below 24. */
+  brainPickMinHours?: number;
 }

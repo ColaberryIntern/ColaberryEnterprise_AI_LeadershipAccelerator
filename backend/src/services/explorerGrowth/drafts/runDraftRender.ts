@@ -3,7 +3,9 @@ import { isExplorerFeatureEnabled } from '../../../config/explorerGrowthFlags';
 import { redactForLogs } from '../../../utils/piiRedaction';
 import { DEFAULT_BRAND_VOICE, generateMessage } from '../../aiMessageService';
 import { buildCompositeContext } from '../../contextGraphService';
-import { validateGeneratedMessage } from '../../messageValidatorService';
+import { validateGeneratedMessage, validateSubjectLine } from '../../messageValidatorService';
+import { loadBrainRules } from '../brainRules';
+import { enqueueExplorerDraft, loadEarlierExplorerEmails, loadExplorerSignals } from './explorerApproval';
 import type { ExplorerFactSet } from '../explorerFactGuard';
 import { groundDraft } from '../explorerKnowledgeGrounding';
 import { loadExplorerKnowledge } from '../explorerKnowledgeLoader';
@@ -93,7 +95,8 @@ async function groundForDraft(input: {
   };
 }
 
-function liveDeps(): DraftRenderDeps {
+/** The production dependencies. Exported (OH1o) so the Brain tab's sample renders through exactly these. */
+export function liveDeps(): DraftRenderDeps {
   return {
     loadSequenceSteps,
     countPriorDrafted,
@@ -118,6 +121,16 @@ function liveDeps(): DraftRenderDeps {
       return gatherBrainPiece(piece, seed, person);
     },
     inOpenHouseCountdown: (leadId) => isInOpenHouseCountdown(leadId),
+    // OH1o: the brain rules (Brain tab), the countdown's signals, the earlier emails in full, the
+    // campaign subject check, and the approval queue (only while explorer_growth_send_enabled is on).
+    loadBrainRules: async () => (await loadBrainRules()).rules,
+    loadSignals: loadExplorerSignals,
+    loadEarlierEmails: loadEarlierExplorerEmails,
+    validateSubject: (subject, context) => {
+      const r = validateSubjectLine(subject, context);
+      return { subject: r.subject, issues: r.issues };
+    },
+    enqueueForApproval: (input) => enqueueExplorerDraft(input),
   };
 }
 

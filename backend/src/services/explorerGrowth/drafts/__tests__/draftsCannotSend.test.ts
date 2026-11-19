@@ -99,6 +99,9 @@ describe('the extractor works, so the assertions below mean something', () => {
   it('sweeps every source file in the directory', () => {
     const names = files.map((f) => path.basename(f)).sort();
     expect(names).toEqual([
+      // Added 2026-11-18 (OH1o). The Brain tab's sample: renders through the production deps with
+      // the writers replaced by in-memory capture. Writes nothing and imports no send path.
+      'brainSample.ts',
       'draftContracts.ts',
       // Added 2026-10-31. Pure copy guards: the banned-word rule and the relative-link
       // repair. It imports only `content/bannedCopyRule`, a dependency-free leaf, so the
@@ -106,6 +109,10 @@ describe('the extractor works, so the assertions below mean something', () => {
       'draftCopyGuards.ts',
       'draftEligibility.ts',
       'draftRepository.ts',
+      // Added 2026-11-18 (OH1o). Queues a passing draft for a PERSON's approval (maya_outbound_approvals)
+      // while explorer_growth_send_enabled is on. It never sends: the send happens only on approval, in
+      // mayaOutboundDelivery, behind explorerSendGuards. The import ban below covers it unchanged.
+      'explorerApproval.ts',
       'renderDecisionDraft.ts',
       'runDraftRender.ts',
     ]);

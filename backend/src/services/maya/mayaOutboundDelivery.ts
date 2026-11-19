@@ -92,6 +92,16 @@ export async function deliverOutboundRow(row: MayaOutboundApproval): Promise<Out
     throw new Error(`UnsupportedChannel: ${row.channel} is not deliverable from this queue`);
   }
 
+  // OH1o: an Explorer Growth email is re-checked against every guard at the moment of approval (kill
+  // switch, unsubscribe, the 24-hour rule, the Open House hold, the brain cadence, the send switch).
+  // Lazy, like everything else this module reaches: the approve path's import graph stays as pinned.
+  const explorer = String(row.composed_by || '').startsWith('explorer_growth:');
+  if (explorer) {
+    const { explorerSendBlock, ExplorerSendBlockedError } = await import('../explorerGrowth/send/explorerSendGuards');
+    const block = await explorerSendBlock(row);
+    if (block) throw new ExplorerSendBlockedError(block);
+  }
+
   const result = await sendOnce(
     {
       recipient: row.recipient_address,
@@ -107,7 +117,8 @@ export async function deliverOutboundRow(row: MayaOutboundApproval): Promise<Out
         subject: row.subject ?? '',
         html: row.body,
         // OH1h: Maya's answer to an email reply threads back to her (Mandrill inbound domain).
-        ...(isMayaReplyRow(row) ? { replyTo: await mayaReplyToAddress() } : {}),
+        // OH1o: an Explorer email's replies come back to Maya the same way.
+        ...(isMayaReplyRow(row) || explorer ? { replyTo: await mayaReplyToAddress() } : {}),
       });
       return sent.ok
         ? { ok: true, messageId: sent.messageId }
@@ -117,6 +128,7 @@ export async function deliverOutboundRow(row: MayaOutboundApproval): Promise<Out
 
   if (result.outcome === 'sent') {
     if (isMayaReplyRow(row)) await recordMayaReplyOnLead(row, result.messageId ?? null);
+    if (explorer) await (await import('../explorerGrowth/send/explorerSendGuards')).recordExplorerSend(row, result.messageId ?? null);
     return { providerRef: result.messageId ?? null };
   }
   if (result.outcome === 'skipped') {
