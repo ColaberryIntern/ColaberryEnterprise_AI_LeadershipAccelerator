@@ -24,7 +24,7 @@ import { SURVEY, DAILY, Question, dailyFor, answerLines, GAMES, WAGER, gameForDa
 import {
   Busy, Slot, PlanItem, RawPick, ctNow, mondayOf, weekDates, addDays, candidateSlots, pickWeekdaySlots,
   weekendSlots, pendingDays, weekdayIndex, shapeItem, nextSlot, fitsSlot, prettyDay, prettyTime, toMin, fromMin,
-  isWeekday, prevWeekday, decideWinner, PROGRAM_START, mergeBusy, looksLikeGrid, removeRange, similarPrize, assumedWorkHours,
+  isWeekday, prevWeekday, decideWinner, PROGRAM_START, mergeBusy, looksLikeGrid, removeRange, similarPrize,
 } from './sparkLogic';
 
 export type Person = 'ali' | 'addie';
@@ -454,10 +454,10 @@ async function weekBusy(week: string): Promise<{ busy: Busy[]; notes: string[]; 
     const c = await one('calendar', { person: p, week });
     if (c?.data.busy) busy.push(...c.data.busy);
     if (c?.data.note) notes.push(String(c.data.note));
-    if (c?.data.retake && !(c.data.busy || []).length) {
-      busy.push(...assumedWorkHours(week)); // photo not in yet: assume a workday, so Sparks land in the evening
-      notes.push(`${PEOPLE[p].name}'s new calendar photo is not in yet; assume ${PEOPLE[p].name} works weekdays until 5:30 PM.`);
-    } else if (!c?.data.done) missing.push(PEOPLE[p].name);
+    // Photo not in yet: plan anyway, in the daytime (Ali, 2026-11-19: "the goal is to find time throughout
+    // the day"). Never assume a full workday, which pushes every Spark into the evening.
+    if (c?.data.retake && !(c.data.busy || []).length) notes.push(`${PEOPLE[p].name}'s new calendar photo is not in yet; either of you can move a time that does not work.`);
+    else if (!c?.data.done) missing.push(PEOPLE[p].name);
   }
   return { busy, notes, missing };
 }

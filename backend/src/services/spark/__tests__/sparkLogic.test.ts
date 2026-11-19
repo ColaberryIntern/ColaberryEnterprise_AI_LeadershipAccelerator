@@ -185,10 +185,15 @@ describe('never the same prize twice (Ali, 2026-11-19: "avoid doing the same pri
   });
 });
 
-describe('planning while a calendar photo is still coming (Ali, 2026-11-19: "I was expecting to have our planned week")', () => {
-  test('assumed work hours put the weekday Sparks in the evening', () => {
-    const p = L.pickWeekdaySlots(L.candidateSlots(L.weekDates(MON), L.assumedWorkHours(MON), TUE_7AM), 3);
+describe('time throughout the day (Ali, 2026-11-19: "the goal is to find time throughout the day")', () => {
+  test('with open calendars every weekday Spark is midday or afternoon, never the evening', () => {
+    const p = L.pickWeekdaySlots(L.candidateSlots(L.weekDates(MON), [], TUE_7AM), 3);
     expect(p.length).toBe(3);
-    expect(p.every((s) => L.toMin(s.start) >= L.toMin(L.EVENING_FROM))).toBe(true);
+    expect(p.every((s) => L.toMin(s.start) < L.toMin(L.EVENING_FROM))).toBe(true);
+  });
+  test('an evening event pushes that day to the afternoon', () => {
+    const busy: L.Busy[] = [{ date: '2026-11-19', start: '09:00', end: '12:00' }, { date: '2026-11-19', start: '18:00', end: '21:30' }];
+    const c = L.candidateSlots(['2026-11-19'], busy, TUE_7AM);
+    expect(c.every((s) => L.toMin(s.start) >= 720 && L.toMin(s.start) < L.toMin(L.EVENING_FROM))).toBe(true);
   });
 });

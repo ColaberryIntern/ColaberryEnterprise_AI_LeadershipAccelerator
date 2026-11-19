@@ -267,8 +267,3 @@ export function similarPrize(a: string, b: string): boolean {
   const shared = [...x].filter((w) => y.has(w)).length;
   return shared / Math.min(x.size, y.size) >= 0.5;
 }
-
-/** Weekday work hours to assume for someone whose new calendar photo is not in yet, so Sparks land in the evening. */
-export function assumedWorkHours(week: string): Busy[] {
-  return weekDates(week).filter(isWeekday).map((date) => ({ date, start: '08:00', end: '17:30' }));
-}
