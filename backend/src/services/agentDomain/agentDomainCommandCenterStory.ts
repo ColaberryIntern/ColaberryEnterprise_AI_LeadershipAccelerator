@@ -39,6 +39,10 @@
 
 import { COMMAND_CENTER_STORY_ID, COMMAND_CENTER_TITLE } from '../sbp/commandCenterStory';
 import { AUTONOMY_LEVELS, AUTONOMY_MEANINGS } from './autonomyLadder';
+// The eight stages come from HERE, never a second hardcoded list. A brief that described a
+// different path from the product would be the first thing a builder read and the last thing
+// anybody checked.
+import { BUILDER_STAGES } from './builderPath';
 import type { AgentDomain } from './agentDomainRegistry';
 import type { DomainCapabilityMatrix } from './capabilityRecord';
 
@@ -118,7 +122,45 @@ export const COMMAND_CENTER_ACCEPTANCE: ReadonlyArray<string> = Object.freeze([
   + ' implies that filing it granted anything.',
   'Trust -- no panel shows a number, a grant, a rung or a result this domain has not actually'
   + ' produced.',
+  // ── TWO ADDED 19 NOV 2026, for panels seven and eight. ──────────────────────────────────
+  //
+  // THE SIX ABOVE ARE UNTOUCHED, and that is measured rather than cautious. In production on
+  // 19 Nov: admissions, marketing, platform and sales are VERIFIED at 6 of 6, and internship
+  // sits at 5 of 6. Criteria match by normalised text (`criterionIdentity.ts`), so rewording
+  // criterion 1's "all six panels" to say eight would stop matching the sentence those five
+  // boards were graded against, and -- with no `SUPERSEDED_CRITERIA` alias, which this file's
+  // own doctrine forbids -- would un-verify four builders' completed work.
+  //
+  // So the new count lives in the new criterion, where it can be checked without discarding
+  // anything. `COMMAND_CENTER_PANEL_COUNT` below is what the test compares against, and the
+  // generated prompt's panel headings are counted against the same constant.
+  //
+  // Neither gets a `SUPERSEDED_CRITERIA` entry either: they are NEW sentences, not rewordings,
+  // so there is nothing to carry forward and an alias could only credit work nobody did.
+  'Given the candidate panel, when it renders, then every candidate on the list shows which of'
+  + ' the eight stages it is at, whose turn it is, and the one action that person takes next,'
+  + ' read from the snapshot\'s `candidates` section rather than computed by the page.',
+  'Given the panel of what the platform owes you, when it renders, then it lists only the'
+  + ' candidates waiting on a screen or a ruling, read from the snapshot\'s `owed_by_product`'
+  + ' section, and says in words when nothing is waiting rather than drawing an empty card.',
 ]);
+
+/**
+ * How many panels the page has, as a number the tests can read.
+ *
+ * It exists because criterion 1 states a count INSIDE a sentence, which made the count
+ * uncheckable: nothing could compare "all six panels" against the number of panels the
+ * generated prompt actually describes, and the two were free to drift. They did -- the prompt
+ * gained two panels while the sentence still said six.
+ *
+ * The sentence is not edited, for the reason recorded above. Instead the count is named here,
+ * the prompt's heading is generated from it, and a test asserts the number of panel headings
+ * equals it. The stale "six" in criterion 1 is therefore visible rather than load-bearing.
+ */
+export const COMMAND_CENTER_PANEL_COUNT = 8;
+
+/** The count the first criterion states, kept apart so the gap between them is explicit. */
+export const COMMAND_CENTER_PANEL_COUNT_IN_FIRST_CRITERION = 6;
 
 /** The human whose review closes this story. Never the builder, and never an agent. */
 export const COMMAND_CENTER_VALIDATION_DEPENDENCY =
@@ -204,6 +246,22 @@ export function commandCenterBrief(d: AgentDomain, m: DomainCapabilityMatrix): s
  * real refusal rules -- rather than from a template, so a renamed route or a changed rung turns
  * into a failing test here instead of a builder following a path that no longer exists.
  */
+/**
+ * The eight stages as a table, read from `BUILDER_STAGES` rather than retyped.
+ *
+ * A second hardcoded list is how the brief and the product end up describing different paths,
+ * and the brief is what a builder reads first. A test asserts every stage key in the import
+ * appears in the generated prompt.
+ */
+function stageTable(): string {
+  return [
+    '| # | Stage | Whose move | What it produces |',
+    '|---|---|---|---|',
+    ...BUILDER_STAGES.map((s, i) => `| ${i + 1} | \`${s.stage}\` -- ${s.title} `
+      + `| ${s.owned_by} | \`${s.artifact_path}\` |`),
+  ].join('\n');
+}
+
 export function commandCenterPromptForDomain(
   d: AgentDomain,
   m: DomainCapabilityMatrix,
@@ -244,7 +302,7 @@ export function commandCenterPromptForDomain(
     'If the file is not there, your repository has not been synced since it started shipping. Click',
     'Sync from GitHub in the portal; if it still does not appear, say so rather than inventing data.',
     '',
-    '## The six panels, and the question each one answers',
+    `## The ${COMMAND_CENTER_PANEL_COUNT} panels, and the question each one answers`,
     '',
     '**1. Your employee -- "does it exist, and what is it allowed to do?"**',
     '',
@@ -289,6 +347,11 @@ export function commandCenterPromptForDomain(
     'you ask for a capability your agent needs; it grants nothing by itself, and this panel must',
     'not imply that filing one did.',
     '',
+    'One candidate can produce TWO requests -- a screen request while the product cannot do the',
+    'thing, and later a tool request once you have done it by hand -- so show which candidate a',
+    'request came from. There is exactly one approval spine; a request is the only object on',
+    'this page that carries a decision, and nothing else may appear to.',
+    '',
     '**6. What is not available -- "what would I be lying about?"**',
     '',
     'A panel that names the gaps, because the gaps are the work. Specifically:',
@@ -303,6 +366,34 @@ export function commandCenterPromptForDomain(
       'Anything this page cannot source from a real endpoint is left blank and labelled, never'
       + ' filled with a plausible example.',
     ]),
+    '',
+    '**7. Your candidate list -- "whose turn is it?"**',
+    '',
+    'From `candidates` in the snapshot (source: `GET /api/admin/agent-domain-candidates-mine`).',
+    'One row per candidate with the stage it is at, whose turn it is, and the single sentence',
+    'saying what that person does next. **Read all three from the snapshot.** The page must not',
+    'work out the stage itself: the platform derives it from the candidate row plus the status of',
+    'the requests it points at, and a second implementation would disagree the first time',
+    'somebody approved a request in the governance console.',
+    '',
+    'The eight stages, in order, and what each one means:',
+    '',
+    stageTable(),
+    '',
+    'You are never asked what you do by hand. Four candidates arrive from four places -- your own',
+    'research, the person who holds the job, Ali, and suggestions scored against the rung -- and',
+    'you choose one. Show where each came from, because that is how much weight it deserves.',
+    '',
+    '**8. What the platform owes you -- "what am I not blocked on myself for?"**',
+    '',
+    'From `owed_by_product` in the snapshot. Only two stages appear here: a candidate waiting on',
+    'a screen or a ruling, and one where the screen was built and you have not used it yet. When',
+    'the list is empty, say so in words -- an empty card here reads as a page that failed to',
+    'load, and this is the panel that tells you the delay is not yours.',
+    '',
+    'A tool request awaiting a decision does NOT belong on this panel even though it is also',
+    'somebody else\'s turn. Ali owes a decision there, not a screen, and one panel for both',
+    'questions answers neither.',
     '',
     '## The rules this page must not break',
     '',

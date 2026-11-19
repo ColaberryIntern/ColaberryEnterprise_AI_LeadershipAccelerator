@@ -44,7 +44,7 @@ const agent: SnapshotAgentInput = {
   tools_granted: [],
 };
 
-describe('the seed carries the SIX criteria the portal grades', () => {
+describe('the seed carries the criteria the portal grades', () => {
   const seed = domainCommandCenterSeed(DOMAIN);
 
   it('is namespaced, so it cannot collide with another project\'s STORY-000', () => {
@@ -55,9 +55,46 @@ describe('the seed carries the SIX criteria the portal grades', () => {
     expect(seed.release).toBe('autonomy:R0');
   });
 
-  it('is the SAME six the backfill wrote, not a second copy to drift', () => {
+  it('is the SAME list the story module holds, not a second copy to drift', () => {
     expect(seed.acceptance).toEqual([...COMMAND_CENTER_ACCEPTANCE]);
-    expect(seed.acceptance).toHaveLength(6);
+    // Six until 19 Nov 2026, eight since: panels seven and eight gained one each.
+    expect(seed.acceptance).toHaveLength(8);
+  });
+
+  it('the FIRST SIX are byte-identical to what four verified boards were graded against', () => {
+    // Measured in production 19 Nov 2026: admissions, marketing, platform and sales are
+    // verified at 6 of 6 and internship sits at 5 of 6. Criteria match by normalised text, so
+    // editing one of these six would stop matching the sentence those boards were graded
+    // against and -- with no SUPERSEDED alias, which this file's doctrine forbids -- would
+    // un-verify completed work. These are the exact strings, committed here as the fixture.
+    expect(seed.acceptance.slice(0, 6)).toEqual([
+      'Given the Command Center, when it is opened, then all six panels render and each one'
+      + ' names the endpoint it read.',
+      'Given a panel whose endpoint returned nothing, when it renders, then it says so in words'
+      + ' and is visibly distinct from a panel that is still loading.',
+      'Given the autonomy ladder panel, when it renders, then all ten rungs are present with'
+      + ' the owner\'s wording, and each capability\'s ceiling is marked against the rung it'
+      + ' stops at.',
+      'Given the autonomy ladder panel, when a capability\'s authority is shown, then the page'
+      + ' shows the effective authority `effectiveAuthority()` returns rather than the level the'
+      + ' capability record asks for, and names the `no_tool_grants` rule with the number of'
+      + ' capabilities it currently constrains, saying so in words when that number is zero.',
+      'Given the governance panel, when a tool request is shown, then nothing on the page states'
+      + ' or implies that filing it granted anything.',
+      'Trust -- no panel shows a number, a grant, a rung or a result this domain has not'
+      + ' actually produced.',
+    ]);
+  });
+
+  it('the two new criteria arrive UNTICKED, which is all a seed can honestly do', () => {
+    // The seed carries criterion TEXT, not state; there is no tick field on it to set. So the
+    // honest assertion is that it carries no completion marker of any kind, rather than a
+    // test that pretends to check a box that does not exist.
+    for (const a of seed.acceptance) {
+      expect(a).not.toMatch(/^\s*\[x\]/i);
+      expect(a).not.toMatch(/\bpassed\b|\bverified\b|\bcomplete\b/i);
+    }
+    expect(Object.keys(seed).sort()).toEqual(['acceptance', 'id', 'release']);
   });
 });
 
@@ -80,7 +117,7 @@ describe('the story doc is the domain brief, not the SBP one', () => {
   it('carries the build prompt, so a cold Claude Code session has it locally', () => {
     // The whole reason STORY-000 needed a doc at all: its prompt lived only on `student_tasks.build`
     // and an agent opening the repo had to author its claims from memory of a page it never saw.
-    expect(doc).toContain('The six panels, and the question each one answers');
+    expect(doc).toContain('The 8 panels, and the question each one answers');
     expect(doc).toContain('effectiveAuthority()');
   });
 
