@@ -16,6 +16,7 @@ import { emitRoomEvent } from './communityRooms/roomOutboxService';
 import { ROOM_EVENTS } from './communityRooms/roomEvents';
 import { log } from './communityRooms/roomShared';
 import { probeRecording, COMFORTABLE_MAX_HEIGHT } from './communityRooms/recordingProbe';
+import { judgeRecordingSubstance, MIN_SUBSTANTIVE_RECORDING_SECONDS } from './recordingSubstance';
 import { findRecordingForSession as findDriveRecording, streamDriveFile, DriveRecordingMatch } from './driveService';
 import {
   findRecordingForSession as findZoomRecording,
@@ -193,6 +194,37 @@ async function attachRecording(
       size_bytes: sizeBytes,
     });
   }
+  // THE BACKSTOP FOR WHAT THE SELECTOR NEVER SEES.
+  //
+  // `findRecordingInstancesByMeetingId` drops join-and-leave clips before they are
+  // downloaded, but it is not on every road into this function. A webhook-supplied
+  // match (`preResolvedMatch`) IS one specific recording and consults no finder at
+  // all, so for a webhook the first and only chance to ask "is this a session?" is
+  // here, with the file on disk and `ffprobe` having just answered it.
+  //
+  // That road is the one that mattered: both Open House sessions had a clip of a
+  // few seconds pinned as their recording, with empty metadata — the signature of
+  // this path, not of the window-aware one.
+  //
+  // Refusing returns `not_found`, which every caller already treats as "recording
+  // is not available", and the file is removed so a retry does not accumulate
+  // copies. `not_found` is honest here: no recording of this session arrived.
+  const substance = judgeRecordingSubstance({ durationSeconds: geometry?.durationSeconds });
+  if (!substance.substantive) {
+    log('warn', 'recording_too_short_to_attach', {
+      room_id: roomId,
+      booking_id: bookingId,
+      reason: substance.reason,
+      duration_seconds: substance.durationSeconds,
+      floor_seconds: MIN_SUBSTANTIVE_RECORDING_SECONDS,
+      size_bytes: sizeBytes,
+      width: geometry?.width ?? null,
+      height: geometry?.height ?? null,
+    });
+    try { fs.unlinkSync(destPath); } catch { /* best-effort */ }
+    return { status: 'not_found' };
+  }
+
   const geometryMetadata = geometry
     ? { video_width: geometry.width, video_height: geometry.height, duration_seconds: geometry.durationSeconds }
     : {};

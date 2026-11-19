@@ -2,6 +2,11 @@ import crypto from 'crypto';
 import { Readable } from 'stream';
 import { env } from '../config/env';
 import LiveSession from '../models/LiveSession';
+import {
+  judgeRecordingSubstance,
+  durationSecondsBetween,
+  MIN_SUBSTANTIVE_RECORDING_SECONDS,
+} from './recordingSubstance';
 // OAuth mint + authenticated request helper, extracted 2026-11-03 because this file is past
 // CLAUDE.md's 500-line ceiling. Imported under the old local names so nothing below changed.
 import {
@@ -485,9 +490,83 @@ function instanceTiming(meeting: ZoomRecordingMeeting): { startedAt: Date | null
   };
 }
 
+/**
+ * Which Zoom identities a recording might be sitting under.
+ *
+ * ── WHY THIS IS NOT JUST ZOOM_HOST_EMAIL ──────────────────────────────────────
+ * A cloud recording belongs to the identity that hosted the meeting, and
+ * `/users/{id}/recordings` answers for that identity alone. This lookup asked only
+ * the configured host, so it was blind to every recording made by anyone else in
+ * the account — and the account has had a host pool since `roomHostAllocator`
+ * landed, precisely because one identity can only host one meeting at a time.
+ *
+ * Found on production 2026-11-18: the Open House is run from a recurring meeting
+ * owned by the shared `support` identity, while the platform created and watched a
+ * second meeting of its own that attendees never joined. The single-host lookup
+ * could only ever see the platform's own meeting, so for three weeks it ingested a
+ * few seconds of an empty room and never the event. Nothing was broken in the
+ * download, the attach, or the player; we were looking in one place and the
+ * recording was in another.
+ *
+ * ── THE POOL IS ALREADY THE LIST ──────────────────────────────────────────────
+ * `zoom_hosts` records every identity the platform mints meetings under, and an
+ * operator registers the shared ones there too. So no new configuration is
+ * introduced here: the registry is read as the list, and production is already
+ * correct.
+ *
+ * ── FAIL-SOFT, AND LOUD ONLY WHEN EVERYTHING FAILS ────────────────────────────
+ * The registry is a database read, in a module whose unit tests stub the database
+ * away, so it is imported lazily and any failure degrades to the configured host —
+ * which is exactly the behavior this replaces. Per-host API errors are likewise
+ * skipped, because one deactivated or unlicensed identity must not blind the sweep
+ * to the other six. But if EVERY host errors, the error is rethrown: a total
+ * outage reported as "no recording found" is the silent failure this file's history
+ * is a catalogue of.
+ */
+const HOST_LIST_TTL_MS = 5 * 60 * 1000;
+let hostListCache: { expiresAt: number; hosts: string[] } | null = null;
+
+export async function recordingHostEmails(): Promise<string[]> {
+  const now = Date.now();
+  if (hostListCache && hostListCache.expiresAt > now) return hostListCache.hosts;
+
+  let pooled: string[] = [];
+  try {
+    const { listHosts } = await import('./zoom/zoomHostRegistry');
+    pooled = (await listHosts())
+      .filter((h) => h.enabled)
+      .map((h) => String(h.host_email || '').trim().toLowerCase())
+      .filter(Boolean);
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
+      event: 'zoom_host_pool_unreadable', outcome: 'degraded',
+      error_class: err?.error_class || err?.name || 'Error',
+      context: { message: err?.message, falling_back_to: 'ZOOM_HOST_EMAIL' },
+    }));
+    pooled = [];
+  }
+
+  // Configured host first: it is the overwhelmingly common home for a recording,
+  // and the merge below keeps the first sighting of each instance.
+  const hosts = Array.from(new Set(
+    [String(env.zoomHostEmail || '').trim().toLowerCase(), ...pooled].filter(Boolean),
+  ));
+  hostListCache = { expiresAt: now + HOST_LIST_TTL_MS, hosts };
+  return hosts;
+}
+
+/** Test seam: drop the memoized host list and recordings list. */
+export function __resetRecordingHostCache(): void {
+  hostListCache = null;
+  listCache = null;
+}
+
 // The recordings-list response is memoized per (from, to) window for ~90s —
 // a cron sweeping several candidate sessions in the same tick would
-// otherwise re-request the near-identical date range once per session.
+// otherwise re-request the near-identical date range once per session. The
+// cache holds the MERGED sweep, so the memo is still one entry per window
+// however many hosts it took to fill.
 let listCache: { key: string; expiresAt: number; meetings: ZoomRecordingMeeting[] } | null = null;
 
 async function listRecordings(fromDate: string, toDate: string): Promise<ZoomRecordingMeeting[]> {
@@ -495,11 +574,36 @@ async function listRecordings(fromDate: string, toDate: string): Promise<ZoomRec
   const now = Date.now();
   if (listCache && listCache.key === key && listCache.expiresAt > now) return listCache.meetings;
 
-  const data = await zoomApiRequest<any>(
-    'GET',
-    `/users/${encodeURIComponent(env.zoomHostEmail)}/recordings?from=${fromDate}&to=${toDate}&page_size=100`,
-  );
-  const meetings: ZoomRecordingMeeting[] = data.meetings || [];
+  const hosts = await recordingHostEmails();
+  // Keyed on the instance uuid, not the meeting id: one meeting legitimately has
+  // many recording instances, and deduping by id would collapse a class recorded
+  // in two parts into one.
+  const seen = new Map<string, ZoomRecordingMeeting>();
+  let failures = 0;
+  let lastError: unknown = null;
+
+  for (const host of hosts) {
+    let data: any;
+    try {
+      data = await zoomApiRequest<any>(
+        'GET',
+        `/users/${encodeURIComponent(host)}/recordings?from=${fromDate}&to=${toDate}&page_size=100`,
+      );
+    } catch (err) {
+      failures += 1;
+      lastError = err;
+      continue;
+    }
+    for (const meeting of (data.meetings || []) as ZoomRecordingMeeting[]) {
+      const dedupeKey = meeting.uuid || `${meeting.id}:${meeting.start_time ?? ''}`;
+      if (!seen.has(dedupeKey)) seen.set(dedupeKey, meeting);
+    }
+  }
+
+  // Every host failed: that is an API or configuration fault, not an empty account.
+  if (failures > 0 && failures === hosts.length) throw lastError;
+
+  const meetings = Array.from(seen.values());
   listCache = { key, expiresAt: now + 90_000, meetings };
   return meetings;
 }
@@ -631,7 +735,40 @@ export async function findRecordingInstancesByMeetingId(
   for (const meeting of meetings) {
     if (String(meeting.id) !== meetingId) continue;
     const match = toRecordingMatch(meeting, fallbackName);
-    if (match) out.push({ uuid: meeting.uuid, match, ...instanceTiming(meeting) });
+    if (!match) continue;
+    const timing = instanceTiming(meeting);
+
+    // DISCARD JOIN-AND-LEAVE ARTEFACTS BEFORE DOWNLOADING THEM.
+    //
+    // Zoom opens a new recording instance for every brief visit to a meeting, so
+    // an always-open room accumulates one tiny clip per person who looked in. The
+    // class path has been filtering these by window overlap since 2026-08-06, but
+    // this function serves the room and booking paths, which had no filter of any
+    // kind — which is how production came to hold 60 recordings under 100 KB.
+    //
+    // The check is here, on the listing, rather than after the download: Zoom's
+    // own per-file timings already answer it, so a clip we will refuse never costs
+    // a download, a disk write, or a row. See recordingSubstance for the rule.
+    const verdict = judgeRecordingSubstance({
+      durationSeconds: durationSecondsBetween(timing.startedAt, timing.endedAt),
+    });
+    if (!verdict.substantive) {
+      console.error(JSON.stringify({
+        timestamp: new Date().toISOString(), level: 'info', service: 'backend',
+        event: 'zoom_recording_instance_skipped', outcome: 'skipped',
+        context: {
+          meeting_id: meetingId,
+          zoom_uuid: meeting.uuid,
+          reason: verdict.reason,
+          duration_seconds: verdict.durationSeconds,
+          floor_seconds: MIN_SUBSTANTIVE_RECORDING_SECONDS,
+          size_bytes: match.sizeBytes,
+        },
+      }));
+      continue;
+    }
+
+    out.push({ uuid: meeting.uuid, match, ...timing });
   }
   return out;
 }
