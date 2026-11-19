@@ -138,3 +138,31 @@ describe('groundingToBackingRefs (the proof judge sees the same proof the drafte
     expect(refs[3]).toBe('Key personnel: P');
   });
 });
+
+describe('solicitation facts (the RFP\'s own facts the agent must assert, never ask for)', () => {
+  const doc = { title: 'Compliance Matrix', requirements: [], sections: [] };
+
+  it('passes solicitationFacts through buildGrounding', () => {
+    const g = buildGrounding({ document: doc, solicitationFacts: ['Proposal submission due date: 2026-11-30', 'Issuing agency: Herriman City'] });
+    expect(g.solicitationFacts).toEqual(['Proposal submission due date: 2026-11-30', 'Issuing agency: Herriman City']);
+  });
+
+  it('renders solicitation facts as authoritative and forbids placeholdering or asking for them', () => {
+    const g = buildGrounding({ document: doc, solicitationFacts: ['Proposal submission due date: 2026-11-30'] });
+    const text = groundingToPromptText(g);
+    expect(text).toMatch(/Solicitation facts \(authoritative/);
+    expect(text).toMatch(/NEVER insert a placeholder or raise a question for them/);
+    expect(text).toMatch(/Proposal submission due date: 2026-11-30/);
+  });
+
+  it('omits the solicitation block entirely when none are supplied', () => {
+    expect(groundingToPromptText(buildGrounding({ document: doc }))).not.toMatch(/Solicitation facts/);
+  });
+
+  it('carries a real requirement statement rather than the bare id (the grounding caller supplies the text)', () => {
+    const g = buildGrounding({ document: { title: 'Technical', requirements: [{ canonicalReqId: 'REQ-004', statement: 'Proposals must be submitted no later than 5:00 p.m. MDT on November 30, 2026.' }], sections: [] } });
+    const text = groundingToPromptText(g);
+    expect(text).toMatch(/\[REQ-004\] Proposals must be submitted no later than 5:00 p\.m\. MDT/);
+    expect(text).not.toMatch(/\[REQ-004\] REQ-004/);
+  });
+});

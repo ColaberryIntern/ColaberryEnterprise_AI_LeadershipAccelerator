@@ -116,6 +116,22 @@ export async function runReviewCycle(deliveryProjectId: string, docKey: string, 
     let personnel: Awaited<ReturnType<typeof import('./govCompanyLibrary').approvedPersonnel>> = [];
     let caseStudies: Grounding['caseStudies'] = [];
     let groundTenantId: string | null = null;
+    // The solicitation's OWN requirement statements, keyed by canonical id. Grounding each requirement with its real
+    // text (not just its id) is what lets the drafter WRITE the response instead of raising a human need to "describe
+    // REQ-003"; the due date and submission method/email live here too (they are administrative/compliance requirements),
+    // so grounding them stops the engine asking the operator for facts the RFP already states.
+    const reqStatements = new Map<string, string>();
+    const solicitationFacts: string[] = [];
+    try {
+      const { default: ContractRequirement } = await import('../../../models/ContractRequirement');
+      const reqs: any[] = await ContractRequirement.findAll({ where: { delivery_project_id: deliveryProjectId } });
+      for (const row of reqs) {
+        const r = row?.get ? row.get({ plain: true }) : row;
+        const id = r?.canonical_req_id ? String(r.canonical_req_id) : '';
+        const stmt = r?.statement ? String(r.statement).trim() : '';
+        if (id && stmt) reqStatements.set(id, stmt);
+      }
+    } catch { /* best-effort; a requirement-text read failure degrades to the id, never an invention */ }
     try { const { default: GovProposalBlueprint } = await import('../../../models/GovProposalBlueprint'); const bp: any = await GovProposalBlueprint.findOne({ where: { delivery_project_id: deliveryProjectId }, order: [['version', 'DESC']] }); blueprint = bp ? bp.blueprint_json : null; } catch { /* best-effort */ }
     try {
       const { default: GovQualification } = await import('../../../models/GovQualification');
@@ -129,6 +145,18 @@ export async function runReviewCycle(deliveryProjectId: string, docKey: string, 
         // Our own delivered case studies as proof points. Separate try so a case-study read failure never drops the
         // approved facts/references/personnel already loaded above.
         try { const { loadProofCaseStudies } = await import('./proposalProofCaseStudies'); caseStudies = await loadProofCaseStudies(q.tenant_id); } catch { /* best-effort */ }
+        // Authoritative solicitation facts the agent must assert directly, never ask for: the resolved close date (which
+        // honours a manualDeadline override), the issuing agency, and our bidding entity.
+        try {
+          const { resolveGovCloseDate } = await import('../govPipeline');
+          const qp = q.get ? q.get({ plain: true }) : q;
+          const close = resolveGovCloseDate(qp);
+          if (close) solicitationFacts.push(`Proposal submission due date: ${String(close).slice(0, 10)}`);
+          const snap = (qp && qp.source_snapshot) || {};
+          const agency = snap.agency || snap.buyer || (snap.opportunity && snap.opportunity.agency);
+          if (agency) solicitationFacts.push(`Issuing agency: ${agency}`);
+          if (qp && qp.bidding_entity) solicitationFacts.push(`Bidding entity (our company): ${qp.bidding_entity}`);
+        } catch { /* best-effort; no close date resolves to the client's not-yet-expired default */ }
       }
     } catch { /* best-effort; grounding without facts still instructs a [PLACEHOLDER], never an invention */ }
     // P-SRC: retrieve the most relevant excerpts from this project's APPROVED uploaded source documents and ground them
@@ -142,7 +170,7 @@ export async function runReviewCycle(deliveryProjectId: string, docKey: string, 
       const hits = await retrieveRelevantChunks(deliveryProjectId, query, 8, groundTenantId);
       sourceExcerpts = hits.map((h) => ({ documentName: h.documentName, text: h.text }));
     } catch { /* best-effort; grounding without excerpts is still valid */ }
-    return buildGrounding({ blueprint, document: { title: d?.title ?? docKey, requirements: (d?.requirementIds ?? []).map((id) => ({ canonicalReqId: id, statement: id })), sections: d?.sections ?? [] }, approvedFacts: facts, references, personnel, caseStudies, sourceExcerpts });
+    return buildGrounding({ blueprint, document: { title: d?.title ?? docKey, requirements: (d?.requirementIds ?? []).map((id) => ({ canonicalReqId: id, statement: reqStatements.get(id) || id })), sections: d?.sections ?? [] }, approvedFacts: facts, solicitationFacts, references, personnel, caseStudies, sourceExcerpts });
   }
 
   const deps: ReviewCycleDeps = {
