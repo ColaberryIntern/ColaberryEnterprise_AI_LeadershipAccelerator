@@ -24,14 +24,23 @@ export function dropResolved(needs: HumanNeed[], resolvedKeys: Set<string>): Hum
   return needs.filter((n) => !resolvedKeys.has(n.key));
 }
 
-/** PURE: extract HumanNeeds from raw gap `need` values and from version finding arrays (resolver==='human'). */
+/** PURE: extract HumanNeeds from raw gap `need` values and from version finding arrays (resolver==='human'). The gap's
+ *  own `suggestions` (example good answers) are carried onto the need when it has none, so the Fill form can show what
+ *  a good answer looks like instead of only a terse label. */
 export function extractNeeds(
-  gapNeeds: Array<{ need?: unknown }>,
+  gapNeeds: Array<{ need?: unknown; suggestions?: unknown }>,
   findingSets: Array<unknown>,
 ): HumanNeed[] {
   const out: HumanNeed[] = [];
   for (const g of gapNeeds) {
-    if (isHumanNeed(g?.need)) out.push(g.need);
+    if (isHumanNeed(g?.need)) {
+      const need = g.need;
+      if ((!Array.isArray(need.suggestions) || need.suggestions.length === 0) && Array.isArray(g.suggestions)) {
+        const ex = (g.suggestions as unknown[]).filter((s): s is string => typeof s === 'string' && s.trim().length > 0).slice(0, 3);
+        if (ex.length) need.suggestions = ex;
+      }
+      out.push(need);
+    }
   }
   for (const set of findingSets) {
     if (!Array.isArray(set)) continue;
@@ -46,8 +55,8 @@ export function extractNeeds(
 export async function collectProjectNeeds(deliveryProjectId: string): Promise<HumanNeed[]> {
   if (!deliveryProjectId) return [];
   try {
-    const gaps = await sequelize.query<{ need: unknown }>(
-      "SELECT need FROM gov_proposal_document_gaps WHERE delivery_project_id = $1 AND resolution = 'open' AND need IS NOT NULL",
+    const gaps = await sequelize.query<{ need: unknown; suggestions: unknown }>(
+      "SELECT need, suggestions FROM gov_proposal_document_gaps WHERE delivery_project_id = $1 AND resolution = 'open' AND need IS NOT NULL",
       { bind: [deliveryProjectId], type: QueryTypes.SELECT },
     );
     // Per-document current-version findings + pass state + Gold-gate state — feeds both the human-resolver needs and

@@ -251,6 +251,8 @@ export interface GovProjectNeed {
   usedIn: Array<{ docKey: string; sectionKey?: string }>;
   format: string; options?: string[]; blocking: 'fatal' | 'score';
   source?: { quote: string; file: string; page?: number };
+  /** Example good answers, so the Needs form shows what a good answer looks like instead of only a terse label. */
+  suggestions?: string[];
   /** Present iff kind === 'record': whether this groups a past-performance reference or a key person, and the
    *  field keys the grouped form collects. */
   recordType?: GovRecordType; recordFields?: string[];
@@ -264,7 +266,7 @@ export interface GovNeedResolveResult { resolved: string; store: string; status:
 /** The result of a bounded Build-all / auto-resume enqueue. */
 export interface GovBuildAllResult { started: boolean; enqueued: Array<{ docKey: string; runId: string }>; skipped: string[]; }
 /** B.4: one derived activity event for the agent-panel feed. */
-export type GovActivityKind = 'version' | 'gate' | 'artifact' | 'blueprint' | 'library_answer' | 'signature';
+export type GovActivityKind = 'run' | 'need' | 'version' | 'gate' | 'artifact' | 'blueprint' | 'library_answer' | 'signature';
 export interface GovActivityEvent { kind: GovActivityKind; at: string; summary: string; docKey?: string | null; }
 /** B.5: a review-cycle run's pollable status. */
 export type GovReviewRunStatus = 'running' | 'passed' | 'blocked' | 'failed' | 'done';

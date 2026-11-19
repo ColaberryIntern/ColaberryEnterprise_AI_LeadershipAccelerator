@@ -87,7 +87,7 @@ export interface DossierNeed {
 }
 
 /** A concept inside a group card (a fact group lists several; a record group is one). */
-export interface NeedGroupConcept { conceptId: string; label: string; asks: string[]; needKeys: string[]; why?: string; sourceQuote?: string }
+export interface NeedGroupConcept { conceptId: string; label: string; asks: string[]; needKeys: string[]; why?: string; sourceQuote?: string; suggestions?: string[] }
 /** One (group, subject) slot: the collapsed, fillable unit the restructured Needs view renders. */
 export interface NeedGroupCard {
   groupSlug: string;

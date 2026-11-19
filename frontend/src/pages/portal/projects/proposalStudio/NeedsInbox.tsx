@@ -107,8 +107,12 @@ function NeedCard(
         {need.source && (
           <div className="gps-quote" data-testid="need-quote">&ldquo;{need.source.quote}&rdquo; <span className="gps-small gps-muted">— {need.source.file}{need.source.page ? `, p.${need.source.page}` : ''}</span></div>
         )}
+        {(need.suggestions || []).some((s) => s && s.trim()) && (
+          <div className="gps-small" data-testid="need-example" style={{ marginTop: 4, color: 'var(--gps-ok)' }}>Example of a good answer: {(need.suggestions || []).find((s) => s && s.trim())}</div>
+        )}
         {docKeys.length > 0 && (
-          <div className="gps-choice-row" style={{ marginTop: 4 }}>
+          <div className="gps-choice-row" style={{ marginTop: 4, alignItems: 'baseline' }}>
+            <span className="gps-small gps-muted">Answering this unblocks:</span>
             {docKeys.map((k) => (
               <button key={k} type="button" data-testid="need-used" className="gps-tag gps-chip-btn" onClick={() => onNavigate('editor')}>{titleFor(k)}</button>
             ))}
