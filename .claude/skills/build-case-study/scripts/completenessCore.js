@@ -126,4 +126,44 @@ function mermaidReservedIds(src) {
   return [...found];
 }
 
-module.exports = { present, presenceProfile, selectReferences, compareToReferences, formatReport, mermaidReservedIds };
+/* NO CODE IN A CASE STUDY. Ali, 2026-11-18: "Don't ever show code in a case study", and of the
+   Open House screens of a prompt file and a JSON ledger entry: "Remove the claude code
+   screenshots ... the part where you show claude is boring." A buyer reads outcomes and the
+   product in use, never the source, a prompt, a terminal or the AI that built it.
+   Returns the public artifacts whose served file is source or data, or whose title says it
+   shows code, a prompt, a terminal or the builder tool. Judged on what the READER is told the
+   picture is (title, file type), so a chart titled "The funnel" never trips it. */
+const CODE_FILE = /\.(md|markdown|json|ya?ml|js|mjs|cjs|ts|tsx|jsx|py|sh|ps1|sql|diff|patch|txt)(\?|#|$)/i;
+const CODE_TITLE = /\b(code|source code|prompt|terminal|console log|json|yaml|script|diff|commit|pull request|claude|cursor|copilot|\.md)\b/i;
+function codeShownArtifacts(artifacts) {
+  return (Array.isArray(artifacts) ? artifacts : []).filter((a) => a && a.visibility === 'public'
+    && (CODE_FILE.test(String(a.publicUrl || a.url || '')) || CODE_TITLE.test(String(a.title || ''))))
+    .map((a) => String(a.title || a.publicUrl || a.url));
+}
+
+/* THE STORY IN BRIEF, beyond its shape. What the builds of 17-18 Nov 2026 (CF1-CF3, GD1-GD2,
+   Internship, Open House) showed a good set of beats does, as checks a script can make:
+   - the "What happened" beat carries a figure (8 of 8; 66 of 82 against 0 of 5): a result
+     with no number is a claim, and it is the beat a skimming buyer reads;
+   - no beat reads like a ticket: no file names, code identifiers, URLs, PR or ticket numbers;
+   - no beat repeats the standfirst: the band exists because the opening paragraph sometimes
+     does not tell the story, so copying it adds nothing;
+   - every beat says a different thing (no two texts alike).
+   Returns a list of problems; empty means clean. Shape (3-5 beats, lengths) is the server's
+   storyInBriefProblem, checked separately. */
+const TICKETISH = /(`|\b[\w-]+\.(js|ts|tsx|py|md|json|sql|sh)\b|https?:\/\/|\bPR ?#?\d+|#\d{3,}|\b[a-z]{2,}[A-Z][a-zA-Z]+\b|\b[a-z]+_[a-z_]+\b)/;
+const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+function storyInBriefLint(beats, standfirst) {
+  const out = [];
+  if (!Array.isArray(beats) || !beats.length) return out;
+  const happened = beats.find((b) => /happen|result|outcome/i.test(String(b && b.label))) || beats[2];
+  if (happened && !/\d/.test(String(happened.text))) out.push(`"${happened.label}" carries no figure`);
+  beats.forEach((b) => { if (TICKETISH.test(String(b && b.text))) out.push(`"${b.label}" reads like a ticket (file, identifier, URL or PR number)`); });
+  const sf = norm(standfirst);
+  beats.forEach((b) => { const t = norm(b && b.text); if (sf && t.length > 40 && (sf.includes(t) || t.includes(sf.slice(0, 80)))) out.push(`"${b.label}" repeats the standfirst`); });
+  const seen = new Set();
+  beats.forEach((b) => { const t = norm(b && b.text); if (seen.has(t)) out.push(`"${b.label}" repeats another beat`); seen.add(t); });
+  return out;
+}
+
+module.exports = { present, presenceProfile, selectReferences, compareToReferences, formatReport, mermaidReservedIds, codeShownArtifacts, storyInBriefLint };

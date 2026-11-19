@@ -54,8 +54,15 @@ export interface StoryMediaCarouselProps {
   label?: string;
 }
 
-/** How much of the viewport one press moves. Just under a full width leaves a hinge. */
-const STEP_FRACTION = 0.9;
+/**
+ * ONE SLIDE AT A TIME (Ali, 18 Nov 2026: "I don't like the scroll bar for the artifacts.
+ * Instead use a carousel"). Each slide is the full width of the track, so one press moves
+ * exactly one slide, the scrollbar is hidden (the arrows, the counter, a swipe and Tab
+ * all still move it), and every picture sits in the same 16:9 frame instead of a row of
+ * cards of different heights. It is still the native scroll-snap track described above:
+ * nothing about access or focus changed, only the geometry.
+ */
+const STEP_FRACTION = 1;
 
 /**
  * Whether this reader asked for less motion.
@@ -81,6 +88,15 @@ export function StoryMediaCarousel({
   const trackRef = useRef<HTMLUListElement>(null);
   /* Starts TRUE. See `measure` for why the unknown case keeps the controls. */
   const [canScroll, setCanScroll] = useState(true);
+  /* Which slide is in view, for the "3 of 21" counter. Read from the track's own scroll
+     position, so a swipe, a Tab into an offscreen slide and an arrow all agree. */
+  const [current, setCurrent] = useState(0);
+  const onScroll = useCallback((): void => {
+    const track = trackRef.current;
+    if (!track || track.clientWidth === 0) return;
+    const at = Math.round(track.scrollLeft / track.clientWidth);
+    setCurrent(Math.max(0, Math.min(slides.length - 1, at)));
+  }, [slides.length]);
 
   /**
    * Does the track have anywhere to go?
@@ -144,6 +160,7 @@ export function StoryMediaCarousel({
       <ul
         className="cbv2-story-carousel__track"
         ref={trackRef}
+        onScroll={onScroll}
         aria-label={label}
         data-testid="story-carousel-track"
       >
@@ -165,17 +182,22 @@ export function StoryMediaCarousel({
                   the title sits immediately beneath, and inventing a sentence
                   about a picture this code has never seen is the thing the whole
                   atmosphere/evidence rule exists to prevent. */}
-              <img
-                className="cbv2-story-carousel__image"
-                src={slide.imageUrl}
-                alt=""
-                loading="lazy"
-              />
+              <span className="cbv2-story-carousel__stage">
+                <img
+                  className="cbv2-story-carousel__image"
+                  src={slide.imageUrl}
+                  alt=""
+                  loading="lazy"
+                />
+              </span>
               <span className="cbv2-story-carousel__caption">
                 <span className="cbv2-story-carousel__kind">
                   {ARTIFACT_TYPE_LABELS[slide.artifactType]}
                 </span>
                 <span className="cbv2-story-carousel__title">{slide.title}</span>
+                {slide.description ? (
+                  <span className="cbv2-story-carousel__note">{slide.description}</span>
+                ) : null}
               </span>
               <span className="cbv2-cs-sr-only"> (opens in a new tab)</span>
             </a>
@@ -199,6 +221,9 @@ export function StoryMediaCarousel({
             <span aria-hidden="true">&larr;</span>
             <span className="cbv2-cs-sr-only">Scroll to previous images</span>
           </button>
+          <span className="cbv2-story-carousel__count" aria-live="polite" data-testid="carousel-count">
+            {current + 1} of {slides.length}
+          </span>
           <button
             type="button"
             className="cbv2-btn cbv2-btn--secondary cbv2-btn--sm"

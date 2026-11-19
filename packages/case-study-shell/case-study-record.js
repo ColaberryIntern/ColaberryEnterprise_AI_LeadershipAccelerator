@@ -122,6 +122,47 @@
     return ul.childNodes.length ? ul : null;
   }
 
+  /* ONE PICTURE AT A TIME. Ali, 18 Nov 2026: "I don't like the scroll bar for the
+     artifacts. Instead use a carousel". The same shape as the Enterprise page
+     (StoryMediaCarousel): a native scroll-snap track, one slide per view, no
+     scrollbar, two arrows and a "3 of 21" count. Every slide stays in the DOM and in
+     tab order, so nothing depends on the arrows; they only move the track. */
+  function carousel(track) {
+    track.className += ' cs-carousel-track';
+    track.setAttribute('aria-label', 'Pictures from this project');
+    var n = track.childNodes.length;
+    var count = el('span', 'cs-carousel-count', '1 of ' + n);
+    count.setAttribute('aria-live', 'polite');
+    function button(label, sr, dir) {
+      var b = el('button', 'cs-carousel-btn');
+      b.type = 'button';
+      var arrow = el('span', null, label);
+      arrow.setAttribute('aria-hidden', 'true');
+      b.appendChild(arrow);
+      b.appendChild(el('span', 'cs-sr-only', sr));
+      b.addEventListener('click', function () {
+        var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        var d = track.clientWidth * dir;
+        if (typeof track.scrollBy === 'function') track.scrollBy({ left: d, behavior: reduce ? 'auto' : 'smooth' });
+        else track.scrollLeft += d;
+      });
+      return b;
+    }
+    track.addEventListener('scroll', function () {
+      if (!track.clientWidth) return;
+      var at = Math.round(track.scrollLeft / track.clientWidth);
+      count.textContent = (Math.max(0, Math.min(n - 1, at)) + 1) + ' of ' + n;
+    });
+    var controls = el('div', 'cs-carousel-controls');
+    controls.appendChild(button('←', 'Previous picture', -1));
+    controls.appendChild(count);
+    controls.appendChild(button('→', 'Next picture', 1));
+    var wrap = el('div', 'cs-carousel');
+    wrap.appendChild(track);
+    wrap.appendChild(controls);
+    return [wrap];
+  }
+
   function section(id, heading, children) {
     var kept = children.filter(Boolean);
     // A heading over nothing reads as a rendering fault. A band with no content
@@ -608,8 +649,8 @@
         return a.access === 'open' && seen.indexOf(a.previewUrl || a.url) < 0;
       });
       if (!open.length) return null;
-      return section('artifacts', 'More from this project', [
-        list(open, function (a) {
+      var pictured = open.filter(function (a) { return a.previewUrl || a.url; });
+      var track = list(open, function (a) {
           var li = el('li', 'cs-artifact');
           var img = a.previewUrl || a.url;
           if (img) {
@@ -622,8 +663,9 @@
           li.appendChild(el('p', 'cs-artifact-title', a.title));
           if (a.description) li.appendChild(el('p', 'cs-artifact-note', a.description));
           return li;
-        }, 'cs-artifacts'),
-      ]);
+        }, 'cs-artifacts');
+      if (!track || pictured.length < 2) return section('artifacts', 'More from this project', [track]);
+      return section('artifacts', 'More from this project', carousel(track));
     },
 
     repositories: function (c) {

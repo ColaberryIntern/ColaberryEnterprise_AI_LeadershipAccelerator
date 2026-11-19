@@ -1,0 +1,22 @@
+/* The closing call to action on a story page.
+
+   Ali, 18 Nov 2026, on the live band: "the black space ... where the text is not centered
+   and not on a good ratio". Two causes, both measured on the live page at 1440px:
+   - the band took the site-wide section padding (128px above and below, from
+     `.cbv2-shell .cbv2-section`), so three short lines sat in a 448px block;
+   - `.cbv2-cs-cta` is `justify-items: start`, so the eyebrow, heading and button lined
+     up on the left edge of a centred box and read as off centre.
+   The band is a closing prompt, not a section: compact, and centred on every line.
+   Three classes deep so it outranks `.cbv2-shell .cbv2-section` at every breakpoint. */
+.cbv2-story .cbv2-section[data-section="cta"] { padding-block: var(--space-16); }
+
+.cbv2-story .cbv2-story__cta .cbv2-cs-cta {
+  justify-items: center;
+  text-align: center;
+  padding: 0;
+  gap: var(--space-4);
+}
+
+@media (max-width: 560px) {
+  .cbv2-story .cbv2-section[data-section="cta"] { padding-block: var(--space-12); }
+}
