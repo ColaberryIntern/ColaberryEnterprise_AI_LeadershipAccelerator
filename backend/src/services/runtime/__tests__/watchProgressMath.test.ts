@@ -126,6 +126,51 @@ describe('withAuthoritativeDuration', () => {
     expect(withAuthoritativeDuration(null, 300)).toBeNull();
     expect(withAuthoritativeDuration(undefined, 300)).toBeNull();
   });
+
+  it('clamps a playhead left behind by a replaced video to the real duration', () => {
+    // The live C118 shape: watched against the old 213s YouTube video, now graded
+    // against the 109s mp4 that replaced it.
+    const carriedOver = stored({ watched_s: 68, max_position_s: 213, duration_s: 213, watched_pct: 32 });
+    const out = withAuthoritativeDuration(carriedOver, 109);
+    expect(out?.max_position_s).toBe(109);   // not 213 — that video is gone
+    expect(out?.duration_s).toBe(109);
+  });
+
+  it('never reduces watched_s when clamping — credit earned is not taken away', () => {
+    const carriedOver = stored({ watched_s: 426, max_position_s: 213, duration_s: 213, watched_pct: 100 });
+    const out = withAuthoritativeDuration(carriedOver, 109);
+    expect(out?.watched_s).toBe(426);
+    expect(meetsWatchRequirement(out, 0.75).met).toBe(true);
+  });
+
+  it('leaves a playhead inside the real duration exactly where it was', () => {
+    const out = withAuthoritativeDuration(stored({ max_position_s: 87, duration_s: 213 }), 109);
+    expect(out?.max_position_s).toBe(87);
+  });
+});
+
+describe('accumulateWatch across a replaced video', () => {
+  it('clamps the ratcheted playhead to the authoritative duration', () => {
+    // Exactly the row found in production: duration_s had already been re-pinned
+    // to 109 by a post-swap beat while max_position_s stayed ratcheted at 213.
+    const carriedOver: WatchState = { watched_s: 122, max_position_s: 213, duration_s: 109, watched_pct: 100 };
+    const s = accumulateWatch(carriedOver, { delta_s: 10, position_s: 20, duration_s: 109 }, NOW, 109);
+    expect(s.max_position_s).toBe(109);
+    expect(s.duration_s).toBe(109);
+    expect(s.watched_s).toBe(132);   // credit still accrues normally
+  });
+
+  it('ignores a client reporting a playhead past the authoritative end', () => {
+    const s = accumulateWatch(null, { delta_s: 10, position_s: 9999, duration_s: 109 }, NOW, 109);
+    expect(s.max_position_s).toBe(109);
+  });
+
+  it('leaves the plain ratchet untouched when no authoritative duration is known', () => {
+    // Loom/Wistia/unverified: there is no ceiling to clamp against, and inventing
+    // one from the client's own report would be trusting the thing this gate distrusts.
+    const s = accumulateWatch(null, { delta_s: 10, position_s: 500, duration_s: 100 }, NOW);
+    expect(s.max_position_s).toBe(500);
+  });
 });
 
 describe('isWatchableCard', () => {
