@@ -1,0 +1,391 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "plan-live-session/blueprint.schema.json",
+  "title": "Live session blueprint",
+  "description": "The structured twin of blueprint.md. Structural rules live here; rules that need arithmetic or cross-references (minutes sum, sound-bite scores, sourced facts, diagram node counts) live in scripts/validate_blueprint.js.",
+  "type": "object",
+  "required": ["schemaVersion", "meta", "header", "angles", "runOfShow", "soundBites", "slides", "facts", "participation", "demo", "students", "contentYield", "scores", "checklist", "risks", "deckHandoff", "sources"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "enum": [1] },
+    "meta": {
+      "type": "object",
+      "required": ["generatedAt", "slug", "params", "belowPassMark", "stoppedAfter"],
+      "properties": {
+        "generatedAt": { "type": "string", "minLength": 10 },
+        "slug": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$", "maxLength": 60 },
+        "params": {
+          "type": "object",
+          "required": ["source", "audience", "length", "date", "angles", "pass_mark", "interactive", "stop_after", "out"],
+          "properties": {
+            "source": { "enum": ["auto", "curriculum", "news", "mix"] },
+            "topic": { "type": ["string", "null"] },
+            "week": { "type": ["integer", "null"], "minimum": 1, "maximum": 12 },
+            "students_on": { "type": ["integer", "null"], "minimum": 1, "maximum": 12 },
+            "build": { "type": ["string", "null"] },
+            "proof": { "type": ["string", "null"] },
+            "news": { "type": ["string", "null"] },
+            "audience": { "enum": ["students", "public", "public-preview"] },
+            "length": { "enum": [60, 90, 120] },
+            "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+            "last_session": { "type": ["string", "null"] },
+            "series": { "type": ["string", "null"] },
+            "guest": { "type": ["string", "null"] },
+            "avoid": { "type": ["string", "null"] },
+            "notes": { "type": ["string", "null"] },
+            "angles": { "type": "integer", "minimum": 3, "maximum": 7 },
+            "pass_mark": { "type": "integer", "minimum": 60, "maximum": 90 },
+            "interactive": { "type": "boolean" },
+            "stop_after": { "enum": ["picks", "angles", "idea", "blueprint"] },
+            "out": { "type": "string" }
+          }
+        },
+        "belowPassMark": { "type": "boolean" },
+        "stoppedAfter": { "enum": ["blueprint"] },
+        "assumptions": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "header": {
+      "type": "object",
+      "required": ["title", "openingLine", "promise", "airDate", "audience", "lengthMinutes", "week", "lens", "lastSessionCallback", "dataPick", "tighteningLog"],
+      "properties": {
+        "title": { "type": "string", "minLength": 3, "maxLength": 34 },
+        "openingLine": { "type": "string", "minLength": 10 },
+        "promise": { "type": "string", "minLength": 10 },
+        "airDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "audience": { "enum": ["students", "public", "public-preview"] },
+        "lengthMinutes": { "enum": [60, 90, 120] },
+        "series": { "type": ["string", "null"] },
+        "guest": { "type": ["string", "null"] },
+        "lens": { "$ref": "#/$defs/lens" },
+        "lastSessionCallback": { "type": "string", "minLength": 3 },
+        "week": {
+          "type": "object",
+          "required": ["number", "theme", "beat", "academy", "deliverable"],
+          "properties": {
+            "number": { "type": "integer", "minimum": 1, "maximum": 12 },
+            "theme": { "type": "string" },
+            "beat": { "type": "string" },
+            "academy": {
+              "type": "object",
+              "required": ["title", "url", "status"],
+              "properties": { "title": { "type": "string" }, "url": { "type": ["string", "null"] }, "status": { "type": "string" } }
+            },
+            "deliverable": { "type": "string" },
+            "storyDevice": { "type": "string" }
+          }
+        },
+        "dataPick": {
+          "type": "object",
+          "required": ["rows", "pickedWeek", "reason"],
+          "properties": {
+            "rows": {
+              "type": "array", "minItems": 1, "maxItems": 12,
+              "items": {
+                "type": "object",
+                "required": ["rank", "week", "theme", "factors", "total"],
+                "properties": {
+                  "rank": { "type": "integer" }, "week": { "type": "integer" }, "theme": { "type": "string" },
+                  "factors": { "type": "object", "required": ["closeness", "coverage", "demand", "buildability", "newsFit"] },
+                  "total": { "type": "number", "minimum": 0, "maximum": 100 },
+                  "evidence": { "type": "string" }
+                }
+              }
+            },
+            "pickedWeek": { "type": "integer", "minimum": 1, "maximum": 12 },
+            "reason": { "type": "string" }
+          }
+        },
+        "tighteningLog": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["round", "angleLens", "title", "score", "changed"],
+            "properties": { "round": { "type": "integer", "minimum": 0 }, "angleLens": { "type": "string" }, "title": { "type": "string" }, "score": { "type": "number" }, "changed": { "type": "string" } }
+          }
+        }
+      }
+    },
+    "angles": {
+      "type": "array", "minItems": 3, "maxItems": 7,
+      "items": {
+        "type": "object",
+        "required": ["lens", "title", "angle", "promise", "openingLine", "whyNow", "proofNeeded", "idea", "chosen"],
+        "properties": {
+          "lens": { "$ref": "#/$defs/lens" },
+          "title": { "type": "string", "maxLength": 34 },
+          "originalTitle": { "type": ["string", "null"] },
+          "promise": { "type": "string" },
+          "device": { "type": ["string", "null"] },
+          "angle": { "type": "string" },
+          "openingLine": { "type": "string" },
+          "whyNow": { "type": "string" },
+          "proofNeeded": { "type": "string" },
+          "chosen": { "type": "boolean" },
+          "idea": { "$ref": "#/$defs/ideaScore" }
+        }
+      }
+    },
+    "runOfShow": {
+      "type": "object",
+      "required": ["lengthMinutes", "publicEndsAtMinute", "segments"],
+      "properties": {
+        "lengthMinutes": { "enum": [60, 90, 120] },
+        "publicEndsAtMinute": { "type": ["integer", "null"], "minimum": 20 },
+        "segments": {
+          "type": "array", "minItems": 6,
+          "items": {
+            "type": "object",
+            "required": ["id", "start", "minutes", "mode", "title", "talkingPoints", "onScreenBuild", "chatPrompt", "visual", "soundBiteIds"],
+            "properties": {
+              "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+              "start": { "type": "integer", "minimum": 0 },
+              "minutes": { "type": "integer", "minimum": 1, "maximum": 10 },
+              "mode": { "enum": ["cold-open", "teach", "live-build", "teardown", "hot-seat", "qa", "story", "poll", "recap"] },
+              "title": { "type": "string" },
+              "talkingPoints": { "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "string", "minLength": 3 } },
+              "onScreenBuild": { "type": "string" },
+              "chatPrompt": { "type": "string", "minLength": 5 },
+              "visual": { "type": "string", "minLength": 5 },
+              "soundBiteIds": { "type": "array", "items": { "type": "string" } },
+              "public": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    },
+    "soundBites": {
+      "type": "array", "minItems": 10,
+      "items": {
+        "type": "object",
+        "required": ["id", "text", "kind", "segmentId", "score"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^sb-\\d+$" },
+          "text": { "type": "string" },
+          "kind": { "enum": ["news-take", "number", "mistake", "framework", "prediction", "contrarian", "story-30s", "other"] },
+          "segmentId": { "type": "string" },
+          "score": { "type": "integer", "minimum": 0, "maximum": 100 },
+          "story": { "type": ["string", "null"], "description": "story-30s only: the full ~75-word story the clip is cut from; `text` is its 8-25 word line." }
+        }
+      }
+    },
+    "slides": {
+      "type": "array", "minItems": 10, "maxItems": 14,
+      "items": {
+        "type": "object",
+        "required": ["id", "segmentId", "type", "title", "bullets", "visual", "speakerNote", "publicValue"],
+        "properties": {
+          "id": { "type": "string" },
+          "segmentId": { "type": "string" },
+          "type": { "enum": ["title", "teach", "demo", "story", "poll", "data", "quote", "close"] },
+          "title": { "type": "string", "minLength": 2 },
+          "bullets": { "type": "array", "maxItems": 3, "items": { "type": "string", "maxLength": 90 } },
+          "visual": { "type": "string", "minLength": 5 },
+          "diagram": { "type": ["string", "null"] },
+          "instruction": { "type": ["string", "null"] },
+          "speakerNote": { "type": "string", "minLength": 10 },
+          "publicValue": { "type": "string", "minLength": 3 }
+        }
+      }
+    },
+    "facts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "claim", "usedIn", "source", "url", "publishedAt", "status", "registry"],
+        "properties": {
+          "id": { "type": "string" },
+          "claim": { "type": "string" },
+          "usedIn": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+          "source": { "type": "string", "minLength": 2 },
+          "url": { "type": ["string", "null"] },
+          "publishedAt": { "type": ["string", "null"] },
+          "status": { "enum": ["sourced", "verify"] },
+          "registryVerified": { "type": "boolean", "description": "The claim matches a claimsRegistry.ts entry that is VERIFIED and approved for public routes; its evidenceSource is the source. May go public." },
+          "illustrative": { "type": "boolean", "description": "A labeled hypothetical (e.g. the curriculum's teaching scenario). Never a real-world claim; may appear publicly only with a visible 'illustrative' label." },
+          "registry": {
+            "type": "object",
+            "required": ["applies", "key", "note"],
+            "properties": { "applies": { "type": "boolean" }, "key": { "type": ["string", "null"] }, "note": { "type": "string" } }
+          }
+        }
+      }
+    },
+    "participation": {
+      "type": "object",
+      "required": ["questions", "storyBeats"],
+      "properties": {
+        "questions": {
+          "type": "array", "minItems": 6, "maxItems": 10,
+          "items": {
+            "type": "object",
+            "required": ["id", "kind", "q", "options", "answer", "segmentId"],
+            "properties": {
+              "id": { "type": "string" },
+              "kind": { "enum": ["roll-call", "diagnostic", "judgment-poll", "self-check"] },
+              "q": { "type": "string" },
+              "options": { "type": "array", "items": { "type": "string" } },
+              "answer": { "type": "string", "minLength": 2 },
+              "segmentId": { "type": "string" }
+            }
+          }
+        },
+        "storyBeats": {
+          "type": "array", "minItems": 3, "maxItems": 5,
+          "items": {
+            "type": "object",
+            "required": ["id", "person", "moment", "stake", "punch", "segmentId"],
+            "properties": {
+              "id": { "type": "string" }, "person": { "type": "string" }, "moment": { "type": "string" },
+              "stake": { "type": "string" }, "punch": { "type": "string" }, "segmentId": { "type": "string" },
+              "device": { "type": ["string", "null"] }
+            }
+          }
+        }
+      }
+    },
+    "demo": {
+      "type": "object",
+      "required": ["goal", "steps", "claudeCodeInstructions", "whatCouldGoWrong", "fallback"],
+      "properties": {
+        "goal": { "type": "string" },
+        "steps": { "type": "array", "minItems": 3, "items": { "type": "string" } },
+        "claudeCodeInstructions": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 20 } },
+        "whatCouldGoWrong": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "fallback": { "type": "string", "minLength": 10 }
+      }
+    },
+    "students": {
+      "type": "object",
+      "required": ["buildAlong", "applyToOwnPlan", "openQuestion"],
+      "properties": { "buildAlong": { "type": "string" }, "applyToOwnPlan": { "type": "string" }, "openQuestion": { "type": "string" } }
+    },
+    "contentYield": {
+      "type": "object",
+      "required": ["video", "shorts", "quoteCards", "linkedinPost", "email", "nextLiveCta"],
+      "properties": {
+        "video": {
+          "type": "object",
+          "required": ["title", "thumbnailText", "firstTwoSentences", "targetMinutes"],
+          "properties": {
+            "title": { "type": "string", "maxLength": 34 },
+            "thumbnailText": { "type": "string", "maxLength": 10 },
+            "firstTwoSentences": { "type": "string" },
+            "targetMinutes": { "type": "string" }
+          }
+        },
+        "shorts": {
+          "type": "array", "minItems": 6, "maxItems": 6,
+          "items": {
+            "type": "object", "required": ["title", "soundBiteId", "segmentId"],
+            "properties": { "title": { "type": "string" }, "soundBiteId": { "type": "string" }, "segmentId": { "type": "string" } }
+          }
+        },
+        "quoteCards": { "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "string" } },
+        "linkedinPost": { "type": "string", "minLength": 100 },
+        "email": {
+          "type": "object", "required": ["subject", "recap"],
+          "properties": { "subject": { "type": "string" }, "recap": { "type": "string" } }
+        },
+        "nextLiveCta": { "type": "string" }
+      }
+    },
+    "scores": {
+      "type": "object",
+      "required": ["idea", "room", "yield", "topFixes"],
+      "properties": {
+        "idea": { "type": "number", "minimum": 0, "maximum": 100 },
+        "room": { "$ref": "#/$defs/fiftyScore" },
+        "yield": { "$ref": "#/$defs/fiftyScore" },
+        "topFixes": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "string" } }
+      }
+    },
+    "checklist": { "type": "array", "minItems": 3, "items": { "type": "string" } },
+    "risks": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+    "deckHandoff": {
+      "type": "object",
+      "required": ["session", "segments", "teach", "slideNotes", "interactions", "storyBeats", "opening", "checkpointsEnabled", "unmapped"],
+      "properties": {
+        "session": {
+          "type": "object", "required": ["title", "publicTitle", "week", "dayKind"],
+          "properties": { "dayKind": { "enum": ["build", "architecture"] } }
+        },
+        "segments": {
+          "type": "array", "minItems": 1,
+          "items": {
+            "type": "object", "required": ["id", "startMin", "endMin", "label", "mode", "purpose", "publicValue", "deckSegment"],
+            "properties": { "mode": { "enum": ["open", "present", "interact", "build", "break", "close"] } }
+          }
+        },
+        "opening": {
+          "type": "object",
+          "properties": { "coldOpen": { "type": "object" }, "hook": { "type": "object" }, "resultPreview": { "type": "object" } }
+        },
+        "checkpointsEnabled": { "type": "boolean" },
+        "teach": {
+          "type": "array",
+          "items": { "type": "object", "required": ["segment", "eyebrow", "title", "script"] }
+        },
+        "slideNotes": { "type": "object" },
+        "interactions": { "type": "array" },
+        "storyBeats": { "type": "array" },
+        "unmapped": {
+          "type": "array",
+          "items": { "type": "object", "required": ["field", "reason"] }
+        }
+      }
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["url", "title", "accessedAt", "fetchedThisRun"],
+        "properties": {
+          "url": { "type": "string", "pattern": "^https?://" },
+          "title": { "type": "string" },
+          "publisher": { "type": ["string", "null"] },
+          "publishedAt": { "type": ["string", "null"] },
+          "accessedAt": { "type": "string" },
+          "fetchedThisRun": { "type": "boolean" },
+          "usedFor": { "type": "string" }
+        }
+      }
+    },
+    "news": {
+      "type": "array", "maxItems": 6,
+      "items": {
+        "type": "object", "required": ["headline", "publisher", "url", "publishedAt", "ageDays"],
+        "properties": { "ageDays": { "type": ["integer", "null"], "minimum": 0 } }
+      }
+    },
+    "demand": { "type": "array" }
+  },
+  "$defs": {
+    "lens": { "enum": ["build-story", "news-consequence", "mistake-teardown", "student-journey", "contrarian-take", "comparison", "prediction"] },
+    "ideaScore": {
+      "type": "object",
+      "required": ["lines", "caps", "total"],
+      "properties": {
+        "lines": {
+          "type": "object",
+          "required": ["demand", "viewer", "promise", "tension", "proof", "series", "news"],
+          "properties": {
+            "demand": { "type": "integer", "minimum": 0, "maximum": 5 },
+            "viewer": { "type": "integer", "minimum": 0, "maximum": 5 },
+            "promise": { "type": "integer", "minimum": 0, "maximum": 5 },
+            "tension": { "type": "integer", "minimum": 0, "maximum": 5 },
+            "proof": { "type": "integer", "minimum": 0, "maximum": 5 },
+            "series": { "type": "integer", "minimum": 0, "maximum": 5 },
+            "news": { "type": "integer", "minimum": 0, "maximum": 5 }
+          }
+        },
+        "caps": { "type": "array", "items": { "type": "string" } },
+        "total": { "type": "number", "minimum": 0, "maximum": 100 }
+      }
+    },
+    "fiftyScore": {
+      "type": "object",
+      "required": ["total", "lines"],
+      "properties": { "total": { "type": "number", "minimum": 0, "maximum": 50 }, "lines": { "type": "object" } }
+    }
+  }
+}
