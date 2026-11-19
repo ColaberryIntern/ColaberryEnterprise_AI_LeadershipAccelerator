@@ -73,6 +73,14 @@ export interface ChannelRow {
   /** Whether the COST figure can be trusted. Separate, because they fail independently. */
   costStatus: TileStatus;
   note: string;
+  /**
+   * Set ONLY on the synthetic `other_sources` row: the rows folded into it, in order.
+   *
+   * The fold is presentation, so the folded rows travel with it rather than being dropped from
+   * the payload. Nothing this panel measured ever leaves the response; the reader chooses
+   * whether to look at it. See `foldLongTail`.
+   */
+  collapsed?: ChannelRow[];
 }
 
 /** Human labels for the sources that actually appear. Anything else falls back to its raw value. */
@@ -193,4 +201,82 @@ export function sortChannels(rows: readonly ChannelRow[]): ChannelRow[] {
     || b.payingMembers - a.payingMembers
     || a.key.localeCompare(b.key)
   ));
+}
+
+/** The synthetic row the trivial tail folds into. */
+export const OTHER_SOURCES_KEY = 'other_sources';
+
+/**
+ * A source with fewer leads than this, no member and no recorded spend is not a channel anyone
+ * is deciding about.
+ *
+ * Measured on production 2026-11-19: the panel rendered 17 rows and 3 of them had a member.
+ * Eleven had 16 leads or fewer and nobody paying, three of those being leftovers of our own
+ * testing (`training.colaberry.com-smoke` 1 lead, `catalog_request` 2, `alumni` 1). The signal
+ * was four rows deep in fourteen rows of noise.
+ *
+ * 50 is a judgement, so it is a named constant and not a literal buried in a filter. It sits
+ * above the largest row this is meant to fold (`contact`, 16) and below the smallest row worth
+ * arguing about (`ai-pilot-cold`, 99), which leaves room on both sides before anything moves.
+ */
+export const TAIL_LEAD_CEILING = 50;
+
+/**
+ * Fold the trivial tail into one row, WITHOUT hiding anything.
+ *
+ * ── THE RAIL THIS MUST NOT BREAK ─────────────────────────────────────────────────────
+ *
+ * The header of this file says a measured zero is not an absence, that paid ads at 0 members
+ * against recorded spend is the most useful number on the panel, and that it must never be
+ * averaged away or hidden. A naive "drop the rows with no members" would delete exactly that
+ * row. So the test is NOT "did anyone pay": a row stays on its own if ANY of these is true.
+ *
+ *   - it has a paying member                 the thing the panel is for
+ *   - spend was recorded against it          the measured zero the header protects
+ *   - it is `unlinked`                       shown rather than dropped, by `noteForChannel`
+ *   - it has >= TAIL_LEAD_CEILING leads      enough volume to be a real decision
+ *
+ * Everything else is a source with a handful of leads and nothing to show for them.
+ *
+ * Folding fewer than two rows is not worth a row of its own, so a single straggler is left
+ * where it is: "Other sources (1)" is strictly worse than the source's own name.
+ */
+export function foldLongTail(rows: readonly ChannelRow[]): ChannelRow[] {
+  const keep: ChannelRow[] = [];
+  const fold: ChannelRow[] = [];
+
+  for (const r of rows) {
+    const survives = r.payingMembers > 0
+      || r.spendCents !== null
+      || r.key === 'unlinked'
+      || r.leads >= TAIL_LEAD_CEILING;
+    (survives ? keep : fold).push(r);
+  }
+
+  if (fold.length < 2) return [...rows];
+
+  const leads = fold.reduce((t, r) => t + r.leads, 0);
+  const names = fold.map((r) => r.label).join(', ');
+
+  const other: ChannelRow = {
+    key: OTHER_SOURCES_KEY,
+    label: `Other sources (${fold.length})`,
+    leads,
+    payingMembers: 0,
+    mrrCents: 0,
+    // Never 0: no spend was recorded against any of these, and 0 would claim we measured it.
+    spendCents: null,
+    costPerPayingMemberCents: null,
+    status: channelStatus(leads, 0),
+    costStatus: costStatus(null, 0),
+    note: `${fold.length} sources with ${leads.toLocaleString('en-US')} lead rows between them `
+      + 'and nobody paying from any of them. They are folded together so the channels that did '
+      + 'produce members stay readable, and they are carried with this row rather than dropped, '
+      + `so nothing measured has left the page. A source leaves this row as soon as it records a `
+      + `member, has spend recorded against it, or passes ${TAIL_LEAD_CEILING} leads. `
+      + `In it: ${names}.`,
+    collapsed: fold,
+  };
+
+  return [...keep, other];
 }

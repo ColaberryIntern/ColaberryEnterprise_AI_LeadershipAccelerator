@@ -115,3 +115,61 @@ describe('the channel panel never prints a number nobody measured', () => {
     expect(html).toContain('$945');
   });
 });
+
+/**
+ * The folded tail.
+ *
+ * WHAT THIS SEAM CANNOT PROVE: `renderToStaticMarkup` never runs effects and cannot click, so
+ * these reach the CLOSED state only. That the sub-rows appear on expand is covered by the
+ * backend carrying them in `collapsed` and by the markup below wiring the button to the state.
+ * Saying so beats a test that implies more than it checks.
+ */
+describe('the folded tail hides nothing', () => {
+  const folded = (over: Partial<ChannelRow> = {}): ChannelRow => row({
+    key: 'other_sources',
+    label: 'Other sources (3)',
+    leads: 25,
+    payingMembers: 0,
+    mrrCents: 0,
+    status: 'measured_zero',
+    note: '3 sources with 25 lead rows between them and nobody paying from any of them. '
+      + 'In it: contact, advisory, alumni.',
+    collapsed: [
+      row({ key: 'contact', label: 'contact', leads: 16, payingMembers: 0, mrrCents: 0 }),
+      row({ key: 'advisory', label: 'advisory', leads: 8, payingMembers: 0, mrrCents: 0 }),
+      row({ key: 'alumni', label: 'alumni', leads: 1, payingMembers: 0, mrrCents: 0 }),
+    ],
+    ...over,
+  });
+
+  it('offers a way to see every folded source, and says how many there are', () => {
+    const html = render(report([row(), folded()]));
+    expect(html).toContain('channel-other-toggle');
+    expect(html).toContain('Show all 3');
+    expect(html).toContain('aria-expanded="false"');
+  });
+
+  it('keeps the folded sources out of the table until they are asked for', () => {
+    const html = render(report([row(), folded()]));
+    expect(html).not.toContain('channel-subrow-contact');
+  });
+
+  it('names the folded sources in the note, so they are legible without expanding', () => {
+    // The point of the fold is readability, not secrecy. A reader who never clicks still
+    // learns which sources are in there and that none of them produced a member.
+    const html = render(report([row(), folded()]));
+    expect(html).toContain('contact, advisory, alumni');
+    expect(html).toContain('nobody paying');
+  });
+
+  it('puts no toggle on an ordinary channel', () => {
+    const html = render(report([row()]));
+    expect(html).not.toContain('channel-other-toggle');
+  });
+
+  it('still reports the folded leads in the row, so the tail is counted', () => {
+    const html = render(report([row(), folded()]));
+    expect(html).toContain('channel-row-other_sources');
+    expect(html).toContain('>25<');
+  });
+});

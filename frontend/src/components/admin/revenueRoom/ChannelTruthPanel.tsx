@@ -34,6 +34,8 @@ export interface ChannelRow {
   status: TileStatus;
   costStatus: TileStatus;
   note: string;
+  /** Present only on the `other_sources` row: the trivial sources folded into it. */
+  collapsed?: ChannelRow[];
 }
 
 export interface ChannelTruth {
@@ -60,6 +62,10 @@ const count = (n: number): string => n.toLocaleString('en-US');
  * reading the source. Same seam `AdminRevenueRoomPage` exports for `InitiativeCardView`.
  */
 export function ChannelTable({ report }: { report: ChannelTruth }) {
+  // Declared before the empty-state return on purpose. Below it this would be a conditional
+  // hook, which React forbids and which only misbehaves once the table is sometimes empty.
+  const [showOther, setShowOther] = useState(false);
+
   if (report.rows.length === 0) {
     return (
       <p className="text-muted small m-3 mb-0" data-testid="channel-empty">
@@ -85,35 +91,67 @@ export function ChannelTable({ report }: { report: ChannelTruth }) {
           </thead>
           <tbody>
             {report.rows.map((r) => (
-              <tr key={r.key} data-testid={`channel-row-${r.key}`}>
-                <td>
-                  <div className="d-flex align-items-center gap-2 flex-wrap">
-                    <span className="fw-semibold" style={{ color: 'var(--text-primary)' }}>
-                      {r.label}
-                    </span>
-                    <StatusChip status={r.status} />
-                  </div>
-                  <div className="small text-muted mt-1" style={{ maxWidth: '52ch' }}>
-                    {r.note}
-                  </div>
-                </td>
-                <td className="text-end fw-semibold">{count(r.payingMembers)}</td>
-                <td className="text-end">{usd(r.mrrCents)}</td>
-                <td className="text-end">{count(r.leads)}</td>
-                <td className="text-end" data-testid={`channel-spend-${r.key}`}>
-                  {/* Spelled out rather than punctuated. A bare hyphen in a money column
-                      reads as zero, and zero is the one thing this cell must not say. */}
-                  {r.spendCents === null
-                    ? <span className="small text-muted">Not recorded</span>
-                    : usd(r.spendCents)}
-                </td>
-                <td className="text-end" data-testid={`channel-cost-${r.key}`}>
-                  <div>{usd(r.costPerPayingMemberCents)}</div>
-                  {r.costStatus !== 'live' && (
-                    <div className="mt-1"><StatusChip status={r.costStatus} /></div>
-                  )}
-                </td>
-              </tr>
+              <React.Fragment key={r.key}>
+                <tr data-testid={`channel-row-${r.key}`}>
+                  <td>
+                    <div className="d-flex align-items-center gap-2 flex-wrap">
+                      <span className="fw-semibold" style={{ color: 'var(--text-primary)' }}>
+                        {r.label}
+                      </span>
+                      <StatusChip status={r.status} />
+                      {(r.collapsed?.length ?? 0) > 0 && (
+                        <button
+                          type="button"
+                          className="btn btn-link btn-sm p-0 align-baseline"
+                          data-testid="channel-other-toggle"
+                          aria-expanded={showOther}
+                          onClick={() => setShowOther((v) => !v)}
+                        >
+                          {showOther ? 'Hide them' : `Show all ${r.collapsed?.length}`}
+                        </button>
+                      )}
+                    </div>
+                    <div className="small text-muted mt-1" style={{ maxWidth: '52ch' }}>
+                      {r.note}
+                    </div>
+                  </td>
+                  <td className="text-end fw-semibold">{count(r.payingMembers)}</td>
+                  <td className="text-end">{usd(r.mrrCents)}</td>
+                  <td className="text-end">{count(r.leads)}</td>
+                  <td className="text-end" data-testid={`channel-spend-${r.key}`}>
+                    {/* Spelled out rather than punctuated. A bare hyphen in a money column
+                        reads as zero, and zero is the one thing this cell must not say. */}
+                    {r.spendCents === null
+                      ? <span className="small text-muted">Not recorded</span>
+                      : usd(r.spendCents)}
+                  </td>
+                  <td className="text-end" data-testid={`channel-cost-${r.key}`}>
+                    <div>{usd(r.costPerPayingMemberCents)}</div>
+                    {r.costStatus !== 'live' && (
+                      <div className="mt-1"><StatusChip status={r.costStatus} /></div>
+                    )}
+                  </td>
+                </tr>
+
+                {/* The folded sources, in place under their parent. Muted and indented so they
+                    read as detail rather than as channels in their own right, and rendered
+                    from the same fields, so a sub-row cannot say something the row above
+                    would not have said. */}
+                {showOther && (r.collapsed ?? []).map((c) => (
+                  <tr key={c.key} data-testid={`channel-subrow-${c.key}`}>
+                    <td className="ps-4 small text-muted">{c.label}</td>
+                    <td className="text-end small text-muted">{count(c.payingMembers)}</td>
+                    <td className="text-end small text-muted">{usd(c.mrrCents)}</td>
+                    <td className="text-end small text-muted">{count(c.leads)}</td>
+                    <td className="text-end small text-muted">
+                      {c.spendCents === null ? 'Not recorded' : usd(c.spendCents)}
+                    </td>
+                    <td className="text-end small text-muted">
+                      {usd(c.costPerPayingMemberCents)}
+                    </td>
+                  </tr>
+                ))}
+              </React.Fragment>
             ))}
           </tbody>
           <tfoot className="table-light">

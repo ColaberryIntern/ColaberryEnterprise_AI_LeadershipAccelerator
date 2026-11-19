@@ -24,6 +24,9 @@ import {
   labelForChannel,
   noteForChannel,
   sortChannels,
+  foldLongTail,
+  OTHER_SOURCES_KEY,
+  TAIL_LEAD_CEILING,
   type ChannelRow,
 } from '../channelTruth';
 import { getChannelTruth, PAID_LANDING_KEY } from '../channelTruthService';
@@ -127,6 +130,76 @@ describe('ordering', () => {
   });
 });
 
+/**
+ * Folding the trivial tail. Measured on production 2026-11-19: 17 rows, 3 with a member, and
+ * eleven with 16 leads or fewer and nobody paying, three of those being our own test leftovers.
+ *
+ * The first test is the one that matters. The header of `channelTruth.ts` promises that a
+ * measured zero is never averaged away, and the single most useful row on this panel is paid
+ * ads: recorded spend, zero members. A fold written as "drop the rows with no members" would
+ * delete exactly that row and the panel would quietly stop making its own point.
+ */
+describe('folding the trivial tail', () => {
+  const tail = (key: string, leads: number) => row({
+    key, label: key, leads, payingMembers: 0, mrrCents: 0,
+    spendCents: null, costPerPayingMemberCents: null,
+    status: 'measured_zero', costStatus: 'unmeasurable',
+  });
+
+  it('NEVER folds a channel with recorded spend, however few leads it has', () => {
+    const rows = [
+      row({ key: 'paid_landing', leads: 3, payingMembers: 0, mrrCents: 0, spendCents: 389480,
+        costPerPayingMemberCents: null, status: 'measured_zero', costStatus: 'undefined_rate' }),
+      tail('catalog_request', 2), tail('alumni', 1), tail('contact', 16),
+    ];
+    const out = foldLongTail(rows);
+    expect(out.map((r) => r.key)).toContain('paid_landing');
+    expect(out.find((r) => r.key === 'paid_landing')?.spendCents).toBe(389480);
+  });
+
+  it('never folds a channel that produced a paying member', () => {
+    const rows = [row({ key: 'tiny_but_paying', leads: 2, payingMembers: 1, mrrCents: 19900 }),
+      tail('a', 1), tail('b', 1)];
+    expect(foldLongTail(rows).map((r) => r.key)).toContain('tiny_but_paying');
+  });
+
+  it('never folds the unlinked row, which is shown rather than dropped by design', () => {
+    const rows = [tail('unlinked', 1), tail('a', 1), tail('b', 1)];
+    expect(foldLongTail(rows).map((r) => r.key)).toContain('unlinked');
+  });
+
+  it('keeps a source with real volume and folds the ones below the ceiling', () => {
+    const rows = [tail('ai-pilot-cold', TAIL_LEAD_CEILING), tail('contact', 16), tail('alumni', 1)];
+    const out = foldLongTail(rows);
+    expect(out.map((r) => r.key)).toEqual(['ai-pilot-cold', OTHER_SOURCES_KEY]);
+  });
+
+  it('carries every folded source with the row instead of dropping it', () => {
+    const rows = [tail('contact', 16), tail('advisory', 8), tail('alumni', 1)];
+    const other = foldLongTail(rows).find((r) => r.key === OTHER_SOURCES_KEY);
+
+    expect(other?.leads).toBe(25);
+    expect(other?.collapsed?.map((c) => c.key)).toEqual(['contact', 'advisory', 'alumni']);
+    // Nothing measured left the payload: the folded leads still add up to the input.
+    expect(other?.collapsed?.reduce((t, c) => t + c.leads, 0)).toBe(25);
+    expect(other?.note).toContain('contact');
+  });
+
+  it('leaves a single straggler alone, because "Other sources (1)" is worse than its name', () => {
+    const rows = [row({ key: 'open_house' }), tail('alumni', 1)];
+    expect(foldLongTail(rows).map((r) => r.key)).toEqual(['open_house', 'alumni']);
+  });
+
+  it('builds a synthetic row that obeys the same cost rail as a real one', () => {
+    const out = foldLongTail([tail('a', 2), tail('b', 1)]);
+    // Would throw if the invented row claimed a cost it cannot know.
+    expect(() => assertNoChannelShowsAnUnmeasuredCost(out)).not.toThrow();
+    const other = out.find((r) => r.key === OTHER_SOURCES_KEY);
+    expect(other?.spendCents).toBeNull();
+    expect(other?.payingMembers).toBe(0);
+  });
+});
+
 describe('getChannelTruth', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -199,6 +272,29 @@ describe('getChannelTruth', () => {
     expect(out.rows.find((r) => r.key === 'open_house')!.mrrCents).toBe(298400);
     expect(out.totals.payingMembers).toBe(21);
     expect(out.totals.mrrCents).toBe(298400 + 89500);
+  });
+
+  it('folds the trivial sources on the page while the totals still count every one of them', async () => {
+    // The shape production actually had on 2026-11-19: one channel carrying the members, and a
+    // tail of sources with a handful of leads each and nobody paying.
+    give(
+      [{ source: 'open_house', members: 16, mrr: 2984 }],
+      [
+        { source: 'open_house', leads: 847 }, { source: 'contact', leads: 16 },
+        { source: 'advisory', leads: 8 }, { source: 'alumni', leads: 1 },
+      ],
+    );
+    const out = await getChannelTruth();
+
+    expect(out.rows.map((r) => r.key)).toEqual(['open_house', OTHER_SOURCES_KEY]);
+    const other = out.rows.find((r) => r.key === OTHER_SOURCES_KEY);
+    expect(other?.leads).toBe(25);
+    expect(other?.collapsed).toHaveLength(3);
+
+    // The fold is presentation. It must not be able to move the book: totals are summed over
+    // every row before folding, so this holds whatever the fold decides.
+    expect(out.totals.payingMembers).toBe(16);
+    expect(out.totals.mrrCents).toBe(298400);
   });
 
   it('degrades to no cost anywhere rather than failing the panel when spend cannot be read', async () => {
