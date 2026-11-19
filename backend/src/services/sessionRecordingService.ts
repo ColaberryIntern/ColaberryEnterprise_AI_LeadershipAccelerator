@@ -16,6 +16,7 @@ import { emitRoomEvent } from './communityRooms/roomOutboxService';
 import { ROOM_EVENTS } from './communityRooms/roomEvents';
 import { log } from './communityRooms/roomShared';
 import { probeRecording, COMFORTABLE_MAX_HEIGHT } from './communityRooms/recordingProbe';
+import { judgeRecordingSubstance, MIN_SUBSTANTIVE_RECORDING_SECONDS } from './recordingSubstance';
 import { findRecordingForSession as findDriveRecording, streamDriveFile, DriveRecordingMatch } from './driveService';
 import {
   findRecordingForSession as findZoomRecording,
@@ -193,6 +194,41 @@ async function attachRecording(
       size_bytes: sizeBytes,
     });
   }
+  // THE BACKSTOP FOR WHAT THE SELECTOR NEVER SEES.
+  //
+  // `findRecordingInstancesByMeetingId` drops join-and-leave clips before they are
+  // downloaded, but it is not on every road into this function. A webhook-supplied
+  // match (`preResolvedMatch`) IS one specific recording and consults no finder at
+  // all, so for a webhook the first and only chance to ask "is this a session?" is
+  // here, with the file on disk and `ffprobe` having just answered it.
+  //
+  // That road is the one that mattered: both Open House sessions had a clip of a
+  // few seconds pinned as their recording, with empty metadata — the signature of
+  // this path, not of the window-aware one.
+  //
+  // Refusing returns `not_found`, which every caller already treats as "recording
+  // is not available", and the file is removed so a retry does not accumulate
+  // copies. `not_found` is honest here: no recording of this session arrived.
+  const substance = judgeRecordingSubstance({
+    durationSeconds: geometry?.durationSeconds,
+    videoHeight: geometry?.height,
+    recordingType: (metadata as Record<string, unknown> | undefined)?.recording_type as string | undefined,
+  });
+  if (!substance.substantive) {
+    log('warn', 'recording_too_short_to_attach', {
+      room_id: roomId,
+      booking_id: bookingId,
+      reason: substance.reason,
+      duration_seconds: substance.durationSeconds,
+      floor_seconds: MIN_SUBSTANTIVE_RECORDING_SECONDS,
+      size_bytes: sizeBytes,
+      width: geometry?.width ?? null,
+      height: geometry?.height ?? null,
+    });
+    try { fs.unlinkSync(destPath); } catch { /* best-effort */ }
+    return { status: 'not_found' };
+  }
+
   const geometryMetadata = geometry
     ? { video_width: geometry.width, video_height: geometry.height, duration_seconds: geometry.durationSeconds }
     : {};
@@ -252,11 +288,34 @@ export async function ingestRecordingForSession(
   if (!provider) return { status: 'not_found' };
 
   /*
-   * Zoom sessions go through the window-aware, multi-instance path below.
-   * A webhook-supplied match (preResolvedMatch) skips it: that payload already
-   * IS one specific completed recording, so there is nothing to select.
+   * EVERY Zoom session goes through the window-aware, multi-instance path below,
+   * including a webhook-delivered one.
+   *
+   * It used to be `!preResolvedMatch && ...`, on the reasoning that a webhook
+   * payload already IS one specific completed recording, so there is nothing to
+   * select. That reasoning is wrong, and it is wrong in the way that cost us both
+   * Open House recordings. `recording.completed` fires for EVERY recording Zoom
+   * closes on a meeting, and Zoom closes one for every brief visit — so the
+   * payload is one specific recording, but not necessarily one specific *session*.
+   * Taking it unexamined meant the first person to open a link and leave had their
+   * four seconds attached and pinned, after which the booking-wide idempotency
+   * check refused the real recording for good. Both bad rows carry empty metadata,
+   * which is this road's fingerprint: the window-aware path always writes a
+   * zoom_uuid, a source and a part.
+   *
+   * It matters more now than it did. An Open House session points at a RECURRING
+   * meeting, so one meeting id legitimately serves many months of events; without
+   * the window filter, December's recording would match November's session.
+   *
+   * So the webhook keeps its real value — telling us promptly that something
+   * finished — and gives up a job it was never able to do correctly. Selection
+   * goes to `findClassRecordingInstances`, which asks whether a recording actually
+   * overlaps the scheduled class, and `preResolvedMatch` is used only where there
+   * is no meeting id to select against. The cost is one list call instead of a
+   * payload read, plus the window guard's refusal to run before a class has
+   * finished, which the 30-minute sweep already covers.
    */
-  if (!preResolvedMatch && session.meeting_provider === 'zoom' && session.zoom_meeting_id) {
+  if (session.meeting_provider === 'zoom' && session.zoom_meeting_id) {
     return ingestZoomRecordingsForSession(session, booking);
   }
 

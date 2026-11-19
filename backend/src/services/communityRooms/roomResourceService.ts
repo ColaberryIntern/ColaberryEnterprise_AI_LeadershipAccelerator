@@ -9,6 +9,7 @@ import { RoomAccessContext, canReadContent, canUploadResource, canModerate } fro
 import { emitRoomEvent } from './roomOutboxService';
 import { ROOM_EVENTS } from './roomEvents';
 import { notFoundError, forbiddenError, validationError, log } from './roomShared';
+import { shouldListResource } from '../recordingSubstance';
 
 // Docs & Files: list/create/delete/download for room_resources, scoped to a
 // room and optionally one of its bookings. Every operation re-checks
@@ -58,9 +59,18 @@ export async function listResources(
     limit: 200,
   });
   const canMod = canModerate(ctx, membership);
-  return rows.map((row) => Object.assign(row, {
-    can_delete: row.created_by_enrollment_id === ctx.enrollmentId || canMod,
-  })) as ResourceWithPerms[];
+  return rows
+    // A recording of a few seconds is not a recording, and listing it costs the
+    // reader more than it gives them: the Recordings tab of a busy room was half
+    // join-and-leave clips, so finding the session meant opening several files to
+    // learn which of them was real. Ingest refuses these now, but production
+    // already holds 89 of them and they do not disappear by being refused in
+    // future. Filtered rather than deleted — the row and the file stay exactly
+    // where they are, and the rule lives in one place for both ends.
+    .filter((row) => shouldListResource(row))
+    .map((row) => Object.assign(row, {
+      can_delete: row.created_by_enrollment_id === ctx.enrollmentId || canMod,
+    })) as ResourceWithPerms[];
 }
 
 export interface CreateFileResourceInput {
