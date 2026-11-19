@@ -235,8 +235,14 @@ describe('the stories land on the rung the data names', () => {
     }
   });
 
-  it('every inserted story traces to a capability', () => {
+  it('every inserted story traces to a capability, or is a rung gate', () => {
+    // `rung_gate` joined the inserts on 2026-11-19 and is deliberately UNTRACED: it carries a
+    // `shared_foundation_reason` instead, asserted in `agentDomainStoryTemplates.test.ts`.
     for (const s of plan.stories_to_insert) {
+      if (s.story_kind === 'rung_gate') {
+        expect(s.capability_id).toBeFalsy();
+        continue;
+      }
       expect(s.capability_id).toBeTruthy();
       expect(s.story_kind).toBe('capability_ladder');
     }
@@ -441,8 +447,11 @@ describe('rows written while story_id was varchar(60)', () => {
       expect(s.story_kind).not.toBe('capability_ladder');
     }
     for (const s of plan.stories_to_insert) {
-      expect(s.story_kind).toBe('capability_ladder');
+      expect(['capability_ladder', 'rung_gate']).toContain(s.story_kind);
     }
+    // The narrowing by kind is still doing work, so this is not passing over an empty list.
+    expect(plan.stories_to_insert.filter((s) => s.story_kind === 'capability_ladder').length)
+      .toBeGreaterThan(0);
   });
 
   it('is still idempotent once the ids have been repaired', () => {
@@ -495,7 +504,10 @@ describe('every domain migrates, not just the one under test', () => {
     }
   });
 
-  it('projects 40 new stories and re-parents 518 across the ten', () => {
+  it('projects 80 new stories and re-parents 518 across the ten', () => {
+    // 40 -> 80 on 2026-11-19: three more path stories per domain for the capability in flight,
+    // plus one gate story per domain for its CURRENT rung. The re-parent count does not move,
+    // because nothing existing was renamed or removed.
     // The two totals this migration is accountable for, measured through the migration rather
     // than through the generator, so a plan that silently dropped a domain would show up here.
     //
@@ -515,7 +527,7 @@ describe('every domain migrates, not just the one under test', () => {
       inserted += plan.stories_to_insert.length;
       reparented += plan.stories_to_reparent.length;
     }
-    expect(inserted).toBe(40);
+    expect(inserted).toBe(80);
     expect(reparented).toBe(518);
   });
 });

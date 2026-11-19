@@ -56,6 +56,7 @@ const AdminOrchestrationPage = lazy(() => import('../pages/admin/AdminOrchestrat
 const WorkforceOSPage = lazy(() => import('../pages/admin/workforce/WorkforceOSPage'));
 // AF2.1 - the landing a domain owner sees after bridging in from the portal.
 const AdminMyDomainPage = lazy(() => import('../pages/admin/AdminMyDomainPage'));
+const AdminBuilderPathPage = lazy(() => import('../pages/admin/AdminBuilderPathPage'));
 const AdminAllDomainsPage = lazy(() => import('../pages/admin/AdminAllDomainsPage'));
 // AF4.2 - file a change request, and (for an admin) decide one.
 const AdminChangeRequestsPage = lazy(() => import('../pages/admin/AdminChangeRequestsPage'));
@@ -290,6 +291,10 @@ const adminRoutes = (
         */}
         <Route path="/admin/agent-dashboard" element={<AgentDashboardPage />} />
         <Route path="/admin/my-domain" element={<AdminMyDomainPage />} />
+        {/* The owner-facing board: where all seven builders are, and what is
+            waiting on Ali. Its API is requireAdmin, not a section, because it returns
+            all ten domains by design. */}
+        <Route path="/admin/builder-path" element={<AdminBuilderPathPage />} />
         {/* AF4.2. Everyone who can open it may file and see their own; the decision queue
             renders only when the admin-only API returns it, so the page cannot drift out of
             agreement with `requireAdmin` the way a client-side role check would. */}

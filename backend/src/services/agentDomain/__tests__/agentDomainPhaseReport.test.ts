@@ -83,7 +83,14 @@ describe('the report covers every domain, with figures read from the data', () =
     // The implementation total is pinned alongside both so a story count that moves for the wrong
     // reason cannot hide behind the right one: 443 is the number of CAPABILITIES, and it must not
     // move when the ladder shape changes, because a ladder step is not a new capability.
-    expect(r.totals.stories).toBe(558);
+    // 558 -> 598 on 2026-11-19, when the four-step ladder became the eight-stage builder path:
+    // +30 (three new stages for the one capability each of the ten domains has in flight) and
+    // +10 (one `rung_gate` story per domain, for its CURRENT rung only). Nothing was removed --
+    // every id emitted before is still emitted, asserted against a committed fixture.
+    //
+    // The release count does NOT move, again, and for the same reason it did not move on 13 Nov:
+    // the ten rungs still exist as rungs. A gate story is one row ON a rung, not a new rung.
+    expect(r.totals.stories).toBe(598);
     expect(r.totals.releases).toBe(130);
     expect(r.rows.reduce((n, x) => n + x.implementation_stories, 0)).toBe(448);
   });

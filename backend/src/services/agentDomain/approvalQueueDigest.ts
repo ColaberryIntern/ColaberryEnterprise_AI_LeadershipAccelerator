@@ -94,6 +94,21 @@ export interface ComposedDigest {
   readonly isFallback: boolean;
   /** Domains whose named owner cannot decide, as "domain (email)", for the fallback to name. */
   readonly ownerCannotDecide: ReadonlyArray<string>;
+  /**
+   * The ticket this digest's replies would route to, and the token that authorizes them.
+   *
+   * BOTH NULL TODAY, and the fields exist anyway so the reply address has one source. A change
+   * request is not a ticket: `ticketReplyService.ts` routes on `ticket-<id>-<token>@`, and a
+   * change request carries neither, so `ticketReplyAddress` returns null and the sender sets no
+   * `replyTo` at all. That is better than an address with a blank segment, which looks like a
+   * working reply path in a mail client, accepts a reply and drops it.
+   *
+   * Named here rather than left out so the sender calls the shared builder rather than deciding
+   * for itself whether to format one. The day these rows carry a token, the address appears with
+   * no format string anywhere to keep in sync.
+   */
+  readonly replyTicketId?: string | null;
+  readonly replyToken?: string | null;
 }
 
 /** Whole days elapsed, floored. An hour-old request reads as 0 days, which is honest. */

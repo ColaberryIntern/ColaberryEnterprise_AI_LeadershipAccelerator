@@ -41,6 +41,7 @@
  * same way the provisioner does, and is deterministic for a given domain key.
  */
 import { FOUNDATION_STAGE } from './agentDomainReleaseLadder';
+import { BUILDER_STAGES } from './builderPath';
 import {
   COMMAND_CENTER_ACCEPTANCE,
   COMMAND_CENTER_SHARED_FOUNDATION_REASON,
@@ -103,6 +104,15 @@ export function domainCommandCenterDoc(domainKey: string): string {
     'marking this story complete.',
     '',
     ...COMMAND_CENTER_ACCEPTANCE.map((a) => `- [ ] ${a}`),
+    '',
+    '## The eight stages of one capability',
+    '',
+    'Read from `builderPath.ts`, not retyped here, so this list and the product cannot describe',
+    'different paths. One of the eight owes you no task: when a tool request is filed, the next',
+    'move is a decision somebody else makes.',
+    '',
+    ...BUILDER_STAGES.map((s, i) => `${i + 1}. **${s.title}** (\`${s.stage}\`, ${s.owned_by}) -- `
+      + `${s.meaning}`),
     '',
     '## Who closes this story',
     '',

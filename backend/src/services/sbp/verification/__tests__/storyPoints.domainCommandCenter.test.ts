@@ -14,7 +14,8 @@
  * ── THE SECOND HALF, WHICH THE FIRST DRAFT OF THIS FIX MISSED ───────────────
  *
  * Two different constants are named `COMMAND_CENTER_ACCEPTANCE`: the SBP's with
- * FIVE generic lines, and the agent-domain one with SIX. Resolving only the id
+ * FIVE generic lines, and the agent-domain one with EIGHT (six until 19 Nov 2026, when
+ * panels seven and eight were added). Resolving only the id
  * would have judged `platform.STORY-000` against the SBP's five, grading a
  * builder against criteria they were never shown — a quiet wrong answer in
  * place of a loud missing one. The id and its criteria therefore come from one
@@ -55,9 +56,12 @@ beforeEach(() => {
 });
 
 describe('the two acceptance constants really do differ — the premise of this fix', () => {
-  it('SBP has five lines and the agent domains have six, so one cannot stand in for the other', () => {
+  it('SBP has five lines and the agent domains have eight, so one cannot stand in for the other', () => {
+    // SIX until 19 Nov 2026. Panels seven and eight -- the candidate list and the gap
+    // board -- added one criterion each. The counts are read from the imported constants
+    // rather than restated, so the only thing that needs editing is the length.
     expect(COMMAND_CENTER_ACCEPTANCE).toHaveLength(5);
-    expect(DOMAIN_ACCEPTANCE).toHaveLength(6);
+    expect(DOMAIN_ACCEPTANCE).toHaveLength(8);
     expect([...DOMAIN_ACCEPTANCE]).not.toEqual([...COMMAND_CENTER_ACCEPTANCE]);
   });
 });
@@ -68,11 +72,11 @@ describe('commandCenterSpecForProject — resolved, never assumed', () => {
     expect((await commandCenterSpecForProject(DOMAIN_PROJECT)).id).toBe('platform.STORY-000');
   });
 
-  it('carries the SIX domain criteria, not the SBP five', async () => {
+  it('carries the EIGHT domain criteria, not the SBP five', async () => {
     mockDomainKeyForProject.mockResolvedValue('platform');
     const spec = await commandCenterSpecForProject(DOMAIN_PROJECT);
     expect(spec.acceptance).toEqual([...DOMAIN_ACCEPTANCE]);
-    expect(spec.acceptance).toHaveLength(6);
+    expect(spec.acceptance).toHaveLength(8);
   });
 
   it('uses the SAME id builder the board and the repo use, so the three cannot drift', async () => {
@@ -111,7 +115,7 @@ describe('commandCenterSpecForProject — resolved, never assumed', () => {
     const a = await commandCenterSpecForProject(DOMAIN_PROJECT);
     a.acceptance.push('tampered');
     const b = await commandCenterSpecForProject(DOMAIN_PROJECT);
-    expect(b.acceptance).toHaveLength(6);
+    expect(b.acceptance).toHaveLength(8);
   });
 });
 
@@ -124,10 +128,10 @@ describe('planStorySpecs — the judged set carries the namespaced Command Cente
     expect(specs.some((s) => s.id === COMMAND_CENTER_STORY_ID)).toBe(false);
   });
 
-  it('gives the namespaced story the SAME six criteria as the board row and the repo doc', () => {
+  it('gives the namespaced story the SAME eight criteria as the board row and the repo doc', () => {
     const specs = planStorySpecs(plan([]) as any, domainSpec);
     expect(specs[0].acceptance).toEqual([...DOMAIN_ACCEPTANCE]);
-    expect(specs[0].acceptance).toHaveLength(6);
+    expect(specs[0].acceptance).toHaveLength(8);
   });
 
   it('still defaults to the bare id and the SBP five when no caller supplies a spec', () => {

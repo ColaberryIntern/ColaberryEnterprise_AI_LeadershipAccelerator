@@ -218,7 +218,25 @@ describe('the boot registration is WRAPPED, because its assert throws', () => {
     // by the application.
     //
     // It is wrapped: `ensureToolRequestMessageSchemaGuarded` cannot reject.
+    // The newest member, 19 Nov 2026. `ensureAgentDomainCandidateSchema.ts` holds the capability
+    // CANDIDATES a builder chooses from, and asserts the same way for the same reason as the
+    // others.
+    //
+    // Its post-condition carries one none of the others do: it asserts an ABSENCE. Three CHECK
+    // constraints and three indexes are named, and then it fails the boot if a column matching
+    // `status|approver|approved_by|approved_at|decided_at|declined_reason` has reached the table
+    // by any route. That is the no-second-spine rule as a runtime check — `AGENT_TOOL_REQUEST_
+    // HANDOFF.md` says "There is already an approval spine. Do not build a second one." — and an
+    // absence is what a later edit removes quietly, so it is checked rather than documented.
+    //
+    // It is wrapped: `ensureAgentDomainCandidateSchemaGuarded` cannot reject, and
+    // `ensureAgentDomainCandidateSchema.test.ts` drives that failure path with a staged read that
+    // reports a missing table, asserting it RESOLVES `{ ok: false }` with the derived error_class.
+    // `ensureAgentDomainCandidateSchema.bootWiring.test.ts` separately asserts the call is ACTIVE
+    // in `server.ts` and ordered after its parent — which it was not, on the first attempt, with
+    // 48 tests green.
     expect(throwing.sort()).toEqual([
+      'ensureAgentDomainCandidateSchema.ts',
       'ensureAgentDomainChangeRequestSchema.ts',
       'ensureAgentDomainProjectSchema.ts',
       'ensureAgentDomainToolDuplicateCheckSchema.ts',

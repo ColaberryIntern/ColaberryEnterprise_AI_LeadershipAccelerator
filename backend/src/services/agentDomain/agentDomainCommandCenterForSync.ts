@@ -274,16 +274,26 @@ export async function domainCommandCenterOverrideForProject(
     const [
       { AGENT_DOMAIN_SNAPSHOT_PATH, buildAgentDomainSnapshot, serialiseAgentDomainSnapshot },
       { loadDomainMatrix },
+      { listCandidates },
       agent,
       governance,
       stories,
     ] = await Promise.all([
       import('./agentDomainSnapshot'),
       import('./capabilityRecord'),
+      // The candidate list is loaded HERE rather than in the snapshot, because the snapshot is
+      // pure and must stay that way: `agentDomainSnapshotPurity.test.ts` asserts it reaches no
+      // model and no database connection. This is the bridge that supplies it, which is exactly
+      // what the snapshot's own header says the bridge is for.
+      import('./candidateService'),
       agentForProject(projectId),
       governanceForDomain(domainKey),
       storyVerdictsForProject(projectId),
     ]);
+    // Scoped to the ONE domain this sync is for, never a wider read. `listCandidates` refuses an
+    // empty scope outright, so a domain key that resolved to nothing cannot fall through to a
+    // full-table read.
+    const candidates = await listCandidates([domainKey]);
     files.push({
       path: AGENT_DOMAIN_SNAPSHOT_PATH,
       content: serialiseAgentDomainSnapshot(buildAgentDomainSnapshot({
@@ -292,6 +302,7 @@ export async function domainCommandCenterOverrideForProject(
         matrix: loadDomainMatrix(domainKey),
         governance,
         stories,
+        candidates,
       })),
     });
   } catch (err: unknown) {

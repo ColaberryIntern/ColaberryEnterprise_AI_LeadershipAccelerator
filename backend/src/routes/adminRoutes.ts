@@ -66,6 +66,8 @@ import mayaOutboundRoutes from './admin/mayaOutboundRoutes';
 import mayaGoLiveRoutes from './admin/mayaGoLiveRoutes';
 import growthJourneyContentApprovalRoutes from './admin/growthJourneyContentApprovalRoutes';
 import agentDomainRoutes from './admin/agentDomainRoutes';
+import agentDomainCandidateRoutes from './admin/agentDomainCandidateRoutes';
+import builderPathBoardRoutes from './admin/builderPathBoardRoutes';
 import agentNudgeRoutes from './admin/agentNudgeRoutes';
 import internNudgeRoutes from './admin/internNudgeRoutes';
 import internArtifactRoutes from './admin/internArtifactRoutes';
@@ -329,6 +331,12 @@ router.use(growthJourneyContentApprovalRoutes); // R2: content approval from the
 // The ten AI employee domain projects. Read-only; every route carries its own
 // requireSection guard, because the repo's route-auth lint is per FILE not per route.
 router.use(agentDomainRoutes);
+// The capability candidate list. A separate router from agentDomainRoutes, which is read-only by
+// charter, because three of these four routes WRITE. Same self-scoping, its own PATH_SECTION row.
+router.use(agentDomainCandidateRoutes);
+// The owner's cross-builder board. Read-only, and `requireAdmin` rather than a section,
+// because it returns all ten domains by design.
+router.use(builderPathBoardRoutes);
 // Nudges to the agent builders. Separate from the line above because these SEND, while
 // agentDomainRoutes is read-only by charter, and because the recipient's name and address make
 // this an `internship` grant rather than a `program` one.

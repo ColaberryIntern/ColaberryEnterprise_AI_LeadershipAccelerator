@@ -505,6 +505,7 @@ import DeliveryClientAcceptance from './DeliveryClientAcceptance';
 import DeliveryChangeRequest from './DeliveryChangeRequest';
 import AgentDomainChangeRequest from './AgentDomainChangeRequest';
 import AgentDomainToolRequestDetail from './AgentDomainToolRequestDetail';
+import AgentDomainCandidate from './AgentDomainCandidate';
 import AgentDomainToolDuplicateCheck from './AgentDomainToolDuplicateCheck';
 import AgentDomainCapabilityConfirmation from './AgentDomainCapabilityConfirmation';
 import AgentDomainToolRequestDecision from './AgentDomainToolRequestDecision';
@@ -1712,6 +1713,7 @@ export {
   DeliveryChangeRequest,
   AgentDomainChangeRequest,
   AgentDomainToolRequestDetail,
+  AgentDomainCandidate,
   AgentDomainToolDuplicateCheck,
   AgentDomainCapabilityConfirmation,
   AgentDomainToolRequestDecision,
