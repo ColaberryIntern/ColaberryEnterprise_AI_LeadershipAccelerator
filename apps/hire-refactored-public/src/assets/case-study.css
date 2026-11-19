@@ -38,22 +38,24 @@
 .hire-hero .dek{font-size:1.12rem;color:var(--fg-muted);max-width:58ch}
 .builder{display:inline-flex;align-items:center;gap:12px;margin-top:24px;padding:8px 16px 8px 8px;border:1px solid var(--line-strong);border-radius:60px;background:var(--bg-elevated)}
 .builder b{display:block;font-size:.92rem}.builder span span{font-size:.78rem;color:var(--fg-faint)}
-.outcomes{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:-34px 0 40px;position:relative;z-index:3}
-@media(max-width:760px){.outcomes{grid-template-columns:repeat(2,1fr)}}
+/* minmax(0,1fr), never bare 1fr: a 1fr track will not shrink below its widest word, so one long
+   outcome value or fact pushed the page 8-14px past a 390px phone (Ali, 19 Nov 2026). */
+.outcomes{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:-34px 0 40px;position:relative;z-index:3}
+@media(max-width:760px){.outcomes{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .brief{margin:0 0 40px;padding:22px 24px;background:var(--bg-elevated);border:1px solid var(--line);border-radius:var(--r)}
 .brief h2{margin:0 0 16px;font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-muted)}
 .brief ol{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:18px}
 /* align-content:start: every li stretches to the tallest beat in its row, and without it the
    spare height went to the label's row, dropping the text below its label (18 Nov 2026). */
-.brief li{display:grid;grid-template-columns:auto 1fr;column-gap:10px;row-gap:4px;align-items:start;align-content:start;padding-top:12px;border-top:3px solid var(--accent);min-width:0}
+.brief li{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:10px;row-gap:4px;align-items:start;align-content:start;padding-top:12px;border-top:3px solid var(--accent);min-width:0}
 .brief .n{grid-row:1/span 2;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--accent);color:var(--accent-contrast);font-weight:700;font-size:.85rem}
 .brief b{color:var(--fg);line-height:1.3}
 .brief p{margin:0;font-size:.92rem;line-height:1.5;color:var(--fg-muted)}
 .outcomes div{background:var(--bg-elevated);border:1px solid var(--line);border-radius:var(--r);padding:18px;box-shadow:var(--shadow)}
-.outcomes b{font-family:var(--font-mono);font-size:1.9rem;color:var(--star-text);display:block;line-height:1.1}
-.outcomes span{font-size:.8rem;color:var(--fg-muted)}
-.cs-body{display:grid;grid-template-columns:1fr 300px;gap:36px;padding-bottom:60px}
-@media(max-width:960px){.cs-body{grid-template-columns:1fr}}
+.outcomes b{font-family:var(--font-mono);font-size:1.9rem;color:var(--star-text);display:block;line-height:1.1;overflow-wrap:anywhere}
+.outcomes span{font-size:.8rem;color:var(--fg-muted);overflow-wrap:anywhere}
+.cs-body{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:36px;padding-bottom:60px}
+@media(max-width:960px){.cs-body{grid-template-columns:minmax(0,1fr)}}
 /* The aside must BE the grid item, or the sticky card has no room to travel: a sticky box
    only moves inside its parent, and #hire-card-host wrapped the aside so the aside was only
    as tall as the card (measured 592px beside a 12,199px record; the card scrolled away).
