@@ -688,6 +688,13 @@ of the tab that was captured first.
   produced. The audit's `no code shown` check refuses a public artifact whose file is source
   or data or whose title says code, prompt, terminal, JSON, commit, pull request or Claude.
   Not even as "how it was built": that story is told in words, in the decisions.
+  A **link** into a repository is code too: a public artifact pointing at a file or folder
+  on GitHub (`/blob/`, `/tree/`) is refused like a screenshot of it (the 19 Nov sweep found
+  three on one live record: two `.md` files and an infrastructure folder; they were made
+  private, not deleted). Ali, 2026-11-19: *"don't want any code or claude code screenshots in
+  the video or the presentation"*, so the same rule holds for every frame of the walkthrough
+  video: before attaching it, render a contact sheet (`ffmpeg -i v.mp4 -vf
+  "fps=1/10,scale=480:-1,tile=4x4" -frames:v 1 sheet.jpg`) and look at every tile.
 
 ### Trim every screen, and they show one at a time
 
@@ -1414,6 +1421,27 @@ the builds of 17-18 Nov (CF1-CF3, GD1-GD2, Internship, Open House). What a good 
 
 The audit's second check, `the story in brief is a story, not a ticket`, runs
 `storyInBriefLint` (completenessCore.js) over the beats and the standfirst.
+
+**Every live record carries beats.** Ali, 19 Nov 2026: *"can we add 'The story in brief' to
+all the case study's."* The whole live catalog (20 records) was backfilled that day from
+`scripts/case-study-story-in-brief/beats-2026-11-19.json` by `apply-story-in-brief.js`
+(dry run by default; refuses an id/slug mismatch, the server's own shape problems, and the
+claim scan's vocabulary: percentages, currency, quotation marks, return and production
+claims; skips unchanged beats; reports any surface the republish did not reach). To add or
+change beats on a live record, edit that file (or a dated successor), run
+`node --test scripts/case-study-story-in-brief/beats.test.js`, then the applier. Lessons
+from the backfill:
+
+- **Counts, not percentages.** The claim scan blocks any percentage a verified metric does not
+  carry verbatim, and a blocked republish leaves the record approved but NOT live. "31 of 66"
+  passes; "47%" did not, on Open House, until the captions were reworded.
+- **No metric, no invented figure.** A record with no metric (your-repositories) labels its
+  third beat **Where it stands** and says no outcome is measured yet. The test lists it as a
+  named exception; the fix is a verified metric on the record, not a number in the beat.
+- **Pick the headline a buyer cares about.** When a record marks no headline metric, lead
+  with the result (findings kept and rejected, calls scored), not a safety count that reads
+  oddly on its own ("0 of 10 stored queries write ...") - put that second.
+- **No pronouns for Kes**, even when the record uses one: "Kes calls it unproven".
 
 ### One introduction
 

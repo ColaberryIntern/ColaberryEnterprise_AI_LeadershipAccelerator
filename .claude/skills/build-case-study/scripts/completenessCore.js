@@ -135,9 +135,14 @@ function mermaidReservedIds(src) {
    picture is (title, file type), so a chart titled "The funnel" never trips it. */
 const CODE_FILE = /\.(md|markdown|json|ya?ml|js|mjs|cjs|ts|tsx|jsx|py|sh|ps1|sql|diff|patch|txt)(\?|#|$)/i;
 const CODE_TITLE = /\b(code|source code|prompt|terminal|console log|json|yaml|script|diff|commit|pull request|claude|cursor|copilot|\.md)\b/i;
+/* A link to a file or folder in a code host is code too (19 Nov 2026 sweep: an infrastructure folder linked from
+   a live record passed both checks above). A repository's front page is not caught: it names the work, it does not
+   show the code. */
+const CODE_LINK = /\/\/(?:www\.)?(?:github\.com|gitlab\.com|bitbucket\.org)\/[^/]+\/[^/]+\/(?:-\/)?(?:blob|tree|src|commit|pull)\//i;
 function codeShownArtifacts(artifacts) {
   return (Array.isArray(artifacts) ? artifacts : []).filter((a) => a && a.visibility === 'public'
-    && (CODE_FILE.test(String(a.publicUrl || a.url || '')) || CODE_TITLE.test(String(a.title || ''))))
+    && (CODE_FILE.test(String(a.publicUrl || a.url || '')) || CODE_LINK.test(String(a.publicUrl || a.url || ''))
+      || CODE_TITLE.test(String(a.title || ''))))
     .map((a) => String(a.title || a.publicUrl || a.url));
 }
 

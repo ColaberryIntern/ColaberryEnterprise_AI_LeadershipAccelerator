@@ -1,0 +1,525 @@
+{
+  "note": "The story in brief, reviewed beats per live case study (19 Nov 2026). Written by apply-story-in-brief.js; every figure copied from the record. standfirst is carried only so the test can check no beat repeats it.",
+  "records": {
+    "268c5050-7f83-4b5d-ac39-cd44dbe433e2": {
+      "slug": "ai-systems-architect-training-system",
+      "standfirst": "Traditional training records what a learner completed. This platform connects each lesson to work the learner builds, submits, and has verified as evidence against ten independently tracked competencies.",
+      "beats": [
+        {
+          "label": "Before",
+          "text": "A completion record says a learner attended or passed a quiz, not that they can design a working AI system. With AI help on every exercise, a finished artifact alone no longer proves much either."
+        },
+        {
+          "label": "What we built",
+          "text": "A thirteen-week curriculum where each lesson leads to a build the learner submits, each submission is kept as a permanent record, and a mentor approves the work before it can appear on a public portfolio."
+        },
+        {
+          "label": "What happened",
+          "text": "The curriculum shipped as weeks 0 to 12 with ten competencies tracked separately, each recomputed from all of a learner's evidence rather than ticked up when a module is finished."
+        },
+        {
+          "label": "Why it matters",
+          "text": "A capability claim holds up when it points to work a skeptical reader can inspect, recorded when it happened and never quietly edited afterward."
+        },
+        {
+          "label": "What's next",
+          "text": "Placement readiness scoring is still in progress, and access for a full cohort to save their builds is not finished, so some learners still build without the record that proves it."
+        }
+      ]
+    },
+    "9e378138-b634-4504-9897-60de0a310818": {
+      "slug": "every-lead-has-a-history",
+      "standfirst": "Can an operator explain a lead's current state and name its next scheduled action? In an admissions team's calling system, the console in use today, at one reading on 18 Sep 2026, named the same next action in both of its lead views for open leads with pending work, but it splits the rest of the history across three views, keeps the reason for a campaign switch without showing it, and leaves call-level work out of its trace. An AI Systems Architect at Colaberry built the records and views behind that history.",
+      "beats": [
+        {
+          "label": "Before",
+          "text": "An admissions team's calling system kept a lead's calls, messages, scheduled jobs and campaign switches in separate places, so explaining why a lead sat where it did meant joining records by hand."
+        },
+        {
+          "label": "What we built",
+          "text": "Views that put a lead's history in order, keep what has happened apart from what is only scheduled, and record why a campaign switched when a call caused it."
+        },
+        {
+          "label": "What happened",
+          "text": "On 18 Sep 2026 the two lead views agreed on the next action for 314 of 314 open leads with pending work, while 28 of 4,403 open leads carried a next-action time with no job behind it."
+        },
+        {
+          "label": "Why it matters",
+          "text": "A lead's state can only be explained from the records a system keeps if the system writes down the reason each time it makes a change."
+        },
+        {
+          "label": "What's next",
+          "text": "The current console still does not show why a campaign changed or the call-level work, and only 7 of 2,181 recorded campaign writes carry a reason."
+        }
+      ]
+    },
+    "b295e441-f8b5-4559-b1bd-f01535c3d8d7": {
+      "slug": "nobody-is-listed-until-they-have-shipped",
+      "standfirst": "Employers see plenty of claims about AI engineers and very little proof. Colaberry built hire.refactored.ai so the proof comes first: a person appears in the directory only once a case study about work they built is approved and published, and an employer can then ask for an introduction or request an interview time the candidate controls.",
+      "beats": [
+        {
+          "label": "Before",
+          "text": "Employers hiring AI engineers face profiles full of claims nobody has checked, and candidates on a directory need their email and phone number kept away from whoever visits."
+        },
+        {
+          "label": "What we built",
+          "text": "A hiring directory where an engineer's work appears only as published case studies, contact details stay private, and an employer's interview request waits for the candidate to accept, suggest another time or decline."
+        },
+        {
+          "label": "What happened",
+          "text": "All 6 listed engineers are backed by a published case study, and 0 of 2,693 site events now fall in the catch-all category, against 1,756 of 2,339 before the counting was fixed."
+        },
+        {
+          "label": "Why it matters",
+          "text": "Putting proof before the profile and privacy before reach lets an employer trust a listing without anyone having to vouch for it."
+        },
+        {
+          "label": "What's next",
+          "text": "Booking is switched on for 0 of 6 engineers and no interview has been booked yet, so whether a listing leads to a hire is still unmeasured."
+        }
+      ]
+    },
+    "80808a8c-03ed-43bd-bb1a-d6c8366a7464": {
+      "slug": "recovering-the-calls-the-workflow-lost",
+      "standfirst": "A voice call could finish while the event saying so never arrived. This is how an admissions operator console learned to notice the gap, fetch the original record, and replay it through the same pipeline without doing the work twice.",
+      "beats": [
+        {
+          "label": "Before",
+          "text": "During a three-day burst of admissions calls, 533 of 1,644 launches got no completion event, so leads sat with no next step and an engineer replayed them by hand from a spreadsheet."
+        },
+        {
+          "label": "What we built",
+          "text": "A console that notices when a finished call's result never arrived, fetches the original call record and runs it through the normal processing, on an operator's click or automatically on a schedule."
+        },
+        {
+          "label": "What happened",
+          "text": "586 of 604 lost call results ended with an outcome on the lead, against 245 of 533 repaired by hand during the incident, and 0 of 339 recovered calls created a duplicate record."
+        },
+        {
+          "label": "Why it matters",
+          "text": "When a workflow depends on a message from a vendor it does not control, a missing message has to be something the system can see, count and fix, not something a person discovers by looking."
+        },
+        {
+          "label": "What's next",
+          "text": "The operator recovery path still has no tests, and recovery depends on the voice platform's own records: a call the platform cannot find is treated as a no-answer."
+        }
+      ]
+    },
+    "ee4bcc60-2979-434f-b0e1-f8848c744406": {
+      "slug": "stress-test-review-app",
+      "standfirst": "A reviewer who used to start every Stress Test review from a blank page now starts from a draft, against written rules, with an append-only record of which points were the model’s and which were the reviewer’s. Nothing reaches a student that a person has not approved.",
+      "beats": [
+        {
+          "label": "Before",
+          "text": "Every Stress Test review was written by hand against rules that lived in reviewers' memories, and a student who asked for feedback could wait 16 hours, with the slowest quarter waiting over 39."
+        },
+        {
+          "label": "What we built",
+          "text": "A review assistant that writes a first-pass critique of each submission, cites the written rule behind every point, and shows the reviewer what it found before anything is prepared for the student."
+        },
+        {
+          "label": "What happened",
+          "text": "Of 152 findings the assistant drafted, the reviewer kept 103, rejected 49 and added 18 of their own, and 0 of 10 stored queries can write to the program's review history."
+        },
+        {
+          "label": "Why it matters",
+          "text": "A draft nobody is obliged to accept is safe to use: each rejection becomes a rule correction, so the system improves by being corrected rather than trusted."
+        },
+        {
+          "label": "What's next",
+          "text": "The final sending step is not switched on, and the wait students see after the change has not been measured. Whether to deploy next or stress test further is still an open question."
+        }
+      ]
+    },
+    "080ab93b-5147-4c1a-aa8b-3db1e66501c3": {
+      "slug": "testing-ai-actions-before-they-reach-customers",
+      "standfirst": "A convincing message from an AI model can still be the wrong thing to send. An AI Systems Architect at Colaberry built the shadow paths in an admissions team's calling system, so that the calls, texts, emails and CRM updates it intended were held at the boundary, and the texts, emails and CRM updates it recorded could be read in full before any of them reached a customer.",
+      "beats": [
+        {
+          "label": "Before",
+          "text": "An AI model writes the texts and emails for an admissions team's calling system, which was replacing a working workflow, and a convincing message can still go to the wrong lead, campaign or moment."
+        },
+        {
+          "label": "What we built",
+          "text": "Two gates at the edge of the system, one for calls, texts and emails and one for CRM writes, that record what it intended to do instead of doing it."
+        },
+        {
+          "label": "What happened",
+          "text": "Over five days of rehearsal beside the old workflow, 4,267 intended actions were held instead of performed, and 3,204 of 4,267 kept the exact words or fields they would have sent."
+        },
+        {
+          "label": "Why it matters",
+          "text": "Letting an AI system propose before it acts turns a risky switchover into something a team can read first and open on purpose."
+        },
+        {
+          "label": "What's next",
+          "text": "Nothing records that a person reviewed the held records before the gates opened, and 0 of 6 evaluations of call summaries and consent detection ran with a fixture."
+        }
+      ]
+    },
+    "2d735285-7dfc-4dc1-a84b-74f3d812fc2d": {
+      "slug": "the-ai-proposes-a-verified-human-decides",
+      "standfirst": "An AI operations platform for SQL Server infrastructure that proposes remediations and cannot apply one on its own. Every write waits for a verified human, and every decision leaves a record that outlives the session that made it.",
+      "beats": [
+        {
+          "label": "Before",
+          "text": "Operations teams will not let an AI near a database when they cannot see what it did, stop it, or show afterwards who allowed it."
+        },
+        {
+          "label": "What we built",
+          "text": "An operations assistant that reads database telemetry and proposes fixes, while every change waits for a person with a verified identity to approve it and each decision is kept on record."
+        },
+        {
+          "label": "What happened",
+          "text": "In a deliberate drill on the live app, recovery took 1m31s from confirmed failure, inside a 6m14s outage, and the health check openly reports 1 of 6 data sources as live."
+        },
+        {
+          "label": "Why it matters",
+          "text": "Trust in automation comes from a boundary the software itself enforces and a record someone else can check weeks later, not from how good the suggestion sounds."
+        },
+        {
+          "label": "What's next",
+          "text": "Nothing yet measures whether the proposed fixes are correct or whether troubleshooting time falls, so the record makes no claim on either."
+        }
+      ]
+    },
+    "3aad014f-2147-4d49-af9a-b17e86b87052": {
+      "slug": "the-call-was-already-over-the-review-had-to-be-fair",
+      "standfirst": "An AI Systems Architect at Colaberry built the one pipeline in an admissions team's calling platform that reads calls the platform never made: the calls staff placed through the CRM's own dialer. It finds them, gets a transcript, decides which of two rubrics applies, scores the person who made the call, and flags the ones someone should look at. The review reads what 8,820 examined calls show about the decisions built into it.",
+      "beats": [
+        {
+          "label": "Before",
+          "text": "Staff calls placed by hand through the CRM's dialer were invisible to the calling platform, so review meant someone picking recordings to hear, usually the calls already under suspicion."
+        },
+        {
+          "label": "What we built",
+          "text": "A system that finds those calls at the vendor, checks whether each connected, gets a transcript, sorts it as sales or support, scores it against the existing rubric for that kind and records every call."
+        },
+        {
+          "label": "What happened",
+          "text": "Of 8,820 calls examined, 6,246 were scored against the rubric for their kind, and simple rules settled sales or support for 6,109 of 6,257 classified calls."
+        },
+        {
+          "label": "Why it matters",
+          "text": "A score about a named person has to be defensible to that person: judged against a standard already written down, with the reason a call has no score kept as carefully as the score."
+        },
+        {
+          "label": "What's next",
+          "text": "Flags are written as open text, with 1,834 different wordings across 3,251 flagged rows, so they cannot yet be grouped by kind, and no screen shows the five scoring dimensions."
+        }
+      ]
+    },
+    "c34dd57b-8782-4165-8965-237fe3c83031": {
+      "slug": "the-conversation-happened-the-crm-needs-the-right-record",
+      "standfirst": "An AI Systems Architect at Colaberry built the part of an admissions team's calling platform that writes each finished call into the CRM: the contact's fields, a task for a person, the call in the conversation history, the transcript as a staff note. The review reads the platform's own record of those writes against its jobs, and states where that record keeps its promise and where a completed job wrote nothing.",
+      "beats": [
+        {
+          "label": "Before",
+          "text": "After each admissions call, the CRM needs updated contact fields, a follow-up task, the call in the history and the transcript as a note. Each of those writes can fail, be skipped or be repeated."
+        },
+        {
+          "label": "What we built",
+          "text": "The part of the calling platform that writes each finished call into the CRM: it confirms which contact the call belongs to first, keeps a local proof row per write, and opens an exception a person can retry when a write fails."
+        },
+        {
+          "label": "What happened",
+          "text": "All 1,181 transcript notes carry the CRM's acknowledgement, but 0 of 1,099 completed call-history jobs wrote anything, because the only access token on file sat under another location."
+        },
+        {
+          "label": "Why it matters",
+          "text": "A job marked complete is not proof that a write happened. Only an acknowledgement stored from the other system is, and anything short of that should be counted as unproven."
+        },
+        {
+          "label": "What's next",
+          "text": "0 of 2,453 task rows carry a task id, and on 21 Sep 2026 the write switch read live in one place and shadow in another. No decision on either is recorded."
+        }
+      ]
+    },
+    "81ed506f-1011-450c-9414-e99c1294745c": {
+      "slug": "the-exemption-was-denied-someone-had-to-say-why",
+      "standfirst": "Selective Service registration is a legal obligation, and the decisions around it change a person standing: whether an exemption is granted, whether an appeal succeeds, whether somebody is recorded as compliant. A Colaberry intern built a working demonstration of how that system could run online, and built it so that no determination is ever made by the software. The eligibility check can read Eligible and a case manager can still deny the application, with the reason on the record and an appeal open to the applicant.",
+      "beats": [
+        {
+          "label": "Before",
+          "text": "Exemptions, appeals and compliance records in a government registration process change a person's standing, yet much of that work still ran on paper and a mainframe."
+        },
+        {
+          "label": "What we built",
+          "text": "A working online demonstration in which the software runs the checks and a person makes every decision, with a reason, a second reviewer on appeal and an audit entry nobody can edit."
+        },
+        {
+          "label": "What happened",
+          "text": "By the builder's own count, 45 of 46 stories work, and the documents written on the first day carried 14 infrastructure claims that the review written after the build did not support."
+        },
+        {
+          "label": "Why it matters",
+          "text": "When a decision changes someone's standing, software should check and a person should decide, and a confident completion report is not evidence that the software exists."
+        },
+        {
+          "label": "What's next",
+          "text": "It was a rehearsal with no client and nothing filed. The builder's own figures still await an independent recount, and no test with assistive technology users was arranged."
+        }
+      ]
+    },
+    "fe1a02f7-b2e1-440f-9578-8d6a381f1358": {
+      "slug": "the-interview-was-in-the-inbox-the-student-still-had-to-be-told",
+      "standfirst": "Thirty students were job-hunting at once and their mail arrived in one place: job-board digests, application receipts, rejections, and occasionally a real interview request with a date on it. An AI Systems Architect at Colaberry built something that reads that inbox every two hours, files what is routine, and puts the few messages that need a decision in front of a person. No student is told anything until someone approves the words.",
+      "beats": [
+        {
+          "label": "Before",
+          "text": "During a placement push, one shared inbox carried the job-search mail for thirty students, and a missed interview invitation meant a student who did not turn up."
+        },
+        {
+          "label": "What we built",
+          "text": "An inbox reader that sorts every message, pulls out interview details and drafts the notice for the student, then holds each notice until a person approves, edits or rejects it."
+        },
+        {
+          "label": "What happened",
+          "text": "Across fifty days it processed 20,773 messages and found 268 that needed a decision; of 127 uncertain cases staff reviewed, 106 were accepted as classified. These figures are self-reported."
+        },
+        {
+          "label": "Why it matters",
+          "text": "Automation earns its place by deciding where it stops: this one pushes its doubt toward a person instead of filing it quietly, and holds what it cannot match."
+        },
+        {
+          "label": "What's next",
+          "text": "Nobody has measured how often a person doing this by hand gets it wrong, so the record does not claim the system is more accurate, and unreviewed classifications remain unchecked."
+        }
+      ]
+    },
+    "0cdb1702-085a-4450-9cec-8866526e8c15": {
+      "slug": "the-next-call-needs-a-time-and-a-place-in-the-queue",
+      "standfirst": "Campaign calls need an eligible time and a place among the other launches waiting. An AI Systems Architect at Colaberry built a shared scheduling grid and checks before launch for an admissions team's calling platform, and the operating review shows what those controls cover and where the callback path still breaks down.",
+      "beats": [
+        {
+          "label": "Before",
+          "text": "On 10 Sep 2026 one five-minute window held 14 launch jobs against a cap of four, and that day's stuck calls traced back to how each planned call was given its slot."
+        },
+        {
+          "label": "What we built",
+          "text": "One shared schedule of short time slots for campaign calls, voicemail retries and deferred calls, a lock so two schedulers cannot take the same slot, and a last check of pauses and guards before a call goes."
+        },
+        {
+          "label": "What happened",
+          "text": "Since the lock, 11 of 1,064 five-minute windows started more than four launch jobs, against 20 of 331 on the shared schedule before the lock and 60 of 2,732 before it existed."
+        },
+        {
+          "label": "Why it matters",
+          "text": "Deciding when a call may go is two questions, not one: whether the time is allowed for that lead, and whether there is room for it among the calls already waiting."
+        },
+        {
+          "label": "What's next",
+          "text": "Callbacks a lead asks for still skip the shared schedule, and 0 of 19 reconstructed callback requests after the urgent-request guard shipped had a completed launch job, with no reason recorded."
+        }
+      ]
+    },
+    "1a4b7dab-a4b5-41c0-812b-4347e0a5cec1": {
+      "slug": "the-pipeline-needed-more-than-one-person",
+      "standfirst": "A small sales team needed a repeatable way to work its pipeline. Colaberry's Managing Director, working as its AI Systems Architect, built a daily outreach queue for an executive ground-transportation company: AI-assisted drafts, territory controls on the server and an explicit sending profile on the human-approved send path. The project established those controls at the API level; its browser identity flow remained unfinished when the project was sunset in September 2026. Told here as a retrospective, limits included.",
+      "beats": [
+        {
+          "label": "Before",
+          "text": "At an executive ground-transportation company, one person was the whole sales pipeline. On 14 Jun 2026 the plan changed: a second owner for Texas, a new hire for Iowa, and more owners over time."
+        },
+        {
+          "label": "What we built",
+          "text": "A daily outreach queue where each representative sees only the leads in their own states, a model prepares a draft, a person reviews it, and the message leaves under the right sender's name."
+        },
+        {
+          "label": "What happened",
+          "text": "A live release checklist over the API passed 25 of 25 on 24 Jun 2026, never through a browser login. 113 campaign emails went out by late June; the September reports showed 7,786 leads and 0 sends."
+        },
+        {
+          "label": "Why it matters",
+          "text": "Who sees which lead and whose name goes on a message are business rules. They hold only when the server enforces them, not when the screen merely hides them."
+        },
+        {
+          "label": "What's next",
+          "text": "The project was sunset in September 2026 with sign-out and per-user signatures unfinished and six lead actions still unchecked for territory, so shared use was never proven through a login."
+        }
+      ]
+    },
+    "0d367110-7161-481d-874c-6bb6eebce775": {
+      "slug": "the-question-was-in-plain-english-the-query-still-had-to-be-safe",
+      "standfirst": "Harpreet Kaur, a Colaberry learner, built a plain-English question tool for SQL Server in which the model only ever proposes a query, and code with no model in it decides whether that query may run.",
+      "beats": [
+        {
+          "label": "Before",
+          "text": "Business answers often sit in a database only someone who writes SQL can reach, and a text-to-SQL tool adds a risk: a fluent answer can hide a wrong table, an invented join or an unsafe statement."
+        },
+        {
+          "label": "What we built",
+          "text": "Kes built a tool that answers plain-English questions about a company database, checks every suggested query against the known tables before it runs, and asks back when a question is unclear."
+        },
+        {
+          "label": "What happened",
+          "text": "Every query that passes runs read-only under a default 1,000-row cap and 30-second timeout, both configurable, and the check is tested against 17 write and control statement forms it must refuse."
+        },
+        {
+          "label": "Why it matters",
+          "text": "A model can help draft a query, as long as the decision to run it belongs to rules a data team can inspect."
+        },
+        {
+          "label": "What's next",
+          "text": "Answer accuracy, response latency and business impact have not been measured, and nothing shows the tool deployed or used by anyone yet."
+        }
+      ]
+    },
+    "c10289b1-29b1-4e97-969b-9d4501e11b6c": {
+      "slug": "the-report-names-the-move-next-week-it-grades-it",
+      "standfirst": "Colaberry's weekly funnel report does not stop at describing the week. It names the one move with the greatest impact, attaches the prompt Claude Code follows to make it, and keeps a ledger, so the next report grades whether the move worked.",
+      "beats": [
+        {
+          "label": "Before",
+          "text": "Ads sent strangers to an Open House sign-up that created their account. An audit the next morning found 5 new accounts and nobody had gone in: the welcome email landed where people do not read."
+        },
+        {
+          "label": "What we built",
+          "text": "A weekly funnel report that follows every person from the ad to the first win, grades each step against a target, stars the one move with the greatest impact, and walks a reader through the rest in a guided tour."
+        },
+        {
+          "label": "What happened",
+          "text": "After the Access your account button shipped, 66 of 82 new accounts went in, against 0 of 5 before. Every move goes into a ledger with the test next week's numbers will decide."
+        },
+        {
+          "label": "Why it matters",
+          "text": "The reporting grows with the business instead of going stale: it remembers what was tried, refuses to recommend what is still being measured, and grades every move in public."
+        },
+        {
+          "label": "What's next",
+          "text": "The move starred on 18 November has not shipped yet. Its first grade is due on 25 November."
+        }
+      ]
+    },
+    "1193fb5b-76dc-4e04-9207-68cddd850579": {
+      "slug": "the-request-was-messy-the-price-couldnt-be",
+      "standfirst": "Reservation requests arrived as web forms, forwarded threads and free text. Colaberry's Managing Director, working as its AI Systems Architect, built a queue that extracts trip details, calculates prices through explicit rules and prepares a reply for a person to review. The calculation is repeatable for the same inputs and rate-card version; the final reply still needs checking, because its model-written amount is not validated against that calculation on the queue path. Sunset in September 2026; told here as a retrospective, limits included.",
+      "beats": [
+        {
+          "label": "Before",
+          "text": "At an executive ground-transportation company, the person answering each request had to find the trip inside a form, a forwarded thread or a few lines of text and price it from a rate card kept in a document."
+        },
+        {
+          "label": "What we built",
+          "text": "A queue that reads each request, lets a model fill only the trip details, computes the price from fixed rules shown line by line, and holds anything a model read for a person to check and send."
+        },
+        {
+          "label": "What happened",
+          "text": "239 of 239 reservation and pricing tests passed at the end of the build, one asserting that the same inputs always return the same quote; on 23 Jun 2026, 10 of 43 queue rows were waiting for a reply."
+        },
+        {
+          "label": "Why it matters",
+          "text": "Let a model read the messy request, but let only fixed rules decide the number, so a person can see exactly which parts of a quote still need checking."
+        },
+        {
+          "label": "What's next",
+          "text": "The project was sunset in September 2026. Automatic sending was never built, and the amount in the model-written reply on the queue path was never checked against the calculated price."
+        }
+      ]
+    },
+    "95c0f5cf-0ab1-4ce3-9383-5ef198021b1b": {
+      "slug": "the-score-shows-its-work-the-data-cannot-prove-it-yet",
+      "standfirst": "Megan Dimiyo-Mbenoun, a Colaberry learner, built a staffing-intelligence app that ranks open roles by how hard they look to fill and explains every score in plain language. Then she tested her own score and reported the honest answer: not enough data yet.",
+      "beats": [
+        {
+          "label": "Before",
+          "text": "A staffing sales user has to pick which company to call first, and job boards list postings without saying which employer is struggling to fill them."
+        },
+        {
+          "label": "What we built",
+          "text": "A tool that reads public job postings and employer filings, ranks roles by how hard they look to fill, shows the reasons behind each score, and drafts an outreach note a person must release."
+        },
+        {
+          "label": "What happened",
+          "text": "Kes tested the score itself: the hardness check has 4 of the 20 high-score requisitions it needs before it will conclude anything, so Kes calls it unproven."
+        },
+        {
+          "label": "Why it matters",
+          "text": "A score that shows its reasons and says when the data is too thin earns more trust than one that only looks confident."
+        },
+        {
+          "label": "What's next",
+          "text": "It still runs locally, by hand, on two real companies beside seeded rows, and 24 of 54 decisions await the owner. The rerun at 20 per group is not scheduled."
+        }
+      ]
+    },
+    "a6cc67d5-9f0d-429c-8bdb-a6d2bfa7530d": {
+      "slug": "the-workflow-grew-so-did-the-responsibility",
+      "standfirst": "A recap workflow begins with a call and ends with a useful next step. As an admissions team's calling system took on more of that work, the harder question became where unfinished work lives and who moves it forward. An AI Systems Architect at Colaberry built the answer into a Python API and worker platform, with explicit boundaries between process state, execution and the CRM, and the record states where those boundaries still leak.",
+      "beats": [
+        {
+          "label": "Before",
+          "text": "After every call, an admissions team's calling system has work left to finish: analysis, a campaign move, the next contact and CRM updates. A lost step leaves a lead waiting with nobody told."
+        },
+        {
+          "label": "What we built",
+          "text": "A job platform in which every piece of unfinished work is written down before it is queued, abandoned work returns to the line, and every CRM write has a retry limit and an off switch."
+        },
+        {
+          "label": "What happened",
+          "text": "In the 30 days to 19 Sep 2026, 82,701 of 83,604 accepted jobs ran to completion, and at one reading 0 of 349 open jobs were overdue or holding an expired lease."
+        },
+        {
+          "label": "Why it matters",
+          "text": "Dependable automation rests less on how fast work runs than on knowing where unfinished work lives and who moves it forward."
+        },
+        {
+          "label": "What's next",
+          "text": "A queued job whose record never saves is still dropped, recovery runs on one worker role, and CRM task writes carry no duplicate check."
+        }
+      ]
+    },
+    "6baee793-bd5d-4ece-8700-ab479d9e3eb5": {
+      "slug": "turning-call-intent-into-the-next-action",
+      "standfirst": "When an AI voice agent finishes a call with a prospect, someone has to decide what happens next. Kes, who joined Colaberry as an intern and is now an AI Systems Architect, built the rules that read what the caller asked for and schedule, cancel or stop the follow-up, and then bounded them when they retried too much.",
+      "beats": [
+        {
+          "label": "Before",
+          "text": "An admissions team's AI voice agent left a summary and a task after each answered call, and a request for a person looked just like a finished call, waiting for someone to read it."
+        },
+        {
+          "label": "What we built",
+          "text": "Plain rules that read what each caller asked for and then schedule a follow-up, change the lead's state or stop calling, leaving the reason on every job they create."
+        },
+        {
+          "label": "What happened",
+          "text": "2,227 of 2,326 answered calls received a next step by rule, and when an audit found retries looping, Kes bounded them, taking retries after inconclusive calls from 551 to none."
+        },
+        {
+          "label": "Why it matters",
+          "text": "What happens after the AI has spoken is a decision worth writing as rules a colleague can read, and worth revisiting when those rules run too far."
+        },
+        {
+          "label": "What's next",
+          "text": "No reviewed sample exists yet to measure how often the rules picked the right intent, and the voice platform reports attempted transfers, not completed ones."
+        }
+      ]
+    },
+    "7a128b16-3b64-47ca-a7b8-a78e1930e121": {
+      "slug": "your-repositories-already-wrote-your-resume",
+      "standfirst": "A developer's GitHub history is already proof of what they can do, and almost nobody can read it. This system reads the repositories through a six-phase pipeline and writes the portfolio, deciding the role in code before the language model is allowed an opinion.",
+      "beats": [
+        {
+          "label": "Before",
+          "text": "A developer's GitHub history already shows what they can build, but a recruiter skimming it in thirty seconds sees project names and a language bar, and most portfolio tools hand the developer an empty text box."
+        },
+        {
+          "label": "What we built",
+          "text": "A tool that reads the projects a developer selects and writes their headline, summary and project descriptions, published as a shareable portfolio page and a matching PDF resume."
+        },
+        {
+          "label": "Where it stands",
+          "text": "No outcome is measured yet. The developer edits a draft grounded in their own work instead of a blank field, and the portfolio page and resume carry the same headline."
+        },
+        {
+          "label": "Why it matters",
+          "text": "Asking people to describe their own work hands the hardest part back to them; reading the evidence and drafting from it is the part a tool can take on."
+        },
+        {
+          "label": "What's next",
+          "text": "There is no public deployment yet and no automated tests on the server side; the system runs locally for now."
+        }
+      ]
+    }
+  }
+}
