@@ -147,6 +147,15 @@ describe('the shell wiring', () => {
     assert.match(css, /#cs-record\s*>\s*\.cs-hero\s*>\s*\.cs-hero-copy\s*\{\s*display:\s*none/);
   });
 
+  test('no grid track is a bare 1fr, so nothing pushes the page past a phone', () => {
+    // Ali, 19 Nov 2026: two records scrolled sideways at 390px. A 1fr track cannot shrink below its
+    // widest word, so a long fact value or outcome number widened the column past the screen.
+    const css = fs.readFileSync(path.join(__dirname, '..', 'src', 'assets', 'case-study.css'), 'utf8');
+    for (const rule of css.match(/grid-template-columns:[^;}]+/g) || []) {
+      assert.doesNotMatch(rule.replace(/minmax\([^)]*\)/g, ''), /(^|[\s,(:])1fr\b/, `bare 1fr in "${rule}"`);
+    }
+  });
+
   test('the person card stays on screen: its aside is the grid item, not a card-high wrapper', () => {
     // A sticky box only travels inside its parent. With #hire-card-host as an ordinary block, the
     // aside was as tall as the card (592px beside a 12,199px record) and scrolled away.
