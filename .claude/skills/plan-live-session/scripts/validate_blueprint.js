@@ -10,7 +10,12 @@
  *   2. Rules the schema cannot express: minutes sum to the length, segment shape, sound-bite scores
  *      recomputed with score_soundbite.js, teach-slide diagrams, no terminal commands on slides,
  *      sourced facts backed by a URL fetched this run, idea totals recomputed with score_idea.js,
- *      cross-references between ids.
+ *      cross-references between ids, deck segments that render teach slides and story beats (read
+ *      from kitSpecDaySlides.ts), dayKind vs the week's checkpoints (via load_curriculum.js), the
+ *      recap naming next week, claimsRegistry.ts key shapes, demand rows backed by fetched pages,
+ *      deck polls matching participation questions word for word, the news window, and the
+ *      routing competitors a skills-triggering teardown needs. Schedule numbers (air date and time,
+ *      next air date, episode, length, minute stamps) are exempt from the public-number warning.
  *
  * Exit 0 = valid. Exit 2 = invalid (every error printed). Exit 1 = could not read the file.
  */
@@ -62,6 +67,7 @@ function validateSchema(root, schema, value, at, errors) {
 const TERMINAL = /(^|\n|`)\s*(\$ |> |npm |npx |yarn |pnpm |git |cd |pip |python |node |curl |wget |docker |ssh |scp |ls |mkdir |rm |chmod |sudo |export |set -)/;
 const GREETING = /^(hi|hello|hey|welcome|good (morning|afternoon|evening)|what's up)\b/i;
 const BAD_START = /^(and|so|it|this)\b/i;
+const REPO = path.resolve(__dirname, '..', '..', '..', '..');
 // Valid deck segment ids, read from the repo's run-of-show templates so they never drift.
 // A slide tagged with any other id renders nowhere (build-class-deck, "Hard traps").
 function deckSegments() {
@@ -93,6 +99,85 @@ function teachSegments() {
   return out.architecture.length && out.build.length ? out : fallback;
 }
 const TEACH_SEGMENTS = teachSegments();
+
+// The subset of segments where kitSpecDaySlides.ts actually renders story beats
+// (`pushStoryBeats(out, mBeats, '<id>'` = Architecture Day, `pushStoryBeats(out, tBeats, '<id>'` =
+// Build Day). A beat tagged to any other segment is dropped without a trace.
+function storySegments() {
+  const fallback = { architecture: ['checkin', 'business-problem', 'architecture', 'deconstruct', 'micro-build'], build: ['result-preview', 'build-map', 'failure'] };
+  const f = path.join(REPO, 'backend', 'src', 'services', 'classKit', 'kitSpecDaySlides.ts');
+  if (!fs.existsSync(f)) return fallback;
+  const src = fs.readFileSync(f, 'utf8');
+  const ids = (v) => [...src.matchAll(new RegExp(`pushStoryBeats\\(out,\\s*${v},\\s*'([a-z-]+)'`, 'g'))].map((m) => m[1]);
+  const out = { architecture: ids('mBeats'), build: ids('tBeats') };
+  return out.architecture.length && out.build.length ? out : fallback;
+}
+const STORY_SEGMENTS = storySegments();
+
+// frontend/src/config/claimsRegistry.ts entries: key → { verification, approvedRoutes }.
+function claimsRegistry() {
+  const f = path.join(REPO, 'frontend', 'src', 'config', 'claimsRegistry.ts');
+  if (!fs.existsSync(f)) return null;
+  const out = new Map();
+  for (const block of fs.readFileSync(f, 'utf8').split(/\n\s*key:\s*'/).slice(1)) {
+    const key = block.slice(0, block.indexOf("'"));
+    const verification = (block.match(/verification:\s*'([A-Z_]+)'/) || [])[1] || null;
+    const routes = (block.match(/approvedRoutes:\s*\[([^\]]*)\]/) || [])[1] || '';
+    out.set(key, { verification, approvedRoutes: [...routes.matchAll(/'([^']*)'/g)].map((m) => m[1]) });
+  }
+  return out;
+}
+const REGISTRY = claimsRegistry();
+
+// Curriculum (checkpoints per week, next week's title) from the repo, via load_curriculum.js.
+function curriculum() {
+  try { return require('./load_curriculum').loadCurriculum(REPO); } catch (e) { return null; }
+}
+const CURRICULUM = curriculum();
+
+// history.json schedule (air time), for the schedule-number exemption in public copy.
+function historySchedule(p) {
+  const f = p ? path.resolve(p) : path.join(REPO, 'docs', 'live-sessions', 'history.json');
+  try { return JSON.parse(fs.readFileSync(f, 'utf8')).schedule || null; } catch (e) { return null; }
+}
+
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const esc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/**
+ * The session's own schedule values may appear in public copy without a fact row: the air date and
+ * next air date (any common spelling), the air time (history.json schedule.time, 12- or 24-hour),
+ * the episode number, the length in minutes and the run-of-show minute stamps. Returns the
+ * patterns to blank out of public copy before numbers are traced to facts.
+ */
+function scheduleExemptions(bp, schedule) {
+  const h = bp.header || {};
+  const pats = [];
+  for (const iso of [h.airDate, h.nextAirDate].filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d || ''))) {
+    const [y, m, d] = iso.split('-').map(Number);
+    const mon = MONTHS[m - 1];
+    pats.push(new RegExp(`\\b(?:${mon}|${mon.slice(0, 3)}\\.?)\\s+0?${d}(?:st|nd|rd|th)?\\b(?:,?\\s+${y})?`, 'gi'));
+    pats.push(new RegExp(`\\b0?${d}(?:st|nd|rd|th)?\\s+(?:of\\s+)?(?:${mon}|${mon.slice(0, 3)}\\.?)(?:,?\\s+${y})?`, 'gi'));
+    pats.push(new RegExp(`\\b0?${m}/0?${d}(?:/(?:${y}|${String(y).slice(2)}))?\\b`, 'g'));
+    pats.push(new RegExp(`\\b${esc(iso)}\\b`, 'g'));
+    pats.push(new RegExp(`\\b${y}\\b`, 'g'));
+  }
+  const t = (h.airTime || (schedule && schedule.time) || '').match(/^(\d{1,2}):(\d{2})/);
+  if (t) {
+    const hh = Number(t[1]); const h12 = hh % 12 || 12;
+    const ampm = '\\s*[ap]\\.?\\s?m\\.?';
+    const tail = t[2] === '00' ? `(?::00)?${ampm}` : `:${t[2]}(?:${ampm})?`;
+    pats.push(new RegExp(`\\b(?:${h12}|0?${hh})${tail}`, 'gi'));
+  }
+  const ep = (String(h.series || '').match(/episode\s+(\d+)/i) || [])[1];
+  if (ep) pats.push(new RegExp(`\\b(?:episode|ep\\.?)\\s*#?${ep}\\b|#${ep}\\b`, 'gi'));
+  const segs = (bp.runOfShow && bp.runOfShow.segments) || [];
+  const mins = new Set([h.lengthMinutes, bp.runOfShow && bp.runOfShow.publicEndsAtMinute, ...segs.flatMap((s) => [s.start, s.minutes, s.start + s.minutes])].filter((x) => Number.isInteger(x)));
+  for (const v of mins) {
+    pats.push(new RegExp(`\\b${v}[\\s-]*(?:minutes?|mins?)\\b`, 'gi'));
+    pats.push(new RegExp(`\\bminute\\s+${v}\\b`, 'gi'));
+  }
+  return pats;
+}
 const REQUIRED_KINDS =['news-take', 'number', 'mistake', 'framework', 'prediction', 'contrarian', 'story-30s'];
 
 function mermaidNodes(src) {
@@ -111,6 +196,44 @@ function mermaidNodes(src) {
     }
   }
   return { head, nodes };
+}
+
+/** Resolve a dotted path like "demo.claudeCodeInstructions[0]" inside the blueprint. */
+function atPath(obj, p) {
+  return p.split('.').reduce((o, part) => {
+    if (o == null) return undefined;
+    const m = part.match(/^([^[\]]+)((?:\[\d+\])*)$/);
+    if (!m) return undefined;
+    let v = o[m[1]];
+    for (const ix of m[2].match(/\d+/g) || []) v = v == null ? undefined : v[Number(ix)];
+    return v;
+  }, obj);
+}
+const lineCounts = new Map();
+/**
+ * status "checked": confirmed against the repo or by Ali, never a real-world/news claim.
+ * checkedAgainst entries: "<repo path>:<line>" (file exists, line within it), "Ali confirmed
+ * YYYY-MM-DD", or "blueprint:<path>" (the session's own design; the path must resolve).
+ */
+function checkFact(bp, f, at, errors) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(f.checkedAt || '')) errors.push(`${at}: status "checked" needs checkedAt (YYYY-MM-DD)`);
+  const planned = String((bp.meta && bp.meta.generatedAt) || '').slice(0, 10);
+  if (f.checkedAt && /^\d{4}-\d{2}-\d{2}$/.test(planned) && f.checkedAt > planned) errors.push(`${at}: checkedAt ${f.checkedAt} is after the planning day ${planned}`);
+  if (f.url && /^https?:\/\//i.test(f.url)) errors.push(`${at}: has a web URL, so it is a real-world claim: it must be "sourced" from a page fetched this run (or "verify"), never "checked"`);
+  const list = f.checkedAgainst || [];
+  if (!list.length) errors.push(`${at}: status "checked" needs checkedAgainst (repo path:line, "Ali confirmed YYYY-MM-DD" or "blueprint:<path>")`);
+  for (const c of list) {
+    if (/^Ali confirmed \d{4}-\d{2}-\d{2}$/.test(c)) continue;
+    const bpRef = c.match(/^blueprint:(.+)$/);
+    if (bpRef) { if (atPath(bp, bpRef[1]) == null) errors.push(`${at}: checkedAgainst "${c}" does not resolve in this blueprint`); continue; }
+    const m = c.match(/^(.+):(\d+)$/);
+    if (!m) { errors.push(`${at}: checkedAgainst "${c}" is not "<repo path>:<line>", "Ali confirmed YYYY-MM-DD" or "blueprint:<path>"`); continue; }
+    const file = path.resolve(REPO, m[1]);
+    if (path.relative(REPO, file).startsWith('..') || !fs.existsSync(file) || !fs.statSync(file).isFile()) { errors.push(`${at}: checkedAgainst "${c}": ${m[1]} is not a file in the repo`); continue; }
+    if (!lineCounts.has(file)) lineCounts.set(file, fs.readFileSync(file, 'utf8').split(/\r?\n/).length);
+    const n = Number(m[2]);
+    if (n < 1 || n > lineCounts.get(file)) errors.push(`${at}: checkedAgainst "${c}": line ${n} is outside ${m[1]} (${lineCounts.get(file)} lines)`);
+  }
 }
 
 function validateRules(bp, errors, warnings) {
@@ -208,12 +331,37 @@ function validateRules(bp, errors, warnings) {
       if (!f.url) errors.push(`facts[${i}] "${f.claim}": sourced without a URL`);
       else if (!fetched.has(f.url)) errors.push(`facts[${i}] "${f.claim}": sourced, but ${f.url} is not a source fetched this run`);
     }
+    if (f.status === 'checked') checkFact(bp, f, `facts[${i}] "${String(f.claim).slice(0, 60)}"`, errors);
+    else if (f.checkedAgainst || f.checkedAt) errors.push(`facts[${i}]: checkedAt/checkedAgainst belong only to status "checked"`);
+    // Registry shape. In scope (Colaberry, the program, pricing, credentials, partners, outcomes):
+    // applies true + the entry's key, or applies true + key null + note "not registered".
+    // Out of scope: applies false + key null.
+    const r = f.registry || {};
+    const at = `facts[${i}] "${String(f.claim).slice(0, 60)}"`;
+    if (r.key != null) {
+      if (r.applies !== true) errors.push(`${at}: registry.key "${r.key}" is set, so registry.applies must be true`);
+      if (REGISTRY && !REGISTRY.has(r.key)) errors.push(`${at}: registry.key "${r.key}" is not a key in claimsRegistry.ts`);
+    } else if (r.applies === true && !/\bnot registered\b/i.test(r.note || '')) {
+      errors.push(`${at}: registry.applies true with key null must say "not registered" in registry.note`);
+    }
+    if (f.registryVerified) {
+      const e = REGISTRY && r.key ? REGISTRY.get(r.key) : null;
+      if (!r.key) errors.push(`${at}: registryVerified needs registry.key`);
+      else if (e && e.verification !== 'VERIFIED') errors.push(`${at}: registryVerified, but ${r.key} is ${e.verification}, not VERIFIED`);
+    }
   });
 
   // participation
   const q = (bp.participation && bp.participation.questions) || [];
   for (const k of ['roll-call', 'diagnostic', 'judgment-poll', 'self-check']) if (!q.some((x) => x.kind === k)) errors.push(`no participation question of kind "${k}"`);
-  q.forEach((x, i) => { if (!segIds.has(x.segmentId)) errors.push(`participation.questions[${i}]: unknown segment ${x.segmentId}`); });
+  q.forEach((x, i) => {
+    if (!segIds.has(x.segmentId)) errors.push(`participation.questions[${i}]: unknown segment ${x.segmentId}`);
+    // Every question becomes a deck poll or trivia, and a deck poll needs options; a self-check
+    // carries 3-4 self-rating options so the participation list and the deck cannot diverge.
+    const n = (x.options || []).length;
+    if (x.kind === 'self-check' && (n < 3 || n > 4)) errors.push(`participation.questions[${i}] "${x.q}": a self-check needs 3-4 self-rating options (it becomes a deck poll), has ${n}`);
+    else if (n < 2) errors.push(`participation.questions[${i}] "${x.q}": needs at least 2 options (it becomes a deck poll or trivia), has ${n}`);
+  });
   ((bp.participation && bp.participation.storyBeats) || []).forEach((x, i) => { if (!segIds.has(x.segmentId)) errors.push(`participation.storyBeats[${i}]: unknown segment ${x.segmentId}`); });
 
   // content yield
@@ -250,6 +398,27 @@ function validateRules(bp, errors, warnings) {
       if (n.ageDays !== age) errors.push(`news[${i}] "${n.headline}": ageDays ${n.ageDays}, but ${n.publishedAt} → ${h.airDate} is ${age}`);
     }
     if (n.url && !fetched.has(n.url)) errors.push(`news[${i}] "${n.headline}": ${n.url} is not a source fetched this run`);
+    // The window: news is found between (airDate - 14 days) and the planning day for the fresh
+    // tier, and never after the planning day; past 90 days on air it is no hook at all.
+    const planned = String((bp.meta && bp.meta.generatedAt) || '').slice(0, 10);
+    if (n.publishedAt && /^\d{4}-\d{2}-\d{2}$/.test(planned) && n.publishedAt.slice(0, 10) > planned) errors.push(`news[${i}] "${n.headline}": published ${n.publishedAt}, after the planning day ${planned}; news cannot come from the future`);
+    if (n.ageDays != null && n.ageDays > 90) errors.push(`news[${i}] "${n.headline}": ${n.ageDays} days old on the air date, outside the 90-day window; drop it`);
+    // The date comes from the fetched page, so it must agree with the source row.
+    const src = (bp.sources || []).find((s) => s.url === n.url);
+    if (src && src.publishedAt && n.publishedAt && src.publishedAt.slice(0, 10) !== n.publishedAt.slice(0, 10)) errors.push(`news[${i}] "${n.headline}": publishedAt ${n.publishedAt} != its source row's ${src.publishedAt}; take the date from the fetched page`);
+  }
+  // Dropped stories: a refused fetch (403/429) needs one alternate outlet tried before the drop.
+  for (const [i, d] of (bp.newsDropped || []).entries()) {
+    if (/\b(4\d\d|5\d\d|refus|block|paywall|timeout|timed out)/i.test(d.reason || '') && !d.alternateTried) errors.push(`newsDropped[${i}] "${d.headline}": the fetch failed (${d.reason}); try one alternate outlet for the same story and record it in alternateTried`);
+  }
+
+  // demand: every video and every page yt_demand.js printed as source is in sources, fetched this run
+  for (const [i, d] of (bp.demand || []).entries()) {
+    const at = `demand[${i}] "${String(d.title || d.url).slice(0, 60)}"`;
+    if (d.url && !fetched.has(d.url)) errors.push(`${at}: ${d.url} is not in sources with fetchedThisRun: true`);
+    for (const u of d.sourceUrls || []) if (!fetched.has(u)) errors.push(`${at}: source ${u} is not in sources with fetchedThisRun: true`);
+    if (d.views != null && d.channelMedian && d.ratio != null && Math.abs(d.views / d.channelMedian - d.ratio) > 0.15) errors.push(`${at}: ratio ${d.ratio}, but views ${d.views} / channel median ${d.channelMedian} is ${(d.views / d.channelMedian).toFixed(2)}`);
+    if (!d.channelMedian && d.ratio != null) errors.push(`${at}: a ratio needs a channel median`);
   }
 
   // angles + idea score
@@ -296,6 +465,45 @@ function validateRules(bp, errors, warnings) {
   for (const x of dh.interactions || []) if (!valid.includes(x.segment)) errors.push(`deckHandoff.interactions "${x.q}": segment "${x.segment}" is not a valid deck segment`);
   for (const x of dh.storyBeats || []) if (!valid.includes(x.segment)) errors.push(`deckHandoff.storyBeats "${x.title}": segment "${x.segment}" is not a valid deck segment`);
   for (const x of dh.interactions || []) if (x.kind === 'poll' && !(x.options || []).length) errors.push(`deckHandoff.interactions "${x.q}": a deck poll needs options`);
+  // Each deck poll/trivia is a participation question, word for word (same q, same options).
+  const sameOpts = (a, b) => JSON.stringify((a || []).map((s) => String(s).trim())) === JSON.stringify((b || []).map((s) => String(s).trim()));
+  for (const x of dh.interactions || []) {
+    if (x.kind !== 'poll' && x.kind !== 'trivia') continue;
+    const match = q.find((p) => String(p.q).trim() === String(x.q).trim());
+    if (!match) errors.push(`deckHandoff.interactions ${x.kind} "${x.q}": matches no participation question; use the same text in both`);
+    else if (!sameOpts(match.options, x.options)) errors.push(`deckHandoff.interactions ${x.kind} "${x.q}": options differ from participation question ${match.id}; use the same options in both`);
+  }
+  // Story beats render only in some segments of each day kind (kitSpecDaySlides.ts pushStoryBeats).
+  const storyOk = STORY_SEGMENTS[dayKind] || [];
+  for (const x of dh.storyBeats || []) {
+    if (valid.includes(x.segment) && !storyOk.includes(x.segment)) errors.push(`deckHandoff.storyBeats "${x.title}": segment "${x.segment}" never renders story beats on a ${dayKind} day (only ${storyOk.join(', ')}); move it to one of those or list it under deckHandoff.unmapped`);
+  }
+
+  // Which day's material: dayKind decides (SKILL.md Stage 1.2). params.day forces it; otherwise
+  // the default (build) is recorded as an assumption naming dayKind.
+  if (P.day && dh.session && dh.session.dayKind !== P.day) errors.push(`day=${P.day} was given but deckHandoff.session.dayKind is ${dh.session.dayKind}`);
+  if (!P.day && !((bp.meta && bp.meta.assumptions) || []).some((a) => /dayKind/.test(a))) errors.push('no day= was given: record the dayKind default (build) and why in meta.assumptions (an assumption that names "dayKind")');
+  const wk = CURRICULUM && h.week && CURRICULUM.weeks.find((w) => w.week === h.week.number);
+  if (dayKind === 'build' && wk && wk.days && wk.days.build.checkpoints.length && dh.checkpointsEnabled !== true) {
+    errors.push(`Build Day plans from week ${wk.week}'s Build Day deliverable, which has ${wk.days.build.checkpoints.length} authored checkpoints (${wk.days.build.checkpoints.map((c) => `CP${c.n} ${c.label}`).join(', ')}): checkpointsEnabled must be true and the live builds must follow them. Planning the Architecture Day incident instead? set dayKind "architecture"`);
+  }
+
+  // Name next week: the recap names the next curriculum week (week + 1, or the capstone after 12).
+  if (wk && wk.next && segs.length) {
+    const r = segs[segs.length - 1];
+    const recapText = [r.title, ...(r.talkingPoints || []), r.onScreenBuild, r.visual].join('\n');
+    const nx = wk.next;
+    const named = nx.week ? new RegExp(`\\bweek\\s+${nx.week}\\b`, 'i').test(recapText) || (nx.publicTitle && recapText.includes(nx.publicTitle)) : /capstone/i.test(recapText);
+    if (!named) errors.push(`the recap segment must name next week: ${nx.week ? `"Week ${nx.week}" or its public title "${nx.publicTitle}"` : '"the capstone"'} (from load_curriculum.js \`next\`)`);
+  }
+
+  // Teardown of skill triggering: a vague description only loses the routing when other skills compete.
+  const td = segs.filter((s) => s.mode === 'teardown').map((s) => [s.title, ...(s.talkingPoints || []), s.onScreenBuild].join('\n')).join('\n');
+  if (/skill/i.test(td) && /(never fires|vague|description|trigger)/i.test(td)) {
+    const comp = (bp.demo && bp.demo.routingCompetitors) || [];
+    if (comp.length < 2) errors.push(`the teardown breaks skill triggering, so demo.routingCompetitors must name at least two other skills that sit in the folder during it (has ${comp.length}); alone, the vague skill can still be picked and the teardown silently succeeds`);
+    if (!(bp.risks || []).some((r) => /silently succeed/i.test(r))) errors.push('the teardown breaks skill triggering: add a risks line that the teardown can silently succeed (the vague skill still fires) and what Ali says if it does');
+  }
   const op = dh.opening || {};
   if (dayKind === 'build' && op.coldOpen && !op.resultPreview) errors.push('deckHandoff.opening: Build Day reads only opening.resultPreview; coldOpen alone is a silent no-op');
   if (dayKind === 'architecture' && op.resultPreview && !op.coldOpen) errors.push('deckHandoff.opening: Architecture Day reads opening.coldOpen; resultPreview alone is a silent no-op');
@@ -308,13 +516,19 @@ function validateRules(bp, errors, warnings) {
   }
 
   // numbers in public copy must trace to a fact that may go public
-  const publicable = (bp.facts || []).filter((f) => f.status === 'sourced' || f.illustrative || f.registryVerified);
+  // A checked fact may trace a public number unless it is an in-scope registry claim that is not
+  // registry-verified (those stay out of public copy whatever their status).
+  const publicable = (bp.facts || []).filter((f) => f.status === 'sourced' || f.illustrative || f.registryVerified
+    || (f.status === 'checked' && !(f.registry && f.registry.applies)));
   const shortsText = (cy.shorts || []).map((s) => (sbs.find((b) => b.id === s.soundBiteId) || {}).text || '');
-  const pub = [publicCopy, ...shortsText].join('\n');
+  // The session's own schedule (air date, next air date, air time, episode, length, minute stamps)
+  // is exempt: the CTA may say "Tuesday, December 1, 6:30 pm Central" with no fact row.
+  let pub = [publicCopy, ...shortsText].join('\n');
+  for (const re of scheduleExemptions(bp, historySchedule(P.history))) pub = pub.replace(re, ' ');
   for (const num of new Set(pub.match(/\$?\d[\d,.]*%?/g) || [])) {
     const bare = num.replace(/[$,%]/g, '').replace(/\.$/, '');
     if (bare.length < 2 && !/[$%]/.test(num)) continue; // single digits: episode/week numbers
-    if (!publicable.some((f) => String(f.claim).replace(/,/g, '').includes(bare))) warnings.push(`public copy uses "${num}", which matches no sourced, illustrative or registry-verified fact`);
+    if (!publicable.some((f) => String(f.claim).replace(/,/g, '').includes(bare))) warnings.push(`public copy uses "${num}", which matches no sourced, checked, illustrative or registry-verified fact`);
   }
 }
 

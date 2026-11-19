@@ -73,6 +73,11 @@ if ((bp.news || []).length || (bp.demand || []).length) {
   if (!(bp.demand || []).length) p('- No demand evidence with a channel median was found this run.');
   p('');
 }
+if ((bp.newsDropped || []).length) {
+  p('### Stories found but dropped', '');
+  for (const d of bp.newsDropped) p(`- ✖ **${esc(d.headline)}**${d.publisher ? `, ${esc(d.publisher)}` : ''}: ${esc(d.reason)}${d.alternateTried ? ` (alternate tried: ${esc(d.alternateTried)})` : ''}: ${d.url}`);
+  p('');
+}
 
 /* 2. Run of show */
 p('## 2. Run-of-show', '');
@@ -110,10 +115,17 @@ bp.slides.forEach((s, i) => {
 
 /* 5. Facts */
 p('## 5. Facts and data points', '');
-const verify = bp.facts.filter((f) => f.status === 'verify').length;
-p(`${bp.facts.length} facts · ${verify} still marked **verify**.`, '');
+const count = (st) => bp.facts.filter((f) => f.status === st).length;
+const verify = count('verify');
+p(`${bp.facts.length} facts · ${count('sourced')} sourced · ${count('checked')} checked · ${verify} still marked **verify**.`, '');
 p('| Id | Claim | Status | Source | Published | Claims registry | Used in |', '|---|---|---|---|---|---|---|');
-for (const f of bp.facts) p(`| ${f.id} | ${esc(f.claim)} | ${f.status === 'verify' ? '**verify**' : 'sourced'} | ${f.url ? `[${esc(f.source)}](${f.url})` : esc(f.source)} | ${f.publishedAt || '—'} | ${f.registry.applies ? (f.registry.key ? `\`${f.registry.key}\`` : '**not registered**') : 'n/a'} ${esc(f.registry.note)} | ${f.usedIn.join(', ')} |`);
+const statusCell = (f) => {
+  const base = f.status === 'verify' ? '**verify**'
+    : f.status === 'checked' ? `✔ checked ${f.checkedAt}: ${(f.checkedAgainst || []).map((c) => `\`${esc(c)}\``).join(', ')}`
+      : 'sourced';
+  return f.illustrative ? `${base} · _illustrative_` : base;
+};
+for (const f of bp.facts) p(`| ${f.id} | ${esc(f.claim)} | ${statusCell(f)} | ${f.url ? `[${esc(f.source)}](${f.url})` : esc(f.source)} | ${f.publishedAt || '—'} | ${f.registry.applies ? (f.registry.key ? `\`${f.registry.key}\`` : '**not registered**') : 'n/a'} ${esc(f.registry.note)} | ${f.usedIn.join(', ')} |`);
 p('');
 
 /* 6. Participation */

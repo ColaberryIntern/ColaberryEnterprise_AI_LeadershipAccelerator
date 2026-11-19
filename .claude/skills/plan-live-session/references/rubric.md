@@ -14,12 +14,12 @@ Do the arithmetic with `scripts/score_idea.js`, not by hand.
 | Line (`key`) | Weight | 1 | 3 | 5 |
 |---|---|---|---|---|
 | Proven demand (`demand`) | 20 | No similar video has performed | A similar video beat its channel's median | A video on this exact angle ran 3× a channel's median in the last 90 days |
-| Right viewer (`viewer`) | 15 | Hobbyists who will never enrol | Working professionals who could become FDEs | The exact person on the program page |
+| Right viewer (`viewer`) | 15 | Hobbyists who will never enroll | Working professionals who could become FDEs | The exact person on the program page |
 | Five-word promise (`promise`) | 15 | Needs a sentence to explain | Clear, under 50 characters | Five words or fewer, under 30 characters |
 | Tension (`tension`) | 10 | Neutral and informational | A clear benefit | Stakes, a contrarian claim or a mistake to avoid |
 | Proof only I have (`proof`) | 15 | Opinion anyone could give | A demo I built | A real deployed build or learner result on screen |
 | Series fit (`series`) | 10 | A one-off | Fits a loose theme | A named episode in a recurring series |
-| News hook (`news`) | 15 | No reason to publish this week | A story from the last 90 days as proof point | A story under 14 days old that touches the viewer's job or pay |
+| News hook (`news`) | 15 | No reason to publish this week | A story from the last 90 days as proof point | A story ≤ 14 days old on the air date that touches the viewer's job or pay |
 
 **Caps** (applied by `score_idea.js`):
 - No `proof` input given → "Proof only I have" cannot exceed **2**.
@@ -30,7 +30,11 @@ Do the arithmetic with `scripts/score_idea.js`, not by hand.
 - `demand` needs a named video with a view count found in this run, compared with its channel's
   median over its ten most recent uploads (method in SKILL.md Stage 1.4). No channel median →
   2 at most. No evidence found → 1 at most.
-- `news` needs a dated story. Its age decides the ceiling: under 14 days can reach 5, 14–90 days 3, older 1.
+- `news` needs a dated story, dated from its fetched page (never a search summary). Its age **on
+  the air date** decides the ceiling: ≤ 14 days can reach 5, 15–90 days 3, older 1. The fresh
+  search window is therefore [air date − 14 days, today]: a story published before air date − 14
+  is not fresh however new it is at planning time. A story dropped because its page refused the
+  fetch (after one alternate outlet was tried) scores nothing; it is listed in `newsDropped`.
 - `viewer`: "the exact person on the program page" is the 35–60 enterprise professional in
   `TWELVE_WEEK_STORY_ARC.md`, who has never written production code and is changing careers toward
   forward deployed AI engineering. Developer-hobbyist framing scores 1–2.
@@ -55,8 +59,20 @@ Used in Stage 6, section 10. Five lines each, 0–10 per line. Anchors at 2 / 6 
 | **Cold open** | Starts with an agenda or a greeting | Shows the finished result | Shows the finished result in ≤ 5 minutes **and** calls back to last session by name |
 | **Pace** | A segment runs over 10 minutes | Every segment ≤ 10 minutes | A new segment every 8–10 minutes, pace changes at story beats, total ≤ 90 minutes where possible |
 | **Participation** | Questions only at the end | A chat prompt in most segments | A chat prompt in **every** segment, 6–10 questions across all four kinds, a hot seat or Q&A |
-| **Build credibility** | Slides only, nothing runs | One live build | Two or more live builds, one deliberate failure or teardown, a fallback ready in a second tab |
+| **Build credibility** | Slides only, nothing runs | One live build | Two or more live builds, one deliberate failure or teardown that is set up to fail for real (a skills-triggering teardown has 2+ competing skills in the folder), a fallback ready in a second tab |
 | **Student relevance** | Generic topic, no curriculum tie | Matches the week's theme | Matches the week's beat and deliverable, uses a recurring story device, points at the student's own build plan, ends with an open loop to next week |
+
+**Cold open, "last session by name".** Episode 2 onward: the previous live's title or what it
+built, by name. **Episode 1** (no earlier live in history): the callback is to the curriculum week
+the students just finished, by number and name ("You just finished Week 1, where you stopped
+typing code and started directing Claude Code"), or, when the session is on Week 1, to the
+series promise ("Every Tuesday you watch one real build…"). Either earns the 10 when the cold open
+also shows the finished result in ≤ 5 minutes. A generic "welcome to the first episode" is a 2.
+
+**"Open loop to next week".** Next week is the next curriculum week (current week + 1, or the
+capstone after Week 12), named in the recap by number or by its public title from
+`load_curriculum.js` (`weeks[n].next`), and teased with that week's tension or public title. A
+device the next week does not have (not every week has a 2 AM question) is never required.
 
 ### Yield: how much publishable content does it leave behind?
 

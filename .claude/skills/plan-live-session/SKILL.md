@@ -1,6 +1,6 @@
 ---
 name: plan-live-session
-description: Plan Ali's weekly live session end to end. Picks the topic from the 12-week curriculum, this fortnight's AI news and proven YouTube demand; writes and scores story angles; tightens the best one until it passes the Idea rubric; then writes a complete session blueprint (run-of-show, sound bites, slides, sourced facts, participation, live Claude Code demo, student build-along, content yield for an 18–24 minute avatar video plus Shorts/quote cards/LinkedIn/email, scores, checklist, and a build-class-deck handoff). Runs with no arguments and never asks a question unless interactive=true. Invoke on "/plan-live-session", "plan next week's live", "plan the live session on X", "what should this week's live be", "blueprint for Thursday's live". It never builds the deck; build-class-deck does that from the blueprint.
+description: Plan Ali's weekly live session end to end. Picks the topic from the 12-week curriculum, this fortnight's AI news and proven YouTube demand; writes and scores story angles; tightens the best one until it passes the Idea rubric; then writes a complete session blueprint (run-of-show, sound bites, slides, sourced facts, participation, live Claude Code demo, student build-along, content yield for an 18–24 minute avatar video plus Shorts/quote cards/LinkedIn/email, scores, checklist, and a build-class-deck handoff). Runs with no arguments and never asks a question unless interactive=true. Invoke on "/plan-live-session", "plan next week's live", "plan the live session on X", "what should this week's live be", "blueprint for Monday's live". It never builds the deck; build-class-deck does that from the blueprint.
 user-invocable: true
 ---
 
@@ -32,6 +32,7 @@ All commands below run from the repo root. `S=.claude/skills/plan-live-session/s
 | `source` | `auto` `curriculum` `news` `mix` | `auto` | Where the topic comes from. `auto` lets the data decide. |
 | `topic` | text | none | Ali's own topic. Overrides the data pick; still matched to a curriculum week. |
 | `week` | 1–12 | auto | Force a curriculum week. |
+| `day` | `build` `architecture` | `build` | Which of the week's two class days the session plans from (see "Which day's material", Stage 1.2). |
 | `students_on` | 1–12 | unknown | The week most subscribers are on. Nearby weeks rank higher. |
 | `build` | text | skill chooses | What to build live on screen. |
 | `proof` | text | none | Real proof Ali can show (a deployed build, a learner result, a number). |
@@ -51,13 +52,13 @@ All commands below run from the repo root. `S=.claude/skills/plan-live-session/s
 | `out` | path | `docs/live-sessions/` | Where blueprints are written. |
 | `history` | path | `docs/live-sessions/history.json` | Testing only: point at a scratch history so test runs never pollute the real one. |
 
-**Parsing.** Accept `key=value` pairs (quote values with spaces) **and** plain sentences. Map a
+**Parsing.** Ignore every line that starts with `#` (the copy-paste skeleton in `docs/live-sessions/README.md` uses them for help text and sample values; a key whose value is empty, e.g. `week=`, means "use the default"). Accept `key=value` pairs (quote values with spaces) **and** plain sentences. Map a
 sentence onto the same parameters: "plan next week's live on subagents, students are on week 7" →
 `topic="subagents" students_on=7`; "a 90 minute public one about the FDE academy news" →
 `length=90 audience=public source=news topic="FDE academy"`. "next week" with no date → the default
 date. Out-of-range values: clamp to the nearest allowed value and record it in `meta.assumptions`.
 Print the resolved parameters as one line before Stage 1, marking defaults, e.g.
-`source=auto · week=auto · students_on=unknown · audience=students · length=60 · date=2026-12-03 (default) · angles=5 · pass_mark=70 · stop_after=blueprint · out=docs/live-sessions/`.
+`source=auto · week=auto · day=build (default) · students_on=unknown · audience=students · length=60 · date=2026-12-03 (default) · angles=5 · pass_mark=70 · stop_after=blueprint · out=docs/live-sessions/`.
 
 **`topic` vs `week`.** `week` wins for the curriculum week. `topic` alone → pick the week whose
 theme/beat it fits best (say which and why in `dataPick.reason`). Both → use both; if they clash,
@@ -84,7 +85,9 @@ exactly which stage to re-run and why. Never discard finished work.
    ```
    `next-date` returns the next open weekly slot at least one day out; if it prints an
    "assumption:" line, copy it into `meta.assumptions`. No previous session → the callback is to the
-   student's current week ("you just finished…"), recorded as an assumption. If `last` says
+   student's current week ("you just finished…"), recorded as an assumption; on Episode 1 the
+   Room rubric's cold-open callback is scored against that curriculum week by name (see
+   `references/rubric.md`, "Episode 1"), so a 10 is reachable without a previous live. If `last` says
    `notYetAired: true`, or it is more than 7 days before the new date, the callback says "last
    session", never "last week", and describes what it *covers*, not what happened in it.
    **Series default:** the weekly live *is* a recurring series. With no `series=`, use
@@ -100,16 +103,39 @@ exactly which stage to re-run and why. Never discard finished work.
    It reads `backend/src/data/canonicalCourse.ts`, `backend/src/data/classSessionPlan.ts` (the
    week's assignment is its deliverable) and `docs/training-program-2026-q3/TWELVE_WEEK_STORY_ARC.md`,
    and returns per week: theme, intensive, act, beat, Academy course, deliverable, and the recurring
-   devices (2 AM question, the person who isn't there, trust rung, own project, dragon callback).
+   devices (2 AM question, the person who isn't there, trust rung, own project, dragon callback),
+   plus `days` (each class day's material) and `next` (the following curriculum week).
    Also skim `docs/training-program-2026-q3/CANONICAL_COURSE_STRUCTURE.md` for the chosen week.
    A non-empty `gaps` array is not fatal: use what exists and list the gap in `meta.assumptions`.
+
+   **Which day's material.** A week has two class days whose builds differ: Architecture Day
+   plans an incident and a micro-build, Build Day the graded deliverable and its checkpoints. The
+   session's `dayKind` decides, and nothing else:
+
+   | `dayKind` | Plan from (`weeks[n].days.…`) | `checkpointsEnabled` |
+   |---|---|---|
+   | `build` (**default**) | `build.resultPreview` (the deliverable), `build.checkpoints` (the live builds follow CP0..CPn), `build.failureInjection` (the teardown) | `true` whenever `build.checkpoints` is non-empty |
+   | `architecture` | `architecture.tension` (the incident), `architecture.realExample` (the teardown), `architecture.microBuild` (the live builds) | not rendered on Architecture Day |
+
+   `dayKind` = `day=` when given; otherwise `build`, because the weekly live's second job is a
+   real build and Build Day carries the week's graded deliverable. Record the default in
+   `meta.assumptions` with the word `dayKind` (e.g. "dayKind defaulted to build (no day= given):
+   the live builds follow Week 2's Build Day checkpoints"). Never mix days: wanting the
+   Architecture Day incident means `day=architecture`, not a Build Day deck with
+   `checkpointsEnabled: false`. The validator rejects a `build` session with
+   `checkpointsEnabled: false` when the week has checkpoints, and a `dayKind` that differs from
+   `day=`.
 3. **News, in two passes** (the leading week depends on the news, so do not search for it first).
    If `news=` is a URL, fetch it. If it is text, search for the original story and fetch it.
    Otherwise:
-   - *Pass 1, broad:* web searches for the **14 days before today** (news cannot come from the
-     future, even when `date` is weeks out) on: forward deployed engineer; Anthropic and Claude
-     Code releases; MCP; agent skills; subagents; enterprise AI deployment. `ageDays` is still
-     counted to the air date, so a date far out lowers the news ceilings; say so in the Stage 1 line.
+   - *Pass 1, broad:* web searches on: forward deployed engineer; Anthropic and Claude Code
+     releases; MCP; agent skills; subagents; enterprise AI deployment. **The fresh window is
+     [`date` − 14 days, today]**: `ageDays` is counted to the air date, so a story published
+     before `date` − 14 will be more than 14 days old on air and is not fresh, and nothing can be
+     published after today. When `date` − 14 is after today, no story can be fresh: say so in the
+     Stage 1 line. Stories from (`date` − 90, `date` − 14) may still serve the 15–90-day tier; older
+     than 90 days on air, drop them (the validator rejects `ageDays` > 90 and a `publishedAt`
+     after the planning day).
    - Score provisionally (Stage 2 command, leaving `demand` out of every week so it scores neutral
      2), then *pass 2:* search the top three weeks' own keywords (theme words plus the
      deliverable), gather demand (step 4), and re-score. With `week=` given, the "top three" are
@@ -121,6 +147,16 @@ exactly which stage to re-run and why. Never discard finished work.
    `ageDays` from `date`. Fetch each one you keep: a story seen only in a search snippet is not a
    source, and neither is an index or listing page (a news index, a changelog's table of
    contents). Fetch the story's own page. Respect `avoid`.
+   **Dates come from the fetched page** (its byline, `datePublished` or release-notes heading),
+   never from a WebSearch summary, which is not authoritative; the news row's `publishedAt` and
+   its `sources` row's `publishedAt` must agree.
+   **When a page refuses the fetch** (HTTP 403, 429, a paywall or a timeout), search for the same
+   story at **one alternate outlet** (another publisher, the company's own release, a wire copy)
+   and fetch that before dropping the story. Every story found but not kept goes in
+   `newsDropped[]` with `headline`, `url`, `reason` (e.g. "HTTP 403 on fetch; alternate HTTP 429")
+   and `alternateTried` (the alternate URL and its result; `null` only when the reason is not a
+   fetch failure, such as "duplicate of news[2]" or "outside the window"), so the loss is
+   visible in `blueprint.md`.
 4. **Demand.** For each top-three week, find YouTube videos on the topic from the last 90 days
    and compare each promising one with its channel's median. A web-fetch tool cannot read
    YouTube (the pages render in JavaScript), so use the script, which reads the data the page
@@ -130,8 +166,13 @@ exactly which stage to re-run and why. Never discard finished work.
    node $S/yt_demand.js channel @<handle> --n=10                 # median of 10 latest uploads ≥ 14 days old
    node $S/yt_demand.js video <id>                               # exact views + publish date
    ```
-   Record title, channel, views, channel median, ratio, URL, date in `demand[]`, and the pages
-   it printed as `source:` in `sources` (`fetchedThisRun: true`).
+   Every command prints its page as a `source: <url>` line first **and last** (so `| tail` keeps
+   it), and as `source` in `--json` output. Record one `demand[]` row per video:
+   `{ week, query, title, channel, url, views, channelMedian, ratio, publishedAt, sourceUrls }`
+   (`channelMedian`/`ratio` `null` when unread; `ratio` = views ÷ channel median, 1 decimal;
+   `sourceUrls` = every `source:` page behind the row: the search results, the channel's videos
+   page, the watch page). The video `url` and every `sourceUrls` entry go in `sources` with
+   `fetchedThisRun: true`; the validator checks both and recomputes the ratio.
    If the channel median cannot be read, the video counts only as "beats the topic's typical
    results" and caps at demand 2. No number seen → no demand evidence; do not infer it. If no
    tool in this session returns YouTube view counts at all, score demand 0 for every week and say
@@ -144,9 +185,9 @@ exactly which stage to re-run and why. Never discard finished work.
    - **buildability**: can the week's deliverable be shown working in about 20 minutes, live, with
      a recorded fallback? 5 only if Ali could build it from an empty folder in 20 minutes with
      Claude Code; 3 if it needs a prepared starter repo; 1 if it cannot run live.
-   - **newsFit** (is there a reason this week?): 5 = a story under 14 days old whose *main subject*
-     is this week's topic; 4 = main subject, 14–90 days; 3 = a passing mention under 14 days;
-     2 = passing mention, 14–90 days; 0 = none.
+   - **newsFit** (is there a reason this week?): 5 = a story ≤ 14 days old on the air date whose
+     *main subject* is this week's topic; 4 = main subject, 15–90 days; 3 = a passing mention
+     ≤ 14 days; 2 = passing mention, 15–90 days; 0 = none.
    - **demand**: 5 = a video on this topic ran ≥ 3× its channel median; 3 = beat its channel
      median; 2 = beats the topic's typical results with no channel median; 1 = videos exist, none
      outperformed; 0 = nothing found.
@@ -247,7 +288,8 @@ prompts). **Where the two disagree, `build-class-deck` wins**: the arc's rule 2 
 `references/example-blueprint.md` for the expected depth.
 
 1. **Header.** Title, opening line, promise (what a student can do afterwards), air date,
-   audience, length, curriculum week with theme, beat, Academy course link and deliverable
+   `airTime` (history.json `schedule.time`, 24-hour, or `null`), `timezone`, `nextAirDate`
+   (from `history.js next-date --from=<date>`), audience, length, curriculum week with theme, beat, Academy course link and deliverable
    (flatten the loader's object to one string: `"<title>: <item>; <item>"`), the
    story device used, the lens, `lastSessionCallback`, the data-pick table (`dataPick.rows` = the
    ranking rows, `dataPick.weights` = the ranking's `weights`), and the tightening log.
@@ -255,7 +297,12 @@ prompts). **Where the two disagree, `build-class-deck` wins**: the arc's rule 2 
    is the sum of the ones before. Segment 1 is `cold-open`, ≤ 5 minutes, shows the finished result
    and calls back to last session. At least two `live-build` segments; one `teardown` (or deliberate
    failure); one `hot-seat` or `qa`; the last segment is `recap`: recap, assign the build-along,
-   name next week. `audience=public-preview` → set `publicEndsAtMinute` (a segment boundary ≥ 20)
+   name next week. **"Next week" is the next curriculum week**, `weeks[n].next` from
+   `load_curriculum.js` (week + 1, or "the capstone" after week 12): the recap names it as
+   "Week N" or by its `publicTitle`, and teases it with that week's `tension` or `publicTitle`.
+   Use the next week's 2 AM question only when it has one; never require a device a week does
+   not have. The validator checks that the recap segment says "Week N", the public title, or
+   "capstone". `audience=public-preview` → set `publicEndsAtMinute` (a segment boundary ≥ 20)
    and make everything before it stand alone (no "as you'll see later"). Every segment: start,
    minutes, mode, three talking points, the on-screen build, one chat prompt, one clean full-screen
    visual, its sound-bite ids. A new segment every 8–10 minutes (E8).
@@ -282,32 +329,75 @@ prompts). **Where the two disagree, `build-class-deck` wins**: the arc's rule 2 
    copy. Ranking evidence (`dataPick`, `demand`, `news`) is already sourced through `sources` and
    needs no fact rows. Each fact has a source, URL, publication date and `status`. Structural numbers of the
    session itself (segment minutes, checkpoint numbers, "20 fictional companies" in sample data)
-   are not facts. `sourced` **only** when the claim appears in a source fetched in this run (that URL
-   must be in `sources` with `fetchedThisRun: true`). Everything else is `verify`. **Never invent a
-   statistic, model name, price, result or affiliation.** Curriculum facts cite the repo file as
-   source with `url: null` and status `verify`. Check every claim about Colaberry, the program,
-   pricing, credentials, partners or outcomes against `frontend/src/config/claimsRegistry.ts`:
-   `registry.applies: true` with the matching `key`, or `key: null` and a note "not registered".
+   are not facts. Three statuses:
+   - `sourced` **only** when the claim appears in a source fetched in this run (that URL must be in
+     `sources` with `fetchedThisRun: true`).
+   - `checked` when the claim was confirmed against the repo or by Ali: set `checkedAt`
+     (YYYY-MM-DD, not after the planning day) and `checkedAgainst`, a list whose entries are each
+     a repo file with a line number (`"backend/src/data/classSessionPlan.ts:486"`, one entry per
+     line cited), `"Ali confirmed YYYY-MM-DD"`, or `"blueprint:<path>"` for the session's own
+     design (e.g. `"blueprint:demo.claudeCodeInstructions[0]"` for the sample data the demo
+     generates). Skill defaults cite the skill file (`".claude/skills/plan-live-session/SKILL.md:94"`).
+     The validator opens each cited file and checks the line exists, and resolves each
+     `blueprint:` path. `checked` is **never** for a real-world or news claim: a fact with a web
+     `url` is `sourced` or `verify`. Curriculum facts cite the repo with `url: null` and are
+     `checked` once the line is read.
+   - `verify`: everything else.
+   An `illustrative` fact stays `illustrative: true` whatever its status (it still needs the
+   visible label in public). **Never invent a statistic, model name, price, result or
+   affiliation.** Check every claim about Colaberry, the program,
+   pricing, credentials, partners or outcomes against `frontend/src/config/claimsRegistry.ts`.
+   `registry` is exactly one of three shapes:
+   - **registered:** `{ "applies": true, "key": "<registry key>", "note": "<its status>" }`; the key
+     must exist in `claimsRegistry.ts`.
+   - **in scope, not registered:** `{ "applies": true, "key": null, "note": "not registered…" }`;
+     the note contains the words "not registered". `applies` is `true` because the claim appears in
+     the session copy (every fact row does; that is why it is a fact row).
+   - **out of scope** (a third-party, product or curriculum fact, not about Colaberry or the
+     program): `{ "applies": false, "key": null, "note": "<why>" }`. `applies: false` never has a key.
    A claim whose entry is `VERIFIED` and approved for public routes may go public: set
    `registryVerified: true` and cite the entry's `evidenceSource` (status stays `verify` unless a
-   page fetched this run also shows it). The validator warns on any number in public copy that
-   matches no sourced, illustrative or registry-verified fact; clear every such warning.
+   page fetched this run also shows it); `registryVerified` needs the key, and the entry must be
+   `VERIFIED`. The validator warns on any number in public copy that matches no sourced,
+   checked (outside the registry's scope), illustrative or registry-verified fact; clear every
+   such warning. **Schedule values are
+   exempt** and need no fact row: the air date and `nextAirDate` (any spelling: "Tuesday,
+   December 1", "Dec. 1", "12/1"), the air time from `header.airTime` / history.json
+   `schedule.time` ("6:30 pm Central"), the episode number in `header.series`, `lengthMinutes`
+   ("60 minutes") and run-of-show minute stamps ("minute 20", "the first 20 minutes"). So the CTA
+   can say "Monday, November 30, 6:30 pm Central".
    A claim whose registry entry is `DO_NOT_PUBLISH` or `NEEDS_VERIFICATION` does not appear in
    public-facing copy (LinkedIn, video, Shorts, quote cards, public segments) at all. Neither does
    a `verify` number. A number from a labeled teaching scenario (the curriculum's made-up
-   incident) is not a real-world claim: mark it `verify` with `illustrative: true`, and it may go
+   incident) is not a real-world claim: mark it `illustrative: true` (status `checked` against the
+   curriculum line, else `verify`), and it may go
    public only with a visible "illustrative" label.
 6. **Participation.** 6–10 questions mixing `roll-call`, `diagnostic`, `judgment-poll` and
    `self-check`, each with its answer (a self-check's answer says what a good answer looks like).
+   **Every question has options**, because each becomes a deck poll or trivia: 2–4 for the
+   others, and 3–4 self-rating options for a self-check (e.g. "Not yet / With the notes / From
+   memory"). Write each question once and copy it into `deckHandoff.interactions` with the
+   **same `q` text and the same options**; the validator rejects a deck poll or trivia that
+   matches no participation question word for word.
    3–5 story beats, each a concrete person, a specific moment and a stake, ending with a punch.
    No invented real people: use a role ("a claims analyst in Dallas"), Ali's own first-hand story,
    or a story from a fetched source.
 7. **Live demo plan.** Goal, numbered steps, the exact instructions Ali gives Claude Code (each
    says to run the steps itself), what could go wrong, and a fallback (a recorded run or saved
    result ready in a second tab). The demo uses a sandbox or sample data, never client or student data.
+   **A teardown that breaks skill triggering** (a vague description that "never fires") only
+   fails when other skills compete for the same ask: alone in the folder, the vague skill is the
+   only candidate and can still be picked, so the teardown silently succeeds. Keep **at least
+   two other skills** in the folder during it (built earlier in the session or prepared before
+   the show; one should be a plausible match for the same ask), name them in
+   `demo.routingCompetitors`, and never move the competitors out for the teardown. Add a `risks`
+   line that starts "The teardown can silently succeed" and says what Ali says if the vague skill
+   fires anyway. The validator enforces both whenever a teardown segment is about a skill's
+   description or trigger.
 8. **For the students.** The build-along assignment, how to apply it to their own build plan,
-   and the open question that brings them back next week. Next week's date for the recap and
-   `nextLiveCta` comes from `node $S/history.js next-date --from=<date> [--history=<history>]`;
+   and the open question that brings them back next week (built from `weeks[n].next`, as in the
+   recap rule of section 2). Next week's date for the recap and
+   `nextLiveCta` (and `header.nextAirDate`) comes from `node $S/history.js next-date --from=<date> [--history=<history>]`;
    copy any "assumption:" line it prints (e.g. a skipped holiday) into `meta.assumptions`.
 9. **Content yield.** Edited-video title (≤ 34 chars), thumbnail text (≤ 10 chars), the video's
    first two sentences (spoken by the avatar, no live context needed); six Shorts titles each
@@ -320,12 +410,15 @@ prompts). **Where the two disagree, `build-class-deck` wins**: the arc's rule 2 
 11. **Pre-show checklist and risks.** Always include, word for word: "No keys, client data or
     student data on screen", "News sources re-checked on the air date", "Clip-marker button
     tested". Add the session-specific ones (fallback tab open, sandbox reset, Zoom/YouTube link).
+    A skills-triggering teardown adds the "The teardown can silently succeed…" risk (section 7)
+    and a checklist line that the competing skills are in the folder before the show.
 12. **Deck handoff.** Read `KitConfig` in `backend/src/services/classKit/kitConfig.ts`, `TeachSlide`
     in `backend/src/data/classTeachContent.ts`, `StoryBeat`/`Interaction` in
     `backend/src/data/classSessionPlan.ts` and the run-of-show templates in
     `backend/src/services/classKit/runOfShow.ts`, then fill `deckHandoff`:
-    - `session`: title, publicTitle, week, `dayKind` (`build` unless the session is mostly
-      teaching, then `architecture`).
+    - `session`: title, publicTitle, week, `dayKind`: `day=` when given, else `build` (the rule
+      and its assumption are in Stage 1.2, "Which day's material"; the builds must come from that
+      day's material).
     - `segments`: the blueprint's segments with `startMin`/`endMin`, `label`, a deck `mode`
       (`open|present|interact|build|break|close`), `purpose`, `publicValue`, and `deckSegment`:
       the **valid** segment id of that day kind each one lands in (Build Day: `result-preview,
@@ -360,13 +453,26 @@ prompts). **Where the two disagree, `build-class-deck` wins**: the arc's rule 2 
       beats `<seg>-900+i`, interactions `<seg>-950+i`, teach `<seg>-200+i`. Confirm against the
       file before relying on one; a wrong key is silently ignored.
     - `checkpointsEnabled`: the week's CP0..CPn checkpoint slides render unless this is false.
-      Keep `true` only when the live builds follow the week's authored checkpoints; otherwise
-      `false` (build-class-deck, "Checkpoint slides are not overridable").
+      On Build Day the live builds follow the week's authored checkpoints (Stage 1.2), so it is
+      `true` whenever `days.build.checkpoints` is non-empty (build-class-deck, "Checkpoint slides
+      are not overridable"); `false` only for a week with none.
     - `interactions`: `InteractionPlacement`s (`kind` prediction|poll|trivia, `q`, `options`,
       `answer` index for trivia, `reveal`, `segment`, `presenterTip`). Map judgment-poll and
       roll-call → `poll`, diagnostic with a right answer → `trivia`, self-check → `poll` with 3–4
-      self-rating options and the good-answer text in `reveal` (a deck poll needs options).
+      self-rating options and the good-answer text in `reveal` (a deck poll needs options). `q`
+      and `options` are copied word for word from the participation question (section 6).
     - `storyBeats`: `StoryBeatOverride`s (`icon`, `eyebrow`, `title`, `body`, `punch`, `segment`).
+      **Story beats render only in some segments** (`pushStoryBeats` calls in
+      `kitSpecDaySlides.ts`; the validator reads them from the file):
+
+      | Day kind | Segments that render story beats |
+      |---|---|
+      | Build Day | `result-preview`, `build-map`, `failure` |
+      | Architecture Day | `checkin`, `business-problem`, `architecture`, `deconstruct`, `micro-build` |
+
+      A beat tagged to any other segment (e.g. Build Day `guided-build`, `demos`, `cta`) is dropped
+      without a trace: move it to the nearest segment above, or list it under `unmapped` and carry
+      its line in `slideNotes`. The validator rejects it.
     - `opening`: Build Day reads only `opening.resultPreview`; Architecture Day reads
       `opening.coldOpen` (and `opening.hook`). Fill the one the day kind reads, `{title, body}`.
     - `unmapped`: every blueprint field the deck cannot carry, with the reason. Do not guess a
@@ -391,7 +497,7 @@ until the blueprint validates.
 ```
 <title>
 Idea <n>/100 · Room <n>/50 · Yield <n>/50   [⚠ below pass mark]
-Facts still marked verify: <n> of <m>
+Facts still marked verify: <n> of <m> (<s> sourced · <c> checked)
 Files: <dir>/blueprint.md · <dir>/blueprint.json · <dir>/sources.md
 Build the deck: /build-class-deck blueprint=<dir>/blueprint.json
 ```
@@ -402,8 +508,9 @@ Then one line on any assumption Ali should know about (the default date, an unkn
 ## Rules that apply everywhere
 
 - **No questions** unless `interactive=true`. Defaults and assumptions instead.
-- **Never invent a fact.** If it was not in a source fetched this run or in the repo, it is
-  `verify`, and a number nobody can source does not go on a public surface.
+- **Never invent a fact.** Fetched this run → `sourced`; read in the repo or confirmed by Ali →
+  `checked` (with the file:line or date); anything else is `verify`, and a number nobody can
+  source does not go on a public surface.
 - **American spelling.** Never the word "free" in public copy. Times in Central (CST/CDT) with the
   zone written out.
 - **No terminal on screen.** Everything typed is an instruction to Claude Code to run it itself.
@@ -420,7 +527,7 @@ Then one line on any assumption Ali should know about (the default date, an unkn
 | Benchmarks and their sources | `references/evidence.md` |
 | Blueprint schema | `references/blueprint.schema.json` |
 | Worked example | `references/example-blueprint.md` |
-| Curriculum loader | `scripts/load_curriculum.js` |
+| Curriculum loader (weeks, `days`, `next`) | `scripts/load_curriculum.js` |
 | Topic scorer | `scripts/score_topics.js` |
 | Idea arithmetic + caps | `scripts/score_idea.js` |
 | Sound-bite scorer | `scripts/score_soundbite.js` |

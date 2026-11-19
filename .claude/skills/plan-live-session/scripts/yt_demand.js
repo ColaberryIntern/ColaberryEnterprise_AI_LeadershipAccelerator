@@ -14,7 +14,10 @@
  *        exact view count and publish date for one video
  *   add --json for machine-readable output
  *
- * Record every URL this prints that you rely on in `sources` (fetchedThisRun: true) and in `demand[]`.
+ * Every command prints its page as a `source: <url>` line both first and last in text mode (so
+ * `| tail` still shows it), and as `source` in the --json result.
+ * Record every URL this prints that you rely on in `sources` (fetchedThisRun: true) and in the
+ * `demand[]` row's `sourceUrls`.
  * Exit 1 when YouTube returns no ytInitialData (blocked, consent page, layout change): then say so
  * and fall back to the "no tool returns view counts" rule in SKILL.md.
  */
@@ -92,6 +95,7 @@ const median = (xs) => { const s = xs.filter((x) => x != null).sort((a, b) => a 
     if (asJson) return console.log(JSON.stringify({ query: target, source: url, videos: vids }, null, 2));
     console.log(`source: ${url}`);
     for (const v of vids) console.log(`${String(v.views ?? '?').padStart(10)}  ${v.age.padEnd(14)} ${v.handle || v.channel}  ${v.title}  ${v.url}`);
+    console.log(`source: ${url}`);
   } else if (cmd === 'channel' && target) {
     const h = target.startsWith('@') ? target : `@${target.replace(/^\//, '')}`;
     const url = `https://www.youtube.com/${h}/videos`;
@@ -105,6 +109,7 @@ const median = (xs) => { const s = xs.filter((x) => x != null).sort((a, b) => a 
     console.log(`source: ${url}`);
     for (const v of vids) console.log(`${String(v.views ?? '?').padStart(10)}  ${v.age.padEnd(14)} ${v.title}`);
     console.log(`median of the ${vids.length} most recent uploads at least ${minAge} days old: ${res.medianViews}`);
+    console.log(`source: ${url}`);
   } else if (cmd === 'video' && target) {
     const id = (target.match(/(?:v=|youtu\.be\/)([\w-]{11})/) || [null, target])[1];
     const url = `https://www.youtube.com/watch?v=${id}`;
@@ -114,8 +119,10 @@ const median = (xs) => { const s = xs.filter((x) => x != null).sort((a, b) => a 
     const title = ((html.match(/<title>(.*?) - YouTube<\/title>/) || [])[1] || '')
       .replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>');
     if (!views) { console.error(`yt_demand: no viewCount at ${url}`); process.exit(1); }
-    const res = { id, url, title, views: Number(views), publishDate: date || null };
-    console.log(asJson ? JSON.stringify(res, null, 2) : `${res.views} views · published ${res.publishDate} · ${title} · ${url}`);
+    const res = { id, url, title, views: Number(views), publishDate: date || null, source: url };
+    if (asJson) return console.log(JSON.stringify(res, null, 2));
+    console.log(`${res.views} views · published ${res.publishDate} · ${title} · ${url}`);
+    console.log(`source: ${url}`);
   } else {
     console.error('usage: yt_demand.js search "<query>" [--limit=10] | channel @handle [--n=10] | video <id|url>   [--json]');
     process.exit(1);
