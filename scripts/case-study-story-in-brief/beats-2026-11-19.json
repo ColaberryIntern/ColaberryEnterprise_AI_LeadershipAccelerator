@@ -349,7 +349,7 @@
         },
         {
           "label": "What we built",
-          "text": "Kes built a tool that answers plain-English questions about a company database, checks every suggested query against the known tables before it runs, and asks back when a question is unclear."
+          "text": "A tool that answers plain-English questions about a company database, checks every suggested query against the known tables before it runs, and asks back when a question is unclear."
         },
         {
           "label": "What happened",
@@ -431,7 +431,7 @@
         },
         {
           "label": "What happened",
-          "text": "Kes tested the score itself: the hardness check has 4 of the 20 high-score requisitions it needs before it will conclude anything, so Kes calls it unproven."
+          "text": "The score was tested against its own claim: the hardness check has 4 of the 20 high-score requisitions it needs before it will conclude anything, so it is labeled unproven."
         },
         {
           "label": "Why it matters",
@@ -483,7 +483,7 @@
         },
         {
           "label": "What happened",
-          "text": "2,227 of 2,326 answered calls received a next step by rule, and when an audit found retries looping, Kes bounded them, taking retries after inconclusive calls from 551 to none."
+          "text": "2,227 of 2,326 answered calls received a next step by rule, and when an audit found retries looping, they were bounded, taking retries after inconclusive calls from 551 to none."
         },
         {
           "label": "Why it matters",

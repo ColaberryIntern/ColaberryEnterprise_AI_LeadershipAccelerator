@@ -1409,7 +1409,7 @@ the builds of 17-18 Nov (CF1-CF3, GD1-GD2, Internship, Open House). What a good 
 - **No beat repeats the standfirst**, and no two beats say the same thing: the band exists
   because the opening paragraph sometimes does not tell the story.
 - **It is not a ticket**: no file names, identifiers, URLs, PR or ticket numbers, staff names
-  (roles only), learner names ("Kes" only). (Audit: `reads like a ticket`.)
+  (roles only), learner names (none: the byline names the builder, see below). (Audit: `reads like a ticket`.)
 - **Writing it on a live record republishes it.** `applyHumanOverride` on path `identity`
   takes the WHOLE identity: `{ ...identity, storyInBrief: beats }`, or the rest is erased.
   Run `storyInBriefProblem(beats)` from `/app/dist` first and refuse on any problem.
@@ -1441,7 +1441,12 @@ from the backfill:
 - **Pick the headline a buyer cares about.** When a record marks no headline metric, lead
   with the result (findings kept and rejected, calls scored), not a safety count that reads
   oddly on its own ("0 of 10 stored queries write ...") - put that second.
-- **No pronouns for Kes**, even when the record uses one: "Kes calls it unproven".
+- **No builder name at all, not even Kes.** The beats are one text for every surface, but the
+  builder is not: Hire names a consenting learner in the byline, Enterprise and Training say
+  Kes. Ali, 19 Nov 2026, on a Hire page bylined Harpreet Kaur: *"the names in your story brief
+  don't always match the author ... this was built by harpreet but you mention kes"*. Write the
+  beats in the passive or about the product ("A tool that ...", "the retries were bounded");
+  the byline names the builder. The test refuses `Kes` in a beat.
 
 ### One introduction
 

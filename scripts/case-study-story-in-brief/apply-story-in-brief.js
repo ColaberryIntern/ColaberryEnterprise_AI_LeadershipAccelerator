@@ -51,7 +51,10 @@ function vocabularyProblem(beats) {
   return null;
 }
 
-const same = (a, b) => JSON.stringify(a || []) === JSON.stringify(b || []);
+// Compared field by field: Postgres jsonb stores each beat with its keys reordered ({text, label}),
+// so a whole-object JSON.stringify never matched and every rerun reported "wrote" for unchanged records.
+const shape = (beats) => JSON.stringify((beats || []).map((b) => [b && b.label, b && b.text]));
+const same = (a, b) => shape(a) === shape(b);
 
 (async () => {
   if (!FILE) { console.error('usage: apply-story-in-brief.js <beats.json> [--apply] [--only=<slug>]'); process.exit(64); }

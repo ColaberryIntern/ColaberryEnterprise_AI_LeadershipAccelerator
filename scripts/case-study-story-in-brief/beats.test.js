@@ -19,6 +19,9 @@ const FORBIDDEN = [
   [/\b(?:in production|went live|go[- ]live)\b/i, 'a production claim'],
   [/\bfree\b/i, 'the word free'],
   [/\b(?:claude|cursor|copilot|pull request|commit|repo(?:sitory)?|source code)\b/i, 'the builder tool or code'],
+  // The beats are ONE text for every surface, but the builder is not: Hire names a consenting learner
+  // (Ali, 19 Nov 2026: "this was built by harpreet but you mention kes"), other surfaces say Kes.
+  [/\bKes\b/, 'a builder name (it differs per surface; the byline names the builder)'],
 ];
 
 test('every record is an id and a slug with 3 to 5 beats inside the server limits', () => {

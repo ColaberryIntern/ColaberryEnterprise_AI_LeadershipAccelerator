@@ -134,6 +134,13 @@ describe('the shell wiring', () => {
     assert.match(html, /id="cs-record"/);
   });
 
+  test('Keep reading links land on /case-studies/<slug>/, not /<slug>/', () => {
+    // The renderer builds every related card and the back link from data-index. With "/" each card
+    // went to /<slug>/ and 404'd (Ali, 19 Nov 2026: "these links don't work"). /case-studies/
+    // itself redirects to the published list, so the back link still works.
+    assert.match(html, /data-surface="hire" data-index="\/case-studies\/"/);
+  });
+
   test('hides the shell hero\'s COPY only, never its picture slot (the walkthrough lives there)', () => {
     const css = fs.readFileSync(path.join(__dirname, '..', 'src', 'assets', 'case-study.css'), 'utf8');
     assert.doesNotMatch(css, /#cs-record\s*>\s*\.cs-hero\s*\{\s*display:\s*none/, 'hiding the whole hero hid every video on Hire');
