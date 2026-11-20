@@ -35,13 +35,17 @@ export async function reviseDocument(currentHtml: string, findings: CheckFinding
   const user = [
     'GROUNDING (your only source of specific facts):', groundingToPromptText(grounding), '',
     'REVIEW FINDINGS TO FIX:', findingsBlock, '',
-    'CURRENT DOCUMENT:', String(currentHtml ?? '').slice(0, 30000),
+    // Keep the WHOLE document in the prompt (a multi-volume technical response runs well past 30k chars); truncating
+    // the input here made the reviser silently drop every section past the cut, tanking the coverage check.
+    'CURRENT DOCUMENT:', String(currentHtml ?? '').slice(0, 120000),
   ].join('\n');
 
   try {
     const client = getInstrumentedOpenAI({ workflow_id: 'gov_proposal_document_revise' }, { timeout: 120000, maxRetries: 1 });
     const res = await client.chat.completions.create({
-      model: DEFAULT_MODEL, temperature: 0.3, max_tokens: 4000, response_format: { type: 'json_object' },
+      // max_tokens must be large enough to re-emit the FULL revised document, not a truncated head of it: a 4000-token
+      // cap (~16k chars) shrank long volumes mid-sentence. 16000 covers the longest single proposal document we draft.
+      model: DEFAULT_MODEL, temperature: 0.3, max_tokens: 16000, response_format: { type: 'json_object' },
       messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
     });
     let parsed: any = {};

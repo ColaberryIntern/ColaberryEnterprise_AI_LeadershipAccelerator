@@ -19,7 +19,8 @@
  *     passes, the credit stops being offered (isFlashCreditExpired), with a
  *     short grace so a checkout started before midnight still settles.
  *
- * Guards: no stacking with an unused Open House scholarship (that would make
+ * Guards: no stacking with an unused Open House scholarship or 2026 alumni
+ * credit (that would make
  * the year cost almost nothing); never for someone who already has an active
  * annual membership; idempotent per (session, email).
  */
@@ -29,6 +30,7 @@ import { Enrollment } from '../models';
 import { grantCredit } from './accountCreditService';
 import { formatDisplayName } from './sessionPresenceService';
 import { FLASH_REASON, FLASH_CENTS, flashSourceId, validateFlashDeadline } from './openHouseFlashCredit';
+import { ALUMNI_REASON } from './alumniDiscountRules';
 
 export interface FlashConfig { deadline: string; cents: number; activated_at: string }
 
@@ -91,10 +93,10 @@ export async function ensureFlashCredit(enrollmentId: string, nowMs: number = Da
   const blockers = await sequelize.query<{ n: string }>(
     `SELECT (SELECT count(*) FROM account_credits c
                WHERE c.enrollment_id = :eid AND c.status = 'available'
-                 AND c.reason IN ('open_house_scholarship_annual', :flashReason))
+                 AND c.reason IN ('open_house_scholarship_annual', :flashReason, :alumniReason))
           + (SELECT count(*) FROM subscriptions s
                WHERE s.enrollment_id = :eid AND s.status = 'active' AND s.plan = 'annual') AS n`,
-    { replacements: { eid: enrollmentId, flashReason: FLASH_REASON }, type: QueryTypes.SELECT },
+    { replacements: { eid: enrollmentId, flashReason: FLASH_REASON, alumniReason: ALUMNI_REASON }, type: QueryTypes.SELECT },
   );
   if (Number(blockers[0]?.n || 0) > 0) return false;
 

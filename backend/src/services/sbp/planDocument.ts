@@ -111,8 +111,12 @@ export interface PlanDocSchedule {
 export interface PlanDocDerived {
   /** Numeric NFRs — the numbers the student said they would move. */
   measures: Array<{ id: string; statement: string }>;
-  /** SAFE requirements — the promises the system must not break. */
-  guardrails: Array<{ id: string; statement: string }>;
+  /**
+   * SAFE requirements — the promises the system must not break. `kind` says
+   * whether a person can let it through (`approval`, with `approver` when the
+   * statement names one) or nobody can (`hard_rule`, approver always null).
+   */
+  guardrails: Array<{ id: string; statement: string; kind: GuardrailKind; approver: string | null }>;
   /** Systems of record named by CONSTRAINT requirements. */
   systems: string[];
   /** Roles the student's own stories are written for. */
@@ -261,18 +265,52 @@ export function systemsOfRecord(requirements: PlanRequirement[]): string[] {
   return [...new Set(names)];
 }
 
-/** Roles the student's own stories are written for ("As a <role>, I want …"). */
+/**
+ * Roles the student's own stories are written for ("As a <role>, I want …").
+ *
+ * A named person counts too: a plan grounded in the student's words writes
+ * "As Dana, I want …", and ShiftFill's Command Center left Dana, the person
+ * five stories serve, off its Users tab because only "As a/an" matched.
+ * The system itself is not a role, however it is spelled.
+ */
 export function rolesFrom(stories: PlanStory[]): string[] {
   const roles = stories
-    .map((s) => s.narrative.match(/^\s*As an?\s+([^,]{2,40}),/i)?.[1]?.trim())
+    .map((s) => s.narrative.match(/^\s*As\s+(?:an?\s+|the\s+)?([^,]{2,40}),/i)?.[1]?.trim())
     .filter((x): x is string => Boolean(x))
-    .filter((r) => !/^system$/i.test(r));
+    .filter((r) => !/^(?:the\s+)?(?:system|platform|agent|ai)$/i.test(r));
   return [...new Set(roles)].slice(0, 12);
 }
 
 /** A number-bearing NFR is a measure the student committed to moving. */
 export function measures(requirements: PlanRequirement[]): PlanRequirement[] {
   return requirements.filter((r) => r.kind === 'NFR' && /\d/.test(r.statement));
+}
+
+export type GuardrailKind = 'approval' | 'hard_rule';
+
+const APPROVAL_WORDS = /\b(?:approv\w*|review\w*|sign(?:s|ed)?[\s-]?off|confirm\w*|authori[sz]\w*)\b/i;
+/** A capitalised name right after the word that hands the decision to someone. */
+const NAMED_APPROVER = /\b(?:by|for|without|until|from|unless)\s+([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)\b/;
+
+/**
+ * Does a guardrail have a person who can let it through, and who?
+ *
+ * "Never offer a shift past 40 hours without Dana approving overtime" is an
+ * approval point with an approver; "never text a hygienist on approved leave"
+ * is a hard rule that nobody overrides, and "approved" there describes the
+ * leave, not a gate. A Command Center that showed both as approval gates with
+ * the approver blank (ShiftFill, 2026-11-20) was asking a question the plan had
+ * already answered. Read from the statement only; a role is preferred over a
+ * guess so "the scheduler" wins when it is named.
+ */
+export function guardrailGate(statement: string, roles: readonly string[]): { kind: GuardrailKind; approver: string | null } {
+  // "approved leave" / "approved list": an adjective about something else.
+  const gateText = statement.replace(/\bapproved\s+(?!by\b)\w+/gi, '');
+  if (!APPROVAL_WORDS.test(gateText)) return { kind: 'hard_rule', approver: null };
+  const lower = statement.toLowerCase();
+  const role = roles.find((r) => new RegExp(`\\b${r.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(lower));
+  const named = statement.match(NAMED_APPROVER)?.[1] ?? null;
+  return { kind: 'approval', approver: role ?? named };
 }
 
 /** SAFE requirements are the promises the system must not break. */
@@ -308,12 +346,14 @@ function buildDerived(plan: BuildPlan, truth: readonly UnderstandingItem[] | nul
 
   const failurePaths = new Set<string>();
   for (const s of stories) for (const f of s.failure_paths ?? []) failurePaths.add(f.trim().toLowerCase());
+  const roles = rolesFrom(stories);
 
   return {
     measures: measures(requirements).map((r) => ({ id: r.id, statement: r.statement })),
-    guardrails: guardrails(requirements).map((r) => ({ id: r.id, statement: r.statement })),
+    guardrails: guardrails(requirements)
+      .map((r) => ({ id: r.id, statement: r.statement, ...guardrailGate(r.statement, roles) })),
     systems: systemsOfRecord(requirements),
-    roles: rolesFrom(stories),
+    roles,
     counts: {
       requirements_total: requirements.length,
       requirements_by_kind: tally(requirements.map((r) => r.kind)),
@@ -352,6 +392,18 @@ export function buildPlanDocument(plan: BuildPlan, input: PlanDocInput = {}): Pl
     };
   });
 
+  // The release the student demos. The schedule names one only when the plan is
+  // too big for the window ("you will reach r2"); when everything fits it says
+  // "demo the finished build" and leaves the key null, which left every
+  // Command Center with no demo target at all (ShiftFill, 2026-11-20). The
+  // finished build IS the last release, so say so. Dated plans only: with no
+  // schedule there is no demo day to aim at.
+  const lastWithStories = byKey(plan.releases, (r) => r.key)
+    .filter((r) => stories.some((s) => s.release === r.key)).pop()?.key ?? null;
+  const demoReleaseKey = input.schedule
+    ? (input.schedule.demoReleaseKey ?? lastWithStories)
+    : null;
+
   const releases: PlanDocRelease[] = byKey(plan.releases, (r) => r.key).map((r) => {
     const inRel = stories.filter((s) => s.release === r.key);
     const dates = inRel.map((s) => s.due_on).filter((d): d is DateOnly => Boolean(d)).sort();
@@ -360,7 +412,7 @@ export function buildPlanDocument(plan: BuildPlan, input: PlanDocInput = {}): Pl
       story_ids: inRel.map((s) => s.id),
       starts_on: dates[0] ?? null,
       ends_on: dates[dates.length - 1] ?? null,
-      is_demo_target: Boolean(input.schedule?.demoReleaseKey && input.schedule.demoReleaseKey === r.key),
+      is_demo_target: Boolean(demoReleaseKey && demoReleaseKey === r.key),
     };
   });
 
@@ -376,7 +428,7 @@ export function buildPlanDocument(plan: BuildPlan, input: PlanDocInput = {}): Pl
       build_end: dateOnly(input.schedule.buildEnd)!,
       demo_day: dateOnly(input.schedule.demoDay)!,
       build_weeks: input.schedule.buildWeeks,
-      demo_release_key: input.schedule.demoReleaseKey ?? null,
+      demo_release_key: demoReleaseKey,
       roadmap_release_keys: input.schedule.roadmapReleaseKeys ?? [],
       prep: (input.schedule.prep ?? []).map((p) => ({
         key: p.key, title: p.title, due_on: dateOnly(p.dueOn)!,
