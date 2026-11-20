@@ -172,7 +172,8 @@ const EventCard: React.FC<{ ev: OpenHouseView; focused?: boolean }> = ({ ev, foc
       {ev.is_registered && (
         <div className="evt-foot"><span className="evt-going" data-testid={`evt-going-${ev.id}`}>✓ You&rsquo;re going</span></div>
       )}
-      {ev.registration_url && !ev.is_registered && (
+      {/* While an event is live, Watch live is the one action; signing up for it has passed. */}
+      {ev.registration_url && !ev.is_registered && !watchLiveHref(ev) && (
         <div className="evt-foot">
           <a
             className="evt-btn"

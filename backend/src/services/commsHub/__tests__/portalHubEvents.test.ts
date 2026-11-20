@@ -45,6 +45,19 @@ describe('CH2.3 cards', () => {
     expect(toCards(live, NOW, IN_30)).toEqual([expect.objectContaining({ is_live: true })]);
   });
 
+  it('a live event with no end time stays visible (treated as running 4 hours)', () => {
+    const live = ev({ status: 'live', starts_at: new Date(NOW - 600_000), ends_at: null });
+    expect(toCards(live, NOW, IN_30)).toEqual([expect.objectContaining({ is_live: true })]);
+  });
+
+  it('a live weekly series marks only the occurrence happening now as live', () => {
+    const series = ev({ status: 'live', starts_at: new Date(NOW - 600_000), ends_at: new Date(NOW + 3_000_000), repeat_rule: { freq: 'weekly', until: '2026-12-31' } });
+    const cards = toCards(series, NOW, IN_30);
+    expect(cards.length).toBeGreaterThan(1);
+    expect(cards.filter((c) => c.is_live)).toHaveLength(1);
+    expect(cards[0].is_live).toBe(true);
+  });
+
   it('an event outside the window produces nothing', () => {
     expect(toCards(ev({ starts_at: new Date('2027-03-01T00:00:00Z'), ends_at: null }), NOW, IN_30)).toEqual([]);
   });

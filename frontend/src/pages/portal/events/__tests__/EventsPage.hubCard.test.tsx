@@ -1,0 +1,64 @@
+import React from 'react';
+import { createRoot, Root } from 'react-dom/client';
+import { act } from 'react-dom/test-utils';
+import { MemoryRouter } from 'react-router-dom';
+import EventsPage from '../EventsPage';
+import * as onboardingApi from '../../../../services/onboardingApi';
+import type { OpenHouseView } from '../../../../services/onboardingApi';
+
+// The portal chrome has its own tests; here it only has to pass the page's children through.
+jest.mock('../../today/PortalShell', () => ({ __esModule: true, default: ({ children }: { children: React.ReactNode }) => <div>{children}</div> }));
+jest.mock('../../today/CondensedHeaderCard', () => ({ __esModule: true, default: () => <div /> }));
+jest.mock('../../../../services/onboardingApi', () => ({ ...jest.requireActual('../../../../services/onboardingApi'), fetchPublicEvents: jest.fn() }));
+
+/**
+ * CH2.3 at the render level: a Communications Hub card on the member Events page. No picture yet
+ * (CH4) means the existing first-letter fallback; no registration link means no Sign up; a live hub
+ * event shows Watch live INSTEAD of Sign up.
+ */
+(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+let container: HTMLDivElement;
+let root: Root;
+
+const hubCard = (o: Partial<OpenHouseView> = {}): OpenHouseView => ({
+  id: 'hub:44444444-4444-4444-8444-444444444444:2026-12-02T00:00:00.000Z', title: 'Demo Tuesday', description: 'Builders demo.',
+  starts_at: '2099-12-02T00:00:00.000Z', ends_at: '2099-12-02T01:00:00.000Z', timezone: 'America/Chicago',
+  registration_url: null, meeting_link: 'https://zoom.us/j/9', image_url: null, signup_count: null, is_registered: false,
+  source: 'hub', is_live: false, watch_url: null, ...o,
+});
+
+async function renderWith(events: OpenHouseView[]): Promise<void> {
+  (onboardingApi.fetchPublicEvents as jest.Mock).mockResolvedValue(events);
+  container = document.createElement('div');
+  document.body.appendChild(container);
+  root = createRoot(container);
+  await act(async () => { root.render(<MemoryRouter><EventsPage /></MemoryRouter>); });
+  for (let i = 0; i < 4; i += 1) await act(async () => { await Promise.resolve(); });
+}
+afterEach(() => { act(() => { root.unmount(); }); container.remove(); jest.clearAllMocks(); });
+
+const links = (): string[] => Array.from(container.querySelectorAll('a')).map((a) => (a.textContent ?? '').trim());
+
+describe('CH2.3 a hub card on the member Events page', () => {
+  it('no picture: the first-letter fallback; no registration link: no Sign up', async () => {
+    await renderWith([hubCard()]);
+    expect(container.textContent).toContain('Demo Tuesday');
+    const fallback = container.querySelector('.evt-thumb-fallback');
+    expect(fallback?.textContent).toBe('D');
+    expect(container.querySelector('.evt-thumb img')).toBeNull();
+    expect(links().some((t) => t.startsWith('Sign up'))).toBe(false);
+  });
+
+  it('with a registration link and not live: Sign up opens the Eventbrite page', async () => {
+    await renderWith([hubCard({ registration_url: 'https://www.eventbrite.com/e/1992498063344' })]);
+    const signUp = Array.from(container.querySelectorAll('a')).find((a) => (a.textContent ?? '').trim().startsWith('Sign up'));
+    expect(signUp?.getAttribute('href')).toBe('https://www.eventbrite.com/e/1992498063344');
+  });
+
+  it('live with a watch path: Watch live replaces Sign up', async () => {
+    await renderWith([hubCard({ registration_url: 'https://www.eventbrite.com/e/1992498063344', is_live: true, watch_url: '/portal/live/event/abc' })]);
+    const watch = container.querySelector('[data-testid^="evt-watch-"]');
+    expect(watch?.getAttribute('href')).toBe('/portal/live/event/abc');
+    expect(links().some((t) => t.startsWith('Sign up'))).toBe(false);
+  });
+});

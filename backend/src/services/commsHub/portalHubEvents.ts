@@ -27,15 +27,15 @@ export function visibleTo(e: CommsHubEvent, cohortId: string | null): boolean {
   return cohortId !== null && e.audience.cohort_ids.includes(cohortId);
 }
 
+/** An occurrence with no end time is treated as running this long, so a live event without one stays visible. */
+export const OPEN_ENDED_MS = 4 * 3_600_000;
+
 export function toCards(e: CommsHubEvent, fromMs: number, toMs: number): PortalEventCard[] {
-  const live = e.status === 'live';
   return expandOccurrences(e.starts_at, e.ends_at, e.repeat_rule)
-    .filter((o) => {
-      const end = (o.ends_at ?? o.starts_at).getTime();
-      const inWindow = o.starts_at.getTime() <= toMs && end >= fromMs;
-      return inWindow || (live && o.starts_at.getTime() <= fromMs && end >= fromMs);
-    })
-    .map((o) => ({
+    .map((o) => ({ o, end: o.ends_at ? o.ends_at.getTime() : o.starts_at.getTime() + OPEN_ENDED_MS }))
+    .filter(({ o, end }) => o.starts_at.getTime() <= toMs && end >= fromMs)
+    .map(({ o, end }) => ({ o, liveNow: e.status === 'live' && o.starts_at.getTime() <= fromMs && end >= fromMs }))
+    .map(({ o, liveNow }) => ({
       id: `hub:${e.id}:${o.starts_at.toISOString()}`,
       title: e.title,
       description: e.description,
@@ -48,7 +48,8 @@ export function toCards(e: CommsHubEvent, fromMs: number, toMs: number): PortalE
       signup_count: null,
       is_registered: false,
       source: 'hub' as const,
-      is_live: live,
+      is_live: liveNow,
+      // CH5.3 fills this with the broadcast viewer path for the occurrence that is live now.
       watch_url: null,
     }));
 }
@@ -83,6 +84,12 @@ export function mergeCards(ccpp: PortalEventCard[], hub: PortalEventCard[]): Por
 export async function getPortalHubEvents(cohortId: string | null, days: number, now: Date = new Date()): Promise<PortalEventCard[]> {
   const fromMs = now.getTime();
   const toMs = fromMs + days * 86_400_000;
-  const rows = await CommsHubEvent.findAll({ where: { status: { [Op.in]: ['scheduled', 'live'] } }, limit: 500 });
+  // Bounded and ordered: nothing that first starts after the window can appear in it, and the newest
+  // series come first, so a long history of old one-off events can never push current ones past the limit.
+  const rows = await CommsHubEvent.findAll({
+    where: { status: { [Op.in]: ['scheduled', 'live'] }, starts_at: { [Op.lte]: new Date(toMs) } },
+    order: [['starts_at', 'DESC']],
+    limit: 500,
+  });
   return rows.filter((e) => visibleTo(e, cohortId)).flatMap((e) => toCards(e, fromMs, toMs));
 }
