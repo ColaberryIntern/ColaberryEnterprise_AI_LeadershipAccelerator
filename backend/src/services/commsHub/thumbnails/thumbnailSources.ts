@@ -91,9 +91,11 @@ export async function aiOption(req: GenerateRequest, family: StyleFamily, now: D
   const row = await reserveAiAttempt(req.event.id, family, prompt, IMAGE_MODEL(), AI_DAILY_LIMIT, req.actor, now);
   if (!row) return fallback(`This event has used today's ${AI_DAILY_LIMIT} AI pictures. Try again tomorrow, or use a template.`);
   const started = Date.now();
+  let billed: number | null = null; // set once the image came back: a later failure was still paid for
   try {
     const img = await generateImage(prompt, '1536x1024', req.photos.slice(0, MAX_AI_PHOTOS));
     const cost = estimateCostUsd(IMAGE_QUALITY(), '1536x1024');
+    billed = cost;
     // Overlay mode: the model drew art only; code lays the exact text over it, giving all three sizes from one call.
     const pngs = mode === 'overlay'
       ? Object.fromEntries((await renderOverlayAllSizes(img.png, OVERLAY_THEME[family], { headline: req.headline, supporting: req.supporting, badge: badgeFor(slots, req.showWhen) })).map((r) => [r.size, r.png]))
@@ -105,7 +107,7 @@ export async function aiOption(req: GenerateRequest, family: StyleFamily, now: D
     const ms = Date.now() - started;
     const kind = err instanceof ImageApiError ? err.kind : 'unexpected';
     await failAiAttempt(row, kind, ms);
-    logCall(req, family, row.id, 'failure', { cost: null, ms, error: kind });
+    logCall(req, family, row.id, 'failure', { cost: billed, ms, error: kind });
     if (err instanceof ImageApiError) return fallback(`${err.message} These are the branded templates instead.`);
     throw err;
   }
