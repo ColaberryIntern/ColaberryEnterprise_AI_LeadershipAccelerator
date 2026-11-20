@@ -8,7 +8,7 @@ import CommsHubDestination, { type CommsHubDestinationType } from '../../../mode
 import CommsHubApproval from '../../../models/CommsHubApproval';
 import CommsHubDelivery from '../../../models/CommsHubDelivery';
 import { logActivity, type Actor } from '../activityLog';
-import { approveMessage, MessageRuleError, reconcileApproval, scheduleMessage } from './approvals';
+import { approveMessage, MessageRuleError, reconcileApproval, scheduleMessage, submitForApproval } from './approvals';
 import { factsFor, problemsFor } from './draftFacts';
 import { recommendDestinations, type Recommendation } from './drafting';
 import { replayLink } from './links';
@@ -111,10 +111,19 @@ export async function setSendTime(messageId: string, sendAt: Date | null, actor:
   });
 }
 
-/** "Approve and schedule": approve (validated, hashed) then schedule, so it is in the sending queue. */
+/**
+ * "Approve and schedule", in ONE transaction: a draft is submitted first (both gates validate), then
+ * approved (hashed) and scheduled, so it is in the sending queue. If any step is refused nothing is
+ * left half-done (no approved-but-unscheduled message).
+ */
 export async function approveAndSchedule(messageId: string, actor: Actor, now: Date = new Date()): Promise<void> {
-  await approveMessage(messageId, actor, now);
-  await scheduleMessage(messageId, actor);
+  await sequelize.transaction(async (t) => {
+    const m = await CommsHubMessage.findByPk(messageId, { transaction: t });
+    if (!m) throw new MessageRuleError('That message was not found.', 404, 'not_found');
+    if (m.status === 'draft') await submitForApproval(messageId, actor, now, t);
+    await approveMessage(messageId, actor, now, t);
+    await scheduleMessage(messageId, actor, t);
+  });
 }
 
 /** What the organizer can send to: each open cohort's feed, and in-app to everyone or one cohort. */

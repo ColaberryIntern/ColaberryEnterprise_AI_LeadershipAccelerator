@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import type { Channel, DestinationView, MessageKind, MessageView, Tone } from '../../../../services/commsHubApi';
 import type { Compose } from './useCompose';
+import RichText from '../../../../pages/portal/community/RichText';
 import { centralLabel, centralToIso, isoToCentral } from './centralTime';
 
 /** The three steps of Compose (design 03, CH6.5): what it is about, check the message, who gets it and when. */
@@ -96,7 +97,9 @@ function PostPreview({ m }: { m: MessageView }): React.ReactElement {
     <figure className="ch-prev-feed" aria-label="How it looks in the community feed">
       <div className="ch-prev-head"><span className="ch-prev-avatar" aria-hidden="true">C</span><span><strong>Colaberry Team</strong><span className="ch-prev-sub">Announcement</span></span></div>
       {banner && !broken && <img className="ch-prev-banner" src={banner} alt="" onError={() => setBroken(true)} />}
-      <p className="ch-prev-body">{d?.body ?? 'No community post yet.'}</p>
+      {/* The portal renders post bodies with RichText (links become links); the preview uses the same. */}
+      <p className="ch-prev-body" style={{ whiteSpace: 'pre-wrap' }}>{d ? <RichText text={d.body} /> : 'No community post yet.'}</p>
+      {m.event && <div className="ch-prev-event"><strong>{m.event.title}</strong><span className="ch-prev-sub">{m.event.when}</span></div>}
     </figure>
   );
 }
@@ -106,7 +109,7 @@ function BellPreview({ m }: { m: MessageView }): React.ReactElement {
   return (
     <figure className="ch-prev-bell" aria-label="How it looks in the notification bell">
       <span className="ch-prev-bell-ic" aria-hidden="true"><i className="ri-notification-3-line" /></span>
-      <span className="ch-prev-bell-text"><strong>{d?.title ?? 'No notification yet.'}</strong> {d?.body}<span className="ch-prev-time">now</span></span>
+      <span className="ch-prev-bell-text"><strong>{d?.title ?? 'No notification yet.'}</strong> {d?.body}{m.event && <span className="ch-prev-link">Open event</span>}<span className="ch-prev-time">now</span></span>
     </figure>
   );
 }
@@ -118,6 +121,12 @@ function Editor({ c, channel }: { c: Compose; channel: Channel }): React.ReactEl
   useEffect(() => { setTitle(d?.title ?? ''); setBody(d?.body ?? ''); }, [d?.id, d?.title, d?.body]);
   const changed = body !== (d?.body ?? '') || (channel === 'in_app' && title !== (d?.title ?? ''));
   const locked = ['sending', 'sent', 'cancelled'].includes(c.message!.status) || c.busy !== null;
+  const unsaved = changed && !['sending', 'sent', 'cancelled'].includes(c.message!.status);
+  useEffect(() => {
+    const key = `edit:${channel}`;
+    c.register(key, unsaved ? () => (body.trim() ? c.edit(channel, { title: channel === 'in_app' ? title : null, body }) : Promise.resolve((c.refuse('A message cannot be empty.'), false))) : null);
+    return () => c.register(key, null);
+  });
   return (
     <div className="mt-2">
       {channel === 'in_app' && (<><label className="form-label" htmlFor="ch-e-title">Title</label><input id="ch-e-title" className="form-control mb-2" maxLength={120} value={title} disabled={locked} onChange={(e) => setTitle(e.target.value)} /></>)}
@@ -186,14 +195,26 @@ export function StepApprove({ c }: { c: Compose }): React.ReactElement {
   const [date, setDate] = useState(initial.date);
   const [time, setTime] = useState(initial.time);
   const [note, setNote] = useState('');
-  useEffect(() => { setPicked(new Set(m.destinations.map(keyOf))); setMode(m.send_at ? 'at' : 'now'); }, [m.id, m.destinations, m.send_at]);
+  const savedKeys = m.destinations.map(keyOf).join(',');
+  useEffect(() => { setPicked(new Set(m.destinations.map(keyOf))); setMode(m.send_at ? 'at' : 'now'); }, [m.id, savedKeys, m.send_at]);
+  const [confirmCancel, setConfirmCancel] = useState(false);
   // The message's own rows win over the plain options, so a recipient already sent to keeps its lock.
   const all = [...c.options.map((o) => m.destinations.find((d) => keyOf(d) === keyOf(o)) ?? o), ...m.destinations.filter((d) => !c.options.some((o) => keyOf(o) === keyOf(d)))];
   const editable = !['sending', 'sent', 'cancelled'].includes(m.status) && c.busy === null;
   const chosen = all.filter((d) => picked.has(keyOf(d)));
   const recipientsChanged = chosen.length !== m.destinations.length || chosen.some((d) => !m.destinations.some((x) => keyOf(x) === keyOf(d)));
   const wantIso = mode === 'now' ? null : centralToIso(date, time);
-  const timeChanged = (wantIso ?? null) !== (m.send_at ? new Date(m.send_at).toISOString() : null);
+  // "At a set time" with no date or time yet is a change too: it must not quietly mean "now".
+  const timeIncomplete = mode === 'at' && !wantIso;
+  const timeChanged = timeIncomplete || (wantIso ?? null) !== (m.send_at ? new Date(m.send_at).toISOString() : null);
+  const open = !['sending', 'sent', 'cancelled'].includes(m.status);
+  useEffect(() => {
+    c.register('recipients', open && recipientsChanged ? () => c.setRecipients(chosen) : null);
+    c.register('time', !open || !timeChanged ? null
+      : timeIncomplete ? () => Promise.resolve((c.refuse('Pick a date and a time, or choose "As soon as I approve".'), false))
+        : () => c.setTime(wantIso));
+    return () => { c.register('recipients', null); c.register('time', null); };
+  });
   const feeds = m.destinations.filter((d) => d.channel === 'community_post');
   const inApp = m.destinations.filter((d) => d.channel === 'in_app');
   const approved = m.status === 'approved' || m.status === 'scheduled';
@@ -238,18 +259,27 @@ export function StepApprove({ c }: { c: Compose }): React.ReactElement {
 
       <div className="d-flex flex-wrap gap-2 mt-3">
         {m.status === 'draft' && <button type="button" className="btn ch-btn-berry comms-hub-action" disabled={c.busy !== null} onClick={() => void c.submit()}>{c.busy === 'submit' ? 'Submitting...' : 'Submit for approval'}</button>}
+        {(m.status === 'draft' || m.status === 'needs_approval') && <button type="button" className="btn btn-primary comms-hub-action" disabled={c.busy !== null} onClick={() => void c.approve()}>{c.busy === 'approve' ? 'Approving...' : 'Approve and schedule'}</button>}
         {m.status === 'needs_approval' && (
           <>
-            <button type="button" className="btn btn-primary comms-hub-action" disabled={c.busy !== null} onClick={() => void c.approve()}>{c.busy === 'approve' ? 'Approving...' : 'Approve and schedule'}</button>
             <label className="visually-hidden" htmlFor="ch-reject-note">Why it is rejected (optional)</label>
             <input id="ch-reject-note" className="form-control ch-reject-note" placeholder="Why (optional)" value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} />
             <button type="button" className="btn btn-outline-danger comms-hub-action" disabled={c.busy !== null} onClick={() => void c.reject(note.trim() || null)}>Reject</button>
           </>
         )}
-        {m.status === 'draft' && <button type="button" className="btn btn-outline-secondary comms-hub-action" disabled={c.busy !== null} onClick={c.keepDraft}>Save as draft</button>}
+        {m.status === 'draft' && <button type="button" className="btn btn-outline-secondary comms-hub-action" disabled={c.busy !== null} onClick={() => void c.keepDraft()}>Save as draft</button>}
         {approved && <button type="button" className="btn btn-outline-secondary comms-hub-action" disabled={c.busy !== null} onClick={() => void c.undo()}>Undo approval</button>}
-        {!['sending', 'sent', 'cancelled'].includes(m.status) && <button type="button" className="btn btn-link comms-hub-action" disabled={c.busy !== null} onClick={() => void c.cancel()}>Cancel this message</button>}
+        {open && !confirmCancel && <button type="button" className="btn btn-link comms-hub-action" disabled={c.busy !== null} onClick={() => setConfirmCancel(true)}>Cancel this message</button>}
       </div>
+      {open && confirmCancel && (
+        <div className="alert alert-warning py-2 mt-2" role="group" aria-labelledby="ch-cancel-q">
+          <p id="ch-cancel-q" className="mb-2">Cancel this message? It will not be sent, and this cannot be undone.</p>
+          <div className="d-flex flex-wrap gap-2">
+            <button type="button" className="btn btn-danger comms-hub-action" disabled={c.busy !== null} onClick={() => { setConfirmCancel(false); void c.cancel(); }}>Yes, cancel it</button>
+            <button type="button" className="btn btn-outline-secondary comms-hub-action" onClick={() => setConfirmCancel(false)}>Keep it</button>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

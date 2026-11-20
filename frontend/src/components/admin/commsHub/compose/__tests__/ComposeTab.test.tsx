@@ -175,6 +175,9 @@ describe('CH6.5 step 3', () => {
     await click(btn('Undo approval'));
     expect(status()).toContain('Approval undone.');
     await click(btn('Cancel this message'));
+    expect(api.messageAction).not.toHaveBeenLastCalledWith('m1', 'cancel');
+    expect(container.textContent).toContain('Cancel this message? It will not be sent');
+    await click(btn('Yes, cancel it'));
     expect(api.messageAction).toHaveBeenLastCalledWith('m1', 'cancel');
     expect(btn('Approve and schedule')).toBeUndefined();
   });
@@ -206,15 +209,29 @@ describe('CH6.5 accessibility', () => {
     for (const id of ['ch-c-notes', 'ch-c-kind', 'ch-e-community_post', 'ch-e-title', 'ch-e-in_app', 'ch-reject-note', 'ch-when-now']) {
       expect(container.querySelector(`label[for="${id}"]`)).not.toBeNull();
     }
-    const order = ['#ch-c-kind', '#ch-c-notes', '#ch-e-community_post', '#ch-e-in_app', '#ch-when-now', '#ch-reject-note'];
-    const all = Array.from(container.querySelectorAll<HTMLElement>('input, select, textarea, button, summary'));
-    const pos = order.map((s) => all.indexOf(container.querySelector(s) as HTMLElement));
-    expect(pos.every((p) => p >= 0)).toBe(true);
-    expect([...pos].sort((a, b) => a - b)).toEqual(pos);
-    const approve = all.indexOf(btn('Approve and schedule'));
-    expect(approve).toBeGreaterThan(pos[4]);
-    (container.querySelector('#ch-e-community_post') as HTMLElement).focus();
-    expect(document.activeElement).toBe(container.querySelector('#ch-e-community_post'));
+    // The Tab sequence: every focusable control in DOM order, minus disabled ones (also those inside a disabled fieldset), tabindex=-1 (the
+    // inactive channel tab) and anything inside a hidden tab panel. No positive tabindex reorders it.
+    expect(container.querySelectorAll('[tabindex]:not([tabindex="0"]):not([tabindex="-1"])')).toHaveLength(0);
+    const seq = Array.from(container.querySelectorAll<HTMLElement>('input, select, textarea, button, summary, a[href]'))
+      .filter((el) => !el.matches(':disabled') && el.tabIndex >= 0 && !el.closest('[hidden]'));
+    // Tab through it: each one takes focus in turn.
+    for (const el of seq) {
+      act(() => { el.focus(); });
+      expect(document.activeElement).toBe(el);
+    }
+    const at = (sel: string): number => seq.indexOf(container.querySelector(sel) as HTMLElement);
+    expect(at('#ch-e-in_app')).toBe(-1); // in the hidden panel, so not reachable until its tab is chosen
+    expect(at('#ch-tab-in_app')).toBe(-1); // roving tabindex: reached with the arrow keys
+    expect(at('#ch-c-kind')).toBe(-1); // step 1 is locked once the message exists
+    const steps = [seq.indexOf(btn('Start a new message')), at('#ch-tab-community_post'), at('#ch-e-community_post'), at('#ch-when-now'), seq.indexOf(btn('Approve and schedule')), at('#ch-reject-note')];
+    expect(steps.every((p) => p >= 0)).toBe(true);
+    expect([...steps].sort((a, b) => a - b)).toEqual(steps);
+    // Choosing the other tab brings its editor into the sequence, right after the tab list.
+    await click(container.querySelector('#ch-tab-in_app')!);
+    const seq2 = Array.from(container.querySelectorAll<HTMLElement>('input, select, textarea, button, summary'))
+      .filter((el) => !el.matches(':disabled') && el.tabIndex >= 0 && !el.closest('[hidden]'));
+    expect(seq2.indexOf(container.querySelector('#ch-e-in_app') as HTMLElement)).toBeGreaterThan(seq2.indexOf(container.querySelector('#ch-tab-in_app') as HTMLElement));
+    expect(seq2.indexOf(container.querySelector('#ch-e-community_post') as HTMLElement)).toBe(-1);
   });
 });
 
@@ -239,5 +256,107 @@ describe('CH6.5 opening an existing message', () => {
     await act(async () => { inApp.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true })); });
     await settle();
     expect(document.activeElement).toBe(container.querySelector('#ch-tab-community_post'));
+  });
+});
+
+describe('CH6.5 approve and save act on what is on screen', () => {
+  it('Approve and schedule saves an unsaved time first, then approves', async () => {
+    m(api.getMessage).mockResolvedValue(msg({ status: 'needs_approval' }));
+    await render('/admin/comms-hub/compose?message=m1');
+    await click(container.querySelector('#ch-when-at')!);
+    await type('ch-when-date', '2026-11-30');
+    await type('ch-when-time', '18:00');
+    m(api.setMessageSendTime).mockResolvedValue(msg({ status: 'needs_approval', send_at: '2026-12-01T00:00:00.000Z' }));
+    m(api.messageAction).mockResolvedValue(msg({ status: 'scheduled', send_at: '2026-12-01T00:00:00.000Z' }));
+    await click(btn('Approve and schedule'));
+    expect(api.setMessageSendTime).toHaveBeenCalledWith('m1', '2026-12-01T00:00:00.000Z');
+    expect(m(api.setMessageSendTime).mock.invocationCallOrder[0]).toBeLessThan(m(api.messageAction).mock.invocationCallOrder[0]);
+    expect(api.messageAction).toHaveBeenCalledWith('m1', 'approve');
+    expect(container.textContent).toContain('Mon, Nov 30, 6:00 PM CST');
+  });
+
+  it('a half-typed time stops the approval and says why', async () => {
+    m(api.getMessage).mockResolvedValue(msg({ status: 'needs_approval' }));
+    await render('/admin/comms-hub/compose?message=m1');
+    await click(container.querySelector('#ch-when-at')!);
+    await click(btn('Approve and schedule'));
+    expect(api.messageAction).not.toHaveBeenCalled();
+    expect(container.querySelector('[role="alert"]')!.textContent).toContain('Pick a date and a time');
+  });
+
+  it('Approve and schedule saves unsaved recipients first', async () => {
+    m(api.getMessage).mockResolvedValue(msg({ status: 'needs_approval' }));
+    await render('/admin/comms-hub/compose?message=m1');
+    await click(container.querySelector('[id="ch-to-in_app|in_app_audience|all_members"]')!);
+    m(api.setMessageDestinations).mockResolvedValue(msg({ status: 'needs_approval', destinations: OPTIONS as never }));
+    m(api.messageAction).mockResolvedValue(msg({ status: 'scheduled', destinations: OPTIONS as never }));
+    await click(btn('Approve and schedule'));
+    expect(m(api.setMessageDestinations).mock.calls[0][1].map((d: { target_id: string }) => d.target_id)).toEqual(['c1', 'all_members']);
+    expect(m(api.setMessageDestinations).mock.invocationCallOrder[0]).toBeLessThan(m(api.messageAction).mock.invocationCallOrder[0]);
+    expect(container.textContent).toContain('1 in-app notification to Everyone in the program');
+  });
+
+  it('Approve and schedule saves unsaved editor text first; a refused save stops it', async () => {
+    m(api.getMessage).mockResolvedValue(msg());
+    await render('/admin/comms-hub/compose?message=m1');
+    await type('ch-e-community_post', 'Come build with us on Tuesday, December 1 at 6:00 PM CST.');
+    m(api.editMessageDraft).mockResolvedValue(msg());
+    m(api.messageAction).mockResolvedValue(msg({ status: 'scheduled' }));
+    await click(btn('Approve and schedule')); // shown for a draft: it is submitted and approved in one step
+    expect(api.editMessageDraft).toHaveBeenCalledWith('m1', 'community_post', { title: null, body: 'Come build with us on Tuesday, December 1 at 6:00 PM CST.' });
+    expect(m(api.editMessageDraft).mock.invocationCallOrder[0]).toBeLessThan(m(api.messageAction).mock.invocationCallOrder[0]);
+    expect(api.messageAction).toHaveBeenCalledWith('m1', 'approve');
+    act(() => { root.unmount(); }); container.remove(); jest.clearAllMocks();
+    m(api.listHubEvents).mockResolvedValue([EVENT]); m(api.getDestinationOptions).mockResolvedValue(OPTIONS);
+    m(api.getMessage).mockResolvedValue(msg());
+    await render('/admin/comms-hub/compose?message=m1');
+    await type('ch-e-community_post', 'Come build with us at 6.');
+    m(api.editMessageDraft).mockRejectedValue({ response: { data: { error: 'Fix the drafts first.' } } });
+    await click(btn('Approve and schedule'));
+    expect(api.messageAction).not.toHaveBeenCalled();
+    expect(container.querySelector('[role="alert"]')!.textContent).toContain('Fix the drafts first.');
+  });
+
+  it('Save as draft saves the unsaved text and time, and does not submit', async () => {
+    m(api.getMessage).mockResolvedValue(msg());
+    await render('/admin/comms-hub/compose?message=m1');
+    await type('ch-e-community_post', 'Come build with us on Tuesday, December 1 at 6:00 PM CST.');
+    await click(container.querySelector('#ch-when-at')!);
+    await type('ch-when-date', '2026-11-30');
+    await type('ch-when-time', '18:00');
+    m(api.editMessageDraft).mockResolvedValue(msg());
+    m(api.setMessageSendTime).mockResolvedValue(msg({ send_at: '2026-12-01T00:00:00.000Z' }));
+    await click(btn('Save as draft'));
+    expect(api.editMessageDraft).toHaveBeenCalledTimes(1);
+    expect(api.setMessageSendTime).toHaveBeenCalledWith('m1', '2026-12-01T00:00:00.000Z');
+    expect(api.messageAction).not.toHaveBeenCalled();
+    expect(status()).toContain('Saved. It stays a draft');
+  });
+
+  it('a refused action reloads the message as it now is', async () => {
+    m(api.getMessage).mockResolvedValueOnce(msg({ status: 'needs_approval' })).mockResolvedValueOnce(msg({ status: 'cancelled' }));
+    await render('/admin/comms-hub/compose?message=m1');
+    m(api.messageAction).mockRejectedValue({ response: { data: { error: 'Someone cancelled this message.' } } });
+    await click(btn('Approve and schedule'));
+    expect(api.getMessage).toHaveBeenCalledTimes(2);
+    expect(container.querySelector('.ch-status')!.textContent).toBe('Cancelled');
+    expect(btn('Approve and schedule')).toBeUndefined();
+  });
+
+  it('Keep it closes the cancel question without cancelling', async () => {
+    m(api.getMessage).mockResolvedValue(msg());
+    await render('/admin/comms-hub/compose?message=m1');
+    await click(btn('Cancel this message'));
+    await click(btn('Keep it'));
+    expect(api.messageAction).not.toHaveBeenCalled();
+    expect(btn('Cancel this message')).toBeDefined();
+  });
+
+  it('the feed preview links URLs like the portal and shows the event', async () => {
+    m(api.getMessage).mockResolvedValue(msg({ drafts: { ...msg().drafts, community_post: { ...msg().drafts.community_post!, body: 'Join at https://example.com/join on Tuesday.' } } }));
+    await render('/admin/comms-hub/compose?message=m1');
+    const feed = container.querySelector('[aria-label="How it looks in the community feed"]')!;
+    expect(feed.querySelector('a.cm-link')!.getAttribute('href')).toBe('https://example.com/join');
+    expect(feed.querySelector('.ch-prev-event')!.textContent).toContain('Tuesday, December 1 · 6:00 PM CST');
   });
 });

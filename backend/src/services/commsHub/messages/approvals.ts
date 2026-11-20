@@ -73,8 +73,8 @@ async function inForce(messageId: string, t: Transaction): Promise<CommsHubAppro
  * CH6.3 validator (the event's correct Central date and time, nothing else dated, no unfilled
  * placeholder, no banned word). The refusal carries each problem as a sentence.
  */
-export async function submitForApproval(messageId: string, actor: Actor, now: Date = new Date()): Promise<CommsHubMessage> {
-  return sequelize.transaction(async (t) => {
+export async function submitForApproval(messageId: string, actor: Actor, now: Date = new Date(), outer?: Transaction): Promise<CommsHubMessage> {
+  return inTx(outer, async (t) => {
     const m = await locked(messageId, t);
     move(m, 'needs_approval');
     const content = await loadContent(m.id, t);
@@ -90,10 +90,10 @@ export async function submitForApproval(messageId: string, actor: Actor, now: Da
  * Approve: needs_approval -> approved, recording who and the hash of exactly what was approved.
  * Refused when there is nothing to send (no draft, or no destination).
  */
-export async function approveMessage(messageId: string, actor: Actor, now: Date = new Date()): Promise<{ message: CommsHubMessage; approval: CommsHubApproval }> {
+export async function approveMessage(messageId: string, actor: Actor, now: Date = new Date(), outer?: Transaction): Promise<{ message: CommsHubMessage; approval: CommsHubApproval }> {
   const approver = actor.id;
   if (!approver) throw new MessageRuleError('Approvals need a signed-in person.', 403, 'no_actor');
-  return sequelize.transaction(async (t) => {
+  return inTx(outer, async (t) => {
     const m = await locked(messageId, t);
     move(m, 'approved');
     const content = await loadContent(m.id, t);

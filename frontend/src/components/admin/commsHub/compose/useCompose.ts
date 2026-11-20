@@ -32,6 +32,22 @@ export function useCompose() {
   const [error, setError] = useState<string | null>(null);
   const [problems, setProblems] = useState<string[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
+  /**
+   * Unsaved changes on screen (an edited draft, ticked recipients, a typed time). Each step registers a
+   * save while it has one; "Approve and schedule" and "Save as draft" run them all first, so they act on
+   * exactly what is on screen, and stop if one is refused.
+   */
+  const pending = useRef(new Map<string, () => Promise<boolean>>());
+  const register = useCallback((key: string, save: (() => Promise<boolean>) | null) => {
+    if (save) pending.current.set(key, save); else pending.current.delete(key);
+  }, []);
+  const flush = async (): Promise<boolean> => {
+    for (const [key, save] of Array.from(pending.current)) {
+      if (!(await save())) return false;
+      pending.current.delete(key);
+    }
+    return true;
+  };
 
   useEffect(() => {
     listHubEvents('upcoming').then((e) => { setEvents(e); setForm((f) => (f.eventId || !e[0] ? f : { ...f, eventId: e[0].id })); }, () => setEvents([]));
@@ -71,6 +87,9 @@ export function useCompose() {
     } catch (err) {
       setProblems(apiProblems(err));
       setError(apiErrorMessage(err, 'That did not work. Try again.'));
+      // A refusal can mean someone else changed it: show the message as it now is.
+      const current = message?.id ?? messageId;
+      if (current) await Promise.resolve().then(() => getMessage(current)).then((now) => { if (now) setMessage(now); }, () => undefined);
       return false;
     } finally { setBusy(null); }
   }, [message, messageId, setParams]);
@@ -87,13 +106,17 @@ export function useCompose() {
     setRecipients: (d: DestinationView[]) => run('recipients', () => setMessageDestinations(id, d)),
     setTime: (iso: string | null) => run('time', () => setMessageSendTime(id, iso)),
     submit: () => run('submit', () => messageAction(id, 'submit'), () => 'It is ready for approval.'),
-    approve: () => run('approve', () => messageAction(id, 'approve')),
+    /** Saves what is on screen first, then approves and schedules (a draft is submitted in the same step). */
+    approve: async () => { if (await flush()) await run('approve', () => messageAction(id, 'approve'), () => 'Approved. It is scheduled to go out.'); },
     reject: (note: string | null) => run('reject', () => rejectHubMessage(id, note), () => 'Rejected. It is back to draft for changes.'),
     undo: () => run('undo', () => messageAction(id, 'undo'), () => 'Approval undone. Nothing will be sent until it is approved again.'),
     cancel: () => run('cancel', () => messageAction(id, 'cancel'), () => 'Cancelled. It will not be sent.'),
-    startOver: () => { setParams({}); setMessage(null); setError(null); setProblems([]); setNotice(null); },
-    /** Every edit is already saved as a version; this only says so (it stays a draft until submitted). */
-    keepDraft: () => setNotice('Saved. It stays a draft until you submit it for approval.'),
+    startOver: () => { pending.current.clear(); setParams({}); setMessage(null); setError(null); setProblems([]); setNotice(null); },
+    /** Saves every unsaved change on screen; it stays a draft until it is submitted or approved. */
+    keepDraft: async () => { if (await flush()) setNotice('Saved. It stays a draft until you submit it for approval.'); },
+    register,
+    /** A step refusing to save (for example a half-typed time) says why in the same alert as the server. */
+    refuse: (why: string) => { setProblems([]); setNotice(null); setError(why); },
   };
 }
 export type Compose = ReturnType<typeof useCompose>;

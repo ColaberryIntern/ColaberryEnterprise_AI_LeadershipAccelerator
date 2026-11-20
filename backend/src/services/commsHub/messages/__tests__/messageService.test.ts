@@ -25,9 +25,10 @@ jest.mock('../../../../models/Cohort', () => ({ __esModule: true, default: { fin
 jest.mock('../../activityLog', () => ({ logActivity: jest.fn(async () => undefined) }));
 const mockApprove = jest.fn(async () => undefined);
 const mockSchedule = jest.fn(async () => undefined);
+const mockSubmit = jest.fn(async () => undefined);
 jest.mock('../approvals', () => {
   const actual = jest.requireActual('../approvals');
-  return { MessageRuleError: actual.MessageRuleError, approveMessage: (...a: unknown[]) => mockApprove(...(a as [])), scheduleMessage: (...a: unknown[]) => mockSchedule(...(a as [])), reconcileApproval: jest.fn(async (_id: string, reason: string) => { reconciled.push(reason); return true; }) };
+  return { MessageRuleError: actual.MessageRuleError, approveMessage: (...a: unknown[]) => mockApprove(...(a as [])), submitForApproval: (...a: unknown[]) => mockSubmit(...(a as [])), scheduleMessage: (...a: unknown[]) => mockSchedule(...(a as [])), reconcileApproval: jest.fn(async (_id: string, reason: string) => { reconciled.push(reason); return true; }) };
 });
 jest.mock('../drafting', () => ({ recommendDestinations: jest.fn(async () => [{ channel: 'in_app', target_type: 'in_app_audience', target_id: 'all_members', label: 'Everyone in the program', reason: 'x' }]) }));
 
@@ -104,9 +105,32 @@ describe('CH6.5 send time and approve', () => {
     await expect(setSendTime('m1', new Date('2026-11-01T00:00:00Z'), JACKIE, NOW)).rejects.toMatchObject({ reason: 'past' });
   });
 
-  it('Approve and schedule approves (validated, hashed) and then schedules', async () => {
+  it('Approve and schedule approves (validated, hashed) and then schedules, in one transaction', async () => {
     await approveAndSchedule('m1', JACKIE, NOW);
-    expect(mockApprove).toHaveBeenCalledWith('m1', JACKIE, NOW);
-    expect(mockSchedule).toHaveBeenCalledWith('m1', JACKIE);
+    const t = expect.objectContaining({ LOCK: expect.anything() });
+    expect(mockSubmit).not.toHaveBeenCalled(); // already waiting on approval
+    expect(mockApprove).toHaveBeenCalledWith('m1', JACKIE, NOW, t);
+    expect(mockSchedule).toHaveBeenCalledWith('m1', JACKIE, t);
+    // The same transaction object is shared by both steps.
+    expect((mockApprove.mock.calls[0] as unknown[])[3]).toBe((mockSchedule.mock.calls[0] as unknown[])[2]);
+  });
+
+  it('Approve and schedule on a draft submits it first (both validator gates), in the same transaction', async () => {
+    messages.get('m1')!.status = 'draft';
+    await approveAndSchedule('m1', JACKIE, NOW);
+    expect(mockSubmit).toHaveBeenCalledWith('m1', JACKIE, NOW, expect.anything());
+    const tx = (mockSubmit.mock.calls[0] as unknown[])[3];
+    expect((mockApprove.mock.calls[0] as unknown[])[3]).toBe(tx);
+    expect(mockSubmit.mock.invocationCallOrder[0]).toBeLessThan(mockApprove.mock.invocationCallOrder[0]);
+  });
+
+  it('Approve and schedule leaves nothing half-done when approval is refused', async () => {
+    mockApprove.mockRejectedValueOnce(new Error('Fix the drafts before approving.') as never);
+    await expect(approveAndSchedule('m1', JACKIE, NOW)).rejects.toThrow('Fix the drafts');
+    expect(mockSchedule).not.toHaveBeenCalled();
+  });
+
+  it('Approve and schedule on a missing message is a 404', async () => {
+    await expect(approveAndSchedule('nope', JACKIE, NOW)).rejects.toMatchObject({ status: 404 });
   });
 });
