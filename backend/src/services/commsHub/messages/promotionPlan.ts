@@ -47,8 +47,9 @@ function centralOffsetMinutes(at: number): number {
 /**
  * The instant a Central wall clock names. Two passes, so the offset is the one in force AT the target
  * (a single pass uses the offset of a guess that can sit on the other side of a change: an early-morning
- * time the day after a change came out an hour off). A wall time that does not exist (the skipped hour
- * in spring) resolves forward, which is what a clock does.
+ * time the day after a change came out an hour off). A wall time that does not exist (the skipped
+ * 2:00-2:59 AM hour in spring) resolves to the hour BEFORE (2:30 AM on the change day becomes 1:30 AM
+ * CST); it only affects the reminder for an event at 2:00-2:59 AM on the Monday after the spring change.
  */
 export function atCentral(dateKey: string, hhmm: string): Date {
   const naive = Date.parse(`${dateKey}T${hhmm}:00Z`);
