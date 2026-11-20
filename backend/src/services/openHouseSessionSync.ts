@@ -11,6 +11,8 @@
  * WHAT IT DOES, hourly (schedulerService cron 'OpenHouseSessionSync'):
  *   1. ensureNextOpenHouseSession(): create-or-update the session for the next announced
  *      Open House, keyed on the Eventbrite id (the logic the script used to own).
+ *   1b. ensureRoomAndMeeting() (OH1v): give the session its community room and a platform
+ *      Zoom meeting, so no Open House depends on a hand-picked meeting again.
  *   2. bookCountdownForEarlierRegistrants(): for each registrant of that session who has NO
  *      countdown row for it (any status), grant the event-reminder permission (never
  *      overwrites a person's own choice) and book the countdown.
@@ -184,16 +186,60 @@ export async function bookCountdownForEarlierRegistrants(sessionId: string, log:
   return result;
 }
 
-/** The cron entry: ensure the session, then book whoever it was missing. Never throws. */
-export async function syncOpenHouseCountdown(log: Log = defaultLog): Promise<{ session: SessionSyncResult | null; booking: BookResult | null }> {
+export interface RoomAndMeetingResult {
+  room_id: string | null;
+  meeting: 'minted' | 'kept' | 'failed' | 'no_session';
+}
+
+/**
+ * OH1v (Ali, 2026-11-20): "Every event that comes in, you should be assigning to a room and a
+ * zoom as well." "Just use the zoom you have."
+ *
+ * Before this, an Open House session got a community room only when it was created through the
+ * admin screens, and a Zoom meeting only when someone clicked Generate Meet link. The sync-made
+ * Dec 3 session had neither, and Nov 19 ran on a hand-picked recurring Support meeting
+ * (waiting room on, no attendance, the platform recorded an empty room).
+ *
+ * Room: the same ensureRoomForSession every class uses (idempotent findOrCreate on the session).
+ * Zoom: the same generateMeetLink every class uses: the platform's own host, waiting room off,
+ * cloud recording on, stored on the session, which is where the check-in link in every reminder
+ * sends people. Only minted when the session has NO link, so a re-run never mints a second
+ * meeting and never replaces a link someone set on purpose.
+ */
+export async function ensureRoomAndMeeting(sessionId: string, log: Log = defaultLog): Promise<RoomAndMeetingResult> {
+  const { LiveSession } = await import('../models');
+  const session = await LiveSession.findByPk(sessionId);
+  if (!session) return { room_id: null, meeting: 'no_session' };
+
+  const { resolveRoomId } = await import('./acceleratorService');
+  const room_id = await resolveRoomId(session);
+
+  let meeting: RoomAndMeetingResult['meeting'] = 'kept';
+  if (!(session as any).meeting_link) {
+    const { generateMeetLink } = await import('./meetingService');
+    meeting = (await generateMeetLink(session)) ? 'minted' : 'failed';
+  }
+  log('room_and_meeting', {
+    session_id: sessionId, room_id, meeting,
+    outcome: meeting === 'failed' || !room_id ? 'partial' : 'success',
+  });
+  return { room_id, meeting };
+}
+
+/** The cron entry: ensure the session, its room and Zoom, then book whoever it was missing. Never throws. */
+export async function syncOpenHouseCountdown(log: Log = defaultLog): Promise<{
+  session: SessionSyncResult | null; venue: RoomAndMeetingResult | null; booking: BookResult | null;
+}> {
   let session: SessionSyncResult | null = null;
+  let venue: RoomAndMeetingResult | null = null;
   try {
     session = await ensureNextOpenHouseSession({}, log);
-    if (!session.id || (session.outcome !== 'created' && session.outcome !== 'updated')) return { session, booking: null };
+    if (!session.id || (session.outcome !== 'created' && session.outcome !== 'updated')) return { session, venue, booking: null };
+    venue = await ensureRoomAndMeeting(session.id, log);
     const booking = await bookCountdownForEarlierRegistrants(session.id, log);
-    return { session, booking };
+    return { session, venue, booking };
   } catch (err: any) {
     log('sync_failed', { outcome: 'failure', message: err?.message });
-    return { session, booking: null };
+    return { session, venue, booking: null };
   }
 }
