@@ -31,6 +31,8 @@ export function ReplayCard({ replay }: { replay: ReplayBroadcast }): React.React
 
   return (
     <article className="te-card rp-card" data-testid={`replay-${replay.id}`}>
+      {/* CH5.3: the picture the organizer chose for the event. Decorative: the title below names it. */}
+      {replay.thumbnail_url && <img className="rp-thumb" src={replay.thumbnail_url} alt="" loading="lazy" data-testid={`replay-thumb-${replay.id}`} />}
       <div className="rp-card-body">
         <h3 className="rp-title">{replay.title}</h3>
         <p className="rp-when">

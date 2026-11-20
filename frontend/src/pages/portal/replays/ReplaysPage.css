@@ -51,7 +51,10 @@
   padding: 14px 16px;
 }
 
-.rp-card-body { min-width: 0; }
+.rp-card-body { min-width: 0; flex: 1 1 auto; }
+/* CH5.3: a Communications Hub event's chosen thumbnail, beside the title. */
+.rp-thumb { flex: 0 0 auto; width: 128px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 8px; }
+@media (max-width: 480px) { .rp-thumb { width: 88px; } }
 
 .rp-title {
   font-size: 1rem;

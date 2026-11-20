@@ -277,3 +277,17 @@ describe('an entry with no recording bound', () => {
     expect(q('[data-testid="replay-watch-occ-week-9"]')).not.toBeNull();
   });
 });
+
+describe('CH5.3 a Communications Hub replay shows the thumbnail the organizer chose', () => {
+  it('draws the picture (decorative: the title names it) when the server sends one', () => {
+    mount({ replays: [replay({ id: 'occ-hub', thumbnail_url: '/api/comms-hub/thumbnails/e1/16x9.png?v=t7' })] });
+    const img = container.querySelector('[data-testid="replay-thumb-occ-hub"]') as HTMLImageElement;
+    expect(img.getAttribute('src')).toBe('/api/comms-hub/thumbnails/e1/16x9.png?v=t7');
+    expect(img.getAttribute('alt')).toBe('');
+  });
+
+  it('draws nothing for a replay without one (every other class), or an older backend that omits the field', () => {
+    mount({ replays: [replay({ id: 'a', thumbnail_url: null }), replay({ id: 'b' })] });
+    expect(container.querySelector('.rp-thumb')).toBeNull();
+  });
+});

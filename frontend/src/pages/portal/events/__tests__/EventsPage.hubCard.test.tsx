@@ -9,6 +9,11 @@ import type { OpenHouseView } from '../../../../services/onboardingApi';
 // The portal chrome has its own tests; here it only has to pass the page's children through.
 jest.mock('../../today/PortalShell', () => ({ __esModule: true, default: ({ children }: { children: React.ReactNode }) => <div>{children}</div> }));
 jest.mock('../../today/CondensedHeaderCard', () => ({ __esModule: true, default: () => <div /> }));
+const mockOpen = jest.fn();
+let mockPlayingId: string | null = null;
+jest.mock('../../../../contexts/BroadcastPlayerContext', () => ({
+  useBroadcastPlayer: () => ({ open: mockOpen, close: jest.fn(), session: mockPlayingId ? { occurrenceId: mockPlayingId, asset: 'master.m3u8', title: 'x' } : null }),
+}));
 jest.mock('../../../../services/onboardingApi', () => ({ ...jest.requireActual('../../../../services/onboardingApi'), fetchPublicEvents: jest.fn() }));
 
 /**
@@ -35,7 +40,7 @@ async function renderWith(events: OpenHouseView[]): Promise<void> {
   await act(async () => { root.render(<MemoryRouter><EventsPage /></MemoryRouter>); });
   for (let i = 0; i < 4; i += 1) await act(async () => { await Promise.resolve(); });
 }
-afterEach(() => { act(() => { root.unmount(); }); container.remove(); jest.clearAllMocks(); });
+afterEach(() => { act(() => { root.unmount(); }); container.remove(); jest.clearAllMocks(); mockPlayingId = null; });
 
 const links = (): string[] => Array.from(container.querySelectorAll('a')).map((a) => (a.textContent ?? '').trim());
 
@@ -67,5 +72,29 @@ describe('CH2.3 a hub card on the member Events page', () => {
     const watch = container.querySelector('[data-testid^="evt-watch-"]');
     expect(watch?.getAttribute('href')).toBe('/portal/live/event/abc');
     expect(links().some((t) => t.startsWith('Sign up'))).toBe(false);
+  });
+});
+
+describe('CH5.3 Watch live opens the stream in the portal player', () => {
+  it('a hub card on air: Watch live replaces Sign up and opens that occurrence in the player', async () => {
+    await renderWith([hubCard({ registration_url: 'https://www.eventbrite.com/e/1992498063344', is_live: true, live_occurrence_id: 'occ-77' })]);
+    const watch = container.querySelector('[data-testid^="evt-watch-"]') as HTMLButtonElement;
+    expect(watch.tagName).toBe('BUTTON');
+    expect(links().some((t) => t.startsWith('Sign up'))).toBe(false);
+    await act(async () => { watch.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    expect(mockOpen).toHaveBeenCalledWith({ occurrenceId: 'occ-77', asset: 'master.m3u8', title: 'Demo Tuesday' });
+  });
+
+  it('already playing that stream: says so instead of a second button that would restart it', async () => {
+    mockPlayingId = 'occ-77';
+    await renderWith([hubCard({ is_live: true, live_occurrence_id: 'occ-77' })]);
+    expect(container.querySelector('[data-testid^="evt-watch-"]')).toBeNull();
+    expect(container.querySelector('[data-testid^="evt-watching-"]')!.textContent).toBe('Playing now');
+  });
+
+  it('not on air (no occurrence id): no Watch live, Sign up stays', async () => {
+    await renderWith([hubCard({ registration_url: 'https://www.eventbrite.com/e/1992498063344', is_live: false, live_occurrence_id: null })]);
+    expect(container.querySelector('[data-testid^="evt-watch-"]')).toBeNull();
+    expect(links().some((t) => t.startsWith('Sign up'))).toBe(true);
   });
 });

@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import PortalShell from '../today/PortalShell';
 import CondensedHeaderCard from '../today/CondensedHeaderCard';
 import { fetchPublicEvents, OpenHouseView } from '../../../services/onboardingApi';
+import { useBroadcastPlayer } from '../../../contexts/BroadcastPlayerContext';
 import './EventsPage.css';
 
 /**
@@ -66,6 +67,11 @@ export function watchLiveHref(ev: Pick<OpenHouseView, 'is_live' | 'watch_url'>):
   return ev.watch_url.startsWith('/portal/') ? ev.watch_url : null;
 }
 
+/** CH5.3: the broadcast occurrence a live hub card opens in the portal player, or null. */
+export function watchOccurrenceId(ev: Pick<OpenHouseView, 'is_live' | 'live_occurrence_id'>): string | null {
+  return ev.is_live && ev.live_occurrence_id ? ev.live_occurrence_id : null;
+}
+
 /** Group events by calendar month so a long list stays scannable. */
 export function groupByMonth(events: OpenHouseView[]): Array<{ key: string; label: string; items: OpenHouseView[] }> {
   const out: Array<{ key: string; label: string; items: OpenHouseView[] }> = [];
@@ -89,6 +95,8 @@ const EventCard: React.FC<{ ev: OpenHouseView; focused?: boolean }> = ({ ev, foc
   // An Eventbrite CDN URL can 404 or be blocked; fall back to the lettered tile
   // rather than leaving a broken-image frame in the grid.
   const [imgBroken, setImgBroken] = useState(false);
+  const { open, session } = useBroadcastPlayer();
+  const liveId = watchOccurrenceId(ev);
   const blurb = truncateBlurb(ev.description);
   const showImage = Boolean(ev.image_url) && !imgBroken;
 
@@ -163,9 +171,17 @@ const EventCard: React.FC<{ ev: OpenHouseView; focused?: boolean }> = ({ ev, foc
       </div>
 
       {/* CH2.3: a Communications Hub event streaming now; same tab, it is a portal page. */}
-      {watchLiveHref(ev) && (
+      {watchLiveHref(ev) && !liveId && (
         <div className="evt-foot">
           <a className="evt-btn" href={watchLiveHref(ev) as string} data-testid={`evt-watch-${ev.id}`}>Watch live</a>
+        </div>
+      )}
+      {/* CH5.3: a hub event on air opens in the portal's own player (the mini-player keeps playing as the member moves around). */}
+      {liveId && (
+        <div className="evt-foot">
+          {session?.occurrenceId === liveId
+            ? <span className="evt-going" data-testid={`evt-watching-${ev.id}`}>Playing now</span>
+            : <button type="button" className="evt-btn" data-testid={`evt-watch-${ev.id}`} onClick={() => open({ occurrenceId: liveId, asset: 'master.m3u8', title: ev.title })}>Watch live</button>}
         </div>
       )}
       {/* C27 (v6 D5): one-tap Sign up (Eventbrite is the record), or "You're going" once Eventbrite has you */}
@@ -173,7 +189,7 @@ const EventCard: React.FC<{ ev: OpenHouseView; focused?: boolean }> = ({ ev, foc
         <div className="evt-foot"><span className="evt-going" data-testid={`evt-going-${ev.id}`}>✓ You&rsquo;re going</span></div>
       )}
       {/* While an event is live, Watch live is the one action; signing up for it has passed. */}
-      {ev.registration_url && !ev.is_registered && !watchLiveHref(ev) && (
+      {ev.registration_url && !ev.is_registered && !watchLiveHref(ev) && !liveId && (
         <div className="evt-foot">
           <a
             className="evt-btn"

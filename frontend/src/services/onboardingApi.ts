@@ -69,6 +69,8 @@ export interface OpenHouseView {
   /** CH2.3/CH5.3: a hub event that is streaming now, and where members watch it. */
   is_live?: boolean;
   watch_url?: string | null;
+  /** CH5.3: the broadcast occurrence on air for this card's date; Watch live opens it in the portal player. */
+  live_occurrence_id?: string | null;
 }
 export interface FirstClassView {
   start_date: string;
