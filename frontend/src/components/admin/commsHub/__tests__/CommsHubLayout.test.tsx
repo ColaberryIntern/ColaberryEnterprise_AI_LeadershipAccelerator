@@ -72,11 +72,37 @@ describe('CH1.3 Communications Hub shell', () => {
     expect(button('New message')).toBeDefined();
   });
 
-  it('Today shows the summary counts from the server', async () => {
+  it('Today shows the summary counts from the server, and the approval card agrees with its tile', async () => {
     (commsHubApi.getCommsHubSummary as jest.Mock).mockResolvedValue({ ...EMPTY, awaiting_approval: 2, upcoming_events: 4, events_missing_thumbnail: 1 });
     await renderAt('/admin/comms-hub');
-    expect(text()).toContain('Waiting for your approval');
+    const tile = (label: string): string => {
+      const card = Array.from(container.querySelectorAll('div')).find((d) => d.textContent?.startsWith(label) || (d.firstElementChild?.textContent ?? '') === label);
+      return card?.parentElement?.textContent ?? '';
+    };
+    expect(tile('Waiting for your approval')).toContain('2');
+    expect(tile('Upcoming events')).toContain('4');
     expect(text()).toContain('1 still need a thumbnail');
+    expect(text()).toContain('2 waiting for your approval');
+    expect(text()).not.toContain('Nothing is waiting for your approval');
+  });
+
+  it.each([
+    ['/admin/comms-hub', 'Nothing is waiting for your approval'],
+    ['/admin/comms-hub/events', 'No events yet'],
+    ['/admin/comms-hub/schedule', 'Nothing is scheduled'],
+  ])('a failed summary on %s shows the retry and never claims emptiness', async (path, emptyCopy) => {
+    (commsHubApi.getCommsHubSummary as jest.Mock).mockRejectedValueOnce(new Error('down'));
+    await renderAt(path);
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain('did not load');
+    expect(text()).not.toContain(emptyCopy);
+    expect(container.querySelector('[role="status"]')?.textContent).toContain('unavailable until the summary loads');
+  });
+
+  it('before the summary arrives, tabs say Loading rather than empty', async () => {
+    (commsHubApi.getCommsHubSummary as jest.Mock).mockReturnValue(new Promise(() => undefined));
+    await renderAt('/admin/comms-hub/schedule');
+    expect(text()).toContain('Loading...');
+    expect(text()).not.toContain('Nothing is scheduled');
   });
 
   it('a failed summary shows a retry instead of zeros, and the retry reloads', async () => {
