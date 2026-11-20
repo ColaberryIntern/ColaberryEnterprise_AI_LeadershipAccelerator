@@ -100,8 +100,13 @@ export function buildInterviewPrompt(facts: InterviewFacts, exchanges: number): 
     .join('\n');
 }
 
+// One line per turn. The extractor splits on newlines and takes any "Label: text" line as a
+// new speaker, so a typed answer or brief spanning lines ("Systems: McLeod") would otherwise be
+// credited to a speaker called "Systems" and its quotes rejected as not the customer's.
 function transcriptFor(turns: InterviewTurn[]): string {
-  return turns.map((t) => `${t.role === 'user' ? 'human' : 'assistant'}: ${t.text}`).join('\n');
+  return turns
+    .map((t) => `${t.role === 'user' ? 'human' : 'assistant'}: ${String(t.text).replace(/\s*\r?\n\s*/g, ' ')}`)
+    .join('\n');
 }
 
 /**

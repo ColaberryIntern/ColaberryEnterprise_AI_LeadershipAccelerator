@@ -85,7 +85,7 @@ describe('completeFlotationCall', () => {
     await completeFlotationCall({ callId: 'call_1', status: 'completed', transcript: TRANSCRIPT });
 
     const { conversation } = mockFinish.mock.calls[0][0];
-    expect(conversation).toContain('human (written before the call): Build an AI Proposal Assistant for Patriot AI Solutions.');
+    expect(conversation).toContain('human: (written before the call) Build an AI Proposal Assistant for Patriot AI Solutions.');
     expect(conversation).toContain(TRANSCRIPT);
     expect(conversation.indexOf('Patriot')).toBeLessThan(conversation.indexOf('Tell me about'));
   });
