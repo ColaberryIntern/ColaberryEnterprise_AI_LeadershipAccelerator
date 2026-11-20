@@ -37,6 +37,19 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
       'Explorer Growth OS content registry sync. Projects published timeline cards into explorer_content_assets as POINTERS - title, summary and a portal URL - never as message copy, because the registry has no body column and the existing campaign engine renders at send time. PROJECTS ONLY: decides nothing, enqueues nothing, cannot send, and the no-send guard sweeps its directory. Idempotent by upsert against the partial unique index on (source_system, source_id), so two runs yield identical rows. Runs 30 minutes BEFORE ExplorerProfileRecompute, so also before ExplorerGovernorDecide, which resolves content at decision time - a registry refreshed after the Governor ran would serve yesterday catalogue for a day. Dark unless both EXPLORER_GROWTH_OS_ENABLED and EXPLORER_JOURNEY_INTELLIGENCE_ENABLED are on.',
   },
   {
+    // OH1t (2026-11-20). Seeded rather than baselined, for the reason BatchRollover gives
+    // below. `schedule` must stay equal to the cron expression in schedulerService.ts.
+    agent_name: 'OpenHouseSessionSync',
+    agent_type: 'scheduled_processor',
+    module: 'syncOpenHouseCountdown',
+    source_file: 'backend/src/services/openHouseSessionSync.ts',
+    trigger_type: 'cron',
+    schedule: '20 * * * *',
+    category: 'operations',
+    description:
+      'Keeps the next announced Open House in live_sessions (create-or-update by Eventbrite id) and books the countdown for any registrant of it who has no countdown row for that session in any status. Before this the session existed only after a manual script run, and anyone who registered earlier was enrolled with zero reminders: all 22 Dec 3 registrants on 2026-11-20. Grants only the event_reminder permission, never overwriting a person\'s own choice. Books only while the countdown campaign is active. Sends nothing itself; every send gate still decides each reminder.',
+  },
+  {
     // Intern nudge cadence (2026-11-11). Seeded rather than added to cronRegistryBaseline.ts,
     // for the reason BatchRollover gives below: an instrumentCronJob() name with no ai_agents row
     // tracks its run_count and error_count against nothing, and the baseline is a ratchet that is

@@ -2146,6 +2146,18 @@ export function startScheduler(): void {
     });
   });
 
+  // OH1t: keep the next Open House session in live_sessions (it used to exist only after a
+  // manual script run) and book the countdown for anyone who registered before it existed.
+  // Hourly, so a newly announced Open House is on our side within the hour. Sends nothing.
+  cron.schedule('20 * * * *', () => {
+    instrumentCronJob('OpenHouseSessionSync', async () => {
+      const { syncOpenHouseCountdown } = await import('./openHouseSessionSync');
+      await syncOpenHouseCountdown();
+    }).catch((err) => {
+      console.error('[Scheduler] Open House session sync error:', err);
+    });
+  });
+
   // GitHub repository-invitation sweep (SBP-GH). Accepts the collaborator
   // invitations students send us, which is the ONLY way the platform ever gets
   // push access to a student repo.
