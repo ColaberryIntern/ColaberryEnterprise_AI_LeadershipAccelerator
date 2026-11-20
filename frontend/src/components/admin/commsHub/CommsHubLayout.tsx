@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { PageHeader } from '../shell';
 import { getCommsHubSummary, type CommsHubSummary } from '../../../services/commsHubApi';
+// The hub's styles for every tab (Today, Events, Compose, Schedule), not only the Events tab.
+import './commsHub.css';
 
 /**
  * The Communications Hub shell (CH1.3): the header with its three controls, the four tabs as real

@@ -46,6 +46,8 @@ beforeEach(() => {
   (commsHubApi.getCommsHubSummary as jest.Mock).mockResolvedValue(EMPTY);
   // CH3.1: the Events tab loads its own list; an empty hub has no events.
   (commsHubApi.listHubEvents as jest.Mock).mockResolvedValue([]);
+  // CH6.5: Compose loads the recipient options.
+  (commsHubApi.getDestinationOptions as jest.Mock).mockResolvedValue([]);
 });
 afterEach(() => { act(() => { root.unmount(); }); container.remove(); jest.clearAllMocks(); });
 
@@ -57,7 +59,7 @@ describe('CH1.3 Communications Hub shell', () => {
   it.each([
     ['/admin/comms-hub', 'Today', 'Nothing is waiting for your approval'],
     ['/admin/comms-hub/events', 'Events', 'No upcoming events'],
-    ['/admin/comms-hub/compose', 'Compose', 'Start a message'],
+    ['/admin/comms-hub/compose', 'Compose', '1. What is it about?'],
     ['/admin/comms-hub/schedule', 'Schedule & history', 'Nothing is scheduled'],
   ])('%s deep-links to its tab (%s) and renders its empty state', async (path, tab, empty) => {
     await renderAt(path);

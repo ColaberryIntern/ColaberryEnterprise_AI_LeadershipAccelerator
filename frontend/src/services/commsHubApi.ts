@@ -237,3 +237,42 @@ export async function savePromotionPlan(eventId: string, kinds: PlanKind[]): Pro
   const { data } = await api.put<PlanView & { result: PlanResult }>(`/api/admin/comms-hub/events/${eventId}/plan`, { kinds });
   return data;
 }
+
+/* Compose (CH6.5: backend/src/routes/admin/commsHubMessageRoutes.ts). */
+export type MessageKind = 'announcement' | 'reminder' | 'starting_soon' | 'recording_thanks' | 'time_change' | 'cancellation' | 'update' | 'other';
+export type Tone = 'friendly' | 'professional' | 'urgent';
+export type Channel = 'community_post' | 'in_app';
+export interface DraftView { id: string; channel: Channel; version: number; title: string | null; body: string; author: string; instruction: string | null; created_at: string }
+export interface DestinationView { id?: string; channel: Channel; target_type: 'cohort_feed' | 'in_app_audience'; target_id: string; label: string | null; has_delivery?: boolean; reason?: string }
+export interface MessageView {
+  id: string; status: HubMessageStatus; kind: MessageKind; tone: Tone | null; notes: string | null; subject: string | null;
+  include: { thumbnail?: boolean; join_link?: boolean; registration_link?: boolean }; send_at: string | null; created_by: string | null;
+  plan_kind: PlanKind | null; occurrence_starts_at: string | null;
+  event: { id: string; title: string; when: string; thumbnail_id: string | null } | null;
+  drafts: Partial<Record<Channel, DraftView>>; versions: DraftView[]; destinations: DestinationView[];
+  approval: { id: string; approved_by: string; approved_at: string } | null; problems: string[]; recommended: DestinationView[];
+}
+const messages = '/api/admin/comms-hub/messages';
+const one = async (p: Promise<{ data: { message: MessageView } }>): Promise<MessageView> => (await p).data.message;
+
+export async function createMessage(input: { event_id?: string | null; subject?: string | null; kind: MessageKind; tone?: Tone | null; notes?: string | null; include?: MessageView['include'] }): Promise<MessageView> {
+  return one(api.post(messages, input));
+}
+export async function getMessage(id: string): Promise<MessageView> { return one(api.get(`${messages}/${id}`)); }
+export async function regenerateMessage(id: string, instruction: 'shorter' | 'warmer' | 'more_detail'): Promise<MessageView> { return one(api.post(`${messages}/${id}/regenerate`, { instruction })); }
+export async function editMessageDraft(id: string, channel: Channel, text: { title?: string | null; body: string }): Promise<MessageView> { return one(api.post(`${messages}/${id}/drafts`, { channel, ...text })); }
+export async function setMessageDestinations(id: string, destinations: DestinationView[]): Promise<MessageView> {
+  return one(api.put(`${messages}/${id}/destinations`, { destinations: destinations.map(({ channel, target_type, target_id, label }) => ({ channel, target_type, target_id, label })) }));
+}
+export async function setMessageSendTime(id: string, sendAt: string | null): Promise<MessageView> { return one(api.put(`${messages}/${id}/send-time`, { send_at: sendAt })); }
+export async function messageAction(id: string, action: 'submit' | 'approve' | 'undo' | 'cancel'): Promise<MessageView> { return one(api.post(`${messages}/${id}/${action}`)); }
+export async function rejectHubMessage(id: string, note: string | null): Promise<MessageView> { return one(api.post(`${messages}/${id}/reject`, { note })); }
+export async function getDestinationOptions(): Promise<DestinationView[]> {
+  const { data } = await api.get<{ destinations: DestinationView[] }>(`${messages}/destination-options`);
+  return data.destinations;
+}
+/** The validator's problems from a refused submit/approve, or []. */
+export function apiProblems(err: unknown): string[] {
+  const p = (err as { response?: { data?: { problems?: unknown } } })?.response?.data?.problems;
+  return Array.isArray(p) ? p.filter((x): x is string => typeof x === 'string') : [];
+}

@@ -180,3 +180,27 @@
   .ch-plan-row { grid-template-columns: 1fr auto; }
   .ch-plan-when, .ch-plan-channels { grid-column: 1 / -1; }
 }
+
+/* CH6.5 Compose (design 03). Previews follow the member feed card and the notification bell row. */
+.ch-compose-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
+.ch-compose-step { border: 1px solid var(--neutral-200); border-radius: var(--radius-lg); background: var(--neutral-0); padding: 1rem 1.1rem; }
+.ch-compose-tabs { display: flex; gap: 0.25rem; border-bottom: 1px solid var(--neutral-200); margin-bottom: 0.75rem; }
+.ch-compose-tab { border: 0; background: none; padding: 0.6rem 0.75rem; min-height: 44px; font-weight: 600; color: var(--neutral-700); border-bottom: 3px solid transparent; }
+.ch-compose-tab.active { color: var(--neutral-900); border-bottom-color: var(--red-600); }
+.ch-compose-tab:focus-visible { outline: 3px solid var(--blue-500); outline-offset: 2px; }
+@media (max-width: 1199.98px) { .ch-compose-grid { grid-template-columns: 1fr; } }
+.ch-prev-h { font-size: 0.85rem; font-weight: 700; color: var(--neutral-700); margin: 0 0 0.5rem; }
+.ch-prev-feed { border: 1px solid var(--neutral-200); border-radius: var(--radius-lg); background: var(--neutral-0); padding: 0.85rem; margin: 0; }
+.ch-prev-head { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.6rem; }
+.ch-prev-avatar { width: 34px; height: 34px; border-radius: var(--radius-circle); background: var(--red-600); color: var(--neutral-0); display: flex; align-items: center; justify-content: center; font-weight: 800; }
+.ch-prev-sub { display: block; font-size: 0.78rem; color: var(--neutral-600); }
+.ch-prev-banner { display: block; width: 100%; aspect-ratio: 3 / 1; object-fit: cover; border-radius: var(--radius-md); margin-bottom: 0.6rem; }
+.ch-prev-body { margin: 0; white-space: pre-wrap; }
+.ch-prev-bell { display: flex; gap: 0.6rem; align-items: flex-start; border: 1px solid var(--neutral-200); border-radius: var(--radius-lg); background: var(--neutral-0); padding: 0.75rem; margin: 0; }
+.ch-prev-bell-ic { width: 32px; height: 32px; border-radius: var(--radius-circle); background: var(--neutral-100); display: flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+.ch-prev-time { display: block; font-size: 0.75rem; color: var(--neutral-600); }
+.ch-compose-versions summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }
+.ch-compose-summary { border: 1px solid var(--neutral-200); border-radius: var(--radius-lg); padding: 0.85rem 1rem; background: var(--neutral-50); }
+.ch-reject-note { max-width: 260px; }
+.ch-compose-step legend { font-size: 0.9rem; font-weight: 600; margin-bottom: 0.35rem; }
+.ch-compose-step h2.ch-studio-h { margin-bottom: 0.75rem; }
