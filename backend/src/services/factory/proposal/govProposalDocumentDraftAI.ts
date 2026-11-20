@@ -42,8 +42,12 @@ function attrValue(attrs: string, name: string): string | null {
  * above). Drops the entire contents of <script>/<style>, removes comments, strips every other attribute (so no event
  * handlers / javascript: urls survive), and removes any non-allowlisted tag while keeping its inner text. The XSS rail.
  */
+// A generous upper bound on a single proposal document's HTML. The old 40000 (~8 pages) silently truncated a
+// multi-volume technical response mid-sentence and then tanked its coverage check (every requirement past the cut
+// read as un-answered). This bounds length as an XSS/DoS guard without amputating a legitimately long volume.
+const MAX_DOC_HTML = 200000;
 export function sanitizeProposalHtml(raw: unknown): string {
-  let html = clampStr(raw, 40000);
+  let html = clampStr(raw, MAX_DOC_HTML);
   if (!html) return '';
   // 1. Remove script/style/iframe/head blocks ENTIRELY (tag + contents).
   html = html.replace(/<(script|style|iframe|head|title|template|svg|math)[\s\S]*?<\/\1\s*>/gi, '');
@@ -59,7 +63,7 @@ export function sanitizeProposalHtml(raw: unknown): string {
     if (tag === 'figure') { const da = attrValue(attrs, 'data-artifact'); return da && /^[A-Za-z0-9-]+$/.test(da) ? `<figure data-artifact="${da}">` : '<figure>'; }
     return `<${tag}>`;
   });
-  return html.trim().slice(0, 40000);
+  return html.trim().slice(0, MAX_DOC_HTML);
 }
 
 export interface DocumentDraftReq { canonicalReqId: string; statement: string; }

@@ -29,16 +29,29 @@ describe('reviewCycleCore', () => {
     expect(r).toMatchObject({ stoppedBecause: 'passed', finalPasses: true, iterations: 1 });
   });
 
-  it('stops at open_questions when the checks surface an open fact gap', async () => {
-    const r = await reviewCycleCore(deps({ runChecks: async () => checks({ findings: [{ check: 'fact', severity: 'major', message: 'open question' }] }) }));
-    expect(r.stoppedBecause).toBe('open_questions');
+  it('a fact gap no longer bails before revising: the reviser runs first and can fill it from grounding', async () => {
+    // Old behavior stopped HERE on any fact/major finding without revising. Now the reviser attempts the fix; if it
+    // fills the gap from the grounding (no returned gaps), the next check passes and the loop completes.
+    const revise = jest.fn(async () => ({ html: '<p>filled</p>', gaps: [], changeSummary: 'filled from grounding' }));
+    let n = 0;
+    const runChecks = async () => (++n === 1 ? checks({ findings: [{ check: 'fact', severity: 'major', message: 'open question' }] }) : checks({ passes: true }));
+    const r = await reviewCycleCore(deps({ runChecks, revise }));
+    expect(revise).toHaveBeenCalled();
+    expect(r.stoppedBecause).toBe('passed');
   });
 
-  it('stops + persists gaps when the revision raises a question it cannot answer', async () => {
+  it('saves the revision progress AND persists the gap when the reviser raises a question it cannot answer', async () => {
     const persistGaps = jest.fn(async () => {});
-    const r = await reviewCycleCore(deps({ revise: async () => ({ html: '<p>x</p>', gaps: [{ question: 'Who is the PM?', suggestions: [] }], changeSummary: 'c' }), persistGaps }));
+    const saveVersion = jest.fn(async () => {});
+    const r = await reviewCycleCore(deps({ revise: async () => ({ html: '<p>x</p>', gaps: [{ question: 'Who is the PM?', suggestions: [] }], changeSummary: 'c' }), persistGaps, saveVersion }));
     expect(r.stoppedBecause).toBe('open_questions');
     expect(persistGaps).toHaveBeenCalled();
+    expect(saveVersion).toHaveBeenCalled(); // the convergence fix: partial progress is preserved, never discarded
+  });
+
+  it('stops when the reviser makes no further change and raises no gap (nothing left to improve)', async () => {
+    const r = await reviewCycleCore(deps({ loadContent: async () => '<p>same</p>', revise: async () => ({ html: '<p>same</p>', gaps: [], changeSummary: 'noop' }) }));
+    expect(r).toMatchObject({ stoppedBecause: 'max_iterations', iterations: 1 });
   });
 
   it('stops at revise_failed when the reviser errors', async () => {
@@ -46,9 +59,11 @@ describe('reviewCycleCore', () => {
     expect(r.stoppedBecause).toBe('revise_failed');
   });
 
-  it('runs to maxIterations writing a version each pass when it never passes and never asks', async () => {
+  it('runs to maxIterations writing a version each pass when it never passes but keeps improving', async () => {
     const saveVersion = jest.fn(async () => {});
-    const r = await reviewCycleCore(deps({ saveVersion }), { maxIterations: 3 });
+    let k = 0;
+    const revise = async () => ({ html: `<p>rev ${++k}</p>`, gaps: [], changeSummary: 'c' }); // distinct each pass → real progress
+    const r = await reviewCycleCore(deps({ saveVersion, revise }), { maxIterations: 3 });
     expect(r.stoppedBecause).toBe('max_iterations');
     expect(r.iterations).toBe(3);
     expect(saveVersion).toHaveBeenCalledTimes(3);
