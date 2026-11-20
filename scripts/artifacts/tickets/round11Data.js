@@ -22,6 +22,19 @@ module.exports = {
     quickCheck: { attempts: 2, perfect: 2 },
     deployedAt: '11:25 AM CST, 9 Nov', sha: '9009df497',
   },
+  C119: {
+    id: 'C119', ticket: `${BC}/10493820271`, title: 'The player now records exactly where a learner leaves a video',
+    prs: [`${PR}/3808`],
+    asked: 'Record exact exits, including a closed tab, before the Monday rerun.',
+    delivered: 'Live since 7:03 AM CST, 10 Nov, and proven on production: a tab closed at 8 s recorded 8 s.',
+    // Real non-finishers of the welcome video (exit second = max_position_s). "Before" readings sit on a 15-second
+    // reporting step or come from a pause; a closed tab under 15 s was not recorded at all.
+    before: [6, 15, 18, 15, 5, 15],
+    after: [12, 46],
+    staleTab: 18,
+    proof: { playedTo: 8.3, beatsBeforeClose: 0, recordedWatched: 8, recordedExit: 8, at: '8:04:38 AM CST, 11 Nov' },
+    tests: { new: 9, total: 20, mutationFails: 2 },
+  },
   C120: {
     id: 'C120', ticket: `${BC}/10498337159`, title: 'The Open House funnel, tested end to end, with a step-by-step report',
     prs: [`${PR}/3861`],

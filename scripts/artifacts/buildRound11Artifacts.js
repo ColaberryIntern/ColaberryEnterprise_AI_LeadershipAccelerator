@@ -115,6 +115,58 @@ function c118() {
   return { visual, doc };
 }
 
+// ---------- C119 ----------
+function c119() {
+  const t = D.C119;
+  const p = t.proof;
+  const strip = (secs, color) => {
+    const W = 600, H = 34, X = (s) => 10 + (s / 109) * (W - 20);
+    const ticks = [0, 15, 30, 45, 60, 75, 90, 109].map((s) => `<line x1="${X(s)}" y1="4" x2="${X(s)}" y2="${H - 10}" stroke="#e2e8f0"/><text x="${X(s)}" y="${H}" font-size="8" fill="${TOKENS.MUTED}" text-anchor="middle">${s}s</text>`).join('');
+    // Learners who left at the same second share one dot, labeled with how many, so no one is hidden under another.
+    const counts = secs.reduce((m, s) => m.set(s, (m.get(s) || 0) + 1), new Map());
+    const dots = [...counts].map(([s, n]) => `<circle cx="${X(s)}" cy="${(H - 10) / 2 + 2}" r="${n > 1 ? 8 : 6}" fill="${color}" opacity=".85"/>`
+      + (n > 1 ? `<text x="${X(s)}" y="${(H - 10) / 2 + 5.5}" font-size="9" font-weight="700" fill="#fff" text-anchor="middle">${n}</text>` : '')).join('');
+    return `<svg viewBox="0 0 ${W} ${H + 2}" width="100%" role="img">${ticks}${dots}</svg>`;
+  };
+  const visual = `<div class="page">${header(t, 'LIVE, PROVEN ON PRODUCTION', 'ok')}
+  <div class="grid"><div class="main">
+    <div class="lane">The proof: a real browser, the test account, the tab closed at ${p.playedTo} s</div>
+    <div class="flow"><div class="step"><b>Play</b>to ${p.playedTo} s</div><div class="arrow">&rarr;</div><div class="step"><b>Ordinary reports</b>${p.beatsBeforeClose} (they fire every 15 s)</div><div class="arrow">&rarr;</div><div class="step"><b>Close the tab</b>exit report sent (keepalive)</div><div class="arrow">&rarr;</div><div class="step ok"><b>Server recorded</b>${p.recordedWatched} s watched, exit at ${p.recordedExit} s</div></div>
+    <div class="note warn"><strong>Before C119</strong> this exact visit left no trace: under 15 s, no report had fired, and closing the tab sent nothing.</div>
+    <div class="lane">Where real learners left the 1:49 welcome video</div>
+    <div class="small">Before exit tracking (${t.before.length} people): readings sit on the 15-second step or come from a pause</div>
+    ${strip(t.before, TOKENS.MUTED)}
+    <div class="small" style="margin-top:6px">Since exit tracking (${t.after.length} people so far): exact seconds</div>
+    ${strip(t.after, TOKENS.CHERRY)}
+    <p class="small">One more learner played the old YouTube video from a tab opened before the switch (exit ${t.staleTab} s, old code) and is left out.</p>
+  </div><div class="side">
+    ${decide('What do we do with the exact exits?', [
+    { k: 'A', text: 'Collect a week, then rerun on Mon 16 Nov and look for one drop point in the first 30 s before touching the video.', rec: true },
+    { k: 'B', text: 'Also store which event sent each report (exit, pause, cadence) so the report can show it.' },
+    { k: 'C', text: 'Nothing more: the exact exit second is enough.' },
+  ])}
+    <div class="cards"><div class="card"><div class="n">${t.tests.total}</div><div class="k">tests pass (${t.tests.new} new)</div></div><div class="card"><div class="n">${t.tests.mutationFails}</div><div class="k">fail with the exit code removed</div></div></div>
+  </div></div></div>`;
+  const doc = `${takeaway('Takeaway', `Closing the tab now records exactly how far a learner got. Proven on production: a tab closed at ${p.playedTo} s recorded ${p.recordedWatched} s.`)}
+  ${askedDelivered(t)}
+  <h2>What changed</h2>
+  ${table([
+    ['Player', 'While a video plays, pagehide (tab closed) and visibilitychange to hidden (app backgrounded, phone locked) send the buffered watch time at once, marked exiting. A pause after the page is hidden counts as an exit.'],
+    ['Delivery', 'The exit report goes as a keepalive fetch, which survives the page closing and keeps the sign-in header (sendBeacon cannot set it).'],
+    ['Scope', 'The card drawer and the Today tile inline player. No server, database or nginx change.'],
+  ], ['Part', 'Detail'])}
+  <h2>Verification</h2>
+  ${table([
+    ['Unit tests', `${t.tests.total} pass, ${t.tests.new} new; removing the exit listener fails ${t.tests.mutationFails}`],
+    ['Live bundle', 'The exit listener and the keepalive option are in the code the site serves'],
+    ['Production proof', `Test account, real Chrome, real sign-in link: played to ${p.playedTo} s with ${p.beatsBeforeClose} ordinary reports, then closed the tab. The server recorded watched ${p.recordedWatched} s and exit ${p.recordedExit} s at ${p.at}.`],
+    ['Real learners', `${t.after.length} exits since the deploy, at ${t.after.join(' s and ')} s`],
+  ], ['Check', 'Result'])}
+  <h2>What this does not establish</h2>
+  <p>Which event sent a given real learner's last report: the server does not store the exiting flag, so the report shows the exit second, not how it was sent. A phone that kills the browser without a visibility event still sends nothing. Firefox before version 133 drops the exit report.</p>`;
+  return { visual, doc };
+}
+
 // ---------- C120 ----------
 function c120() {
   const t = D.C120;
@@ -236,7 +288,7 @@ function c122() {
   return { visual, doc };
 }
 
-const BUILDERS = { C118: c118, C120: c120, C121: c121, C122: c122 };
+const BUILDERS = { C118: c118, C119: c119, C120: c120, C121: c121, C122: c122 };
 
 function guardText(id, html) {
   const text = html.replace(/<[^>]+>/g, ' ').replace(/&[a-z#0-9]+;/gi, ' ');
