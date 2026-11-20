@@ -233,6 +233,9 @@ async function recordInterviewed(
   transcript: string | null = null,
 ): Promise<boolean> {
   const ok = (outcome.understanding === 'created' || outcome.understanding === 'deduplicated') && !!outcome.understanding_id;
+  // The first finished interview is the record. A repeated final turn, or a webhook delivered
+  // again, must not overwrite the transcript that was already posted to the client's list.
+  if (ok && intake.understanding_id && intake.interviewed_at) return true;
   if (ok) {
     await intake.update({
       status: 'interviewed',

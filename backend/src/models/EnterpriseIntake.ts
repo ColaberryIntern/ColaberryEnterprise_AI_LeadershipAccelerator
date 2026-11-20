@@ -53,6 +53,21 @@ export interface EnterpriseIntakeAttributes {
   transcript: string | null;
   /** Phase 2: when the write-up and transcript were posted on the list. Null = still to post. */
   bc_writeup_posted_at: Date | null;
+  /** Phase 2: the whole checklist is on the list. Null = still to build or repair. */
+  bc_checklist_ready_at?: Date | null;
+  /** Phase 2: the interview to-do is ticked. */
+  bc_interview_ticked_at?: Date | null;
+  /** Phase 3: the company research brief and the draft pilot options (JSON). */
+  research?: unknown | null;
+  pilot_options?: unknown | null;
+  researched_at?: Date | null;
+  research_attempts?: number;
+  /** Phase 3: once the research and options are posted on the client's list. */
+  bc_research_posted_at?: Date | null;
+  /** Phase 3: the follow-up email with their options. Drafted by AI, sent only on Ali's approval. */
+  options_email_subject?: string | null;
+  options_email_body?: string | null;
+  options_email_sent_at?: Date | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -84,6 +99,16 @@ class EnterpriseIntake extends Model<EnterpriseIntakeAttributes> implements Ente
   declare bc_todolist_id: string | null;
   declare transcript: string | null;
   declare bc_writeup_posted_at: Date | null;
+  declare bc_checklist_ready_at: Date | null;
+  declare bc_interview_ticked_at: Date | null;
+  declare research: unknown | null;
+  declare pilot_options: unknown | null;
+  declare researched_at: Date | null;
+  declare research_attempts: number;
+  declare bc_research_posted_at: Date | null;
+  declare options_email_subject: string | null;
+  declare options_email_body: string | null;
+  declare options_email_sent_at: Date | null;
   declare createdAt: Date;
   declare updatedAt: Date;
 }
@@ -116,6 +141,16 @@ EnterpriseIntake.init(
     bc_todolist_id: { type: DataTypes.STRING(32), allowNull: true },
     transcript: { type: DataTypes.TEXT, allowNull: true },
     bc_writeup_posted_at: { type: DataTypes.DATE, allowNull: true },
+    bc_checklist_ready_at: { type: DataTypes.DATE, allowNull: true },
+    bc_interview_ticked_at: { type: DataTypes.DATE, allowNull: true },
+    research: { type: DataTypes.JSONB, allowNull: true },
+    pilot_options: { type: DataTypes.JSONB, allowNull: true },
+    researched_at: { type: DataTypes.DATE, allowNull: true },
+    research_attempts: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    bc_research_posted_at: { type: DataTypes.DATE, allowNull: true },
+    options_email_subject: { type: DataTypes.STRING(255), allowNull: true },
+    options_email_body: { type: DataTypes.TEXT, allowNull: true },
+    options_email_sent_at: { type: DataTypes.DATE, allowNull: true },
   },
   {
     sequelize,

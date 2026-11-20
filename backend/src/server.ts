@@ -1426,19 +1426,11 @@ async function ensureEnterpriseIntakeSchema() {
   try {
     const { EnterpriseIntake } = await import('./models');
     await EnterpriseIntake.sync();
-    // sync() creates a missing table but never adds a column to an existing one. Each phase
-    // of the intake adds columns (W29: transcript, bc_writeup_posted_at), so add whatever the
-    // model has and the table lacks. Additive only: nothing is altered or dropped.
-    const qi = EnterpriseIntake.sequelize!.getQueryInterface();
-    const table = EnterpriseIntake.getTableName() as string;
-    const existing = await qi.describeTable(table);
-    for (const attr of Object.values(EnterpriseIntake.getAttributes()) as any[]) {
-      const column = attr.field || attr.fieldName;
-      if (!existing[column]) {
-        await qi.addColumn(table, column, { type: attr.type, allowNull: true });
-        console.log(`[DB] enterprise_intakes: added column ${column}`);
-      }
-    }
+    // sync() creates a missing table but never adds a column to an existing one, and each
+    // phase of the intake adds columns. Additive only: nothing is altered or dropped.
+    const { addMissingColumns } = await import('./models/addMissingColumns');
+    const added = await addMissingColumns(EnterpriseIntake, EnterpriseIntake.sequelize!.getQueryInterface());
+    if (added.length) console.log(`[DB] enterprise_intakes: added columns ${added.join(', ')}`);
     console.log('[DB] EnterpriseIntake schema ensured');
   } catch (err: any) {
     console.warn('[DB] EnterpriseIntake schema ensure failed:', err.message?.split('\n')[0]);

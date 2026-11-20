@@ -8,6 +8,7 @@ const mockBcGetAll = jest.fn();
 const mockBcPost = jest.fn();
 const mockFindByPk = jest.fn();
 const mockFindAll = jest.fn();
+const mockStaticUpdate = jest.fn();
 const mockRecordFind = jest.fn();
 
 jest.mock('../../../config/env', () => ({ env: mockEnv }));
@@ -18,7 +19,11 @@ jest.mock('../../ops/basecampClient', () => ({
 }));
 jest.mock('../../../models/EnterpriseIntake', () => ({
   __esModule: true,
-  default: { findByPk: (...a: any[]) => mockFindByPk(...a), findAll: (...a: any[]) => mockFindAll(...a) },
+  default: {
+    findByPk: (...a: any[]) => mockFindByPk(...a),
+    findAll: (...a: any[]) => mockFindAll(...a),
+    update: (...a: any[]) => mockStaticUpdate(...a),
+  },
 }));
 jest.mock('../../../models/ProjectUnderstandingRecord', () => ({
   __esModule: true,
@@ -68,6 +73,8 @@ function row(over: Record<string, unknown> = {}) {
     interviewed_via: null,
     transcript: null,
     bc_writeup_posted_at: null,
+    bc_checklist_ready_at: null,
+    bc_interview_ticked_at: null,
     createdAt: FORM_DAY,
     ...over,
   };
@@ -129,8 +136,12 @@ describe('Basecamp text', () => {
   });
 });
 
+
+const ALL_TITLES = CHECKLIST.map((s) => checklistTitle(s));
+const LIST_TODOS = '/buckets/49670056/todolists/101/todos.json';
+
 describe('the form opens the client list', () => {
-  it('creates one list in the Intake project, saves its id first, then the dated checklist, all owned by Ali', async () => {
+  it('creates one list, saves its id first, then the dated checklist, all owned by Ali', async () => {
     const intake = row();
     mockFindByPk.mockResolvedValue(intake);
     expect(await openClientList('i-1')).toBe('opened');
@@ -142,23 +153,48 @@ describe('the form opens the client list', () => {
     // Saved before any to-do is created, so a half-done run can never open a second list.
     expect(intake.update.mock.invocationCallOrder[0]).toBeLessThan(mockBcPost.mock.invocationCallOrder[1]);
 
-    const todos = mockBcPost.mock.calls.filter(([u]) => u === '/buckets/49670056/todolists/101/todos.json').map(([, b]) => b);
-    expect(todos).toHaveLength(CHECKLIST.length);
+    const todos = mockBcPost.mock.calls.filter(([u]) => u === LIST_TODOS).map(([, b]) => b);
+    expect(todos.map((t) => t.content)).toEqual(ALL_TITLES);
     for (const t of todos) {
       expect(t.assignee_ids).toEqual([17454835]);
       expect(t.due_on).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       expect(t.notify).toBe(false);
     }
     expect(todos[0]).toMatchObject({ content: 'AI: Form answers and lead link on this list', due_on: '2026-11-20' });
-    // The form step is ticked at once; nothing else is.
     const done = mockBcPost.mock.calls.filter(([u]) => /completion\.json$/.test(u));
     expect(done).toEqual([['/buckets/49670056/todos/102/completion.json', {}]]);
+    expect(intake.update).toHaveBeenLastCalledWith({ bc_checklist_ready_at: expect.any(Date) });
   });
 
-  it('never opens a second list', async () => {
-    mockFindByPk.mockResolvedValue(row({ bc_todolist_id: '999' }));
+  it('repairs a half-built checklist: adds only the missing steps, never a second list', async () => {
+    const intake = row({ bc_todolist_id: '101' });
+    mockFindByPk.mockResolvedValue(intake);
+    mockBcGetAll.mockImplementation(async (url: string) =>
+      url.endsWith('?completed=true')
+        ? [{ id: 1, content: ALL_TITLES[0] }]
+        : [{ id: 2, content: ALL_TITLES[1] }, { id: 3, content: ALL_TITLES[2] }],
+    );
+    expect(await openClientList('i-1')).toBe('repaired');
+    expect(mockBcPost.mock.calls.some(([u]) => u.endsWith('todolists.json'))).toBe(false);
+    const made = mockBcPost.mock.calls.filter(([u]) => u === LIST_TODOS).map(([, b]) => b.content);
+    expect(made).toEqual(ALL_TITLES.slice(3));
+    // The form step was already ticked; it is not ticked again.
+    expect(mockBcPost.mock.calls.some(([u]) => /completion\.json$/.test(u))).toBe(false);
+    expect(intake.update).toHaveBeenCalledWith({ bc_checklist_ready_at: expect.any(Date) });
+  });
+
+  it('leaves a complete list alone', async () => {
+    mockFindByPk.mockResolvedValue(row({ bc_todolist_id: '999', bc_checklist_ready_at: new Date() }));
     expect(await openClientList('i-1')).toBe('exists');
     expect(mockBcPost).not.toHaveBeenCalled();
+  });
+
+  it('two overlapping opens for one client create one list', async () => {
+    const intake = row();
+    mockFindByPk.mockResolvedValue(intake);
+    const [a, b] = await Promise.all([openClientList('i-1'), openClientList('i-1')]);
+    expect([a, b].sort()).toEqual(['busy', 'opened']);
+    expect(mockBcPost.mock.calls.filter(([u]) => u.endsWith('todolists.json'))).toHaveLength(1);
   });
 
   it('does nothing until the project is configured', async () => {
@@ -169,49 +205,94 @@ describe('the form opens the client list', () => {
 });
 
 describe('the interview lands on the list', () => {
-  const interviewed = () =>
-    row({ status: 'interviewed', bc_todolist_id: '101', understanding_id: 'u-1', interviewed_via: 'chat', transcript: 'AI: Hi\nThem: Hello' });
+  const interviewed = (over: Record<string, unknown> = {}) =>
+    row({
+      status: 'interviewed',
+      bc_todolist_id: '101',
+      bc_checklist_ready_at: new Date(),
+      understanding_id: 'u-1',
+      interviewed_via: 'chat',
+      transcript: 'AI: Hi\nThem: Hello',
+      ...over,
+    });
 
-  it('posts the write-up and transcript as a comment, then ticks the interview to-do', async () => {
+  beforeEach(() => {
+    mockRecordFind.mockResolvedValue({ items: [{ dimension: 'systems', value: 'McLeod TMS.' }] });
+    mockBcGetAll.mockImplementation(async (url: string) =>
+      url.endsWith('?completed=true') ? [] : [{ id: 302, content: ALL_TITLES[1] }],
+    );
+    mockStaticUpdate.mockResolvedValue([1]);
+  });
+
+  it('claims the post, posts the write-up and transcript, then ticks the interview to-do', async () => {
     const intake = interviewed();
     mockFindByPk.mockResolvedValue(intake);
-    mockRecordFind.mockResolvedValue({ items: [{ dimension: 'systems', value: 'McLeod TMS.' }] });
-    mockBcGetAll.mockResolvedValue([
-      { id: 301, content: 'AI: Company research brief (site, size, news, systems)' },
-      { id: 302, content: 'AI: AI interview done: write-up and transcript on this list' },
-    ]);
     expect(await postInterviewToList('i-1')).toBe('posted');
+    expect(mockStaticUpdate).toHaveBeenCalledWith(
+      { bc_writeup_posted_at: expect.any(Date) },
+      { where: { id: 'i-1', bc_writeup_posted_at: null } },
+    );
     const [url, body] = mockBcPost.mock.calls[0];
     expect(url).toBe('/buckets/49670056/recordings/101/comments.json');
     expect(body.content).toContain('AI interview done (typed).');
     expect(body.content).toContain('<li>McLeod TMS.</li>');
     expect(body.content).toContain('<div>Them: Hello</div>');
-    expect(intake.update).toHaveBeenCalledWith(expect.objectContaining({ bc_writeup_posted_at: expect.any(Date) }));
     expect(mockBcPost).toHaveBeenLastCalledWith('/buckets/49670056/todos/302/completion.json', {});
+    expect(intake.update).toHaveBeenCalledWith({ bc_interview_ticked_at: expect.any(Date) });
   });
 
-  it('posts once only', async () => {
-    mockFindByPk.mockResolvedValue({ ...interviewed(), bc_writeup_posted_at: new Date() });
+  it('posts at most once when two callers arrive together (in process)', async () => {
+    mockFindByPk.mockImplementation(async () => interviewed());
+    const results = await Promise.all([postInterviewToList('i-1'), postInterviewToList('i-1')]);
+    expect(results.sort()).toEqual(['busy', 'posted']);
+    expect(mockBcPost.mock.calls.filter(([u]) => u.endsWith('comments.json'))).toHaveLength(1);
+  });
+
+  it('posts nothing when another process already holds the claim, but still ticks', async () => {
+    mockFindByPk.mockResolvedValue(interviewed());
+    mockStaticUpdate.mockResolvedValue([0]);
+    expect(await postInterviewToList('i-1')).toBe('ticked');
+    expect(mockBcPost.mock.calls.some(([u]) => u.endsWith('comments.json'))).toBe(false);
+  });
+
+  it('releases the claim when Basecamp refuses the comment, so the sweep can try again', async () => {
+    mockFindByPk.mockResolvedValue(interviewed());
+    mockBcPost.mockRejectedValueOnce(new Error('BC POST -> 503'));
+    await expect(postInterviewToList('i-1')).rejects.toThrow('503');
+    expect(mockStaticUpdate).toHaveBeenLastCalledWith({ bc_writeup_posted_at: null }, { where: { id: 'i-1' } });
+  });
+
+  it('keeps the tick open for the sweep when the interview to-do is not on the list yet', async () => {
+    const intake = interviewed({ bc_writeup_posted_at: new Date() });
+    mockFindByPk.mockResolvedValue(intake);
+    mockBcGetAll.mockResolvedValue([]);
+    expect(await postInterviewToList('i-1')).toBe('not_ready');
+    expect(intake.update).not.toHaveBeenCalled();
+  });
+
+  it('does nothing once posted and ticked', async () => {
+    mockFindByPk.mockResolvedValue(interviewed({ bc_writeup_posted_at: new Date(), bc_interview_ticked_at: new Date() }));
     expect(await postInterviewToList('i-1')).toBe('done');
     expect(mockBcPost).not.toHaveBeenCalled();
   });
 
-  it('waits when the list is not open yet, so the sweep can post it later', async () => {
-    mockFindByPk.mockResolvedValue({ ...interviewed(), bc_todolist_id: null });
+  it('waits for a complete list', async () => {
+    mockFindByPk.mockResolvedValue(interviewed({ bc_checklist_ready_at: null }));
     expect(await postInterviewToList('i-1')).toBe('not_ready');
     expect(mockBcPost).not.toHaveBeenCalled();
   });
 });
 
 describe('the sweep', () => {
-  it('opens missed lists and posts waiting interviews, and one failure does not stop the rest', async () => {
+  it('finishes lists and posts waiting interviews, and one failure does not stop the rest', async () => {
     const a = row({ id: 'a' });
     const b = row({ id: 'b' });
-    const c = row({ id: 'c', status: 'interviewed', bc_todolist_id: '101', understanding_id: 'u-1' });
+    const c = row({ id: 'c', status: 'interviewed', bc_todolist_id: '101', bc_checklist_ready_at: new Date(), understanding_id: 'u-1' });
     mockFindAll.mockResolvedValueOnce([a, b]).mockResolvedValueOnce([c]);
     mockFindByPk.mockImplementation(async (id: string) => ({ a, b, c } as any)[id]);
     mockRecordFind.mockResolvedValue({ items: [] });
-    mockBcGetAll.mockResolvedValue([]);
+    mockStaticUpdate.mockResolvedValue([1]);
+    mockBcGetAll.mockImplementation(async (url: string) => (url.endsWith('?completed=true') ? [] : [{ id: 302, content: ALL_TITLES[1] }]));
     let first = true;
     mockBcPost.mockImplementation(async (url: string) => {
       if (url.endsWith('todolists.json') && first) {

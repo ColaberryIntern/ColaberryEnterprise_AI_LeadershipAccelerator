@@ -126,48 +126,116 @@ const log = (event: string, outcome: string, context: Record<string, unknown>, e
   (outcome === 'failure' ? console.error : console.log)(JSON.stringify(line));
 };
 
-/** In-process guard so the form's own call and the sweep never open two lists for one client. */
+/**
+ * In-process guard. The request path and the sweep run in the same backend process, so this
+ * stops them working on the same client at the same moment. The column claims below are the
+ * second line: they hold across processes too.
+ */
 const inFlight = new Set<string>();
 
-/**
- * Open the client's list, once. Safe to call repeatedly: a row that already has a list is left
- * alone. The list id is saved before the to-dos are added, so a failure halfway can never lead
- * to a second list for the same client.
- */
-export async function openClientList(intakeId: string): Promise<'opened' | 'exists' | 'off' | 'missing' | 'busy'> {
-  if (!intakeBasecampEnabled()) return 'off';
-  if (inFlight.has(intakeId)) return 'busy';
-  inFlight.add(intakeId);
+async function exclusive<T>(key: string, busy: T, fn: () => Promise<T>): Promise<T> {
+  if (inFlight.has(key)) return busy;
+  inFlight.add(key);
   try {
+    return await fn();
+  } finally {
+    inFlight.delete(key);
+  }
+}
+
+type ClaimColumn = 'bc_writeup_posted_at';
+
+/**
+ * Claim a once-only step: set its timestamp only where it is still null. Exactly one caller
+ * gets `true`, however many arrive together. At most once, on purpose: a duplicate comment on a
+ * client's list is worse than a retry, so a failure releases the claim and the sweep tries again.
+ */
+async function claim(intakeId: string, column: ClaimColumn): Promise<boolean> {
+  const [n] = await EnterpriseIntake.update({ [column]: new Date() } as Partial<EnterpriseIntake>, {
+    where: { id: intakeId, [column]: null } as Record<string, unknown>,
+  });
+  return n === 1;
+}
+
+async function release(intakeId: string, column: ClaimColumn): Promise<void> {
+  await EnterpriseIntake.update({ [column]: null } as Partial<EnterpriseIntake>, { where: { id: intakeId } });
+}
+
+interface ListTodo { id: number; content: string; completed: boolean }
+
+/** Every to-do on the list, open and done. Basecamp lists the two separately. */
+export async function listTodos(project: string, listId: string): Promise<ListTodo[]> {
+  const path = `/buckets/${project}/todolists/${listId}/todos.json`;
+  const open = await bcGetAll<{ id: number; content: string }>(path);
+  const done = await bcGetAll<{ id: number; content: string }>(`${path}?completed=true`);
+  return [...open.map((t) => ({ ...t, completed: false })), ...done.map((t) => ({ ...t, completed: true }))];
+}
+
+/**
+ * Tick one checklist step. True once the step is done (now or before); false when the step is
+ * not on the list yet (the checklist is still being built), so the caller can try again later.
+ */
+export async function tickStep(project: string, listId: string, key: string): Promise<boolean> {
+  const step = CHECKLIST.find((s) => s.key === key);
+  if (!step) throw new Error(`unknown checklist step ${key}`);
+  const todo = (await listTodos(project, listId)).find((t) => t.content === checklistTitle(step));
+  if (!todo) return false;
+  if (!todo.completed) await bcPost(`/buckets/${project}/todos/${todo.id}/completion.json`, {});
+  return true;
+}
+
+/**
+ * Open the client's list and make sure its whole checklist is on it. Safe to call again and
+ * again: the list is created once (its id is saved before anything else), and every later call
+ * adds only the steps that are missing, so a run that failed halfway is finished by the next.
+ * `bc_checklist_ready_at` marks a list that is complete.
+ */
+export async function openClientList(
+  intakeId: string,
+): Promise<'opened' | 'repaired' | 'exists' | 'off' | 'missing' | 'busy'> {
+  if (!intakeBasecampEnabled()) return 'off';
+  return exclusive(`list:${intakeId}`, 'busy' as const, async () => {
     const intake = await EnterpriseIntake.findByPk(intakeId);
     if (!intake) return 'missing';
-    if (intake.bc_todolist_id) return 'exists';
+    if (intake.bc_todolist_id && intake.bc_checklist_ready_at) return 'exists';
 
     const project = env.enterpriseIntakeBcProjectId;
-    const ts = await todosetId(project);
-    const list = await bcPost<{ id: number; app_url: string }>(`/buckets/${project}/todosets/${ts}/todolists.json`, {
-      name: listName(intake),
-      description: listDescription(intake),
-    });
-    await intake.update({ bc_todolist_id: String(list.id) });
+    let created = false;
+    if (!intake.bc_todolist_id) {
+      const ts = await todosetId(project);
+      const list = await bcPost<{ id: number }>(`/buckets/${project}/todosets/${ts}/todolists.json`, {
+        name: listName(intake),
+        description: listDescription(intake),
+      });
+      await intake.update({ bc_todolist_id: String(list.id) });
+      created = true;
+    }
+    const listId = intake.bc_todolist_id as string;
 
+    const have = created ? [] : await listTodos(project, listId);
     const opened = intake.createdAt || new Date();
     const owner = Number(env.enterpriseIntakeBcOwnerId);
     for (const step of CHECKLIST) {
-      const todo = await bcPost<{ id: number }>(`/buckets/${project}/todolists/${list.id}/todos.json`, {
-        content: checklistTitle(step),
-        assignee_ids: owner ? [owner] : [],
-        due_on: dueOn(opened, step.days),
-        notify: false,
-      });
+      const existing = have.find((t) => t.content === checklistTitle(step));
+      let id = existing?.id;
+      if (!existing) {
+        const todo = await bcPost<{ id: number }>(`/buckets/${project}/todolists/${listId}/todos.json`, {
+          content: checklistTitle(step),
+          assignee_ids: owner ? [owner] : [],
+          due_on: dueOn(opened, step.days),
+          notify: false,
+        });
+        id = todo.id;
+      }
       // The form step is done the moment the list exists: the answers are its description.
-      if (step.key === 'form') await bcPost(`/buckets/${project}/todos/${todo.id}/completion.json`, {});
+      if (step.key === 'form' && !existing?.completed) {
+        await bcPost(`/buckets/${project}/todos/${id}/completion.json`, {});
+      }
     }
-    log('enterprise_intake_list_opened', 'success', { intake_id: intake.id, todolist_id: list.id });
-    return 'opened';
-  } finally {
-    inFlight.delete(intakeId);
-  }
+    await intake.update({ bc_checklist_ready_at: new Date() });
+    log('enterprise_intake_list_opened', 'success', { intake_id: intake.id, todolist_id: listId, created });
+    return created ? 'opened' : 'repaired';
+  });
 }
 
 /** The write-up, grouped the way the extractor files it, as Basecamp rich text. */
@@ -193,35 +261,50 @@ export function transcriptHtml(transcript: string | null): string {
 }
 
 /**
- * Post the interview's write-up and transcript on the client's list, then tick the interview
- * to-do. Runs once per intake: `bc_writeup_posted_at` is set only after the comment lands.
+ * Post the interview's write-up and transcript on the client's list (once, by claim), then tick
+ * the interview to-do (retried until it lands, recorded in `bc_interview_ticked_at`).
  */
-export async function postInterviewToList(intakeId: string): Promise<'posted' | 'off' | 'missing' | 'not_ready' | 'done'> {
+export async function postInterviewToList(
+  intakeId: string,
+): Promise<'posted' | 'ticked' | 'off' | 'missing' | 'not_ready' | 'done' | 'busy'> {
   if (!intakeBasecampEnabled()) return 'off';
-  const intake = await EnterpriseIntake.findByPk(intakeId);
-  if (!intake) return 'missing';
-  if (intake.bc_writeup_posted_at) return 'done';
-  if (!intake.bc_todolist_id || intake.status === 'form' || !intake.understanding_id) return 'not_ready';
+  return exclusive(`interview:${intakeId}`, 'busy' as const, async () => {
+    const intake = await EnterpriseIntake.findByPk(intakeId);
+    if (!intake) return 'missing';
+    if (intake.bc_writeup_posted_at && intake.bc_interview_ticked_at) return 'done';
+    if (!intake.bc_todolist_id || !intake.bc_checklist_ready_at || !intake.understanding_id) return 'not_ready';
 
-  const project = env.enterpriseIntakeBcProjectId;
-  const record = await ProjectUnderstandingRecord.findByPk(intake.understanding_id);
-  const items = ((record?.items as any[]) || []).map((x) => ({ dimension: x.dimension, value: x.value }));
-  const via = intake.interviewed_via === 'call' ? 'by phone' : 'typed';
-  const content = [
-    `<div><strong>AI interview done (${via}).</strong> ${items.length} facts in the write-up.</div><br>`,
-    writeupHtml(items),
-    '<br><div><strong>Transcript</strong></div>',
-    transcriptHtml(intake.transcript),
-  ].join('');
-  await bcPost(`/buckets/${project}/recordings/${intake.bc_todolist_id}/comments.json`, { content });
-  await intake.update({ bc_writeup_posted_at: new Date() });
+    const project = env.enterpriseIntakeBcProjectId;
+    let posted = false;
+    if (!intake.bc_writeup_posted_at && (await claim(intake.id, 'bc_writeup_posted_at'))) {
+      try {
+        const record = await ProjectUnderstandingRecord.findByPk(intake.understanding_id);
+        const items = ((record?.items as Array<{ dimension: string; value: string }>) || []).map((x) => ({
+          dimension: x.dimension,
+          value: x.value,
+        }));
+        const via = intake.interviewed_via === 'call' ? 'by phone' : 'typed';
+        const content = [
+          `<div><strong>AI interview done (${via}).</strong> ${items.length} facts in the write-up.</div><br>`,
+          writeupHtml(items),
+          '<br><div><strong>Transcript</strong></div>',
+          transcriptHtml(intake.transcript),
+        ].join('');
+        await bcPost(`/buckets/${project}/recordings/${intake.bc_todolist_id}/comments.json`, { content });
+        posted = true;
+        log('enterprise_intake_interview_posted', 'success', { intake_id: intake.id, facts: items.length });
+      } catch (err) {
+        await release(intake.id, 'bc_writeup_posted_at');
+        throw err;
+      }
+    }
 
-  const interviewTitle = checklistTitle(CHECKLIST.find((s) => s.key === 'interview')!);
-  const todos = await bcGetAll<{ id: number; content: string }>(`/buckets/${project}/todolists/${intake.bc_todolist_id}/todos.json`);
-  const todo = todos.find((t) => t.content === interviewTitle);
-  if (todo) await bcPost(`/buckets/${project}/todos/${todo.id}/completion.json`, {});
-  log('enterprise_intake_interview_posted', 'success', { intake_id: intake.id, facts: items.length });
-  return 'posted';
+    if (!intake.bc_interview_ticked_at && (await tickStep(project, intake.bc_todolist_id, 'interview'))) {
+      await intake.update({ bc_interview_ticked_at: new Date() });
+      return posted ? 'posted' : 'ticked';
+    }
+    return posted ? 'posted' : 'not_ready';
+  });
 }
 
 /** Fire-and-forget wrappers for the request path: log, never throw. */
@@ -234,22 +317,24 @@ export function postInterviewSoon(intakeId: string): void {
 }
 
 /**
- * The sweep: open any list the form's own attempt missed, and post any interview still waiting.
- * Only rows older than a minute, so it never races the request path. Bounded per run.
+ * The sweep: finish any list the form's own attempt missed or left half-built, and post or tick
+ * any interview still waiting. Only rows older than a minute, so it rarely meets the request
+ * path, and the guards above make it harmless when it does. Bounded per run.
  */
 export async function syncEnterpriseIntakesToBasecamp(limit = 20): Promise<{ opened: number; posted: number; failed: number }> {
   const out = { opened: 0, posted: 0, failed: 0 };
   if (!intakeBasecampEnabled()) return out;
   const before = new Date(Date.now() - 60_000);
 
-  const unopened = await EnterpriseIntake.findAll({
-    where: { bc_todolist_id: null, created_at: { [Op.lt]: before } } as any,
+  const unready = await EnterpriseIntake.findAll({
+    where: { bc_checklist_ready_at: null, created_at: { [Op.lt]: before } } as Record<string, unknown>,
     order: [['created_at', 'ASC']],
     limit,
   });
-  for (const i of unopened) {
+  for (const i of unready) {
     try {
-      if ((await openClientList(i.id)) === 'opened') out.opened += 1;
+      const r = await openClientList(i.id);
+      if (r === 'opened' || r === 'repaired') out.opened += 1;
     } catch (err) {
       out.failed += 1;
       log('enterprise_intake_list_failed', 'failure', { intake_id: i.id, via: 'sweep' }, err);
@@ -258,17 +343,18 @@ export async function syncEnterpriseIntakesToBasecamp(limit = 20): Promise<{ ope
 
   const waiting = await EnterpriseIntake.findAll({
     where: {
-      bc_todolist_id: { [Op.ne]: null },
-      bc_writeup_posted_at: null,
+      bc_checklist_ready_at: { [Op.ne]: null },
       understanding_id: { [Op.ne]: null },
       interviewed_at: { [Op.lt]: before },
-    } as any,
+      [Op.or]: [{ bc_writeup_posted_at: null }, { bc_interview_ticked_at: null }],
+    } as Record<string | symbol, unknown>,
     order: [['interviewed_at', 'ASC']],
     limit,
   });
   for (const i of waiting) {
     try {
-      if ((await postInterviewToList(i.id)) === 'posted') out.posted += 1;
+      const r = await postInterviewToList(i.id);
+      if (r === 'posted' || r === 'ticked') out.posted += 1;
     } catch (err) {
       out.failed += 1;
       log('enterprise_intake_interview_post_failed', 'failure', { intake_id: i.id, via: 'sweep' }, err);

@@ -185,6 +185,15 @@ describe('the typed interview', () => {
     expect(mockPostInterview).toHaveBeenCalledWith(intake.id);
   });
 
+  it('W29: a repeated final turn does not overwrite the interview already recorded', async () => {
+    mockRunTurn.mockResolvedValue({ done: true, message: 'Thanks.', understanding: 'deduplicated', understanding_id: 'u-1' });
+    const intake = intakeRow({ understanding_id: 'u-1', interviewed_at: new Date(), status: 'interviewed' });
+    const out = await runEnterpriseInterviewTurn(intake as any, [{ role: 'user', text: 'again' }]);
+    expect(out).toEqual({ done: true, message: 'Thanks.', understood: true });
+    expect(intake.update).not.toHaveBeenCalled();
+    expect(mockPostInterview).not.toHaveBeenCalled();
+  });
+
   it('W29: posts nothing to Basecamp when there is no write-up', async () => {
     mockRunTurn.mockResolvedValue({ done: true, message: 'Thanks.', understanding: 'failed' });
     await runEnterpriseInterviewTurn(intakeRow() as any, []);
