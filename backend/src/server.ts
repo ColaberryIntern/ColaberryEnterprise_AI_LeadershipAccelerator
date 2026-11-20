@@ -1426,6 +1426,19 @@ async function ensureEnterpriseIntakeSchema() {
   try {
     const { EnterpriseIntake } = await import('./models');
     await EnterpriseIntake.sync();
+    // sync() creates a missing table but never adds a column to an existing one. Each phase
+    // of the intake adds columns (W29: transcript, bc_writeup_posted_at), so add whatever the
+    // model has and the table lacks. Additive only: nothing is altered or dropped.
+    const qi = EnterpriseIntake.sequelize!.getQueryInterface();
+    const table = EnterpriseIntake.getTableName() as string;
+    const existing = await qi.describeTable(table);
+    for (const attr of Object.values(EnterpriseIntake.getAttributes()) as any[]) {
+      const column = attr.field || attr.fieldName;
+      if (!existing[column]) {
+        await qi.addColumn(table, column, { type: attr.type, allowNull: true });
+        console.log(`[DB] enterprise_intakes: added column ${column}`);
+      }
+    }
     console.log('[DB] EnterpriseIntake schema ensured');
   } catch (err: any) {
     console.warn('[DB] EnterpriseIntake schema ensure failed:', err.message?.split('\n')[0]);
@@ -3945,6 +3958,16 @@ async function start(): Promise<void> {
       .then(({ reconcileOpenFlotationCalls }) => reconcileOpenFlotationCalls())
       .then((out) => { if (out.reconciled.length) console.log(`[FlotationCalls] sweep completed ${out.reconciled.length} of ${out.checked} open call(s)`); })
       .catch((err) => console.warn('[FlotationCalls] sweep failed:', err?.message));
+  });
+
+  // W29: Enterprise client lists in Basecamp. The form and the interview write to the list
+  // straight away; this retries whatever Basecamp missed. A no-op until
+  // BASECAMP_ENTERPRISE_INTAKE_PROJECT_ID is set.
+  cron.schedule('*/5 * * * *', () => {
+    import('./services/enterpriseIntake/enterpriseIntakeBasecamp')
+      .then(({ syncEnterpriseIntakesToBasecamp }) => syncEnterpriseIntakesToBasecamp())
+      .then((out) => { if (out.opened || out.posted || out.failed) console.log(`[EnterpriseIntake] Basecamp sweep: ${out.opened} opened, ${out.posted} posted, ${out.failed} failed`); })
+      .catch((err) => console.warn('[EnterpriseIntake] Basecamp sweep failed:', err?.message));
   });
 
   // Start follow-up email scheduler if enabled

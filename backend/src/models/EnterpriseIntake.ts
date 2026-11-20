@@ -49,6 +49,10 @@ export interface EnterpriseIntakeAttributes {
   interviewed_at: Date | null;
   /** Phase 2: the client's to-do list in the Basecamp "Colaberry Enterprise Intake" project. */
   bc_todolist_id: string | null;
+  /** Phase 2: the interview as text (typed turns, or the call transcript), for the client's list. */
+  transcript: string | null;
+  /** Phase 2: when the write-up and transcript were posted on the list. Null = still to post. */
+  bc_writeup_posted_at: Date | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -78,6 +82,8 @@ class EnterpriseIntake extends Model<EnterpriseIntakeAttributes> implements Ente
   declare interviewed_via: 'chat' | 'call' | null;
   declare interviewed_at: Date | null;
   declare bc_todolist_id: string | null;
+  declare transcript: string | null;
+  declare bc_writeup_posted_at: Date | null;
   declare createdAt: Date;
   declare updatedAt: Date;
 }
@@ -108,6 +114,8 @@ EnterpriseIntake.init(
     interviewed_via: { type: DataTypes.STRING(10), allowNull: true },
     interviewed_at: { type: DataTypes.DATE, allowNull: true },
     bc_todolist_id: { type: DataTypes.STRING(32), allowNull: true },
+    transcript: { type: DataTypes.TEXT, allowNull: true },
+    bc_writeup_posted_at: { type: DataTypes.DATE, allowNull: true },
   },
   {
     sequelize,

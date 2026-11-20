@@ -120,7 +120,7 @@ export async function completeFlotationCall(input: CallCompletionInput): Promise
   if (enterprise) {
     // Lazy, so this module does not load the intake service and its model at import time.
     const { recordEnterpriseCallOutcome } = await import('../enterpriseIntake/enterpriseIntakeService');
-    await recordEnterpriseCallOutcome(input.callId, intake);
+    await recordEnterpriseCallOutcome(input.callId, intake, input.transcript || null);
   }
 
   return { handled: true, completed: true, intake };

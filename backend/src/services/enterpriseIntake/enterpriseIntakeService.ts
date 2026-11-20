@@ -29,6 +29,7 @@ import type { IntakeOutcome } from '../delivery/projectIntake';
 import { requestInstantCallback } from '../callbackRequestService';
 import { env } from '../../config/env';
 import { ENTERPRISE_INTAKE_SOURCE } from './enterpriseIntakeSource';
+import { openClientListSoon, postInterviewSoon } from './enterpriseIntakeBasecamp';
 
 export const FORM_TYPE = 'demo_pilot_request';
 
@@ -183,7 +184,12 @@ export async function createEnterpriseIntake(
     interviewed_via: null,
     interviewed_at: null,
     bc_todolist_id: null,
+    transcript: null,
+    bc_writeup_posted_at: null,
   });
+
+  // W29: the client's Basecamp list. After the response is decided, never in its way.
+  openClientListSoon(intake.id);
 
   return { token: intake.id, callAvailable: voiceConfigured() && callable(intake) };
 }
@@ -202,7 +208,8 @@ export async function runEnterpriseInterviewTurn(
   intake: EnterpriseIntake,
   rawTurns: unknown,
 ): Promise<EnterpriseTurnResult> {
-  const turns = [{ role: 'user' as const, text: writtenBrief(intake) }, ...boundTurns(rawTurns)];
+  const spoken = boundTurns(rawTurns);
+  const turns = [{ role: 'user' as const, text: writtenBrief(intake) }, ...spoken];
   const result = await runIntakeTurn({
     turns,
     facts: factsOf(intake),
@@ -212,7 +219,10 @@ export async function runEnterpriseInterviewTurn(
   });
   if (!result.done) return { done: false, message: result.message, exchanges: result.exchanges };
 
-  const understood = await recordInterviewed(intake, result, 'chat');
+  const transcript = [...spoken, { role: 'assistant' as const, text: result.message }]
+    .map((t) => `${t.role === 'assistant' ? 'AI' : 'Them'}: ${t.text}`)
+    .join('\n');
+  const understood = await recordInterviewed(intake, result, 'chat', transcript);
   return { done: true, message: result.message, understood };
 }
 
@@ -220,6 +230,7 @@ async function recordInterviewed(
   intake: EnterpriseIntake,
   outcome: IntakeOutcome,
   via: 'chat' | 'call',
+  transcript: string | null = null,
 ): Promise<boolean> {
   const ok = (outcome.understanding === 'created' || outcome.understanding === 'deduplicated') && !!outcome.understanding_id;
   if (ok) {
@@ -228,15 +239,22 @@ async function recordInterviewed(
       understanding_id: outcome.understanding_id!,
       interviewed_via: via,
       interviewed_at: new Date(),
+      transcript: transcript ? transcript.slice(0, 100000) : null,
     });
+    // W29: the write-up and transcript go on the client's Basecamp list.
+    postInterviewSoon(intake.id);
   }
   return ok;
 }
 
 /** Called by the shared call completion once an Enterprise intake call has a write-up. */
-export async function recordEnterpriseCallOutcome(callId: string, outcome: IntakeOutcome): Promise<void> {
+export async function recordEnterpriseCallOutcome(
+  callId: string,
+  outcome: IntakeOutcome,
+  transcript: string | null = null,
+): Promise<void> {
   const intake = await EnterpriseIntake.findOne({ where: { call_id: callId } });
-  if (intake) await recordInterviewed(intake, outcome, 'call');
+  if (intake) await recordInterviewed(intake, outcome, 'call', transcript);
 }
 
 export type CallRequestResult =
