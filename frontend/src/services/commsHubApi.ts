@@ -120,3 +120,73 @@ export function apiErrorMessage(err: unknown, fallback: string): string {
   const msg = (err as { response?: { data?: { error?: unknown } } })?.response?.data?.error;
   return typeof msg === 'string' && msg.length > 0 && msg.length < 400 ? msg : fallback;
 }
+
+/** The instance defaults to JSON; axios fills in the multipart boundary when told the body is a form. */
+const MULTIPART = { headers: { 'Content-Type': 'multipart/form-data' } };
+
+/* Event pictures (CH4.1: backend/src/routes/admin/commsHubPhotoRoutes.ts). */
+export interface HubPhoto { id: string; media_asset_id: string; alt_text: string | null; width: number | null; height: number | null; url: string | null }
+
+export async function listEventPhotos(eventId: string): Promise<HubPhoto[]> {
+  const { data } = await api.get<{ photos: HubPhoto[] }>(`/api/admin/comms-hub/events/${eventId}/photos`);
+  return data.photos;
+}
+export async function addEventPhoto(eventId: string, file: File, altText: string): Promise<HubPhoto[]> {
+  const form = new FormData();
+  form.append('alt_text', altText);
+  form.append('file', file);
+  const { data } = await api.post<{ photos: HubPhoto[] }>(`/api/admin/comms-hub/events/${eventId}/photos`, form, MULTIPART);
+  return data.photos;
+}
+export async function removeEventPhoto(eventId: string, photoId: string): Promise<HubPhoto[]> {
+  const { data } = await api.delete<{ photos: HubPhoto[] }>(`/api/admin/comms-hub/events/${eventId}/photos/${photoId}`);
+  return data.photos;
+}
+
+/* Thumbnail studio (CH4.4: backend/src/routes/admin/commsHubThumbnailRoutes.ts). */
+export type ThumbSize = '16x9' | '1x1' | '3x1';
+export type TemplateStyle = 'bold_cherry' | 'berry_night' | 'clean_white';
+export type AiStyle = 'A_dark_tech' | 'B_staged_headshot' | 'C_open_house' | 'D_weekly_live' | 'E_infographic';
+export type StudioStyle = 'templates' | TemplateStyle | AiStyle;
+export interface ThumbOption {
+  id: string; source: 'template' | 'upload' | 'ai'; style: string | null; style_label: string;
+  prompt: string | null; headline: string | null; supporting: string | null; show_when: boolean;
+  cost_usd: number | null; created_at: string; chosen: boolean; cropped: ThumbSize[];
+  previews: Record<ThumbSize, string | null>;
+}
+export interface StudioView { options: ThumbOption[]; chosen_id: string | null; ai: { enabled: boolean; used_today: number; daily_limit: number; batch: number } }
+export interface ThumbJob { id: string; event_id: string; kind: 'ai' | 'template'; status: 'running' | 'done' | 'failed'; option_ids: string[]; notice: string | null; error: string | null }
+
+const studio = (eventId: string): string => `/api/admin/comms-hub/events/${eventId}/thumbnails`;
+
+export async function listThumbnails(eventId: string): Promise<StudioView> {
+  const { data } = await api.get<StudioView>(studio(eventId));
+  return data;
+}
+export async function generateThumbnails(eventId: string, input: { style: StudioStyle; headline: string; supporting: string | null; show_when: boolean }): Promise<ThumbJob> {
+  const { data } = await api.post<{ job: ThumbJob }>(`${studio(eventId)}/generate`, input);
+  return data.job;
+}
+export async function getThumbnailJob(eventId: string, jobId: string): Promise<ThumbJob> {
+  const { data } = await api.get<{ job: ThumbJob }>(`${studio(eventId)}/jobs/${jobId}`);
+  return data.job;
+}
+export async function changeThumbnail(eventId: string, thumbId: string, request: string): Promise<{ job: ThumbJob; summary: string }> {
+  const { data } = await api.post<{ job: ThumbJob; summary: string }>(`${studio(eventId)}/${thumbId}/change`, { request });
+  return data;
+}
+export async function chooseThumbnail(eventId: string, thumbId: string): Promise<string> {
+  const { data } = await api.post<{ thumbnail_id: string }>(`${studio(eventId)}/${thumbId}/use`);
+  return data.thumbnail_id;
+}
+export async function downloadThumbnail(eventId: string, thumbId: string, size: ThumbSize): Promise<Blob> {
+  const { data } = await api.get<Blob>(`${studio(eventId)}/${thumbId}/download`, { params: { size }, responseType: 'blob' });
+  return data;
+}
+export async function uploadThumbnail(eventId: string, file: File, altText: string): Promise<string> {
+  const form = new FormData();
+  form.append('alt_text', altText);
+  form.append('file', file);
+  const { data } = await api.post<{ id: string }>(`${studio(eventId)}/upload`, form, MULTIPART);
+  return data.id;
+}

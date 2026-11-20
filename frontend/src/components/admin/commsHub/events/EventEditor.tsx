@@ -5,11 +5,12 @@ import EventFormFields from './EventFormFields';
 import EventStatusChip from './EventStatusChip';
 import { useEventEditor } from './useEventEditor';
 import { cancelSummary } from './eventDisplay';
+import ThumbnailStudio from './studio/ThumbnailStudio';
 
 /**
  * The event editor (design 02, CH3.2): the form, then Save event, Save as draft, Duplicate and Cancel
- * this event. Cancelling asks first and says what it does. Thumbnail studio (CH4), promotion plan
- * (CH6.4) and the Live panel (CH5.2) join this page in their own tickets.
+ * this event. Cancelling asks first and says what it does. A saved event gets the thumbnail studio
+ * (CH4.4) below the form; the promotion plan (CH6.4) and the Live panel (CH5.2) join in their own tickets.
  */
 interface Props {
   eventId: string | null;
@@ -47,7 +48,7 @@ export default function EventEditor({ eventId, onClose, onSaved }: Props): React
 
   const locked = ed.event?.status === 'cancelled' || ed.event?.status === 'ended';
   const title = ed.event ? 'Event details' : 'New event';
-  return (
+  const details = (
     <SectionCard title={title} icon="calendar-event-line" actions={ed.event ? <EventStatusChip status={ed.event.status} /> : undefined}>
       {back}
       {ed.errors.form && <div className="alert alert-danger" role="alert">{ed.errors.form}</div>}
@@ -71,5 +72,13 @@ export default function EventEditor({ eventId, onClose, onSaved }: Props): React
         <ConfirmCancel what={cancelSummary(ed.event)} busy={ed.busy === 'cancel'} onNo={() => setConfirming(false)} onYes={() => { void ed.act('cancel').then(() => setConfirming(false)); }} />
       )}
     </SectionCard>
+  );
+  if (!ed.event) return details;
+  // Design 02: the event details on the left, the thumbnail studio beside them (stacked on narrow screens).
+  return (
+    <div className="ch-editor-grid">
+      {details}
+      <ThumbnailStudio key={ed.event.id} event={ed.event} locked={locked} />
+    </div>
   );
 }

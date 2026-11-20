@@ -49,6 +49,13 @@ describe('CH2.3 a hub card on the member Events page', () => {
     expect(links().some((t) => t.startsWith('Sign up'))).toBe(false);
   });
 
+  it('CH4.4 a chosen thumbnail: the card shows it from the public thumbnail route', async () => {
+    await renderWith([hubCard({ image_url: '/api/comms-hub/thumbnails/44444444-4444-4444-8444-444444444444/16x9.png?v=t7' })]);
+    const img = container.querySelector('.evt-thumb img') as HTMLImageElement;
+    expect(img.getAttribute('src')).toBe('/api/comms-hub/thumbnails/44444444-4444-4444-8444-444444444444/16x9.png?v=t7');
+    expect(container.querySelector('.evt-thumb-fallback')).toBeNull();
+  });
+
   it('with a registration link and not live: Sign up opens the Eventbrite page', async () => {
     await renderWith([hubCard({ registration_url: 'https://www.eventbrite.com/e/1992498063344' })]);
     const signUp = Array.from(container.querySelectorAll('a')).find((a) => (a.textContent ?? '').trim().startsWith('Sign up'));

@@ -11,6 +11,8 @@ jest.mock('../../../../../services/commsHubApi', () => ({
   ...jest.requireActual('../../../../../services/commsHubApi'),
   listHubEvents: jest.fn(), getHubEvent: jest.fn(), listHubCohorts: jest.fn(), createHubEvent: jest.fn(), updateHubEvent: jest.fn(),
   duplicateHubEvent: jest.fn(), cancelHubEvent: jest.fn(), describeHubEvent: jest.fn(),
+  // CH4.4 the editor now holds the thumbnail studio; its own test covers it.
+  listThumbnails: jest.fn(), listEventPhotos: jest.fn(),
 }));
 
 /** CH3.1 + CH3.2 rendered: the list in training-site shape, the editor, save/duplicate/cancel, Write with AI, a11y. */
@@ -36,6 +38,10 @@ async function renderAt(url: string): Promise<void> {
   await act(async () => { root.render(<MemoryRouter initialEntries={[url]}><Routes><Route path="/admin/comms-hub/events" element={<EventsTab />} /></Routes></MemoryRouter>); });
   await settle();
 }
+beforeEach(() => {
+  (api.listThumbnails as jest.Mock).mockResolvedValue({ options: [], chosen_id: null, ai: { enabled: true, used_today: 0, daily_limit: 12, batch: 3 } });
+  (api.listEventPhotos as jest.Mock).mockResolvedValue([]);
+});
 beforeEach(() => { (api.listHubCohorts as jest.Mock).mockResolvedValue([{ id: '77777777-7777-4777-8777-777777777777', name: 'November 2026', status: 'open', start_date: '2026-11-03' }]); });
 afterEach(() => { act(() => { root.unmount(); }); container.remove(); jest.clearAllMocks(); });
 

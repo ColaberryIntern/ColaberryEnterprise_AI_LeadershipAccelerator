@@ -107,3 +107,53 @@
   .ch-featured { grid-template-columns: 1fr; }
   .ch-featured-pic { min-height: 160px; }
 }
+
+/* CH4.4 thumbnail studio (design 02): its own card beside the event details. Selection is carried by a
+   border and the "Selected" text, not colour alone. */
+.ch-editor-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 1.25rem; align-items: start; }
+.ch-editor-grid > .admin-section-card { margin: 0; }
+.ch-studio-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.25rem; }
+.ch-studio-step { margin-top: 1.25rem; }
+.ch-studio-top .ch-studio-step { margin-top: 0.5rem; }
+.ch-studio-h { font-size: 0.95rem; font-weight: 700; margin: 0 0 0.6rem; }
+.ch-studio-hint { color: var(--neutral-600); font-size: 0.85rem; }
+.ch-studio-photos { display: flex; flex-wrap: wrap; gap: 0.6rem; margin: 0; padding: 0; }
+.ch-studio-photo { position: relative; width: 84px; height: 84px; border-radius: var(--radius-md); overflow: hidden; background: var(--neutral-100); }
+.ch-studio-photo img { width: 100%; height: 100%; object-fit: cover; }
+.ch-studio-photo-remove { position: absolute; top: 4px; right: 4px; width: 28px; height: 28px; border-radius: var(--radius-circle); border: 0; background: var(--neutral-0); color: var(--neutral-900); box-shadow: var(--shadow-sm); display: flex; align-items: center; justify-content: center; padding: 0; }
+.ch-studio-photo-remove:focus-visible { outline: 3px solid var(--blue-500); outline-offset: 1px; }
+.ch-studio-photo-missing { display: block; padding: 0.5rem; font-size: 0.75rem; }
+.ch-studio-add { border: 1.5px dashed var(--neutral-400); background: var(--neutral-0); }
+.ch-studio-add label { display: flex; width: 100%; height: 100%; align-items: center; justify-content: center; font-weight: 700; cursor: pointer; margin: 0; }
+.ch-studio-add:focus-within { outline: 3px solid var(--blue-500); outline-offset: 2px; }
+.ch-studio-add.is-disabled label { cursor: not-allowed; color: var(--neutral-500); }
+.ch-studio-photo-form { margin-top: 0.75rem; }
+.ch-studio-generate { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin-top: 1.25rem; }
+.ch-btn-berry { background: var(--blue-700); border-color: var(--blue-700); color: var(--neutral-0); font-weight: 700; }
+.ch-btn-berry:hover, .ch-btn-berry:focus-visible { background: var(--blue-800); border-color: var(--blue-800); color: var(--neutral-0); }
+.ch-studio-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; border: 0; padding: 0; margin: 0; }
+.ch-studio-option { border-radius: var(--radius-lg); }
+.ch-studio-option label { display: block; cursor: pointer; margin: 0; }
+.ch-studio-option img, .ch-studio-noimg { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius-md); border: 3px solid transparent; }
+.ch-studio-option.is-selected img { border-color: var(--blue-700); }
+.ch-studio-option:focus-within { outline: 3px solid var(--blue-500); outline-offset: 2px; }
+.ch-studio-noimg { display: flex; align-items: center; justify-content: center; background: var(--neutral-100); color: var(--neutral-600); }
+.ch-studio-caption { display: block; padding: 0.4rem 0 0; }
+.ch-studio-selected { color: var(--blue-700); font-weight: 700; }
+.ch-studio-inuse { color: var(--green-700); font-weight: 700; }
+.ch-studio-prompt summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-size: 0.85rem; }
+.ch-studio-preview { margin-top: 0.75rem; max-width: 420px; }
+.ch-studio-preview img { display: block; width: 100%; border-radius: var(--radius-md); }
+.ch-studio-preview.ch-size-1x1 { max-width: 240px; }
+
+@media (max-width: 1199.98px) {
+  .ch-editor-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 575.98px) {
+  .ch-studio-top, .ch-studio-options { grid-template-columns: 1fr; }
+}
+/* Beside the studio the details card is narrow, so its viewport-sized columns become halves and full rows. */
+@media (min-width: 1200px) {
+  .ch-editor-grid > .admin-section-card:first-child .row > .col-md-4 { flex: 0 0 50%; max-width: 50%; }
+  .ch-editor-grid > .admin-section-card:first-child .row > .col-md-8 { flex: 0 0 100%; max-width: 100%; }
+}
