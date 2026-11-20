@@ -13,7 +13,21 @@ The upgraded engine computes the Rubric v1.0 score from evidence. For Herriman *
 - `mandatory_compliance`, `pricing_commercial`, and `evidence_past_performance` scored low / UNKNOWN because the human-owned inputs are genuinely absent.
 - **`MANDATORY_BLOCKED` + `APPROVAL_BLOCKED`**, so the overall score is **PROVISIONAL** and export is disabled — exactly as designed. A provisional number is never presented as a final ≥92.
 
-**Actual computed numbers:** generated on the post-deploy re-run and written to `quality-review.html` (the offline scorecard delivered to Downloads). Until that run completes against the deployed engine, the per-dimension AFTER figures are **NOT YET EVALUATED** here — they will be filled from the run record, not estimated.
+**Actual computed numbers (live post-deploy re-run, 2026-11-20, project 80b35be2):**
+
+| Dimension | Weight | AFTER score | Signal |
+|---|---:|---|---|
+| Mandatory submission compliance | 20 | UNKNOWN (0) | blocked: pricing/forms/references absent |
+| Technical responsiveness | 20 | 63 | substantive coverage + evaluator |
+| Implementation & delivery | 15 | 60 | evaluator (method/approach) |
+| Evidence & past performance | 15 | 68 | proof-backed claims (references limited) |
+| Pricing & commercial completeness | 10 | UNKNOWN (0) | no authorized pricing |
+| Buyer differentiation | 10 | 55 | clarity / customer-focus |
+| Risk, security & support | 5 | UNKNOWN (0) | not separately measured yet (R4/R7) |
+| Presentation & clarity | 5 | 78 | format + clarity |
+| **Weighted total** | **100** | **41.2 — PROVISIONAL** | **hard gates: MANDATORY / PACKAGE / APPROVAL blocked** |
+
+Per-document six-check scores from the live engine (none passing, honestly): compliance_matrix `cov100 fmt100 fact80 eval60 proof80 clarity45`; technical `cov0 fmt100 fact20 eval60 proof100 clarity65`; pilot_demo `cov100 fmt100 fact0 eval60 proof25 clarity55`. All three review runs **stopped at `open_questions`** — the engine surfaced the real missing facts rather than fabricating them. The baseline 22 and this 41.2 are on different rubrics and are not directly subtractable; the load-bearing result is that the engine now scores truthfully and refuses to fake a pass. Full scorecard: `quality-review.html` / `QUALITY_SCORECARD.html` in the delivered packet.
 
 ## What a legitimate ≥92 requires
 The engine reaches ≥92 with all gates green only when the human-owned inputs exist:
