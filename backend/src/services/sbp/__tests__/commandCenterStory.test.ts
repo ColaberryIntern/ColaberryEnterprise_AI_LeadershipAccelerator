@@ -140,7 +140,8 @@ describe('every section is wired to the student\'s own plan', () => {
 
   it('shows the SAFE requirement on the guardrails tab', () => {
     const out = commandCenterPrompt(fullPlan(), schedule());
-    expect(out).toMatch(/\*\*REQ-004\*\* — Nothing is sent to a client/);
+    // Tagged with whether a person can let it through, and who.
+    expect(out).toMatch(/\*\*REQ-004\*\* \((?:hard rule|approval: [^)]+)\) — Nothing is sent to a client/);
   });
 
   it('lists the systems the plan actually names', () => {

@@ -293,6 +293,49 @@ export function assembleStories(
   return out;
 }
 
+/**
+ * Give each release a share of the weeks in proportion to its stories, end to end.
+ *
+ * The outline call picks week numbers before any story exists, and it picks
+ * them loosely: ShiftFill (2026-11-20) came back r0 wk1, r1 wk2, r2 wk4,
+ * r3 wk5-6, so week 3 was empty and the last release's one story landed on the
+ * final build day. The schedule spreads the real calendar by these numbers, so
+ * a gap here is an idle week on the student's Gantt and a pile-up at the end.
+ * Once the stories are known, re-pace: the span the model chose is kept
+ * (widened to one week per release if it was narrower), every release gets at
+ * least one whole week of its own, and the weeks left over go by story count
+ * (largest remainder, earlier release on a tie). Contiguous, no overlap, no
+ * week skipped.
+ */
+export function paceReleases(releases: PlanRelease[], storyCount: ReadonlyMap<string, number>): PlanRelease[] {
+  if (!releases.length) return releases;
+  const n = releases.length;
+  const span = Math.max(n, ...releases.map((r) => r.week_end || 0));
+  const counts = releases.map((r) => Math.max(0, storyCount.get(r.key) ?? 0));
+  const total = counts.reduce((a, b) => a + b, 0);
+  if (total === 0) return releases;
+
+  const spare = span - n; // weeks beyond the one each release is guaranteed
+  const quota = counts.map((c) => (c / total) * spare);
+  const weeks = quota.map((q) => 1 + Math.floor(q));
+  let left = span - weeks.reduce((a, b) => a + b, 0);
+  const byRemainder = quota.map((q, i) => ({ i, r: q - Math.floor(q) }))
+    .sort((a, b) => b.r - a.r || a.i - b.i);
+  for (const { i } of byRemainder) {
+    if (left <= 0) break;
+    weeks[i] += 1;
+    left -= 1;
+  }
+
+  let next = 1;
+  return releases.map((r, i) => {
+    const weekStart = next;
+    const weekEnd = weekStart + weeks[i] - 1;
+    next = weekEnd + 1;
+    return { ...r, week_start: weekStart, week_end: weekEnd };
+  });
+}
+
 // ── the pipeline ─────────────────────────────────────────────────────────────
 
 export interface StagedOptions extends DecomposeInputs {
@@ -409,11 +452,13 @@ export async function generateStagedPlan(opts: StagedOptions): Promise<StagedRes
 
   // 5. Assemble.
   const stories = assembleStories(perRelease, requirements);
+  const storyCount = new Map<string, number>();
+  for (const s of stories) storyCount.set(s.release, (storyCount.get(s.release) ?? 0) + 1);
   const plan: BuildPlan = {
     project_name: extracted.requirements.project_name,
     descriptor: extracted.requirements.descriptor,
     requirements,
-    releases: outline.releases,
+    releases: paceReleases(outline.releases, storyCount),
     stories,
   };
   const stages = {

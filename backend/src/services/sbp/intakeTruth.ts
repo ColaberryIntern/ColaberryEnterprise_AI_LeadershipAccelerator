@@ -83,6 +83,53 @@ export const ANGLE_TO_DIMENSION: Readonly<Record<string, UnderstandingDimension>
   'THE JOB': 'problem',
 };
 
+/**
+ * The guided outline's own labelled lines, and where each one belongs.
+ *
+ * The outline (`frontend/.../outlineModel.ts` `composeIdea`) writes every
+ * answer as `<label>: <answer>` on its own line. The label says exactly what
+ * the student was asked, so it decides the dimension; no model needs to guess.
+ * Two guesses this replaces went wrong on the ShiftFill run (2026-11-20):
+ * the "how it is today" line was quoted as the SUCCESS definition, so the
+ * Command Center showed today's cost as the goal; and "the call I am handing
+ * over" was filed as a HUMAN-ONLY decision, the opposite of what it says.
+ *
+ * Keep the labels in step with `composeIdea`. A label that drifts simply stops
+ * matching, and the model's quotes take over again, which is the old behavior.
+ */
+export const OUTLINE_LABEL_TO_DIMENSION: ReadonlyArray<readonly [string, UnderstandingDimension]> = [
+  ['What it should produce, and for whom', 'problem'],
+  ['Who uses it, and how comfortable they are with tools like this', 'actors'],
+  ['What makes it start', 'current_workflow'],
+  ['How many, in a normal week and on the busiest', 'current_workflow'],
+  ['Tools it needs to read from or write to', 'systems'],
+  // The judgement the student is HANDING to the agent. Not human-only.
+  ['The call I am handing over, and what I look at to make it', 'ai_opportunities'],
+  ['What I want to look at myself before it goes out', 'approval_points'],
+  ["When it isn't sure, it should", 'exceptions'],
+  ["Before I'd let it run on its own, I'd need it to", 'approval_points'],
+  // The baseline. Today's cost is a pain point, never the success definition.
+  ['How long it takes today, or how often it goes wrong', 'pain_points'],
+  ['What good would look like', 'success_definition'],
+  ['What would make someone say "I didn\'t know it could do that"', 'desired_outcome'],
+  ["What I'd drop to get it", 'constraints'],
+];
+
+/** The outline's labelled lines found in a description, in the order written. */
+export function outlineLines(idea: string): Array<{ dimension: UnderstandingDimension; text: string; line: string }> {
+  const out: Array<{ dimension: UnderstandingDimension; text: string; line: string }> = [];
+  for (const raw of idea.split(/\r?\n/)) {
+    const line = raw.trim();
+    for (const [label, dimension] of OUTLINE_LABEL_TO_DIMENSION) {
+      if (!line.startsWith(`${label}:`)) continue;
+      const text = line.slice(label.length + 1).trim();
+      if (text) out.push({ dimension, text, line });
+      break;
+    }
+  }
+  return out;
+}
+
 /** Longest quote we keep. A whole pasted document is not a quote. */
 const MAX_QUOTE = 600;
 
@@ -122,11 +169,19 @@ export function itemsFromIntake(input: IntakeTruthInput): IntakeTruthResult {
   const unmapped: IntakeAnswer[] = [];
 
   const idea = clean(input.idea);
-  if (idea) {
+  const outline = idea ? outlineLines(idea) : [];
+  if (outline.length) {
+    // A guided outline: every line already says what it answers.
+    for (const o of outline) items.push(fact(o.dimension, o.text, o.text));
+  } else if (idea) {
     // The description is the one thing every intake has, and it is the
     // student's own words about what they are building.
     items.push(fact('problem', idea.length <= MAX_QUOTE ? idea : quote(idea), idea));
   }
+  // A model quote that is (part of) an outline line is that line again, and its
+  // angle may file it somewhere the label contradicts. The label wins.
+  const fromOutline = (evidence: string): boolean =>
+    outline.some((o) => o.text.includes(evidence) || evidence.includes(o.text));
 
   for (const answer of input.answers ?? []) {
     const text = clean(answer.answer);
@@ -147,6 +202,7 @@ export function itemsFromIntake(input: IntakeTruthInput): IntakeTruthResult {
     // is also reachable from a stored plan written before that gate existed.
     if (!evidence || !dimension) continue;
     if (NEVER_FACT_DIMENSIONS.includes(dimension)) continue;
+    if (fromOutline(evidence)) continue;
 
     items.push(fact(dimension, evidence, evidence));
   }
