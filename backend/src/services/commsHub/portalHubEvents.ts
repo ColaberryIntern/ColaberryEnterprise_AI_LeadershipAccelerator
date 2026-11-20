@@ -3,6 +3,7 @@ import CommsHubEvent from '../../models/CommsHubEvent';
 import type { OpenHouseView } from '../openHouseTypes';
 import { CENTRAL_TZ } from '../centralDate';
 import { expandOccurrences } from './eventRecurrence';
+import { publicThumbnailPath } from './thumbnails/thumbnailPaths';
 
 /**
  * Hub events on the member portal's Events page (CH2.3). That page used to read only CCPP
@@ -10,8 +11,8 @@ import { expandOccurrences } from './eventRecurrence';
  * events for the viewer's audience, in the same card shape, and lets a hub event replace the CCPP
  * card that points at the same Eventbrite registration (Jackie pasted that link into the hub).
  *
- * Thumbnails arrive in CH4 (the chosen 16:9 image becomes image_url); until a thumbnail exists the
- * card shows the first-letter fallback EventsPage already renders for a missing image.
+ * The chosen 16:9 thumbnail (CH4.4) is image_url, served by the public thumbnail route; until one is
+ * chosen the card shows the first-letter fallback EventsPage already renders for a missing image.
  */
 export interface PortalEventCard extends OpenHouseView {
   source?: 'ccpp' | 'hub';
@@ -44,7 +45,7 @@ export function toCards(e: CommsHubEvent, fromMs: number, toMs: number): PortalE
       timezone: CENTRAL_TZ,
       registration_url: e.registration_url,
       meeting_link: e.join_url,
-      image_url: null,
+      image_url: e.thumbnail_id ? publicThumbnailPath(e.id, e.thumbnail_id) : null,
       signup_count: null,
       is_registered: false,
       source: 'hub' as const,

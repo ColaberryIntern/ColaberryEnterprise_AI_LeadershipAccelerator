@@ -6,6 +6,7 @@ import { logFailure, sendValidated } from '../campusRoutes';
 import eventRoutes from './commsHubEventRoutes';
 import formRoutes from './commsHubFormRoutes';
 import photoRoutes from './commsHubPhotoRoutes';
+import thumbnailRoutes from './commsHubThumbnailRoutes';
 
 /**
  * Communications Hub admin API (CH1.3 onward). Every route sits under /api/admin/comms-hub, which
@@ -29,5 +30,7 @@ router.use(formRoutes);
 router.use(eventRoutes);
 // CH4.1 event pictures (inputs to thumbnails).
 router.use(photoRoutes);
+// CH4.4 the thumbnail studio.
+router.use(thumbnailRoutes);
 
 export default router;

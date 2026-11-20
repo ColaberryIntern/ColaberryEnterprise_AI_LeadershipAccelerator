@@ -40,6 +40,11 @@ describe('CH2.3 cards', () => {
     expect(new Set(cards.map((c) => c.id)).size).toBe(3);
   });
 
+  it('CH4.4 a chosen thumbnail is the card image, via the public route, cache-busted by the choice', () => {
+    const cards = toCards(ev({ id: 'e1', thumbnail_id: 't7' }), NOW, IN_30);
+    expect(cards[0].image_url).toBe('/api/comms-hub/thumbnails/e1/16x9.png?v=t7');
+  });
+
   it('a live event that started before now still shows, marked live', () => {
     const live = ev({ status: 'live', starts_at: new Date(NOW - 600_000), ends_at: new Date(NOW + 3_000_000) });
     expect(toCards(live, NOW, IN_30)).toEqual([expect.objectContaining({ is_live: true })]);

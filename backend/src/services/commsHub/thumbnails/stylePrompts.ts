@@ -32,6 +32,7 @@ export interface PromptSlots {
   platform: string; // "Live on Zoom" / "Online"
   aspect: string; // "wide 16:9 banner" etc.
   photoCount: number;
+  artNote?: string | null; // CH4.4 "Ask for a change": a short look instruction, guarded like the rest
 }
 
 export class PromptGuardError extends Error {}
@@ -66,7 +67,7 @@ const CHECKS: Array<[(folded: string, rejoined: string[]) => boolean, string]> =
 
 /** Refuse organizer text that would put a forbidden thing into the picture. */
 export function guardSlots(s: PromptSlots): void {
-  for (const value of [s.headline, s.supporting ?? '', ...s.hosts]) {
+  for (const value of [s.headline, s.supporting ?? '', ...s.hosts, s.artNote ?? '']) {
     const folded = foldText(value);
     const rejoined = rejoinSpelledOut(folded);
     for (const [hit, what] of CHECKS) {
@@ -88,7 +89,7 @@ export function quoteSafe(value: string): string {
 }
 
 function safeSlots(s: PromptSlots): PromptSlots {
-  return { ...s, headline: quoteSafe(s.headline), supporting: s.supporting === null ? null : quoteSafe(s.supporting), hosts: s.hosts.map(quoteSafe) };
+  return { ...s, headline: quoteSafe(s.headline), supporting: s.supporting === null ? null : quoteSafe(s.supporting), hosts: s.hosts.map(quoteSafe), artNote: s.artNote ? quoteSafe(s.artNote) : null };
 }
 
 const RULES = [
@@ -99,6 +100,8 @@ const RULES = [
   'Colaberry brand colors: cherry red, berry blue, leaf green, white and near-black. Polished, high contrast, legible at small sizes.',
 ].join(' ');
 
+/** The organizer's requested change, placed BEFORE the rules so the rules still win. */
+const noteLine = (n: string | null | undefined): string => (n ? `Requested change to the look: "${n}".` : '');
 const keepFaces = (n: number): string => (n > 0 ? `Keep the face, hair and identity of every person in the ${n} attached photo${n > 1 ? 's' : ''} exactly the same.` : '');
 const hostLine = (h: string[]): string => (h.length ? `Name cards for: ${h.map((x) => `"${x}"`).join(', ')}.` : '');
 
@@ -139,7 +142,8 @@ const FAMILY: Record<StyleFamily, (s: PromptSlots) => string> = {
 
 export function buildPrompt(family: StyleFamily, slots: PromptSlots): string {
   guardSlots(slots);
-  return `${FAMILY[family](safeSlots(slots))} ${RULES}`.replace(/\s+/g, ' ').trim();
+  const safe = safeSlots(slots);
+  return `${FAMILY[family](safe)} ${noteLine(safe.artNote)} ${RULES}`.replace(/\s+/g, ' ').trim();
 }
 
 /**
@@ -170,7 +174,8 @@ const ART_RULES = [
 /** The art-only prompt for a family. The organizer's text never goes to the model in this mode, but it is still guarded. */
 export function buildArtPrompt(family: StyleFamily, slots: PromptSlots): string {
   guardSlots(slots);
-  return `A ${slots.aspect}. ${ART[family](safeSlots(slots))} ${keepFaces(slots.photoCount)} ${ART_RULES}`.replace(/\s+/g, ' ').trim();
+  const safe = safeSlots(slots);
+  return `A ${slots.aspect}. ${ART[family](safe)} ${noteLine(safe.artNote)} ${keepFaces(slots.photoCount)} ${ART_RULES}`.replace(/\s+/g, ' ').trim();
 }
 
 /** Which theme the code-drawn text uses over each family's art (dark scenes get light text). */

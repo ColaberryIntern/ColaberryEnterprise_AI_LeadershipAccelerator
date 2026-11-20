@@ -56,3 +56,18 @@ export async function renderAllSizes(id: TemplateId, text: TemplateText, photos:
   for (const size of Object.keys(SIZES) as ThumbSize[]) out.push(await renderTemplate(id, size, text, photos));
   return out;
 }
+
+/**
+ * All three sizes from one picture that has no code-drawn text (CH4.4): an uploaded image, or a
+ * model-mode AI image. Each size is a centred cover crop, so the edges of a wide picture are cut for
+ * the square; the studio says so for these options.
+ */
+export async function deriveAllSizes(image: Buffer): Promise<RenderedThumb[]> {
+  const out: RenderedThumb[] = [];
+  for (const size of Object.keys(SIZES) as ThumbSize[]) {
+    const { w, h } = SIZES[size];
+    const png = await sharp(image).rotate().resize(w, h, { fit: 'cover', position: 'centre' }).png().toBuffer();
+    out.push({ size, png, width: w, height: h, truncated: false });
+  }
+  return out;
+}

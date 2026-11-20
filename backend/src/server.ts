@@ -32,6 +32,7 @@ import sparkRoutes from './routes/sparkRoutes';
 import trackedLinkRedirectRoutes from './routes/trackedLinkRedirectRoutes';
 import openclawShortLinkRoutes from './routes/openclawShortLinkRoutes';
 import mediaFetchRoutes from './routes/mediaFetchRoutes';
+import commsHubPublicThumbnailRoutes from './routes/commsHubPublicThumbnailRoutes';
 import publicLandingPageRoutes from './routes/publicLandingPageRoutes';
 import publicSnackbarFeedRoutes from './routes/publicSnackbarFeedRoutes';
 import publicTrackingConfigRoutes from './routes/publicTrackingConfigRoutes';
@@ -324,6 +325,9 @@ app.use(openclawShortLinkRoutes);
 // Signed media fetch (/m/...) - public, a provider fetches it at publish time with no session.
 // Same rule as /r/ and /i/: above adminRoutes or the guard 401s it. Pinned by its own test.
 app.use(mediaFetchRoutes);
+// Communications Hub chosen event thumbnails (CH4.4) - public for the same reason: the portal Events
+// card's <img> sends no Bearer token. Above adminRoutes; pinned by commsHubPublicThumbnailRoutes.test.ts.
+app.use(commsHubPublicThumbnailRoutes);
 // Hosted landing pages (GET /p/:brand/:slug) - public server-rendered HTML, the destination of
 // social posts. Same rule as /r/ /i/ /m/ above: a visitor clicking a link in a post has no
 // session, so mounted below adminRoutes this would 401 every click on every campaign. Pinned by

@@ -23,14 +23,16 @@ jest.mock('../thumbnailStore', () => ({
     reservations.push(row);
     return row;
   }),
-  completeAiAttempt: jest.fn(async (row: Row, input: Row) => { row.status = 'done'; row.pngs = input.pngs; return row; }),
+  completeAiAttempt: jest.fn(async (row: Row, input: Row) => { row.status = 'done'; row.pngs = input.pngs; row.inputs = input.inputs; return row; }),
   failAiAttempt: jest.fn(async (row: Row, kind: string) => { row.status = 'failed'; row.error = kind; }),
   estimateCostUsd: (q: string, c: string): number | null => (q === 'medium' && c === '1536x1024' ? 0.063 : null),
 }));
 const mockOverlay = jest.fn(async (_art: Buffer, _theme: string, _text: Record<string, unknown>) => ['16x9', '1x1', '3x1'].map((size) => ({ size, png: Buffer.from(size) })));
+const mockDerive = jest.fn(async (_img: Buffer) => ['16x9', '1x1', '3x1'].map((size) => ({ size, png: Buffer.from(`crop-${size}`) })));
 jest.mock('../templateRender', () => ({
   renderAllSizes: jest.fn(async () => [{ size: '16x9', png: Buffer.from('t') }]),
   renderOverlayAllSizes: (...a: unknown[]) => mockOverlay(...(a as [Buffer, string, Record<string, unknown>])),
+  deriveAllSizes: (...a: unknown[]) => mockDerive(...(a as [Buffer])),
 }));
 
 import { aiEnabled, aiOption, slotsFor, templateOptions, aiSource, templateSource, AI_DAILY_LIMIT, MAX_AI_PHOTOS, type GenerateRequest } from '../thumbnailSources';
@@ -137,12 +139,14 @@ describe('CH4.3 the AI source', () => {
     expect(text).toEqual({ headline: 'Demo Tuesday', supporting: 'Live builds. Real feedback.', badge: 'EVERY TUESDAY \u00B7 6:00 PM CST' });
   });
 
-  it('model mode (COMMS_HUB_AI_TEXT_MODE=model): the reverse-engineered prompt with the text, 16:9 only', async () => {
+  it('model mode (COMMS_HUB_AI_TEXT_MODE=model): the reverse-engineered prompt with the text; other sizes are crops, marked as such', async () => {
     process.env.COMMS_HUB_AI_TEXT_MODE = 'model';
     try {
       await aiOption(req(), 'A_dark_tech');
       expect(JSON.parse(okFetch.mock.calls[0][1].body as string).prompt).toContain('"Demo Tuesday"');
-      expect(Object.keys(reservations[0].pngs)).toEqual(['16x9']);
+      expect(Object.keys(reservations[0].pngs).sort()).toEqual(['16x9', '1x1', '3x1']);
+      expect(reservations[0].inputs.cropped).toEqual(['1x1', '3x1']);
+      expect(mockDerive).toHaveBeenCalledTimes(1);
       expect(mockOverlay).not.toHaveBeenCalled();
     } finally { delete process.env.COMMS_HUB_AI_TEXT_MODE; }
   });
