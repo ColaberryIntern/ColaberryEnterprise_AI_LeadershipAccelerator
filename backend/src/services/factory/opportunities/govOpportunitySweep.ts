@@ -17,7 +17,7 @@
 import { FLAGS } from '../../../config/featureFlags';
 import { buildDiscoveryBoard, rowsToHide, type BoardFacts, type DiscoveryBoard, type HideDecision } from './govDiscoveryBoard';
 import type { GovOpportunity } from './govOpportunity';
-import { govPursuitSubject, renderGovPursuitEmail } from './govPursuitEmail';
+import { forTheEmail, govPursuitSubject, renderGovPursuitEmail } from './govPursuitEmail';
 
 const RUN_LOG_KEY = 'gov_opp_sweep_run_log';
 const SWEEP_ACTOR = 'gov-opp-sweep';
@@ -84,7 +84,9 @@ export async function runGovOpportunitySweep(): Promise<SweepResult> {
   const board = buildDiscoveryBoard(feed, afterHides(facts, hidden), today);
   const { sendGovOpportunitySweepEmail } = await import('../../emailService');
   try {
-    await sendGovOpportunitySweepEmail({ subject: govPursuitSubject(board), html: renderGovPursuitEmail(board, hidden, today) });
+    // The email leaves out bids closing in under 10 days; the board itself still shows them.
+    const view = forTheEmail(board, hidden, today);
+    await sendGovOpportunitySweepEmail({ subject: govPursuitSubject(view.board), html: renderGovPursuitEmail(view.board, view.hidden, today, view.leftOut) });
   } catch (err: any) {
     log('gov_opp_sweep_send_failed', 'failure', { hidden: hidden.length, message: err?.message }, err?.constructor?.name);
     return { hidden: hidden.length, emailed: false, counts: board.counts };
