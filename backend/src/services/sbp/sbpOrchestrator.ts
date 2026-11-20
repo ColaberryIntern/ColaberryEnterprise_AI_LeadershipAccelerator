@@ -48,7 +48,7 @@ import { loadBuildProgress } from './buildProgressSnapshot';
 import { materializePlanAsTasks } from './materializeTasks';
 import { markProjectPendingApproval } from '../projects/projectApprovalService';
 import { Schedule } from './buildSchedule';
-import { scheduleForEnrollment } from './scheduleForEnrollment';
+import { scheduleForEnrollment, truthForRender } from './scheduleForEnrollment';
 import { hashPlan } from './planHash';
 import {
   saveIntake, getIntake, savePlanDraft, getPlan, publishPlan, firstPublishedAt, StoredPlan, BuildIntake,
@@ -842,6 +842,12 @@ export async function publishBuild(
   // true where we hold push — one repo in thirteen on 2026-08-19.
   const repoWriteAccess = await repoWriteAccessForProject(projectId, correlationId ?? null);
 
+  // The student's own account of the project, for plan.json's
+  // `derived.understanding` and STORY-000.md's truth section. Without it the
+  // FIRST publish ships an Outcomes tab with nothing in it, and only a later
+  // sync fills it. Never throws.
+  const truth = await truthForRender(projectId, correlationId ?? null);
+
   const files = renderDocs(published.plan as BuildPlan, {
     repoUrl: opts.repo.url,
     generatedAt: new Date().toISOString(),
@@ -850,6 +856,7 @@ export async function publishBuild(
     correlationId: correlationId ?? undefined,
     projectId,
     truthRevision: published.truth_revision ?? null,
+    truth,
     schedule,
     progress: snapshot.progress,
     baselineByStory: snapshot.baselineByStory,
