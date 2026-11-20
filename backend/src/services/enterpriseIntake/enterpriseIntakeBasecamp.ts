@@ -203,12 +203,28 @@ export async function openClientList(
     let created = false;
     if (!intake.bc_todolist_id) {
       const ts = await todosetId(project);
-      const list = await bcPost<{ id: number }>(`/buckets/${project}/todosets/${ts}/todolists.json`, {
-        name: listName(intake),
-        description: listDescription(intake),
-      });
-      await intake.update({ bc_todolist_id: String(list.id) });
-      created = true;
+      // A create that timed out may still have made the list (the client never retries a POST
+      // after a timeout, and nothing saved its id). Adopt it rather than open a second one: same
+      // name, with or without a stage prefix, AND this client's email in the description, so two
+      // clients who share a name and company cannot be mixed up.
+      const name = listName(intake);
+      const lists = await bcGetAll<{ id: number; name: string; description?: string }>(`/buckets/${project}/todosets/${ts}/todolists.json`);
+      const earlier = lists.find(
+        (l) => {
+          const n = String(l.name || '');
+          return (n === name || n.endsWith(`] ${name}`)) && String(l.description || '').includes(esc(intake.email));
+        },
+      );
+      if (earlier) {
+        await intake.update({ bc_todolist_id: String(earlier.id) });
+      } else {
+        const list = await bcPost<{ id: number }>(`/buckets/${project}/todosets/${ts}/todolists.json`, {
+          name,
+          description: listDescription(intake),
+        });
+        await intake.update({ bc_todolist_id: String(list.id) });
+        created = true;
+      }
     }
     const listId = intake.bc_todolist_id as string;
 

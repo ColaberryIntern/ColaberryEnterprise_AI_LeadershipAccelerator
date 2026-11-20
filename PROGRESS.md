@@ -18436,5 +18436,5 @@ Steps 1-4 are safe without 5: the form accepts, the lead is captured and attribu
     - **Test data.** The W28 and W29 test clients were deleted in one transaction (Ali: "D yes"). The backup is at `/root/w28_w29_test_rows_backup_20261120.txt` on prod. Their two Basecamp lists were trashed.
   - Verification:
     - Backend: Basecamp client and callers 854 pass; admin and client routes 30/30; digest action 5/5.
-    - Frontend: MyPilot 5/5 and admin page 15/15; tsc clean.
+    - Frontend: MyPilotV2 5/5 and AdminEnterpriseClientsPage 6/6 (11/11 together); tsc clean.
   - Notes: The digest-action tightening also closes an older hole: any token signed with the app secret (participant, alumni) could reclassify inbox email. The only minter, `askUserDigestService`, always sets `email_ids`, so real digest links still work.
