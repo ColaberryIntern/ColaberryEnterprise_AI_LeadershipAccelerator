@@ -77,15 +77,16 @@ async function modelStore(): Promise<MemberStore> {
   const { Op } = await import('sequelize');
   const { default: CommunityMember } = await import('../models/CommunityMember');
   const { default: Enrollment } = await import('../models/Enrollment');
-  const toRow = (m: any, email: string): MemberRow => ({
+  const toRow = (m: InstanceType<typeof CommunityMember>, email: string): MemberRow => ({
     id: m.id, email, role: m.role, mgmt_role: m.mgmt_role, mgmt_extra_sections: m.mgmt_extra_sections ?? [],
   });
   return {
     async findByEmail(email) {
       const enrollments = await Enrollment.findAll({ where: { email: { [Op.iLike]: email } }, attributes: ['id', 'email'] });
       if (!enrollments.length) return [];
-      const members = await CommunityMember.findAll({ where: { enrollment_id: enrollments.map((e: any) => e.id) } });
-      return members.map((m: any) => toRow(m, email));
+      const ids = enrollments.map((e) => e.get('id') as string);
+      const members = await CommunityMember.findAll({ where: { enrollment_id: ids } });
+      return members.map((m) => toRow(m, email));
     },
     async findById(id) {
       const m = await CommunityMember.findByPk(id);
