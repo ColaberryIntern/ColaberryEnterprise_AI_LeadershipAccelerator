@@ -456,14 +456,26 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
       {campus.active && <CampusLocationBar next={condensed ? condensedSlot ?? null : null} />}
 
       {/* ── nav ── Colaberry Campus replaces the classic rail when active (flag on + not chosen classic) */}
+      {/*
+        THE FOOTER IS THE WAY BACK, AND IT IS THE ONLY ONE IN THIS LAYOUT. The campus Me panel
+        carries the same Campus/Classic choice, but choosing classic hides that panel, so once a
+        learner is here this button and the Settings page are all that is left (Swati Raman,
+        2026-11-03: switched to classic, could not get back, looked in Profile and Settings).
+        It renders whenever the campus is on OR classic was explicitly chosen: fetchCampusFlags
+        fails CLOSED, so gating it on `enabled` alone lets one timed-out flag read strand someone
+        in the classic view permanently, with the stored preference keeping them there.
+        campus.css keeps it visible: sticky to the bottom of the rail, icon-only when collapsed.
+      */}
       {campus.active ? <CampusNav active={active} /> : (
       <ClassicNav
         groups={groups} active={active} navCollapsed={navCollapsed} navExpanded={navExpanded}
         onToggleGroup={(grp) => setNavExpanded((m) => ({ ...m, [grp]: !m[grp] }))}
         todayBadge={todayBadge} isStaff={isStaff} hasFullAccess={hasFullAccess} cohortName={cohortName}
-        footer={campus.enabled ? (
-          <button type="button" className="cm-link cm-switch-back" data-testid="cm-use-campus" onClick={() => campus.updateSettings({ nav: 'campus' })}>
-            <span aria-hidden="true">🗺 </span>Switch to the campus view
+        footer={campus.enabled || campus.settings.nav === 'classic' ? (
+          <button type="button" className="cm-link cm-switch-back" data-testid="cm-use-campus"
+            title="Switch to the campus view" aria-label="Switch to the campus view"
+            onClick={() => campus.updateSettings({ nav: 'campus' })}>
+            <span className="ic" aria-hidden="true">🗺</span><span className="lb">Switch to the campus view</span>
           </button>
         ) : undefined}
       />
