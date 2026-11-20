@@ -7,6 +7,7 @@ import { fetchSchedule, fetchPublicEvents, fetchPoints, joinSession, OpenHouseVi
 import { fmtCentralTime, centralParts } from '../today/shellUtils';
 import { useCampus } from '../../../components/campus/CampusContext';
 import { EventSignup } from '../../../components/campus/events/EventSignup';
+import HubWatchLive, { watchOccurrenceId } from '../../../components/portal/HubWatchLive';
 import '../../../components/campus/events/campusEvents.css';
 import { useHallway } from '../../../components/campus/hallway/Hallway';
 import {
@@ -34,11 +35,13 @@ import './SchedulePage.css';
  * Wrap a calendar item: a session -> in-app Link, today's plan item -> Link, a public event -> its row with one-tap Sign up / You're
  * going (C27: no longer the whole item as a link to Eventbrite, so the button is the one place that registers), else a plain div.
  */
-function renderItem(ev: SchedEvent, className: string, inner: React.ReactNode, block?: boolean): React.ReactNode {
+export function renderItem(ev: SchedEvent, className: string, inner: React.ReactNode, block?: boolean): React.ReactNode {
   const style: React.CSSProperties = { textDecoration: 'none', color: 'inherit' };
   if (block) style.display = 'block';
   if (ev.event) {
-    return <div key={ev.id} className={className} title={ev.title} data-testid={`sch-ev-${ev.id}`}>{inner}<span className="sch-signup"><EventSignup event={ev.event} compact /></span></div>;
+    // CH5.3: a Communications Hub event streaming now offers Watch live (the portal player) instead of Sign up.
+    const action = watchOccurrenceId(ev.event) ? <HubWatchLive ev={ev.event} className="sch-watch" playingClassName="sch-watching" /> : <EventSignup event={ev.event} compact />;
+    return <div key={ev.id} className={className} title={ev.title} data-testid={`sch-ev-${ev.id}`}>{inner}<span className="sch-signup">{action}</span></div>;
   }
   if (ev.href) {
     return <Link key={ev.id} to={ev.href} className={className} title={ev.title} style={style}>{inner}</Link>;

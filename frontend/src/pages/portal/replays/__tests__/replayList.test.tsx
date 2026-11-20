@@ -291,3 +291,13 @@ describe('CH5.3 a Communications Hub replay shows the thumbnail the organizer ch
     expect(container.querySelector('.rp-thumb')).toBeNull();
   });
 });
+
+describe('CH5.3 attempt 2: a picture that fails to load is hidden, not shown broken', () => {
+  it('hides the thumbnail on an image error', () => {
+    mount({ replays: [replay({ id: 'occ-hub', thumbnail_url: '/api/comms-hub/thumbnails/e1/16x9.png?v=t7' })] });
+    const img = container.querySelector('[data-testid="replay-thumb-occ-hub"]') as HTMLImageElement;
+    act(() => { img.dispatchEvent(new Event('error')); });
+    expect(container.querySelector('[data-testid="replay-thumb-occ-hub"]')).toBeNull();
+    expect(container.textContent).toContain('Week 9 Build Day');
+  });
+});

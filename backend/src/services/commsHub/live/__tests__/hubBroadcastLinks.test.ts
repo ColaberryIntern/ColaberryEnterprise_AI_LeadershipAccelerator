@@ -14,6 +14,9 @@ describe('hubThumbnailsForOccurrences', () => {
     expect(sql).toMatch(/r\.source_type = 'community_event'/);
     expect(sql).toMatch(/split_part\(r\.source_id, '@', 1\)/);
     expect(sql).toMatch(/e\.thumbnail_id IS NOT NULL/);
+    // Exactly the public route's conditions, so the URL never 404s (a cancelled event, one off the Events page).
+    expect(sql).toMatch(/e\.status IN \('scheduled', 'live', 'ended'\)/);
+    expect(sql).toMatch(/\(e\.placement->>'events_page'\)::boolean/);
     expect(opts.replacements).toEqual({ ids: ['o1', 'o2'] });
   });
 

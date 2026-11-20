@@ -44,7 +44,11 @@ export async function hubThumbnailsForOccurrences(occurrenceIds: readonly string
       `SELECT r.occurrence_id, e.id AS event_id, e.thumbnail_id
          FROM broadcast_source_refs r JOIN comms_hub_events e ON e.id::text = split_part(r.source_id, '@', 1)
         WHERE r.source_type = 'community_event' AND position('@' in r.source_id) > 0
-          AND r.occurrence_id IN (:ids) AND e.thumbnail_id IS NOT NULL`,
+          AND r.occurrence_id IN (:ids) AND e.thumbnail_id IS NOT NULL
+          -- The same rule as the public image route (thumbnailStudio.publicThumbnail), so a URL is only
+          -- ever offered when that route will serve it: never for a cancelled or draft event, or one
+          -- taken off the Events page.
+          AND e.status IN ('scheduled', 'live', 'ended') AND COALESCE((e.placement->>'events_page')::boolean, false)`,
       { replacements: { ids: [...occurrenceIds] }, type: QueryTypes.SELECT },
     );
     for (const r of rows) out.set(r.occurrence_id, publicThumbnailPath(r.event_id, r.thumbnail_id));

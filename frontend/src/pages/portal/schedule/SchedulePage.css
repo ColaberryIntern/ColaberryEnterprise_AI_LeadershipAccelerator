@@ -175,3 +175,8 @@
 .sch-root .sch-signup{display:block;margin-top:6px}
 .sch-root .mdot .sch-signup{display:none}
 .sch-root .qtask .sch-signup{margin:0 0 0 auto;flex:none}
+
+/* CH5.3: Watch live on a Communications Hub event streaming now (in place of Sign up). */
+.sch-watch { border: 0; border-radius: 999px; padding: 2px 10px; min-height: 24px; font-size: 12px; font-weight: 700; background: var(--cherry-deep); color: #fff; cursor: pointer; }
+.sch-watch:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.sch-watching { font-size: 12px; font-weight: 700; }
