@@ -175,6 +175,18 @@ const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded, badge, au
       handshake();
       const onMsg = (ev: MessageEvent) => {
         if (typeof ev.origin !== 'string' || !ev.origin.includes(yt ? 'youtube' : 'vimeo')) return;
+        // ...AND only this component's own iframe. The origin check above passes for EVERY
+        // YouTube/Vimeo player on the page, so when a card showed two players (the drawer opening
+        // over the tile's preview) each tracker counted the other's playback as well as its own:
+        // watch time credited at about 2x real play, and up to 3.5x once the two drifted apart.
+        // Confirmed in production on 20 Nov 2026 by Swati Raman -- with one video visibly playing,
+        // saves arrived in PAIRS a fraction of a second apart. `ev.source` is the window that
+        // posted, so comparing it with our own contentWindow is what separates "my player" from
+        // "a player". If the ref is not attached yet there is no own window to match against, and
+        // a null-vs-undefined comparison would wave every message through, so that case drops the
+        // message rather than trusting it. (20 Nov 2026)
+        const own = iframeRef.current?.contentWindow;
+        if (!own || ev.source !== own) return;
         let data: any = ev.data;
         if (typeof data === 'string') { try { data = JSON.parse(data); } catch { return; } }
         if (!data || typeof data !== 'object') return;

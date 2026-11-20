@@ -33,12 +33,21 @@ let beats: WatchBeatPayload[];
 let now: number;
 let nowSpy: jest.SpyInstance;
 
+/** The window of the component's OWN iframe. VideoEmbed now ignores a player that is not this
+ *  one, so every message a test sends has to claim to come from here or it is correctly dropped. */
+const ownWindow = (): Window => {
+  const el = container.querySelector('iframe');
+  if (!el?.contentWindow) throw new Error('iframe is not mounted, so there is no own window to post from');
+  return el.contentWindow;
+};
+
 /** One YouTube infoDelivery message, one second of wall clock after the previous one. */
-const tick = (positionS: number) => {
+const tick = (positionS: number, from: Window | null = null) => {
   now += 1000;
   act(() => {
     window.dispatchEvent(new MessageEvent('message', {
       origin: 'https://www.youtube.com',
+      source: from ?? ownWindow(),
       data: JSON.stringify({
         event: 'infoDelivery',
         info: { currentTime: positionS, duration: 600, playerState: 1 },
@@ -127,4 +136,46 @@ it('re-credits the buffered seconds when the send is rejected, instead of destro
   play(21, 24);
   expect(beats).toHaveLength(2);
   expect(beats[1].delta_s).toBeGreaterThanOrEqual(lost);
+});
+
+/**
+ * The second half of the same bug, found in production on 20 Nov 2026 by Swati Raman after the
+ * loop fix shipped. The origin check passes for EVERY YouTube player on the page, so a card
+ * showing two players had each tracker counting the other's playback too: watch time credited at
+ * roughly 2x real play (158s watched, 324s credited), and up to 3.5x once the players drifted.
+ * The direction of the fault had flipped -- progress was no longer destroyed, it was inflated,
+ * and a learner could pass the 75% gate without watching 75%.
+ */
+describe('a tracker counts only its own player', () => {
+  /** A DIFFERENT YouTube player on the same page, which must not feed this component. */
+  const otherPlayer = (): Window => {
+    const el = document.createElement('iframe');
+    document.body.appendChild(el);
+    if (!el.contentWindow) throw new Error('the second iframe has no contentWindow');
+    return el.contentWindow;
+  };
+
+  it('ignores time updates posted by another player on the page', () => {
+    render((b) => { beats.push(b); });
+    const other = otherPlayer();
+
+    // Well past the 15s flush threshold. Every one of these carries a correct YouTube origin and
+    // a well-formed infoDelivery payload: the ONLY thing wrong with them is who sent them.
+    for (let t = 0; t <= 40; t += 1) tick(t, other);
+
+    expect(beats).toHaveLength(0);
+  });
+
+  it('still credits its own player, so the filter is not simply dropping everything', () => {
+    render((b) => { beats.push(b); });
+    const other = otherPlayer();
+
+    // Interleaved, the way two players on one card actually behave.
+    for (let t = 0; t <= 20; t += 1) { tick(t, other); tick(t); }
+
+    // Exactly one player's worth of time, not two. Before the fix this credited both streams.
+    expect(beats.length).toBeGreaterThanOrEqual(1);
+    const credited = beats.reduce((n, b) => n + b.delta_s, 0);
+    expect(credited).toBeLessThanOrEqual(21);
+  });
 });
