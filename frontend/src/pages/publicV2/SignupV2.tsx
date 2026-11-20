@@ -20,7 +20,6 @@ import {
   buildContextPayload,
   isConsumerEmail,
 } from '../../config/v2Signup';
-import { shouldAskPhoneConsent } from '../../components/PhoneConsentCheckbox';
 import { PHONE_CONSENT_TEXT } from '../../config/consentText';
 import './signupV2.css';
 import '../../components/publicV2/heroV8.css';
@@ -47,7 +46,9 @@ import '../../components/publicV2/heroV8.css';
 const WORKSPACE_URL = '/portal/company';
 
 function SignupV2(): React.ReactElement {
-  const [account, setAccount] = useState<AccountInput>({ fullName: '', workEmail: '', company: '' });
+  const [account, setAccount] = useState<AccountInput>({
+    fullName: '', workEmail: '', company: '', phone: '', phoneConsent: false,
+  });
   const [errors, setErrors] = useState<AccountErrors>({});
   const [serverError, setServerError] = useState('');
   const [creating, setCreating] = useState(false);
@@ -55,9 +56,8 @@ function SignupV2(): React.ReactElement {
   const [finishing, setFinishing] = useState(false);
 
   const [ctx, setCtx] = useState<ContextInput>({
-    role: '', teamSize: '', timeline: '', goal: '', phone: '', notes: '',
+    role: '', teamSize: '', timeline: '', goal: '', notes: '',
     evaluating90Days: false, sponsorshipInterest: false, consentContact: false,
-    phoneConsent: false,
   });
 
   const setField = <K extends keyof AccountInput>(k: K, v: AccountInput[K]) =>
@@ -241,6 +241,27 @@ function SignupV2(): React.ReactElement {
                   {errors.company ? <span className="cbv2-err" role="alert">{errors.company}</span> : null}
                 </label>
 
+                <label className="cbv2-field">
+                  <span className="cbv2-field__label">Phone</span>
+                  <input
+                    className="cbv2-field__input"
+                    type="tel"
+                    autoComplete="tel"
+                    required
+                    value={account.phone}
+                    onChange={(ev) => setField('phone', ev.target.value)}
+                    aria-invalid={Boolean(errors.phone)}
+                  />
+                  {errors.phone ? <span className="cbv2-err" role="alert">{errors.phone}</span> : null}
+                </label>
+
+                {/* Always shown beside the phone (PH1), never pre-ticked, never required. */}
+                <label className="cbv2-consent">
+                  <input type="checkbox" checked={account.phoneConsent}
+                    onChange={(ev) => setField('phoneConsent', ev.target.checked)} />
+                  <span>{PHONE_CONSENT_TEXT}</span>
+                </label>
+
                 {serverError ? (
                   <p className="cbv2-err cbv2-err--server" role="alert">{serverError}</p>
                 ) : null}
@@ -302,26 +323,6 @@ function SignupV2(): React.ReactElement {
                     ))}
                   </div>
                 </fieldset>
-
-                <label className="cbv2-field">
-                  <span className="cbv2-field__label">Phone, if you would rather be called</span>
-                  <input className="cbv2-field__input" type="tel" autoComplete="tel"
-                    value={ctx.phone} onChange={(ev) => setCtxField('phone', ev.target.value)} />
-                </label>
-
-                {/*
-                  Directly under the number rather than with the three ticks below,
-                  because it is about this field and they are not. Shown only once
-                  something is typed; never pre-ticked; leaving it alone still
-                  finishes the signup.
-                */}
-                {shouldAskPhoneConsent(ctx.phone) && (
-                  <label className="cbv2-consent">
-                    <input type="checkbox" checked={ctx.phoneConsent}
-                      onChange={(ev) => setCtxField('phoneConsent', ev.target.checked)} />
-                    <span>{PHONE_CONSENT_TEXT}</span>
-                  </label>
-                )}
 
                 <label className="cbv2-field">
                   <span className="cbv2-field__label">Anything we should know</span>

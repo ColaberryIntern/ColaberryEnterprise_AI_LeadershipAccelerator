@@ -4,6 +4,7 @@ import { captureUTMFromURL } from '../services/utmService';
 import { captureCampaignFromURL } from '../services/campaignAttributionService';
 import SEOHead from '../components/SEOHead';
 import PhoneConsentCheckbox from '../components/PhoneConsentCheckbox';
+import { phoneProblem } from '../utils/phone';
 
 // Config-driven vertical variants of the AI ROI Pilot landing page. One component,
 // many verticals (DRY). Each variant has its own URL and lead attribution
@@ -119,6 +120,13 @@ function AIPilotVerticalPage({ variantKey }: { variantKey: keyof typeof VARIANTS
     e.preventDefault();
     if (!form.name || !form.email || !form.consent_contact) {
       setErrorMsg('Please add your name, work email, and check the consent box.');
+      setStatus('error');
+      return;
+    }
+    // PH1: the phone is required on every public lead form; the call/text box is not.
+    const phoneError = phoneProblem(form.phone);
+    if (phoneError) {
+      setErrorMsg(phoneError);
       setStatus('error');
       return;
     }
@@ -299,14 +307,13 @@ function AIPilotVerticalPage({ variantKey }: { variantKey: keyof typeof VARIANTS
                     <input type="text" className="form-control" value={form.company} onChange={(e) => update('company', e.target.value)} />
                   </div>
                   <div className="col-md-5">
-                    <label className="form-label small fw-bold" style={{ color: DARK.text }}>Phone</label>
-                    <input type="tel" className="form-control" value={form.phone} onChange={(e) => update('phone', e.target.value)} placeholder="(555) 123-4567" />
+                    <label className="form-label small fw-bold" style={{ color: DARK.text }}>Phone *</label>
+                    <input type="tel" className="form-control" value={form.phone} onChange={(e) => update('phone', e.target.value)} placeholder="(555) 123-4567" autoComplete="tel" required />
                   </div>
                 </div>
                 <div className="mb-3">
                   <PhoneConsentCheckbox
                     id="ai-pilot-vertical-phone-consent"
-                    phone={form.phone}
                     checked={form.phone_consent}
                     onChange={(next) => update('phone_consent', next)}
                     disabled={status === 'submitting'}

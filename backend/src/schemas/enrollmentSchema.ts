@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { requiredPhone } from './phone';
 
 export const createInvoiceSchema = z.object({
   /**
@@ -12,7 +13,8 @@ export const createInvoiceSchema = z.object({
   email: z.string().email('Invalid email address').max(255),
   company: z.string().min(1, 'Company is required').max(255),
   title: z.string().max(255).optional().default(''),
-  phone: z.string().max(50).optional().default(''),
+  // REQUIRED (PH1, Ali 2026-11-19): every public signup form requires a phone number.
+  phone: requiredPhone,
   company_size: z.string().max(50).optional().default(''),
   cohort_id: z.string().uuid('Invalid cohort ID'),
 });
@@ -49,7 +51,8 @@ export const createFreeAccountSchema = z.object({
   email: z.string().email('Invalid email address').max(255),
   company: z.string().max(255).optional().default(''),
   title: z.string().max(255).optional().default(''),
-  phone: z.string().max(50).optional().default(''),
+  // REQUIRED (PH1, Ali 2026-11-19). The number only: `phone_consent` above stays optional.
+  phone: requiredPhone,
   company_size: z.string().max(50).optional().default(''),
 });
 
@@ -212,17 +215,22 @@ export const portalFreeSignupSchema = z.object({
   marketing_opt_in: z.boolean().optional(),
 
   /**
-   * Phone, OPTIONAL, and 50 to match `Lead.phone` STRING(50) rather than any opinion about how
-   * long a phone number is.
+   * Phone, REQUIRED, capped at 50 characters to match `Lead.phone` STRING(50) and counted as
+   * 10-15 digits by the shared `requiredPhone` rule.
    *
    * Measured 2026-10-26: of 270 landing-page signups in thirty days, ZERO had a phone, because
    * the form never asked. Open House, which does ask, collected 48 of 53. Nobody can be called
    * without this, so it is the field that unblocks every phone-based follow-up.
    *
-   * It stays optional on purpose. Requiring it would cost signups on a page converting at 41.6%,
-   * and the whole value of this entry point is how little it asks for.
+   * It was optional until PH1. Ali, 2026-11-19, decided every public signup/lead form requires a
+   * phone number, which overrides the earlier "keep the ask small on a 41.6% page" call. The
+   * number is mandatory; permission to call it (`phone_consent` below) is NOT.
+   *
+   * `.strict()` deploy note: the frontend already sent phone when typed, so a newer frontend
+   * against this older backend is fine; an OLDER frontend against this backend 400s a blank phone.
+   * Ship them together.
    */
-  phone: z.string().trim().max(50).optional(),
+  phone: requiredPhone,
 
   /**
    * Permission to CALL OR TEXT, which is a different permission from `marketing_opt_in`.

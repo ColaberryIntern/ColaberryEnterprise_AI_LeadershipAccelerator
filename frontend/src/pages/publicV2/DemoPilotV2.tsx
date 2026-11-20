@@ -5,6 +5,7 @@ import Icon from '../../components/publicV2/Icon';
 import { getUTMParams } from '../../services/utmService';
 import { identifyVisitor } from '../../utils/tracker';
 import { createIntake } from '../../services/enterpriseIntakeApi';
+import { PHONE_CONSENT_TEXT } from '../../config/consentText';
 import DemoPilotIntake from './DemoPilotIntake';
 import {
   DEPARTMENTS,
@@ -28,8 +29,10 @@ import {
  * the process, two numbers, and permission. The interview asks the rest.
  *
  * CONSENT IS NOT OPTIONAL. The tick to be contacted blocks submission, as /contact always has.
- * The AI call has its OWN tick, tied to the number: one sentence about being "contacted" must
- * never authorize an autodialed call. No number, or no tick, means no call is offered.
+ * The phone NUMBER is required (PH1, Ali 2026-11-19: every public lead form requires one). The
+ * call/text permission beside it is a separate tick, always shown, unticked and NOT required:
+ * one sentence about being "contacted" must never authorize an automated call. No tick means
+ * no AI call is offered; the interview is typed instead.
  *
  * It posts to /api/enterprise/intake, which writes the same lead /api/leads wrote (same form
  * type, same message, same pipeline) and opens an intake record. Its random id goes in the
@@ -189,20 +192,25 @@ export function DemoPilotV2(): React.ReactElement {
                   autoComplete: 'url',
                   placeholder: 'e.g. acme.com',
                 })}
-                {field('phone', 'dp-phone', <>Mobile number <small>for the AI call</small></>, {
+                {field('phone', 'dp-phone', 'Mobile number', {
                   type: 'tel',
+                  inputMode: 'tel',
                   autoComplete: 'tel',
+                  required: true,
                 })}
               </div>
-              {form.phone.trim() ? (
-                <div className="cbv2-consent5">
-                  <input type="checkbox" id="dp-call" name="callConsent" checked={form.callConsent} onChange={change} />
-                  <label htmlFor="dp-call">
-                    Colaberry&apos;s AI may call this number now to interview me about this process. It will say
-                    it is an AI.
-                  </label>
-                </div>
-              ) : null}
+              {/* PH1: always shown beside the phone, unticked, never required. It is also the
+                  grant the AI interview call rests on: no tick, no "Call me now". */}
+              <div className="cbv2-consent5">
+                <input
+                  type="checkbox"
+                  id="dp-phone-consent"
+                  name="callConsent"
+                  checked={form.callConsent}
+                  onChange={change}
+                />
+                <label htmlFor="dp-phone-consent">{PHONE_CONSENT_TEXT}</label>
+              </div>
 
               <fieldset className="cbv2-field5 cbv2-field5--set">
                 <legend>

@@ -4,6 +4,8 @@ import CompanyMomentumDashboard from '../components/capability/CompanyMomentumDa
 import { registerOrg, persistParticipantSession } from '../services/orgApi';
 import EnterpriseLockup from '../components/publicV2/EnterpriseLockup';
 import { MANAGEMENT_PREVIEW_ENTERPRISE_CSS } from './managementPreviewEnterpriseStyles';
+import { PHONE_CONSENT_TEXT } from '../config/consentText';
+import { phoneProblem } from '../utils/phone';
 
 /**
  * ManagementPreviewPage (/try) — preview of the enterprise MANAGEMENT
@@ -159,6 +161,9 @@ function ManagementPreviewPage() {
   const [regName, setRegName] = useState('');
   const [regCompany, setRegCompany] = useState('');
   const [regEmail, setRegEmail] = useState('');
+  // PH1: the phone is required; permission to call or text it is not, and starts unticked.
+  const [regPhone, setRegPhone] = useState('');
+  const [regPhoneConsent, setRegPhoneConsent] = useState(false);
   const [regBusy, setRegBusy] = useState(false);
   const [regErr, setRegErr] = useState<string | null>(null);
   const openReg = () => { setRegErr(null); setShowReg(true); };
@@ -167,9 +172,14 @@ function ManagementPreviewPage() {
     const workEmail = regEmail.trim();
     if (!name) { setRegErr('Please enter your name.'); return; }
     if (!/\S+@\S+\.\S+/.test(workEmail)) { setRegErr('Please enter a valid work email.'); return; }
+    const phoneError = phoneProblem(regPhone);
+    if (phoneError) { setRegErr(phoneError); return; }
     setRegBusy(true); setRegErr(null);
     try {
-      const res = await registerOrg({ name, company: regCompany.trim() || undefined, email: workEmail });
+      const res = await registerOrg({
+        name, company: regCompany.trim() || undefined, email: workEmail,
+        phone: regPhone.trim(), phone_consent: regPhoneConsent,
+      });
       // C103: an email that already has an account gets a sign-in link, not a session.
       if (!res.jwt) {
         setRegErr(res.message || 'You already have an account. Check your email for a sign-in link.');
@@ -421,6 +431,12 @@ function ManagementPreviewPage() {
               <input style={inputStyle} placeholder="Your name" value={regName} disabled={regBusy} autoFocus onChange={(e) => setRegName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') submitReg(); }} />
               <input style={inputStyle} placeholder="Company (optional)" value={regCompany} disabled={regBusy} onChange={(e) => setRegCompany(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') submitReg(); }} />
               <input style={inputStyle} type="email" placeholder="Work email" value={regEmail} disabled={regBusy} onChange={(e) => setRegEmail(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') submitReg(); }} />
+              <input style={inputStyle} type="tel" inputMode="tel" autoComplete="tel" aria-label="Phone number" placeholder="Phone number" required value={regPhone} disabled={regBusy} onChange={(e) => setRegPhone(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') submitReg(); }} />
+              {/* Always shown beside the phone (PH1), unticked, never required to create the account. */}
+              <label htmlFor="try-phone-consent" style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'flex-start', fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', lineHeight: 1.45, cursor: 'pointer' }}>
+                <input id="try-phone-consent" type="checkbox" checked={regPhoneConsent} disabled={regBusy} onChange={(e) => setRegPhoneConsent(e.target.checked)} style={{ marginTop: 3, flexShrink: 0 }} />
+                <span>{PHONE_CONSENT_TEXT}</span>
+              </label>
             </div>
             {regErr && <div style={{ color: 'var(--status-danger, #C20E1E)', fontSize: 'var(--fs-caption)', fontWeight: 700, marginTop: 'var(--space-3)' }}>{regErr}</div>}
             <div style={{ display: 'flex', gap: 'var(--space-3)', marginTop: 'var(--space-5)', justifyContent: 'flex-end' }}>

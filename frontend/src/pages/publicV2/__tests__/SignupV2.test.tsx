@@ -35,20 +35,21 @@ const account: AccountInput = {
   fullName: '  Dana Reyes ',
   workEmail: ' dana@acme.com ',
   company: ' Acme Corp ',
+  phone: ' (555) 555-0100 ',
+  phoneConsent: true,
 };
 
 const ctx: ContextInput = {
   role: 'exec', teamSize: '50-199', timeline: 'this_quarter', goal: 'measure_readiness',
-  phone: ' 555-0100 ', notes: ' We have no idea where we stand. ',
+  notes: ' We have no idea where we stand. ',
   evaluating90Days: true, sponsorshipInterest: true, consentContact: true,
-  phoneConsent: true,
 };
 
 describe('buildContextPayload — the phone grant is its own field', () => {
   it('carries phone_consent separately from consent_contact', () => {
     // "You may contact me about this" is channel-blind and cannot stand as
     // agreement to be telephoned, so the two must be able to disagree.
-    const p = buildContextPayload(account, { ...ctx, phoneConsent: false }, {}, '/signup');
+    const p = buildContextPayload({ ...account, phoneConsent: false }, ctx, {}, '/signup');
     expect(p.consent_contact).toBe(true);
     expect(p.phone_consent).toBe(false);
   });
@@ -56,14 +57,18 @@ describe('buildContextPayload — the phone grant is its own field', () => {
   it('sends the grant when it was given', () => {
     const p = buildContextPayload(account, ctx, {}, '/signup');
     expect(p.phone_consent).toBe(true);
-    expect(p.phone).toBe('555-0100');
+    expect(p.phone).toBe('(555) 555-0100');
   });
 });
 
 describe('buildAccountBody — sends only what the endpoint accepts', () => {
-  it('sends exactly name, email and company', () => {
-    // POST /api/portal/org/register accepts { name, company?, email } and nothing else.
-    expect(Object.keys(buildAccountBody(account)).sort()).toEqual(['company', 'email', 'name']);
+  it('sends exactly name, email, company, phone and the phone permission', () => {
+    // POST /api/portal/org/register accepts { name, company?, email, phone, phone_consent? } (PH1).
+    expect(Object.keys(buildAccountBody(account)).sort()).toEqual(['company', 'email', 'name', 'phone', 'phone_consent']);
+  });
+
+  it('sends phone_consent false when the box was left alone', () => {
+    expect(buildAccountBody({ ...account, phoneConsent: false }).phone_consent).toBe(false);
   });
 
   it('trims the values', () => {
@@ -87,6 +92,12 @@ describe('validateAccount — required, but not obstructive', () => {
     expect(validateAccount({ ...account, fullName: ' ' }).fullName).toBeTruthy();
     expect(validateAccount({ ...account, workEmail: 'nope' }).workEmail).toBeTruthy();
     expect(validateAccount({ ...account, company: '' }).company).toBeTruthy();
+  });
+
+  it('requires a phone with 10 to 15 digits (PH1), and not the permission to call it', () => {
+    expect(validateAccount({ ...account, phone: '' }).phone).toBeTruthy();
+    expect(validateAccount({ ...account, phone: '555-0100' }).phone).toBeTruthy();
+    expect(validateAccount({ ...account, phoneConsent: false })).toEqual({});
   });
 
   it('accepts a complete account', () => {

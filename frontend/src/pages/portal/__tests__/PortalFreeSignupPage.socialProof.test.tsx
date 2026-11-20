@@ -59,11 +59,14 @@ async function mount() {
 }
 
 /** By id, never by index: this suite exists because a field was inserted above the others. */
-async function fillAndSubmit(name = 'Dana Okoro', email = 'dana@example.com') {
+async function fillAndSubmit(name = 'Dana Okoro', email = 'dana@example.com', phone = '(214) 555-0100') {
   const nameEl = container.querySelector<HTMLInputElement>('#cbfs-name')!;
   const emailEl = container.querySelector<HTMLInputElement>('#cbfs-email')!;
+  const phoneEl = container.querySelector<HTMLInputElement>('#cbfs-phone')!;
   await act(async () => { type(nameEl, name); });
   await act(async () => { type(emailEl, email); });
+  // The phone is REQUIRED (PH1). A test that already typed one keeps it.
+  if (phoneEl.value === '') await act(async () => { type(phoneEl, phone); });
   await act(async () => { submitButton().dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
 }
 

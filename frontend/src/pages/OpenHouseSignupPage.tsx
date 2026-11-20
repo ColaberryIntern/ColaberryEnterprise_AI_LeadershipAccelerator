@@ -11,11 +11,8 @@ import { loadMetaPixel } from '../services/metaPixel';
 import { CBOH_CSS } from './openHouseStyles';
 import { OPEN_HOUSE_LEAD_PATH } from './OpenHouseLeadPage';
 import { SIGNUP_CONSENT_TEXT, PHONE_CONSENT_TEXT } from '../config/consentText';
-// The GATE and the WORDING are shared; the markup is not. PhoneConsentCheckbox renders
-// Bootstrap, and this page has its own `cboh-*` sheet - so it calls the rule and renders
-// with its own primitives, which is the path that component's own docs prescribe.
-import { shouldAskPhoneConsent } from '../components/PhoneConsentCheckbox';
 import ColaberryLockup from '../components/brand/ColaberryLockup';
+import { phoneProblem } from '../utils/phone';
 
 /**
  * The Open House front door (OH-3) — where the ads actually land people.
@@ -70,25 +67,10 @@ const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
  * only - so from the day it shipped, the funnel stopped collecting phone numbers.
  * This puts the field back and makes it required.
  *
- * Counted in DIGITS, matching `PHONE_MIN_DIGITS` on the route, so the page never
- * accepts something the backend will refuse.
+ * The rule now lives in utils/phone (PH1, 2026-11-19), shared by every public form so
+ * none accepts something the backend will refuse. Re-exported for existing imports.
  */
-const PHONE_MIN_DIGITS = 10;
-const PHONE_MAX_DIGITS = 15;
-// The route caps the raw string at 50 characters as well as the digit count. Without
-// this line a long entry passed here and came back a 400 - the visitor told the number
-// was fine and then refused. Caught by running both rules against one table of inputs
-// before shipping, which is the only reason it is not a bug report.
-const PHONE_MAX_CHARS = 50;
-
-export function phoneProblem(raw: string): string | null {
-  const digits = raw.replace(/\D/g, '');
-  if (digits === '') return 'Please enter your phone number.';
-  if (raw.trim().length > PHONE_MAX_CHARS) return 'That number is too long. Please enter just the number.';
-  if (digits.length < PHONE_MIN_DIGITS) return 'That number looks too short. Please include the area code.';
-  if (digits.length > PHONE_MAX_DIGITS) return 'That number has too many digits.';
-  return null;
-}
+export { phoneProblem };
 
 /** "394 seats left", or nothing at all. 0 and null both mean "do not claim a number". */
 export function seatsLabel(seatsRemaining: number | null | undefined): string {
@@ -293,19 +275,16 @@ function OpenHouseSignupPage(): React.ReactElement {
                 So we can reach you about your seat and the joining link.
               </p>
 
-              {/* Asked only once a number is typed: permission to call somebody we have
-                  no number for grants nothing, and a box sitting above an empty field
-                  reads as a condition of submitting, which it is not. */}
-              {shouldAskPhoneConsent(phone) && (
-                <label className="cboh-consent" htmlFor="cboh-phone-consent">
-                  <input
-                    id="cboh-phone-consent" className="cboh-check" type="checkbox"
-                    checked={phoneConsent} onChange={(e) => setPhoneConsent(e.target.checked)}
-                    disabled={loading}
-                  />
-                  <span>{PHONE_CONSENT_TEXT}</span>
-                </label>
-              )}
+              {/* Always shown beside the phone (PH1), unticked and optional: the number
+                  is required, permission to call or text it is not. */}
+              <label className="cboh-consent" htmlFor="cboh-phone-consent">
+                <input
+                  id="cboh-phone-consent" className="cboh-check" type="checkbox"
+                  checked={phoneConsent} onChange={(e) => setPhoneConsent(e.target.checked)}
+                  disabled={loading}
+                />
+                <span>{PHONE_CONSENT_TEXT}</span>
+              </label>
 
               {/* Beside the field it is about, which is where PortalFreeSignupPage moved
                   its own to after measuring 59 ticks on 347 signups with it sitting last. */}

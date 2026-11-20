@@ -15,40 +15,25 @@ import { PHONE_CONSENT_TEXT } from '../config/consentText';
  * `colaberry/core` primitives on /contact, the `cbv2-*` sheet on the publicV2
  * pages, inline styles on /enroll. One component trying to wear all four would
  * either take a dozen class-name props or render foreign markup into a page that
- * has its own, so the pages that have their own primitives call
- * `shouldAskPhoneConsent` and render with them.
+ * has its own, so the pages that have their own primitives render
+ * `PHONE_CONSENT_TEXT` with them.
  *
- * ── THE TWO RULES ───────────────────────────────────────────────────────────
+ * ── THE TWO RULES (PH1, Ali 2026-11-19) ─────────────────────────────────────
  *
- * 1. ASK ONLY ONCE A NUMBER IS TYPED. Permission to call somebody we have no
- *    number for grants nothing, and a phone-permission box sitting on a form
- *    before the field is filled reads as a condition of submitting it, which it
- *    is not.
+ * 1. ALWAYS SHOWN, NEVER REQUIRED. Every public form now requires a phone number,
+ *    so the box sits beside the field from the start rather than appearing once a
+ *    number is typed. Its wording says outright that consent is not required to
+ *    sign up, and submitting never depends on it: a required number must never be
+ *    read as a granted permission.
  *
  * 2. NEVER PRE-TICKED. Consent has to be an affirmative act. This is enforced by
  *    the caller's initial state rather than here (the component is controlled),
- *    which is exactly why `phoneConsentState.test.tsx` asserts every caller
- *    starts it `false`.
+ *    which is exactly why every caller starts it `false`.
  */
-
-/**
- * Rule 1, as a function, so every form asks the same question of the same input.
- *
- * Whitespace-only is not a number. This intentionally does NOT try to validate the
- * number — `normalizePhone` on the backend is the authority on what is dialable,
- * and a frontend that hid the tick for a number it judged malformed would collect
- * a phone with no way to authorise it. Showing the box for a half-typed number
- * costs nothing: the backend writes no grant it cannot key.
- */
-export function shouldAskPhoneConsent(phone: string | null | undefined): boolean {
-  return typeof phone === 'string' && phone.trim() !== '';
-}
 
 export interface PhoneConsentCheckboxProps {
   /** Unique within the page. Several of these forms coexist on one route. */
   id: string;
-  /** The current phone value. The box renders only once this is non-blank. */
-  phone: string;
   checked: boolean;
   onChange: (next: boolean) => void;
   disabled?: boolean;
@@ -58,16 +43,9 @@ export interface PhoneConsentCheckboxProps {
   labelClassName?: string;
 }
 
-/**
- * The Bootstrap renderer, for the forms that are already Bootstrap.
- *
- * Returns null rather than a hidden element when there is no number: a
- * `display:none` checkbox is still in the form, still submittable, and still read
- * by a screen reader in some modes.
- */
+/** The Bootstrap renderer, for the forms that are already Bootstrap. */
 export default function PhoneConsentCheckbox({
   id,
-  phone,
   checked,
   onChange,
   disabled = false,
@@ -75,8 +53,6 @@ export default function PhoneConsentCheckbox({
   inputClassName = 'form-check-input',
   labelClassName = 'form-check-label small text-muted',
 }: PhoneConsentCheckboxProps) {
-  if (!shouldAskPhoneConsent(phone)) return null;
-
   return (
     <div className={wrapperClassName}>
       <input

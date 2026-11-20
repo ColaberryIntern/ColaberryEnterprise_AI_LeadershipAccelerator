@@ -81,6 +81,15 @@ const GOOD_CONTENT = {
   title: 'Six-week AI build',
   sections: [
     { type: 'hero', headline: 'Ship an AI project in six weeks' },
+    // PH1: a button may only go to a signup page that requires a phone number.
+    { type: 'cta', headline: 'Apply', cta: { label: 'Apply now', href: '/open-house' } },
+  ],
+};
+
+const OFF_POLICY_CONTENT = {
+  title: 'Six-week AI build',
+  sections: [
+    { type: 'hero', headline: 'Ship an AI project in six weeks' },
     { type: 'cta', headline: 'Apply', cta: { label: 'Apply now', href: '/apply' } },
   ],
 };
@@ -266,6 +275,14 @@ describe('publishing', () => {
     expect(rows[0].status).toBe('draft');
   });
 
+  it('PH1: refuses to publish a page whose button skips the phone-requiring signup', async () => {
+    rows[0].content = OFF_POLICY_CONTENT;
+    const res = await request(app).post(`/api/admin/landing-pages/${PAGE}/publish`).send({});
+    expect(res.status).toBe(422);
+    expect(res.body.error_class).toBe('CtaDestinationNotAllowed');
+    expect(rows[0].status).toBe('draft');
+  });
+
   it('refuses to publish without a slug, because the URL cannot be built', async () => {
     rows[0].slug = null;
     const res = await request(app).post(`/api/admin/landing-pages/${PAGE}/publish`).send({});
@@ -314,6 +331,21 @@ describe('hand-editing', () => {
     const res = await request(app).patch(`/api/admin/landing-pages/${PAGE}`)
       .send({ content: { sections: [{ type: 'cta', headline: 'Go', cta: { label: 'x', href: 'javascript:alert(1)' } }] } });
     expect(res.status).toBe(400);
+  });
+
+  it('PH1: refuses a button that goes anywhere but a phone-requiring signup page', async () => {
+    const res = await request(app).patch(`/api/admin/landing-pages/${PAGE}`).send({ content: OFF_POLICY_CONTENT });
+    expect(res.status).toBe(400);
+    expect(res.body.error_class).toBe('CtaDestinationNotAllowed');
+    expect(res.body.details).toEqual(['/apply']);
+    // Nothing was saved.
+    expect(rows[0].content).toEqual(GOOD_CONTENT);
+  });
+
+  it('PH1: accepts a button to /portal/signup with tracking tags on it', async () => {
+    const content = { sections: [{ type: 'cta', headline: 'Go', cta: { label: 'Start', href: '/portal/signup?utm_source=fb' } }] };
+    const res = await request(app).patch(`/api/admin/landing-pages/${PAGE}`).send({ content });
+    expect(res.status).toBe(200);
   });
 
   it('keeps the legacy path column in step with a new slug', async () => {

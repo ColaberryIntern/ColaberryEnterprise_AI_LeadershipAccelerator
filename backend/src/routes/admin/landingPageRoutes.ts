@@ -9,6 +9,7 @@ import { landingPageTraffic } from '../../services/marketing/landingPageTraffic'
 import { siteSlugForBrand } from '../../services/marketing/landingPageSiteTag';
 import { landingPageAudience } from '../../services/marketing/landingPageVisitors';
 import { parseSnackbarConfig, snackbarConfigSchema } from '../../services/marketing/landingPageSnackbar';
+import { disallowedCtaHrefs, CTA_DESTINATION_MESSAGE } from '../../services/marketing/landingPageCtaPolicy';
 
 /**
  * Landing page authoring API — brief in, reviewable page out.
@@ -88,6 +89,22 @@ function bad(res: Response, details: unknown): void {
 }
 
 /**
+ * PH1: refuse to SAVE content whose buttons go anywhere but a phone-requiring signup route.
+ * Returns true when it has answered. Save-time only - the public renderer never runs this, so a
+ * page already live keeps rendering. See services/marketing/landingPageCtaPolicy.ts.
+ */
+function refuseDisallowedCtas(res: Response, content: unknown, status = 400): boolean {
+  const offenders = disallowedCtaHrefs(content);
+  if (offenders.length === 0) return false;
+  res.status(status).json({
+    error: CTA_DESTINATION_MESSAGE,
+    error_class: 'CtaDestinationNotAllowed',
+    details: offenders,
+  });
+  return true;
+}
+
+/**
  * Report a failure to the caller AND to the log.
  *
  * A `WorkflowError` used to return silently - it is an expected, well-described failure, so it
@@ -164,6 +181,8 @@ router.post('/api/admin/landing-pages', requireAdmin, async (req: Request, res: 
 
     const { draftLandingPage } = await import('../../services/marketing/landingPageDraftService');
     const draft = await draftLandingPage({ source: parsed.data.source, brandId: parsed.data.brand_id });
+    // A generated button that goes somewhere other than a phone-requiring signup page is not saved.
+    if (refuseDisallowedCtas(res, draft.content, 422)) return;
 
     // `path` is NOT NULL and UNIQUE on this table from its path-registry days. A hosted page's
     // real address is /lp/:brand/:slug, so the legacy column is filled with that same path to
@@ -246,6 +265,7 @@ router.post('/api/admin/landing-pages/:id/revise', requireAdmin, async (req: Req
       mode: parsed.data.mode ?? 'tweak',
     });
 
+    if (refuseDisallowedCtas(res, draft.content, 422)) return;
     await page.update({ content: draft.content });
     const { readsAsRedesignRequest, modeMismatchNotice } = await import('../../services/marketing/landingPageRevisionMode');
     res.json({
@@ -275,6 +295,8 @@ router.patch('/api/admin/landing-pages/:id', requireAdmin, async (req: Request, 
     if (page.kind !== 'hosted') {
       return void res.status(409).json({ error: 'This is an external path, not a page this platform builds.', error_class: 'NotHosted' });
     }
+
+    if (parsed.data.content && refuseDisallowedCtas(res, parsed.data.content)) return;
 
     const patch: Record<string, unknown> = { ...parsed.data };
     // Keep the legacy `path` column in step with the slug, so the table's own uniqueness still
@@ -363,6 +385,8 @@ router.post('/api/admin/landing-pages/:id/publish', requireAdmin, async (req: Re
         error: 'This page cannot be published until it renders.', error_class: 'UnrenderableContent', details: content.problems,
       });
     }
+    // Publishing is a save of the page's state, so the PH1 button rule applies here too.
+    if (refuseDisallowedCtas(res, content.content, 422)) return;
 
     const { Brand, LandingPage: Model } = await import('../../models');
     const brand = await Brand.findByPk(page.brand_id);

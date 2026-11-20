@@ -23,6 +23,7 @@ import { z } from 'zod';
 import EnterpriseIntake from '../../models/EnterpriseIntake';
 import { createLead, leadSchema } from '../leadService';
 import { capturePhoneConsent } from '../consent/capturePhoneConsent';
+import { requiredPhone } from '../../schemas/phone';
 import { runIntakeTurn, boundTurns } from '../delivery/projectIntake';
 import type { IntakeOutcome } from '../delivery/projectIntake';
 import { requestInstantCallback } from '../callbackRequestService';
@@ -39,7 +40,8 @@ export const intakeFormSchema = z.object({
   email: z.string().trim().email('Invalid email address').max(255),
   company: z.string().trim().min(1, 'Company is required').max(255),
   role: text(100),
-  phone: text(50),
+  // PH1 (Ali 2026-11-19): every public lead form requires a phone number. Same rule as /api/leads.
+  phone: requiredPhone,
   callConsent: z.boolean().optional().default(false),
   website: text(255),
   service: text(50),

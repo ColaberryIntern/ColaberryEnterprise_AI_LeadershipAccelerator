@@ -121,11 +121,16 @@ describe('the form arrives', () => {
     expect(out).toEqual({ token: 'tok-1', callAvailable: true });
   });
 
-  it('never grants a call without both a number and the tick', async () => {
-    await createEnterpriseIntake({ ...FORM, callConsent: false }, { ipAddress: null, userAgent: null });
+  it('never grants a call without the tick', async () => {
+    const out = await createEnterpriseIntake({ ...FORM, callConsent: false }, { ipAddress: null, userAgent: null });
     expect(mockCreateLead.mock.calls[0][0].phone_consent).toBe(false);
-    await createEnterpriseIntake({ ...FORM, phone: '' }, { ipAddress: null, userAgent: null });
-    expect(mockCreateLead.mock.calls[1][0].phone_consent).toBe(false);
+    expect(out.callAvailable).toBe(false);
+  });
+
+  it('PH1: refuses a form with no phone number, or too short a one', () => {
+    expect(() => intakeFormSchema.parse({ ...FORM, phone: '' })).toThrow();
+    expect(() => intakeFormSchema.parse({ ...FORM, phone: '555 0100' })).toThrow();
+    expect(intakeFormSchema.parse(FORM).phone).toBe('(214) 555-0100');
   });
 
   it('offers no call while the Enterprise agent is not configured', async () => {

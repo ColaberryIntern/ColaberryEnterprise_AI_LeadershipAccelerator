@@ -49,8 +49,8 @@ export interface EnterpriseIntakeAttributes {
   interviewed_at: Date | null;
   /** Phase 2: the client's to-do list in the Basecamp "Colaberry Enterprise Intake" project. */
   bc_todolist_id: string | null;
-  created_at?: Date;
-  updated_at?: Date;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 class EnterpriseIntake extends Model<EnterpriseIntakeAttributes> implements EnterpriseIntakeAttributes {
@@ -78,8 +78,8 @@ class EnterpriseIntake extends Model<EnterpriseIntakeAttributes> implements Ente
   declare interviewed_via: 'chat' | 'call' | null;
   declare interviewed_at: Date | null;
   declare bc_todolist_id: string | null;
-  declare created_at: Date;
-  declare updated_at: Date;
+  declare createdAt: Date;
+  declare updatedAt: Date;
 }
 
 EnterpriseIntake.init(

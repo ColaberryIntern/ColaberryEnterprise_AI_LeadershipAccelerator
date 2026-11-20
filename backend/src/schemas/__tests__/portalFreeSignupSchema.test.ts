@@ -14,17 +14,38 @@ import { portalFreeSignupSchema } from '../enrollmentSchema';
  * narrowed; this file is the proof of the narrowing list, class by class.
  */
 
+/**
+ * The phone every accepting body now carries: REQUIRED since PH1 (Ali, 2026-11-19: every public
+ * signup/lead form requires a phone number). Spread into the bodies below so each test still
+ * isolates the one field it is about.
+ */
+const P = { phone: '(214) 555-0100' } as const;
+
 describe('T204 — the schema at the unauthenticated boundary', () => {
+  it('PH1: rejects a signup with no phone, a blank one, or one under 10 digits', () => {
+    for (const phone of [undefined, '', '   ', '555-0100', '1234567890123456']) {
+      const body: Record<string, unknown> = { full_name: 'Maya', email: 'maya@example.com' };
+      if (phone !== undefined) body.phone = phone;
+      expect(portalFreeSignupSchema.safeParse(body).success).toBe(false);
+    }
+  });
+
+  it('PH1: a phone with NO consent is accepted - the permission to call stays optional', () => {
+    const r = portalFreeSignupSchema.safeParse({ ...P, full_name: 'Maya', email: 'maya@example.com' });
+    expect(r.success).toBe(true);
+    expect(r.success && r.data.phone_consent).toBeUndefined();
+  });
+
   /**
    * THE DEPLOY GUARD. `frontend/src/services/onboardingApi.ts` declares
-   * `freeSignup(body: { full_name: string; email: string })` and
+   * `freeSignup(body: { ...P, full_name: string; email: string })` and
    * `PortalFreeSignupPage.tsx` is its only caller, passing exactly those two trimmed
    * strings and nothing else. That is the whole live request shape, which is what
    * makes `.strict()` safe to add to an endpoint already in production — and this test
    * is where that stops being an argument and becomes a check.
    */
   it('accepts exactly the body the portal page sends today, and nothing it does not', () => {
-    expect(portalFreeSignupSchema.safeParse({ full_name: 'Maya', email: 'maya@example.com' }).success)
+    expect(portalFreeSignupSchema.safeParse({ ...P, full_name: 'Maya', email: 'maya@example.com' }).success)
       .toBe(true);
   });
 
@@ -37,16 +58,16 @@ describe('T204 — the schema at the unauthenticated boundary', () => {
    */
   it.each([
     ['an empty body', {}],
-    ['a missing email', { full_name: 'Maya' }],
+    ['a missing email', { ...P, full_name: 'Maya' }],
     ['a missing name', { email: 'a@b.co' }],
-    ['an empty name', { full_name: '', email: 'a@b.co' }],
-    ['a numeric email', { full_name: 'Maya', email: 123 }],
-    ['a null email', { full_name: 'Maya', email: null }],
+    ['an empty name', { ...P, full_name: '', email: 'a@b.co' }],
+    ['a numeric email', { ...P, full_name: 'Maya', email: 123 }],
+    ['a null email', { ...P, full_name: 'Maya', email: null }],
     // `!full_name` rejected 0 before, so it must still be rejected rather than
     // becoming the name "0". A union of string|number alone WIDENS the endpoint here,
     // which is the opposite of the claim the first draft made about this change.
-    ['a zero name', { full_name: 0, email: 'a@b.co' }],
-    ['a NaN name', { full_name: NaN, email: 'a@b.co' }],
+    ['a zero name', { ...P, full_name: 0, email: 'a@b.co' }],
+    ['a NaN name', { ...P, full_name: NaN, email: 'a@b.co' }],
   ])('returns the legacy required message for %s', (_label, body) => {
     const r = portalFreeSignupSchema.safeParse(body);
     expect(r.success).toBe(false);
@@ -56,24 +77,24 @@ describe('T204 — the schema at the unauthenticated boundary', () => {
   it('still accepts a NUMERIC full_name, which the old String() coercion allowed', () => {
     // A number is not a name, but it was accepted before and this is a live public
     // endpoint: tightening it is a separate decision from adding fields.
-    const r = portalFreeSignupSchema.safeParse({ full_name: 123, email: 'a@b.co' });
+    const r = portalFreeSignupSchema.safeParse({ ...P, full_name: 123, email: 'a@b.co' });
     expect(r.success).toBe(true);
     expect(r.success && r.data.full_name).toBe('123');
   });
 
   it('returns the legacy invalid-email message for a malformed address', () => {
-    const r = portalFreeSignupSchema.safeParse({ full_name: 'Maya', email: 'not-an-email' });
+    const r = portalFreeSignupSchema.safeParse({ ...P, full_name: 'Maya', email: 'not-an-email' });
     expect(r.success).toBe(false);
     expect(!r.success && r.error.issues[0].message).toBe('A valid email is required');
   });
 
   it('rejects an over-long name and an over-long email', () => {
-    expect(portalFreeSignupSchema.safeParse({ full_name: 'x'.repeat(256), email: 'a@b.co' }).success).toBe(false);
-    expect(portalFreeSignupSchema.safeParse({ full_name: 'Maya', email: `${'x'.repeat(320)}@b.co` }).success).toBe(false);
+    expect(portalFreeSignupSchema.safeParse({ ...P, full_name: 'x'.repeat(256), email: 'a@b.co' }).success).toBe(false);
+    expect(portalFreeSignupSchema.safeParse({ ...P, full_name: 'Maya', email: `${'x'.repeat(320)}@b.co` }).success).toBe(false);
   });
 
   it('rejects a non-URL in page_url, which would otherwise reach admin surfaces and the CRM', () => {
-    const r = portalFreeSignupSchema.safeParse({ full_name: 'Maya', email: 'a@b.co', page_url: 'not a url' });
+    const r = portalFreeSignupSchema.safeParse({ ...P, full_name: 'Maya', email: 'a@b.co', page_url: 'not a url' });
     expect(r.success).toBe(false);
     expect(!r.success && r.error.issues[0].message).toBe('page_url must be a URL');
   });
@@ -89,13 +110,13 @@ describe('T204 — the schema at the unauthenticated boundary', () => {
     'data:text/html,<script>alert(1)</script>',
     'file:///etc/passwd',
   ])('rejects a dangerous URL scheme in page_url: %s', (page_url) => {
-    expect(portalFreeSignupSchema.safeParse({ full_name: 'Maya', email: 'a@b.co', page_url }).success)
+    expect(portalFreeSignupSchema.safeParse({ ...P, full_name: 'Maya', email: 'a@b.co', page_url }).success)
       .toBe(false);
   });
 
   it('still accepts the schemes a real signup arrives with', () => {
     for (const page_url of ['https://cpn.example.com/ai', 'http://localhost:3000/enroll']) {
-      expect(portalFreeSignupSchema.safeParse({ full_name: 'Maya', email: 'a@b.co', page_url }).success)
+      expect(portalFreeSignupSchema.safeParse({ ...P, full_name: 'Maya', email: 'a@b.co', page_url }).success)
         .toBe(true);
     }
   });
@@ -104,18 +125,18 @@ describe('T204 — the schema at the unauthenticated boundary', () => {
     // Notably this blocks a caller trying to CHOOSE its own programme, which is a
     // server-side decision: this path is always 'learner'.
     expect(portalFreeSignupSchema.safeParse({
-      full_name: 'Maya', email: 'a@b.co', programme: 'learner',
+      ...P, full_name: 'Maya', email: 'a@b.co', programme: 'learner',
     }).success).toBe(false);
   });
 
   it.each(['__proto__', 'constructor', 'prototype'])('rejects the prototype-pollution key %s', (key) => {
-    expect(portalFreeSignupSchema.safeParse({ full_name: 'Maya', email: 'a@b.co', [key]: 'x' }).success)
+    expect(portalFreeSignupSchema.safeParse({ ...P, full_name: 'Maya', email: 'a@b.co', [key]: 'x' }).success)
       .toBe(false);
   });
 
   it.each([
-    ['an array for a string', { full_name: 'Maya', email: 'a@b.co', utm_source: ['x'] }],
-    ['an object for a string', { full_name: 'Maya', email: 'a@b.co', utm_source: { x: 1 } }],
+    ['an array for a string', { ...P, full_name: 'Maya', email: 'a@b.co', utm_source: ['x'] }],
+    ['an object for a string', { ...P, full_name: 'Maya', email: 'a@b.co', utm_source: { x: 1 } }],
     ['an array body', []],
     ['a string body', 'nope'],
   ])('rejects %s', (_label, body) => {
@@ -131,12 +152,12 @@ describe('T204 — the schema at the unauthenticated boundary', () => {
    * endpoint is unchanged when it is not.
    */
   it.each([
-    ['full_name over 255 — the column is STRING(255)', { full_name: 'x'.repeat(256), email: 'a@b.co' }],
-    ['email over the column width', { full_name: 'Maya', email: `${'x'.repeat(320)}@b.co` }],
-    ['an unexpected key, previously ignored', { full_name: 'Maya', email: 'a@b.co', nope: 1 }],
-    ['full_name as an object — the old code stored "[object Object]"', { full_name: {}, email: 'a@b.co' }],
-    ['full_name as a boolean', { full_name: true, email: 'a@b.co' }],
-    ['full_name as an array', { full_name: [], email: 'a@b.co' }],
+    ['full_name over 255 — the column is STRING(255)', { ...P, full_name: 'x'.repeat(256), email: 'a@b.co' }],
+    ['email over the column width', { ...P, full_name: 'Maya', email: `${'x'.repeat(320)}@b.co` }],
+    ['an unexpected key, previously ignored', { ...P, full_name: 'Maya', email: 'a@b.co', nope: 1 }],
+    ['full_name as an object — the old code stored "[object Object]"', { ...P, full_name: {}, email: 'a@b.co' }],
+    ['full_name as a boolean', { ...P, full_name: true, email: 'a@b.co' }],
+    ['full_name as an array', { ...P, full_name: [], email: 'a@b.co' }],
   ])('NARROWER than before, deliberately: rejects %s', (_label, body) => {
     expect(portalFreeSignupSchema.safeParse(body).success).toBe(false);
   });
@@ -160,7 +181,7 @@ describe('T204 — the schema at the unauthenticated boundary', () => {
     ['a single-character TLD', 'a@b.c'],
     ['an all-digit TLD', 'a@b.12'],
   ])('NARROWER than the old regex, class 5: rejects %s', (_label, email) => {
-    expect(portalFreeSignupSchema.safeParse({ full_name: 'Maya', email }).success).toBe(false);
+    expect(portalFreeSignupSchema.safeParse({ ...P, full_name: 'Maya', email }).success).toBe(false);
   });
 
   it.each([
@@ -169,7 +190,7 @@ describe('T204 — the schema at the unauthenticated boundary', () => {
     "o'brien@example.museum",
     'xn--bcher-kva@example.com',
   ])('but still accepts the realistic address %s, which is why class 5 is acceptable', (email) => {
-    expect(portalFreeSignupSchema.safeParse({ full_name: 'Maya', email }).success).toBe(true);
+    expect(portalFreeSignupSchema.safeParse({ ...P, full_name: 'Maya', email }).success).toBe(true);
   });
 
   /**
@@ -182,12 +203,12 @@ describe('T204 — the schema at the unauthenticated boundary', () => {
     ['a tab-only name', '	'],
     ['Infinity as a name', Infinity],
   ])('NARROWER than before, class 6: rejects %s (previously a 500)', (_label, full_name) => {
-    expect(portalFreeSignupSchema.safeParse({ full_name, email: 'a@b.co' }).success).toBe(false);
+    expect(portalFreeSignupSchema.safeParse({ ...P, full_name, email: 'a@b.co' }).success).toBe(false);
   });
 
   it('trims what it accepts', () => {
     const r = portalFreeSignupSchema.safeParse({
-      full_name: '  Maya  ', email: '  MAYA@Example.COM  ', source: ' cpn_landing ',
+      ...P, full_name: '  Maya  ', email: '  MAYA@Example.COM  ', source: ' cpn_landing ',
     });
     expect(r.success).toBe(true);
     if (!r.success) return;
@@ -205,7 +226,7 @@ describe('T204 — the schema at the unauthenticated boundary', () => {
    */
   it('accepts the consent as a boolean', () => {
     const r = portalFreeSignupSchema.safeParse({
-      full_name: 'Maya', email: 'maya@example.com', social_proof_opt_in: true,
+      ...P, full_name: 'Maya', email: 'maya@example.com', social_proof_opt_in: true,
     });
     expect(r.success).toBe(true);
     if (!r.success) return;
@@ -213,7 +234,7 @@ describe('T204 — the schema at the unauthenticated boundary', () => {
   });
 
   it('leaves it UNDEFINED when absent, rather than inventing a false', () => {
-    const r = portalFreeSignupSchema.safeParse({ full_name: 'Maya', email: 'maya@example.com' });
+    const r = portalFreeSignupSchema.safeParse({ ...P, full_name: 'Maya', email: 'maya@example.com' });
     expect(r.success).toBe(true);
     if (!r.success) return;
     expect(r.data.social_proof_opt_in).toBeUndefined();
@@ -225,7 +246,7 @@ describe('T204 — the schema at the unauthenticated boundary', () => {
     ['the number 1', 1],
   ])('rejects %s: one place decides what a tick is, and it is not this one', (_l, value) => {
     expect(portalFreeSignupSchema.safeParse({
-      full_name: 'Maya', email: 'maya@example.com', social_proof_opt_in: value,
+      ...P, full_name: 'Maya', email: 'maya@example.com', social_proof_opt_in: value,
     }).success).toBe(false);
   });
 
@@ -233,7 +254,7 @@ describe('T204 — the schema at the unauthenticated boundary', () => {
     // Without this, adding the field by accidentally dropping `.strict()` would make every
     // assertion above pass while the endpoint silently widened.
     expect(portalFreeSignupSchema.safeParse({
-      full_name: 'Maya', email: 'maya@example.com', social_proof_opt_out: true,
+      ...P, full_name: 'Maya', email: 'maya@example.com', social_proof_opt_out: true,
     }).success).toBe(false);
   });
 });

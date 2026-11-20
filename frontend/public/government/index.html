@@ -1213,10 +1213,16 @@ scrim.addEventListener('click',function(e){if(e.target===scrim)closeModal()});
 addEventListener('keydown',function(e){if(e.key==='Escape'&&modalOpen)closeModal()});
 function side(x,title,lines){return '<div class="md__side"><div class="art">'+(x?art(x.art):'')+'</div><span class="k">'+(x?esc(x.name):'Colaberry Inc.')+'</span><h3>'+esc(title)+'</h3>'+
   '<ul>'+lines.map(function(l){return '<li>'+CHECK+'<span>'+l+'</span></li>'}).join('')+'</ul></div>'}
+/* The same rule as requiredPhone on the backend: 10-15 digits, at most 50 characters. */
+function phoneOk(v){var t=String(v||'').trim(),d=t.replace(/\D/g,'');return t.length>0&&t.length<=50&&d.length>=10&&d.length<=15}
 function form(kind,label){
   return '<form id="leadForm" novalidate data-kind="'+kind+'">'+
    '<div class="f2"><div class="fl"><label for="lfN">Full name</label><input id="lfN" name="name" required autocomplete="name"></div><div class="fl"><label for="lfE">Work email</label><input id="lfE" name="email" type="email" required autocomplete="email" placeholder="name@agency.gov"></div></div>'+
    '<div class="f2"><div class="fl"><label for="lfO">Agency or organization</label><input id="lfO" name="org" required autocomplete="organization"></div><div class="fl"><label for="lfR">Your role</label><select id="lfR" name="role"><option>Contracting officer / specialist</option><option>Program or project manager</option><option>Technical evaluator</option><option>Prime contractor / BD</option><option>Other</option></select></div></div>'+
+   /* PH1 (2026-11-19): every public lead form requires a phone. The call/text box beside it is
+      always shown, never pre-ticked and never required; its wording is PHONE_CONSENT_TEXT exactly. */
+   '<div class="fl"><label for="lfP">Phone</label><input id="lfP" name="phone" type="tel" inputmode="tel" required autocomplete="tel" placeholder="(555) 555-5555"></div>'+
+   '<label class="consent"><input type="checkbox" name="phone_consent" id="lfPC"> Colaberry may call or text me at this number, including with AI-assisted or automated calls, about my program and events. Consent isn\'t required to sign up. Message and data rates may apply. Reply STOP or ask us to stop at any time.</label>'+
    '<div class="fl"><label for="lfS">Solicitation or notice ID <small>optional</small></label><input id="lfS" name="notice" placeholder="e.g. RFP number or SAM.gov notice ID"></div>'+
    '<label class="consent"><input type="checkbox" name="ok" required> Send it to my email, and let a Colaberry capture lead follow up about this request.</label>'+
    '<button class="btn btn--red" type="submit">'+label+' '+ARROW+'</button></form>';
@@ -1229,9 +1235,9 @@ function requestModal(x,c,kind){
   var f=md.querySelector('#leadForm');
   f.addEventListener('input',function(e){e.target.removeAttribute('aria-invalid')});f.addEventListener('change',function(e){e.target.removeAttribute('aria-invalid')});
   f.addEventListener('submit',function(e){e.preventDefault();var ok=true;
-    f.querySelectorAll('[required]').forEach(function(i){var bad=i.type==='checkbox'?!i.checked:(!i.value.trim()||(i.type==='email'&&!/^\S+@\S+\.\S+$/.test(i.value)));i.setAttribute('aria-invalid',bad);if(bad&&ok){i.focus();ok=false}});
+    f.querySelectorAll('[required]').forEach(function(i){var bad=i.type==='checkbox'?!i.checked:(!i.value.trim()||(i.type==='email'&&!/^\S+@\S+\.\S+$/.test(i.value))||(i.type==='tel'&&!phoneOk(i.value)));i.setAttribute('aria-invalid',bad);if(bad&&ok){i.focus();ok=false}});
     if(!ok)return;
-    var lead={name:f.elements['name'].value,email:f.elements['email'].value,org:f.elements['org'].value,role:f.elements['role'].value,notice:f.elements['notice'].value,service:x?x.slug:null,caseStudy:c?c.t:null,kind:kind,at:new Date().toISOString()};
+    var lead={name:f.elements['name'].value,email:f.elements['email'].value,phone:f.elements['phone'].value,phoneConsent:f.elements['phone_consent'].checked,org:f.elements['org'].value,role:f.elements['role'].value,notice:f.elements['notice'].value,service:x?x.slug:null,caseStudy:c?c.t:null,kind:kind,at:new Date().toISOString()};
     postLead(lead);
     md.querySelector('.md__main').innerHTML='<button class="md__x" type="button" aria-label="Close">'+XI+'</button><div class="md__done"><div class="ok">'+CHECK+'</div><h4 id="mdT" style="padding:0">On its way to '+esc(lead.email)+'</h4><p class="sub" style="margin-top:8px">'+(c?esc(c.t):'Your package')+' will arrive shortly, and a person on our capture team will follow up. <br><em>A person on our capture team will follow up.</em></p><button class="btn btn--line" type="button" id="mdDone" style="width:auto;margin-top:8px">Back to services</button></div>';
     md.querySelector('.md__x').onclick=closeModal;md.querySelector('#mdDone').onclick=closeModal;md.querySelector('#mdDone').focus();
@@ -1259,8 +1265,8 @@ function capModal(){
   if(ALL_PSC.length)rows.push(['PSC',ALL_PSC.join(', ')]);
   var dl='<dl style="display:grid;grid-template-columns:auto 1fr;font-size:13.5px">'+rows.map(function(r){return '<dt style="font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#8C8C8C;padding:5px 12px 5px 0">'+r[0]+'</dt><dd style="color:#E4E4E3;padding:5px 0">'+r[1]+'</dd>'}).join('')+'</dl>';
   openModal('<div class="md__side"><span class="k">Capability statement</span><h3>Colaberry Inc.</h3>'+dl+'</div><div class="md__main"><button class="md__x" type="button" aria-label="Close">'+XI+'</button><h4 id="mdT">Get the capability statement</h4><p class="sub">The PDF, plus the case studies that match your requirement.</p>'+form('capability','Email me the PDF')+'</div>');
-  var f=md.querySelector('#leadForm');f.addEventListener('submit',function(e){e.preventDefault();var ok=f.checkValidity();if(!ok){f.querySelectorAll('[required]').forEach(function(i){i.setAttribute('aria-invalid',i.type==='checkbox'?!i.checked:!i.value.trim())});return}
-    postLead({name:f.elements['name'].value,email:f.elements['email'].value,org:f.elements['org'].value,role:f.elements['role'].value,notice:f.elements['notice'].value,service:null,caseStudy:null,kind:'capability',at:new Date().toISOString()});
+  var f=md.querySelector('#leadForm');f.addEventListener('submit',function(e){e.preventDefault();var ok=f.checkValidity()&&phoneOk(f.elements['phone'].value);if(!ok){f.querySelectorAll('[required]').forEach(function(i){i.setAttribute('aria-invalid',i.type==='checkbox'?!i.checked:(!i.value.trim()||(i.type==='tel'&&!phoneOk(i.value))))});return}
+    postLead({name:f.elements['name'].value,email:f.elements['email'].value,phone:f.elements['phone'].value,phoneConsent:f.elements['phone_consent'].checked,org:f.elements['org'].value,role:f.elements['role'].value,notice:f.elements['notice'].value,service:null,caseStudy:null,kind:'capability',at:new Date().toISOString()});
     md.querySelector('.md__main').innerHTML='<button class="md__x" type="button" aria-label="Close">'+XI+'</button><div class="md__done"><div class="ok">'+CHECK+'</div><h4 id="mdT" style="padding:0">On its way</h4><p class="sub" style="margin-top:8px">A person on our capture team will follow up.</p></div>';md.querySelector('.md__x').onclick=closeModal});
 }
 $('#capBtn').onclick=capModal;
@@ -1410,6 +1416,9 @@ function postLead(l) {
       body: JSON.stringify({
         name: l.name,
         email: l.email,
+        phone: l.phone,
+        /* Only a tick grants permission to call or text; the required number alone does not. */
+        phone_consent: l.phoneConsent === true,
         company: l.org,
         role: l.role,
         message: msg.join('\n'),

@@ -117,6 +117,7 @@ describe('/book e-book form', () => {
     type('#bk-email', 'dana@example.com');
     type('#bk-company', 'Acme');
     type('#bk-role', 'COO');
+    type('#bk-phone', '(214) 555-0100');
     act(() => q<HTMLInputElement>('#bk-consent').click());
     await submit();
 
@@ -131,6 +132,9 @@ describe('/book e-book form', () => {
       source: 'trustbeforeintelligence',
       form_type: 'book_ebook_request',
       consent_contact: true,
+      phone: '(214) 555-0100',
+      // The call/text box was left alone, so no permission is claimed.
+      phone_consent: false,
     });
 
     const link = downloadLink();
@@ -142,10 +146,21 @@ describe('/book e-book form', () => {
     post.mockRejectedValue(new Error('network'));
     type('#bk-name', 'Dana Reader');
     type('#bk-email', 'dana@example.com');
+    type('#bk-phone', '(214) 555-0100');
     act(() => q<HTMLInputElement>('#bk-consent').click());
     await submit();
     expect(downloadLink()).toBeNull();
     expect(host.textContent).toContain('That did not send');
+  });
+
+  it('PH1: requires a phone, and shows the optional call/text box from the start', async () => {
+    type('#bk-name', 'Dana Reader');
+    type('#bk-email', 'dana@example.com');
+    act(() => q<HTMLInputElement>('#bk-consent').click());
+    expect(q<HTMLInputElement>('#bk-phone-consent').checked).toBe(false);
+    await submit();
+    expect(post).not.toHaveBeenCalled();
+    expect(host.textContent).toContain('Please enter your phone number.');
   });
 });
 

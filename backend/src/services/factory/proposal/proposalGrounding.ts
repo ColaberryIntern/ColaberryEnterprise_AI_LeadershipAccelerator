@@ -44,6 +44,24 @@ export interface GroundingInput {
   sourceExcerpts?: Array<{ documentName: string; text: string }>;
 }
 
+/** B1b: pick the RFP's OWN submission-administration statements (deadline, submission email, how/where to send) out of
+ *  the full requirement set, so they can be grounded PROPOSAL-WIDE. These are administrative requirements that rarely
+ *  belong to a single volume's requirementIds, so without this the per-document requirement grounding misses them and the
+ *  drafter ends up raising a human need for the due date / submission email the solicitation already states — the exact
+ *  "don't ask the due date, it's sitting right above it" awareness gap. Pure + deterministic: no I/O, order-preserving,
+ *  de-duplicated, capped. */
+const SUBMISSION_FACT_RE = /\b(no later than|deadline|due date|date and time|time and date|submit(?:ted|ting|s)?|submission|e-?mail|addressed to|delivered to|mailed to|proposals? (?:are|must|shall|should) be)\b/i;
+export function selectSubmissionFacts(statements: string[], max = 8): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of Array.isArray(statements) ? statements : []) {
+    const s = typeof raw === 'string' ? raw.trim() : '';
+    if (!s || seen.has(s)) continue;
+    if (SUBMISSION_FACT_RE.test(s)) { seen.add(s); out.push(s); if (out.length >= max) break; }
+  }
+  return out;
+}
+
 export interface Grounding {
   title: string;
   scoringFactors: Array<{ label: string; points?: number; percent?: number }>;

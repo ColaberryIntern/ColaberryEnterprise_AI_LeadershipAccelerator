@@ -1,6 +1,6 @@
 import { bookCallSchema } from '../calendarSchema';
 import { createFreeAccountSchema } from '../enrollmentSchema';
-import { leadSchema } from '../../services/leadService';
+import { leadSchema, publicLeadSchema } from '../../services/leadService';
 
 /**
  * `phone_consent` at the three inbound boundaries that accept a phone.
@@ -25,10 +25,13 @@ const BOOKING = {
   email: 'dana@example.com',
   slot_start: '2026-11-04T15:00:00.000Z',
   timezone: 'America/Chicago',
+  // REQUIRED since PH1 (Ali, 2026-11-19): every public signup/lead form requires a phone.
+  phone: '(214) 555-0100',
 };
 
-const FREE_ACCOUNT = { full_name: 'Dana Reyes', email: 'dana@example.com' };
+const FREE_ACCOUNT = { full_name: 'Dana Reyes', email: 'dana@example.com', phone: '(214) 555-0100' };
 const LEAD = { name: 'Dana Reyes', email: 'dana@example.com' };
+const PUBLIC_LEAD = { ...LEAD, phone: '(214) 555-0100' };
 
 describe('bookCallSchema', () => {
   it('accepts the tick as a boolean, "true" or "on"', () => {
@@ -106,6 +109,48 @@ describe('leadSchema', () => {
     // Unlike the two form-facing schemas above, nothing posts "on" to this one
     // from a raw HTML form — the React clients send JSON booleans.
     expect(() => leadSchema.parse({ ...LEAD, phone_consent: 'true' })).toThrow();
+  });
+});
+
+/**
+ * PH1 (Ali, 2026-11-19): the NUMBER is required on every public signup/lead form; the PERMISSION
+ * to call it is not. These pin both halves at the schema boundary.
+ */
+describe('PH1: the phone is required, the permission is not', () => {
+  const BOOKING_NO_PHONE = { ...BOOKING, phone: undefined };
+  const FREE_NO_PHONE = { ...FREE_ACCOUNT, phone: undefined };
+
+  it.each([
+    ['bookCallSchema', bookCallSchema, BOOKING_NO_PHONE],
+    ['createFreeAccountSchema', createFreeAccountSchema, FREE_NO_PHONE],
+    ['publicLeadSchema', publicLeadSchema, LEAD],
+  ])('%s rejects a body with no phone', (_name, schema, base) => {
+    expect(schema.safeParse(base).success).toBe(false);
+  });
+
+  it.each([
+    ['bookCallSchema', bookCallSchema, BOOKING_NO_PHONE],
+    ['createFreeAccountSchema', createFreeAccountSchema, FREE_NO_PHONE],
+    ['publicLeadSchema', publicLeadSchema, LEAD],
+  ])('%s rejects a blank, short or over-long phone', (_name, schema, base) => {
+    for (const phone of ['', '   ', '555-0100', '1234567890123456', 'x'.repeat(51)]) {
+      expect(schema.safeParse({ ...base, phone }).success).toBe(false);
+    }
+  });
+
+  it.each([
+    ['bookCallSchema', bookCallSchema, BOOKING],
+    ['createFreeAccountSchema', createFreeAccountSchema, FREE_ACCOUNT],
+    ['publicLeadSchema', publicLeadSchema, PUBLIC_LEAD],
+  ])('%s accepts a phone with NO consent - consent stays optional', (_name, schema, base) => {
+    const out = schema.parse(base) as Record<string, unknown>;
+    expect(out.phone).toBe('(214) 555-0100');
+    // Never manufactured: absent stays absent (or the leadSchema false default).
+    expect(out.phone_consent === undefined || out.phone_consent === false).toBe(true);
+  });
+
+  it('the internal leadSchema stays phone-optional, for callers that are not public forms', () => {
+    expect(leadSchema.safeParse(LEAD).success).toBe(true);
   });
 });
 

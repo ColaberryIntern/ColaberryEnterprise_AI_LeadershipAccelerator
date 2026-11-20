@@ -7,6 +7,7 @@ import { getSignupAcquisitionFields } from '../../services/utmService';
 import { SIGNUP_CONSENT_TEXT, PHONE_CONSENT_TEXT, SOCIAL_PROOF_CONSENT_TEXT } from '../../config/consentText';
 import { hasLiveParticipantSession } from '../../utils/participantToken';
 import ColaberryLockup from '../../components/brand/ColaberryLockup';
+import { phoneProblem } from '../../utils/phone';
 
 // Public "Start for $0" front door. Creates a $0 guest account (0 points), logs
 // the visitor straight in, and drops them on the Today shell — the top of the
@@ -24,8 +25,9 @@ const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 function PortalFreeSignupPage() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
-  // Optional. 270 signups in thirty days produced zero numbers because the form never asked, so
-  // nobody could be called; requiring it would cost signups on a page converting at 41.6%.
+  // REQUIRED (PH1, Ali 2026-11-19: every public signup/lead form requires a phone number). It was
+  // optional to keep the ask small on a page converting at 41.6%; that call is superseded. The
+  // permission to call it (phoneConsent) stays optional and unticked.
   const [phone, setPhone] = useState('');
   const [phoneConsent, setPhoneConsent] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -63,16 +65,18 @@ function PortalFreeSignupPage() {
     setNotice('');
     if (!fullName.trim()) { setError('Please enter your name.'); return; }
     if (!EMAIL_RE.test(email.trim())) { setError('Please enter a valid email.'); return; }
+    const phoneError = phoneProblem(phone);
+    if (phoneError) { setError(phoneError); return; }
     setLoading(true);
     try {
       const person = {
         full_name: fullName.trim(),
         email: email.trim(),
         marketing_opt_in: marketingOptIn,
-        // Sent only when given. The route is `.strict()`, so a server deployed before these
-        // fields existed would reject the whole signup rather than ignore the extra keys.
-        ...(phone.trim() ? { phone: phone.trim() } : {}),
-        ...(phone.trim() && phoneConsent ? { phone_consent: true } : {}),
+        // Always sent: the route requires it (PH1). The consent key is sent only when ticked,
+        // because the route is `.strict()` and absent means "no permission recorded".
+        phone: phone.trim(),
+        ...(phoneConsent ? { phone_consent: true } : {}),
         // Same rule, and it is why an unticked box sends NOTHING rather than `false`: this page
         // can reach a server that predates the field, and `.strict()` would reject the whole
         // signup over a key it does not know. Absent and false land identically on the row
@@ -210,29 +214,26 @@ function PortalFreeSignupPage() {
             <span>{SIGNUP_CONSENT_TEXT}</span>
           </label>
 
-          <label className="cbfs-label" htmlFor="cbfs-phone">Phone (optional)</label>
+          <label className="cbfs-label" htmlFor="cbfs-phone">Phone number</label>
           <input
-            id="cbfs-phone" className="cbfs-input" type="tel" autoComplete="tel"
+            id="cbfs-phone" className="cbfs-input" type="tel" autoComplete="tel" inputMode="tel"
             placeholder="(555) 555-5555" value={phone}
             onChange={(e) => setPhone(e.target.value)}
-            disabled={loading}
+            disabled={loading} required
           />
 
           {/*
-            Shown only once a number is typed. Permission to call somebody we have no number for
-            grants nothing, and asking up front reads as a condition of signing up, which it is
-            not. Never pre-ticked.
+            Always shown beside the phone (PH1), never pre-ticked, never required: the number is
+            mandatory, permission to call or text it is not, and the wording says so.
           */}
-          {phone.trim() !== '' && (
-            <label className="cbfs-consent" htmlFor="cbfs-phone-consent">
-              <input
-                id="cbfs-phone-consent" className="cbfs-check" type="checkbox"
-                checked={phoneConsent} onChange={(e) => setPhoneConsent(e.target.checked)}
-                disabled={loading}
-              />
-              <span>{PHONE_CONSENT_TEXT}</span>
-            </label>
-          )}
+          <label className="cbfs-consent" htmlFor="cbfs-phone-consent">
+            <input
+              id="cbfs-phone-consent" className="cbfs-check" type="checkbox"
+              checked={phoneConsent} onChange={(e) => setPhoneConsent(e.target.checked)}
+              disabled={loading}
+            />
+            <span>{PHONE_CONSENT_TEXT}</span>
+          </label>
 
           {error && <div className="cbfs-error" role="alert">{error}</div>}
           {notice && <div className="cbfs-notice" role="status" data-testid="cbfs-check-email">{notice}</div>}

@@ -44,12 +44,17 @@ describe('DemoPilotV2 — consent', () => {
     expect(textOf(h)).toContain('I agree that Colaberry may contact me');
   });
 
-  it('W28: asks for a mobile number only for the AI call, with no call tick until a number is typed', () => {
-    // The AI call needs its own grant, tied to the number. The general "may contact me"
-    // tick must never stand in for it, so the call tick only appears beside a number.
+  it('PH1: asks for a REQUIRED phone, with its own optional call/text tick beside it', () => {
+    // Ali, 2026-11-19: every public lead form requires a phone number. The permission to call
+    // it is a separate tick: always shown, unticked, not required. W28: it is also what lets
+    // the AI interview call them.
     const h = html();
     expect(h).toContain('name="phone"');
-    expect(h).not.toContain('name="callConsent"');
+    expect(h).toMatch(/id="dp-phone"[^>]*required/);
+    expect(h).toContain('name="callConsent"');
+    // Static markup escapes the apostrophe in the wording, so match a span without one.
+    expect(textOf(h)).toContain('including with AI-assisted or automated calls');
+    expect(h).not.toMatch(/id="dp-phone-consent"[^>]*checked/);
   });
 });
 
@@ -58,6 +63,7 @@ describe('W28: demoPilotModel', () => {
     ...EMPTY,
     fullName: 'Dana',
     email: 'dana@acme.test',
+    phone: '214 555 0100',
     company: 'Acme',
     process: 'Re-keying orders',
     consentContact: true,
@@ -68,10 +74,11 @@ describe('W28: demoPilotModel', () => {
     expect(validate(filled)).toEqual({});
   });
 
-  it('never sends a call grant without a number', () => {
-    expect(toIntakeBody({ ...filled, callConsent: true, phone: '' }, {}).callConsent).toBe(false);
-    expect(validate({ ...filled, callConsent: true, phone: '12' }).phone).toBeTruthy();
-    expect(toIntakeBody({ ...filled, callConsent: true, phone: '214 555 0100' }, {}).callConsent).toBe(true);
+  it('PH1: requires a phone number, and sends the call grant only when ticked', () => {
+    expect(validate({ ...filled, phone: '' }).phone).toBeTruthy();
+    expect(validate({ ...filled, phone: '555 0100' }).phone).toBeTruthy();
+    expect(toIntakeBody(filled, {}).callConsent).toBe(false);
+    expect(toIntakeBody({ ...filled, callConsent: true }, {}).callConsent).toBe(true);
   });
 
   it('sends the two cost numbers as numbers, and blanks as null', () => {

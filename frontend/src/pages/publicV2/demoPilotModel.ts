@@ -8,6 +8,8 @@
  * Nothing here states a figure of our own; a measured one needs a Claim Registry row first.
  */
 
+import { phoneProblem } from '../../utils/phone';
+
 export const SERVICES = ['Build', 'Guide', 'Train', 'Not sure yet'] as const;
 
 export const DEPARTMENTS = [
@@ -94,7 +96,9 @@ export function validate(f: PilotForm): Record<string, string> {
   else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email.trim())) e.email = 'That does not look like an email address';
   if (!f.company.trim()) e.company = 'Please tell us your company, so we can research it before we meet';
   if (!f.process.trim()) e.process = 'Name one process, even roughly';
-  if (f.callConsent && f.phone.replace(/\D/g, '').length < 7) e.phone = 'Add a number we can call, or untick the call box';
+  // PH1: every public lead form requires a phone number, checked by the one shared rule.
+  const phoneError = phoneProblem(f.phone);
+  if (phoneError) e.phone = phoneError;
   if (f.peopleCount.trim() && figure(f.peopleCount) === null) e.peopleCount = 'A number, please';
   if (f.hoursPerWeek.trim() && figure(f.hoursPerWeek) === null) e.hoursPerWeek = 'A number, please';
   // Blocking, deliberately: consent to be contacted is a compliance surface, not a style choice.
@@ -114,7 +118,7 @@ export function toIntakeBody(
     company: f.company.trim(),
     role: f.role.trim(),
     phone,
-    callConsent: Boolean(f.callConsent && phone),
+    callConsent: f.callConsent,
     website: f.website.trim(),
     service: f.service,
     department: f.department,

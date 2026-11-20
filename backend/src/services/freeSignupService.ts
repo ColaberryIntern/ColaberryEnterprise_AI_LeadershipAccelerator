@@ -385,6 +385,21 @@ export async function createFreeAccount(input: FreeSignupInput): Promise<FreeSig
     input.socialProofOptIn === true,
   );
 
+  // PH1: the number also lands on the ENROLLMENT this call created, so the portal's
+  // "has a phone" check and the settings page see it without a lead join. Only for a row
+  // created here: this route is unauthenticated, and typing somebody else's email must never
+  // let a stranger write a number onto that person's existing account. Never blocks signup.
+  if (phone && disposition === 'created') {
+    try {
+      const row = enrollment as unknown as { phone?: string | null; update?: (p: object) => Promise<unknown> };
+      if (!row.phone && typeof row.update === 'function') await row.update({ phone });
+    } catch (err) {
+      console.error('[freeSignup] enrollment phone write failed', {
+        error_class: err instanceof Error ? err.constructor.name : 'Unknown',
+      });
+    }
+  }
+
   /**
    * Phone permission, recorded per channel and keyed on the NUMBER.
    *

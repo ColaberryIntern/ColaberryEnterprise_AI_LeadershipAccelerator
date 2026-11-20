@@ -14,7 +14,6 @@ import {
   composeSummary,
   StepId,
 } from '../../config/v2Lab';
-import { shouldAskPhoneConsent } from '../../components/PhoneConsentCheckbox';
 import { PHONE_CONSENT_TEXT } from '../../config/consentText';
 import './opportunityLabV2.css';
 
@@ -369,32 +368,35 @@ function OpportunityLabV2(): React.ReactElement {
                 </div>
 
                 <label className="cbv2-field">
-                  <span className="cbv2-field__label">Phone (optional)</span>
+                  <span className="cbv2-field__label">Phone</span>
                   <input
                     className="cbv2-field__input"
                     type="tel"
                     value={phone}
                     onChange={(ev) => setPhone(ev.target.value)}
                     autoComplete="tel"
+                    required
+                    aria-invalid={Boolean(errors.phone)}
                   />
+                  {errors.phone ? (
+                    <span className="cbv2-err" role="alert">{errors.phone}</span>
+                  ) : null}
                 </label>
 
                 {/*
-                  Its own permission, shown only once a number is typed. Consistent
-                  with this page's data stance rather than an exception to it: the
-                  number and the agreement are both things the person typed, on
-                  screen, in the words the backend stores as evidence.
+                  Its own permission, always shown beside the phone (PH1), never
+                  pre-ticked and never required. The number and the agreement are
+                  both things the person chose, on screen, in the words the backend
+                  stores as evidence.
                 */}
-                {shouldAskPhoneConsent(phone) && (
-                  <label className="cbv2-consent">
-                    <input
-                      type="checkbox"
-                      checked={phoneConsent}
-                      onChange={(ev) => setPhoneConsent(ev.target.checked)}
-                    />
-                    <span>{PHONE_CONSENT_TEXT}</span>
-                  </label>
-                )}
+                <label className="cbv2-consent">
+                  <input
+                    type="checkbox"
+                    checked={phoneConsent}
+                    onChange={(ev) => setPhoneConsent(ev.target.checked)}
+                  />
+                  <span>{PHONE_CONSENT_TEXT}</span>
+                </label>
 
                 <label className="cbv2-consent">
                   <input

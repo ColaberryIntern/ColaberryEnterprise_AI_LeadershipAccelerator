@@ -5,6 +5,8 @@ import {
 } from '../services/orgService';
 import { getSponsoredCohorts } from '../services/orgSponsoredCohorts';
 import { emailSignInLinkInstead } from '../services/signup/existingAccountSignIn';
+import { requiredPhone } from '../schemas/phone';
+import { capturePhoneConsent } from '../services/consent/capturePhoneConsent';
 
 // ── Validation schemas (Zod v4 — read .issues, not .errors) ──────────────────
 
@@ -12,6 +14,11 @@ const RegisterSchema = z.object({
   name: z.string().trim().min(1, 'name is required'),
   company: z.string().trim().max(255).optional(),
   email: z.string().trim().toLowerCase().email('a valid email is required'),
+  // REQUIRED (PH1, Ali 2026-11-19): every public signup form requires a phone number. Both
+  // callers (/try and the publicV2 signup) send it.
+  phone: requiredPhone,
+  // Permission to call or text that number. OPTIONAL and separate; absent records nothing.
+  phone_consent: z.boolean().optional(),
   // Which entry site they came from — this is what decides Training vs Business
   // vs Consulting. Optional, and its absence keeps the old behaviour
   // (management_account), so any existing caller that never sends it is
@@ -38,7 +45,18 @@ export async function handleOrgRegister(req: Request, res: Response, next: NextF
     return;
   }
   try {
-    const result = await registerManager(parsed.data);
+    const { phone_consent, ...registration } = parsed.data;
+    const result = await registerManager(registration);
+    // Only a tick writes a grant, keyed on the number typed; the required number alone writes
+    // nothing. Never throws, so it cannot cost anybody their account.
+    await capturePhoneConsent({
+      phone: registration.phone,
+      email: registration.email,
+      phoneConsent: phone_consent,
+      source: 'org_register',
+      ipAddress: req.ip ?? null,
+      userAgent: typeof (req as any).get === 'function' ? req.get('user-agent') ?? null : null,
+    });
     // C103: the email already had an account, so no session and no org details for
     // whoever typed it; the owner gets a sign-in link.
     if (result.existing_account) {

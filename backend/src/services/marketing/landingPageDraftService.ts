@@ -1,6 +1,7 @@
 import { Brand } from '../../models';
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import { WorkflowError } from '../content/contentWorkflowService';
+import { isAllowedCtaHref, CTA_DESTINATION_MESSAGE } from './landingPageCtaPolicy';
 import { findInventedSpecifics } from '../content/composerDraftService';
 import { normalizeHeadingCase } from './landingPageHeadingCase';
 import { revisionInstruction, type RevisionMode } from './landingPageRevisionMode';
@@ -326,6 +327,13 @@ export async function draftLandingPage(input: LandingPageDraftRequest): Promise<
       400,
       'ValidationError',
     );
+  }
+
+  // PH1: the button destination the operator supplies must be a phone-requiring signup route.
+  // Refused before any model call, so nobody pays for a draft that could not be saved.
+  const ctaUrl = (input.ctaUrl ?? '').trim();
+  if (ctaUrl && !isAllowedCtaHref(ctaUrl)) {
+    throw new WorkflowError(CTA_DESTINATION_MESSAGE, 400, 'CtaDestinationNotAllowed');
   }
 
   const brand = await Brand.findByPk(input.brandId);
