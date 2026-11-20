@@ -54,19 +54,31 @@ export async function reviewCycleCore(deps: ReviewCycleDeps, opts?: { maxIterati
     deps.log({ event: 'review_cycle_iteration', iteration: i, passes, scores: checks?.scores ?? null });
     if (passes) return { iterations: i, stoppedBecause: 'passed', finalPasses: true };
 
-    // An open question (an unresolved fact gap) needs a human — stop and surface it.
-    const openQuestions = (checks?.findings ?? []).filter((f) => f.check === 'fact' && f.severity === 'major');
-    if (openQuestions.length) return { iterations: i, stoppedBecause: 'open_questions', finalPasses: false };
-
+    // A fact gap no longer short-circuits the loop. The old code stopped HERE on any fact/major finding without ever
+    // revising — so a drafter placeholder for a fact that IS in the grounding (the engine just phrased the need
+    // differently than the fact's key) blocked the whole document forever, and once that gap was persisted every
+    // re-run bailed on it again. Instead, always let the reviser attempt the fix from the grounding first; only the
+    // facts it genuinely cannot fill (its own returned gaps) surface to a human, below.
     const grounding = await deps.gatherGrounding();
     const revised = await deps.revise(currentHtml, checks?.findings ?? [], grounding);
     if (revised.error || !revised.html) return { iterations: i, stoppedBecause: 'revise_failed', finalPasses: false };
 
-    // The revision raised questions it could not answer from the grounding — persist them and stop for a human.
-    if (revised.gaps.length) { await deps.persistGaps(revised.gaps); deps.log({ event: 'review_cycle_gaps', iteration: i, gaps: revised.gaps.length }); return { iterations: i, stoppedBecause: 'open_questions', finalPasses: false }; }
+    // Save the revision's progress FIRST, even when open questions remain. Discarding a revision that filled some
+    // placeholders (the old behavior — the save came AFTER an early return on gaps) is why the loop never converged:
+    // every run re-drafted the same gaps. A revision is monotonic progress, so persist it, then stop for the human
+    // only on the facts it could not resolve. Writing only when the content changed avoids empty version churn.
+    const changed = revised.html !== currentHtml;
+    if (changed) { await deps.saveVersion(revised.html, revised.changeSummary || `Agent revision ${i}`); currentHtml = revised.html; }
 
-    await deps.saveVersion(revised.html, revised.changeSummary || `Agent revision ${i}`);
-    currentHtml = revised.html;
+    if (revised.gaps.length) {
+      // Facts the reviser could not fill from the grounding genuinely need a human. Persist them and stop — but the
+      // improved version is already saved, so answering the gap and re-running continues from here instead of resetting.
+      await deps.persistGaps(revised.gaps);
+      deps.log({ event: 'review_cycle_gaps', iteration: i, gaps: revised.gaps.length });
+      return { iterations: i, stoppedBecause: 'open_questions', finalPasses: false };
+    }
+    // No open questions and the reviser could not change anything further — more iterations won't help.
+    if (!changed) return { iterations: i, stoppedBecause: 'max_iterations', finalPasses: false };
   }
   return { iterations: max, stoppedBecause: 'max_iterations', finalPasses: false };
 }
