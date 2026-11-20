@@ -42,8 +42,40 @@ export interface DocumentCheckInput {
 const hasAnchor = (contentHtml: string | null, id: string): boolean =>
   typeof contentHtml === 'string' && contentHtml.includes(`data-req="${id}"`);
 
-/** Coverage: fraction of the document's requirements that have authored content (a section with text, or a
- *  data-req anchor in the body). Build-track requirements are removed from the denominator. Pure. */
+/** Strip tags to plain text for the substance heuristics. Pure. */
+const plain = (html: string | null | undefined): string =>
+  String(html ?? '').replace(/<[^>]+>/g, ' ').replace(/&[a-z]+;/gi, ' ').replace(/\s+/g, ' ').trim();
+
+/** The minimum informative length (plain-text chars) an answer must have before it can count as substantive. A
+ *  one-line "we comply" is well under this; a real method answer runs far past it. */
+export const MIN_SUBSTANTIVE_CHARS = 160;
+
+/** Pure boilerplate detector: compliance filler that asserts conformance without saying HOW. Used only to LABEL a
+ *  non-substantive answer precisely in the finding; the substance test itself is length + concreteness below. */
+const BOILERPLATE_RE = /\b(we\s+(will\s+)?comply|in\s+(full\s+)?compliance|fully\s+compliant|the\s+(firm|company|team|proposer|offeror)\s+(understands|acknowledges|will\s+comply)|we\s+(understand|acknowledge|confirm|affirm|attest)|as\s+(required|requested|specified|stated)|meets?\s+(all\s+)?(the\s+)?requirements?|noted\s+and\s+understood|will\s+be\s+provided\s+as\s+required)\b/i;
+export function isBoilerplateAnswer(html: string | null | undefined): boolean {
+  const t = plain(html);
+  return t !== '' && BOILERPLATE_RE.test(t) && !hasConcreteDetail(t);
+}
+
+/** Concreteness signal: a substantive government-proposal answer names specifics — numbers, dates, or concrete
+ *  method/technology/deliverable nouns — rather than restating the requirement and asserting conformance. Pure. */
+const SPECIFIC_RE = /\b(API|SLA|GIS|SSO|RBAC|ETL|CMMS|WOMS|UUID|JSON|SOC\s*2|ISO|FedRAMP|integration|interface|migration|workflow|architecture|schema|endpoint|database|dashboard|encryption|backup|disaster\s+recovery|role|milestone|sprint|phase|week|day|month|timeline|acceptance\s+test|training|ticket|work\s+order|asset|permit|inspection|audit|uptime|response\s+time|deliverable|resume|reference|warranty|support\s+tier)\b/i;
+function hasConcreteDetail(plainText: string): boolean {
+  return /\d/.test(plainText) || SPECIFIC_RE.test(plainText);
+}
+
+/** PURE: is this section a SUBSTANTIVE answer (not just present / not just boilerplate)? A requirement is only
+ *  "covered" when its answer clears a minimum informative length AND names something concrete. This is the fix for
+ *  the headline defect: a bare `data-req` anchor, any-nonempty-text, or a generic "we comply" no longer counts. */
+export function isSubstantiveAnswer(html: string | null | undefined): boolean {
+  const t = plain(html);
+  return t.length >= MIN_SUBSTANTIVE_CHARS && hasConcreteDetail(t);
+}
+
+/** Coverage (SUBSTANTIVE): the fraction of the document's requirements that have a real, concrete answer — not a
+ *  label, not an anchor, not boilerplate. Build-track requirements are removed from the denominator. Pure.
+ *  The OLD structural notion survives as `checkLocationCoverage` so the two are reported separately (R2). */
 export function checkCoverage(input: DocumentCheckInput): { score: number; findings: CheckFinding[] } {
   const exclude = new Set(input.buildRequirementIds ?? []);
   const denom = (input.requirementIds ?? []).filter((id) => !exclude.has(id));
@@ -53,11 +85,29 @@ export function checkCoverage(input: DocumentCheckInput): { score: number; findi
   let covered = 0;
   for (const id of denom) {
     const s = sectionById.get(id);
-    const ok = (s && typeof s.contentHtml === 'string' && s.contentHtml.trim() !== '') || hasAnchor(input.contentHtml, id);
-    if (ok) covered += 1;
+    const html = s?.contentHtml;
+    const present = (typeof html === 'string' && html.trim() !== '') || hasAnchor(input.contentHtml, id);
+    if (isSubstantiveAnswer(html)) { covered += 1; continue; }
+    if (present) findings.push({ check: 'coverage', severity: 'major', message: `Requirement ${id} is addressed but the answer is ${isBoilerplateAnswer(html) ? 'generic compliance boilerplate' : 'too thin'} — it needs a concrete, specific response.`, sectionKey: id });
     else findings.push({ check: 'coverage', severity: 'major', message: `Requirement ${id} is not yet answered in a section.`, sectionKey: id });
   }
   return { score: Math.round((covered / denom.length) * 100), findings };
+}
+
+/** Location coverage (STRUCTURAL): the OLD rule — a requirement is "located" if its section has any nonempty text
+ *  or a `data-req` anchor exists. Preserved as an INDEPENDENT signal (R2): it says WHERE a requirement is addressed,
+ *  never that it is substantively satisfied. Reported alongside coverage, not inside the weighted pass score. Pure. */
+export function checkLocationCoverage(input: DocumentCheckInput): { score: number } {
+  const exclude = new Set(input.buildRequirementIds ?? []);
+  const denom = (input.requirementIds ?? []).filter((id) => !exclude.has(id));
+  const sectionById = new Map((input.sections ?? []).map((s) => [s.sectionKey, s]));
+  if (denom.length === 0) return { score: 100 };
+  let located = 0;
+  for (const id of denom) {
+    const s = sectionById.get(id);
+    if ((s && typeof s.contentHtml === 'string' && s.contentHtml.trim() !== '') || hasAnchor(input.contentHtml, id)) located += 1;
+  }
+  return { score: Math.round((located / denom.length) * 100) };
 }
 
 /** Format: page count within the page limit (over = FATAL), a file name is set, body has headings. Pure. */
@@ -113,6 +163,10 @@ export interface AiCheckResults {
   findings: CheckFinding[];
   /** v3 T11: the per-judge run records (evaluator/proof/clarity), recorded on the scored version's judge_run_ids. */
   judgeRuns?: Array<{ judge: string; runId: string; model: string; at: string }>;
+  /** Fraction of the document's plain text the judges actually read (1 = whole document, no truncation). T05. */
+  coverageFootprint?: number;
+  /** Checks that returned UNVERIFIED (e.g. proof found zero claims): scored 0, NEVER a silent pass. T06. */
+  unverified?: Array<'evaluator' | 'proof' | 'clarity'>;
 }
 
 /**
@@ -122,6 +176,7 @@ export interface AiCheckResults {
  */
 export function runDocumentChecks(input: DocumentCheckInput, ai?: AiCheckResults | null): CheckRunResult {
   const coverage = checkCoverage(input);
+  const location = checkLocationCoverage(input);
   const format = checkFormat(input);
   const fact = checkFact(input);
   const aiScores = ai?.scores ?? { evaluator: 0, proof: 0, clarity: 0 };
@@ -136,5 +191,10 @@ export function runDocumentChecks(input: DocumentCheckInput, ai?: AiCheckResults
   };
   const findings = [...coverage.findings, ...format.findings, ...fact.findings, ...aiFindings];
   const fatal = findings.filter((f) => f.severity === 'fatal');
-  return { scores, findings, fatal, passes: passes(scores, fatal, fact.openGaps), pageCount: input.pageCount ?? null };
+  return {
+    scores, findings, fatal, passes: passes(scores, fatal, fact.openGaps), pageCount: input.pageCount ?? null,
+    locationCoverage: location.score,
+    coverageFootprint: ai?.coverageFootprint,
+    unverifiedChecks: ai?.unverified,
+  };
 }

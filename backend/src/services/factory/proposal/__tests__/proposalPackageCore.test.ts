@@ -2,7 +2,7 @@
  * proposalPackageCore — the export gate (blocked on any failing doc / unapproved Gold / fatal item), the manifest
  * shape (version, page count, sha256, blueprint version, sealed pricing), and the redacted-copy transform.
  */
-import { evaluatePackageReadiness, buildPackageManifest, redactHtml, type PackageDoc } from '../proposalPackageCore';
+import { evaluatePackageReadiness, buildPackageManifest, redactHtml, goldApprovedForVersion, type PackageDoc } from '../proposalPackageCore';
 
 const doc = (over: Partial<PackageDoc> = {}): PackageDoc => ({
   key: 'technical', title: 'Technical Proposal', passes: true, goldApproved: true, fatalCount: 0,
@@ -24,6 +24,20 @@ describe('evaluatePackageReadiness', () => {
   });
   it('blocked when there are no documents', () => {
     expect(evaluatePackageReadiness([]).blocking).toEqual(['no_documents']);
+  });
+});
+
+describe('goldApprovedForVersion — version-bound Gold (T18)', () => {
+  it('approval on the CURRENT version counts', () => {
+    expect(goldApprovedForVersion({ status: 'approved', version_id: 'v5' }, 'v5')).toBe(true);
+  });
+  it('T18: approval on a SUPERSEDED version is stale and does not count (edit after Gold forces re-approval)', () => {
+    expect(goldApprovedForVersion({ status: 'approved', version_id: 'v4' }, 'v5')).toBe(false);
+  });
+  it('a pending/returned gate never counts, and a null gate never counts', () => {
+    expect(goldApprovedForVersion({ status: 'pending', version_id: 'v5' }, 'v5')).toBe(false);
+    expect(goldApprovedForVersion(null, 'v5')).toBe(false);
+    expect(goldApprovedForVersion({ status: 'approved', version_id: null }, 'v5')).toBe(false);
   });
 });
 

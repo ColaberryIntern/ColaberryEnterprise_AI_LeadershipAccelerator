@@ -66,4 +66,27 @@ describe('runAiChecks', () => {
     expect(r!.scores.clarity).toBe(80);
     expect(r!.findings.some((f) => f.check === 'evaluator' && /could not run/i.test(f.message))).toBe(true);
   });
+
+  it('T06: a valid proof response with ZERO claims is UNVERIFIED (score 0), never an automatic 100', async () => {
+    createMock.mockImplementation(async ({ messages }: any) => {
+      const sys = String(messages[0].content);
+      if (/evaluator/i.test(sys)) return reply({ score: 90, rationale: 'r' });
+      if (/claims are backed/i.test(sys)) return reply({ claims: [] }); // valid response, but no claims identified
+      if (/clarity/i.test(sys)) return reply({ score: 85, issues: [] });
+      return reply({});
+    });
+    const r = await runAiChecks({ docKey: 'technical', title: 'Technical', contentHtml: '<p>Generic prose with nothing checkable.</p>' });
+    expect(r!.scores.proof).toBe(0);
+    expect(r!.unverified).toContain('proof');
+    expect(r!.findings.some((f) => f.check === 'proof' && /UNVERIFIED/i.test(f.message))).toBe(true);
+  });
+
+  it('T05: an obligation placed AFTER character 8,000 is still sent to the judges (no silent truncation)', async () => {
+    createMock.mockImplementation(routeByPrompt([90, 90, 90]));
+    const filler = '<p>' + 'The system shall record routine maintenance activity. '.repeat(200) + '</p>'; // ~10,800 chars
+    const sentinel = 'OBLIGATION-ZZZ the vendor shall provide 24x7 emergency dispatch';
+    await runAiChecks({ docKey: 'technical', title: 'Technical', contentHtml: `${filler}<p>${sentinel}.</p>` });
+    const sawSentinel = createMock.mock.calls.some((c: any[]) => String(c[0]?.messages?.[1]?.content ?? '').includes('OBLIGATION-ZZZ'));
+    expect(sawSentinel).toBe(true); // the old 8,000-char cut would have dropped it
+  });
 });

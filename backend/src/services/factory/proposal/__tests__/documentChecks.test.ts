@@ -2,26 +2,61 @@
  * documentChecks — the deterministic checks + the pure pass rule. Table-driven. Includes the hazard-3.2 guard: a
  * build-track (scope) requirement is EXCLUDED from the coverage denominator, so it is never counted as "uncovered".
  */
-import { checkCoverage, checkFormat, checkFact, passes, runDocumentChecks, type DocumentCheckInput } from '../documentChecks';
+import { checkCoverage, checkLocationCoverage, checkFormat, checkFact, passes, runDocumentChecks, isSubstantiveAnswer, isBoilerplateAnswer, type DocumentCheckInput } from '../documentChecks';
 import type { CheckScores } from '../proposalReviewTypes';
 
 const scoreAll = (n: number): CheckScores => ({ coverage: n, format: n, fact: n, evaluator: n, proof: n, clarity: n });
 const base: DocumentCheckInput = { contentHtml: '<h1>x</h1>', sections: [], requirementIds: [], fileName: 'technical.pdf' };
+// A real, concrete answer: past the minimum informative length AND naming specifics (numbers + method/tech nouns).
+const SUBSTANTIVE = '<p>We deliver a GIS-integrated work order management workflow: role-based intake, a 2-week migration of 12,000 historical work orders, SSO via SAML, weekly acceptance testing against the city uptime SLA, and a 3-phase training plan for 40 staff.</p>';
+// A truthful but generic compliance sentence — no method, no specifics.
+const BOILERPLATE = '<p>We comply with this requirement and the firm understands its obligations as required.</p>';
 
-describe('checkCoverage', () => {
-  it('scores the fraction of requirements with authored content', () => {
-    const r = checkCoverage({ ...base, requirementIds: ['R1', 'R2'], sections: [{ sectionKey: 'R1', contentHtml: '<p>answered</p>' }, { sectionKey: 'R2', contentHtml: '' }] });
+describe('isSubstantiveAnswer / isBoilerplateAnswer', () => {
+  it('a long, concrete answer is substantive and not boilerplate', () => {
+    expect(isSubstantiveAnswer(SUBSTANTIVE)).toBe(true);
+    expect(isBoilerplateAnswer(SUBSTANTIVE)).toBe(false);
+  });
+  it('a generic "we comply" sentence is boilerplate and NOT substantive', () => {
+    expect(isSubstantiveAnswer(BOILERPLATE)).toBe(false);
+    expect(isBoilerplateAnswer(BOILERPLATE)).toBe(true);
+  });
+  it('a bare anchor / tiny text is not substantive', () => {
+    expect(isSubstantiveAnswer('<p>answered</p>')).toBe(false);
+  });
+});
+
+describe('checkCoverage (SUBSTANTIVE)', () => {
+  it('scores the fraction of requirements with a substantive answer', () => {
+    const r = checkCoverage({ ...base, requirementIds: ['R1', 'R2'], sections: [{ sectionKey: 'R1', contentHtml: SUBSTANTIVE }, { sectionKey: 'R2', contentHtml: '' }] });
     expect(r.score).toBe(50);
     expect(r.findings.some((f) => f.sectionKey === 'R2')).toBe(true);
   });
-  it('counts a data-req anchor in the body as covered', () => {
+  it('T04: a generic "we comply" section WITH a correct data-req anchor is NOT substantively covered', () => {
+    const r = checkCoverage({ ...base, requirementIds: ['R1'], contentHtml: '<section data-req="R1">We comply.</section>', sections: [{ sectionKey: 'R1', contentHtml: BOILERPLATE }] });
+    expect(r.score).toBe(0);
+    expect(r.findings.some((f) => f.sectionKey === 'R1' && /boilerplate|thin/i.test(f.message))).toBe(true);
+  });
+  it('a bare data-req anchor no longer earns substantive coverage (location only)', () => {
     const r = checkCoverage({ ...base, requirementIds: ['R1'], contentHtml: '<section data-req="R1">answered inline</section>', sections: [] });
-    expect(r.score).toBe(100);
+    expect(r.score).toBe(0);
   });
   it('HAZARD 3.2: a build-track requirement is excluded from the denominator (never counted uncovered)', () => {
-    const r = checkCoverage({ ...base, requirementIds: ['R1', 'BUILD-1'], buildRequirementIds: ['BUILD-1'], sections: [{ sectionKey: 'R1', contentHtml: '<p>answered</p>' }] });
-    expect(r.score).toBe(100); // only R1 is in the denominator, and it is covered
+    const r = checkCoverage({ ...base, requirementIds: ['R1', 'BUILD-1'], buildRequirementIds: ['BUILD-1'], sections: [{ sectionKey: 'R1', contentHtml: SUBSTANTIVE }] });
+    expect(r.score).toBe(100); // only R1 is in the denominator, and it is substantively covered
     expect(r.findings.find((f) => f.sectionKey === 'BUILD-1')).toBeUndefined();
+  });
+});
+
+describe('checkLocationCoverage (STRUCTURAL, independent of substance)', () => {
+  it('a bare data-req anchor IS located (100), even though it is not substantively covered', () => {
+    const r = checkLocationCoverage({ ...base, requirementIds: ['R1'], contentHtml: '<section data-req="R1">answered inline</section>', sections: [] });
+    expect(r.score).toBe(100);
+  });
+  it('the generic-boilerplate case is 100% located but 0% substantively covered — the two never conflate', () => {
+    const input = { ...base, requirementIds: ['R1'], contentHtml: '<section data-req="R1">x</section>', sections: [{ sectionKey: 'R1', contentHtml: BOILERPLATE }] };
+    expect(checkLocationCoverage(input).score).toBe(100);
+    expect(checkCoverage(input).score).toBe(0);
   });
 });
 
@@ -79,10 +114,19 @@ describe('runDocumentChecks', () => {
   });
   it('with passing AI results and clean deterministic checks, the version passes', () => {
     const r = runDocumentChecks(
-      { ...base, requirementIds: ['R1'], sections: [{ sectionKey: 'R1', contentHtml: '<p>a</p>' }], pageLimit: 20, pageCount: 10 },
+      { ...base, requirementIds: ['R1'], sections: [{ sectionKey: 'R1', contentHtml: SUBSTANTIVE }], pageLimit: 20, pageCount: 10 },
       { scores: { evaluator: 96, proof: 95, clarity: 96 }, findings: [] },
     );
     expect(r.passes).toBe(true);
     expect(r.fatal).toEqual([]);
+    expect(r.locationCoverage).toBe(100); // structural signal reported alongside
+  });
+  it('a generic answer cannot pass even with passing AI results (substantive coverage fails the floor)', () => {
+    const r = runDocumentChecks(
+      { ...base, requirementIds: ['R1'], sections: [{ sectionKey: 'R1', contentHtml: BOILERPLATE }], pageLimit: 20, pageCount: 10 },
+      { scores: { evaluator: 96, proof: 95, clarity: 96 }, findings: [] },
+    );
+    expect(r.scores.coverage).toBe(0);
+    expect(r.passes).toBe(false); // the headline fix: boilerplate no longer rides passing AI scores to a green
   });
 });

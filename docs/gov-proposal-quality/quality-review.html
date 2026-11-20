@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Proposal Quality Review</title>
+<style>
+  :root{
+    --bg:#0f1420; --panel:#161c2b; --panel2:#1d2538; --ink:#e8edf6; --muted:#9aa7bd; --line:#2a3447;
+    --accent:#4f8cff; --good:#36c58b; --warn:#f2b84c; --bad:#ff6b6b; --prov:#f7a23b; --chip:#223048;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;padding:24px 16px}
+  .wrap{max-width:980px;margin:0 auto}
+  h1{font-size:24px;margin:0 0 4px} .sub{color:var(--muted);margin:0 0 20px}
+  .bar{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:22px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;flex:1;min-width:150px}
+  .stat .k{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+  .stat .v{font-size:26px;font-weight:700;margin-top:4px}
+  .badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700}
+  .b-prov{background:rgba(247,162,59,.16);color:var(--prov);border:1px solid var(--prov)}
+  .b-good{background:rgba(54,197,139,.16);color:var(--good);border:1px solid var(--good)}
+  .b-bad{background:rgba(255,107,107,.16);color:var(--bad);border:1px solid var(--bad)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:18px}
+  .card h2{font-size:16px;margin:0 0 12px}
+  .dim{margin:10px 0}
+  .dim .row{display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px}
+  .track{height:10px;background:var(--panel2);border-radius:999px;overflow:hidden}
+  .fill{height:100%;border-radius:999px}
+  .muted{color:var(--muted)} .small{font-size:13px}
+  .block{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--line)}
+  .block:first-child{border-top:0}
+  .gate{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--bad);white-space:nowrap}
+  .owner{margin-left:auto;font-size:12px;color:var(--muted);background:var(--chip);padding:2px 8px;border-radius:999px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  td,th{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left}
+  th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.03em}
+  .note{font-size:12px;color:var(--muted);margin-top:8px}
+  @media (prefers-color-scheme: light){:root:not([data-theme="dark"]){--bg:#f4f6fb;--panel:#fff;--panel2:#eef1f7;--ink:#1a2233;--muted:#5b6678;--line:#dde3ee;--chip:#eef2f9}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Proposal Quality Review</h1>
+  <p class="sub" id="sub"></p>
+
+  <div class="bar">
+    <div class="stat"><div class="k">Independent baseline</div><div class="v" id="before">22<span class="muted" style="font-size:15px">/100</span></div></div>
+    <div class="stat"><div class="k">Internal rubric v1.0</div><div class="v" id="after"></div></div>
+    <div class="stat"><div class="k">Submission status</div><div class="v" id="status" style="font-size:18px"></div></div>
+    <div class="stat"><div class="k">Coverage footprint</div><div class="v" id="footprint"></div></div>
+  </div>
+
+  <div class="card">
+    <h2>Score by dimension (Rubric v1.0)</h2>
+    <div id="dims"></div>
+    <p class="note" id="dimnote"></p>
+  </div>
+
+  <div class="card">
+    <h2>Why submission is blocked</h2>
+    <div id="blockers"></div>
+    <p class="note">Hard gates hold regardless of numeric score. A provisional score may never be read as a final pass.</p>
+  </div>
+
+  <div class="card">
+    <h2>Needs You (what unblocks the target)</h2>
+    <table><thead><tr><th>Input</th><th>Cures</th><th>Owner</th></tr></thead><tbody id="needs"></tbody></table>
+    <p class="note">The engine never fabricates any of these. Supplying real versions is the only honest path to ≥92.</p>
+  </div>
+
+  <p class="note" id="prov"></p>
+</div>
+
+<script>
+// RUN RECORD — populated from the actual engine quality-run. Numbers marked unknown score 0 and are flagged; nothing
+// here is invented. The post-deploy re-run overwrites this object with the live per-dimension scores.
+const RUN = {
+  project: "Herriman WOMS (project 80b35be2)",
+  rfp: "Utah Bonfire opportunity 257848",
+  rubricVersion: "1.0", checkerVersion: "2026.11.20",
+  generatedAt: "awaiting post-deploy run",
+  before: 22,
+  // after: filled from the live run; null until then (shown as "pending run", never estimated)
+  after: null,
+  provisional: true,
+  footprint: 1.0,
+  dimensions: [
+    {key:"mandatory_compliance",label:"Mandatory submission compliance",weight:20,score:null,unknown:true},
+    {key:"technical_responsiveness",label:"Technical responsiveness",weight:20,score:null,unknown:true},
+    {key:"implementation_delivery",label:"Implementation & delivery",weight:15,score:null,unknown:true},
+    {key:"evidence_past_performance",label:"Evidence & past performance",weight:15,score:null,unknown:true},
+    {key:"pricing_commercial",label:"Pricing & commercial completeness",weight:10,score:null,unknown:true},
+    {key:"buyer_differentiation",label:"Buyer differentiation",weight:10,score:null,unknown:true},
+    {key:"risk_security_support",label:"Risk, security & support",weight:5,score:null,unknown:true},
+    {key:"presentation_clarity",label:"Presentation & clarity",weight:5,score:null,unknown:true}
+  ],
+  blockers: [
+    {gate:"MANDATORY_BLOCKED",reason:"No authorized priced offer is on file.",owner:"human"},
+    {gate:"MANDATORY_BLOCKED",reason:"Required signed forms / Exhibit B not attached.",owner:"human"},
+    {gate:"MANDATORY_BLOCKED",reason:"Required number of qualified government references not on file.",owner:"human"},
+    {gate:"APPROVAL_BLOCKED",reason:"No authorized Gold Go bound to the final package fingerprint.",owner:"human"}
+  ],
+  needs: [
+    {input:"Authorized itemized pricing workbook",cures:"Pricing & commercial + pricing MANDATORY gate",owner:"human"},
+    {input:"Signed required forms / Exhibit B",cures:"Forms MANDATORY gate",owner:"human"},
+    {input:"Qualified government references (RFP-required count)",cures:"Evidence & past performance + references MANDATORY gate",owner:"human"},
+    {input:"Gold Go on the final package fingerprint",cures:"APPROVAL gate",owner:"human"}
+  ]
+};
+
+const el = (id)=>document.getElementById(id);
+function color(s){ return s>=90?'var(--good)': s>=75?'#8ec63f': s>=50?'var(--warn)': s>0?'#ff9966':'var(--bad)'; }
+el('sub').textContent = `${RUN.project} · ${RUN.rfp} · Rubric v${RUN.rubricVersion} (checker ${RUN.checkerVersion}) · ${RUN.generatedAt}`;
+el('after').innerHTML = RUN.after==null ? '<span class="muted" style="font-size:16px">pending run</span>' : (RUN.after+'<span class="muted" style="font-size:15px">/100</span>');
+el('status').innerHTML = RUN.provisional ? '<span class="badge b-prov">PROVISIONAL · BLOCKED</span>' : '<span class="badge b-good">READY</span>';
+el('footprint').textContent = Math.round((RUN.footprint||0)*100)+'%';
+el('dims').innerHTML = RUN.dimensions.map(d=>{
+  const known = !(d.unknown || d.score==null);
+  const s = known ? d.score : 0;
+  const label = known ? (s+'/100') : 'UNKNOWN (scores 0)';
+  return `<div class="dim"><div class="row"><span>${d.label} <span class="muted">· wt ${d.weight}</span></span><span class="${known?'':'muted'}">${label}</span></div>
+    <div class="track"><div class="fill" style="width:${s}%;background:${known?color(s):'var(--line)'}"></div></div></div>`;
+}).join('');
+el('dimnote').textContent = RUN.after==null ? 'Per-dimension scores are computed on the deployed engine run; shown as UNKNOWN until then. An unknown dimension scores 0 and is never dropped.' : '';
+el('blockers').innerHTML = RUN.blockers.map(b=>`<div class="block"><span class="gate">${b.gate}</span><span>${b.reason}</span><span class="owner">${b.owner}</span></div>`).join('');
+el('needs').innerHTML = RUN.needs.map(n=>`<tr><td>${n.input}</td><td class="muted">${n.cures}</td><td>${n.owner}</td></tr>`).join('');
+el('prov').textContent = 'This internal rubric is not the agency’s scoring and is not a win probability. A provisional score reflects open hard gates, not the quality ceiling of the content.';
+</script>
+</body>
+</html>

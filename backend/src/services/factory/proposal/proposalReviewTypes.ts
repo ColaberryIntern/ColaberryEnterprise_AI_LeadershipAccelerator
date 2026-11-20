@@ -85,6 +85,13 @@ export interface CheckRunResult {
   passes: boolean;
   /** Real PDF page count from the format render, when computed. */
   pageCount: number | null;
+  /** STRUCTURAL coverage (where each requirement is addressed), reported ALONGSIDE the substantive `scores.coverage`
+   *  so the two are never conflated (R2). Optional so every existing CheckRunResult literal stays valid. */
+  locationCoverage?: number;
+  /** Fraction of the document the AI judges read (1 = whole document, no truncation). T05. Optional. */
+  coverageFootprint?: number;
+  /** AI checks that returned UNVERIFIED rather than a real score (scored 0, never a silent pass). T06. Optional. */
+  unverifiedChecks?: Array<'evaluator' | 'proof' | 'clarity'>;
 }
 
 /** The Shipley color-team gates, in order. (Blue folds into Pink for small bids; Green is the admin price gate.) */

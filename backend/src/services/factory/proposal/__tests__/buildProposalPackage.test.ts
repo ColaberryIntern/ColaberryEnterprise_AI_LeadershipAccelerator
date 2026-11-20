@@ -52,4 +52,25 @@ describe('assemblePackageCore', () => {
     expect(r.manifest?.fileCount).toBe(2); // the manifest still lists both, pricing flagged sealed
     expect(r.manifest?.items.find((i) => i.fileName === 'price.xlsx')?.sealed).toBe(true);
   });
+
+  it('T09: a null/failed render FAILS the package closed — no success manifest, no phantom rendered count', async () => {
+    const r = await assemblePackageCore(deps({ renderDoc: async () => null }));
+    expect(r.ok).toBe(false);
+    expect(r.blocking.some((b) => b.startsWith('render_failed'))).toBe(true);
+    expect(r.manifest).toBeUndefined();
+    expect(r.rendered).toBeUndefined();
+  });
+
+  it('a zero-page render is also a failure (fails closed, not a silent success)', async () => {
+    const r = await assemblePackageCore(deps({ renderDoc: async () => 0 }));
+    expect(r.ok).toBe(false);
+    expect(r.blocking.some((b) => b.startsWith('render_failed'))).toBe(true);
+  });
+
+  it('T13: the manifest page count is re-verified from the FRESH rendered bytes, not the stored field', async () => {
+    // the stored page count says 12, but the real render returns 9 — the manifest must carry 9.
+    const r = await assemblePackageCore(deps({ loadDocs: async () => [okDoc({ pageCount: 12 })], renderDoc: async () => 9 }));
+    expect(r.ok).toBe(true);
+    expect(r.manifest?.items.find((i) => i.docKey === 'technical')?.pageCount).toBe(9);
+  });
 });

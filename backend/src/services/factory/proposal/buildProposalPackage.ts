@@ -8,7 +8,7 @@
  * The assembly CORE (`assemblePackageCore`) takes its I/O as injected deps so the gating + manifest path is
  * unit-testable without Playwright or a DB; `assembleProposalPackage` wires the real services.
  */
-import { evaluatePackageReadiness, buildPackageManifest, type PackageDoc, type PackageManifest } from './proposalPackageCore';
+import { evaluatePackageReadiness, buildPackageManifest, goldApprovedForVersion, type PackageDoc, type PackageManifest } from './proposalPackageCore';
 
 export interface PackageDeps {
   loadDocs: () => Promise<PackageDoc[]>;
@@ -34,10 +34,21 @@ export async function assemblePackageCore(deps: PackageDeps): Promise<PackageRes
   // Never assemble a non-ready package.
   if (blocking.length) return { ok: false, blocking };
 
-  // Render every non-pricing document (the pricing file is the sealed passthrough, not a rendered PDF).
-  let rendered = 0;
-  for (const d of docs.filter((x) => !x.adminOnly)) { await deps.renderDoc(d); rendered += 1; }
-  return { ok: true, blocking: [], manifest: buildPackageManifest(docs, deps.now()), rendered };
+  // Render every non-pricing document and REQUIRE each render to succeed. A null/failed render FAILS THE PACKAGE
+  // CLOSED (spec defect #5 / T09): no success manifest, no phantom "rendered" count. The manifest's page counts are
+  // then taken from the FRESH rendered bytes, re-verifying them rather than trusting a possibly-stale stored field
+  // (R6 / T13) — a source-HTML field can never masquerade as the exported PDF's real page count.
+  const toRender = docs.filter((x) => !x.adminOnly);
+  const failed: string[] = [];
+  const freshPageCounts = new Map<string, number>();
+  for (const d of toRender) {
+    const pc = await deps.renderDoc(d);
+    if (pc == null || !Number.isFinite(pc) || pc < 1) { failed.push(d.fileName ?? d.key); continue; }
+    freshPageCounts.set(d.key, pc);
+  }
+  if (failed.length) return { ok: false, blocking: [`render_failed:${failed.join(',')}`] };
+  const verified = docs.map((d) => (freshPageCounts.has(d.key) ? { ...d, pageCount: freshPageCounts.get(d.key) as number } : d));
+  return { ok: true, blocking: [], manifest: buildPackageManifest(verified, deps.now()), rendered: toRender.length };
 }
 
 /**
@@ -62,10 +73,16 @@ export async function assembleProposalPackage(deliveryProjectId: string): Promis
       const ver: any = d.current_version_id ? await GovProposalDocumentVersion.findByPk(d.current_version_id) : null;
       const v = ver ? ver.get({ plain: true }) : null;
       const goldRow: any = await GovProposalGateReview.findOne({ where: { document_id: d.id, gate: 'gold' } });
+      const goldPlain: any = goldRow?.get?.({ plain: true }) ?? null;
+      // Gold approval is bound to the EXACT current version: an approval recorded against a now-superseded version is
+      // STALE and does not count (spec defect #6 / T18), so an edit after Gold forces re-approval. (Binding to the
+      // blueprint/source-bundle/final-package fingerprint as well is a documented follow-up; version binding closes
+      // the "edited after Gold Go" hole at the consuming export gate regardless of whether gate reopen fired.)
+      const goldApproved = goldApprovedForVersion(goldPlain, d.current_version_id);
       const findings: any[] = v && Array.isArray(v.findings) ? v.findings : [];
       out.push({
         key: d.doc_key, title: d.title, passes: !!v?.passes,
-        goldApproved: (goldRow?.get?.({ plain: true })?.status ?? 'pending') === 'approved',
+        goldApproved,
         fatalCount: findings.filter((f) => f.severity === 'fatal').length,
         version: v?.version ?? 0, pageCount: v?.page_count ?? null, blueprintVersion: d.blueprint_version ?? null,
         contentSha256: crypto.createHash('sha256').update(String(v?.content_html ?? '')).digest('hex'),
