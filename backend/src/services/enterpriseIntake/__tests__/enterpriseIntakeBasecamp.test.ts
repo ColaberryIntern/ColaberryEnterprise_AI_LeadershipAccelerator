@@ -36,6 +36,7 @@ import {
   ascii,
   checklistTitle,
   dueOn,
+  intakeRef,
   listDescription,
   listName,
   openClientList,
@@ -189,16 +190,30 @@ describe('the form opens the client list', () => {
     mockFindByPk.mockResolvedValue(intake);
     mockBcGetAll.mockImplementation(async (url: string) =>
       url.endsWith('/todosets/555/todolists.json')
-        ? [
-            // Same name, a different person's email: not this client's list.
-            { id: 700, name: 'Acme Logistics - Dana Reyes', description: 'Email: someone-else@acme.test' },
-            { id: 701, name: '[Form] Acme Logistics - Dana Reyes', description: '<li><strong>Email:</strong> dana@acme.test</li>' },
-          ]
+        ? [{ id: 701, name: '[Form] Acme Logistics - Dana Reyes', description: `<li>...</li><div><small>${intakeRef('i-1')}</small></div>` }]
         : [],
     );
     expect(await openClientList('i-1')).toBe('repaired');
     expect(intake.update).toHaveBeenCalledWith({ bc_todolist_id: '701' });
     expect(mockBcPost.mock.calls.some(([u]) => u.endsWith('/todolists.json') && u.includes('todosets'))).toBe(false);
+  });
+
+  it('a second booking by the SAME person gets its own list, never the earlier booking\'s', async () => {
+    const second = row({ id: 'i-2' });
+    mockFindByPk.mockResolvedValue(second);
+    mockBcGetAll.mockImplementation(async (url: string) =>
+      url.endsWith('/todosets/555/todolists.json')
+        ? [{
+            id: 701,
+            name: '[Signed] Acme Logistics - Dana Reyes',
+            description: `<li><strong>Email:</strong> dana@acme.test</li><div><small>${intakeRef('i-1')}</small></div>`,
+          }]
+        : [],
+    );
+    expect(await openClientList('i-2')).toBe('opened');
+    expect(second.update).not.toHaveBeenCalledWith({ bc_todolist_id: '701' });
+    expect(mockBcPost.mock.calls[0][0]).toBe('/buckets/49670056/todosets/555/todolists.json');
+    expect(mockBcPost.mock.calls[0][1].description).toContain(intakeRef('i-2'));
   });
 
   it('leaves a complete list alone', async () => {

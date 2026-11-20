@@ -100,8 +100,15 @@ export function listDescription(i: EnterpriseIntake): string {
     row('Who else decides', i.other_deciders),
     '</ul>',
     `<div><strong>The process</strong></div><div>${esc(i.process).replace(/\n/g, '<br>')}</div>`,
+    `<div><small>${intakeRef(i.id)}</small></div>`,
   ].join('');
 }
+
+/**
+ * This intake's own stamp on its list. A UUID, so it can only ever match one intake's list,
+ * and it is what openClientList adopts by after a create that timed out.
+ */
+export const intakeRef = (id: string): string => `Intake ref: ${id}`;
 
 let todosetCache: { project: string; id: number } | null = null;
 
@@ -204,17 +211,13 @@ export async function openClientList(
     if (!intake.bc_todolist_id) {
       const ts = await todosetId(project);
       // A create that timed out may still have made the list (the client never retries a POST
-      // after a timeout, and nothing saved its id). Adopt it rather than open a second one: same
-      // name, with or without a stage prefix, AND this client's email in the description, so two
-      // clients who share a name and company cannot be mixed up.
+      // after a timeout, and nothing saved its id). Adopt it rather than open a second one, but
+      // ONLY a list stamped with THIS intake's own reference. Name or email would also match a
+      // list from the same person's earlier booking, which must keep its own list.
       const name = listName(intake);
+      const ref = intakeRef(intake.id);
       const lists = await bcGetAll<{ id: number; name: string; description?: string }>(`/buckets/${project}/todosets/${ts}/todolists.json`);
-      const earlier = lists.find(
-        (l) => {
-          const n = String(l.name || '');
-          return (n === name || n.endsWith(`] ${name}`)) && String(l.description || '').includes(esc(intake.email));
-        },
-      );
+      const earlier = lists.find((l) => String(l.description || '').includes(ref));
       if (earlier) {
         await intake.update({ bc_todolist_id: String(earlier.id) });
       } else {

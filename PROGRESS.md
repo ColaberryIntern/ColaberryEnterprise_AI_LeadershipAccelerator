@@ -18433,8 +18433,9 @@ Steps 1-4 are safe without 5: the form accepts, the lead is captured and attribu
     - **No POST retry after a timeout.** `basecampClient.ts` no longer retries a POST that timed out, because Basecamp may already have created the item. A refused 429/503 still retries.
     - **Digest links.** `inboxController.handleDigestAction` accepts only a digest token (`batch_id` plus `email_ids`) naming the email being acted on. Admin, participant and client tokens are all refused.
     - **Sign-in token.** A test that /my-pilot removes the token from the address bar.
+    - **No duplicate client list after a timed-out create.** Each list's description now carries `Intake ref: <intake id>`, and `openClientList` adopts an existing list only when it carries THIS intake's ref. That covers a create that landed after its timeout. A repeat booking by the same person still gets its own list: the first attempt matched on name and email and would have hijacked it, which the review caught.
     - **Test data.** The W28 and W29 test clients were deleted in one transaction (Ali: "D yes"). The backup is at `/root/w28_w29_test_rows_backup_20261120.txt` on prod. Their two Basecamp lists were trashed.
   - Verification:
-    - Backend: Basecamp client and callers 854 pass; admin and client routes 30/30; digest action 5/5.
+    - Backend: `npx jest src/services/enterpriseIntake src/services/ops src/services/inboxCase src/scripts/__tests__/syncLifecycleLadder` gives 856 passed (5 skipped); admin and client routes 30/30; digest action 5/5.
     - Frontend: MyPilotV2 5/5 and AdminEnterpriseClientsPage 6/6 (11/11 together); tsc clean.
   - Notes: The digest-action tightening also closes an older hole: any token signed with the app secret (participant, alumni) could reclassify inbox email. The only minter, `askUserDigestService`, always sets `email_ids`, so real digest links still work.
