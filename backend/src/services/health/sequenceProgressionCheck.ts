@@ -51,6 +51,22 @@ import type { HealthCheck } from '../systemHealthService';
  * change either, so the only diff in the caller is the import.
  */
 
+/*
+ * ─── OH1s (Nov 19 Open House): TWO DELIBERATE CHANGES TO THE QUERY ──────────
+ *
+ * 1. A next step that exists in ANY status is not a gap. The old query counted
+ *    only pending/processing/sent, so a step the send gates had CANCELLED (no
+ *    consent, brand denies, event started) looked "missing" and was re-created,
+ *    cancelled again, re-created again: 2,547 stray text rows for 171 people in
+ *    one evening, still churning the next morning. A cancelled step is a decision.
+ *
+ * 2. A pre-scheduled sequence (every step timed back from a call, a cohort start
+ *    or an Open House; see sequenceService.isPreScheduledSequence) has no "next
+ *    step" to repair: enrollment booked every step that should exist, and skipped
+ *    the ones the person has no consent for. Those sequences are excluded here,
+ *    with the same rule written in SQL.
+ */
+
 // ── 1. Sequence Progression Gaps ────────────────────────────────────────────
 // Detects leads that completed a step but have no next step scheduled.
 // This means scheduleNextStep() silently failed after send.
@@ -68,12 +84,19 @@ export async function checkSequenceProgression(checks: HealthCheck[]): Promise<v
           WHERE se2.lead_id = se.lead_id
             AND se2.sequence_id = se.sequence_id
             AND se2.step_index = se.step_index + 1
-            AND se2.status IN ('pending', 'processing', 'sent')
         )
         AND EXISTS (
           SELECT 1 FROM follow_up_sequences fs
           WHERE fs.id = se.sequence_id
             AND jsonb_array_length(fs.steps) > se.step_index + 1
+            AND NOT (
+              NOT EXISTS (SELECT 1 FROM jsonb_array_elements(fs.steps) st
+                          WHERE COALESCE(NULLIF(st->>'delay_days', ''), '0')::numeric <> 0)
+              AND EXISTS (SELECT 1 FROM jsonb_array_elements(fs.steps) st
+                          WHERE st->>'minutes_before_event' IS NOT NULL
+                             OR st->>'minutes_before_call' IS NOT NULL
+                             OR st->>'days_before_cohort_start' IS NOT NULL)
+            )
         )
     `);
 

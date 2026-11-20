@@ -78,9 +78,11 @@ beforeEach(() => {
 afterEach(() => jest.restoreAllMocks());
 
 describe('the extracted bodies are the ones that left systemHealthService', () => {
-  it('checkSequenceProgression is byte-identical apart from its two re-pointed require paths', () => {
+  it('checkSequenceProgression is pinned (re-pinned by OH1s for its two deliberate query changes)', () => {
     const body = shippedBody('sequenceProgressionCheck.ts', 'checkSequenceProgression');
-    expect(md5(body)).toBe('d35ab8ad0cb0b537ecb38e85d2268806');
+    // OH1s: was d35ab8ad0cb0b537ecb38e85d2268806 (the T609 move). Changed on purpose:
+    // any next-step row counts as "not a gap", and pre-scheduled sequences are excluded.
+    expect(md5(body)).toBe('dbfda9e32e1a78e17f29c31d59e798b1');
     // the two forced edits, asserted as the ONLY path change - an unqualified
     // `./sequenceService` or `../models` here would resolve from the wrong directory
     expect(body).toContain("require('../sequenceService')");
@@ -165,6 +167,30 @@ describe('checkSequenceProgression: the three states it pushed before the move',
     expect(scheduleNextStep).toHaveBeenCalledTimes(100);
     expect(checks[0].metric).toBe(150);
     expect(checks[0].autoFixed).toBe('Recovered 100/150 stuck sequences');
+  });
+});
+
+describe('checkSequenceProgression: OH1s, a cancelled step is a decision, not a gap', () => {
+  async function sqlSent(): Promise<string> {
+    query.mockResolvedValue([[]]);
+    await checkSequenceProgression([] as never);
+    return String(query.mock.calls[0][0]).replace(/\s+/g, ' ');
+  }
+
+  it('any existing next-step row, in any status, means there is no gap to repair', async () => {
+    const sql = await sqlSent();
+    const notExists = sql.slice(sql.indexOf('AND NOT EXISTS'), sql.indexOf('AND EXISTS'));
+    expect(notExists).toContain('se2.step_index = se.step_index + 1');
+    // The old status filter made a CANCELLED next step look missing, so it was re-created forever.
+    expect(notExists).not.toMatch(/se2\.status/);
+  });
+
+  it('pre-scheduled sequences (event, call, cohort countdowns) are excluded, all three kinds', async () => {
+    const sql = await sqlSent();
+    expect(sql).toContain("st->>'minutes_before_event' IS NOT NULL");
+    expect(sql).toContain("st->>'minutes_before_call' IS NOT NULL");
+    expect(sql).toContain("st->>'days_before_cohort_start' IS NOT NULL");
+    expect(sql).toContain("COALESCE(NULLIF(st->>'delay_days', ''), '0')::numeric <> 0");
   });
 });
 
