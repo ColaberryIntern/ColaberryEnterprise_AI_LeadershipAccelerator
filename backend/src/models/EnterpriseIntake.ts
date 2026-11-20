@@ -20,7 +20,9 @@ import { sequelize } from '../config/database';
 export type EnterpriseIntakeStatus =
   | 'form'
   | 'call_requested'
-  | 'interviewed';
+  | 'interviewed'
+  | 'signed'
+  | 'lost';
 
 export interface EnterpriseIntakeAttributes {
   id?: string;
@@ -64,10 +66,26 @@ export interface EnterpriseIntakeAttributes {
   research_attempts?: number;
   /** Phase 3: once the research and options are posted on the client's list. */
   bc_research_posted_at?: Date | null;
+  bc_research_ticked_at?: Date | null;
   /** Phase 3: the follow-up email with their options. Drafted by AI, sent only on Ali's approval. */
   options_email_subject?: string | null;
   options_email_body?: string | null;
   options_email_sent_at?: Date | null;
+  /** Phase 4: how far the client's emails and calls have been copied onto their list. */
+  comms_email_synced_through?: Date | null;
+  comms_calls_synced_through?: Date | null;
+  /** Phase 4: the stage shown in the list's name, so it is renamed only when it changes. */
+  bc_list_stage?: string | null;
+  /** Phase 4: the proposal. Drafted by AI from everything on the list, sent only by Ali. */
+  proposal_subject?: string | null;
+  proposal_body?: string | null;
+  proposal_drafted_at?: Date | null;
+  proposal_sent_at?: Date | null;
+  /** Phase 5: the end of the intake. Signed opens the client's own Basecamp project. */
+  signed_at?: Date | null;
+  lost_at?: Date | null;
+  lost_reason?: string | null;
+  bc_project_id?: string | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -106,9 +124,21 @@ class EnterpriseIntake extends Model<EnterpriseIntakeAttributes> implements Ente
   declare researched_at: Date | null;
   declare research_attempts: number;
   declare bc_research_posted_at: Date | null;
+  declare bc_research_ticked_at: Date | null;
   declare options_email_subject: string | null;
   declare options_email_body: string | null;
   declare options_email_sent_at: Date | null;
+  declare comms_email_synced_through: Date | null;
+  declare comms_calls_synced_through: Date | null;
+  declare bc_list_stage: string | null;
+  declare proposal_subject: string | null;
+  declare proposal_body: string | null;
+  declare proposal_drafted_at: Date | null;
+  declare proposal_sent_at: Date | null;
+  declare signed_at: Date | null;
+  declare lost_at: Date | null;
+  declare lost_reason: string | null;
+  declare bc_project_id: string | null;
   declare createdAt: Date;
   declare updatedAt: Date;
 }
@@ -148,9 +178,21 @@ EnterpriseIntake.init(
     researched_at: { type: DataTypes.DATE, allowNull: true },
     research_attempts: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
     bc_research_posted_at: { type: DataTypes.DATE, allowNull: true },
+    bc_research_ticked_at: { type: DataTypes.DATE, allowNull: true },
     options_email_subject: { type: DataTypes.STRING(255), allowNull: true },
     options_email_body: { type: DataTypes.TEXT, allowNull: true },
     options_email_sent_at: { type: DataTypes.DATE, allowNull: true },
+    comms_email_synced_through: { type: DataTypes.DATE, allowNull: true },
+    comms_calls_synced_through: { type: DataTypes.DATE, allowNull: true },
+    bc_list_stage: { type: DataTypes.STRING(30), allowNull: true },
+    proposal_subject: { type: DataTypes.STRING(255), allowNull: true },
+    proposal_body: { type: DataTypes.TEXT, allowNull: true },
+    proposal_drafted_at: { type: DataTypes.DATE, allowNull: true },
+    proposal_sent_at: { type: DataTypes.DATE, allowNull: true },
+    signed_at: { type: DataTypes.DATE, allowNull: true },
+    lost_at: { type: DataTypes.DATE, allowNull: true },
+    lost_reason: { type: DataTypes.STRING(500), allowNull: true },
+    bc_project_id: { type: DataTypes.STRING(32), allowNull: true },
   },
   {
     sequelize,

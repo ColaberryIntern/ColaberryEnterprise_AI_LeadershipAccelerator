@@ -18,6 +18,8 @@ import * as cheerio from 'cheerio';
 const MAX_BYTES = 600_000;
 const TIMEOUT_MS = 8_000;
 const MAX_REDIRECTS = 3;
+/** The most one website read may take, all hops included. */
+const TOTAL_DEADLINE_MS = 15_000;
 
 /** True for any address that is not on the public internet. */
 export function isPrivateAddress(ip: string): boolean {
@@ -34,13 +36,36 @@ export function isPrivateAddress(ip: string): boolean {
     );
   }
   if (net.isIPv6(ip)) {
-    const v = ip.toLowerCase();
-    if (v === '::' || v === '::1') return true;
-    const mapped = v.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-    if (mapped) return isPrivateAddress(mapped[1]);
-    return /^(fc|fd|fe8|fe9|fea|feb|ff)/.test(v) || v.startsWith('64:ff9b:') || v.startsWith('2001:db8');
+    // An ALLOWLIST, by value, not a list of bad spellings: IPv6 has too many ways to embed an
+    // IPv4 address (::ffff:7f00:1, ::7f00:1, ::ffff:0:..., 64:ff9b::, 2002::) for patterns to
+    // keep up. Only global unicast (2000::/3) passes, minus the ranges that tunnel or document.
+    const h = ipv6Hextets(ip);
+    if (!h) return true;
+    if ((h[0] & 0xe000) !== 0x2000) return true; // not global unicast: ::, ::1, mapped, fc00, fe80, fec0, ff00...
+    if (h[0] === 0x2002) return true; // 6to4 carries an IPv4 address
+    if (h[0] === 0x2001 && (h[1] === 0x0000 || h[1] === 0x0db8)) return true; // Teredo, documentation
+    return false;
   }
   return true;
+}
+
+/** The eight 16-bit groups of an IPv6 address, or null if it does not parse. */
+export function ipv6Hextets(ip: string): number[] | null {
+  let v = ip.toLowerCase().replace(/^\[|\]$/g, '').split('%')[0];
+  const v4 = v.match(/(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (v4) {
+    const [a, b, c, d] = v4.slice(1).map(Number);
+    v = v.slice(0, v4.index) + `${((a << 8) | b).toString(16)}:${((c << 8) | d).toString(16)}`;
+  }
+  const halves = v.split('::');
+  if (halves.length > 2) return null;
+  const head = halves[0] ? halves[0].split(':') : [];
+  const tail = halves.length === 2 && halves[1] ? halves[1].split(':') : [];
+  const fill = halves.length === 2 ? 8 - head.length - tail.length : 0;
+  if (fill < 0 || (halves.length === 1 && head.length !== 8)) return null;
+  const groups = [...head, ...Array(fill).fill('0'), ...tail];
+  if (groups.length !== 8 || groups.some((g) => !/^[0-9a-f]{1,4}$/.test(g))) return null;
+  return groups.map((g) => parseInt(g, 16));
 }
 
 /** The form's free text ("acme.com", "https://www.acme.com/about") as a URL we may fetch, or null. */
@@ -57,8 +82,11 @@ export function normalizeSiteUrl(raw: string): URL | null {
   if (u.username || u.password) return null;
   if (u.port && u.port !== '80' && u.port !== '443') return null;
   const host = u.hostname.replace(/^\[|\]$/g, '');
-  if (!host.includes('.') && !net.isIP(host)) return null;
-  if (net.isIP(host) && isPrivateAddress(host)) return null;
+  // A company website is a NAME. No address literal is accepted at all, in any notation
+  // (127.0.0.1, 2130706433, 0x7f.1 and [::ffff:7f00:1] all reach here as IP literals), so
+  // every host goes through the DNS check in publicLookup.
+  if (net.isIP(host)) return null;
+  if (!host.includes('.')) return null;
   if (/(^|\.)(localhost|local|internal|lan|home|corp)$/i.test(host)) return null;
   return u;
 }
@@ -81,9 +109,14 @@ export const publicLookup: net.LookupFunction = (hostname, options, callback) =>
 
 interface Got { status: number; location?: string; type: string; body: string }
 
-function getOnce(u: URL): Promise<Got> {
+function getOnce(u: URL, deadline: number): Promise<Got> {
   return new Promise((resolve, reject) => {
     const lib = u.protocol === 'https:' ? https : http;
+    // A hard stop for the whole request. `timeout` below is only an idle timeout, so a server
+    // dripping a byte every few seconds would otherwise hold the sweep for minutes.
+    const left = deadline - Date.now();
+    if (left <= 0) return reject(new Error('deadline'));
+    const stop = setTimeout(() => req.destroy(new Error('deadline')), left);
     const req = lib.get(
       u,
       {
@@ -114,7 +147,18 @@ function getOnce(u: URL): Promise<Got> {
     );
     req.on('timeout', () => req.destroy(new Error('timeout')));
     req.on('error', reject);
+    req.on('close', () => clearTimeout(stop));
   });
+}
+
+/** Where a redirect may go: the same rules as the first URL, every hop. */
+export function nextHop(location: string, from: URL): URL | null {
+  if (!location) return null;
+  try {
+    return normalizeSiteUrl(new URL(location, from).toString());
+  } catch {
+    return null;
+  }
 }
 
 export interface SitePage {
@@ -141,11 +185,12 @@ export async function fetchCompanyPage(raw: string): Promise<SitePage | null> {
   const first = normalizeSiteUrl(raw);
   if (!first) return null;
   let u: URL = first;
+  const deadline = Date.now() + TOTAL_DEADLINE_MS;
   try {
     for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-      const got = await getOnce(u);
+      const got = await getOnce(u, deadline);
       if (got.location !== undefined) {
-        const next: URL | null = got.location ? normalizeSiteUrl(new URL(got.location, u).toString()) : null;
+        const next = nextHop(got.location, u);
         if (!next) return null;
         u = next;
         continue;

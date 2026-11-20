@@ -273,6 +273,9 @@ describe('sendFirstContactAsAli (W30: an approved first message, e.g. pilot opti
     mockKillSwitch.mockResolvedValue(false);
     mockIsDev = true;
     expect((await sendFirstContactAsAli(FIRST)).outcome).toBe('skipped');
+    mockIsDev = false;
+    delete process.env.MANDRILL_API_KEY;
+    expect(await sendFirstContactAsAli(FIRST)).toEqual({ outcome: 'skipped', reason: 'mandrill_not_configured' });
     expect(mockSendOnce).not.toHaveBeenCalled();
   });
 });

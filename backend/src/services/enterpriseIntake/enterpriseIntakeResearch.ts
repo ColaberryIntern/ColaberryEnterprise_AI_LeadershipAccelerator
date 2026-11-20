@@ -26,7 +26,7 @@ import { writtenBrief } from './enterpriseIntakeService';
 
 export const MAX_RESEARCH_ATTEMPTS = 3;
 
-const FREE_MAIL = new Set([
+export const FREE_MAIL = new Set([
   'gmail.com', 'googlemail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'live.com', 'msn.com',
   'icloud.com', 'me.com', 'aol.com', 'proton.me', 'protonmail.com', 'gmx.com', 'mail.com', 'yandex.com',
 ]);
@@ -74,6 +74,7 @@ export function ruleBreaks(r: ResearchResult): string[] {
   if (/[$€£]\s?\d|\b\d[\d,.]*\s?(dollars|usd)\b/i.test(all)) out.push('a price');
   if (/\b(guarantee|guaranteed)\b/i.test(all)) out.push('a guarantee');
   if (/—|–/.test(all)) out.push('an em or en dash');
+  if (/https?:\/\/|\bwww\./i.test(`${r.email.subject} ${r.email.body}`)) out.push('a link in the email');
   return out;
 }
 
@@ -200,11 +201,17 @@ export function researchHtml(i: Pick<EnterpriseIntake, 'research' | 'pilot_optio
 }
 
 /** Post the research on the client's list once, then tick the research step. */
-export async function postResearchToList(intakeId: string): Promise<'posted' | 'off' | 'missing' | 'not_ready' | 'done'> {
+export async function postResearchToList(intakeId: string): Promise<'posted' | 'ticked' | 'off' | 'missing' | 'not_ready' | 'done'> {
   if (!intakeBasecampEnabled()) return 'off';
   const intake = await EnterpriseIntake.findByPk(intakeId);
   if (!intake) return 'missing';
-  if (intake.bc_research_posted_at) return 'done';
+  if (intake.bc_research_posted_at) {
+    // Posted already. The tick is its own step, retried until it lands (as the interview's is).
+    if (intake.bc_research_ticked_at || !intake.bc_todolist_id) return 'done';
+    if (!(await tickStep(env.enterpriseIntakeBcProjectId, intake.bc_todolist_id, 'research'))) return 'not_ready';
+    await intake.update({ bc_research_ticked_at: new Date() });
+    return 'ticked';
+  }
   if (!intake.researched_at || !intake.bc_todolist_id || !intake.bc_checklist_ready_at) return 'not_ready';
   const [claimed] = await EnterpriseIntake.update(
     { bc_research_posted_at: new Date() } as Partial<EnterpriseIntake>,
@@ -218,7 +225,11 @@ export async function postResearchToList(intakeId: string): Promise<'posted' | '
     await EnterpriseIntake.update({ bc_research_posted_at: null } as Partial<EnterpriseIntake>, { where: { id: intakeId } });
     throw err;
   }
-  await tickStep(project, intake.bc_todolist_id, 'research').catch(() => false);
+  try {
+    if (await tickStep(project, intake.bc_todolist_id, 'research')) await intake.update({ bc_research_ticked_at: new Date() });
+  } catch {
+    /* the sweep retries the tick: bc_research_ticked_at is still null */
+  }
   return 'posted';
 }
 
@@ -250,12 +261,17 @@ export async function syncEnterpriseResearch(limit = 5): Promise<{ researched: n
   }
   if (!intakeBasecampEnabled()) return out;
   const unposted = await EnterpriseIntake.findAll({
-    where: { researched_at: { [Op.ne]: null }, bc_research_posted_at: null, bc_checklist_ready_at: { [Op.ne]: null } } as Record<string, unknown>,
+    where: {
+      researched_at: { [Op.ne]: null },
+      bc_checklist_ready_at: { [Op.ne]: null },
+      [Op.or]: [{ bc_research_posted_at: null }, { bc_research_ticked_at: null }],
+    } as Record<string | symbol, unknown>,
     limit: 20,
   });
   for (const i of unposted) {
     try {
-      if ((await postResearchToList(i.id)) === 'posted') out.posted += 1;
+      const r = await postResearchToList(i.id);
+      if (r === 'posted' || r === 'ticked') out.posted += 1;
     } catch {
       out.failed += 1;
     }

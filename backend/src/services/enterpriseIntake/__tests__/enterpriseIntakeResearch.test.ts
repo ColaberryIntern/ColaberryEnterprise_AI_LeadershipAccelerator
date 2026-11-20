@@ -108,6 +108,7 @@ describe('the homework', () => {
     ['a price', { ...GOOD, email: { ...GOOD.email, body: 'It costs $5,000.' } }],
     ['the word "free"', { ...GOOD, email: { ...GOOD.email, body: 'A free pilot.' } }],
     ['an em or en dash', { ...GOOD, email: { ...GOOD.email, body: 'Options — two.' } }],
+    ['a link', { ...GOOD, email: { ...GOOD.email, body: 'See www.acme-scam.com for details.' } }],
   ])('refuses a reply with %s and stores nothing', async (_why, bad) => {
     const intake = row();
     mockFindByPk.mockResolvedValue(intake);
@@ -155,6 +156,21 @@ describe('the research on the list', () => {
     expect(body.content).toContain('1. Order intake agent');
     expect(body.content).toContain('Draft email to the client (not sent)');
     expect(mockTick).toHaveBeenCalledWith('49670056', '101', 'research');
+  });
+
+  it('records the tick, and retries a tick that failed after the post', async () => {
+    const intake = researched();
+    mockFindByPk.mockResolvedValue(intake);
+    mockStaticUpdate.mockResolvedValue([1]);
+    mockTick.mockRejectedValueOnce(new Error('BC 503'));
+    expect(await postResearchToList('i-1')).toBe('posted');
+    expect(intake.update).not.toHaveBeenCalledWith({ bc_research_ticked_at: expect.any(Date) });
+    // Next run: already posted, so only the tick is retried, and recorded once it lands.
+    intake.bc_research_posted_at = new Date();
+    mockBcPost.mockClear();
+    expect(await postResearchToList('i-1')).toBe('ticked');
+    expect(mockBcPost).not.toHaveBeenCalled();
+    expect(intake.update).toHaveBeenCalledWith({ bc_research_ticked_at: expect.any(Date) });
   });
 
   it('posts nothing when another caller already claimed it', async () => {
