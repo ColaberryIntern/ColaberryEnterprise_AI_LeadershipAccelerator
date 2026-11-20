@@ -149,3 +149,48 @@ describe('the mapping itself', () => {
     expect(normaliseAngle(undefined)).toBe('');
   });
 });
+
+describe('a guided outline is filed by its own labels', () => {
+  // The ShiftFill run on 2026-11-20, as `composeIdea` wrote it.
+  const OUTLINE = [
+    'What it should produce, and for whom: An AI agent that fills last-minute hygienist shift gaps.',
+    'Who uses it, and how comfortable they are with tools like this: Dana, and 14 hygienists by text.',
+    'The call I am handing over, and what I look at to make it: Deciding who to offer the shift to first.',
+    'How long it takes today, or how often it goes wrong: Dana spends 45 to 90 minutes per gap.',
+    'What good would look like: Gaps filled within 30 minutes on 9 mornings out of 10.',
+  ].join('\n');
+
+  it('files the baseline as a pain point and the target as the success definition', () => {
+    const { items } = itemsFromIntake({ idea: OUTLINE });
+    const by = (d: string) => items.filter((i) => i.dimension === d).map((i) => i.value);
+    expect(by('success_definition')).toEqual(['Gaps filled within 30 minutes on 9 mornings out of 10.']);
+    expect(by('pain_points')).toEqual(['Dana spends 45 to 90 minutes per gap.']);
+    expect(by('problem')).toEqual(['An AI agent that fills last-minute hygienist shift gaps.']);
+    expect(by('actors')).toHaveLength(1);
+  });
+
+  it('files the call being handed over as the agent\'s job, never as a human-only decision', () => {
+    const { items } = itemsFromIntake({
+      idea: OUTLINE,
+      // The model quoted the same line under THE JUDGEMENT; the label wins.
+      covered: [{ angle: 'THE JUDGEMENT', evidence: 'Deciding who to offer the shift to first' }],
+    });
+    expect(items.filter((i) => i.dimension === 'human_only_decisions')).toEqual([]);
+    expect(items.filter((i) => i.dimension === 'ai_opportunities').map((i) => i.value))
+      .toEqual(['Deciding who to offer the shift to first.']);
+  });
+
+  it('keeps a model quote the outline did not already say', () => {
+    const { items } = itemsFromIntake({
+      idea: OUTLINE,
+      covered: [{ angle: 'THE GUARDRAIL', evidence: 'never text anyone on approved leave' }],
+    });
+    expect(items.some((i) => i.dimension === 'approval_points' && /approved leave/.test(i.value))).toBe(true);
+  });
+
+  it('a free-text description with no outline labels is still one problem item', () => {
+    const { items } = itemsFromIntake({ idea: 'Line one\nLine two: with a colon' });
+    expect(items).toHaveLength(1);
+    expect(items[0].dimension).toBe('problem');
+  });
+});

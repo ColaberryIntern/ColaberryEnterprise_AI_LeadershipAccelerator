@@ -28,6 +28,7 @@
 import type { BuildPlan } from './planContract';
 import type { Schedule } from './buildSchedule';
 import {
+  guardrailGate,
   guardrails as guardrailsOf,
   measures as measuresOf,
   rolesFrom as rolesOf,
@@ -56,6 +57,8 @@ interface TabContext {
   safes: ReturnType<typeof guardrailsOf>;
   systems: string[];
   roles: string[];
+  /** Every role, uncapped: what `plan.derived` matches approvers against. */
+  allRoles: string[];
   agents: NonNullable<BuildPlan['agents']>;
   handoffs: ReturnType<typeof handoffsFor>;
   artifacts: ReturnType<typeof artifactsFor>;
@@ -199,7 +202,11 @@ function guardrailsTab(c: TabContext): string[] {
   const lines: string[] = [];
   lines.push('### 4. Guardrails — what must never happen');
   lines.push(
-    'Source: `plan.derived.guardrails` — `id` and `statement` each. To show whether anything '
+    'Source: `plan.derived.guardrails` — `id`, `statement`, `kind` and `approver` each. '
+    + '`kind` is `hard_rule` (nobody can let it through: show it as "never, no exceptions") or '
+    + '`approval` (a person can: show who in `approver`). An approval whose `approver` is null '
+    + 'is a real gap: show "approver not named yet" and list it with the questions for your '
+    + 'instructor. Never put an approver column against a hard rule. To show whether anything '
     + 'enforces one, follow `plan.requirements[].fulfilled_by` to the story ids, then read '
     + 'those stories\' `verification.state` in the progress file. A guardrail whose stories '
     + 'are not verified is a promise you have made and not yet kept, and the page should say '
@@ -207,7 +214,12 @@ function guardrailsTab(c: TabContext): string[] {
   );
   if (safes.length) {
     lines.push('These are the promises your system makes. Show each one, and whether anything in the build currently enforces it:');
-    safes.forEach((r) => lines.push(bullet(`**${r.id}** — ${r.statement}`)));
+    safes.forEach((r) => {
+      const gate = guardrailGate(r.statement, c.allRoles);
+      const tag = gate.kind === 'hard_rule' ? 'hard rule'
+        : `approval: ${gate.approver ?? 'approver not named yet'}`;
+      lines.push(bullet(`**${r.id}** (${tag}) — ${r.statement}`));
+    });
   } else {
     lines.push(
       'Your plan has no requirement typed SAFE yet, which usually means the promise you '
@@ -475,6 +487,7 @@ export function commandCenterTabSections(plan: BuildPlan, schedule?: Schedule | 
     safes: guardrailsOf(plan.requirements),
     systems: systemsOf(plan.requirements),
     roles: rolesOf(plan.stories).slice(0, 6),
+    allRoles: rolesOf(plan.stories),
     agents: plan.agents ?? [],
     handoffs: handoffsFor(plan.agents ?? []),
     artifacts: artifactsFor(plan.agents ?? []),
