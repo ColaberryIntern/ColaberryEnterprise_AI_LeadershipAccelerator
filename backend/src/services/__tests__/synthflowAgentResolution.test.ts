@@ -89,3 +89,18 @@ describe('resolveAgentId', () => {
     expect(resolveAgentId({ callType: 'callback', brandSlug: 'refactored' })).toBe('agent-callback');
   });
 });
+
+describe('W28: the Enterprise intake agent', () => {
+  const anyEnv = env as any;
+  afterEach(() => { delete anyEnv.synthflowEnterpriseIntakeAgentId; });
+
+  it('uses its own agent', () => {
+    anyEnv.synthflowEnterpriseIntakeAgentId = 'agent-enterprise';
+    expect(resolveAgentId({ callType: 'callback', brandSlug: 'enterprise-intake' })).toBe('agent-enterprise');
+  });
+
+  it('has NO fallback: unset means no call, never AI Flotation\'s caller ID', () => {
+    anyEnv.synthflowEnterpriseIntakeAgentId = '';
+    expect(resolveAgentId({ callType: 'callback', brandSlug: 'enterprise-intake' })).toBe('');
+  });
+});
