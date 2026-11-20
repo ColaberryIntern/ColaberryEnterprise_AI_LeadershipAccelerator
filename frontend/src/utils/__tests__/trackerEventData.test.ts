@@ -248,3 +248,20 @@ describe('beacon flush -> /api/t/batch content type', () => {
     expect(sent.event_data.seconds).toBe(240);
   });
 });
+
+describe('W32: never record a client sign-in link', () => {
+  it('sends nothing at all on /my-pilot (its URL can carry a working token)', async () => {
+    window.history.pushState({}, '', '/my-pilot/status?token=secret-token');
+    try {
+      const { initTracker, trackEvent } = await loadTracker();
+      initTracker();
+      trackEvent('anything', { a: 1 });
+      jest.advanceTimersByTime(10000);
+      const sent = [...fetchMock.mock.calls, ...beaconMock.mock.calls].map((c) => JSON.stringify(c));
+      expect(sent.join(' ')).not.toContain('secret-token');
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      window.history.pushState({}, '', '/');
+    }
+  });
+});

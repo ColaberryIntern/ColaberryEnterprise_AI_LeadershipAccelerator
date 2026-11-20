@@ -402,11 +402,11 @@ function ClientList(): React.ReactElement {
               <thead>
                 <tr>
                   <th>Company</th>
-                  <th>Person</th>
+                  <th className="d-none d-sm-table-cell">Person</th>
                   <th>Stage</th>
-                  <th className="text-end">Hours a year</th>
-                  <th>Start</th>
-                  <th>Asked</th>
+                  <th className="text-end text-nowrap">Hrs / year</th>
+                  <th className="d-none d-md-table-cell">Start</th>
+                  <th className="d-none d-md-table-cell">Asked</th>
                 </tr>
               </thead>
               <tbody>
@@ -415,7 +415,7 @@ function ClientList(): React.ReactElement {
                     <td>
                       <Link to={`/admin/enterprise-clients/${r.id}`}>{r.company}</Link>
                     </td>
-                    <td className="small">
+                    <td className="small d-none d-sm-table-cell">
                       {r.fullName}
                       {r.role ? <span className="text-muted">, {r.role}</span> : null}
                     </td>
@@ -423,8 +423,8 @@ function ClientList(): React.ReactElement {
                       <StatusBadge label={r.stage} tone={STAGE_TONE[r.stage]} />
                     </td>
                     <td className="text-end small">{r.hoursPerYear ? r.hoursPerYear.toLocaleString('en-US') : ''}</td>
-                    <td className="small">{r.startTiming}</td>
-                    <td className="small">{day(r.createdAt)}</td>
+                    <td className="small d-none d-md-table-cell">{r.startTiming}</td>
+                    <td className="small d-none d-md-table-cell">{day(r.createdAt)}</td>
                   </tr>
                 ))}
               </tbody>

@@ -108,7 +108,14 @@ function Status({ token }: { token: string }): React.ReactElement {
 
 export function MyPilotV2(): React.ReactElement {
   const [params] = useSearchParams();
-  const token = params.get('token');
+  // Read the sign-in token once, then take it out of the address bar, so a working 7-day
+  // credential does not sit in browser history or get copied with the URL.
+  const [token] = useState(() => params.get('token'));
+  useEffect(() => {
+    if (token && typeof window !== 'undefined' && window.location.search.includes('token=')) {
+      window.history.replaceState(window.history.state, '', window.location.pathname);
+    }
+  }, [token]);
   return (
     <>
       <SeoV2 title="My pilot" description="See where your Colaberry pilot stands." />

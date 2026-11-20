@@ -328,6 +328,8 @@ function shouldTrack(): boolean {
   if (typeof window === 'undefined') return false;
   if (navigator.doNotTrack === '1') return false;
   if (window.location.pathname.startsWith('/admin')) return false;
+  // W32: /my-pilot/status?token= carries a working client sign-in link. Never record its URL.
+  if (window.location.pathname.startsWith('/my-pilot')) return false;
   return true;
 }
 
