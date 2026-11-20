@@ -121,6 +121,9 @@ function getOnce(u: URL, deadline: number): Promise<Got> {
       u,
       {
         lookup: publicLookup,
+        // A fresh socket every time. A pooled keep-alive socket skips `lookup`, so it could
+        // carry this request to an address the check never saw (Phase 3 review, attempt 2).
+        agent: false,
         timeout: TIMEOUT_MS,
         headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ColaberryResearch/1.0)', Accept: 'text/html,text/plain' },
       },

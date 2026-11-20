@@ -6,6 +6,7 @@ const AdminChangePasswordPage = lazy(() => import('../pages/admin/AdminChangePas
 const CareerReviewPage = lazy(() => import('../pages/admin/CareerReviewPage'));
 const PlacementStudentsPage = lazy(() => import('../pages/admin/PlacementStudentsPage'));
 const AdminLoginPage = lazy(() => import('../pages/admin/AdminLoginPage'));
+const AdminEnterpriseClientsPage = lazy(() => import('../pages/admin/AdminEnterpriseClientsPage'));
 const AdminDashboardPage = lazy(() => import('../pages/admin/AdminDashboardPage'));
 const WarRoomPage = lazy(() => import('../pages/admin/WarRoomPage'));
 const AdminCohortDetailPage = lazy(() => import('../pages/admin/AdminCohortDetailPage'));
@@ -218,6 +219,9 @@ const adminRoutes = (
         <Route path="/admin/cohorts/:id" element={<AdminCohortDetailPage />} />
         <Route path="/admin/pipeline" element={<AdminPipelinePage />} />
         <Route path="/admin/leads" element={<AdminLeadsPage />} />
+        {/* W32: Enterprise clients, from Book a demo pilot to signed. */}
+        <Route path="/admin/enterprise-clients" element={<AdminEnterpriseClientsPage />} />
+        <Route path="/admin/enterprise-clients/:id" element={<AdminEnterpriseClientsPage />} />
         {/* Business accounts: the staff-side view of `organizations`. Detail is
             declared after the list so "/admin/business-accounts" is not eaten
             by the ":id" segment. */}

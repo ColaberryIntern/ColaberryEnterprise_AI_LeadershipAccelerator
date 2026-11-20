@@ -90,6 +90,8 @@ describe('every credential-carrying email is exempt from test mode', () => {
     { fn: 'sendTrainingWelcome', what: 'welcome with /portal/verify link' },
     { fn: 'sendOrgInvite', what: 'org invite with /portal/verify link' },
     { fn: 'sendDeliveryClientMagicLink', what: 'project review sign-in link' },
+    // W32: the Enterprise client's /my-pilot/status?token= sign-in link.
+    { fn: 'sendEnterpriseClientLink', what: 'enterprise client pilot status sign-in link' },
   ];
 
   it.each(CREDENTIAL_SENDS)('$fn ($what) passes neverRedirect', ({ fn }) => {

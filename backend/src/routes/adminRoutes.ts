@@ -34,6 +34,7 @@ import insightRoutes from './admin/insightRoutes';
 import settingsRoutes from './admin/settingsRoutes';
 import acceleratorRoutes from './admin/acceleratorRoutes';
 import flotationIntakeRoutes from './admin/flotationIntakeRoutes';
+import enterpriseClientsRoutes from './admin/enterpriseClientsRoutes';
 import kbRoutes from './admin/kbRoutes';
 import orchestrationRoutes from './admin/orchestrationRoutes';
 import timelineAdminRoutes from './admin/timelineAdminRoutes';
@@ -292,6 +293,8 @@ router.use(insightRoutes);
 router.use(settingsRoutes);
 router.use(acceleratorRoutes);
 router.use(flotationIntakeRoutes);
+// W32: Enterprise clients, from Book a demo pilot to signed.
+router.use(enterpriseClientsRoutes);
 router.use(kbRoutes);
 router.use(orchestrationRoutes);
 router.use(timelineAdminRoutes);

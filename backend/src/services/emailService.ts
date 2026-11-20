@@ -2110,6 +2110,53 @@ export async function sendPortalMagicLink(data: PortalMagicLinkData): Promise<vo
   console.log(`[Email] Portal magic link sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId}`);
 }
 
+// --- Enterprise client sign-in link (W32) ---
+
+export interface EnterpriseClientLinkData {
+  to: string;
+  fullName: string;
+  company: string;
+  link: string;
+}
+
+const escapeHtmlText = (s: string): string =>
+  String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/** The body of the client sign-in email. Exported so its wording can be tested. */
+export function buildEnterpriseClientLinkHtml(data: EnterpriseClientLinkData): string {
+  const first = escapeHtmlText(String(data.fullName || '').split(/\s+/)[0] || 'there');
+  const link = escapeHtmlText(data.link);
+  return [
+    '<div style="font-family: arial, sans-serif; font-size: 15px; color: #1a202c; line-height: 1.6; max-width: 560px">',
+    `<p>Hi ${first},</p>`,
+    `<p>Here is your link to see where your Colaberry pilot for ${escapeHtmlText(data.company)} stands.</p>`,
+    `<p><a href="${link}" style="display:inline-block;background:#2E6A86;color:#ffffff;padding:10px 18px;border-radius:6px;text-decoration:none">See my pilot</a></p>`,
+    '<p style="color:#4a5568;font-size:13px">The link works for 7 days. If you did not ask for it, you can ignore this email.</p>',
+    '<p>Colaberry</p>',
+    '</div>',
+  ].join('\n');
+}
+
+export async function sendEnterpriseClientLink(data: EnterpriseClientLinkData): Promise<void> {
+  if (!transporter) {
+    console.warn('[Email] SMTP not configured. Skipping enterprise client link to:', redactForLogs(data.to));
+    return;
+  }
+  // NEVER REDIRECTED, for the same reason as the portal link: it is a working sign-in.
+  const r = await resolveEmailRecipient(data.to, 'Your Colaberry pilot', { neverRedirect: true });
+  const html = buildEnterpriseClientLinkHtml(data);
+  const info = await guardedSendMail({
+    from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    to: r.to,
+    subject: r.subject,
+    html,
+    text: htmlToPlainText(html),
+    headers: emailHeaders('enterprise-client-link'),
+  });
+  console.log(`[Email] Enterprise client link sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId}`);
+}
+
 // --- Organization Invite Email (free member account, magic-link style) ---
 
 interface OrgInviteData {

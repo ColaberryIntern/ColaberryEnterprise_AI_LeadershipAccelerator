@@ -75,6 +75,8 @@ export const NAV_GROUPS: NavGroup[] = [
     { path: '/admin/refunds', label: 'Refunds', icon: 'refund-2-line' },
     { path: '/admin/leads', label: 'Leads', icon: 'group-line', section: 'leads' },
     { path: '/admin/pipeline', label: 'Pipeline', icon: 'filter-3-line', section: 'leads' },
+    // W32: Enterprise clients, from Book a demo pilot to signed (API: /api/admin/enterprise-clients).
+    { path: '/admin/enterprise-clients', label: 'Enterprise Clients', icon: 'briefcase-line' },
     { path: '/admin/business-accounts', label: 'Business Accounts', icon: 'building-line' },
     { path: '/admin/opportunities', label: 'Opportunities', icon: 'line-chart-line' },
     { path: '/admin/funnel', label: 'Funnel', icon: 'filter-2-line' },

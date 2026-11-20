@@ -13,6 +13,7 @@ import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react-dom/test-utils';
 import * as api from '../../../services/enterpriseIntakeApi';
+import { MemoryRouter } from 'react-router-dom';
 import DemoPilotIntake from '../DemoPilotIntake';
 /* eslint-enable import/first */
 
@@ -38,7 +39,11 @@ async function mount(): Promise<void> {
   document.body.appendChild(container);
   root = createRoot(container);
   await act(async () => {
-    root.render(<DemoPilotIntake token="tok-1" phone="214 555 0100" />);
+    root.render(
+      <MemoryRouter>
+        <DemoPilotIntake token="tok-1" phone="214 555 0100" />
+      </MemoryRouter>,
+    );
   });
 }
 

@@ -28,6 +28,8 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   // the router, because this gate is deny-by-default: an unmapped prefix 403s a scoped
   // revenue identity with nothing in the response explaining why.
   ['/api/admin/commercialization', 'revenue'],
+  // W32: Enterprise clients (Book a demo pilot to signed). Revenue, with the pipeline it feeds.
+  ['/api/admin/enterprise-clients', 'revenue'],
   ['/api/admin/campaigns', 'campaigns'], ['/api/admin/communications', 'campaigns'],
   // BEFORE the broad marketing row below, deliberately: pathToSection returns the FIRST
   // match in array order, not the longest prefix, so a narrower path placed after it is
