@@ -1,7 +1,7 @@
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const sharp = require('sharp');
 import { SIZES, photoSlots, type ThumbSize } from './templateLayout';
-import { renderTemplateSvg, type TemplateId, type TemplateText } from './templateSvg';
+import { renderOverlaySvg, renderTemplateSvg, type TemplateId, type TemplateText } from './templateSvg';
 
 /**
  * Rasterise a template (CH4.2): the SVG becomes a PNG with sharp, then each picture is cropped to
@@ -30,6 +30,24 @@ export async function renderTemplate(id: TemplateId, size: ThumbSize, text: Temp
   }
   const png: Buffer = await sharp(Buffer.from(svg)).composite(layers).png({ compressionLevel: 9 }).toBuffer();
   return { size, png, width: w, height: h, truncated };
+}
+
+/**
+ * AI art with code-drawn text (CH4.3 overlay mode): the generated scene fills the canvas (centre
+ * cover crop), then the exact text layer is composited on top. One generation yields every size.
+ */
+export async function renderOverlay(art: Buffer, theme: 'berry_night' | 'clean_white', size: ThumbSize, text: TemplateText): Promise<RenderedThumb> {
+  const { w, h } = SIZES[size];
+  const { svg, truncated } = renderOverlaySvg(theme, size, text);
+  const base = await sharp(art).resize(w, h, { fit: 'cover', position: size === '1x1' ? 'right' : 'centre' }).png().toBuffer();
+  const png: Buffer = await sharp(base).composite([{ input: Buffer.from(svg), left: 0, top: 0 }]).png({ compressionLevel: 9 }).toBuffer();
+  return { size, png, width: w, height: h, truncated };
+}
+
+export async function renderOverlayAllSizes(art: Buffer, theme: 'berry_night' | 'clean_white', text: TemplateText): Promise<RenderedThumb[]> {
+  const out: RenderedThumb[] = [];
+  for (const size of Object.keys(SIZES) as ThumbSize[]) out.push(await renderOverlay(art, theme, size, text));
+  return out;
 }
 
 /** All three sizes for one template. */

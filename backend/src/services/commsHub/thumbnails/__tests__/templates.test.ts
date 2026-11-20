@@ -3,7 +3,7 @@ const sharp = require('sharp');
 import { createHash } from 'crypto';
 import { SIZES, estimateWidth, fitText, photoSlots, regions, wrap, escapeXml, type ThumbSize } from '../templateLayout';
 import { TEMPLATES, renderTemplateSvg } from '../templateSvg';
-import { renderAllSizes, renderTemplate } from '../templateRender';
+import { renderAllSizes, renderTemplate, renderOverlayAllSizes } from '../templateRender';
 
 /** CH4.2 branded templates: text always fits its box, text and pictures never overlap, 9 PNGs, deterministic. */
 const LONG = 'Forward Deployed AI Engineer Accelerator Open House and Info Session for Working Professionals Everywhere';
@@ -64,7 +64,7 @@ describe('CH4.2 layout: text and pictures never overlap', () => {
 });
 
 describe('CH4.2 rendering (real sharp)', () => {
-  const text = { headline: 'Demo Tuesday', supporting: 'Live builds. Real feedback.', badge: 'TUE · 6:00 PM CST' };
+  const text = { headline: 'Demo Tuesday', supporting: 'Live builds. Real feedback.', badge: 'TUE \u00B7 6:00 PM CST' };
   let photo: Buffer;
   beforeAll(async () => { photo = await sharp({ create: { width: 600, height: 800, channels: 3, background: { r: 30, g: 90, b: 140 } } }).jpeg().toBuffer(); });
 
@@ -109,7 +109,7 @@ describe('CH4.2 rendering (real sharp)', () => {
   ];
   const CASES: Array<[ThumbSize, number]> = [['16x9', 1], ['3x1', 1], ['1x1', 0], ['16x9', 0]];
   it.each(WIDE.flatMap((h) => CASES.map(([s, n]) => [h, s, n] as const)))('rendered text stays inside its box: "%s" at %s with %i photo(s)', async (headline, size, n) => {
-    const r = await renderTemplate('bold_cherry', size, { headline, supporting: 'MMMM WWWW MAKE MOMENTUM WITH WORKFLOWS NOW', badge: 'WED · 10:00 AM CST' }, n ? [photo] : []);
+    const r = await renderTemplate('bold_cherry', size, { headline, supporting: 'MMMM WWWW MAKE MOMENTUM WITH WORKFLOWS NOW', badge: 'WED \u00B7 10:00 AM CST' }, n ? [photo] : []);
     const { data, info } = await sharp(r.png).raw().toBuffer({ resolveWithObject: true });
     const { text } = regions(size, n);
     const tolerance = 2; // antialiasing at the very edge of a glyph
@@ -121,6 +121,26 @@ describe('CH4.2 rendering (real sharp)', () => {
       }
     }
     expect(worst).toBe(-1);
+  }, 60_000);
+
+  it('CH4.3 overlay: exact text over AI art, every size at its dimensions, text inside its box, the art kept on the far side', async () => {
+    const art: Buffer = await sharp({ create: { width: 1536, height: 1024, channels: 3, background: { r: 20, g: 120, b: 60 } } }).png().toBuffer();
+    const renders = await renderOverlayAllSizes(art, 'berry_night', { headline: 'FORWARD DEPLOYED AI ENGINEER OPEN HOUSE', supporting: 'See how it works.', badge: 'EVERY TUESDAY \u00B7 6:00 PM CST' });
+    expect(renders.map((r) => r.size).sort()).toEqual(['16x9', '1x1', '3x1']);
+    for (const r of renders) {
+      const { data, info } = await sharp(r.png).raw().toBuffer({ resolveWithObject: true });
+      expect([info.width, info.height]).toEqual([SIZES[r.size].w, SIZES[r.size].h]);
+      const { text } = regions(r.size, 1);
+      for (let y = 0; y < info.height; y += 2) {
+        for (let x = Math.ceil(text.x + text.w) + 2; x < info.width; x += 2) {
+          const i = (y * info.width + x) * info.channels;
+          expect(data[i] > 225 && data[i + 1] > 225 && data[i + 2] > 225).toBe(false);
+        }
+      }
+      // The top-right corner is untouched art at every size (wide scrims cover the left 66%, the square one the bottom 60%).
+      const i = (2 * info.width + (info.width - 3)) * info.channels;
+      expect([data[i], data[i + 1], data[i + 2]]).toEqual([20, 120, 60]);
+    }
   }, 60_000);
 
   it('a very long title still renders and reports that it was shortened', async () => {

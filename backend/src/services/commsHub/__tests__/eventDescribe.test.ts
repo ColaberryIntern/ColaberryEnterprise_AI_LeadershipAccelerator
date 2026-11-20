@@ -24,17 +24,17 @@ describe('cleanDescription', () => {
   });
 
   it('replaces dashes cleanly and strips wrapping quotes', () => {
-    expect(cleanDescription('"Live builds — real feedback."')).toBe('Live builds, real feedback.');
+    expect(cleanDescription('"Live builds \u2014 real feedback."')).toBe('Live builds, real feedback.');
   });
 
   // Every string the CH3.2 attempt-1 verifier leaked through the first guard, verbatim.
   it.each([
     'We start at 6 p.m. sharp.', 'Doors open 9 a.m. Central.', 'See you Dec 1st.', 'Mark Nov 24th.', 'Join us on December 1st.',
     'See you 1 December.', 'It runs 2026-12-01.', 'Doors open at 18:30.', 'Starts at 6:30 sharp.', 'Kicks off at noon.',
-    'Join at 23:00 UTC.', 'Link: bit.ly/demo1', 'Join at zoom.us/j/123', 'Every Tues.', 'Tickets are €10.', '12.01.2026',
-    'Totally fr​ee', 'Totally ｆｒｅｅ.',
+    'Join at 23:00 UTC.', 'Link: bit.ly/demo1', 'Join at zoom.us/j/123', 'Every Tues.', 'Tickets are \u20AC10.', '12.01.2026',
+    'Totally fr\u200Bee', 'Totally \uFF46\uFF52\uFF45\uFF45.',
     // attempt-2 verifier leaks
-    'See you Dec. 3.', 'Nov. 24, 2026.', 'It costs 10 bucks.', 'Cost: USD 10.', 'Tickets: 10€.', 'Rs. 500 to join.',
+    'See you Dec. 3.', 'Nov. 24, 2026.', 'It costs 10 bucks.', 'Cost: USD 10.', 'Tickets: 10\u20AC.', 'Rs. 500 to join.',
     'Join us at 7.', 'Join on the 3rd.', 'Starts @ 6.', 'Seats open next week.', 'It starts in 2 days.',
   ])('drops "%s"', (leak) => {
     // A probe with no closing punctuation would run into the next sentence and take it down too

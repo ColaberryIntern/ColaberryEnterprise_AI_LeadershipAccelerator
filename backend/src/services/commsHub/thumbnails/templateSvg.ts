@@ -41,18 +41,11 @@ function measure(text: TemplateText, box: Box, unit: number, space: number): Blo
   return { badgeSize, badgeH, gap, head, sub, total };
 }
 
-export function renderTemplateSvg(id: TemplateId, size: ThumbSize, text: TemplateText, photoCount: number): TemplateSvg {
-  const { w, h } = SIZES[size];
-  const t = THEMES[id];
-  const { text: box, photos } = regions(size, photoCount);
-  const unit = Math.min(w, h);
+/** Badge, headline, supporting line and wordmark inside `box`; shared by the templates and the AI overlay. */
+function drawTextBlock(parts: string[], t: Theme, box: Box, unit: number, text: TemplateText): boolean {
   const markSize = Math.round(unit * 0.032);
   const space = box.h - markSize * 2.2;
   const m = measure(text, box, unit, space);
-  const parts: string[] = [
-    `<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${t.bg}"/><stop offset="1" stop-color="${t.bg2}"/></linearGradient></defs>`,
-    `<rect width="${w}" height="${h}" fill="url(#bg)"/>`,
-  ];
   if (t.accent) parts.push(`<rect x="${box.x - Math.round(unit * 0.03)}" y="${box.y}" width="${Math.max(6, Math.round(unit * 0.012))}" height="${box.h}" fill="${t.accent}"/>`);
   let y = box.y + Math.max(0, (space - m.total) / 2);
   if (text.badge) {
@@ -68,9 +61,37 @@ export function renderTemplateSvg(id: TemplateId, size: ThumbSize, text: Templat
   y += m.head.lines.length * m.head.lineHeight + m.gap * 0.6;
   if (m.sub) parts.push(textLines(m.sub.lines, box.x, y + m.sub.fontSize, m.sub.lineHeight, m.sub.fontSize, t.sub, 500));
   parts.push(textLines(['colaberry'], box.x, box.y + box.h, 0, markSize, t.mark, 700));
-  return {
-    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${parts.join('')}</svg>`,
-    photoArea: photos,
-    truncated: m.head.truncated || Boolean(m.sub?.truncated),
-  };
+  return m.head.truncated || Boolean(m.sub?.truncated);
+}
+
+export function renderTemplateSvg(id: TemplateId, size: ThumbSize, text: TemplateText, photoCount: number): TemplateSvg {
+  const { w, h } = SIZES[size];
+  const t = THEMES[id];
+  const { text: box, photos } = regions(size, photoCount);
+  const parts: string[] = [
+    `<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${t.bg}"/><stop offset="1" stop-color="${t.bg2}"/></linearGradient></defs>`,
+    `<rect width="${w}" height="${h}" fill="url(#bg)"/>`,
+  ];
+  const truncated = drawTextBlock(parts, t, box, Math.min(w, h), text);
+  return { svg: `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${parts.join('')}</svg>`, photoArea: photos, truncated };
+}
+
+/**
+ * The text layer for AI art (CH4.3 overlay mode): transparent everywhere except a scrim behind the text
+ * region, so the code-drawn text stays legible on any scene. The text region is the same one the
+ * templates use when a picture takes the other side (left on wide sizes, the lower half on the square).
+ */
+export function renderOverlaySvg(id: Extract<TemplateId, 'berry_night' | 'clean_white'>, size: ThumbSize, text: TemplateText): { svg: string; truncated: boolean } {
+  const { w, h } = SIZES[size];
+  const t = { ...THEMES[id], accent: null };
+  const { text: box } = regions(size, 1);
+  const square = size === '1x1';
+  const scrim = id === 'clean_white' ? PALETTE.white : PALETTE.night;
+  const parts: string[] = [
+    `<defs><linearGradient id="scrim" x1="0" y1="${square ? 1 : 0}" x2="${square ? 0 : 1}" y2="0">`
+      + `<stop offset="0" stop-color="${scrim}" stop-opacity="0.92"/><stop offset="0.55" stop-color="${scrim}" stop-opacity="0.78"/><stop offset="1" stop-color="${scrim}" stop-opacity="0"/></linearGradient></defs>`,
+    square ? `<rect x="0" y="${Math.round(h * 0.4)}" width="${w}" height="${h - Math.round(h * 0.4)}" fill="url(#scrim)"/>` : `<rect x="0" y="0" width="${Math.round(w * 0.66)}" height="${h}" fill="url(#scrim)"/>`,
+  ];
+  const truncated = drawTextBlock(parts, t, box, Math.min(w, h), text);
+  return { svg: `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${parts.join('')}</svg>`, truncated };
 }
