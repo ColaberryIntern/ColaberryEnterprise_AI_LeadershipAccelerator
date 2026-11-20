@@ -180,6 +180,15 @@ describe('a guided outline is filed by its own labels', () => {
       .toEqual(['Deciding who to offer the shift to first.']);
   });
 
+  it('an interview answer that repeats an outline line is filed by the line, not the angle', () => {
+    const { items } = itemsFromIntake({
+      idea: OUTLINE,
+      answers: [answer('THE MEASURE', 'Dana spends 45 to 90 minutes per gap.')],
+    });
+    expect(items.filter((i) => i.dimension === 'success_definition').map((i) => i.value))
+      .toEqual(['Gaps filled within 30 minutes on 9 mornings out of 10.']);
+  });
+
   it('keeps a model quote the outline did not already say', () => {
     const { items } = itemsFromIntake({
       idea: OUTLINE,

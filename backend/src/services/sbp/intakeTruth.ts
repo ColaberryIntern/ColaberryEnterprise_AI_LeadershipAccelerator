@@ -115,6 +115,38 @@ export const OUTLINE_LABEL_TO_DIMENSION: ReadonlyArray<readonly [string, Underst
   ["What I'd drop to get it", 'constraints'],
 ];
 
+/**
+ * Which interview angles a guided outline has ALREADY answered, and with what.
+ *
+ * An angle counts only when every line it asks about is filled: THE MEASURE
+ * needs both "today" and "good", so a student who gave one is still asked.
+ * The ShiftFill v3 run (2026-11-20) was asked "how long does it take today,
+ * and what would good look like?" right after typing both, and the reply was
+ * filed by the model's angle, so today's cost landed under success again.
+ */
+export const ANGLE_OUTLINE_LABELS: Readonly<Record<string, readonly string[]>> = {
+  'THE JOB': ['What it should produce, and for whom'],
+  'THE OPERATOR': ['Who uses it, and how comfortable they are with tools like this'],
+  'TRIGGER AND RHYTHM': ['What makes it start', 'How many, in a normal week and on the busiest'],
+  'THE TOOLS': ['Tools it needs to read from or write to'],
+  'THE JUDGEMENT': ['The call I am handing over, and what I look at to make it'],
+  'THE GUARDRAIL': ['What I want to look at myself before it goes out'],
+  'WHEN IT IS NOT SURE': ["When it isn't sure, it should"],
+  'EARNING AUTONOMY': ["Before I'd let it run on its own, I'd need it to"],
+  'THE MEASURE': ['How long it takes today, or how often it goes wrong', 'What good would look like'],
+  'THE STANDOUT AND THE CUT': ['What would make someone say "I didn\'t know it could do that"', "What I'd drop to get it"],
+};
+
+export function outlineAnsweredAngles(idea: string): Map<string, string> {
+  const lines = outlineLines(idea);
+  const out = new Map<string, string>();
+  for (const [angle, labels] of Object.entries(ANGLE_OUTLINE_LABELS)) {
+    const found = labels.map((l) => lines.find((o) => o.line.startsWith(`${l}:`)));
+    if (found.every(Boolean)) out.set(angle, found.map((f) => f!.line).join('\n'));
+  }
+  return out;
+}
+
 /** The outline's labelled lines found in a description, in the order written. */
 export function outlineLines(idea: string): Array<{ dimension: UnderstandingDimension; text: string; line: string }> {
   const out: Array<{ dimension: UnderstandingDimension; text: string; line: string }> = [];
@@ -186,6 +218,8 @@ export function itemsFromIntake(input: IntakeTruthInput): IntakeTruthResult {
   for (const answer of input.answers ?? []) {
     const text = clean(answer.answer);
     if (!text) continue; // a skipped question is not a fact about anything
+    // Repeating an outline line: the line, filed by its label, already says it.
+    if (fromOutline(text)) continue;
 
     const dimension = ANGLE_TO_DIMENSION[normaliseAngle(answer.angle)];
     if (!dimension) { unmapped.push(answer); continue; }

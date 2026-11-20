@@ -187,6 +187,39 @@ describe('the fallback set', () => {
  *
  * A reorder changes what a workflow-tier student is asked. It has to be deliberate.
  */
+describe('never asks what the guided outline already answered', () => {
+  // ShiftFill v3 (2026-11-20): both lines typed, then asked for both again.
+  const OUTLINE_IDEA = [
+    'What it should produce, and for whom: An agent that fills last-minute hygienist shift gaps for our dental offices.',
+    'How long it takes today, or how often it goes wrong: Dana spends 45 to 90 minutes per gap.',
+    'What good would look like: Gaps filled within 30 minutes on 9 mornings out of 10.',
+  ].join('\n');
+  const q = (id: string, angle: string, question: string) => ({
+    id, angle, question, why: 'It matters for the hygienist shift plan.', placeholder: 'about the dental offices',
+  });
+
+  it('drops a question whose angle the outline fully answered, and records the line as covered', async () => {
+    const client = { create: jest.fn().mockResolvedValue(reply([
+      q('measure', 'THE MEASURE', 'How long does a hygienist gap take today, and what would good look like?'),
+      q('guard', 'THE GUARDRAIL', 'What must a person check before a hygienist shift offer goes out?'),
+    ])) };
+    const r = await generateIntakeQuestions({ idea: OUTLINE_IDEA, size: 'project', client: client as any });
+    expect(r.questions.map((x) => x.id)).toEqual(['guard']);
+    const measure = r.covered.find((c) => c.angle === 'THE MEASURE');
+    expect(measure?.evidence).toContain('Dana spends 45 to 90 minutes per gap.');
+    expect(measure?.evidence).toContain('Gaps filled within 30 minutes');
+  });
+
+  it('still asks when only half of an angle was answered', async () => {
+    const half = OUTLINE_IDEA.split('\n').slice(0, 2).join('\n'); // "today" but no "good"
+    const client = { create: jest.fn().mockResolvedValue(reply([
+      q('measure', 'THE MEASURE', 'What would good look like for hygienist shift gaps?'),
+    ])) };
+    const r = await generateIntakeQuestions({ idea: half, size: 'project', client: client as any });
+    expect(r.questions.map((x) => x.id)).toEqual(['measure']);
+  });
+});
+
 describe('the ten angles', () => {
   const prompt = INTAKE_SYSTEM_PROMPT;
   const ORDER = [
