@@ -1,4 +1,4 @@
-import { ENRICHMENT_SCHEMA_VERSION, enrichmentPathFor } from './storyEnrichmentContract';
+import { ENRICHMENT_SCHEMA_VERSION, EVIDENCE_KINDS, enrichmentPathFor } from './storyEnrichmentContract';
 
 /**
  * enrichmentPromptBlock - the paragraph every story prompt carries so the
@@ -38,10 +38,16 @@ export function enrichmentPromptBlock(input: { projectId: string; storyId: strin
 
   return [
     ENRICHMENT_BLOCK_HEADING,
-    `Before you start, read \`.colaberry/plan.json\` and \`docs/stories/STORY-000.md\` (the section`,
-    '"What the platform understands about this project"). That is the current truth. Note anything',
-    'this story adds to it: a system it turns out to talk to, a decision you had to make, a limit you',
-    'discovered, a role or approval point that appeared.',
+    // The section reference used to be unconditional, and no production render
+    // ever produced that section, so every agent went looking for a heading
+    // that was not there. plan.json now carries the same truth in
+    // `derived.understanding`, and the doc section is rendered when the truth
+    // exists; the sentence names both and says which one wins if they differ.
+    `Before you start, read \`.colaberry/plan.json\` (its \`derived.understanding\` is what the student`,
+    'told us, quoted) and, when it is there, the section "What the platform understands about this',
+    'project" in `docs/stories/STORY-000.md`. That is the current truth; if the two ever differ,',
+    'plan.json is the newer one. Note anything this story adds to it: a system it turns out to talk',
+    'to, a decision you had to make, a limit you discovered, a role or approval point that appeared.',
     '',
     `When the acceptance criteria pass, write \`${path}\` with exactly this shape:`,
     '',
@@ -64,6 +70,12 @@ export function enrichmentPromptBlock(input: { projectId: string; storyId: strin
     '- If you found something that contradicts the truth, still write it: the platform files it as',
     '  a question for the student rather than replacing what they confirmed.',
     '- `projectTruthBaseRevision` is `truth_revision` from `.colaberry/manifest.json`, or 0 if absent.',
+    '  The 0 in the example is a placeholder: replace it with the number you read.',
+    '- `sourceCommitSha` is the commit the evidence is in. This file usually lands in the same commit',
+    '  as the work, which cannot name its own sha, so use the sha of the commit before it',
+    '  (`git rev-parse HEAD` before you commit), or null.',
+    `- Every evidence \`kind\` (in \`demonstrationEvidence\` and anywhere else it appears) is one of:`,
+    `  ${EVIDENCE_KINDS.join(', ')}.`,
     '- Commit it with the story. The platform reads it on push; pushing it twice changes nothing.',
   ].join('\n');
 }

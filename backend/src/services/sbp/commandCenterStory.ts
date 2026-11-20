@@ -20,6 +20,7 @@
  * Pure functions only. No I/O.
  */
 import { story000TruthSection } from './story000Truth';
+import { commandCenterTabSections } from './commandCenterTabs';
 import { enrichmentPromptBlock } from './enrichmentPromptBlock';
 import type { UnderstandingItem } from '../delivery/projectUnderstanding';
 import { BuildPlan, PlanRequirement } from './planContract';
@@ -36,6 +37,7 @@ import { progressFileTemplate } from './commandCenterProgressTemplate';
 import { PROFILE_FILE_PATH } from './profileContract';
 import { BLOCK_BEGIN, BLOCK_END } from './managedBlock';
 import {
+  NOJEKYLL_PATH,
   COMMAND_CENTER_ENTRY_FILE,
   COMMAND_CENTER_ENTRY_PATH,
   COMMAND_CENTER_ENTRY_RULE,
@@ -75,12 +77,6 @@ export const COMMAND_CENTER_NARRATIVE =
 
 const bullet = (s: string) => `- ${s}`;
 
-/** How an autonomy level reads on a card, in the student's language. */
-const AUTONOMY_LABEL: Record<string, string> = {
-  suggests: 'drafts for a person',
-  acts_with_approval: 'prepares, then waits for a human to release it',
-  acts_autonomously: 'completes on its own',
-};
 const fmt = (d: Date | null | undefined) =>
   d ? d.toISOString().slice(0, 10) : null;
 
@@ -150,10 +146,6 @@ export function commandCenterPrompt(
   schedule?: Schedule | null,
   opts: { projectId?: string } = {},
 ): string {
-  const kpis = measures(plan);
-  const safes = guardrails(plan);
-  const systems = systemsOfRecord(plan);
-  const roster = agentRoster(plan);
   const releases = [...plan.releases].sort((a, b) => a.key.localeCompare(b.key));
   const dueBy = new Map((schedule?.tasks ?? []).map((t) => [t.storyId, t.dueOn]));
 
@@ -422,6 +414,25 @@ export function commandCenterPrompt(
     + 'acceptance criteria, `due_on` and `due_baseline_on`; progress carries `verification` '
     + 'with the state, the commit and the points. Neither file repeats the other.',
   );
+  // `verification` is null until a verification run happens, and a page that
+  // defaulted it to `not_started` (as our own sample code once did) reports a
+  // measurement nobody took. Said here because the test run hit exactly that.
+  lines.push(
+    '`verification` is null until the platform has checked a story. Null is not '
+    + '`not_started`: show it as "not checked yet", and never as a zero.',
+  );
+  lines.push(
+    `Fetch the files relative to \`${COMMAND_CENTER_ENTRY_PATH}\`, which sits at the repo root: `
+    + `\`./${PLAN_FILE_PATH}\`, not \`../${PLAN_FILE_PATH}\`.`,
+  );
+  lines.push(
+    '`plan.derived` is precomputed for you so every page agrees: `measures`, `guardrails`, '
+    + '`systems`, `roles`, `counts`, and three that exist to make the page rich rather than '
+    + 'thin. `understanding` is what the student said at intake, quoted, each entry with a '
+    + '`dimension`, a `heading` and a `standing` (confirmed, or not yet), plus the questions '
+    + 'still `unanswered`. `handoffs` is which agent passes what to which. `artifacts` is every '
+    + 'named thing the agents read or produce. Use them rather than re-deriving them.',
+  );
   lines.push('');
 
   // ── WHERE IT GOES ─────────────────────────────────────────────────────────
@@ -457,202 +468,9 @@ export function commandCenterPrompt(
   );
   lines.push('');
 
-  lines.push('## Tabs, and what goes in each');
-  lines.push(
-    'Build it as a website, not a dashboard widget. Every tab is a real page, and every '
-    + 'card on it drills down one level to its own detail view. A card with nothing behind '
-    + 'it yet still drills down — to a page that says what will be there and what has to '
-    + 'happen first.',
-  );
-  lines.push('');
-
-  lines.push('### 1. Overview');
-  lines.push(
-    'The single screen you would show someone in thirty seconds: what the system does, '
-    + 'which release you are in, what is live and what is not.',
-  );
-  lines.push(
-    `Source: \`plan.project\` for the name and descriptor, \`plan.schedule\` for where you are `
-    + 'in the term, and `progress.totals` for the headline counts — `stories_verified` of '
-    + '`stories_total`, `criteria_passed` of `criteria_total`, `points_awarded`. Those totals '
-    + 'are already summed; do not recompute them by looping the stories, or the page and the '
-    + 'file will eventually disagree.',
-  );
-  lines.push('');
-
-  lines.push('### 2. Outcomes — the numbers this has to move');
-  lines.push(`Source: \`plan.derived.measures\` — each entry has \`id\` and \`statement\`.`);
-  if (kpis.length) {
-    lines.push('These are the measures you committed to. Each one is a card, each drills into how it is calculated:');
-    kpis.forEach((r) => lines.push(bullet(`**${r.id}** — ${r.statement}`)));
-    lines.push('');
-    lines.push(
-      'On sample data, show a plausible trend toward the target. On real data, show the '
-      + 'real figure — and where there is no measurement yet, show "not measured yet" '
-      + 'rather than a zero, because a zero reads as a real result.',
-    );
-    lines.push(
-      'Note what is NOT in your files: the actual value of any of these. Your files know '
-      + 'what you promised to move, never how far it has moved — that number comes from the '
-      + 'system you are building, once it is running and measuring. Until then every one of '
-      + 'these cards reads "not measured yet", and that is correct rather than unfinished.',
-    );
-  } else {
-    lines.push('Your plan carries no numeric target yet. Build the tab with an empty state that says so, and leave room for one card per measure.');
-  }
-  lines.push('');
-
-  lines.push('### 3. Users and use case');
-  lines.push(
-    'Who this is for and what they are trying to get done. Take the roles from your own '
-    + 'stories — they are written "As a <role>, I want …". Roles in your plan: '
-    + `${rolesFrom(plan).join(', ') || 'not yet named in your stories — say so on screen'}.`,
-  );
-  lines.push(
-    'Source: `plan.derived.roles`, already extracted. `plan.stories[].narrative` has the '
-    + 'full sentence each role came from, for the drill-down.',
-  );
-  lines.push('');
-
-  lines.push('### 4. Guardrails — what must never happen');
-  lines.push(
-    'Source: `plan.derived.guardrails` — `id` and `statement` each. To show whether anything '
-    + 'enforces one, follow `plan.requirements[].fulfilled_by` to the story ids, then read '
-    + 'those stories\' `verification.state` in the progress file. A guardrail whose stories '
-    + 'are not verified is a promise you have made and not yet kept, and the page should say '
-    + 'so in those words.',
-  );
-  if (safes.length) {
-    lines.push('These are the promises your system makes. Show each one, and whether anything in the build currently enforces it:');
-    safes.forEach((r) => lines.push(bullet(`**${r.id}** — ${r.statement}`)));
-  } else {
-    lines.push(
-      'Your plan has no requirement typed SAFE yet, which usually means the promise you '
-      + 'made in the interview was recorded as a normal feature. Show the tab with an empty '
-      + 'state and raise it with your instructor — this is worth fixing early.',
-    );
-  }
-  lines.push('');
-
-  lines.push('### 5. Systems — what this connects to');
-  lines.push(
-    'Source: `plan.derived.systems` — a list of names. That is ALL your files know about '
-    + 'them. Whether any one of them is actually connected right now is a fact about your '
-    + 'running system, and nothing in this repo can tell you it. Render every indicator grey '
-    + 'and labelled "not checked from here" until your own system reports otherwise. An '
-    + 'indicator that goes green because a name appeared in a JSON file is a lie with a '
-    + 'colour on it.',
-  );
-  if (systems.length) {
-    lines.push('One row per system, each with a live indicator (connected / not connected / error) and the time it was last checked:');
-    systems.forEach((s) => lines.push(bullet(s)));
-    lines.push('');
-    lines.push('None of these are connected on day one. The indicator must show that honestly rather than defaulting to green.');
-  } else {
-    lines.push('Your plan names no external system yet. Build the empty state.');
-  }
-  lines.push('');
-
-  lines.push('### 6. Project management');
-  lines.push(
-    'Source: `plan.releases[]` for the bars — each carries `starts_on`, `ends_on`, '
-    + '`story_ids` and `is_demo_target`. `plan.schedule` has `build_start`, `build_end`, '
-    + '`demo_day` and `demo_release_key`. Per story, `plan.stories[].due_on` is the current '
-    + 'date and `due_baseline_on` is the date it was FIRST given: show both, because the gap '
-    + 'between them is slippage and a chart that quietly moves the target hides it. Status '
-    + 'per story comes from the progress file, `stories[].verification.state`, which is one '
-    + 'of `not_started`, `in_progress`, `submitted`, `verified`.',
-  );
-  lines.push('A Gantt view of your releases, and under it every task with its due date. Tasks are clickable and open their own detail. Your releases:');
-  releases.forEach((r) => {
-    const inRel = plan.stories.filter((s) => s.release === r.key);
-    const dates = inRel.map((s) => dueBy.get(s.id)).filter(Boolean) as Date[];
-    const span = dates.length
-      ? ` · ${fmt(new Date(Math.min(...dates.map((d) => d.getTime()))))} → ${fmt(new Date(Math.max(...dates.map((d) => d.getTime()))))}`
-      : '';
-    lines.push(bullet(`**${r.key}** ${r.name} — ${inRel.length} ${inRel.length === 1 ? 'story' : 'stories'}${span}`));
-  });
-  if (schedule) {
-    lines.push('');
-    lines.push(`Demo day is ${fmt(schedule.demoDay)}. Build ends ${fmt(schedule.buildEnd)}, and the week between them is demo prep.`);
-    if (schedule.demoReleaseKey) {
-      lines.push(`Mark **${schedule.demoReleaseKey}** as the demo target on the chart — releases after it are the roadmap, not this term's work.`);
-    }
-  }
-  lines.push('');
-
-  lines.push('### 7. AI agents');
-  lines.push(
-    'Source: `plan.agents[]` — one card each, with `name`, `purpose`, `trigger_type`, '
-    + '`trigger`, `inputs`, `outputs`, `autonomy_level`, `approval_gates`, '
-    + '`escalation_rules`, `skills` and `owns` (the story ids it owns, which you join back '
-    + 'to the plan and the progress file). `plan.derived.counts.agents_by_autonomy` gives '
-    + 'you the roster breakdown without counting them yourself.',
-  );
-  lines.push(
-    'What is NOT there: whether any agent has ever run. There is no run history, no last-run '
-    + 'time and no success rate in these files, because none of that exists until you build '
-    + 'the agent and it starts running. Show the design, and show "no runs recorded" — never '
-    + 'a zero success rate, which reads as an agent that ran and failed.',
-  );
-  if (plan.agents?.length) {
-    lines.push('One card per agent. Each shows what fires it, what it reads and produces, how much it decides on its own, and when it must stop and ask:');
-    for (const a of plan.agents) {
-      lines.push('');
-      lines.push(`**${a.name}** — ${a.purpose}`);
-      lines.push(bullet(`Fires on: ${a.trigger || 'not specified'} (${a.trigger_type})`));
-      if (a.inputs.length) lines.push(bullet(`Reads: ${a.inputs.join(', ')}`));
-      if (a.outputs.length) lines.push(bullet(`Produces: ${a.outputs.join(', ')}`));
-      lines.push(bullet(`Autonomy: **${AUTONOMY_LABEL[a.autonomy_level]}**`));
-      if (a.approval_gates.length) {
-        lines.push(bullet(`Cannot act alone because of: ${a.approval_gates.join('; ')}`));
-      }
-      if (a.escalation_rules.length) lines.push(bullet(`Stops and asks when: ${a.escalation_rules.join('; ')}`));
-      if (a.skills.length) lines.push(bullet(`Skills it needs: ${a.skills.join(', ')}`));
-      lines.push(bullet(`Owns: ${a.owns.join(', ') || 'nothing yet'}`));
-    }
-    lines.push('');
-    lines.push(
-      'Autonomy is not decoration. An agent marked "waits for approval" must have somewhere on '
-      + 'this page showing what is waiting and who has to release it — otherwise the guardrail '
-      + 'exists only in the plan.',
-    );
-  } else {
-    lines.push('Your plan does not carry a scoped agent roster yet, so build this tab from who owns each story:');
-    roster.forEach((a) => lines.push(bullet(`**${a.name}** — owns ${a.stories.join(', ')}`)));
-    lines.push('');
-    lines.push('These are owners, not scoped agents — say so on the tab rather than presenting a job title as an AI agent.');
-  }
-  lines.push('');
-  lines.push('Each card carries a skills list. On real data there are no skills yet — show "no skills registered yet", not an empty box.');
-  lines.push('');
-
-  lines.push('### 8. Knowledge base');
-  lines.push(
-    'Source: `plan.requirements[]` (each with `id`, `statement`, `kind`, `priority`, '
-    + '`cluster` and `fulfilled_by`) and `plan.stories[]`. The traceability view a reviewer '
-    + 'will ask for is `fulfilled_by` rendered as a table: every requirement, the stories '
-    + 'that cover it, and whether those stories are verified. A `must` requirement with an '
-    + 'empty `fulfilled_by` is a real gap — show it rather than hiding the row.',
-  );
-  lines.push(
-    'Everything the project knows about itself: your requirements, your stories, your '
-    + 'decisions, and notes you add as you go. It grows for the whole programme, so build '
-    + 'it to be added to rather than regenerated.',
-  );
-  lines.push('Give it a chat panel that answers questions about the data on this page and cites which tab it came from. If it cannot answer from your data, it says so instead of guessing.');
-  lines.push('');
-
-  lines.push('### 9. Data model');
-  lines.push(
-    'The tables behind all of the above, with fields and relationships. Derive them from '
-    + 'your own requirements — they are listed in full further down. Work through each one '
-    + 'and ask what it has to store and what that thing is called in your domain. Do not '
-    + 'name a table after a vendor: HelloSign is a system you talk to, an agreement is a '
-    + 'thing you store. This is a starting point, not the answer — show me the model before '
-    + 'you create the tables.',
-  );
-  lines.push('');
+  // The nine tab specifications: Source, honesty rules and "what good looks
+  // like", in their own module. See commandCenterTabs.ts for why they grew.
+  lines.push(...commandCenterTabSections(plan, schedule));
 
   lines.push('## Sample data and real data');
   lines.push(
@@ -686,6 +504,7 @@ export function commandCenterPrompt(
     + 'Not a bare relative time — "3 days ago" alone is unreadable in a screenshot.',
   );
   lines.push(bullet('Under about a day old: show it plainly.'));
+  lines.push(bullet('Between a day and a week old: show it plainly too, with the age. It is not a warning yet.'));
   lines.push(bullet('Over about a week old: show it as a warning, and say "sync from the portal to refresh".'));
   lines.push('');
   lines.push(
@@ -766,12 +585,34 @@ export function commandCenterPrompt(
     'Deleting a story from the plan file and reloading removes it from the page. If it '
     + 'survives, you hard-coded something.',
   ));
+  lines.push(bullet(
+    'It reads as THIS project, not a template: the student\'s own words are on Overview and '
+    + 'Outcomes, and every tab whose data has a shape shows it as a picture (the release track, '
+    + 'the enforcement matrix, the data flow, the agent workflow, the Gantt, the traceability '
+    + 'matrix, the entity diagram), with the detail one click below.',
+  ));
   lines.push('');
 
-  lines.push('## Stop and ask me if');
+  // THESE NO LONGER STOP THE BUILD. They were "Stop and ask me if", which made
+  // three separate pause points in one story (take stock, the Overview
+  // checkpoint, and these), and in the ShiftFill test run they were the least
+  // useful of the three: every one already has a safe default in the tab specs
+  // above (build the empty state, never invent). Keeping the student in the
+  // loop is the point, so the questions are collected and handed over at the
+  // end instead of interrupting the build.
+  lines.push('## Questions to raise, without stopping');
+  lines.push(
+    'Do not stop the build for these. Take the safe path each one names, keep going, and list '
+    + 'every one you hit in your summary at the end, so I can answer them in one go:',
+  );
   lines.push(bullet('A tab needs data your plan does not contain — build the empty state and ask, rather than inventing the data.'));
-  lines.push(bullet('You are about to hard-code a KPI value, a customer name, or an integration status.'));
+  lines.push(bullet('You are about to hard-code a KPI value, a customer name, or an integration status. Do not; read it from the files or show the empty state.'));
   lines.push(bullet('The guardrails tab is empty because your plan has no SAFE requirement — that is worth fixing before you build further.'));
+  lines.push(bullet('The data model you propose: put it in `command-center/data-model.json` and the tab, and ask me to review it before any table is created.'));
+  lines.push(
+    'The two real pauses are unchanged: Step 2a stops to tell me what is already here, and '
+    + 'the Overview checkpoint below stops for my review.',
+  );
   lines.push('');
 
   // Continuous enrichment: STORY-000 participates like every other story, and
@@ -978,6 +819,19 @@ export function commandCenterPrompt(
       '**If it refuses because the repo is private,** Pages needs a paid plan for private repos. '
       + 'Tell me plainly that it was refused and carry on — do not retry it, and do not ask me to '
       + 'upgrade anything. The story still verifies without it.',
+    ),
+  );
+  // Found by the ShiftFill test run: without this file Pages runs Jekyll, which
+  // skips every dot-folder, so a published Command Center loads with no data.
+  // The platform now commits it on every sync; this covers a repo it cannot
+  // write to.
+  lines.push(
+    bullet(
+      `**Check that \`${NOJEKYLL_PATH}\` is at the repo root, and add it (an empty file is fine) `
+      + 'if it is not.** Without it, Pages runs Jekyll, Jekyll skips every folder whose name '
+      + 'starts with a dot, and the published page cannot load `.colaberry/plan.json`: the '
+      + 'site answers, every tab is empty. The platform commits this file itself when it can '
+      + 'write to your repo.',
     ),
   );
   lines.push(

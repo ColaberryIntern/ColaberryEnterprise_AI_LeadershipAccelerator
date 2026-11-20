@@ -38,7 +38,7 @@ import { repoWriteAccessForProject } from './repoWriteAccess';
 import { renderDocs } from './renderDocs';
 import { writeDocsToRepo, readRepoManifest, RepoWriteError } from './repoWriter';
 import { loadBuildProgress } from './buildProgressSnapshot';
-import { scheduleForEnrollment } from './scheduleForEnrollment';
+import { scheduleForEnrollment, truthForRender } from './scheduleForEnrollment';
 import { ensureGovPlanPublishedForSync, isGovBuildProjectVariables } from './govPlanForSync';
 import { scheduleFromBoard } from './scheduleFromBoard';
 
@@ -148,6 +148,10 @@ export async function refreshRepoDocuments(
     const commandCenterOverride =
       await domainCommandCenterOverrideForProject(projectId, opts.correlationId ?? null);
 
+    // The student's own account of the project, for plan.json's
+    // `derived.understanding` and STORY-000.md's truth section. Never throws.
+    const truth = await truthForRender(projectId, opts.correlationId ?? null);
+
     const files = renderDocs(plan, {
       repoUrl: repo.url,
       generatedAt: new Date().toISOString(),
@@ -156,6 +160,7 @@ export async function refreshRepoDocuments(
       correlationId: opts.correlationId,
       projectId,
       truthRevision: stored.truth_revision ?? null,
+      truth,
       schedule,
       progress: snapshot.progress,
       baselineByStory: snapshot.baselineByStory,

@@ -43,6 +43,7 @@
  */
 import { BuildPlan } from './planContract';
 import { buildSchedule, Schedule, DEFAULT_PREP_WEEK, DEFAULT_START_WEEK } from './buildSchedule';
+import type { UnderstandingItem } from '../delivery/projectUnderstanding';
 
 function log(event: string, correlationId: string | null | undefined, outcome: string, ctx: Record<string, unknown>): void {
   console.log(JSON.stringify({
@@ -150,6 +151,70 @@ export async function scheduleForEnrollment(
     return schedule;
   } catch (err: any) {
     log('sbp_schedule_failed', correlationId, 'failure', { enrollmentId, message: err?.message });
+    return null;
+  }
+}
+
+/**
+ * The schedule for a PROJECT, the way every document render must compute it.
+ *
+ * Lifted out of `refreshRepoDocuments` because a second render path needed the
+ * same answer and did not have it. The docs bundle (the zip a student with no
+ * writable repo downloads) rendered `.colaberry/plan.json` with NO schedule,
+ * while the portal's copy of the Story 000 prompt carried one: the prompt told
+ * the student's agent "r0 is the demo target, every story due 2026-10-01" and
+ * the file it was told to read said null. One function, every caller.
+ *
+ * A GOV build reads its dates back from the board (its tasks are dated by the
+ * deadline back-scheduler); everything else uses the cohort or self-paced
+ * schedule. Null from either is a normal outcome: the plan renders undated.
+ * `publishedAt` must be the STORED publish time, never `new Date()`.
+ *
+ * Never throws. A missing date must never cost a student their documents.
+ */
+export async function scheduleForProject(
+  projectId: string,
+  plan: BuildPlan,
+  publishedAt: Date | string | null | undefined,
+  correlationId: string | null,
+): Promise<Schedule | null> {
+  try {
+    const { default: Project } = await import('../../models/Project');
+    const project = await Project.findByPk(projectId);
+    const enrollmentId = String((project as any)?.enrollment_id ?? '');
+    const { isGovBuildProjectVariables } = await import('./govPlanForSync');
+    const isGov = isGovBuildProjectVariables((project as { project_variables?: unknown } | null)?.project_variables);
+    if (isGov) {
+      const { scheduleFromBoard } = await import('./scheduleFromBoard');
+      const fromBoard = await scheduleFromBoard(projectId);
+      if (fromBoard) return fromBoard;
+    }
+    return enrollmentId
+      ? await scheduleForEnrollment(enrollmentId, plan, correlationId, publishedAt ?? null)
+      : null;
+  } catch (err: any) {
+    log('sbp_schedule_failed', correlationId, 'failure', { projectId, message: err?.message });
+    return null;
+  }
+}
+
+/**
+ * The project's intake truth for a document render, or null.
+ *
+ * Never throws: the truth is context the documents are better for, not a
+ * precondition of having documents. A failure is logged with its class.
+ */
+export async function truthForRender(
+  projectId: string,
+  correlationId: string | null,
+): Promise<{ items: UnderstandingItem[]; revision: number } | null> {
+  try {
+    const { loadIntakeTruthAtRevision } = await import('./intakeTruthStore');
+    return await loadIntakeTruthAtRevision(projectId);
+  } catch (err: any) {
+    log('sbp_truth_for_render_failed', correlationId, 'partial', {
+      projectId, error_class: err?.name ?? 'Error', message: err?.message,
+    });
     return null;
   }
 }

@@ -40,8 +40,11 @@ export const enrichmentPathFor = (storyId: string): string => `${ENRICHMENT_DIR}
 
 const STORY_ID = /^STORY-\d{3,4}$/;
 
+/** Evidence kinds the contract accepts. Exported so the prompt lists exactly these. */
+export const EVIDENCE_KINDS = ['file', 'commit', 'test', 'url'] as const;
+
 const evidenceRefSchema = z.object({
-  kind: z.enum(['file', 'commit', 'test', 'url']),
+  kind: z.enum(EVIDENCE_KINDS),
   /** A path, a sha, a test name, or a URL. What a person would open to check. */
   ref: z.string().trim().min(1).max(300),
   note: z.string().trim().max(300).optional(),

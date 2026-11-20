@@ -32,6 +32,12 @@ jest.mock('../planStore', () => ({
   getPublishedPlan: (...a: unknown[]) => mockPublished(...a),
   getPlan: (...a: unknown[]) => mockLatest(...a),
 }));
+// The schedule and truth lookups reach Sequelize; this suite is about which
+// files are safe to unzip, so both answer "none", which renders undated.
+jest.mock('../scheduleForEnrollment', () => ({
+  scheduleForProject: jest.fn(async () => null),
+  truthForRender: jest.fn(async () => null),
+}));
 
 import { buildDocsBundle } from '../docsBundle';
 import { PROGRESS_FILE_PATH } from '../verification/progressContract';

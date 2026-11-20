@@ -89,6 +89,12 @@ export interface Schedule {
   demoReleaseKey: string | null;
   /** Releases beyond the demo release — the post-class roadmap. */
   roadmapReleaseKeys: string[];
+  /**
+   * True when the cohort's build window had already closed by `asOf`, so the
+   * programme was re-anchored on the publish day instead. Optional because a
+   * schedule read back from the board (`scheduleFromBoard`) has no window.
+   */
+  windowRolledForward?: boolean;
   /** Honest one-liner for the student, built from the numbers above. */
   verdict: string;
   tasks: ScheduledTask[];
@@ -164,20 +170,35 @@ export function buildSchedule(input: ScheduleInput): Schedule {
   const prepWeek = input.window.prepWeek ?? DEFAULT_PREP_WEEK;
   const demoWeek = input.window.demoWeek ?? DEFAULT_DEMO_WEEK;
 
-  const buildEnd = weekStart(cohortStart, prepWeek);
-  const demoDay = weekStart(cohortStart, demoWeek);
+  let buildEnd = weekStart(cohortStart, prepWeek);
+  let demoDay = weekStart(cohortStart, demoWeek);
 
   // The window opens on the cohort's week-`startWeek` day, or on the day the
   // plan was published if that is later — whichever is further out. buildEnd
-  // and demoDay do NOT move: prep week and the stage are real cohort events
-  // the whole class committed to. A late plan compresses the build window, it
-  // does not push Demo Day. Clamped to buildEnd so a plan published after the
-  // window closed still yields a usable (if degenerate) schedule.
+  // and demoDay do NOT move while the window is still open: prep week and the
+  // stage are real cohort events the whole class committed to. A late plan
+  // compresses the build window, it does not push Demo Day.
+  //
+  // A WINDOW THAT HAS ALREADY CLOSED IS DIFFERENT, and it used to be clamped
+  // to buildEnd: every story due on one day that was already in the past. Ali
+  // hit exactly that on 2026-11-19 — a build published seven weeks after his
+  // cohort's prep week opened, every story "due 2026-10-01", the Gantt a single
+  // stale column. There is no cohort event left to protect by then; the learner
+  // is working on their own time, which is the self-paced case. So the whole
+  // programme is re-anchored on the publish day (still `asOf`, never the wall
+  // clock, so it stays reproducible) with the same week shape everyone gets.
   let buildStart = weekStart(cohortStart, startWeek);
+  let windowRolledForward = false;
   if (input.window.asOf) {
     const floor = alignForwardToWeekday(startOfUtcDay(input.window.asOf), cohortStart.getUTCDay());
-    if (floor.getTime() > buildStart.getTime()) {
-      buildStart = floor.getTime() > buildEnd.getTime() ? buildEnd : floor;
+    if (floor.getTime() >= buildEnd.getTime()) {
+      const reanchored = addWeeks(floor, -Math.max(0, startWeek - 1));
+      buildStart = floor;
+      buildEnd = weekStart(reanchored, prepWeek);
+      demoDay = weekStart(reanchored, demoWeek);
+      windowRolledForward = true;
+    } else if (floor.getTime() > buildStart.getTime()) {
+      buildStart = floor;
     }
   }
 
@@ -249,10 +270,15 @@ export function buildSchedule(input: ScheduleInput): Schedule {
     });
   }
 
+  const verdict = verdictFor(totalTasks, capacity, buildWeeks, demoReleaseKey, ordered, fit);
   return {
     buildStart, buildEnd, demoDay, buildWeeks, capacity, totalTasks,
     demoReleaseKey, roadmapReleaseKeys,
-    verdict: verdictFor(totalTasks, capacity, buildWeeks, demoReleaseKey, ordered, fit),
+    windowRolledForward,
+    verdict: windowRolledForward
+      ? `Your cohort's build window had closed before this plan existed, so it is dated from `
+        + `${buildStart.toISOString().slice(0, 10)} on the same ${buildWeeks}-week shape. ${verdict}`
+      : verdict,
     tasks,
     prep: prepTasks(buildEnd, demoDay),
   };

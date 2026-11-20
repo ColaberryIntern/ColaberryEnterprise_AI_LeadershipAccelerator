@@ -85,6 +85,14 @@ export const COMMAND_CENTER_ENTRY_RULE =
   `The entry point is \`${COMMAND_CENTER_ENTRY_PATH}\` at the ROOT of the repo`;
 
 /**
+ * The file that stops GitHub Pages running Jekyll. Jekyll skips every path that
+ * starts with a dot, so without it a published Command Center loads with no
+ * `.colaberry/` data. Lives here, beside the other "where the Command Center
+ * is served from" facts, because the renderer commits it and the prompt names it.
+ */
+export const NOJEKYLL_PATH = '.nojekyll';
+
+/**
  * Every URL worth asking, for one Pages site, in order of preference.
  *
  * `siteUrl` is the site ROOT — whatever GitHub reported as `html_url`, or the
