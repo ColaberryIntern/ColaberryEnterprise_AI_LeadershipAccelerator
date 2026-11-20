@@ -23,8 +23,30 @@ describe('cleanDescription', () => {
     expect(cleanDescription(raw)).toBe('Three builders show what they shipped. Bring one question.');
   });
 
-  it('replaces dashes and strips wrapping quotes', () => {
-    expect(cleanDescription('"Live builds — real feedback."')).toBe('Live builds , real feedback.');
+  it('replaces dashes cleanly and strips wrapping quotes', () => {
+    expect(cleanDescription('"Live builds — real feedback."')).toBe('Live builds, real feedback.');
+  });
+
+  // Every string the CH3.2 attempt-1 verifier leaked through the first guard, verbatim.
+  it.each([
+    'We start at 6 p.m. sharp.', 'Doors open 9 a.m. Central.', 'See you Dec 1st.', 'Mark Nov 24th.', 'Join us on December 1st.',
+    'See you 1 December.', 'It runs 2026-12-01.', 'Doors open at 18:30.', 'Starts at 6:30 sharp.', 'Kicks off at noon.',
+    'Join at 23:00 UTC.', 'Link: bit.ly/demo1', 'Join at zoom.us/j/123', 'Every Tues.', 'Tickets are €10.', '12.01.2026',
+    'Totally fr​ee', 'Totally ｆｒｅｅ.',
+  ])('drops "%s"', (leak) => {
+    // A probe with no closing punctuation would run into the next sentence and take it down too
+    // (the conservative outcome); terminating it tests exactly the leak.
+    const probe = /[.!?]$/.test(leak) ? leak : `${leak}.`;
+    expect(cleanDescription(`Good intro sentence. ${probe} Closing line here.`)).toBe('Good intro sentence. Closing line here.');
+  });
+
+  it('an unterminated leak is still dropped, even if it takes the next sentence with it', () => {
+    expect(cleanDescription('Good intro sentence. Join at zoom.us/j/123 Closing line here.')).toBe('Good intro sentence.');
+  });
+
+  it('control: ordinary sentences with numbers or short words survive', () => {
+    const ok = 'Three builders show 2 projects each. Bring one question about agents. We review 10 pull requests live.';
+    expect(cleanDescription(ok)).toBe(ok);
   });
 });
 
@@ -41,6 +63,7 @@ describe('describeEvent', () => {
     expect(call.userPrompt).toContain('Demo Tuesday');
     expect(call.userPrompt).toContain('Aleem');
     expect(call.systemPrompt).toMatch(/Never state a date/);
+    expect(call.force).toBe(true); // a retry must produce a new draft, not the cached one
   });
 
   it('a draft that is all forbidden facts is refused rather than returned empty', async () => {

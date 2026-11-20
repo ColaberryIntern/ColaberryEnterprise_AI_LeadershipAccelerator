@@ -19,10 +19,12 @@ let container: HTMLDivElement;
 let root: Root;
 const settle = async (): Promise<void> => { for (let i = 0; i < 5; i += 1) await act(async () => { await Promise.resolve(); }); };
 
+/** Event n starts at 00:00Z on Dec n (6:00 PM CST the evening before); valid for n up to 28. */
+const at = (n: number): string => `2026-12-${String(n).padStart(2, '0')}T00:00:00.000Z`;
 const ev = (n: number, o: Partial<HubEvent> = {}): HubEvent => ({
-  id: `00000000-0000-4000-8000-00000000000${n}`, title: `Event ${n}`, event_type: 'session', audience: { kind: 'all_members' }, status: 'scheduled',
-  starts_at: `2026-12-0${n}T00:00:00.000Z`, ends_at: null, central: { date: `2026-11-3${n - 1}`, start_time: '18:00', end_time: null, label: 'x' },
-  repeat_rule: null, next_occurrence_at: `2026-12-0${n}T00:00:00.000Z`, upcoming_preview: [], join_url: null, registration_url: null, hosts: [],
+  id: `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`, title: `Event ${n}`, event_type: 'session', audience: { kind: 'all_members' }, status: 'scheduled',
+  starts_at: at(n), ends_at: null, central: { date: at(n).slice(0, 10), start_time: '18:00', end_time: null, label: 'x' },
+  repeat_rule: null, next_occurrence_at: at(n), upcoming_preview: [], join_url: null, registration_url: null, hosts: [],
   description: `About event ${n}.`, placement: { calendar: true, events_page: true, campus_rail: true }, thumbnail_id: null, broadcast_occurrence_id: null,
   created_at: '2026-11-20T00:00:00.000Z', updated_at: '2026-11-20T00:00:00.000Z', ...o,
 });
@@ -53,8 +55,31 @@ describe('CH3.1 the list', () => {
     expect(container.querySelector('.ch-featured')?.textContent).toContain('Event 1');
     expect(container.textContent).toContain('More upcoming events');
     expect(container.querySelectorAll('[data-testid="ch-events-grid"] .ch-event-card')).toHaveLength(2);
-    expect(container.querySelector('.ch-date-chip')?.textContent).toBe('1DEC');
+    // Dec 2 00:00Z is Dec 1, 6:00 PM Central: the chip is the Central date, zero-padded like the training site.
+    expect(container.querySelector('.ch-date-chip')?.textContent).toBe('01DEC');
     expect(container.textContent).toContain('Needs a thumbnail');
+  });
+
+  it('twenty events: one featured and nineteen in the grid, each with its own Open', async () => {
+    (api.listHubEvents as jest.Mock).mockResolvedValue(Array.from({ length: 20 }, (_, i) => ev(i + 1)));
+    await renderAt('/admin/comms-hub/events');
+    expect(container.querySelectorAll('.ch-featured')).toHaveLength(1);
+    expect(container.querySelectorAll('[data-testid="ch-events-grid"] .ch-event-card')).toHaveLength(19);
+    expect(Array.from(container.querySelectorAll('.ch-event-card button')).map((b) => b.textContent)).toContain('Open Event 20');
+  });
+
+  it('the featured card says Online when the event has a join link', async () => {
+    (api.listHubEvents as jest.Mock).mockResolvedValue([ev(1, { join_url: 'https://zoom.us/j/1' })]);
+    await renderAt('/admin/comms-hub/events');
+    expect(container.querySelector('.ch-featured-meta')?.textContent).toContain('Online');
+  });
+
+  it('focus order on the list: the scope buttons, then the featured card, then each grid card in date order', async () => {
+    (api.listHubEvents as jest.Mock).mockResolvedValue([ev(1), ev(2), ev(3)]);
+    await renderAt('/admin/comms-hub/events');
+    const order: string[] = [];
+    for (const el of Array.from(container.querySelectorAll<HTMLElement>('button:not([disabled]), a[href]'))) { el.focus(); order.push((document.activeElement?.textContent ?? '').trim()); }
+    expect(order).toEqual(['Upcoming', 'Past', 'Cancelled', 'Open event', 'Open Event 2', 'Open Event 3']);
   });
 
   it('one event: featured only; none: the empty state offers New event; scope buttons say which is on', async () => {
@@ -122,7 +147,11 @@ describe('CH3.2 the editor', () => {
     (api.cancelHubEvent as jest.Mock).mockResolvedValue(ev(1, { status: 'cancelled' }));
     await renderAt(`/admin/comms-hub/events?edit=${ev(1).id}`);
     await click(btn('Cancel this event'));
-    expect(container.querySelector('[role="alertdialog"]')?.textContent).toContain('comes off the community calendar');
+    const dialog = container.querySelector('[role="alertdialog"]');
+    expect(dialog?.textContent).toContain('comes off the community calendar');
+    // Dec 1 00:00Z is Mon, Nov 30 at 6:00 PM Central: the dialog names the Central date.
+    expect(dialog?.textContent).toContain('"Event 1" on Mon, Nov 30 · 6:00 PM CST');
+    expect(document.activeElement?.textContent).toBe('Keep it'); // focus lands on the safe choice
     expect(api.cancelHubEvent).not.toHaveBeenCalled();
     await click(btn('Yes, cancel the event'));
     expect(api.cancelHubEvent).toHaveBeenCalledWith(ev(1).id);
@@ -137,6 +166,30 @@ describe('CH3.2 the editor', () => {
     expect(btn('Cancel this event')).toBeUndefined();
     await click(btn('Duplicate'));
     expect(api.duplicateHubEvent).toHaveBeenCalledWith(ev(1).id);
+  });
+
+  it('a repeating event names the whole series in the cancel question', async () => {
+    (api.getHubEvent as jest.Mock).mockResolvedValue(ev(1, { repeat_rule: { freq: 'weekly', until: '2026-12-29' } }));
+    await renderAt(`/admin/comms-hub/events?edit=${ev(1).id}`);
+    await click(btn('Cancel this event'));
+    expect(container.querySelector('[role="alertdialog"]')?.textContent).toContain('every upcoming date in the series');
+    expect(container.querySelector('[role="alertdialog"]')?.textContent).toContain('repeats until 2026-12-29');
+  });
+
+  it('focus order in the editor follows the form top to bottom, then the actions', async () => {
+    (api.getHubEvent as jest.Mock).mockResolvedValue(ev(1));
+    await renderAt(`/admin/comms-hub/events?edit=${ev(1).id}`);
+    const ids: string[] = [];
+    for (const el of Array.from(container.querySelectorAll<HTMLElement>('input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])'))) {
+      el.focus(); ids.push(document.activeElement?.id || (document.activeElement?.textContent ?? '').trim());
+    }
+    const pos = (x: string): number => ids.indexOf(x);
+    expect(pos('All events')).toBe(0);
+    for (const [a, b] of [['ch-title', 'ch-type'], ['ch-type', 'ch-aud-all'], ['ch-aud-some', 'ch-date'], ['ch-date', 'ch-start'], ['ch-start', 'ch-end'],
+      ['ch-end', 'ch-repeat'], ['ch-repeat', 'ch-join'], ['ch-join', 'ch-reg'], ['ch-reg', 'ch-desc'], ['ch-desc', 'ch-place-calendar'], ['ch-place-campus_rail', 'Save event']]) {
+      expect(pos(a)).toBeGreaterThan(-1);
+      expect(pos(a)).toBeLessThan(pos(b));
+    }
   });
 
   it('accessibility: the editor has no axe violations and every input is labelled', async () => {

@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { SectionCard } from '../../shell';
 import type { HubEvent } from '../../../../services/commsHubApi';
 import EventFormFields from './EventFormFields';
 import EventStatusChip from './EventStatusChip';
 import { useEventEditor } from './useEventEditor';
+import { cancelSummary } from './eventDisplay';
 
 /**
  * The event editor (design 02, CH3.2): the form, then Save event, Save as draft, Duplicate and Cancel
@@ -16,14 +17,21 @@ interface Props {
   onSaved: (ev: HubEvent) => void;
 }
 
-function ConfirmCancel({ onYes, onNo, busy }: { onYes: () => void; onNo: () => void; busy: boolean }): React.ReactElement {
+interface ConfirmProps { what: string; onYes: () => void; onNo: () => void; busy: boolean }
+
+/** Says exactly what is being cancelled, and takes focus so a keyboard user lands on the safe choice. */
+function ConfirmCancel({ what, onYes, onNo, busy }: ConfirmProps): React.ReactElement {
+  const keep = useRef<HTMLButtonElement>(null);
+  useEffect(() => { keep.current?.focus(); }, []);
   return (
     <div className="alert alert-warning mt-3" role="alertdialog" aria-labelledby="ch-cancel-q" aria-describedby="ch-cancel-what">
       <p id="ch-cancel-q" className="fw-bold mb-1">Cancel this event?</p>
-      <p id="ch-cancel-what" className="mb-2">It comes off the community calendar and the member Events page. It cannot be un-cancelled; duplicate it to run it again.</p>
+      <p id="ch-cancel-what" className="mb-2">
+        This cancels {what}. It comes off the community calendar and the member Events page. It cannot be un-cancelled; duplicate it to run it again.
+      </p>
       <div className="d-flex gap-2">
         <button type="button" className="btn btn-danger comms-hub-action" onClick={onYes} disabled={busy}>{busy ? 'Cancelling...' : 'Yes, cancel the event'}</button>
-        <button type="button" className="btn btn-outline-secondary comms-hub-action" onClick={onNo}>Keep it</button>
+        <button ref={keep} type="button" className="btn btn-outline-secondary comms-hub-action" onClick={onNo}>Keep it</button>
       </div>
     </div>
   );
@@ -59,7 +67,9 @@ export default function EventEditor({ eventId, onClose, onSaved }: Props): React
           <button type="button" className="btn btn-outline-danger comms-hub-action" onClick={() => setConfirming(true)} disabled={ed.busy !== null}>Cancel this event</button>
         )}
       </div>
-      {confirming && <ConfirmCancel busy={ed.busy === 'cancel'} onNo={() => setConfirming(false)} onYes={() => { void ed.act('cancel').then(() => setConfirming(false)); }} />}
+      {confirming && ed.event && (
+        <ConfirmCancel what={cancelSummary(ed.event)} busy={ed.busy === 'cancel'} onNo={() => setConfirming(false)} onYes={() => { void ed.act('cancel').then(() => setConfirming(false)); }} />
+      )}
     </SectionCard>
   );
 }

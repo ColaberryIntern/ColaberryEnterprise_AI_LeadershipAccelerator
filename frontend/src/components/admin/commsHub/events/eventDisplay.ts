@@ -25,7 +25,8 @@ export function focusInstant(ev: Pick<HubEvent, 'next_occurrence_at' | 'starts_a
 }
 
 export function dateChip(at: Date): { day: string; month: string } {
-  const day = new Intl.DateTimeFormat('en-US', { timeZone: TZ, day: 'numeric' }).format(at);
+  // Two digits, as training.colaberry.com/events shows them ("01 DEC").
+  const day = new Intl.DateTimeFormat('en-US', { timeZone: TZ, day: '2-digit' }).format(at);
   const month = new Intl.DateTimeFormat('en-US', { timeZone: TZ, month: 'short' }).format(at).toUpperCase();
   return { day, month };
 }
@@ -46,6 +47,18 @@ export function audienceLabel(ev: Pick<HubEvent, 'audience'>): string {
   if (ev.audience.kind === 'all_members') return 'All open cohorts';
   const n = ev.audience.cohort_ids.length;
   return n === 1 ? '1 cohort' : `${n} cohorts`;
+}
+
+/** Where it happens, as the training site's card says it: online when there is a join link. */
+export function placeLabel(ev: Pick<HubEvent, 'join_url'>): string | null {
+  return ev.join_url ? 'Online' : null;
+}
+
+/** What cancelling removes, in words: the event, its next date, and how many dates a series loses. */
+export function cancelSummary(ev: Pick<HubEvent, 'title' | 'next_occurrence_at' | 'starts_at' | 'repeat_rule' | 'upcoming_preview'>): string {
+  const when = whenLabel({ ...ev, repeat_rule: null });
+  if (!ev.repeat_rule) return `"${ev.title}" on ${when}`;
+  return `"${ev.title}" and every upcoming date in the series, starting ${when} (repeats until ${ev.repeat_rule.until})`;
 }
 
 /** Notes the organizer should act on, shown beside the status. */

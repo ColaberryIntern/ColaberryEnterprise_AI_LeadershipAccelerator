@@ -1,7 +1,7 @@
 import React from 'react';
 import type { HubEvent } from '../../../../services/commsHubApi';
 import EventStatusChip from './EventStatusChip';
-import { TYPE_LABEL, attentionNotes, audienceLabel, dateChip, focusInstant, whenLabel } from './eventDisplay';
+import { TYPE_LABEL, attentionNotes, audienceLabel, dateChip, focusInstant, placeLabel, whenLabel } from './eventDisplay';
 
 /**
  * The two card shapes of training.colaberry.com/events (CH3.1): a featured card for the next event
@@ -40,6 +40,7 @@ export function FeaturedEventCard({ ev, onOpen }: CardProps): React.ReactElement
         <h2 className="ch-featured-title">{ev.title}</h2>
         <p className="ch-featured-meta">
           <i className="ri-calendar-line me-1" aria-hidden="true" />{whenLabel(ev)}
+          {placeLabel(ev) && <span className="ms-3"><i className="ri-global-line me-1" aria-hidden="true" />{placeLabel(ev)}</span>}
           <span className="ms-3"><i className="ri-group-line me-1" aria-hidden="true" />{audienceLabel(ev)}</span>
         </p>
         {ev.description && <p className="ch-featured-blurb">{ev.description}</p>}

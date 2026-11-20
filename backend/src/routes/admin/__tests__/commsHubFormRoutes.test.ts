@@ -1,4 +1,11 @@
 jest.mock('jsonwebtoken', () => ({ verify: jest.fn() }));
+// campusRoutes pulls in the whole model graph (models/index.ts associations), which the Cohort mock
+// below cannot satisfy. The route only needs these two helpers from it. Without this mock the suite
+// failed to LOAD in attempt 1 and its tests never ran.
+jest.mock('../../campusRoutes', () => ({
+  sendValidated: (res: { json: (b: unknown) => unknown }, _s: unknown, body: unknown) => res.json(body),
+  logFailure: jest.fn(),
+}));
 jest.mock('../../../config/env', () => require('../../../__tests__/testSupport/configMocks').envModuleMock({ jwtSecret: 'test-secret' }));
 const mockCohorts = jest.fn();
 jest.mock('../../../models/Cohort', () => ({ __esModule: true, default: { findAll: (...a: unknown[]) => mockCohorts(...a) } }));
