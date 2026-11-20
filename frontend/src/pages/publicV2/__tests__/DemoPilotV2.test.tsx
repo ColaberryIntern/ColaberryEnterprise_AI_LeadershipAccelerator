@@ -11,6 +11,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { DemoPilotV2 } from '../DemoPilotV2';
+import { EMPTY, formatHours, hoursPerYear, toIntakeBody, validate } from '../demoPilotModel';
 
 const html = (): string =>
   renderToStaticMarkup(
@@ -43,12 +44,47 @@ describe('DemoPilotV2 — consent', () => {
     expect(textOf(h)).toContain('I agree that Colaberry may contact me');
   });
 
-  it('collects no phone number, which is why there is no phone-consent tick', () => {
-    // /contact asked for a phone and therefore needed a second, separate
-    // consent. This page does not ask, so it must not imply it might call.
+  it('W28: asks for a mobile number only for the AI call, with no call tick until a number is typed', () => {
+    // The AI call needs its own grant, tied to the number. The general "may contact me"
+    // tick must never stand in for it, so the call tick only appears beside a number.
     const h = html();
-    expect(h).not.toContain('name="phone"');
-    expect(h).not.toContain('autoComplete="tel"');
+    expect(h).toContain('name="phone"');
+    expect(h).not.toContain('name="callConsent"');
+  });
+});
+
+describe('W28: demoPilotModel', () => {
+  const filled = {
+    ...EMPTY,
+    fullName: 'Dana',
+    email: 'dana@acme.test',
+    company: 'Acme',
+    process: 'Re-keying orders',
+    consentContact: true,
+  };
+
+  it('requires a company, because we research it before we meet', () => {
+    expect(validate({ ...filled, company: '' }).company).toBeTruthy();
+    expect(validate(filled)).toEqual({});
+  });
+
+  it('never sends a call grant without a number', () => {
+    expect(toIntakeBody({ ...filled, callConsent: true, phone: '' }, {}).callConsent).toBe(false);
+    expect(validate({ ...filled, callConsent: true, phone: '12' }).phone).toBeTruthy();
+    expect(toIntakeBody({ ...filled, callConsent: true, phone: '214 555 0100' }, {}).callConsent).toBe(true);
+  });
+
+  it('sends the two cost numbers as numbers, and blanks as null', () => {
+    const body = toIntakeBody({ ...filled, peopleCount: '4', hoursPerWeek: '1,200' }, {});
+    expect(body).toMatchObject({ peopleCount: 4, hoursPerWeek: 1200 });
+    expect(toIntakeBody(filled, {})).toMatchObject({ peopleCount: null, hoursPerWeek: null });
+  });
+
+  it('shows hours a year from their hours a week, and nothing when they gave none', () => {
+    expect(hoursPerYear(20)).toBe(1040);
+    expect(hoursPerYear(null)).toBeNull();
+    expect(hoursPerYear(0)).toBeNull();
+    expect(formatHours(1040)).toBe('1,040');
   });
 });
 
@@ -58,7 +94,9 @@ describe('DemoPilotV2 — the two figures', () => {
     expect(h).toContain('<fieldset');
     expect(h).toContain('<legend');
     expect(textOf(h)).toContain('The two figures');
-    expect(h).toContain('name="costToday"');
+    // W28: the cost is two numbers (people, hours a week), so it can be shown back as hours a year.
+    expect(h).toContain('name="peopleCount"');
+    expect(h).toContain('name="hoursPerWeek"');
     expect(h).toContain('name="requiredReturn"');
   });
 
@@ -79,9 +117,10 @@ describe('DemoPilotV2 — the page', () => {
 
   it('says what happens after you send it', () => {
     const text = textOf(html());
-    expect(text).toContain('An architect reads it');
-    expect(text).toContain('We meet the leader and the experts');
-    expect(text).toContain('You see the demo pilot');
+    // W28: the AI interview comes first, and the first meeting starts with options.
+    expect(text).toContain('Talk to our AI for 10 minutes');
+    expect(text).toContain('We do the homework');
+    expect(text).toContain('Our first meeting starts with your options');
   });
 
   it('offers an email route for anyone who will not fill in a form', () => {

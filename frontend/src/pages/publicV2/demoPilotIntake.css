@@ -1,0 +1,141 @@
+/* W28: the intake panel on /demo-pilot after the form is sent. Tokens only; every class is
+   cbv2-dpi. Sits inside the page's light .cbv2-dp5 hero. */
+
+.cbv2-shell .cbv2-dpi {
+  display: grid;
+  gap: var(--space-5);
+  max-width: 760px;
+  margin-top: var(--space-6);
+}
+
+.cbv2-shell .cbv2-dpi__wait {
+  color: var(--text-muted);
+  margin-top: var(--space-6);
+}
+
+/* Their figure, in the accent, as the one thing to read first. */
+.cbv2-shell .cbv2-dpi__save {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border-radius: var(--radius-sm);
+  background: var(--surface-brand-subtle);
+  border: 1px solid var(--border-brand);
+}
+
+.cbv2-shell .cbv2-dpi__fig {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  color: var(--text-body);
+}
+
+.cbv2-shell .cbv2-dpi__fig b {
+  font-size: clamp(32px, 4.4vw, 48px);
+  line-height: 1.05;
+  font-weight: 800;
+  color: var(--brand-accent);
+}
+
+.cbv2-shell .cbv2-dpi__skip {
+  margin: 0;
+  color: var(--text-body);
+}
+
+.cbv2-shell .cbv2-dpi__skip b {
+  color: var(--text-strong);
+}
+
+.cbv2-shell .cbv2-dpi__choose,
+.cbv2-shell .cbv2-dpi__calling {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.cbv2-shell .cbv2-dpi__calling p {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.cbv2-shell .cbv2-dpi__hint {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-body-sm);
+}
+
+/* The typed interview. */
+.cbv2-shell .cbv2-dpi__chat {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.cbv2-shell .cbv2-dpi__log {
+  list-style: none;
+  margin: 0;
+  padding: var(--space-4);
+  display: grid;
+  gap: var(--space-3);
+  max-height: 60vh;
+  overflow-y: auto;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--surface-card);
+}
+
+.cbv2-shell .cbv2-dpi__turn {
+  max-width: 85%;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.cbv2-shell .cbv2-dpi__turn--assistant {
+  background: var(--surface-sunken);
+  color: var(--text-strong);
+}
+
+.cbv2-shell .cbv2-dpi__turn--user {
+  justify-self: end;
+  background: var(--brand-accent);
+  color: var(--text-on-accent);
+}
+
+.cbv2-shell .cbv2-dpi__typing {
+  color: var(--text-muted);
+}
+
+.cbv2-shell .cbv2-dpi__reply {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-3);
+  align-items: end;
+}
+
+.cbv2-shell .cbv2-dpi__reply textarea {
+  width: 100%;
+  min-width: 0;
+  font: inherit;
+  padding: var(--space-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--surface-card);
+  color: var(--text-strong);
+}
+
+.cbv2-shell .cbv2-dpi__done {
+  display: grid;
+  gap: var(--space-4);
+}
+
+@media (max-width: 600px) {
+  .cbv2-shell .cbv2-dpi__reply {
+    grid-template-columns: 1fr;
+  }
+  .cbv2-shell .cbv2-dpi__turn {
+    max-width: 100%;
+  }
+}
