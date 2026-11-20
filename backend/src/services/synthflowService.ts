@@ -143,6 +143,8 @@ export function resolveAgentId(params: { callType: VoiceCallType; brandSlug?: st
     return env.synthflowInternshipAgentId || env.synthflowAiFlotationAgentId;
   }
   if (params.brandSlug === 'ai-flotation') return env.synthflowAiFlotationAgentId;
+  // W28: the Enterprise intake. Its own agent and number, NO fallback (see env.ts).
+  if (params.brandSlug === 'enterprise-intake') return env.synthflowEnterpriseIntakeAgentId;
 
   // OpportunityLift. Its own slot when configured, otherwise it BORROWS THE AI
   // FLOTATION SHELL - and the distinction between those two fallbacks is the whole

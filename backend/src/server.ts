@@ -1419,6 +1419,19 @@ async function ensureFriendReferralSchema() {
   }
 }
 
+// W28: one row per Enterprise "Book a demo pilot" intake. Targeted sync creates the
+// table if missing (boot has no global sync). Non-fatal: the form falls back to an
+// error the visitor sees, never a lost lead, because the lead is written first.
+async function ensureEnterpriseIntakeSchema() {
+  try {
+    const { EnterpriseIntake } = await import('./models');
+    await EnterpriseIntake.sync();
+    console.log('[DB] EnterpriseIntake schema ensured');
+  } catch (err: any) {
+    console.warn('[DB] EnterpriseIntake schema ensure failed:', err.message?.split('\n')[0]);
+  }
+}
+
 // Sponsor portal magic-link audit trail (STORY-001). Append-only; the model is
 // the schema contract and targeted sync creates the table if missing, since
 // boot runs no global sync. Non-fatal on failure: an unavailable audit table
@@ -2897,6 +2910,8 @@ async function start(): Promise<void> {
   await ensurePodcastSchema();
   // "Recommend a friend" onboarding step — friend_referrals table.
   await ensureFriendReferralSchema();
+  // W28: Enterprise client intake — enterprise_intakes table.
+  await ensureEnterpriseIntakeSchema();
   // Sponsor portal magic-link audit trail (STORY-001) — sponsor_portal_audit_log.
   await ensureSponsorPortalAuditSchema();
   await ensureSbpSchema();

@@ -328,6 +328,7 @@ import StudentTaskList from './StudentTaskList';
 import StudentTask from './StudentTask';
 import StudentPointsEvent from './StudentPointsEvent';
 import FriendReferral from './FriendReferral';
+import EnterpriseIntake from './EnterpriseIntake';
 import SponsorPortalAuditLog from './SponsorPortalAuditLog';
 import OpenHouseEvent from './OpenHouseEvent';
 import OnboardingProfile from './OnboardingProfile';
@@ -1588,6 +1589,7 @@ export {
   ContributionEvent,
   StudentPointsEvent,
   FriendReferral,
+  EnterpriseIntake,
   SponsorPortalAuditLog,
   OpenHouseEvent,
   OnboardingProfile,

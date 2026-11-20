@@ -9,7 +9,7 @@ import {
   CALLBACK_CONSENT_TTL_DAYS,
 } from './consent/captureSignupConsent';
 import { triggerVoiceCall } from './synthflowService';
-import { buildFlotationCallPrompt, CallBrand } from './voiceCallPrompt';
+import { buildFlotationCallPrompt, CallBrand, ENTERPRISE_BRAND } from './voiceCallPrompt';
 import { buildScholarshipCallPrompt } from './cpn/scholarshipCallPrompt';
 import { logCommunication } from './communicationLogService';
 import { WRITTEN_BRIEF_MAX } from './delivery/interviewMethod';
@@ -46,6 +46,17 @@ function promptForSource(payload: {
       role: payload.role,
       message: payload.message,
     }, brand);
+  }
+
+  // W28: the Enterprise intake. Same interview script, Colaberry Enterprise brand, its
+  // own agent (resolveAgentId), and an ending that promises a meeting, not a project.
+  if (payload.source === 'enterprise-intake') {
+    return buildFlotationCallPrompt({
+      name: payload.name,
+      company: payload.company,
+      role: payload.role,
+      message: payload.message,
+    }, brand ?? ENTERPRISE_BRAND);
   }
 
   // OpportunityLift. A scholarship applicant is not a sales prospect, so this is a

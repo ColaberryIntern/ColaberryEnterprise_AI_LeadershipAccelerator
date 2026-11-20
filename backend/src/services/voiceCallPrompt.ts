@@ -74,6 +74,18 @@ export interface CallBrand {
   origin: string;
   /** One line on what the business does, for the "WHAT X DOES" block. */
   blurb: string;
+  /**
+   * W28: how long the call should take, said to the agent. Absent keeps the existing
+   * brands' prompts unchanged.
+   */
+  pace?: string;
+  /**
+   * W28: what the agent tells them at the end, after confirming their email. Absent
+   * means the project-is-being-set-up closing the intake brands have always used. An
+   * Enterprise prospect is not getting a project built from the call, so that line
+   * would be a promise nothing keeps.
+   */
+  closing?: string;
 }
 
 /** The public AI Flotation prospect intake (aiflotation.com "call me now"). */
@@ -88,6 +100,20 @@ export const COLABERRY_BRAND: CallBrand = {
   name: 'Colaberry',
   origin: 'Colaberry',
   blurb: 'Colaberry helps you turn a real workflow into a working AI system you build and own: the work on the record, evidence before anything ships, and a mentor on every step. AI does the building; authority stays with people.',
+};
+
+/**
+ * W28: the Colaberry Enterprise intake, from "Book a demo pilot" on enterprise.colaberry.ai.
+ * The interview is the same one (interviewMethod.ts); what differs is who is calling, how
+ * long it should take, and what happens next, which is a first meeting that opens with
+ * pilot options, not a project built from the call.
+ */
+export const ENTERPRISE_BRAND: CallBrand = {
+  name: 'Colaberry',
+  origin: 'the Colaberry Enterprise website, where they asked for a demo pilot',
+  blurb: 'Colaberry builds, guides and trains companies into AI: it finds the process where AI pays back, proves it with a demo pilot on that process, then keeps going department by department. Every pilot starts from understanding the work, which is what this call is for.',
+  pace: 'Aim to finish in under 10 minutes. By about 8 minutes, confirm the one or two things you would otherwise have to guess and move to the ending. Never rush them mid-answer.',
+  closing: 'Then tell them: our team will research their company and come to the first meeting with options for their pilot, so that meeting starts with options rather than questions. Someone from Colaberry will email them to set it up.',
 };
 
 /**
@@ -136,6 +162,7 @@ export function buildFlotationCallPrompt(facts: FlotationCallFacts, brand: CallB
     '',
     'HOW TO TALK',
     'Short, concrete, unhurried. Let them finish. No jargon and no pitch.',
+    ...(brand.pace ? [brand.pace] : []),
     '',
     'WHAT YOU MUST NOT DO',
     '- Do not quote a price, a discount, or a contract term.',
@@ -146,7 +173,7 @@ export function buildFlotationCallPrompt(facts: FlotationCallFacts, brand: CallB
     '',
     'HOW TO END',
     'Thank them and confirm the best email to reach them on, spelling it back so you have it right.',
-    `Then tell them: their project is being set up now, and someone from ${brand.name} will email them once it is ready to get started on.`,
+    brand.closing ?? `Then tell them: their project is being set up now, and someone from ${brand.name} will email them once it is ready to get started on.`,
     'Do not give a date or a number of days. Do not say an automated message or confirmation is coming. Then end the call.',
   ].join('\n');
 }

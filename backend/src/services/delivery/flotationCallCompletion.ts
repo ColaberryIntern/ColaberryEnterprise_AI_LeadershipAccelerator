@@ -31,8 +31,18 @@ import { CommunicationLog, Lead } from '../../models';
 import { fetchSynthflowCall, isTerminalCallStatus } from '../synthflowService';
 import { finishIntake, buildTargetFromCall, type IntakeOutcome } from './projectIntake';
 import { conversationWithWrittenBrief } from './interviewMethod';
+import { ENTERPRISE_INTAKE_SOURCE } from '../enterpriseIntake/enterpriseIntakeSource';
 
 export const FLOTATION_SOURCE = 'ai-flotation';
+
+/**
+ * W28: the intake calls this completion owns. The Enterprise intake places the same call
+ * under its own source; it ends the same way, except that nothing is built from it (an
+ * Enterprise prospect gets a first meeting, not a student project) and its intake row
+ * records the write-up.
+ */
+export const isIntakeCallSource = (source: unknown): boolean =>
+  source === FLOTATION_SOURCE || source === ENTERPRISE_INTAKE_SOURCE;
 
 /** How far back the sweep looks. A call older than this that is still `sent` is a fossil. */
 export const SWEEP_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -65,7 +75,7 @@ export async function completeFlotationCall(input: CallCompletionInput): Promise
   if (!commLog) return { handled: false, reason: 'not_found' };
 
   const meta = commLog.metadata || {};
-  if (meta.source !== FLOTATION_SOURCE) return { handled: false, reason: 'not_flotation' };
+  if (!isIntakeCallSource(meta.source)) return { handled: false, reason: 'not_flotation' };
 
   const completed = input.status === 'completed';
 
@@ -87,6 +97,7 @@ export async function completeFlotationCall(input: CallCompletionInput): Promise
   if (!completed || !input.transcript) return { handled: true, completed: false };
 
   const leadRecord: any = commLog.lead_id ? await Lead.findByPk(commLog.lead_id) : null;
+  const enterprise = meta.source === ENTERPRISE_INTAKE_SOURCE;
   const intake = await finishIntake({
     // What they wrote before the call, then what was said. The typed door gets this for
     // free - the brief is the first turn - and the spoken door must not get less.
@@ -101,8 +112,16 @@ export async function completeFlotationCall(input: CallCompletionInput): Promise
     leadId: (commLog.lead_id as number | null) ?? null,
     // An admin-requested call was stamped with the student it is for; a prospect's call
     // is found by their email, the way the typed door finds them.
-    buildFor: buildTargetFromCall({ enrollmentId: meta.enrollment_id, email: leadRecord?.email }),
+    buildFor: enterprise
+      ? { kind: 'none' }
+      : buildTargetFromCall({ enrollmentId: meta.enrollment_id, email: leadRecord?.email }),
   });
+
+  if (enterprise) {
+    // Lazy, so this module does not load the intake service and its model at import time.
+    const { recordEnterpriseCallOutcome } = await import('../enterpriseIntake/enterpriseIntakeService');
+    await recordEnterpriseCallOutcome(input.callId, intake);
+  }
 
   return { handled: true, completed: true, intake };
 }
@@ -121,7 +140,7 @@ export async function reconcileFlotationCall(callId: string): Promise<ReconcileR
     where: { provider: 'synthflow', provider_message_id: callId },
   });
   if (!commLog) return { reconciled: false, reason: 'not_found' };
-  if ((commLog.metadata || {}).source !== FLOTATION_SOURCE) return { reconciled: false, reason: 'not_flotation' };
+  if (!isIntakeCallSource((commLog.metadata || {}).source)) return { reconciled: false, reason: 'not_flotation' };
   if (commLog.status === 'delivered' || commLog.status === 'failed') return { reconciled: false, reason: 'already_terminal' };
 
   const record = await fetchSynthflowCall(callId);
@@ -166,7 +185,7 @@ export async function reconcileOpenFlotationCalls(now: Date = new Date()): Promi
   const reconciled: string[] = [];
   let checked = 0;
   for (const row of rows) {
-    if ((row.metadata || {}).source !== FLOTATION_SOURCE) continue;
+    if (!isIntakeCallSource((row.metadata || {}).source)) continue;
     checked += 1;
     try {
       const out = await reconcileFlotationCall(row.provider_message_id);

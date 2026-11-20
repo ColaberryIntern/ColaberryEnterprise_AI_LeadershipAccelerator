@@ -7,7 +7,7 @@ import { CallContactLog } from '../models';
 import { processCallTranscript } from '../services/callTranscriptProcessor';
 import { sendSmsViaGhl, syncLeadToGhl, findContactByEmail } from '../services/ghlService';
 import { logActivity } from '../services/activityService';
-import { completeFlotationCall } from '../services/delivery/flotationCallCompletion';
+import { completeFlotationCall, isIntakeCallSource } from '../services/delivery/flotationCallCompletion';
 import OpenAI from 'openai';
 import { getInstrumentedOpenAI } from '../services/openaiInstrumented';
 import { env } from '../config/env';
@@ -217,7 +217,8 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
       }
     }
 
-    if (commMeta.source === 'ai-flotation') {
+    // W28: the Enterprise intake call is the same spoken interview and ends the same way.
+    if (isIntakeCallSource(commMeta.source)) {
       try {
         // The spoken mouth of the ONE intake. Everything after the last word - extraction,
         // and the build that starts on its own - is `completeFlotationCall`, which the admin
