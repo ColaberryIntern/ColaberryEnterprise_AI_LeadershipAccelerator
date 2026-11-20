@@ -24,6 +24,7 @@ import { getOnboardingSchedule, rsvpToOpenHouse } from '../services/openHouseSer
 import { isFreePreviewTier, resolveContentPageAccess } from '../services/access/contentEntitlement';
 import { hasFirstWin, hasCompletedAnyCard } from '../services/explorerFirstWin';
 import { getUpcomingPublicEvents, annotateRegistration } from '../services/publicEventsService';
+import { getPortalHubEvents, mergeCards } from '../services/commsHub/portalHubEvents';
 import { Enrollment } from '../models';
 import { ingestBackground, getOnboardingProfile } from '../services/resumeIngestService';
 import { submitReferrals } from '../services/friendReferralService';
@@ -237,11 +238,23 @@ export async function handleGetPublicEvents(req: Request, res: Response, next: N
   try {
     const raw = parseInt(String(req.query.days ?? ''), 10);
     const days = Number.isFinite(raw) ? Math.min(90, Math.max(1, raw)) : 30;
-    const shared = await getUpcomingPublicEvents(days);
-    // `shared` comes from the cross-viewer cache; is_registered is per person,
-    // so it is layered on here rather than baked into the cached objects.
     const enrollment = await Enrollment.findByPk(req.participant!.sub);
-    const events = await annotateRegistration(shared, (enrollment as any)?.email ?? null);
+    // CH2.3: CCPP (Eventbrite) and the Communications Hub are independent sources. Either may fail
+    // without taking the page down; both failing is the only case that errors, as before.
+    const [ccpp, hub] = await Promise.allSettled([
+      // `shared` comes from the cross-viewer cache; is_registered is per person,
+      // so it is layered on here rather than baked into the cached objects.
+      getUpcomingPublicEvents(days).then((shared) => annotateRegistration(shared, (enrollment as any)?.email ?? null)),
+      getPortalHubEvents((enrollment as any)?.cohort_id ?? null, days),
+    ]);
+    if (ccpp.status === 'rejected' && hub.status === 'rejected') throw ccpp.reason;
+    for (const [source, r] of [['ccpp', ccpp], ['comms_hub', hub]] as const) {
+      if (r.status === 'rejected') {
+        console.warn(JSON.stringify({ level: 'warn', service: 'backend', event: 'portal_events_source_failed', outcome: 'failure',
+          error_class: (r.reason as Error)?.name ?? 'UnknownError', context: { source } }));
+      }
+    }
+    const events = mergeCards(ccpp.status === 'fulfilled' ? ccpp.value : [], hub.status === 'fulfilled' ? hub.value : []);
     res.json({ events, window_days: days });
   } catch (err) { next(err); }
 }

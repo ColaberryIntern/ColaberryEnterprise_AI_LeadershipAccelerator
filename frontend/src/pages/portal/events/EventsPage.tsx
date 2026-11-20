@@ -57,6 +57,15 @@ export function truncateBlurb(text: string | null, max = BLURB_MAX): { text: str
   return { text: slice.slice(0, lastSpace > 40 ? lastSpace : max).trimEnd(), cut: true };
 }
 
+/**
+ * CH2.3: where a member watches an event that is live now, or null. Only an internal portal path
+ * counts (the hub's broadcast viewer), so a stray absolute URL can never become a "Watch live" link.
+ */
+export function watchLiveHref(ev: Pick<OpenHouseView, 'is_live' | 'watch_url'>): string | null {
+  if (!ev.is_live || !ev.watch_url) return null;
+  return ev.watch_url.startsWith('/portal/') ? ev.watch_url : null;
+}
+
 /** Group events by calendar month so a long list stays scannable. */
 export function groupByMonth(events: OpenHouseView[]): Array<{ key: string; label: string; items: OpenHouseView[] }> {
   const out: Array<{ key: string; label: string; items: OpenHouseView[] }> = [];
@@ -153,6 +162,12 @@ const EventCard: React.FC<{ ev: OpenHouseView; focused?: boolean }> = ({ ev, foc
         )}
       </div>
 
+      {/* CH2.3: a Communications Hub event streaming now; same tab, it is a portal page. */}
+      {watchLiveHref(ev) && (
+        <div className="evt-foot">
+          <a className="evt-btn" href={watchLiveHref(ev) as string} data-testid={`evt-watch-${ev.id}`}>Watch live</a>
+        </div>
+      )}
       {/* C27 (v6 D5): one-tap Sign up (Eventbrite is the record), or "You're going" once Eventbrite has you */}
       {ev.is_registered && (
         <div className="evt-foot"><span className="evt-going" data-testid={`evt-going-${ev.id}`}>✓ You&rsquo;re going</span></div>

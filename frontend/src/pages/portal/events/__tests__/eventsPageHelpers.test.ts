@@ -1,4 +1,4 @@
-import { formatEventWhen, truncateBlurb, groupByMonth } from '../EventsPage';
+import { formatEventWhen, truncateBlurb, groupByMonth, watchLiveHref } from '../EventsPage';
 import type { OpenHouseView } from '../../../../services/onboardingApi';
 
 /**
@@ -92,5 +92,17 @@ describe('groupByMonth', () => {
 
   it('returns an empty list for no events', () => {
     expect(groupByMonth([])).toEqual([]);
+  });
+});
+
+describe('watchLiveHref (CH2.3)', () => {
+  it('a live hub event with a portal watch path gets a Watch live link', () => {
+    expect(watchLiveHref({ is_live: true, watch_url: '/portal/live/event/abc' })).toBe('/portal/live/event/abc');
+  });
+  it('not live, no url, or an absolute url: no link', () => {
+    expect(watchLiveHref({ is_live: false, watch_url: '/portal/live/event/abc' })).toBeNull();
+    expect(watchLiveHref({ is_live: true, watch_url: null })).toBeNull();
+    expect(watchLiveHref({ is_live: true, watch_url: 'https://evil.example/x' })).toBeNull();
+    expect(watchLiveHref({})).toBeNull();
   });
 });

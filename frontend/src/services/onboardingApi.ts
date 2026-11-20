@@ -64,6 +64,11 @@ export interface OpenHouseView {
   signup_count: number | null;
   /** Whether the signed-in learner has registered. Per-viewer. */
   is_registered: boolean;
+  /** CH2.3: 'hub' for Communications Hub events, 'ccpp' for Eventbrite; absent on older payloads. */
+  source?: 'ccpp' | 'hub';
+  /** CH2.3/CH5.3: a hub event that is streaming now, and where members watch it. */
+  is_live?: boolean;
+  watch_url?: string | null;
 }
 export interface FirstClassView {
   start_date: string;
