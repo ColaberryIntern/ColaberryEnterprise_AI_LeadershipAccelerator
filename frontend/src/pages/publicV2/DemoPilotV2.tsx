@@ -277,7 +277,7 @@ export function DemoPilotV2(): React.ReactElement {
                 <p className="cbv2-fig5__p">They are how we pick the pilot, and how you will judge it. Rough is fine.</p>
                 <div className="cbv2-fgrid5">
                   {field('peopleCount', 'dp-people', 'People who do this today', { inputMode: 'numeric', placeholder: 'e.g. 4' })}
-                  {field('hoursPerWeek', 'dp-hours', <>Hours a week <small>all of them together</small></>, {
+                  {field('hoursPerWeek', 'dp-hours', <>Hours a week <small>in total</small></>, {
                     inputMode: 'decimal',
                     placeholder: 'e.g. 20',
                   })}
