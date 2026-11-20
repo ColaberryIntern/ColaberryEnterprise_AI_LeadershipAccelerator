@@ -42,7 +42,11 @@ async function renderAt(path: string): Promise<void> {
   await settle();
 }
 
-beforeEach(() => { (commsHubApi.getCommsHubSummary as jest.Mock).mockResolvedValue(EMPTY); });
+beforeEach(() => {
+  (commsHubApi.getCommsHubSummary as jest.Mock).mockResolvedValue(EMPTY);
+  // CH3.1: the Events tab loads its own list; an empty hub has no events.
+  (commsHubApi.listHubEvents as jest.Mock).mockResolvedValue([]);
+});
 afterEach(() => { act(() => { root.unmount(); }); container.remove(); jest.clearAllMocks(); });
 
 const text = (): string => container.textContent ?? '';
@@ -52,7 +56,7 @@ const button = (label: string): HTMLButtonElement => Array.from(container.queryS
 describe('CH1.3 Communications Hub shell', () => {
   it.each([
     ['/admin/comms-hub', 'Today', 'Nothing is waiting for your approval'],
-    ['/admin/comms-hub/events', 'Events', 'No events yet'],
+    ['/admin/comms-hub/events', 'Events', 'No upcoming events'],
     ['/admin/comms-hub/compose', 'Compose', 'Start a message'],
     ['/admin/comms-hub/schedule', 'Schedule & history', 'Nothing is scheduled'],
   ])('%s deep-links to its tab (%s) and renders its empty state', async (path, tab, empty) => {
@@ -86,9 +90,16 @@ describe('CH1.3 Communications Hub shell', () => {
     expect(text()).not.toContain('Nothing is waiting for your approval');
   });
 
+  it('a failed event list on Events shows its own retry and never claims there are no events', async () => {
+    (commsHubApi.listHubEvents as jest.Mock).mockRejectedValueOnce(new Error('down'));
+    (commsHubApi.apiErrorMessage as jest.Mock).mockReturnValue('The events did not load.');
+    await renderAt('/admin/comms-hub/events');
+    expect(Array.from(container.querySelectorAll('[role="alert"]')).map((a) => a.textContent).join(' ')).toContain('The events did not load.');
+    expect(text()).not.toContain('No upcoming events');
+  });
+
   it.each([
     ['/admin/comms-hub', 'Nothing is waiting for your approval'],
-    ['/admin/comms-hub/events', 'No events yet'],
     ['/admin/comms-hub/schedule', 'Nothing is scheduled'],
   ])('a failed summary on %s shows the retry and never claims emptiness', async (path, emptyCopy) => {
     (commsHubApi.getCommsHubSummary as jest.Mock).mockRejectedValueOnce(new Error('down'));

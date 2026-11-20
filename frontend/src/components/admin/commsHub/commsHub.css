@@ -1,0 +1,109 @@
+/*
+ * Communications Hub (CH3.1): the Events list in the shape of training.colaberry.com/events.
+ * Tokens only (src/colaberry/tokens); no hex values. Status is carried by text and an icon;
+ * these colours only reinforce it.
+ */
+
+.ch-featured {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  border-radius: var(--radius-2xl);
+  overflow: hidden;
+  background: var(--neutral-950);
+  color: var(--neutral-0);
+  box-shadow: var(--shadow-md);
+  margin-bottom: var(--space-6, 1.5rem);
+}
+.ch-featured-pic {
+  min-height: 240px;
+  background: var(--red-600);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ch-featured-body { padding: 1.75rem; display: flex; flex-direction: column; justify-content: center; }
+.ch-featured-title { font-size: clamp(1.5rem, 2.4vw, 2.1rem); font-weight: 800; line-height: 1.15; margin: 0 0 0.5rem; }
+.ch-featured-meta { color: var(--neutral-300); margin-bottom: 0.75rem; }
+.ch-featured-blurb {
+  color: var(--neutral-200);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.ch-letter { font-size: 4rem; font-weight: 800; color: var(--neutral-0); }
+
+.ch-type-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  border-radius: var(--radius-pill);
+  background: var(--neutral-800);
+  color: var(--green-300);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.ch-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 1rem;
+}
+.ch-event-card {
+  display: flex;
+  flex-direction: column;
+  padding: 1.25rem;
+  border: 1px solid var(--neutral-200);
+  border-radius: var(--radius-xl);
+  background: var(--neutral-0);
+  min-height: 260px;
+}
+.ch-date-chip {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: var(--radius-lg);
+  background: var(--red-50);
+  color: var(--red-600);
+}
+.ch-date-day { font-size: 1.6rem; font-weight: 800; line-height: 1; }
+.ch-date-month { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em; }
+.ch-type-line { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--blue-700); }
+.ch-event-title { font-size: 1.1rem; font-weight: 800; margin: 0 0 0.25rem; }
+.ch-event-when { color: var(--neutral-600); font-size: 0.9rem; margin-bottom: 0.5rem; }
+.ch-event-blurb {
+  color: var(--neutral-600);
+  font-size: 0.9rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.ch-notes { font-size: 0.8rem; font-weight: 600; color: var(--neutral-500); }
+.ch-featured .ch-notes { color: var(--neutral-300); }
+
+.ch-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.6rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.75rem;
+  font-weight: 700;
+  border: 1px solid currentColor;
+}
+.ch-status-neutral { color: var(--neutral-600); background: var(--neutral-50); }
+.ch-status-info { color: var(--blue-700); background: var(--blue-50); }
+.ch-status-danger { color: var(--red-700); background: var(--red-50); }
+.ch-status-success { color: var(--green-700); background: var(--green-50); }
+.ch-status-muted { color: var(--neutral-500); background: var(--neutral-100); text-decoration: line-through; }
+
+@media (max-width: 767.98px) {
+  .ch-featured { grid-template-columns: 1fr; }
+  .ch-featured-pic { min-height: 160px; }
+}
