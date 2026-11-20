@@ -117,6 +117,18 @@ describe('CH4.4 generate', () => {
     expect(($<HTMLInputElement>('#ch-opt-t1')).checked).toBe(true);
   });
 
+  it('closing the studio while it waits starts nothing more (no template fallback nobody asked for)', async () => {
+    await render();
+    await setValue('ch-studio-style', 'C_open_house');
+    m(api.generateThumbnails).mockResolvedValue(job({ id: 'slow', kind: 'ai' }));
+    m(api.getThumbnailJob).mockResolvedValue(job({ id: 'slow', kind: 'ai' }));
+    await click(btn('Generate thumbnails'));
+    act(() => { root.unmount(); });
+    for (let t = 0; t <= GIVE_UP_MS; t += POLL_MS) await tick(POLL_MS);
+    expect(api.generateThumbnails).toHaveBeenCalledTimes(1);
+    root = createRoot(container); // afterEach unmounts again
+  });
+
   it('a refused headline or a failed job shows the server\'s sentence', async () => {
     await render();
     m(api.generateThumbnails).mockRejectedValueOnce({ response: { data: { error: 'The text "FREE class" contains a word the TWC rules do not allow on Colaberry promotions.' } } });

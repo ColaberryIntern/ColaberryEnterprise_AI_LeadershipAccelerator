@@ -90,6 +90,16 @@ describe('CH4.4 generateBatch', () => {
     expect(r.notice).toContain("today's 12 AI pictures");
   });
 
+  it('one attempt throwing unexpectedly does not hide the others; all throwing fails the job', async () => {
+    let n = 0;
+    mockAiAttempt.mockImplementation(async () => { n += 1; if (n === 3) throw new Error('db down'); return { option: { id: `ai${n}` }, reason: null }; });
+    const r = await generateBatch(req(), 'A_dark_tech');
+    expect(r.optionIds).toEqual(['ai1', 'ai2']);
+    expect(r.notice).toBe('2 of 3 AI pictures were made. One AI picture failed unexpectedly.');
+    mockAiAttempt.mockRejectedValue(new Error('db down'));
+    await expect(generateBatch(req(), 'A_dark_tech')).rejects.toThrow('db down');
+  });
+
   it('a change makes exactly one attempt', async () => {
     mockAiAttempt.mockResolvedValue({ option: { id: 'ai1' }, reason: null });
     await generateBatch(req(), 'E_infographic', 1);

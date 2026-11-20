@@ -65,6 +65,8 @@ export function useThumbnailStudio(event: HubEvent) {
   }, [event.id]);
 
   const finish = useCallback(async (job: ThumbJob | null, busy: Busy, summary: string | null): Promise<void> => {
+    // The studio was closed while waiting: nothing to show, and no template fallback nobody asked for.
+    if (!alive.current) return;
     if (!job) {
       patch({ progress: 'Making the branded templates...' });
       const fallback = await waitFor(await generateThumbnails(event.id, { style: 'templates', headline: s.headline.trim(), supporting: s.supporting.trim() || null, show_when: s.showWhen }));

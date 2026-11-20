@@ -81,7 +81,10 @@ export interface BatchResult { optionIds: string[]; notice: string | null }
 export async function generateBatch(req: GenerateRequest, style: StudioStyle, count = AI_BATCH): Promise<BatchResult> {
   if (style === 'templates') return { optionIds: (await templateOptions(req)).map((o) => o.id), notice: null };
   if (isTemplate(style)) return { optionIds: (await templateOptions(req, [style])).map((o) => o.id), notice: null };
-  const results = await Promise.all(Array.from({ length: count }, () => aiAttempt(req, style)));
+  // allSettled: one attempt failing unexpectedly (e.g. a database error) must not hide the ones that worked.
+  const settled = await Promise.allSettled(Array.from({ length: count }, () => aiAttempt(req, style)));
+  if (settled.every((r) => r.status === 'rejected')) throw (settled[0] as PromiseRejectedResult).reason;
+  const results = settled.map((r) => (r.status === 'fulfilled' ? r.value : { option: null, reason: 'One AI picture failed unexpectedly.' }));
   const made = results.filter((r) => r.option).map((r) => r.option!.id);
   const reason = results.find((r) => r.reason)?.reason ?? null;
   if (!made.length) return { optionIds: (await templateOptions(req)).map((o) => o.id), notice: reason };
