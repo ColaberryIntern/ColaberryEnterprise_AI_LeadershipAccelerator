@@ -6,6 +6,7 @@ import EventStatusChip from './EventStatusChip';
 import { useEventEditor } from './useEventEditor';
 import { cancelSummary } from './eventDisplay';
 import ThumbnailStudio from './studio/ThumbnailStudio';
+import LivePanel from './live/LivePanel';
 
 /**
  * The event editor (design 02, CH3.2): the form, then Save event, Save as draft, Duplicate and Cancel
@@ -77,7 +78,10 @@ export default function EventEditor({ eventId, onClose, onSaved }: Props): React
   // Design 02: the event details on the left, the thumbnail studio beside them (stacked on narrow screens).
   return (
     <div className="ch-editor-grid">
-      {details}
+      <div className="ch-editor-left">
+        {details}
+        <LivePanel key={`live-${ed.event.id}`} event={ed.event} locked={ed.event.status === 'cancelled'} onStatusChange={() => void ed.refresh()} />
+      </div>
       <ThumbnailStudio key={ed.event.id} event={ed.event} locked={locked} />
     </div>
   );

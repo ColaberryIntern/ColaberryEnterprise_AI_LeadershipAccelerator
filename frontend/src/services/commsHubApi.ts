@@ -190,3 +190,31 @@ export async function uploadThumbnail(eventId: string, file: File, altText: stri
   const { data } = await api.post<{ id: string }>(`${studio(eventId)}/upload`, form, MULTIPART);
   return data.id;
 }
+
+/* Live panel (CH5.2: backend/src/routes/admin/commsHubLiveRoutes.ts). */
+export interface LiveCommand { command: 'enter_backstage' | 'return_to_scheduled' | 'go_live' | 'end'; available: boolean; reason?: string }
+export interface LivePanelView {
+  input_configured: boolean;
+  occurrence: { id: string; editorial_state: string; provider_health: string; version: number; scheduled_start_at: string | null; content_started_at: string | null; ended_at: string | null } | null;
+  commands: LiveCommand[];
+  input_held_by: { occurrence_id: string; title: string; state: string } | null;
+}
+const live = (eventId: string): string => `/api/admin/comms-hub/events/${eventId}/live`;
+
+export async function getLivePanel(eventId: string): Promise<LivePanelView> {
+  const { data } = await api.get<LivePanelView>(live(eventId));
+  return data;
+}
+export async function prepareLiveStream(eventId: string, startsAt: string | null = null): Promise<LivePanelView> {
+  const { data } = await api.post<LivePanelView>(`${live(eventId)}/prepare`, { starts_at: startsAt });
+  return data;
+}
+export async function sendLiveCommand(eventId: string, command: 'go_live' | 'end' | 'return_to_scheduled', expectedVersion: number): Promise<LivePanelView> {
+  const { data } = await api.post<LivePanelView>(`${live(eventId)}/command`, { command, expected_version: expectedVersion });
+  return data;
+}
+/** The Zoom push details. Only fetched when the organizer asks for them; never stored. */
+export async function getLiveIngest(eventId: string): Promise<{ rtmps_url: string; stream_key: string }> {
+  const { data } = await api.get<{ rtmps_url: string; stream_key: string }>(`${live(eventId)}/ingest`);
+  return data;
+}

@@ -60,7 +60,13 @@ export function useEventEditor(eventId: string | null, onSaved: (ev: HubEvent) =
   };
 
   const describe = useDescribe(form, change);
-  return { load, event, cohorts, form, errors, busy, notice, change, save, act, describe };
+  // CH5.2: going live or ending changes the event's status on the server; re-read the event only, so unsaved form edits stay.
+  const refresh = useCallback(async (): Promise<void> => {
+    if (!eventId) return;
+    try { setEvent(await getHubEvent(eventId)); } catch { /* the panel already said what went wrong */ }
+  }, [eventId]);
+
+  return { load, event, cohorts, form, errors, busy, notice, change, save, act, describe, refresh };
 }
 
 /** "Write with AI" for the description, with one-step undo of the AI text. */

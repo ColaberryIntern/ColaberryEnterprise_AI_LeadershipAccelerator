@@ -111,7 +111,8 @@
 /* CH4.4 thumbnail studio (design 02): its own card beside the event details. Selection is carried by a
    border and the "Selected" text, not colour alone. */
 .ch-editor-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 1.25rem; align-items: start; }
-.ch-editor-grid > .admin-section-card { margin: 0; }
+.ch-editor-grid > .admin-section-card, .ch-editor-left > .admin-section-card { margin: 0; }
+.ch-editor-left { display: flex; flex-direction: column; gap: 1.25rem; min-width: 0; }
 .ch-studio-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.25rem; }
 .ch-studio-step { margin-top: 1.25rem; }
 .ch-studio-top .ch-studio-step { margin-top: 0.5rem; }
@@ -154,6 +155,14 @@
 }
 /* Beside the studio the details card is narrow, so its viewport-sized columns become halves and full rows. */
 @media (min-width: 1200px) {
-  .ch-editor-grid > .admin-section-card:first-child .row > .col-md-4 { flex: 0 0 50%; max-width: 50%; }
-  .ch-editor-grid > .admin-section-card:first-child .row > .col-md-8 { flex: 0 0 100%; max-width: 100%; }
+  .ch-editor-left > .admin-section-card:first-child .row > .col-md-4 { flex: 0 0 50%; max-width: 50%; }
+  .ch-editor-left > .admin-section-card:first-child .row > .col-md-8 { flex: 0 0 100%; max-width: 100%; }
 }
+
+/* CH5.2 Live panel: health is said in words; colour only reinforces it. */
+.ch-live-health { font-weight: 600; }
+.ch-health-ready { color: var(--green-700); }
+.ch-health-down, .ch-health-degraded { color: var(--red-700); }
+.ch-health-unknown { color: var(--neutral-600); }
+.ch-live-field { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.ch-live-field input { flex: 1 1 14rem; min-width: 0; }
