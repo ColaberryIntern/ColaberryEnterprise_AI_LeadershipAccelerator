@@ -1,0 +1,101 @@
+<!doctype html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Colaberry Enterprise | AI Communications Manager</title><style>body{font:15px/1.65 system-ui,Arial;color:#213448;background:#f4f7fa;margin:0}main{max-width:930px;margin:35px auto;background:white;padding:54px 65px;box-shadow:0 8px 35px #1232;border-radius:16px}h1{font-size:34px;color:#123a59;margin-bottom:4px}h2{font-size:21px;color:#12557d;border-bottom:1px solid #dce7ee;padding-bottom:7px;margin-top:35px}p.sub{color:#617789;margin:0 0 30px}li{margin:9px 0}a{color:#086da0} .hero{background:#eaf3f8;padding:20px;border-left:5px solid #14749b;border-radius:7px} @media print{body{background:white}main{margin:0;box-shadow:none;padding:15px 25px}h2{break-after:avoid}li{break-inside:avoid}}</style></head><body><main><h1>Colaberry Enterprise | AI Communications Manager</h1><p class='sub'>Research, architecture, WhatsApp number feasibility &amp; implementation brief for Ali | November 19, 2026</p><nav><strong>Contents</strong><ol>
+<li><a href='#s0'>Executive recommendation</a></li>
+<li><a href='#s1'>What Ali requested in the meeting</a></li>
+<li><a href='#s2'>Office landline: +1 972-992-1024</a></li>
+<li><a href='#s3'>WhatsApp API options</a></li>
+<li><a href='#s4'>Page specification and user workflow</a></li>
+<li><a href='#s5'>Technical architecture for Enterprise</a></li>
+<li><a href='#s6'>Delivery roadmap</a></li>
+<li><a href='#s7'>Pilot acceptance checklist</a></li>
+<li><a href='#s8'>Costs and decisions for Ali</a></li>
+<li><a href='#s9'>Claude Code prompt — Enterprise foundation</a></li>
+<li><a href='#s10'>Claude Code prompt — WhatsApp provider pilot</a></li>
+<li><a href='#s11'>Claude Code prompt — scheduler and safeguards</a></li>
+<li><a href='#s12'>References and verification</a></li>
+</ol></nav>
+<section id='s0'><h2>Executive recommendation</h2><ul>
+<li>Build the AI Communications Manager page inside enterprise.colaberry.ai now, independently of the WhatsApp provider. Start with AI drafting, group/audience selection, approval, event assets, community publishing, and a reliable scheduler.</li>
+<li>Pilot WhatsApp sending using a separate company-controlled mobile number and internal test group. Whapi.Cloud is the simplest hosted provider to evaluate for existing ordinary WhatsApp groups, but it is unofficial and carries account-restriction risk.</li>
+<li>Do not connect the critical Colaberry office landline to an unofficial integration until a controlled test succeeds and Ali explicitly accepts the risk. Nothing is sent or published without Jackie&#x27;s approval.</li>
+</ul></section>
+<section id='s1'><h2>What Ali requested in the meeting</h2><ul>
+<li>One management page inside Colaberry Enterprise for both in-platform community posts and outside-platform WhatsApp communications.</li>
+<li>An AI agent that proposes a message, recommends the audience, prepares a delivery plan, and presents it to Jackie for approval before any send.</li>
+<li>Event creation and promotion support: titles, dates, registration links, thumbnails/flyers, announcements, recurring reminders and cancellations.</li>
+<li>Incremental releases: each release adds a tested capability. This brief deliberately excludes staffing assignments.</li>
+</ul></section>
+<section id='s2'><h2>Office landline: +1 972-992-1024</h2><ul>
+<li>The number is an office landline and is not registered with WhatsApp. Eligible landlines may register through the WhatsApp Business app using voice-call verification; acceptance and successful verification are not guaranteed.</li>
+<li>Ali should confirm who controls the landline and whether inbound automated calls can reach a person. If calls go through a PBX or automated menu, the phone administrator may need to route the verification call directly to a staffed extension.</li>
+<li>Install the official WhatsApp Business app on a company-controlled smartphone; enter the office number; request voice verification if offered; enter the code; enable two-step verification; retain account recovery details securely.</li>
+<li>Registering a number does not automatically grant membership in student groups. Existing group administrators must add the new company WhatsApp account before a linked-device provider can discover those groups.</li>
+<li>Recommended order: use a separate company mobile number for the initial pilot; consider the office landline only after technical validation, policy review and approval.</li>
+</ul></section>
+<section id='s3'><h2>WhatsApp API options</h2><ul>
+<li>Meta official Groups API: officially supported, but as of November 19, 2026 its reported requirements include an Official Business Account, API-created invite-only groups and a maximum of eight participants. It does not provide a practical way to automate Colaberry&#x27;s existing large ordinary student groups. Business-app numbers cannot simply be used with this Groups API.</li>
+<li>Whapi.Cloud: hosted linked-device API; group discovery, group IDs, text/media and webhooks. Advertised price approximately $29 per connected number per month ($348 for twelve months at that rate). Trial and sandbox restrictions apply. Unofficial integration.</li>
+<li>WAHA: self-hosted, open-source WhatsApp HTTP API with group and media functionality. More control, but Colaberry maintains hosting, updates and session reliability. Unofficial WhatsApp Web-based integration.</li>
+<li>Evolution API and WPPConnect: open-source options with group messaging functionality; require more technical ownership and, for WhatsApp Web-based operation, carry similar unofficial-integration risk.</li>
+<li>Decision: test Whapi.Cloud first for speed, retain a provider-neutral backend interface, and reassess Meta&#x27;s official capabilities as its eligibility and limits change.</li>
+</ul></section>
+<section id='s4'><h2>Page specification and user workflow</h2><ul>
+<li>1. Jackie creates an event or announcement: title, audience, topic, date/time, registration URL, optional flyer and message type.</li>
+<li>2. AI drafts one or more messages using approved Colaberry tone. Drafts remain editable and cannot trigger sending.</li>
+<li>3. The system proposes destinations: Enterprise community audiences and/or WhatsApp groups synchronized from the connected provider. Show human-readable group names while storing provider group IDs.</li>
+<li>4. Jackie reviews exact message, media, destinations and delivery time; edits or rejects; explicitly approves the final plan.</li>
+<li>5. An approved item is published immediately or stored as a scheduled job. Scheduled delivery runs on the server even when the browser is closed.</li>
+<li>6. The dashboard displays Draft, Approved, Scheduled, Sending, Sent, Partially Failed, Failed and Cancelled states, plus a searchable history and emergency pause.</li>
+<li>7. If an event changes or is cancelled, pending messages can be cancelled or revised and must be reapproved if content or recipients change.</li>
+</ul></section>
+<section id='s5'><h2>Technical architecture for Enterprise</h2><ul>
+<li>Frontend: authenticated staff page within the existing Enterprise application; do not assume its framework until the repository is inspected.</li>
+<li>Backend: API endpoints for campaigns, event assets, AI drafts, audience/group sync, approval, schedules, delivery status and audit records. Never expose provider tokens in browser JavaScript.</li>
+<li>Data: campaigns, event details, draft versions, groups and IDs, destinations, approval records, scheduled deliveries, delivery attempts, provider message IDs, audit logs and media references.</li>
+<li>Scheduler: durable database-backed queue/worker using America/Chicago timezone with daylight-saving awareness; per-group delivery IDs, idempotency protections, bounded retries, rate limits and failure alerts.</li>
+<li>Connector abstraction: listGroups(), sendText(), sendMedia(), getMessageStatus(); mock implementation first, Whapi.Cloud second. Keep the Enterprise community publishing integration separate.</li>
+<li>Security: existing Enterprise login, role-based permissions, server-side secrets, encrypted credentials, audit trail, destination allowlists, duplicate-send prevention, global pause, and clear access revocation.</li>
+<li>Policy: send only relevant messages to appropriate groups, respect opt-outs and group rules, and obtain explicit management approval for the unofficial-provider risk.</li>
+</ul></section>
+<section id='s6'><h2>Delivery roadmap</h2><ul>
+<li>Release 1 — Dashboard and mock mode: event entry, AI message drafts, approval, audience placeholders, audit trail.</li>
+<li>Release 2 — Enterprise community: integrate approved posts and flyers with the existing community, subject to authorized API access.</li>
+<li>Release 3 — WhatsApp pilot: separate company-controlled number, test group, Whapi.Cloud account, group sync, text/media test sends and logs.</li>
+<li>Release 4 — Scheduling and controls: durable scheduling, recurring reminders, cancellation, retries, emergency pause, delivery status and alerts.</li>
+<li>Release 5 — Production decision: security review, consent/communications policy, pricing confirmation, provider risk acceptance, landline verification if desired, and phased rollout.</li>
+</ul></section>
+<section id='s7'><h2>Pilot acceptance checklist</h2><ul>
+<li>Group names and IDs synchronize correctly from the company test account.</li>
+<li>An AI draft can be edited, rejected and approved; unapproved messages never send.</li>
+<li>Approved text and flyer reach only the selected test group.</li>
+<li>A scheduled message sends while the browser is closed; timezone is correct.</li>
+<li>Duplicate attempts do not cause unintended repeat sends; errors are visible.</li>
+<li>Cancelled campaigns do not send; global pause stops pending delivery.</li>
+<li>All approvals, recipients, message versions and delivery outcomes are auditable.</li>
+</ul></section>
+<section id='s8'><h2>Costs and decisions for Ali</h2><ul>
+<li>Whapi.Cloud: advertised $29/month per connected WhatsApp number; $348/year is simply 12 × $29, not a confirmed annual discount. Verify live terms and tax before purchase.</li>
+<li>WhatsApp Business app: no app subscription fee. A separate company mobile number, AI usage, storage, hosting and developer effort may add cost.</li>
+<li>WAHA core software may be free, but self-hosting and ongoing maintenance are not.</li>
+<li>Ali needs to approve: page owner and permissions; company test number; API evaluation; budget; acceptable account risk; message retention and consent practices; whether/when to register the office landline.</li>
+</ul></section>
+<section id='s9'><h2>Claude Code prompt — Enterprise foundation</h2><ul>
+<li>Inspect the authorized enterprise.colaberry.ai codebase and determine its framework, authentication, database, community posting API and deployment workflow. Build an internal AI Communications Manager page with event details, registration links, flyer uploads, editable AI drafts, audience selection, a human approval workflow, status tracking and an audit log. Start with mock sending and mock community publishing. No sending or deployment without explicit authorization. Explain architecture and setup steps in plain language.</li>
+</ul></section>
+<section id='s10'><h2>Claude Code prompt — WhatsApp provider pilot</h2><ul>
+<li>Create a provider-neutral WhatsApp interface with listGroups(), sendText(), sendMedia() and getMessageStatus(). Implement a mock provider, then a Whapi.Cloud adapter using current official vendor documentation and server-side environment variables. Use only an authorized company test number and internal test group. Sync group names and IDs; display names in the UI and use IDs for delivery. Log provider message IDs, failures and retries without exposing credentials. Require Jackie approval before every send.</li>
+</ul></section>
+<section id='s11'><h2>Claude Code prompt — scheduler and safeguards</h2><ul>
+<li>Implement a durable database-backed scheduling worker in America/Chicago timezone, with daylight-saving handling, one delivery record per group, idempotency keys, bounded retries, provider health checks, cancellation, a global pause, duplicate detection, quiet hours, audit logs and role-based access. Approval must cover the exact content, recipients and schedule. Test disconnects, server restarts, failure recovery and cancellation in mock mode before any production activation.</li>
+</ul></section>
+<section id='s12'><h2>References and verification</h2><ul>
+<li>Meta WhatsApp Groups API: <a href="https://deve">https://deve</a>lopers.facebook.com/documentation/business-messaging/whatsapp/groups/</li>
+<li>Meta Groups API getting started: <a href="https://deve">https://deve</a>lopers.facebook.com/documentation/business-messaging/whatsapp/groups/get-started/</li>
+<li>WhatsApp registration help: <a href="https://faq.wha">https://faq.wha</a>tsapp.com/684051319521343/</li>
+<li>WhatsApp linked-device warnings: <a href="https://faq.wha">https://faq.wha</a>tsapp.com/378279804439436/</li>
+<li>Whapi.Cloud product: <a href="https://whapi.c">https://whapi.c</a>loud/ ; pricing: <a href="https://whapi.c">https://whapi.c</a>loud/price</li>
+<li>WAHA groups: <a href="https://waha.dev">https://waha.dev</a>like.pro/docs/how-to/groups/</li>
+<li>Evolution API: <a href="https://gi">https://gi</a>thub.com/evolution-foundation/evolution-api</li>
+<li>WPPConnect: <a href="https://wppconnec">https://wppconnec</a>t.io/docs/projects/wppconnect-lib/</li>
+<li>Research reviewed November 19, 2026. Vendor terms, pricing and eligibility can change; verify before implementation.</li>
+</ul></section>
+<p class='sub'>Prepared for internal planning. Provider claims and pricing are subject to confirmation.</p></main></body></html>
