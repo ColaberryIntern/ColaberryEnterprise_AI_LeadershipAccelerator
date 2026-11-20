@@ -63,9 +63,14 @@ export function DemoPilotV2(): React.ReactElement {
     }
     setSubmitting(true);
     try {
-      const utm = getUTMParams() as Record<string, string | undefined>;
+      const utm = getUTMParams();
       const created = await createIntake(
-        toIntakeBody(form, { ...utm, pageUrl: window.location.href }),
+        toIntakeBody(form, {
+          utmSource: utm.utmSource,
+          utmMedium: utm.utmMedium,
+          utmCampaign: utm.utmCampaign,
+          pageUrl: window.location.href,
+        }),
       );
       identifyVisitor(form.email.trim(), {
         name: form.fullName.trim(),
