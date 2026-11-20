@@ -10,7 +10,7 @@ import CommsHubMessage from '../../../models/CommsHubMessage';
 import CommsHubSettings from '../../../models/CommsHubSettings';
 import { ALL_MEMBERS } from '../connectors/inAppConnector';
 import { approvalStillMatches, finishMessage, startMessage } from './messageLifecycle';
-import { SENDING_LEASE_MS } from './retryPolicy';
+import { MAX_ATTEMPTS, SENDING_LEASE_MS } from './retryPolicy';
 import type { ClaimedDelivery, DeliveryRepo, SendContext, SendOutcome, WorkerSettings } from './types';
 
 /**
@@ -103,13 +103,23 @@ export const deliveryRepo: DeliveryRepo = {
   startMessage,
 
   async claimDue(now, limit) {
+    const stale = new Date(now.getTime() - SENDING_LEASE_MS);
+    // A row left sending past the lease that has used every try is failed, never reclaimed again (a send
+    // that kills the process every time must not loop forever). The settle sweep then gives its message a result.
+    await sequelize.query(
+      `UPDATE comms_hub_deliveries
+          SET status = 'failed', next_attempt_at = NULL, updated_at = :now,
+              error = 'lease_expired: the send did not finish after ' || attempt_count || ' tries'
+        WHERE status = 'sending' AND updated_at < :stale AND attempt_count >= :max`,
+      { replacements: { now, stale, max: MAX_ATTEMPTS } },
+    );
     const [rows] = await sequelize.query(
       `WITH due AS (
          SELECT d.id FROM comms_hub_deliveries d
            JOIN comms_hub_messages m ON m.id = d.message_id
           WHERE m.status = 'sending'
             AND ((d.status = 'pending' AND (d.next_attempt_at IS NULL OR d.next_attempt_at <= :now))
-              OR (d.status = 'sending' AND d.updated_at < :stale))
+              OR (d.status = 'sending' AND d.updated_at < :stale AND d.attempt_count < :max))
           ORDER BY d.created_at
           LIMIT :limit
           FOR UPDATE OF d SKIP LOCKED
@@ -120,7 +130,7 @@ export const deliveryRepo: DeliveryRepo = {
         WHERE d.id = due.id AND dest.id = d.destination_id
        RETURNING d.id, d.message_id, d.destination_id, d.channel, d.idempotency_key, d.attempt_count AS attempt,
                  d.claimed_at AS first_claimed_at, dest.target_type, dest.target_id`,
-      { replacements: { now, stale: new Date(now.getTime() - SENDING_LEASE_MS), limit } },
+      { replacements: { now, stale, limit, max: MAX_ATTEMPTS } },
     );
     return (rows as Array<ClaimedDelivery & { first_claimed_at: Date | string }>).map((r) => ({ ...r, attempt: Number(r.attempt), first_claimed_at: new Date(r.first_claimed_at) }));
   },

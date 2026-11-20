@@ -249,18 +249,71 @@ describe('bounded retries and failure classes', () => {
     expect(r.finished).toEqual({ m1: 'failed' });
   });
 
-  it('a send that hangs past the timeout counts as a failed attempt and is retried', async () => {
+  it('a slow send keeps the send lock until it settles: a second send to the same feed waits, and the slow one is recorded sent', async () => {
     jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate', 'queueMicrotask'] });
     try {
-      const { repo, ch, deps } = setup();
-      ch.failNext.push('hang');
-      const tick = runDeliveryTick(deps, T0);
-      await jest.advanceTimersByTimeAsync(60_001);
-      await tick;
-      expect(repo.deliveries[0]).toEqual(expect.objectContaining({ status: 'pending', attempt_count: 1, error: expect.stringContaining('TimeoutError') }));
+      const { repo, deps, logs } = setup({ destinations: 2 });
+      repo.destinations[1].target_id = 'cohort-1'; // both to one feed
+      await repo.startMessage('m1', T0);
+      const [a, b] = await repo.claimDue(T0, 10);
+      const order: string[] = [];
+      let finishSlow!: () => void;
+      const slowCh: Connector = {
+        channel: 'community_post',
+        send: (d) => {
+          order.push(`start ${d.deliveryId}`);
+          if (d.deliveryId === a.id) return new Promise((r) => { finishSlow = () => { order.push(`end ${d.deliveryId}`); r({ provider_message_id: 'post-slow', reached: 1, already_done: false }); }; });
+          order.push(`end ${d.deliveryId}`);
+          return Promise.resolve({ provider_message_id: 'post-fast', reached: 1, already_done: false });
+        },
+      };
+      const d2 = { ...deps, connector: () => slowCh };
+      const first = deliverOne(d2, a, T0);
+      const second = deliverOne(d2, b, T0);
+      await jest.advanceTimersByTimeAsync(90_000); // well past SEND_TIMEOUT_MS: logged slow, lock still held
+      expect(order).toEqual([`start ${a.id}`]);
+      expect(logs.some((l) => l.event === 'comms_hub_send_slow')).toBe(true);
+      finishSlow();
+      expect((await first)?.kind).toBe('sent');
+      expect((await second)?.kind).toBe('sent');
+      expect(order).toEqual([`start ${a.id}`, `end ${a.id}`, `start ${b.id}`, `end ${b.id}`]);
+      expect(repo.deliveries.find((x) => x.id === a.id)).toEqual(expect.objectContaining({ status: 'sent', provider_message_id: 'post-slow' }));
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  it('a send that never settles is abandoned at the hard limit: nothing recorded, the row stays sending for the lease', async () => {
+    jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate', 'queueMicrotask'] });
+    try {
+      const { repo, ch, deps, logs } = setup();
+      ch.failNext.push('hang');
+      const tick = runDeliveryTick(deps, T0);
+      await jest.advanceTimersByTimeAsync(8 * 60_000 + 1);
+      await tick;
+      expect(repo.deliveries[0]).toEqual(expect.objectContaining({ status: 'sending', attempt_count: 1 }));
+      expect(logs.find((l) => l.event === 'comms_hub_delivery_crashed')!.ctx).toEqual(expect.objectContaining({ error_class: 'SendAbandonedError' }));
+      expect(repo.messages.get('m1')!.status).toBe('sending');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('reclaims are bounded: a row left sending after its last try is failed, not claimed again, and the message settles', async () => {
+    const { repo, ch, deps } = setup();
+    await repo.startMessage('m1', T0);
+    // Every try "killed the process": claimed, never recorded, left sending.
+    let t = T0.getTime();
+    for (let i = 1; i <= MAX_ATTEMPTS; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      const got = await repo.claimDue(new Date(t), 10);
+      expect(got.map((g) => g.attempt)).toEqual([i]);
+      t += SENDING_LEASE_MS + 1000;
+    }
+    const r = await runDeliveryTick(deps, new Date(t));
+    expect(ch.calls).toHaveLength(0);
+    expect(repo.deliveries[0]).toEqual(expect.objectContaining({ status: 'failed', attempt_count: MAX_ATTEMPTS, error: 'lease_expired: the send did not finish after 4 tries' }));
+    expect(r.finished).toEqual({ m1: 'failed' });
   });
 
   it('a message with no draft for the channel fails with the reason', () => {
@@ -321,6 +374,21 @@ describe('no message is left sending forever', () => {
 });
 
 describe('a step failing does not stop the tick', () => {
+  it('every phase is guarded: a claim that throws still lets the settle sweep run; settings that fail send nothing', async () => {
+    const { repo, ch, deps, logs } = setup();
+    await repo.startMessage('m1', T0);
+    repo.deliveries[0].status = 'sent';
+    repo.claimDue = async () => { throw Object.assign(new Error('connection lost'), { name: 'ConnectionError' }); };
+    const r = await runDeliveryTick(deps, T0);
+    expect(logs.find((l) => l.event === 'comms_hub_send_claim_failed')!.ctx).toEqual(expect.objectContaining({ error_class: 'ConnectionError' }));
+    expect(r.finished).toEqual({ m1: 'sent' });
+    repo.settings = async () => { throw new Error('db down'); };
+    const r2 = await runDeliveryTick(deps, T0);
+    expect(r2.attempted).toBe(0);
+    expect(logs.some((l) => l.event === 'comms_hub_send_settings_failed')).toBe(true);
+    expect(ch.calls).toHaveLength(0);
+  });
+
   it('a start that throws is logged with its class; the claims and sends still run', async () => {
     const { repo, ch, deps, logs } = setup();
     await repo.startMessage('m1', T0);

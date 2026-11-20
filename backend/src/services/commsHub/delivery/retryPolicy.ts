@@ -11,8 +11,14 @@ export const RETRY_DELAYS_MS: readonly number[] = [60_000, 5 * 60_000, 15 * 60_0
 
 /** A delivery left `sending` this long (the process died mid-send) is claimed again. */
 export const SENDING_LEASE_MS = 10 * 60_000;
-/** How long one channel send may take before the attempt counts as failed (and retries). */
+/** A send taking longer than this is logged as slow; the send lock is still held until it settles. */
 export const SEND_TIMEOUT_MS = 60_000;
+/**
+ * A send that has not settled after this is abandoned: its transaction rolls back (releasing the
+ * send lock), the row stays `sending`, and it is reclaimed after the lease. Kept below the lease so
+ * the reclaim can never start while the abandoned send could still be holding the lock.
+ */
+export const SEND_HARD_LIMIT_MS = 8 * 60_000;
 /** Most messages started and deliveries claimed per tick, so one tick stays short. */
 export const MESSAGES_PER_TICK = 20;
 export const DELIVERIES_PER_TICK = 25;

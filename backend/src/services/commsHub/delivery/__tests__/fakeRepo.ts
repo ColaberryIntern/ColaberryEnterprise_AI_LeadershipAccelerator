@@ -1,6 +1,6 @@
 import type { CommsHubMessageStatus } from '../../../../models/CommsHubMessage';
 import { resultOf } from '../resultOf';
-import { SENDING_LEASE_MS } from '../retryPolicy';
+import { MAX_ATTEMPTS, SENDING_LEASE_MS } from '../retryPolicy';
 import type { ClaimedDelivery, DeliveryRepo, SendContext, SendOutcome, StartResult, WorkerSettings } from '../types';
 
 /**
@@ -54,6 +54,11 @@ export class FakeRepo implements DeliveryRepo {
   async claimDue(now: Date, limit: number): Promise<ClaimedDelivery[]> {
     const stale = now.getTime() - SENDING_LEASE_MS;
     const out: ClaimedDelivery[] = [];
+    for (const d of this.deliveries) {
+      if (d.status === 'sending' && d.updated_at.getTime() < stale && d.attempt_count >= MAX_ATTEMPTS) {
+        Object.assign(d, { status: 'failed', next_attempt_at: null, updated_at: now, error: `lease_expired: the send did not finish after ${d.attempt_count} tries` });
+      }
+    }
     for (const d of this.deliveries) {
       if (out.length >= limit) break;
       if (this.messages.get(d.message_id)?.status !== 'sending') continue;

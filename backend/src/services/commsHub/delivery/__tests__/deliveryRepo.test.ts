@@ -66,13 +66,17 @@ it('the banner is an absolute https link the feed and the connector accept', () 
 
 it('claim: one UPDATE over FOR UPDATE SKIP LOCKED, first claim kept, the attempt counted, stale sending reclaimable', async () => {
   const rows = await deliveryRepo.claimDue(NOW, 25);
-  const q = queries[0];
+  // First: a row left sending past the lease that used every try is failed (bounded reclaims).
+  expect(queries[0].sql).toMatch(/SET status = 'failed'/);
+  expect(queries[0].sql).toMatch(/status = 'sending' AND updated_at < :stale AND attempt_count >= :max/);
+  expect(queries[0].replacements).toEqual({ now: NOW, stale: new Date(NOW.getTime() - 600_000), max: 4 });
+  const q = queries[1];
   expect(q.sql).toMatch(/FOR UPDATE OF d SKIP LOCKED/);
   expect(q.sql).toMatch(/claimed_at = COALESCE\(d\.claimed_at, :now\)/);
   expect(q.sql).toMatch(/attempt_count = d\.attempt_count \+ 1/);
-  expect(q.sql).toMatch(/d\.status = 'sending' AND d\.updated_at < :stale/);
+  expect(q.sql).toMatch(/d\.status = 'sending' AND d\.updated_at < :stale AND d\.attempt_count < :max/);
   expect(q.sql).toMatch(/m\.status = 'sending'/);
-  expect(q.replacements).toEqual({ now: NOW, stale: new Date(NOW.getTime() - 600_000), limit: 25 });
+  expect(q.replacements).toEqual({ now: NOW, stale: new Date(NOW.getTime() - 600_000), limit: 25, max: 4 });
   expect(rows[0]).toEqual(expect.objectContaining({ attempt: 2, first_claimed_at: new Date('2026-11-20T15:00:00.000Z') }));
 });
 

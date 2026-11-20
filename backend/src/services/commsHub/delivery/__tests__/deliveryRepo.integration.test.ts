@@ -68,7 +68,7 @@ describeIfDb('CH7.2 sending worker on a scratch Postgres', () => {
   }
   /** An approved, scheduled message to the given feeds, approved on its real content hash. */
   async function approvedMessage(feeds: string[], body = 'Demo Tuesday is Tuesday, December 1 at 6:00 PM CST.'): Promise<string> {
-    const m = (await q<{ id: string }>(`INSERT INTO comms_hub_messages (kind, status) VALUES ('reminder', 'scheduled') RETURNING id`))[0].id;
+    const m = (await q<{ id: string }>(`INSERT INTO comms_hub_messages (kind, status, subject) VALUES ('reminder', 'scheduled', 'Demo Tuesday') RETURNING id`))[0].id;
     await q(`INSERT INTO comms_hub_drafts (message_id, channel, version, body, author) VALUES ($1, 'community_post', 1, $2, 'ai') RETURNING id`, [m, body]);
     for (const f of feeds) await q(`INSERT INTO comms_hub_destinations (message_id, channel, target_type, target_id) VALUES ($1, 'community_post', 'cohort_feed', $2) RETURNING id`, [m, f]); // eslint-disable-line no-await-in-loop
     const hash = approvalHash(await loadContent(m));
@@ -120,6 +120,20 @@ describeIfDb('CH7.2 sending worker on a scratch Postgres', () => {
     const decide = jest.fn();
     expect(await repo.withSendLock(first, NOW, decide)).toBeNull();
     expect(decide).not.toHaveBeenCalled();
+  });
+
+  it('reclaims are bounded: after the last try a row left sending is failed, not claimed', async () => {
+    const m = await approvedMessage([await cohort('A')]);
+    await repo.startMessage(m, NOW);
+    let t = NOW.getTime();
+    for (let i = 1; i <= 4; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      expect((await repo.claimDue(new Date(t), 10)).map((c) => c.attempt)).toEqual([i]);
+      t += 11 * 60_000;
+    }
+    expect(await repo.claimDue(new Date(t), 10)).toEqual([]);
+    expect((await deliveriesOf(m))[0]).toEqual(expect.objectContaining({ status: 'failed', attempt_count: 4 }));
+    expect(await repo.settledSendingIds(10)).toEqual([m]);
   });
 
   it('the send lock: two messages to one feed are sent one after the other, never together', async () => {

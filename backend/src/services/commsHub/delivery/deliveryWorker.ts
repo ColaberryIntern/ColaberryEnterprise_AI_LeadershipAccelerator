@@ -2,8 +2,8 @@ import { randomUUID } from 'crypto';
 import { connectorFor, ConnectorPermanentError, type Connector } from '../connectors';
 import type { CommsHubChannel } from '../../../models/CommsHubDraft';
 import { quietUntil } from './quietHours';
-import { DELIVERIES_PER_TICK, MESSAGES_PER_TICK, nextAttemptAt, SEND_TIMEOUT_MS } from './retryPolicy';
-import type { ClaimedDelivery, DeliveryRepo, SendContext, SendOutcome } from './types';
+import { DELIVERIES_PER_TICK, MESSAGES_PER_TICK, nextAttemptAt, SEND_HARD_LIMIT_MS, SEND_TIMEOUT_MS } from './retryPolicy';
+import type { ClaimedDelivery, DeliveryRepo, SendContext, SendOutcome, WorkerSettings } from './types';
 
 /**
  * The sending worker's decisions (CH7.2). One tick:
@@ -16,11 +16,13 @@ import type { ClaimedDelivery, DeliveryRepo, SendContext, SendOutcome } from './
  *     and so does any sending message left without one (a crash after its last send, or no deliveries).
  *
  * Failure handling: a send that throws is retried on the same row and key (retryPolicy.ts: 4 tries,
- * +1/+5/+15 min) unless the channel says the refusal is permanent; a send that hangs past
- * SEND_TIMEOUT_MS counts as a failed attempt (if it later lands, the connector finds it on the retry).
- * A process that dies mid-send leaves the row `sending`; after the lease it is claimed again and the
- * connector returns the work already done instead of repeating it. Nothing here throws out of a tick:
- * each step's error is logged with its class, and the next tick carries on.
+ * +1/+5/+15 min) unless the channel says the refusal is permanent. A slow send keeps the send lock
+ * until it settles (releasing it early would let the next send to the same feed run beside it); past
+ * SEND_HARD_LIMIT_MS it is abandoned, its transaction rolls back and the row stays `sending`. A row
+ * left `sending` (abandoned, or the process died) is claimed again after the lease and the connector
+ * returns the work already done instead of repeating it; once it has used MAX_ATTEMPTS it is failed,
+ * never reclaimed forever. Every phase of a tick is guarded: an error is logged with its class, the
+ * other phases still run, and the next tick carries on.
  */
 export interface WorkerDeps {
   repo: DeliveryRepo;
@@ -30,12 +32,26 @@ export interface WorkerDeps {
 
 export interface TickResult { paused: boolean; started: number; attempted: number; sent: number; finished: Record<string, string> }
 
-function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
-  let timer: NodeJS.Timeout | undefined;
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(Object.assign(new Error(`The send took longer than ${ms / 1000} seconds.`), { name: 'TimeoutError' })), ms);
+/** Thrown when a send passes the hard limit: it leaves the transaction (rolling it back), it is not recorded. */
+export class SendAbandonedError extends Error {
+  constructor(ms: number) {
+    super(`The send had not finished after ${ms / 60_000} minutes; the lease will reclaim it.`);
+    this.name = 'SendAbandonedError';
+  }
+}
+
+/**
+ * Wait for the send to settle, still holding the lock. Past `slowMs` say so once; past `hardMs` give
+ * up with SendAbandonedError. Otherwise resolves or rejects exactly as the send does.
+ */
+function settleHoldingLock<T>(p: Promise<T>, slowMs: number, hardMs: number, onSlow: () => void): Promise<T> {
+  let slow: NodeJS.Timeout | undefined;
+  let hard: NodeJS.Timeout | undefined;
+  const abandon = new Promise<never>((_, reject) => {
+    slow = setTimeout(onSlow, slowMs);
+    hard = setTimeout(() => reject(new SendAbandonedError(hardMs)), hardMs);
   });
-  return Promise.race([p, timeout]).finally(() => clearTimeout(timer));
+  return Promise.race([p, abandon]).finally(() => { clearTimeout(slow); clearTimeout(hard); });
 }
 
 /** The pre-send checks, in the build prompt's order. Returns an outcome to record, or null to send. */
@@ -55,13 +71,17 @@ export async function deliverOne(deps: WorkerDeps, d: ClaimedDelivery, now: Date
     const held = preSendCheck(ctx, now);
     if (held) return held;
     try {
-      const r = await withTimeout(deps.connector(d.channel).send({
+      const sending = deps.connector(d.channel).send({
         deliveryId: d.id, messageId: d.message_id, since: d.first_claimed_at,
         destination: { target_type: d.target_type, target_id: d.target_id },
         draft: ctx.draft!, media_urls: d.channel === 'community_post' ? ctx.media_urls : undefined,
-      }), SEND_TIMEOUT_MS);
+      });
+      const r = await settleHoldingLock(sending, SEND_TIMEOUT_MS, SEND_HARD_LIMIT_MS,
+        () => deps.log('warn', 'comms_hub_send_slow', { delivery_id: d.id, channel: d.channel, outcome: 'partial', after_ms: SEND_TIMEOUT_MS }));
       return { kind: 'sent', provider_message_id: r.provider_message_id, reached: r.reached };
     } catch (err) {
+      // Not recorded: leave the transaction so it rolls back; the lease reclaims the row.
+      if (err instanceof SendAbandonedError) throw err;
       const e = err as Error & { reason?: string };
       const error = `${e?.name ?? 'Error'}: ${e?.message ?? String(err)}`.slice(0, 2000);
       if (err instanceof ConnectorPermanentError) return { kind: 'failed', error };
@@ -75,27 +95,39 @@ export async function runDeliveryTick(deps: WorkerDeps, now: Date = new Date()):
   const correlation_id = randomUUID();
   const started0 = Date.now();
   const result: TickResult = { paused: false, started: 0, attempted: 0, sent: 0, finished: {} };
-  const settings = await deps.repo.settings();
+  const fail = (event: string, err: unknown, extra: Record<string, unknown> = {}): void => {
+    deps.log('error', event, { correlation_id, outcome: 'failure', error_class: (err as Error)?.name ?? 'UnexpectedError', error: (err as Error)?.message, ...extra });
+  };
+  let settings: WorkerSettings;
+  try { settings = await deps.repo.settings(); } catch (err) {
+    // Without the settings the pause cannot be honored, so nothing is sent this tick.
+    fail('comms_hub_send_settings_failed', err);
+    return result;
+  }
   if (settings.paused) {
     deps.log('info', 'comms_hub_send_paused', { correlation_id, outcome: 'success' });
     return { ...result, paused: true };
   }
 
   const touched = new Set<string>();
+  let due: string[] = [];
   if (!quietUntil(now, settings.quietHours)) {
-    for (const id of await deps.repo.dueMessageIds(now, MESSAGES_PER_TICK)) {
-      try {
-        // eslint-disable-next-line no-await-in-loop
-        const r = await deps.repo.startMessage(id, now);
-        if (r === 'started') { result.started += 1; touched.add(id); }
-        if (r === 'approval_changed') deps.log('warn', 'comms_hub_send_approval_changed', { correlation_id, message_id: id, outcome: 'partial' });
-      } catch (err) {
-        deps.log('error', 'comms_hub_send_start_failed', { correlation_id, message_id: id, outcome: 'failure', error_class: (err as Error)?.name ?? 'UnexpectedError', error: (err as Error)?.message });
-      }
+    try { due = await deps.repo.dueMessageIds(now, MESSAGES_PER_TICK); } catch (err) { fail('comms_hub_send_due_failed', err); }
+  }
+  for (const id of due) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      const r = await deps.repo.startMessage(id, now);
+      if (r === 'started') { result.started += 1; touched.add(id); }
+      if (r === 'approval_changed') deps.log('warn', 'comms_hub_send_approval_changed', { correlation_id, message_id: id, outcome: 'partial' });
+    } catch (err) {
+      fail('comms_hub_send_start_failed', err, { message_id: id });
     }
   }
 
-  for (const d of await deps.repo.claimDue(now, DELIVERIES_PER_TICK)) {
+  let claimed: ClaimedDelivery[] = [];
+  try { claimed = await deps.repo.claimDue(now, DELIVERIES_PER_TICK); } catch (err) { fail('comms_hub_send_claim_failed', err); }
+  for (const d of claimed) {
     touched.add(d.message_id);
     try {
       // eslint-disable-next-line no-await-in-loop
@@ -115,7 +147,9 @@ export async function runDeliveryTick(deps: WorkerDeps, now: Date = new Date()):
   }
 
   // Also settle any sending message left without a result (a crash after its last send, or no deliveries).
-  for (const id of await deps.repo.settledSendingIds(MESSAGES_PER_TICK)) touched.add(id);
+  try {
+    for (const id of await deps.repo.settledSendingIds(MESSAGES_PER_TICK)) touched.add(id);
+  } catch (err) { fail('comms_hub_send_settle_failed', err); }
   for (const id of touched) {
     try {
       // eslint-disable-next-line no-await-in-loop
