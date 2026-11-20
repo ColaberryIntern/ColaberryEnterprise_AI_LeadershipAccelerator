@@ -102,6 +102,12 @@ const NOT_CREATABLE_AT_BOOT: readonly string[] = [
   'admin_users',  // 
   'ai_agents',  // 
   'campaigns',
+  // Created only by seeds/migrations/20260706_add_community_tables.sql (SQL, outside src). Newly
+  // ALTERed at boot by ensureCommsHubSchema (CH2.1, 2026-11-20): one nullable ADD COLUMN IF NOT
+  // EXISTS hub_event_id, which warns and continues when the table is absent and is checked by that
+  // ensure's post-condition. Same reasoning as leads below: a second CREATE TABLE written here would
+  // be the start of two definitions that disagree.
+  'community_events',
   'community_posts',
   'enrollments',  // 
   'entry_points',
