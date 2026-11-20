@@ -211,6 +211,20 @@ describe('CH3.2 the editor', () => {
     expect(link.getAttribute('href')).toBe('/admin/comms-hub/compose?text=Event%201%20is%20cancelled');
   });
 
+  it('CH7.3 a stream retry keeps the cancellation draft the first cancel offered', async () => {
+    (api.getHubEvent as jest.Mock).mockResolvedValue(ev(1));
+    (api.cancelHubEvent as jest.Mock)
+      .mockResolvedValueOnce({ event: ev(1, { status: 'cancelled' }), cancellation: { messages_cancelled: 1, deliveries_cancelled: 0, sending_voided: 0, broadcast: 'failed', draft_message_id: '22222222-2222-4222-8222-222222222222' } })
+      .mockResolvedValueOnce({ event: ev(1, { status: 'cancelled' }), cancellation: { messages_cancelled: 0, deliveries_cancelled: 0, sending_voided: 0, broadcast: 'cancelled', draft_message_id: null } });
+    await renderAt(`/admin/comms-hub/events?edit=${ev(1).id}`);
+    await click(btn('Cancel this event'));
+    await click(btn('Yes, cancel the event'));
+    await click(btn('Try cancelling the stream again'));
+    const link = Array.from(container.querySelectorAll('a')).find((x) => x.textContent === 'Review the cancellation message') as HTMLAnchorElement;
+    expect(link.getAttribute('href')).toBe('/admin/comms-hub/compose?message=22222222-2222-4222-8222-222222222222');
+    expect(container.querySelector('[role="status"]')!.textContent).toContain('The live stream prepared for it was cancelled too.');
+  });
+
   it('duplicate makes a draft copy; a live event offers no cancel', async () => {
     (api.getHubEvent as jest.Mock).mockResolvedValue(ev(1, { status: 'live' }));
     (api.duplicateHubEvent as jest.Mock).mockResolvedValue(ev(2, { status: 'draft' }));

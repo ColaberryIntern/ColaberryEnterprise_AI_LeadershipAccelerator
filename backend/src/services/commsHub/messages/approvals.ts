@@ -41,11 +41,6 @@ export async function loadContent(messageId: string, t?: Transaction): Promise<A
 }
 
 /**
- * The CH6.3 validator, enforced at BOTH gates a draft passes on its way out: submit and approve. An
- * edit made while a message waits for approval (which voids nothing, because nothing is approved yet)
- * is therefore checked before it can be approved.
- */
-/**
  * CH7.3: once an event is cancelled, the only message about it that may still go out is the one
  * saying it is cancelled. Everything else about it is stopped (submit, approve, the worker's start).
  */
@@ -53,6 +48,11 @@ export function stoppedByCancelledEvent(m: Pick<CommsHubMessage, 'kind'>, event:
   return !!event && event.status === 'cancelled' && m.kind !== 'cancellation';
 }
 
+/**
+ * The CH6.3 validator, enforced at BOTH gates a draft passes on its way out: submit and approve. An
+ * edit made while a message waits for approval (which voids nothing, because nothing is approved yet)
+ * is therefore checked before it can be approved.
+ */
 async function assertDraftsValid(m: CommsHubMessage, content: ApprovalContent, t: Transaction, now: Date, doing: string): Promise<void> {
   const event = m.event_id ? await CommsHubEvent.findByPk(m.event_id, { transaction: t }) : null;
   if (stoppedByCancelledEvent(m, event)) {

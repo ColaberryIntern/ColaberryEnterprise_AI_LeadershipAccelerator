@@ -73,8 +73,11 @@ export function useEventEditor(eventId: string | null, onSaved: (ev: HubEvent) =
       } else {
         const { event: done, cancellation } = await cancelHubEvent(event.id);
         setEvent(done); setForm(fromEvent(done));
-        setCancelled(cancellation);
-        setNotice(cancelNotice(cancellation));
+        // A retry of the stream only reports the stream: keep the draft the first cancel offered.
+        const merged = cancellation && cancelled?.draft_message_id && !cancellation.draft_message_id
+          ? { ...cancellation, draft_message_id: cancelled.draft_message_id } : cancellation;
+        setCancelled(merged ?? cancelled);
+        setNotice(cancelNotice(merged ?? cancelled));
       }
     } catch (err) {
       setErrors({ form: apiErrorMessage(err, kind === 'duplicate' ? 'The copy was not made.' : 'The event was not cancelled.') });

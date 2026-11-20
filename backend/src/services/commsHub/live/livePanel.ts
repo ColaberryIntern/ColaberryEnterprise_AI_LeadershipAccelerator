@@ -170,12 +170,12 @@ export async function syncLiveEvents(nowMs: number = Date.now()): Promise<number
   return fixed;
 }
 
-/** Prepare stream: the date's occurrence, then backstage (so the provider's health is watched). */
 /** CH7.3: a cancelled event cannot be taken live (End stays allowed, so a stream that is on air can always stop). */
 function refuseCancelled(e: CommsHubEvent): void {
   if (e.status === 'cancelled') throw new LivePanelError('This event is cancelled, so it cannot be streamed.', 409, 'event_cancelled');
 }
 
+/** Prepare stream: the date's occurrence, then backstage (so the provider's health is watched). */
 export async function prepareLive(eventId: string, at: Date | null, actor: Actor, now: Date = new Date()): Promise<LivePanelView> {
   const e = await eventOr404(eventId);
   refuseCancelled(e);
