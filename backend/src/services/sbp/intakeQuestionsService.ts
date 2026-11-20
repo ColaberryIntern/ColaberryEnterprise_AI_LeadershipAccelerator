@@ -11,6 +11,7 @@
  * the logs. Silent degradation would be worse than the bug this replaces.
  */
 import OpenAI from 'openai';
+import { normaliseAngle, outlineAnsweredAngles } from './intakeTruth';
 import {
   BuildSize,
   IntakeQuestionsInputs,
@@ -270,12 +271,28 @@ export async function generateIntakeQuestions(opts: IntakeQuestionsOptions): Pro
         continue;
       }
 
-      const capped = questions.slice(0, QUESTION_TARGETS[size].max);
+      // Never ask what the guided outline already answered in full. The model
+      // does not always notice (ShiftFill v3 was asked for "today" and "good"
+      // right after typing both), so this is decided from the outline's own
+      // labelled lines, and the line becomes the covered evidence instead.
+      const answered = outlineAnsweredAngles(opts.idea);
+      const asked = questions.filter((q) => !answered.has(normaliseAngle(q.angle)));
+      const coveredAll = [...covered];
+      for (const q of questions) {
+        const angle = normaliseAngle(q.angle);
+        const line = answered.get(angle);
+        if (line && !coveredAll.some((c) => normaliseAngle(c.angle) === angle)) {
+          coveredAll.push({ angle, evidence: line });
+        }
+      }
+
+      const capped = asked.slice(0, QUESTION_TARGETS[size].max);
       log('intake_questions', opts.correlationId, 'success', {
-        attempt, model, count: capped.length, covered_count: covered.length, size,
+        attempt, model, count: capped.length, covered_count: coveredAll.length, size,
+        dropped_already_answered: questions.length - asked.length,
         duration_ms: Date.now() - started,
       });
-      return { questions: capped, covered, generated: true, model, attempts: attempt };
+      return { questions: capped, covered: coveredAll, generated: true, model, attempts: attempt };
     } catch (err: any) {
       lastProblem = err?.message || 'upstream error';
       const isTimeout = /timeout|ETIMEDOUT|aborted/i.test(lastProblem);
