@@ -58,6 +58,12 @@ export const SECTION_KEYS = [
   // recruiter role, and adding one would widen a DB check constraint). Other staff get it per
   // member through extra sections (normalizeExtraSections).
   'placement',
+  // Communications Hub (CH1.1, Ali 2026-11-20): one admin page where the Community Organizer creates events, makes their
+  // thumbnails, takes an event LIVE on the platform's Cloudflare stream, and drafts and approves member announcements.
+  // Its own key rather than 'program' or 'campaigns': Jackie needs this page and nothing else in either group, and
+  // `/api/admin/communications` (the lead-messaging log) stays 'campaigns'. owner and admin derive it from ALL_SECTIONS;
+  // community_organizer is granted it below; anyone else (Taiwo) gets it per member through extra sections.
+  'comms_hub',
 ] as const;
 export type SectionKey = typeof SECTION_KEYS[number];
 
@@ -108,7 +114,8 @@ export const MGMT_ROLE_DEFS: Record<MgmtRole, MgmtRoleDef> = {
   // in careerMentorScopeService. A section key alone would let any mentor review
   // every learner on the platform, which is not what was asked for.
   mentor: { role: 'mentor', label: 'Mentor', sections: ['dashboard', 'career_review'] },
-  community_organizer: { role: 'community_organizer', label: 'Community Organizer', sections: ['dashboard'] },
+  // CH1.1 (2026-11-20): + 'comms_hub', the Communications Hub, which is this role's job (events, announcements, going live).
+  community_organizer: { role: 'community_organizer', label: 'Community Organizer', sections: ['dashboard', 'comms_hub'] },
 
   // ---------------------------------------------------------------------------------------------
   // Agent Factory domain roles (AF2.3). Ali approved option A on 2026-10-15.
