@@ -1,6 +1,7 @@
 /** CH5.1 a hub event becomes a broadcast occurrence: one per date, idempotent, typed refusals, who may watch. */
 type Row = Record<string, any>;
-const refs = new Map<string, { id: string; occurrence_key: string; editorial_state: string }>();
+type Ref = { id: string; occurrence_key: string; editorial_state: string; access_mode: string; room_id: string | null };
+const refs = new Map<string, Ref>();
 const updates: Row[] = [];
 let created = 0;
 let raceOnce = false;
@@ -18,10 +19,11 @@ jest.mock('../../../../config/database', () => {
       }),
       query: jest.fn(async (sql: string, opts: Row) => {
         const r = opts.replacements;
+        if (/^\s*SELECT editorial_state FROM broadcast_occurrences/.test(sql)) { const row = [...refs.values()].find((x) => x.id === r.id); return [row ? [{ editorial_state: row.editorial_state }] : []]; }
         if (/^\s*SELECT/.test(sql)) { const hit = refs.get(r.sid); return [hit ? [hit] : []]; }
         if (/INSERT INTO broadcast_source_refs/.test(sql)) {
-          if (raceOnce) { raceOnce = false; refs.set(r.sourceId, { id: 'winner', occurrence_key: 'k', editorial_state: 'scheduled' }); const e = new Error('dup'); e.name = 'SequelizeUniqueConstraintError'; throw e; }
-          pending.ref = { source_id: r.sourceId, row: { id: r.occurrenceId, occurrence_key: lastKey, editorial_state: 'scheduled' } };
+          if (raceOnce) { raceOnce = false; refs.set(r.sourceId, { id: 'winner', occurrence_key: 'k', editorial_state: 'scheduled', access_mode: 'free', room_id: null }); const e = new Error('dup'); e.name = 'SequelizeUniqueConstraintError'; throw e; }
+          pending.ref = { source_id: r.sourceId, row: { id: r.occurrenceId, occurrence_key: lastKey, editorial_state: 'scheduled', access_mode: lastRow.access_mode, room_id: lastRow.room_id } };
           return [[]];
         }
         if (/UPDATE broadcast_occurrences/.test(sql)) { updates.push(r); const row = [...refs.values()].find((x) => x.id === r.id)!; row.occurrence_key = r.key; return [[]]; }
@@ -31,12 +33,15 @@ jest.mock('../../../../config/database', () => {
   };
 });
 let lastKey = '';
-const mockCreate = jest.fn(async (row: Row) => { created += 1; lastKey = row.occurrence_key; return { id: `occ${created}`, ...row }; });
+let lastRow: Row = {};
+const mockCreate = jest.fn(async (row: Row) => { created += 1; lastKey = row.occurrence_key; lastRow = row; return { id: `occ${created}`, ...row }; });
 jest.mock('../../../../models/BroadcastOccurrence', () => ({ __esModule: true, default: { create: (...a: unknown[]) => mockCreate(...(a as [Row])) } }));
 const cohorts: Record<string, Row> = { c1: { id: 'c1', name: 'November 2026', cohort_type: 'accelerator' }, c9: { id: 'c9', name: 'Explorer', cohort_type: 'explorer' } };
 jest.mock('../../../../models/CommsHubEvent', () => ({ __esModule: true, default: {} }));
 jest.mock('../../../../models/Cohort', () => ({ __esModule: true, default: { findByPk: jest.fn(async (id: string) => cohorts[id] ?? null) } }));
-jest.mock('../../../communityRooms/cohortRoomService', () => ({ ensureRoomForCohort: jest.fn(async (c: Row) => (c.cohort_type === 'accelerator' ? { id: `room-${c.id}` } : null)) }));
+const mockEnsureRoom = jest.fn(async (c: Row) => (c.cohort_type === 'accelerator' ? { id: `room-${c.id}` } : null));
+jest.mock('../../../communityRooms/cohortRoomService', () => ({ cohortRoomSlug: (id: string) => `cohort-${id}`, ensureRoomForCohort: (...a: unknown[]) => mockEnsureRoom(...(a as [Row])) }));
+jest.mock('../../../../models/CommunityRoom', () => ({ __esModule: true, default: { findOne: jest.fn(async ({ where }: Row) => (where.slug === 'cohort-c1' ? { id: 'room-c1' } : null)) } }));
 
 import { ensureOccurrenceForCommunityEvent, LiveRefusedError, pickOccurrence, sourceIdFor } from '../eventOccurrence';
 
@@ -120,7 +125,7 @@ describe('CH5.1 re-timing the same date', () => {
   });
 
   it.each([['live', 'already_aired'], ['ended', 'already_aired'], ['cancelled', 'cancelled']])('a %s occurrence is not moved: %s', async (state, reason) => {
-    refs.set('e1@2026-12-01', { id: 'old', occurrence_key: 'community_event:e1@2026-12-01:2026-12-01T23:00', editorial_state: state });
+    refs.set('e1@2026-12-01', { id: 'old', occurrence_key: 'community_event:e1@2026-12-01:2026-12-01T23:00', editorial_state: state, access_mode: 'free', room_id: null });
     expect(await refusal(ensureOccurrenceForCommunityEvent(ev(), null, NOW))).toBe(reason);
     expect(updates).toEqual([]);
   });
@@ -140,6 +145,11 @@ describe('CH5.1 refusals are typed and write nothing', () => {
 
   it('no date left to stream (a one-off that is over)', async () => {
     expect(await refusal(ensureOccurrenceForCommunityEvent(ev(), null, new Date('2026-12-05T00:00:00Z')))).toBe('undeterminable_start');
+  });
+
+  it('a draft event must be saved first', async () => {
+    expect(await refusal(ensureOccurrenceForCommunityEvent(ev({ status: 'draft' }), null, NOW))).toBe('event_draft');
+    expect(mockCreate).not.toHaveBeenCalled();
   });
 
   it('a cancelled or ended event', async () => {
@@ -164,4 +174,54 @@ describe('CH5.1 who may watch', () => {
     expect(mockCreate).not.toHaveBeenCalled();
   });
 
+});
+
+describe('CH5.1 attempt 2: the stored policy governs, and the link stays on air', () => {
+  it('prepared for all members, then the audience is edited to one cohort: refused, nothing updated, never reported as the new policy', async () => {
+    const e = ev();
+    await ensureOccurrenceForCommunityEvent(e, null, NOW);
+    e.audience = { kind: 'cohorts', cohort_ids: ['c1'] };
+    const err = await ensureOccurrenceForCommunityEvent(e, null, NOW).catch((x) => x);
+    expect(err).toBeInstanceOf(LiveRefusedError);
+    expect(err.reason).toBe('audience_changed');
+    expect(err.detail).toBe('stored free/no room, event now private/room-c1');
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    expect(updates).toEqual([]);
+  });
+
+  it('the comparison only LOOKS UP the batch room: a refusal never creates one', async () => {
+    refs.set('e1@2026-12-01', { id: 'old', occurrence_key: 'community_event:e1@2026-12-01:2026-12-01T23:00', editorial_state: 'live', access_mode: 'private', room_id: 'room-c1' });
+    expect(await refusal(ensureOccurrenceForCommunityEvent(ev({ audience: { kind: 'cohorts', cohort_ids: ['c1'] } }), null, NOW))).toBe('already_aired');
+    const same = ev({ audience: { kind: 'cohorts', cohort_ids: ['c1'] }, starts_at: new Date('2026-12-01T23:00:00Z'), ends_at: new Date('2026-12-02T00:00:00Z') });
+    expect(await ensureOccurrenceForCommunityEvent(same, null, NOW)).toMatchObject({ outcome: 'unchanged', occurrenceId: 'old', accessMode: 'private', roomId: 'room-c1' });
+    expect(mockEnsureRoom).not.toHaveBeenCalled();
+  });
+
+  it('the result reports what is STORED (a lost race returns the winner\'s policy)', async () => {
+    raceOnce = true;
+    expect(await ensureOccurrenceForCommunityEvent(ev({ audience: { kind: 'cohorts', cohort_ids: ['c1'] } }), null, NOW)).toMatchObject({ occurrenceId: 'winner', accessMode: 'free', roomId: null });
+  });
+
+  it('preparing next week while this week is live does not move the event off the live occurrence', async () => {
+    const e = ev({ repeat_rule: { freq: 'weekly', until: '2027-01-31' } });
+    const first = await ensureOccurrenceForCommunityEvent(e, null, NOW);
+    refs.get('e1@2026-12-01')!.editorial_state = 'live';
+    const next = await ensureOccurrenceForCommunityEvent(e, new Date('2026-12-09T00:00:00Z'), NOW);
+    expect(next.outcome).toBe('created');
+    expect(e.broadcast_occurrence_id).toBe(first.occurrenceId);
+    // Once this week has ended, preparing again moves the link on.
+    refs.get('e1@2026-12-01')!.editorial_state = 'ended';
+    await ensureOccurrenceForCommunityEvent(e, new Date('2026-12-09T00:00:00Z'), NOW);
+    expect(e.broadcast_occurrence_id).toBe(next.occurrenceId);
+  });
+
+  it('DST: the date key is the Central date on both sides of the change', () => {
+    // Nov 1 2026 (CDT->CST): 6 PM CST Sun Nov 1 = 00:00Z Nov 2. Mar 8 2027 is after the change to CDT: 6 PM CDT = 23:00Z.
+    expect(sourceIdFor('e1', new Date('2026-11-02T00:00:00Z'))).toBe('e1@2026-11-01');
+    expect(sourceIdFor('e1', new Date('2027-03-15T23:00:00Z'))).toBe('e1@2027-03-15');
+    const weekly = ev({ starts_at: new Date('2026-10-26T23:00:00Z'), ends_at: null, repeat_rule: { freq: 'weekly', until: '2026-11-30' } });
+    // Mon Oct 26 6 PM CDT, then Mon Nov 2 6 PM CST: the wall clock holds, so the instant shifts an hour.
+    expect(pickOccurrence(weekly, new Date('2026-11-03T00:00:00Z'), NOW)!.toISOString()).toBe('2026-11-03T00:00:00.000Z');
+    expect(sourceIdFor('e1', new Date('2026-11-03T00:00:00Z'))).toBe('e1@2026-11-02');
+  });
 });
