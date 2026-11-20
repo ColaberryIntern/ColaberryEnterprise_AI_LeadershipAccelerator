@@ -9,7 +9,9 @@ import { saveBlob, type ArtifactFile, type ArtifactFileKind, type ArtifactSource
  *   pdf                       the browser's own PDF viewer, in the page
  *   csv                       a spreadsheet-style table, plus "Open in Excel" (.xlsx) and the raw CSV
  *   word / slides             rendered server-side to HTML, in a script-less sandbox, plus the download
- *   spreadsheet / image / other   download to open in its app
+ *   image                     the picture itself, in the page
+ *   html                      the page it is, in a script-less sandbox
+ *   spreadsheet / other       download to open in its app
  *   text (incl. Markdown)     the text
  *
  * Shared by the admin viewer and the learner's own work page (C128). `source` says where the bytes come
@@ -25,6 +27,8 @@ export const KIND_STYLE: Record<ArtifactFileKind, { label: string; color: string
   word: { label: 'Word document', color: '#1d4ed8', icon: 'file-word-2-line' },
   slides: { label: 'Slides', color: '#c2410c', icon: 'file-ppt-2-line' },
   image: { label: 'Image', color: '#a21caf', icon: 'image-line' },
+  // Same label and color as the Internship Report's "Web page" chip (renderArtifacts.ts).
+  html: { label: 'Web page', color: '#0f766e', icon: 'global-line' },
   text: { label: 'Markdown / text: wrong format', color: '#b45309', icon: 'error-warning-line' },
   other: { label: 'File', color: '#475569', icon: 'file-line' },
 };
@@ -124,7 +128,7 @@ function CsvViewer({ id, file, source }: ViewerProps): React.ReactElement {
   );
 }
 
-const OPENS_IN: Partial<Record<ArtifactFileKind, string>> = { word: 'Word', slides: 'PowerPoint', spreadsheet: 'Excel', image: 'your image viewer', other: 'its app' };
+const OPENS_IN: Partial<Record<ArtifactFileKind, string>> = { word: 'Word', slides: 'PowerPoint', spreadsheet: 'Excel', image: 'your image viewer', html: 'a browser', other: 'its app' };
 
 /**
  * Word and PowerPoint, rendered in the page (Ali, 10 Nov 2026: "We also need a MS word viewer").
@@ -154,6 +158,71 @@ function OfficeViewer({ id, file, source }: ViewerProps): React.ReactElement {
   );
 }
 
+/** The Blob type to force for an image, so the browser paints it instead of downloading octet-stream. */
+const IMAGE_MIME: Record<string, string> = {
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml',
+};
+
+/**
+ * An image, shown in the page (Ali, 15 Nov 2026: "I can't see an image here"). It used to fall to
+ * DownloadViewer, so an intern's infographic was a button, which is the one thing a picture should
+ * never be.
+ *
+ * The file route sends every non-PDF as an attachment with nosniff, deliberately, so this fetches
+ * the bytes with the viewer's own bearer token and re-labels the Blob client-side. Nothing renders
+ * from our origin.
+ */
+function ImageViewer({ id, file, source }: ViewerProps): React.ReactElement {
+  const [url, setUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    let made: string | null = null;
+    const ext = /\.([a-z0-9]+)$/i.exec(file.name)?.[1]?.toLowerCase() ?? '';
+    source.file(id, IMAGE_MIME[ext] ?? 'image/png')
+      .then((b) => { made = URL.createObjectURL(b); if (live) setUrl(made); })
+      .catch(() => { if (live) setError('Could not load this image.'); });
+    return () => { live = false; if (made) URL.revokeObjectURL(made); };
+  }, [id, file.name, source]);
+  return (
+    <>
+      <div className="mb-2"><DownloadViewer id={id} file={file} source={source} /></div>
+      {error && <div className="alert alert-warning py-2 small" role="alert">{error}</div>}
+      {!error && !url && <div className="text-muted" aria-busy="true">Loading image...</div>}
+      {url && (
+        <a href={url} target="_blank" rel="noopener noreferrer" title="Open full size in a new tab">
+          <img src={url} alt={file.name}
+            style={{ maxWidth: '100%', height: 'auto', border: '1px solid var(--bs-border-color)', borderRadius: 6, background: '#fff' }} />
+        </a>
+      )}
+    </>
+  );
+}
+
+/**
+ * A web page the intern built, rendered as the page it is rather than as its source.
+ *
+ * Shown with the SAME containment as the Word preview: an iframe with an EMPTY sandbox, so no
+ * scripts, no same-origin, no forms and no popups. The markup arrives in the artifact payload the
+ * server already read, so there is no new endpoint and the file is never served inline from our
+ * own origin.
+ */
+function HtmlViewer({ id, file, source }: ViewerProps): React.ReactElement {
+  return (
+    <>
+      <div className="mb-2"><DownloadViewer id={id} file={file} source={source} /></div>
+      {file.text !== null ? (
+        <iframe title={file.name} srcDoc={file.text} sandbox=""
+          style={{ width: '100%', height: '85vh', border: '1px solid var(--bs-border-color)', borderRadius: 6, background: '#fff' }} />
+      ) : (
+        <div className="alert alert-warning py-2 small" role="alert">
+          {file.note ?? 'This page is too large to render here.'} Use the download button to open it in a browser.
+        </div>
+      )}
+    </>
+  );
+}
+
 function DownloadViewer({ id, file, source }: ViewerProps): React.ReactElement {
   const [error, run, busy] = useAction();
   return (
@@ -174,6 +243,8 @@ export function ArtifactFileViewer({ id, file, source, audience = 'admin' }: Vie
   else if (file.kind === 'pdf') body = <PdfViewer id={id} file={file} source={source} />;
   else if (file.kind === 'csv') body = <CsvViewer id={id} file={file} source={source} />;
   else if (file.kind === 'word' || file.kind === 'slides') body = <OfficeViewer id={id} file={file} source={source} />;
+  else if (file.kind === 'image') body = <ImageViewer id={id} file={file} source={source} />;
+  else if (file.kind === 'html') body = <HtmlViewer id={id} file={file} source={source} />;
   else if (file.kind === 'text') {
     body = (
       <>

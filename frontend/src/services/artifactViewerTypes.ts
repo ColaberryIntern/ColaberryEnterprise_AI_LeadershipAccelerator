@@ -4,7 +4,7 @@
  *
  * Mirrors backend/src/services/internship/internArtifactViewer.ts (ArtifactFileKind, InternArtifactView.file).
  */
-export type ArtifactFileKind = 'pdf' | 'csv' | 'word' | 'slides' | 'spreadsheet' | 'image' | 'text' | 'other';
+export type ArtifactFileKind = 'pdf' | 'csv' | 'word' | 'slides' | 'spreadsheet' | 'image' | 'html' | 'text' | 'other';
 
 export interface ArtifactFile {
   name: string;
@@ -40,3 +40,4 @@ export function saveBlob(blob: Blob, name: string): void {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
+

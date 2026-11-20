@@ -34,7 +34,10 @@ const WRITTEN_KINDS = new Set(['case_study', 'prompt_library', 'architecture_doc
 const GENERATED_KINDS = new Set(['case_study', 'prompt_library', 'architecture_doc']);
 
 const FILE_GROUP: Record<ArtifactFileKind, WorkGroup> = {
-  pdf: 'pdf', csv: 'sheet', spreadsheet: 'sheet', word: 'word', slides: 'slides', image: 'image', text: 'notes', other: 'file',
+  pdf: 'pdf', csv: 'sheet', spreadsheet: 'sheet', word: 'word', slides: 'slides', image: 'image',
+  // A published HTML page is a field guide, not a note: the ones interns commit are literally
+  // named *_FieldGuide.html. Grouping it under notes filed finished work beside scratch text.
+  html: 'guide', text: 'notes', other: 'file',
 };
 
 /** Where a written piece came from, when the title does not say. */
