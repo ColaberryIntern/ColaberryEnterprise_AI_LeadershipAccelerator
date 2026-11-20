@@ -7,8 +7,8 @@ import { mgmtSectionGate, pathToSection } from '../mgmtSectionGate';
 import { MGMT_ROLES, roleCanAccessSection, effectiveSections, normalizeExtraSections } from '../../services/access/mgmtRoles';
 
 /**
- * CH1.1 Communications Hub access. Jackie holds community_organizer; Taiwo holds revenue plus the
- * comms_hub extra section; owner and admin derive it. Everyone else is 403 on /api/admin/comms-hub.
+ * CH1.1 Communications Hub access. Jackie holds community_organizer; Taiwo (prod, 2026-11-20: lead_intake
+ * + {agents}) gets the comms_hub extra section from CH1.2; owner and admin derive it. Everyone else is 403.
  */
 const verify = jwt.verify as unknown as jest.Mock;
 
@@ -49,10 +49,17 @@ describe('CH1.1 who reaches the hub', () => {
     expect(gate({ role: 'admin', mgmt_role: 'community_organizer' }, PROBE).passed).toBe(true);
   });
 
-  it('revenue with the comms_hub extra section (Taiwo) passes, and still keeps revenue', () => {
-    const taiwo = { role: 'admin', mgmt_role: 'revenue', mgmt_extra_sections: ['comms_hub'] };
+  it('Taiwo as she is on prod (lead_intake + {agents}) plus comms_hub passes, and keeps lead ingestion', () => {
+    const taiwo = { role: 'admin', mgmt_role: 'lead_intake', mgmt_extra_sections: ['agents', 'comms_hub'] };
     expect(gate(taiwo, PROBE).passed).toBe(true);
-    expect(gate(taiwo, '/api/admin/refunds/list').passed).toBe(true);
+    expect(gate(taiwo, '/api/admin/sources/list').passed).toBe(true);
+    expect(gate({ role: 'admin', mgmt_role: 'lead_intake', mgmt_extra_sections: ['agents'] }, PROBE).status).toBe(403);
+  });
+
+  it('revenue with the comms_hub extra section passes, and still keeps revenue', () => {
+    const r = { role: 'admin', mgmt_role: 'revenue', mgmt_extra_sections: ['comms_hub'] };
+    expect(gate(r, PROBE).passed).toBe(true);
+    expect(gate(r, '/api/admin/refunds/list').passed).toBe(true);
   });
 
   it('revenue WITHOUT the extra section is 403 with the section_not_permitted code', () => {
