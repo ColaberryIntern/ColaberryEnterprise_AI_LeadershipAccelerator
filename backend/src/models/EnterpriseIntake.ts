@@ -74,6 +74,9 @@ export interface EnterpriseIntakeAttributes {
   /** Phase 4: how far the client's emails and calls have been copied onto their list. */
   comms_email_synced_through?: Date | null;
   comms_calls_synced_through?: Date | null;
+  /** Phase 4: call ids already posted, and when this client was last checked (fair rotation). */
+  comms_calls_posted?: string[] | null;
+  comms_checked_at?: Date | null;
   /** Phase 4: the stage shown in the list's name, so it is renamed only when it changes. */
   bc_list_stage?: string | null;
   /** Phase 4: the proposal. Drafted by AI from everything on the list, sent only by Ali. */
@@ -130,6 +133,8 @@ class EnterpriseIntake extends Model<EnterpriseIntakeAttributes> implements Ente
   declare options_email_sent_at: Date | null;
   declare comms_email_synced_through: Date | null;
   declare comms_calls_synced_through: Date | null;
+  declare comms_calls_posted: string[] | null;
+  declare comms_checked_at: Date | null;
   declare bc_list_stage: string | null;
   declare proposal_subject: string | null;
   declare proposal_body: string | null;
@@ -184,6 +189,8 @@ EnterpriseIntake.init(
     options_email_sent_at: { type: DataTypes.DATE, allowNull: true },
     comms_email_synced_through: { type: DataTypes.DATE, allowNull: true },
     comms_calls_synced_through: { type: DataTypes.DATE, allowNull: true },
+    comms_calls_posted: { type: DataTypes.JSONB, allowNull: true },
+    comms_checked_at: { type: DataTypes.DATE, allowNull: true },
     bc_list_stage: { type: DataTypes.STRING(30), allowNull: true },
     proposal_subject: { type: DataTypes.STRING(255), allowNull: true },
     proposal_body: { type: DataTypes.TEXT, allowNull: true },

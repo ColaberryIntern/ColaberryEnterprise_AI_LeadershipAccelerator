@@ -11,12 +11,17 @@ const mockBcPost = jest.fn();
 const mockSend = jest.fn();
 const mockTick = jest.fn();
 const mockStage = jest.fn();
+const mockStaticUpdate = jest.fn();
+const mockBcGetAll = jest.fn();
 
 jest.mock('../../../config/env', () => ({ env: mockEnv }));
-jest.mock('../../../models/EnterpriseIntake', () => ({ __esModule: true, default: { findByPk: (...a: any[]) => mockFindByPk(...a) } }));
+jest.mock('../../../models/EnterpriseIntake', () => ({
+  __esModule: true,
+  default: { findByPk: (...a: any[]) => mockFindByPk(...a), update: (...a: any[]) => mockStaticUpdate(...a) },
+}));
 jest.mock('../../../models/ProjectUnderstandingRecord', () => ({ __esModule: true, default: { findByPk: (...a: any[]) => mockRecordFind(...a) } }));
 jest.mock('../../runtime/runtimeAi', () => ({ chatJson: (...a: any[]) => mockChat(...a) }));
-jest.mock('../../ops/basecampClient', () => ({ bcPost: (...a: any[]) => mockBcPost(...a) }));
+jest.mock('../../ops/basecampClient', () => ({ bcPost: (...a: any[]) => mockBcPost(...a), bcGetAll: (...a: any[]) => mockBcGetAll(...a) }));
 jest.mock('../../email/sendReplyAsAli', () => {
   class StyleViolationError extends Error {}
   return { sendFirstContactAsAli: (...a: any[]) => mockSend(...a), StyleViolationError };
@@ -31,7 +36,7 @@ jest.mock('../enterpriseIntakeService', () => ({ writtenBrief: () => 'Company: A
 jest.mock('../enterpriseIntakeSync', () => ({ syncListStage: (...a: any[]) => mockStage(...a) }));
 
 /* eslint-disable import/first */
-import { ActionRefused, PRICE_PLACEHOLDER, draftProposal, markLost, markSigned, sendBlockers, sendOptionsEmail, sendProposal } from '../enterpriseIntakeActions';
+import { ActionRefused, PRICE_PLACEHOLDER, draftProposal, markLost, markSigned, sendBlockers, sendOptionsEmail, sendProposal, statesAPrice } from '../enterpriseIntakeActions';
 /* eslint-enable import/first */
 
 function row(over: Record<string, unknown> = {}) {
@@ -42,6 +47,7 @@ function row(over: Record<string, unknown> = {}) {
     signed_at: null, lost_at: null, bc_project_id: null, bc_todolist_id: '101', ...over,
   };
   r.update = jest.fn(async (p: any) => Object.assign(r, p));
+  r.reload = jest.fn(async () => r);
   return r;
 }
 
@@ -66,6 +72,8 @@ beforeEach(() => {
   mockBcPost.mockResolvedValue({ id: 900, app_url: 'https://3.basecamp.com/3945211/projects/900' });
   mockTick.mockResolvedValue(true);
   mockRecordFind.mockResolvedValue({ items: [{ dimension: 'systems', value: 'McLeod' }] });
+  mockStaticUpdate.mockResolvedValue([1]);
+  mockBcGetAll.mockResolvedValue([]);
 });
 
 describe('send rules', () => {
@@ -89,10 +97,24 @@ describe('the options email', () => {
     expect(mockStage).toHaveBeenCalled();
   });
 
-  it('never sends twice, even with an edited subject', async () => {
-    mockFindByPk.mockResolvedValue(row({ options_email_sent_at: new Date() }));
-    await expect(sendOptionsEmail('i-1', 'New subject', 'Body')).rejects.toThrow('already sent');
-    expect(mockSend).not.toHaveBeenCalled();
+  it('claims the send atomically first: a second click, even with an edited subject, sends nothing', async () => {
+    mockFindByPk.mockResolvedValue(row());
+    mockStaticUpdate.mockResolvedValueOnce([1]).mockResolvedValueOnce([0]);
+    await sendOptionsEmail('i-1', 'Subject one', 'Body');
+    await expect(sendOptionsEmail('i-1', 'Edited subject', 'Body')).rejects.toThrow('already sent');
+    expect(mockSend).toHaveBeenCalledTimes(1);
+    expect(mockStaticUpdate.mock.calls[0]).toEqual([
+      { options_email_sent_at: expect.any(Date) },
+      { where: { id: 'i-1', options_email_sent_at: null, lost_at: null } },
+    ]);
+    expect(mockStaticUpdate.mock.invocationCallOrder[0]).toBeLessThan(mockSend.mock.invocationCallOrder[0]);
+  });
+
+  it('releases the claim when the send does not happen, so it can be tried again', async () => {
+    mockFindByPk.mockResolvedValue(row());
+    mockSend.mockResolvedValue({ outcome: 'failed', idempotencyKey: 'k', errorClass: 'X', error: 'relay down' });
+    await expect(sendOptionsEmail('i-1', 'S', 'B')).rejects.toThrow('relay down');
+    expect(mockStaticUpdate).toHaveBeenLastCalledWith({ options_email_sent_at: null }, { where: { id: 'i-1' } });
   });
 
   it('refuses before there are options, and to a lost client', async () => {
@@ -108,6 +130,7 @@ describe('the options email', () => {
     mockSend.mockResolvedValue({ outcome: 'skipped', reason: 'kill_switch_active' });
     await expect(sendOptionsEmail('i-1', 'S', 'B')).rejects.toThrow('kill_switch_active');
     expect(i.update).not.toHaveBeenCalled();
+    expect(mockStaticUpdate).toHaveBeenLastCalledWith({ options_email_sent_at: null }, { where: { id: 'i-1' } });
   });
 
   it('a Basecamp failure after the send does not undo it', async () => {
@@ -137,6 +160,7 @@ describe('the proposal', () => {
     ['states a price', PROPOSAL_BODY.replace('A 30 minute call.', 'It costs $9,000.')],
     ['drops the price placeholder', PROPOSAL_BODY.replace(PRICE_PLACEHOLDER, 'TBD')],
     ['uses the word free', PROPOSAL_BODY.replace('A 30 minute call.', 'A free call.')],
+    ['states a price in words', PROPOSAL_BODY.replace('A 30 minute call.', 'About 18,000 dollars.')],
   ])('refuses an AI draft that %s', async (_why, body) => {
     const i = row();
     mockFindByPk.mockResolvedValue(i);
@@ -154,9 +178,15 @@ describe('the proposal', () => {
     expect((await sendProposal('i-1', 'Proposal', priced)).sent).toBe(true);
     expect(mockSend).toHaveBeenCalledWith(expect.objectContaining({ businessEventId: 'enterprise-intake-proposal-i-1' }));
     expect(mockTick).toHaveBeenCalledWith('49670056', '101', 'approve');
-    mockFindByPk.mockResolvedValue(row({ proposal_drafted_at: new Date(), proposal_sent_at: new Date() }));
+    mockStaticUpdate.mockResolvedValueOnce([0]);
     await expect(sendProposal('i-1', 'Proposal', priced)).rejects.toThrow('already sent');
+    expect(mockSend).toHaveBeenCalledTimes(1);
   });
+});
+
+describe('price detection', () => {
+  it.each(['$18,000', 'USD 18000', '18,000 dollars', '18k', 'EUR 5', '2 million'])('sees %p', (t) => expect(statesAPrice(t)).toBe(true));
+  it.each(['a 30 minute call', '6 weeks', '300 orders a day', '20 hours a week', 'Phase 2'])('ignores %p', (t) => expect(statesAPrice(t)).toBe(false));
 });
 
 describe('signed and lost', () => {
@@ -166,12 +196,29 @@ describe('signed and lost', () => {
     const out = await markSigned('i-1');
     expect(mockBcPost.mock.calls[0]).toEqual(['/projects.json', expect.objectContaining({ name: 'Acme Logistics - Colaberry Enterprise' })]);
     expect(out).toEqual({ projectId: '900', projectUrl: 'https://3.basecamp.com/3945211/projects/900' });
-    expect(i.update).toHaveBeenCalledWith(expect.objectContaining({ status: 'signed', signed_at: expect.any(Date) }));
+    expect(mockStaticUpdate).toHaveBeenCalledWith(
+      { signed_at: expect.any(Date), status: 'signed' },
+      { where: { id: 'i-1', signed_at: null, lost_at: null } },
+    );
     expect(mockTick).toHaveBeenCalledWith('49670056', '101', 'signed');
     mockBcPost.mockClear();
     mockFindByPk.mockResolvedValue(row({ bc_project_id: '900', signed_at: new Date() }));
     await markSigned('i-1');
     expect(mockBcPost.mock.calls.some(([u]) => u === '/projects.json')).toBe(false);
+  });
+
+  it('finds a project an earlier attempt created, instead of opening a second one', async () => {
+    mockFindByPk.mockResolvedValue(row({ signed_at: new Date() }));
+    mockBcGetAll.mockResolvedValue([{ id: 777, name: 'Acme Logistics - Colaberry Enterprise', app_url: 'https://3.basecamp.com/3945211/projects/777' }]);
+    expect((await markSigned('i-1')).projectId).toBe('777');
+    expect(mockBcPost.mock.calls.some(([u]) => u === '/projects.json')).toBe(false);
+  });
+
+  it('signed refuses a client just marked lost elsewhere (atomic)', async () => {
+    mockFindByPk.mockResolvedValue(row());
+    mockStaticUpdate.mockResolvedValueOnce([0]);
+    await expect(markSigned('i-1')).rejects.toThrow('marked lost or signed elsewhere');
+    expect(mockBcPost).not.toHaveBeenCalled();
   });
 
   it('a double click opens one project', async () => {
@@ -185,8 +232,15 @@ describe('signed and lost', () => {
     const i = row();
     mockFindByPk.mockResolvedValue(i);
     await markLost('i-1', 'Chose another vendor');
-    expect(i.update).toHaveBeenCalledWith(expect.objectContaining({ status: 'lost', lost_reason: 'Chose another vendor' }));
+    expect(mockStaticUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'lost', lost_reason: 'Chose another vendor' }),
+      { where: { id: 'i-1', signed_at: null } },
+    );
     mockFindByPk.mockResolvedValue(row({ signed_at: new Date() }));
+    await expect(markLost('i-1', 'x')).rejects.toThrow('signed');
+    // Signed between the read and the write: the conditional update refuses it.
+    mockFindByPk.mockResolvedValue(row());
+    mockStaticUpdate.mockResolvedValueOnce([0]);
     await expect(markLost('i-1', 'x')).rejects.toThrow('signed');
   });
 });

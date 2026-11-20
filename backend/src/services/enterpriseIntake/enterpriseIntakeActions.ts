@@ -15,7 +15,7 @@ import { z } from 'zod';
 import EnterpriseIntake from '../../models/EnterpriseIntake';
 import ProjectUnderstandingRecord from '../../models/ProjectUnderstandingRecord';
 import { chatJson } from '../runtime/runtimeAi';
-import { bcPost } from '../ops/basecampClient';
+import { bcGetAll, bcPost } from '../ops/basecampClient';
 import { sendFirstContactAsAli, StyleViolationError } from '../email/sendReplyAsAli';
 import { env } from '../../config/env';
 import { ascii, esc, intakeBasecampEnabled, tickStep } from './enterpriseIntakeBasecamp';
@@ -30,6 +30,17 @@ export class ActionRefused extends Error {
   constructor(message: string, readonly status = 409) {
     super(message);
   }
+}
+
+/**
+ * A price the AI wrote: currency symbols or codes before a number, or a number followed by a
+ * currency word or a thousands suffix ("$18,000", "USD 18000", "18,000 dollars", "18k").
+ */
+export function statesAPrice(text: string): boolean {
+  return (
+    /(?:[$€£]|\b(?:usd|eur|gbp|us\$)\b)\s?\d/i.test(text) ||
+    /\b\d[\d,.]*\s?(?:k\b|thousand\b|million\b|dollars?\b|usd\b|euros?\b|pounds?\b)/i.test(text)
+  );
 }
 
 /** What may never go to a client in a message Ali sends from this page. Prices he adds are fine. */
@@ -89,12 +100,40 @@ async function send(i: EnterpriseIntake, kind: 'options' | 'proposal', subject: 
   }
 }
 
+type SentColumn = 'options_email_sent_at' | 'proposal_sent_at';
+
+/**
+ * Once, across clicks, tabs and processes: claim the "sent" column (set it only where it is
+ * still null) BEFORE sending, so two clicks with different subjects cannot both go out. If the
+ * send then does not happen, the claim is released so it can be tried again.
+ */
+async function claimSend(i: EnterpriseIntake, column: SentColumn): Promise<void> {
+  const [n] = await EnterpriseIntake.update({ [column]: new Date() } as Partial<EnterpriseIntake>, {
+    where: { id: i.id, [column]: null, lost_at: null } as Record<string, unknown>,
+  });
+  if (n !== 1) throw new ActionRefused(column === 'proposal_sent_at' ? 'The proposal was already sent' : 'The options email was already sent');
+}
+
+async function releaseSend(i: EnterpriseIntake, column: SentColumn): Promise<void> {
+  await EnterpriseIntake.update({ [column]: null } as Partial<EnterpriseIntake>, { where: { id: i.id } });
+}
+
+async function sendClaimed(i: EnterpriseIntake, column: SentColumn, kind: 'options' | 'proposal', subject: string, body: string) {
+  const blockers = sendBlockers(subject, body);
+  if (blockers.length) throw new ActionRefused(`Not sent: ${blockers.join('; ')}.`, 422);
+  await claimSend(i, column);
+  try {
+    return await send(i, kind, subject, body);
+  } catch (err) {
+    await releaseSend(i, column);
+    throw err;
+  }
+}
+
 export async function sendOptionsEmail(id: string, subject: string, body: string): Promise<{ sent: boolean; already: boolean }> {
   const i = await load(id);
   if (!i.researched_at) throw new ActionRefused('There are no pilot options yet');
-  // Once. The ledger dedupes an identical message; this stops an edited one going out again.
-  if (i.options_email_sent_at) throw new ActionRefused('The options email was already sent');
-  const out = await send(i, 'options', subject, body);
+  const out = await sendClaimed(i, 'options_email_sent_at', 'options', subject, body);
   await i.update({ options_email_subject: subject, options_email_body: body, options_email_sent_at: i.options_email_sent_at || new Date() });
   await record(i, async () => {
     await note(i, `<div><strong>Options email sent by Ali</strong> to ${esc(i.email)}.</div><div><em>Subject:</em> ${esc(subject)}</div><div>${esc(body).replace(/\n/g, '<br>')}</div>`);
@@ -132,7 +171,7 @@ export async function draftProposal(id: string): Promise<{ subject: string; body
   const r = proposalSchema.safeParse(parsed);
   if (!r.success) throw new ActionRefused('The AI draft did not come back complete. Try again.', 502);
   const body = r.data.body.replace(/[–—]/g, '-');
-  if (/\bfree\b/i.test(body) || !body.includes(PRICE_PLACEHOLDER) || /[$€£]\s?\d/.test(body)) {
+  if (/\bfree\b/i.test(body) || !body.includes(PRICE_PLACEHOLDER) || statesAPrice(body.replace(PRICE_PLACEHOLDER, ''))) {
     throw new ActionRefused('The AI draft broke a proposal rule (price or wording). Try again.', 502);
   }
   await i.update({ proposal_subject: r.data.subject, proposal_body: body, proposal_drafted_at: new Date() });
@@ -146,8 +185,7 @@ export async function draftProposal(id: string): Promise<{ subject: string; body
 export async function sendProposal(id: string, subject: string, body: string): Promise<{ sent: boolean; already: boolean }> {
   const i = await load(id);
   if (!i.proposal_drafted_at) throw new ActionRefused('Draft the proposal first');
-  if (i.proposal_sent_at) throw new ActionRefused('The proposal was already sent');
-  const out = await send(i, 'proposal', subject, body);
+  const out = await sendClaimed(i, 'proposal_sent_at', 'proposal', subject, body);
   await i.update({ proposal_subject: subject, proposal_body: body, proposal_sent_at: i.proposal_sent_at || new Date() });
   await record(i, async () => {
     await note(i, `<div><strong>Proposal approved and sent by Ali</strong> to ${esc(i.email)}.</div><div><em>Subject:</em> ${esc(subject)}</div>`);
@@ -169,20 +207,32 @@ export async function markSigned(id: string): Promise<{ projectId: string | null
   }
 }
 
+export const projectName = (company: string) => ascii(`${company} - Colaberry Enterprise`).slice(0, 200);
+
 async function signOnce(id: string): Promise<{ projectId: string | null; projectUrl: string | null }> {
   const i = await load(id);
+  // Signed and lost are exclusive: this claim only lands on a row that is not lost.
+  if (!i.signed_at) {
+    const [n] = await EnterpriseIntake.update({ signed_at: new Date(), status: 'signed' } as Partial<EnterpriseIntake>, {
+      where: { id: i.id, signed_at: null, lost_at: null } as Record<string, unknown>,
+    });
+    if (n !== 1) throw new ActionRefused('This client was just marked lost or signed elsewhere. Reload.');
+    await i.reload();
+  }
   let projectId = i.bc_project_id;
   let projectUrl: string | null = projectId ? `https://3.basecamp.com/3945211/projects/${projectId}` : null;
   if (!projectId && intakeBasecampEnabled()) {
-    const p = await bcPost<{ id: number; app_url: string }>('/projects.json', {
-      name: ascii(`${i.company} - Colaberry Enterprise`).slice(0, 200),
+    const name = projectName(i.company);
+    // A project from an earlier attempt whose id never got saved is found by name, not duplicated.
+    const existing = (await bcGetAll<{ id: number; name: string; app_url: string }>('/projects.json')).find((p) => p.name === name);
+    const p = existing || (await bcPost<{ id: number; app_url: string }>('/projects.json', {
+      name,
       description: ascii(`Client project for ${i.company} (${i.full_name}). Opened from the Colaberry Enterprise Intake when they signed.`),
-    });
+    }));
     projectId = String(p.id);
     projectUrl = p.app_url;
     await i.update({ bc_project_id: projectId });
   }
-  await i.update({ signed_at: i.signed_at || new Date(), status: 'signed' });
   await record(i, async () => {
     await note(i, `<div><strong>Signed.</strong> ${projectUrl ? `Their own project: <a href="${esc(projectUrl)}">${esc(i.company)} - Colaberry Enterprise</a>.` : ''}</div>`);
     await tick(i, 'signed');
@@ -194,6 +244,12 @@ export async function markLost(id: string, reason: string): Promise<void> {
   const i = await EnterpriseIntake.findByPk(id);
   if (!i) throw new ActionRefused('No such client', 404);
   if (i.signed_at) throw new ActionRefused('This client has signed');
-  await i.update({ lost_at: i.lost_at || new Date(), lost_reason: reason.slice(0, 500), status: 'lost' });
+  // Exclusive with signed, atomically: a concurrent "signed" cannot leave the row both.
+  const [n] = await EnterpriseIntake.update(
+    { lost_at: i.lost_at || new Date(), lost_reason: reason.slice(0, 500), status: 'lost' } as Partial<EnterpriseIntake>,
+    { where: { id: i.id, signed_at: null } as Record<string, unknown> },
+  );
+  if (n !== 1) throw new ActionRefused('This client has signed');
+  await i.reload();
   await record(i, () => note(i, `<div><strong>Marked lost.</strong> ${esc(reason || 'No reason given.')}</div>`));
 }
