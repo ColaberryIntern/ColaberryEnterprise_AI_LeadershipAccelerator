@@ -14,6 +14,8 @@ import type { CommsHubMessageStatus } from '../../../models/CommsHubMessage';
  *   scheduled -> sending           the delivery worker claimed it
  *   sending -> sent | partially_failed | failed   the worker's result across destinations
  *   partially_failed | failed -> sending          retry (only the destinations that did not succeed)
+ *   partially_failed | failed -> needs_approval   edited after a failed send: the approval is voided and
+ *                                  the changed message is approved again before any retry
  *   any not-yet-finished status -> cancelled      (not while sending: the worker finishes the attempt)
  * sent and cancelled are final. A status to itself is not a transition and is refused, so a caller
  * can never mistake a no-op for progress.
@@ -26,8 +28,8 @@ const ALLOWED: Readonly<Record<CommsHubMessageStatus, readonly CommsHubMessageSt
   approved: ['scheduled', 'needs_approval', 'cancelled'],
   scheduled: ['sending', 'needs_approval', 'cancelled'],
   sending: ['sent', 'partially_failed', 'failed'],
-  partially_failed: ['sending', 'cancelled'],
-  failed: ['sending', 'cancelled'],
+  partially_failed: ['sending', 'needs_approval', 'cancelled'],
+  failed: ['sending', 'needs_approval', 'cancelled'],
   sent: [],
   cancelled: [],
 };
@@ -43,14 +45,22 @@ export function transition(from: CommsHubMessageStatus, to: CommsHubMessageStatu
   return { ok: false, reason: `a ${from} message cannot become ${to}` };
 }
 
-/** Statuses in which an approval is in force (a change to the content voids it). */
-export const APPROVED_STATUSES: readonly CommsHubMessageStatus[] = ['approved', 'scheduled'];
+/**
+ * Statuses in which an approval is in force, so a change to the content voids it: approved and
+ * scheduled, and after a failed or partly failed send (a retry runs under that approval). Not while
+ * sending: the worker finishes the attempt first.
+ */
+export const APPROVED_STATUSES: readonly CommsHubMessageStatus[] = ['approved', 'scheduled', 'partially_failed', 'failed'];
 
 /** What an approval covers: the exact drafts, destinations and send time. */
 export interface ApprovalContent {
   drafts: Array<{ channel: string; title: string | null; body: string }>;
   destinations: Array<{ channel: string; target_type: string; target_id: string }>;
-  /** The send time, or null for "send as soon as approved". */
+  /**
+   * The send time, or null for "send now" (as soon as approved). CONVENTION: "send now" keeps send_at
+   * NULL for the life of the message (the worker treats null as due); scheduling never writes it
+   * (approvals.scheduleMessage), so an approval cannot void itself.
+   */
   send_at: Date | null;
 }
 

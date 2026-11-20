@@ -30,7 +30,8 @@ jest.mock('../../../../models/CommsHubApproval', () => ({
 }));
 jest.mock('../../activityLog', () => ({ logActivity: jest.fn(async (_a: Row, action: string, _t: string, id: string, detail: Row) => { activity.push({ action, id, ...detail }); }) }));
 
-import { approveMessage, MessageRuleError, reconcileApproval, rejectMessage, submitForApproval, undoApproval } from '../approvals';
+import { sequelize } from '../../../../config/database';
+import { approveMessage, cancelMessage, MessageRuleError, reconcileApproval, rejectMessage, scheduleMessage, submitForApproval, undoApproval } from '../approvals';
 import { approvalHash } from '../messageStatus';
 
 const JACKIE = { id: 'jackie-1', label: 'Jackie' };
@@ -152,5 +153,48 @@ describe('CH6.2 submit, reject, undo', () => {
 
   it('an unknown message is a 404', async () => {
     expect((await err(approveMessage('nope', TAIWO, AT))).status).toBe(404);
+  });
+});
+
+describe('CH6.2 attempt 2', () => {
+  it('a partly failed send that is edited: the approval is voided and the message goes back for approval before any retry', async () => {
+    await approveMessage('m1', TAIWO, AT);
+    messages.get('m1')!.status = 'partially_failed';
+    drafts.push({ message_id: 'm1', channel: 'community_post', version: 3, title: null, body: 'Corrected: Demo Tuesday is tomorrow at 6:30 PM CST.' });
+    expect(await reconcileApproval('m1', 'draft_changed', JACKIE, AT)).toBe(true);
+    expect(messages.get('m1')!.status).toBe('needs_approval');
+    expect(approvals[0]).toMatchObject({ voided_reason: 'draft_changed' });
+    // ...and the same for a failed one, by undo.
+    await approveMessage('m1', TAIWO, AT);
+    messages.get('m1')!.status = 'failed';
+    await undoApproval('m1', TAIWO, AT);
+    expect(messages.get('m1')!.status).toBe('needs_approval');
+  });
+
+  it('cancelling voids the approval in force (kept, reason cancelled); a sending message cannot be cancelled', async () => {
+    await approveMessage('m1', TAIWO, AT);
+    await cancelMessage('m1', JACKIE, AT);
+    expect(messages.get('m1')!.status).toBe('cancelled');
+    expect(approvals[0]).toMatchObject({ voided_at: AT, voided_reason: 'cancelled' });
+    messages.get('m1')!.status = 'sending';
+    expect((await err(cancelMessage('m1', JACKIE, AT))).reason).toBe('invalid_transition');
+  });
+
+  it('"send now": scheduling never writes the send time, so the approval stays valid', async () => {
+    messages.get('m1')!.send_at = null;
+    await approveMessage('m1', TAIWO, AT);
+    await scheduleMessage('m1', TAIWO);
+    expect(messages.get('m1')).toMatchObject({ status: 'scheduled', send_at: null });
+    expect(await reconcileApproval('m1', 'send_time_changed', JACKIE, AT)).toBe(false);
+    expect(approvals[0].voided_at).toBeNull();
+  });
+
+  it("joins the caller's transaction when given one (the edit and the void commit together)", async () => {
+    await approveMessage('m1', TAIWO, AT);
+    (sequelize.transaction as jest.Mock).mockClear();
+    destinations.push({ message_id: 'm1', channel: 'in_app', target_type: 'in_app_audience', target_id: 'all_members' });
+    const outer = { LOCK: { UPDATE: 'UPDATE' } } as never;
+    expect(await reconcileApproval('m1', 'destinations_changed', JACKIE, AT, outer)).toBe(true);
+    expect(sequelize.transaction).not.toHaveBeenCalled();
   });
 });

@@ -1,5 +1,6 @@
 import { approvalHash, MESSAGE_STATUSES, transition, type ApprovalContent } from '../messageStatus';
 import type { CommsHubMessageStatus } from '../../../../models/CommsHubMessage';
+import { COMMS_HUB_MESSAGE_STATUSES } from '../../../../db/ensureCommsHubSchema';
 
 /**
  * CH6.2 the status machine: EVERY ordered pair of the nine statuses (81), each asserted allowed or
@@ -11,15 +12,16 @@ const ALLOWED_PAIRS = new Set([
   'approved>scheduled', 'approved>needs_approval', 'approved>cancelled',
   'scheduled>sending', 'scheduled>needs_approval', 'scheduled>cancelled',
   'sending>sent', 'sending>partially_failed', 'sending>failed',
-  'partially_failed>sending', 'partially_failed>cancelled',
-  'failed>sending', 'failed>cancelled',
+  'partially_failed>sending', 'partially_failed>needs_approval', 'partially_failed>cancelled',
+  'failed>sending', 'failed>needs_approval', 'failed>cancelled',
 ]);
 
 const PAIRS: Array<[CommsHubMessageStatus, CommsHubMessageStatus]> = MESSAGE_STATUSES.flatMap((f) => MESSAGE_STATUSES.map((t) => [f, t] as [CommsHubMessageStatus, CommsHubMessageStatus]));
 
 describe('CH6.2 every status pair', () => {
-  it('there are nine statuses and 81 pairs', () => {
+  it('there are nine statuses, exactly the values the schema CHECK allows, and 81 pairs', () => {
     expect(MESSAGE_STATUSES).toHaveLength(9);
+    expect([...MESSAGE_STATUSES].sort()).toEqual([...COMMS_HUB_MESSAGE_STATUSES].sort());
     expect(PAIRS).toHaveLength(81);
   });
 

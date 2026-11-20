@@ -105,12 +105,44 @@ async function voidInForce(m: CommsHubMessage, reason: VoidReason, actor: Actor,
 }
 
 /** Undo approval: approved | scheduled -> needs_approval, the approval voided as 'undone'. */
-export async function undoApproval(messageId: string, actor: Actor, now: Date = new Date()): Promise<CommsHubMessage> {
-  return sequelize.transaction(async (t) => {
+export async function undoApproval(messageId: string, actor: Actor, now: Date = new Date(), outer?: Transaction): Promise<CommsHubMessage> {
+  return inTx(outer, async (t) => {
     const m = await locked(messageId, t);
     move(m, 'needs_approval');
     if (!APPROVED_STATUSES.includes(m.status)) throw new MessageRuleError('This message is not approved.', 409, 'not_approved');
     await voidInForce(m, 'undone', actor, t, now);
+    return m;
+  });
+}
+
+/** Optional outer transaction: the caller's edit and the void then commit (or roll back) together. */
+function inTx<T>(t: Transaction | undefined, fn: (t: Transaction) => Promise<T>): Promise<T> {
+  return t ? fn(t) : sequelize.transaction(fn);
+}
+
+/**
+ * Schedule: approved -> scheduled. Never touches send_at (null stays "send now"), so the content the
+ * approval covers is unchanged and the approval stays valid.
+ */
+export async function scheduleMessage(messageId: string, actor: Actor, t?: Transaction): Promise<CommsHubMessage> {
+  return inTx(t, async (tx) => {
+    const m = await locked(messageId, tx);
+    move(m, 'scheduled');
+    await m.update({ status: 'scheduled', updated_by: actor.id }, { transaction: tx });
+    await logActivity(actor, 'message.scheduled', 'message', m.id, { send_at: m.send_at ? m.send_at.toISOString() : 'now' }, tx);
+    return m;
+  });
+}
+
+/** Cancel: any status that may be cancelled -> cancelled; an approval in force is voided as 'cancelled'. */
+export async function cancelMessage(messageId: string, actor: Actor, now: Date = new Date(), t?: Transaction): Promise<CommsHubMessage> {
+  return inTx(t, async (tx) => {
+    const m = await locked(messageId, tx);
+    move(m, 'cancelled');
+    const a = await inForce(m.id, tx);
+    if (a) await a.update({ voided_at: now, voided_reason: 'cancelled' }, { transaction: tx });
+    await m.update({ status: 'cancelled', updated_by: actor.id }, { transaction: tx });
+    await logActivity(actor, 'message.cancelled', 'message', m.id, { approval_id: a?.id ?? null }, tx);
     return m;
   });
 }
@@ -120,8 +152,8 @@ export async function undoApproval(messageId: string, actor: Actor, now: Date = 
  * no longer matches the approved hash, void the approval and return the message to needs_approval.
  * Returns whether it voided. Content that still matches (an edit that was reverted) keeps the approval.
  */
-export async function reconcileApproval(messageId: string, reason: Exclude<VoidReason, 'undone' | 'cancelled'>, actor: Actor, now: Date = new Date()): Promise<boolean> {
-  return sequelize.transaction(async (t) => {
+export async function reconcileApproval(messageId: string, reason: Exclude<VoidReason, 'undone' | 'cancelled'>, actor: Actor, now: Date = new Date(), outer?: Transaction): Promise<boolean> {
+  return inTx(outer, async (t) => {
     const m = await locked(messageId, t);
     if (!APPROVED_STATUSES.includes(m.status)) return false;
     const a = await inForce(m.id, t);
