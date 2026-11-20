@@ -309,3 +309,12 @@
   white-space: nowrap;
   border: 0;
 }
+
+/* Communications Hub (CH1.3): every control and tab meets the 44x44 px touch target. */
+.comms-hub-action,
+.comms-hub-tab {
+  min-height: 44px;
+  min-width: 44px;
+  display: inline-flex;
+  align-items: center;
+}

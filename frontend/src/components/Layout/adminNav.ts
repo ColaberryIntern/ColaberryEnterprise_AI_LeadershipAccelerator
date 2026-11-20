@@ -197,6 +197,13 @@ export const NAV_GROUPS: NavGroup[] = [
     { source: 'gov', label: 'Contracts', section: 'gov_contracts', icon: 'government-line',
       paths: [/^\/admin\/internship\/gov-contract\/[A-Za-z0-9-]{1,64}$/] },
   ]},
+  // CH1.3 Communications Hub: events, thumbnails, going live and member announcements, for the Community Organizer
+  // (and Taiwo, through an extra section). One link: its tabs (/events, /compose, /schedule) are child paths, which
+  // sectionForPath resolves by prefix, so they need no UNLISTED_PATH_SECTIONS rows. It sits BEFORE Placement on
+  // purpose: the campus tower numbers floors top-down, so a group after Placement would move Career Prep's floor.
+  { label: 'Communications Hub', section: 'comms_hub', links: [
+    { path: '/admin/comms-hub', label: 'Communications Hub', icon: 'calendar-event-line' },
+  ]},
   // Career Prep v27 (CP2.1): one floor, three names in the campus tower (students: Career Prep; partners: Hiring; staff:
   // Placement). Release 1 ships one staff page, each student's prep, read-only; the kit's queue, inboxes, bookings and
   // fees pages join this group in Releases 2 and 3 when they exist. Staff doors open in place (M1 Q5 default).

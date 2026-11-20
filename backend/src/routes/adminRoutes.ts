@@ -177,6 +177,7 @@ import factoryDownstreamRoutes from './admin/factoryDownstreamRoutes';
 import govQualificationRoutes from './admin/govQualificationRoutes';
 import govContractsRoutes from './admin/govContractsRoutes';
 import placementRoutes from './admin/placementRoutes';
+import commsHubRoutes from './admin/commsHubRoutes';
 import govProposalSourceRoutes from './admin/govProposalSourceRoutes';
 import govCompanyDossierRoutes from './admin/govCompanyDossierRoutes';
 import agentFactoryRoutes from './admin/agentFactoryRoutes';
@@ -499,6 +500,9 @@ router.use(govQualificationRoutes);
 router.use(govContractsRoutes);
 // Career Prep v27 (CP1.5): staff read of a student's prep, gated 'placement'; mgmtSectionGate maps the prefix.
 router.use(placementRoutes);
+// Communications Hub (CH1.3): events, thumbnails, going live, member announcements. Gated 'comms_hub' per route;
+// mgmtSectionGate maps /api/admin/comms-hub.
+router.use(commsHubRoutes);
 router.use(govProposalSourceRoutes);
 // Gov Company Dossier (Dossier Phase 2a): tenant-wide library portal under /api/admin/factory/dossier/*, which
 // mgmtSectionGate already maps to 'program' (its routes also self-declare requireSection('program')).
