@@ -3,7 +3,7 @@
  * document's requirements + section plans, inserted artifacts, approved facts) and nothing else; the prompt text
  * tells the model those approved facts are its ONLY source, and falls back to the [PLACEHOLDER] instruction when none.
  */
-import { buildGrounding, groundingToPromptText, groundingToBackingRefs } from '../proposalGrounding';
+import { buildGrounding, groundingToPromptText, groundingToBackingRefs, selectSubmissionFacts } from '../proposalGrounding';
 import type { ProposalBlueprint } from '../proposalBlueprintTypes';
 
 const blueprint: ProposalBlueprint = {
@@ -164,5 +164,39 @@ describe('solicitation facts (the RFP\'s own facts the agent must assert, never 
     const text = groundingToPromptText(g);
     expect(text).toMatch(/\[REQ-004\] Proposals must be submitted no later than 5:00 p\.m\. MDT/);
     expect(text).not.toMatch(/\[REQ-004\] REQ-004/);
+  });
+});
+
+describe('selectSubmissionFacts (B1b — ground the RFP submission facts proposal-wide so they are never asked)', () => {
+  it('selects the deadline and submission-email statements from the full requirement set', () => {
+    const picked = selectSubmissionFacts([
+      'The system shall provide role-based access control.',
+      'Proposals must be submitted no later than 5:00 p.m. MDT on November 30, 2026.',
+      'Proposals shall be emailed to purchasing@herriman.gov.',
+      'The vendor will provide a GIS integration.',
+    ]);
+    expect(picked).toEqual([
+      'Proposals must be submitted no later than 5:00 p.m. MDT on November 30, 2026.',
+      'Proposals shall be emailed to purchasing@herriman.gov.',
+    ]);
+  });
+
+  it('ignores purely technical requirements (no false positives)', () => {
+    expect(selectSubmissionFacts(['The system shall support SAML SSO.', 'Provide a public citizen portal.'])).toEqual([]);
+  });
+
+  it('de-duplicates identical statements and trims whitespace', () => {
+    expect(selectSubmissionFacts(['  Proposals are due by the deadline.  ', 'Proposals are due by the deadline.'])).toEqual(['Proposals are due by the deadline.']);
+  });
+
+  it('caps the number of facts to avoid flooding the grounding', () => {
+    const many = Array.from({ length: 20 }, (_, i) => `Submission note ${i}: proposals must be submitted on time.`);
+    expect(selectSubmissionFacts(many, 3)).toHaveLength(3);
+  });
+
+  it('is total on junk input', () => {
+    expect(selectSubmissionFacts([] as any)).toEqual([]);
+    expect(selectSubmissionFacts(null as any)).toEqual([]);
+    expect(selectSubmissionFacts(['', '   ', 42 as any])).toEqual([]);
   });
 });
