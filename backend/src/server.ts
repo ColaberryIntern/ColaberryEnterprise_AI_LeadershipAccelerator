@@ -3959,6 +3959,10 @@ async function start(): Promise<void> {
     import('./services/enterpriseIntake/enterpriseIntakeBasecamp')
       .then(({ syncEnterpriseIntakesToBasecamp }) => syncEnterpriseIntakesToBasecamp())
       .then((out) => { if (out.opened || out.posted || out.failed) console.log(`[EnterpriseIntake] Basecamp sweep: ${out.opened} opened, ${out.posted} posted, ${out.failed} failed`); })
+      // W30: research and pilot options for interviews still waiting, then their Basecamp post.
+      .then(() => import('./services/enterpriseIntake/enterpriseIntakeResearch'))
+      .then(({ syncEnterpriseResearch }) => syncEnterpriseResearch())
+      .then((out) => { if (out.researched || out.posted || out.failed) console.log(`[EnterpriseIntake] research sweep: ${out.researched} researched, ${out.posted} posted, ${out.failed} failed`); })
       .catch((err) => console.warn('[EnterpriseIntake] Basecamp sweep failed:', err?.message));
   });
 

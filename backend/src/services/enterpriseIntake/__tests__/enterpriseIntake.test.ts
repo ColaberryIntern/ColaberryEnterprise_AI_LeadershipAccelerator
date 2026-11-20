@@ -32,6 +32,7 @@ jest.mock('../../delivery/projectIntake', () => ({
 jest.mock('../../callbackRequestService', () => ({ requestInstantCallback: (...a: any[]) => mockCallback(...a) }));
 const mockOpenList = jest.fn();
 const mockPostInterview = jest.fn();
+jest.mock('../enterpriseIntakeResearch', () => ({ researchSoon: jest.fn() }));
 jest.mock('../enterpriseIntakeBasecamp', () => ({
   openClientListSoon: (...a: any[]) => mockOpenList(...a),
   postInterviewSoon: (...a: any[]) => mockPostInterview(...a),

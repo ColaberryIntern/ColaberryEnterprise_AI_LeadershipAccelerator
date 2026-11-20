@@ -246,6 +246,11 @@ async function recordInterviewed(
     });
     // W29: the write-up and transcript go on the client's Basecamp list.
     postInterviewSoon(intake.id);
+    // W30: then the homework, research and pilot options. Lazy: the research module reads
+    // this one (writtenBrief), so a static import would be a cycle.
+    import('./enterpriseIntakeResearch')
+      .then(({ researchSoon }) => researchSoon(intake.id))
+      .catch(() => undefined);
   }
   return ok;
 }

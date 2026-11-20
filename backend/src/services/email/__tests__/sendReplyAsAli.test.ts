@@ -250,3 +250,29 @@ describe('StyleViolationError', () => {
     expect(e.message).toContain('r');
   });
 });
+
+describe('sendFirstContactAsAli (W30: an approved first message, e.g. pilot options)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { sendFirstContactAsAli } = require('../sendReplyAsAli');
+  const FIRST = { recipient: 'dana@acme.test', subject: 'Your pilot options', body: 'Hi Dana, two options.', businessEventId: 'enterprise-intake-options-i-1' };
+
+  it('sends with no threading, signed, BCC path and ledger unchanged', async () => {
+    mockSendCampaignMessage.mockResolvedValue({ ok: true, messageId: 'mandrill-1' });
+    const out = await sendFirstContactAsAli(FIRST);
+    expect(out.outcome).toBe('sent');
+    const built = mockBuildCampaignMessage.mock.calls[0][0] as any;
+    expect(built.inReplyTo).toBeUndefined();
+    expect(built.tag).toBe('first-contact');
+    expect(hasBrandedSignature(built.text)).toBe(true);
+    expect(mockSendOnce).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps every refusal: kill switch, dev, no Mandrill', async () => {
+    mockKillSwitch.mockResolvedValue(true);
+    expect((await sendFirstContactAsAli(FIRST)).outcome).toBe('skipped');
+    mockKillSwitch.mockResolvedValue(false);
+    mockIsDev = true;
+    expect((await sendFirstContactAsAli(FIRST)).outcome).toBe('skipped');
+    expect(mockSendOnce).not.toHaveBeenCalled();
+  });
+});

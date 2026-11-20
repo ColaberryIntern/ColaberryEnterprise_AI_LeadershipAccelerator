@@ -115,7 +115,25 @@ export async function sendReplyAsAli(
       + 'this would start a new conversation and leave the original thread reading as unanswered.',
     );
   }
+  return deliverAsAli(input);
+}
 
+export type SendFirstContactAsAliInput = Omit<SendReplyAsAliInput, 'inReplyTo' | 'references'>;
+
+/**
+ * A NEW conversation from Ali, for a message he approved (W30: the Enterprise intake's options
+ * and proposal emails). Everything `sendReplyAsAli` guarantees still holds: kill switch, no dev
+ * sends, style lint, signature, exactly-once ledger, Ali's BCC. It only drops the threading
+ * requirement, because there is no earlier message to thread into. Never use it to answer a
+ * message: that is what `sendReplyAsAli` is for.
+ */
+export async function sendFirstContactAsAli(input: SendFirstContactAsAliInput): Promise<SendReplyAsAliOutcome> {
+  return deliverAsAli({ ...input, tag: input.tag ?? 'first-contact' });
+}
+
+async function deliverAsAli(
+  input: Omit<SendReplyAsAliInput, 'inReplyTo'> & { inReplyTo?: string },
+): Promise<SendReplyAsAliOutcome> {
   // Before the claim. See the docblock: a claim without a send poisons the key.
   if (await isKillSwitchActive()) {
     return { outcome: 'skipped', reason: 'kill_switch_active' };
