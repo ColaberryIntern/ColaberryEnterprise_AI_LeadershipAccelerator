@@ -17,6 +17,7 @@
 import CommunityMember from '../../models/CommunityMember';
 import Enrollment from '../../models/Enrollment';
 import { sendCommunityReplyEmail } from '../emailService';
+import { PROGRAM_IDENTITY_DOMAIN } from '../staffDetection';
 
 /**
  * The opt-out lives in the SAME place as every other "email me when…" setting:
@@ -66,7 +67,8 @@ export async function notifyReplyByEmail(
 
     const enrollment = await Enrollment.findByPk(member.enrollment_id);
     const to = enrollment?.email;
-    if (!to) return { sent: false, reason: 'no_email' };
+    // The Communications Hub's "Colaberry Team" identity has a reserved, undeliverable address: no inbox to reach.
+    if (!to || to.toLowerCase().endsWith(`@${PROGRAM_IDENTITY_DOMAIN}`)) return { sent: false, reason: 'no_email' };
 
     const intake = (enrollment as any)?.intake_data_json;
     const prefs = intake && typeof intake === 'object' ? intake.preferences : null;

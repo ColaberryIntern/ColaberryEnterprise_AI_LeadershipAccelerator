@@ -27,6 +27,9 @@ jest.mock('../../../pointsService', () => ({
 jest.mock('../../../progression/communityXpService', () => ({ awardCommunityXp: jest.fn(async () => undefined) }));
 jest.mock('../../../subscriptionService', () => ({ activeCompEnrollmentIds: jest.fn(async () => new Set<string>()) }));
 jest.mock('../../../progression/progressionService', () => ({ getRungNamesForEnrollments: jest.fn(async () => new Map<string, string>()) }));
+// The deliveries table (and its message / destination / event chain) is not what this proves: no
+// other delivery has recorded a post here, which is what an empty answer says.
+jest.mock('../../../../models/CommsHubDelivery', () => ({ __esModule: true, default: { findAll: jest.fn(async () => []) } }));
 
 jest.setTimeout(120_000);
 

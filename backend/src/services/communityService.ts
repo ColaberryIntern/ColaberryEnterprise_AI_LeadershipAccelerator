@@ -297,7 +297,9 @@ function toFeedItem(
  * passes these; the public composer route never does.
  *  - cohortId: the feed to post into. A member posts into their own enrollment's cohort; the hub's
  *    "Colaberry Team" identity has no cohort and posts into each feed a message is sent to.
- *  - reward: false skips the author's post points (the program does not earn points).
+ *  - reward: false skips the author's post points at creation (the program does not earn points).
+ *    Likes on the post still credit its author the usual way; for the hub identity that ledger has no
+ *    cohort, so it never ranks on any leaderboard.
  */
 export interface CreatePostOptions { cohortId?: string; reward?: boolean }
 

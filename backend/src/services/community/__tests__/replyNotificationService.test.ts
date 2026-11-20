@@ -125,6 +125,12 @@ describe('notifyReplyByEmail', () => {
     await expect(notifyReplyByEmail(INPUT)).resolves.toEqual({ sent: false, reason: 'no_email' });
   });
 
+  it("never emails the Communications Hub's Colaberry Team (an undeliverable program address)", async () => {
+    mockEnrollmentFindByPk.mockResolvedValue({ id: 'e-team', email: 'colaberry-team@comms-hub.invalid', intake_data_json: null });
+    await expect(notifyReplyByEmail(INPUT)).resolves.toEqual({ sent: false, reason: 'no_email' });
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
   it('NEVER throws — a mail outage must not take the reply down with it', async () => {
     mockSend.mockRejectedValue(new Error('Mandrill 503'));
     await expect(notifyReplyByEmail(INPUT)).resolves.toEqual({ sent: false, reason: 'error' });

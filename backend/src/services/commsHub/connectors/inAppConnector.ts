@@ -22,7 +22,9 @@ import { ConnectorPermanentError, type Connector, type ConnectorDelivery, type C
  *
  * Retry safety and overlap: anyone who already has this message's announcement is skipped, so a
  * retry writes only the ones a crash missed, and someone in two audiences of one message (all
- * members and their cohort) is notified once.
+ * members and their cohort) is notified once. That skip is a read-then-write, so it is exact only
+ * when one message's in-app deliveries are not sent at the same moment: the worker (CH7.2) sends
+ * them one at a time per message (advisory lock on the message id held across the send).
  */
 export const ALL_MEMBERS = 'all_members';
 

@@ -54,9 +54,21 @@ jest.mock('../../../../models/CommunityMember', () => ({
 jest.mock('../../../../models/CommunityPost', () => ({
   __esModule: true,
   default: {
-    findOne: jest.fn(async ({ where }: { where: Row }) => {
+    findAll: jest.fn(async ({ where }: { where: Row }) => {
       const since = Object.values(Object.getOwnPropertySymbols(where.created_at as object).map((s) => (where.created_at as Record<symbol, Date>)[s]))[0];
-      return posts.find((p) => p.member_id === where.member_id && p.cohort_id === where.cohort_id && p.body === where.body && p.status === where.status && (p.created_at as Date) >= since) ?? null;
+      return posts.filter((p) => p.member_id === where.member_id && p.cohort_id === where.cohort_id && p.body === where.body && p.status === where.status && (p.created_at as Date) >= since);
+    }),
+  },
+}));
+// Deliveries that already recorded a post as theirs (provider_message_id), by delivery id.
+let recorded: Array<{ id: string; provider_message_id: string }> = [];
+jest.mock('../../../../models/CommsHubDelivery', () => ({
+  __esModule: true,
+  default: {
+    findAll: jest.fn(async ({ where }: { where: Row }) => {
+      const ids = inOf(where.provider_message_id);
+      const notId = Object.getOwnPropertySymbols(where.id as object).map((s) => (where.id as Record<symbol, string>)[s])[0];
+      return recorded.filter((r) => ids.includes(r.provider_message_id) && r.id !== notId);
     }),
   },
 }));
@@ -84,7 +96,7 @@ const delivery = (o: Row = {}) => ({
 }) as never;
 
 beforeEach(() => {
-  posts = []; notifications = []; members = [];
+  posts = []; notifications = []; members = []; recorded = [];
   enrollments = [
     { id: 'e-ada', cohort_id: 'c-nov', status: 'active', portal_enabled: true },
     { id: 'e-bo', cohort_id: 'c-nov', status: 'active', portal_enabled: true },
@@ -137,6 +149,26 @@ describe('community post connector', () => {
     const r = await connectorFor('community_post').send(delivery());
     expect(r.already_done).toBe(false);
     expect(mockCreatePost).toHaveBeenCalledTimes(1);
+  });
+
+  it('a post with the same words that ANOTHER delivery recorded is not adopted: this delivery still posts', async () => {
+    await connectorFor('community_post').send(delivery({ deliveryId: 'dl-other', messageId: 'msg-2' }));
+    recorded.push({ id: 'dl-other', provider_message_id: 'post-1' });
+    const r = await connectorFor('community_post').send(delivery());
+    expect(mockCreatePost).toHaveBeenCalledTimes(2);
+    expect(r).toEqual({ provider_message_id: 'post-2', reached: 1, already_done: false });
+    // ...while this delivery's own unrecorded post is still found on its retry.
+    const again = await connectorFor('community_post').send(delivery());
+    expect(again).toEqual({ provider_message_id: 'post-2', reached: 1, already_done: true });
+  });
+
+  it("media goes through the composer's own rule: a relative or non-http link is refused, not posted", async () => {
+    await expect(connectorFor('community_post').send(delivery({ media_urls: ['/api/comms-hub/thumbnails/e1/3x1.png'] }))).rejects.toMatchObject({ reason: 'bad_media' });
+    await expect(connectorFor('community_post').send(delivery({ media_urls: ['javascript:alert(1)'] }))).rejects.toMatchObject({ reason: 'bad_media' });
+    await expect(connectorFor('community_post').send(delivery({ draft: { title: null, body: 'x'.repeat(10001) } }))).rejects.toMatchObject({ reason: 'too_long' });
+    expect(mockCreatePost).not.toHaveBeenCalled();
+    await connectorFor('community_post').send(delivery({ media_urls: ['/api/portal/community/media/abc.png'] }));
+    expect(mockCreatePost.mock.calls[0][1].media_urls).toEqual(['/api/portal/community/media/abc.png']);
   });
 
   it('failure: the community service throws, and the error reaches the worker (the delivery fails with it)', async () => {
