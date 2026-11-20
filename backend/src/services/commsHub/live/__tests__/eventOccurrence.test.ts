@@ -35,7 +35,7 @@ jest.mock('../../../../config/database', () => {
 let lastKey = '';
 let lastRow: Row = {};
 const mockCreate = jest.fn(async (row: Row) => { created += 1; lastKey = row.occurrence_key; lastRow = row; return { id: `occ${created}`, ...row }; });
-jest.mock('../../../../models/BroadcastOccurrence', () => ({ __esModule: true, default: { create: (...a: unknown[]) => mockCreate(...(a as [Row])) } }));
+jest.mock('../../../../models/BroadcastOccurrence', () => ({ __esModule: true, BROADCAST_ACCESS_MODES: ['free', 'paid', 'preview', 'private'], default: { create: (...a: unknown[]) => mockCreate(...(a as [Row])) } }));
 const cohorts: Record<string, Row> = { c1: { id: 'c1', name: 'November 2026', cohort_type: 'accelerator' }, c9: { id: 'c9', name: 'Explorer', cohort_type: 'explorer' } };
 jest.mock('../../../../models/CommsHubEvent', () => ({ __esModule: true, default: {} }));
 jest.mock('../../../../models/Cohort', () => ({ __esModule: true, default: { findByPk: jest.fn(async (id: string) => cohorts[id] ?? null) } }));

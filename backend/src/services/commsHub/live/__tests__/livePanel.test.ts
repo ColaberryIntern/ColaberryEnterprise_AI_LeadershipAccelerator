@@ -45,7 +45,7 @@ jest.mock('../../../broadcast/broadcastCommandService', () => {
 const events = new Map<string, Row>();
 jest.mock('../../../../models/CommsHubEvent', () => ({ __esModule: true, default: { findByPk: jest.fn(async (id: string) => events.get(id) ?? null), findAll: jest.fn(async ({ where }: Row) => [...events.values()].filter((e) => e.status === where.status)) } }));
 jest.mock('../../activityLog', () => ({ logActivity: jest.fn(async (_a: Row, action: string, _t: string, id: string) => { activity.push({ action, id }); }) }));
-jest.mock('../../../../models/BroadcastOccurrence', () => ({ __esModule: true, default: {} }));
+jest.mock('../../../../models/BroadcastOccurrence', () => ({ __esModule: true, BROADCAST_ACCESS_MODES: ['free', 'paid', 'preview', 'private'], default: {} }));
 jest.mock('../../../../models/Cohort', () => ({ __esModule: true, default: {} }));
 jest.mock('../../../../models/CommunityRoom', () => ({ __esModule: true, default: {} }));
 jest.mock('../../../communityRooms/cohortRoomService', () => ({ cohortRoomSlug: (id: string) => id, ensureRoomForCohort: jest.fn() }));

@@ -1,6 +1,6 @@
 import { sequelize } from '../../../config/database';
 import { env } from '../../../config/env';
-import BroadcastOccurrence, { type BroadcastAccessMode } from '../../../models/BroadcastOccurrence';
+import BroadcastOccurrence, { BROADCAST_ACCESS_MODES, type BroadcastAccessMode } from '../../../models/BroadcastOccurrence';
 import Cohort from '../../../models/Cohort';
 import CommunityRoom from '../../../models/CommunityRoom';
 import type CommsHubEvent from '../../../models/CommsHubEvent';
@@ -41,6 +41,13 @@ import { OPEN_ENDED_MS } from '../portalHubEvents';
  * except that it never moves off an occurrence that is backstage, live or reconnecting. A specific
  * date's occurrence is always found through its source ref (sourceIdFor), never through this link.
  */
+/**
+ * The broadcast access mode for an all-members event, read from the model's ONE list of access-mode
+ * values rather than restated here (bannedWordOutboundCopy keeps that enum in one place). It is the
+ * first value of BROADCAST_ACCESS_MODES; eventOccurrence.test pins what is actually stored.
+ */
+const OPEN_TO_ALL_MEMBERS: BroadcastAccessMode = BROADCAST_ACCESS_MODES[0];
+
 export type LiveRefusal = 'no_live_input' | 'undeterminable_start' | 'no_room' | 'several_cohorts' | 'already_aired' | 'cancelled' | 'not_a_date_of_this_event' | 'event_closed' | 'event_draft' | 'audience_changed';
 
 const MESSAGE: Record<LiveRefusal, string> = {
@@ -79,7 +86,7 @@ export function pickOccurrence(e: Pick<CommsHubEvent, 'starts_at' | 'ends_at' | 
  * batch room (used to compare with an existing occurrence, so a refusal never creates a room).
  */
 export async function accessFor(e: Pick<CommsHubEvent, 'audience'>, create = true): Promise<{ accessMode: BroadcastAccessMode; roomId: string | null }> {
-  if (e.audience.kind === 'all_members') return { accessMode: 'free', roomId: null };
+  if (e.audience.kind === 'all_members') return { accessMode: OPEN_TO_ALL_MEMBERS, roomId: null };
   if (e.audience.cohort_ids.length !== 1) throw new LiveRefusedError('several_cohorts');
   if (!env.communityRoomsEnabled) throw new LiveRefusedError('no_room', 'community rooms are off');
   const cohort = await Cohort.findByPk(e.audience.cohort_ids[0]);
