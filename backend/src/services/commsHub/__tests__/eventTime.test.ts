@@ -13,6 +13,12 @@ describe('CH2.2 Central input becomes the right instant', () => {
     expect(toEventFields(parse({ date: '2026-11-24' })).starts_at.toISOString()).toBe('2026-11-25T00:00:00.000Z');
   });
 
+  it('6:30 PM on the change days themselves takes the offset of that evening', () => {
+    // Sun 2026-11-01: CST from 2:00 AM, so 18:30 CST = 00:30Z next day. Sun 2027-03-14: CDT from 2:00 AM, so 23:30Z.
+    expect(toEventFields(parse({ date: '2026-11-01', start_time: '18:30' })).starts_at.toISOString()).toBe('2026-11-02T00:30:00.000Z');
+    expect(toEventFields(parse({ date: '2027-03-14', start_time: '18:30' })).starts_at.toISOString()).toBe('2027-03-14T23:30:00.000Z');
+  });
+
   it('an end time on the same day becomes ends_at; end before start is refused', () => {
     expect(toEventFields(parse({ end_time: '19:30' })).ends_at!.toISOString()).toBe('2026-10-28T00:30:00.000Z');
     expect(() => toEventFields(parse({ end_time: '17:00' }))).toThrow(EventInputError);

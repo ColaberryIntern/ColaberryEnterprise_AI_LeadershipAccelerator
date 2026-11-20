@@ -75,10 +75,24 @@ export async function createEvent(input: EventInput, actor: Actor): Promise<Even
   return toView(created);
 }
 
+/**
+ * A key-order-free serialization. Postgres JSONB does not keep object key order (it stores
+ * {calendar, events_page, campus_rail} back as {calendar, campus_rail, events_page}), so comparing
+ * plain JSON.stringify output would call every re-save of an unchanged event a change.
+ */
+export function canonical(v: unknown): string {
+  if (v instanceof Date) return JSON.stringify(v.toISOString());
+  if (Array.isArray(v)) return `[${v.map(canonical).join(',')}]`;
+  if (v && typeof v === 'object') {
+    const o = v as Record<string, unknown>;
+    return `{${Object.keys(o).filter((k) => o[k] !== undefined).sort().map((k) => `${JSON.stringify(k)}:${canonical(o[k])}`).join(',')}}`;
+  }
+  return JSON.stringify(v ?? null);
+}
+
 /** Field names whose stored value differs from the incoming value. */
-function changedFields(e: CommsHubEvent, next: Partial<CommsHubEventAttributes>): string[] {
-  const norm = (v: unknown): string => JSON.stringify(v instanceof Date ? v.toISOString() : v ?? null);
-  return COMPARED.filter((k) => k in next && norm(e.get(k)) !== norm(next[k]));
+export function changedFields(e: CommsHubEvent, next: Partial<CommsHubEventAttributes>): string[] {
+  return COMPARED.filter((k) => k in next && canonical(e.get(k)) !== canonical(next[k]));
 }
 
 export async function updateEvent(id: string, input: EventInput, actor: Actor): Promise<EventView> {

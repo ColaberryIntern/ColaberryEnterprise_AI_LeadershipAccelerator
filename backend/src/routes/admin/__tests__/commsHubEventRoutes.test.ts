@@ -59,6 +59,14 @@ describe('CH2.2 events API', () => {
     expect(svc.createEvent).not.toHaveBeenCalled();
   });
 
+  it('a rule zod cannot see (end before start) is a 400 with the plain reason', async () => {
+    const { EventInputError } = jest.requireActual('../../../services/commsHub/eventInput');
+    (svc.createEvent as jest.Mock).mockRejectedValueOnce(new EventInputError('The end time must be after the start time.'));
+    const res = await call('post', '/api/admin/comms-hub/events', { body: { ...body, end_time: '17:00' } });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toEqual({ error: 'The end time must be after the start time.', error_class: 'ValidationError' });
+  });
+
   it('a bad id or scope is 400 before the service runs', async () => {
     expect((await call('get', '/api/admin/comms-hub/events/:id', { params: { id: 'nope' } })).statusCode).toBe(400);
     expect((await call('get', '/api/admin/comms-hub/events', { query: { scope: 'everything' } })).statusCode).toBe(400);

@@ -6,7 +6,9 @@ import type { CommsHubEventAttributes } from '../../models/CommsHubEvent';
 
 /**
  * What the event form sends (CH2.2). The organizer types a Central date and clock time; this is
- * the one place they become instants (centralDate.classInstant), so no other file parses dates.
+ * the one place they become instants (centralDate.classInstant). Elsewhere in the hub, dates are
+ * only stepped on the calendar (noon-UTC "YYYY-MM-DD" arithmetic, explicit Z), never read as a
+ * wall clock.
  */
 const DATE = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be YYYY-MM-DD');
 const TIME = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'time must be HH:MM (24-hour, Central)');

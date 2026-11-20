@@ -6,11 +6,30 @@ type Row = Record<string, any>;
 const store = new Map<string, FakeEvent>();
 let seq = 0;
 
+/**
+ * Stores JSON columns the way Postgres JSONB hands them back: object keys reordered (JSONB sorts by
+ * key length, then bytes). Without this the fake hid the CH2.2 attempt-1 defect, where an unchanged
+ * placement read back as {calendar, campus_rail, events_page} counted as an edit.
+ */
+const JSON_COLS = ['audience', 'repeat_rule', 'hosts', 'placement'];
+function asJsonb(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(asJsonb);
+  if (v && typeof v === 'object' && !(v instanceof Date)) {
+    const o = v as Row;
+    return Object.fromEntries(Object.keys(o).sort((a, b) => a.length - b.length || (a < b ? -1 : 1)).map((k) => [k, asJsonb(o[k])]));
+  }
+  return v;
+}
+function stored(d: Row): Row {
+  const out = { ...d };
+  for (const c of JSON_COLS) if (c in out) out[c] = asJsonb(out[c]);
+  return out;
+}
 class FakeEvent {
   data: Row;
-  constructor(d: Row) { this.data = { ...d }; Object.assign(this, this.data); }
+  constructor(d: Row) { this.data = stored(d); Object.assign(this, this.data); }
   get(k: string) { return this.data[k]; }
-  async update(f: Row) { this.data = { ...this.data, ...f, updated_at: new Date() }; Object.assign(this, this.data); return this; }
+  async update(f: Row) { this.data = stored({ ...this.data, ...f, updated_at: new Date() }); Object.assign(this, this.data); return this; }
 }
 
 jest.mock('../../../config/database', () => ({
@@ -83,11 +102,23 @@ describe('CH2.2 create writes through to the calendar', () => {
 });
 
 describe('CH2.2 update, duplicate, cancel', () => {
-  it('the same payload twice changes nothing and logs one activity row in total', async () => {
-    const v = await createEvent(input(), JACKIE);
-    await updateEvent(v.id, input(), JACKIE);
-    await updateEvent(v.id, input(), JACKIE);
+  it('the same payload twice changes nothing and logs one activity row in total, with JSONB key order', async () => {
+    const payload = input({ hosts: [{ name: 'Aleem', role: 'Design' }], repeat: { freq: 'weekly', until: '2026-12-29' } });
+    const v = await createEvent(payload, JACKIE);
+    // Prove the fake really reorders, so this test can fail the way Postgres would make it fail.
+    expect(Object.keys(store.get(v.id)!.get('placement'))).toEqual(['calendar', 'campus_rail', 'events_page']);
+    await updateEvent(v.id, payload, JACKIE);
+    await updateEvent(v.id, payload, JACKIE);
     expect(actions()).toEqual(['event.created']);
+    expect(mockDestroy).toHaveBeenCalledTimes(1); // only the create's sync; no re-sync on a no-op save
+  });
+
+  it('canonical() ignores key order but not values', async () => {
+    const { canonical } = await import('../eventService');
+    expect(canonical({ a: 1, b: { c: 2, d: [1, { e: 3, f: 4 }] } })).toBe(canonical({ b: { d: [1, { f: 4, e: 3 }], c: 2 }, a: 1 }));
+    expect(canonical({ a: 1 })).not.toBe(canonical({ a: 2 }));
+    expect(canonical([1, 2])).not.toBe(canonical([2, 1]));
+    expect(canonical(new Date('2026-12-01T00:00:00Z'))).toBe(canonical(new Date('2026-12-01T00:00:00.000Z')));
   });
 
   it('a real edit re-syncs the calendar and records which fields changed', async () => {
