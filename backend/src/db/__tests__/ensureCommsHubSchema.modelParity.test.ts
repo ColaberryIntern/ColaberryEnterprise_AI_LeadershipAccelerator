@@ -52,8 +52,8 @@ describe('ensureCommsHubSchema: safe to run on every boot', () => {
 
   it('touches no existing table except the one nullable column, and drops nothing', () => {
     for (const s of COMMS_HUB_SCHEMA_STATEMENTS) {
-      // ON DELETE CASCADE on the thumbnails FK is a rule, not a statement; strip it before looking for deletes.
-      expect(s.replace(/ON DELETE CASCADE/gi, '')).not.toMatch(/\bDROP\b|\bTRUNCATE\b|\bDELETE\b|ALTER COLUMN/i);
+      // ON DELETE CASCADE / RESTRICT on a FK is a rule, not a statement; strip it before looking for deletes.
+      expect(s.replace(/ON DELETE (CASCADE|RESTRICT)/gi, '')).not.toMatch(/\bDROP\b|\bTRUNCATE\b|\bDELETE\b|ALTER COLUMN/i);
       const altered = /ALTER TABLE (\w+)/i.exec(s)?.[1];
       if (altered && !TABLES.includes(altered)) expect(s).toMatch(/ALTER TABLE community_events ADD COLUMN IF NOT EXISTS hub_event_id UUID$/);
     }
@@ -82,8 +82,19 @@ describe('CH6.1 the guarantees the message tables carry', () => {
     expect(joined).toMatch(/CHECK \(version >= 1\)/);
   });
 
-  it('a delivery cannot happen twice: the idempotency key is unique', () => {
+  it('a delivery cannot happen twice: ONE row per destination per message, and the idempotency key is unique', () => {
     expect(joined).toMatch(/CREATE UNIQUE INDEX IF NOT EXISTS uq_comms_hub_deliveries_key ON comms_hub_deliveries \(idempotency_key\)/);
+    expect(joined).toMatch(/CREATE UNIQUE INDEX IF NOT EXISTS uq_comms_hub_deliveries_destination ON comms_hub_deliveries \(message_id, destination_id\)/);
+  });
+
+  it('delivery history survives a recipients edit: a destination with deliveries cannot be deleted', () => {
+    expect(joined).toMatch(/destination_id UUID NOT NULL REFERENCES comms_hub_destinations\(id\) ON DELETE RESTRICT/);
+  });
+
+  it('one approval in force per message; a plan message is the kind of its plan entry; a claimed send can be recovered', () => {
+    expect(joined).toMatch(/uq_comms_hub_approvals_active ON comms_hub_approvals \(message_id\) WHERE voided_at IS NULL/);
+    expect(joined).toMatch(/CHECK \(plan_kind IS NULL OR kind = plan_kind\)/);
+    expect(joined).toMatch(/claimed_at TIMESTAMPTZ/);
   });
 
   it('a promotion-plan message is unique per event + kind + occurrence; ad-hoc messages are not constrained', () => {
@@ -95,11 +106,11 @@ describe('CH6.1 the guarantees the message tables carry', () => {
     expect(joined).toMatch(/CHECK \(event_id IS NOT NULL OR subject IS NOT NULL\)/);
   });
 
-  it('every message-child table hangs off comms_hub_messages, and deliveries also off their destination', () => {
+  it('every message-child table hangs off comms_hub_messages (cascade), deliveries also off their destination (restrict)', () => {
     for (const t of ['comms_hub_drafts', 'comms_hub_destinations', 'comms_hub_approvals', 'comms_hub_deliveries']) {
       const ddl = COMMS_HUB_SCHEMA_STATEMENTS.find((x) => x.includes(`CREATE TABLE IF NOT EXISTS ${t} (`))!;
       expect(ddl).toMatch(/message_id UUID NOT NULL REFERENCES comms_hub_messages\(id\) ON DELETE CASCADE/);
     }
-    expect(joined).toMatch(/destination_id UUID NOT NULL REFERENCES comms_hub_destinations\(id\) ON DELETE CASCADE/);
+    expect(joined).toMatch(/destination_id UUID NOT NULL REFERENCES comms_hub_destinations\(id\) ON DELETE RESTRICT/);
   });
 });

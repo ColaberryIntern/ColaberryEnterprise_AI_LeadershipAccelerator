@@ -17,6 +17,7 @@ export interface CommsHubDeliveryAttributes {
   status?: CommsHubDeliveryStatus;
   attempt_count?: number;
   next_attempt_at?: Date | null;
+  claimed_at?: Date | null;
   provider_message_id?: string | null;
   error?: string | null;
   sent_at?: Date | null;
@@ -33,6 +34,7 @@ class CommsHubDelivery extends Model<CommsHubDeliveryAttributes> implements Comm
   declare status: CommsHubDeliveryStatus;
   declare attempt_count: number;
   declare next_attempt_at: Date | null;
+  declare claimed_at: Date | null;
   declare provider_message_id: string | null;
   declare error: string | null;
   declare sent_at: Date | null;
@@ -50,6 +52,7 @@ CommsHubDelivery.init(
     status: { type: DataTypes.STRING(16), allowNull: false, defaultValue: 'pending' },
     attempt_count: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
     next_attempt_at: { type: DataTypes.DATE, allowNull: true },
+    claimed_at: { type: DataTypes.DATE, allowNull: true },
     provider_message_id: { type: DataTypes.STRING(255), allowNull: true },
     error: { type: DataTypes.TEXT, allowNull: true },
     sent_at: { type: DataTypes.DATE, allowNull: true },

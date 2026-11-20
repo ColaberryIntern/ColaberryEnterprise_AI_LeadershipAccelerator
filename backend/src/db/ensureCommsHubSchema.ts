@@ -22,8 +22,9 @@ import { sequelize } from '../config/database';
  * - comms_hub_destinations: who it goes to, per channel (a cohort feed, an in-app audience).
  * - comms_hub_approvals: who approved, when, and the hash of the exact drafts, destinations and send
  *   time approved. A change voids it (voided_at + reason); rows are never deleted.
- * - comms_hub_deliveries: one row per destination per send, with a UNIQUE idempotency key, so a
- *   retried send can never post twice.
+ * - comms_hub_deliveries: ONE row per destination per message (unique), with a UNIQUE idempotency key,
+ *   so neither a retry nor a re-approval can post twice; a destination with deliveries cannot be
+ *   deleted (its history stays).
  */
 export const COMMS_HUB_EVENT_TYPES = ['session', 'open_house', 'office_hours', 'workshop', 'other'] as const;
 export const COMMS_HUB_EVENT_STATUSES = ['draft', 'scheduled', 'live', 'ended', 'cancelled'] as const;
@@ -153,6 +154,9 @@ export const COMMS_HUB_SCHEMA_STATEMENTS: readonly string[] = [
      CHECK (plan_kind IS NULL OR (plan_kind IN (${list(COMMS_HUB_PLAN_KINDS)}) AND event_id IS NOT NULL AND occurrence_starts_at IS NOT NULL))`,
   `ALTER TABLE comms_hub_messages ADD CONSTRAINT comms_hub_messages_about_check
      CHECK (event_id IS NOT NULL OR subject IS NOT NULL)`,
+  // A plan message's kind is its plan entry (an Announcement row is an announcement).
+  `ALTER TABLE comms_hub_messages ADD CONSTRAINT comms_hub_messages_plan_kind_match
+     CHECK (plan_kind IS NULL OR kind = plan_kind)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS uq_comms_hub_messages_plan ON comms_hub_messages (event_id, plan_kind, occurrence_starts_at) WHERE plan_kind IS NOT NULL`,
   `CREATE INDEX IF NOT EXISTS idx_comms_hub_messages_status ON comms_hub_messages (status, send_at)`,
   `CREATE INDEX IF NOT EXISTS idx_comms_hub_messages_event ON comms_hub_messages (event_id)`,
@@ -199,16 +203,22 @@ export const COMMS_HUB_SCHEMA_STATEMENTS: readonly string[] = [
      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
    )`,
   `CREATE INDEX IF NOT EXISTS idx_comms_hub_approvals_message ON comms_hub_approvals (message_id, approved_at DESC)`,
+  // At most one approval in force per message: a new approval needs the previous one voided first.
+  `CREATE UNIQUE INDEX IF NOT EXISTS uq_comms_hub_approvals_active ON comms_hub_approvals (message_id) WHERE voided_at IS NULL`,
 
   `CREATE TABLE IF NOT EXISTS comms_hub_deliveries (
      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
      message_id UUID NOT NULL REFERENCES comms_hub_messages(id) ON DELETE CASCADE,
-     destination_id UUID NOT NULL REFERENCES comms_hub_destinations(id) ON DELETE CASCADE,
+     -- RESTRICT: a destination that has been sent to keeps its delivery history (CH7.4 shows per-row
+     -- results); recipients that were never sent to can still be removed.
+     destination_id UUID NOT NULL REFERENCES comms_hub_destinations(id) ON DELETE RESTRICT,
      channel VARCHAR(24) NOT NULL,
      idempotency_key VARCHAR(128) NOT NULL,
      status VARCHAR(16) NOT NULL DEFAULT 'pending',
      attempt_count INTEGER NOT NULL DEFAULT 0,
      next_attempt_at TIMESTAMPTZ,
+     -- When a worker claimed it (CH7.2): a row left 'sending' by a crash is reclaimable after a lease.
+     claimed_at TIMESTAMPTZ,
      provider_message_id VARCHAR(255),
      error TEXT,
      sent_at TIMESTAMPTZ,
@@ -220,6 +230,10 @@ export const COMMS_HUB_SCHEMA_STATEMENTS: readonly string[] = [
   `ALTER TABLE comms_hub_deliveries ADD CONSTRAINT comms_hub_deliveries_channel_check
      CHECK (channel IN (${list(COMMS_HUB_CHANNELS)}))`,
   `CREATE UNIQUE INDEX IF NOT EXISTS uq_comms_hub_deliveries_key ON comms_hub_deliveries (idempotency_key)`,
+  // ONE delivery row per destination per message (the build prompt's Data table): an edit and
+  // re-approval after a partly failed send reuses the row, so a destination that already received the
+  // post cannot get a second row; CH7.2 retries only rows that are not sent, on their own key.
+  `CREATE UNIQUE INDEX IF NOT EXISTS uq_comms_hub_deliveries_destination ON comms_hub_deliveries (message_id, destination_id)`,
   `CREATE INDEX IF NOT EXISTS idx_comms_hub_deliveries_due ON comms_hub_deliveries (status, next_attempt_at)`,
   `CREATE INDEX IF NOT EXISTS idx_comms_hub_deliveries_message ON comms_hub_deliveries (message_id)`,
 
