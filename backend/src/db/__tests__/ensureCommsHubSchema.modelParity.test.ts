@@ -98,7 +98,7 @@ describe('CH6.1 the guarantees the message tables carry', () => {
   });
 
   it('a promotion-plan message is unique per event + kind + occurrence; ad-hoc messages are not constrained', () => {
-    expect(joined).toMatch(/uq_comms_hub_messages_plan ON comms_hub_messages \(event_id, plan_kind, occurrence_starts_at\) WHERE plan_kind IS NOT NULL/);
+    expect(joined).toMatch(/uq_comms_hub_messages_plan ON comms_hub_messages \(event_id, plan_kind, occurrence_starts_at\) WHERE plan_kind IS NOT NULL AND status <> 'cancelled'/);
     expect(joined).toMatch(/plan_kind IS NULL OR \(plan_kind IN \([^)]*\) AND event_id IS NOT NULL AND occurrence_starts_at IS NOT NULL\)/);
   });
 

@@ -158,7 +158,8 @@ export const COMMS_HUB_SCHEMA_STATEMENTS: readonly string[] = [
   // A plan message's kind is its plan entry (an Announcement row is an announcement).
   `ALTER TABLE comms_hub_messages ADD CONSTRAINT comms_hub_messages_plan_kind_match
      CHECK (plan_kind IS NULL OR kind = plan_kind)`,
-  `CREATE UNIQUE INDEX IF NOT EXISTS uq_comms_hub_messages_plan ON comms_hub_messages (event_id, plan_kind, occurrence_starts_at) WHERE plan_kind IS NOT NULL`,
+  // Cancelled plan messages stay as history and do not block a new one (untick, then tick again).
+  `CREATE UNIQUE INDEX IF NOT EXISTS uq_comms_hub_messages_plan ON comms_hub_messages (event_id, plan_kind, occurrence_starts_at) WHERE plan_kind IS NOT NULL AND status <> 'cancelled'`,
   `CREATE INDEX IF NOT EXISTS idx_comms_hub_messages_status ON comms_hub_messages (status, send_at)`,
   `CREATE INDEX IF NOT EXISTS idx_comms_hub_messages_event ON comms_hub_messages (event_id)`,
 

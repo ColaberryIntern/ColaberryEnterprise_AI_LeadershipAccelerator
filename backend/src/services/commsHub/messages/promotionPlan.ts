@@ -1,7 +1,7 @@
 import { Op } from 'sequelize';
 import CommsHubEvent from '../../../models/CommsHubEvent';
 import CommsHubMessage, { type CommsHubMessageStatus, type CommsHubPlanKind } from '../../../models/CommsHubMessage';
-import { centralDateKey, centralWallClockToInstant } from '../../centralDate';
+import { CENTRAL_TZ, centralDateKey } from '../../centralDate';
 import { centralClock, expandOccurrences } from '../eventRecurrence';
 import { OPEN_ENDED_MS } from '../portalHubEvents';
 import { logActivity, type Actor } from '../activityLog';
@@ -38,7 +38,24 @@ function shiftDate(key: string, days: number): string {
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 }
-const atCentral = (dateKey: string, hhmm: string): Date => centralWallClockToInstant(new Date(`${dateKey}T${hhmm}:00Z`));
+const offsetFmt = new Intl.DateTimeFormat('en-US', { timeZone: CENTRAL_TZ, year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', hourCycle: 'h23' });
+/** Minutes Central is behind UTC at this instant (300 in CDT, 360 in CST). */
+function centralOffsetMinutes(at: number): number {
+  const p = Object.fromEntries(offsetFmt.formatToParts(new Date(at)).map((x) => [x.type, Number(x.value)]));
+  return Math.round((at - Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute)) / 60_000);
+}
+/**
+ * The instant a Central wall clock names. Two passes, so the offset is the one in force AT the target
+ * (a single pass uses the offset of a guess that can sit on the other side of a change: an early-morning
+ * time the day after a change came out an hour off). A wall time that does not exist (the skipped hour
+ * in spring) resolves forward, which is what a clock does.
+ */
+export function atCentral(dateKey: string, hhmm: string): Date {
+  const naive = Date.parse(`${dateKey}T${hhmm}:00Z`);
+  let guess = naive + centralOffsetMinutes(naive) * 60_000;
+  guess = naive + centralOffsetMinutes(guess) * 60_000;
+  return new Date(guess);
+}
 
 /** When a plan row's message for this occurrence goes out. */
 export function sendTimeFor(kind: CommsHubPlanKind, startsAt: Date, endsAt: Date | null): Date {
@@ -57,8 +74,11 @@ export interface EnsureResult { created: number; existing: number; skipped: Arra
 /** Create every message the event's ticked rows need now (idempotent). */
 export async function ensurePlan(event: CommsHubEvent, actor: Actor, now: Date = new Date()): Promise<EnsureResult> {
   const out: EnsureResult = { created: 0, existing: 0, skipped: [] };
-  if (event.status !== 'scheduled' && event.status !== 'live') return out;
-  const kinds = (event.promotion_plan ?? []).filter((k): k is CommsHubPlanKind => (PLAN_KINDS as string[]).includes(k));
+  // An ended event (its stream is over: livePanel.syncEventStatus) still gets its Recording and thanks.
+  if (event.status !== 'scheduled' && event.status !== 'live' && event.status !== 'ended') return out;
+  const kinds = (event.promotion_plan ?? []).filter((k): k is CommsHubPlanKind => (PLAN_KINDS as string[]).includes(k))
+    .filter((k) => event.status !== 'ended' || k === 'recording_thanks');
+  const replies = new Map<CommsHubPlanKind, Awaited<ReturnType<typeof createPlanMessage>>['reply']>();
   const windowEnd = now.getTime() + PLAN_WINDOW_DAYS * 86_400_000;
   const occurrences = expandOccurrences(event.starts_at, event.ends_at, event.repeat_rule);
   for (const kind of kinds) {
@@ -71,12 +91,16 @@ export async function ensurePlan(event: CommsHubEvent, actor: Actor, now: Date =
       if (!due) continue;
       let sendAt = sendTimeFor(kind, o.starts_at, o.ends_at);
       if (sendAt.getTime() <= now.getTime()) {
-        // The thanks goes out as soon as it can; an announcement or reminder whose moment has passed is skipped, not sent late.
-        if (kind !== 'recording_thanks') { out.skipped.push({ kind, occurrence: o.starts_at.toISOString(), reason: 'its send time has already passed' }); continue; }
+        // Late: the thanks goes out as soon as it can; an announcement still goes out soon while the event is
+        // more than a day away (a short-notice event keeps its announcement); a reminder or a starting-soon
+        // whose moment has passed is skipped, not sent late, and the organizer is told.
+        const announceLate = kind === 'announcement' && start - now.getTime() > 86_400_000;
+        if (kind !== 'recording_thanks' && !announceLate) { out.skipped.push({ kind, occurrence: o.starts_at.toISOString(), reason: 'its send time has already passed' }); continue; }
         sendAt = new Date(now.getTime() + 5 * 60_000);
       }
       // eslint-disable-next-line no-await-in-loop
-      const r = await createPlanMessage(event, { kind, occurrence: o.starts_at, sendAt }, actor, now);
+      const r = await createPlanMessage(event, { kind, occurrence: o.starts_at, sendAt }, actor, now, replies.get(kind));
+      if (r.reply && !replies.has(kind)) replies.set(kind, r.reply);
       if (r.created) out.created += 1; else out.existing += 1;
     }
   }
@@ -92,7 +116,7 @@ const OPEN: CommsHubMessageStatus[] = ['draft', 'needs_approval'];
 export async function setPlan(eventId: string, kinds: CommsHubPlanKind[], actor: Actor, now: Date = new Date()): Promise<{ plan: PlanView; result: EnsureResult }> {
   const event = await CommsHubEvent.findByPk(eventId);
   if (!event) throw new MessageRuleError('That event was not found.', 404, 'not_found');
-  if (event.status === 'cancelled' || event.status === 'ended' || event.status === 'draft') throw new MessageRuleError(`A ${event.status} event has no promotion plan.`, 409, 'event_closed');
+  if (event.status === 'cancelled' || event.status === 'draft') throw new MessageRuleError(`A ${event.status} event has no promotion plan.`, 409, 'event_closed');
   const ticked = PLAN_KINDS.filter((k) => kinds.includes(k));
   const unticked = PLAN_KINDS.filter((k) => !ticked.includes(k));
   await event.update({ promotion_plan: ticked });
@@ -131,7 +155,8 @@ export async function readPlan(eventId: string, now: Date = new Date()): Promise
 
 /** The worker's hook (CH7.2): keep every event's plan current as occurrences come into the window or end. */
 export async function ensurePlansForUpcoming(actor: Actor, now: Date = new Date()): Promise<number> {
-  const events = await CommsHubEvent.findAll({ where: { status: { [Op.in]: ['scheduled', 'live'] } } });
+  // Ended events too: their Recording and thanks becomes due after they end.
+  const events = await CommsHubEvent.findAll({ where: { status: { [Op.in]: ['scheduled', 'live', 'ended'] } } });
   let created = 0;
   for (const e of events) {
     if (!(e.promotion_plan ?? []).length) continue;

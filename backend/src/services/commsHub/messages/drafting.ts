@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { Op } from 'sequelize';
 import type { Transaction } from 'sequelize';
 import { sequelize } from '../../../config/database';
 import CommsHubEvent from '../../../models/CommsHubEvent';
@@ -134,11 +135,16 @@ export async function createDraftMessage(input: MessageInput, actor: Actor, now:
  * event + kind + occurrence: an existing one is returned untouched, and a lost race converges on the
  * row that won (the unique index decides).
  */
-export async function createPlanMessage(event: CommsHubEvent, plan: { kind: CommsHubPlanKind; occurrence: Date; sendAt: Date }, actor: Actor, now: Date = new Date()): Promise<{ message: CommsHubMessage; created: boolean }> {
-  const where = { event_id: event.id, plan_kind: plan.kind, occurrence_starts_at: plan.occurrence };
+export async function createPlanMessage(
+  event: CommsHubEvent, plan: { kind: CommsHubPlanKind; occurrence: Date; sendAt: Date }, actor: Actor, now: Date = new Date(),
+  /** A reply already drafted for this kind (the prose is the same for every date; facts are filled per occurrence). */
+  reuse?: DraftReply,
+): Promise<{ message: CommsHubMessage; created: boolean; reply?: DraftReply }> {
+  // A cancelled message (the row was unticked) is history: it does not count, so ticking again drafts a new one.
+  const where = { event_id: event.id, plan_kind: plan.kind, occurrence_starts_at: plan.occurrence, status: { [Op.ne]: 'cancelled' as const } };
   const existing = await CommsHubMessage.findOne({ where });
   if (existing) return { message: existing, created: false };
-  const reply = await askModel({ about: promptAbout(event, null), kind: plan.kind, tone: null, notes: null });
+  const reply = reuse ?? await askModel({ about: promptAbout(event, null), kind: plan.kind, tone: null, notes: null });
   const recommended = await recommendDestinations(event);
   try {
     return await sequelize.transaction(async (t) => {
@@ -151,7 +157,7 @@ export async function createPlanMessage(event: CommsHubEvent, plan: { kind: Comm
         await CommsHubDestination.create({ message_id: m.id, channel: r.channel, target_type: r.target_type, target_id: r.target_id, label: r.label }, { transaction: t });
       }
       await logActivity(actor, 'message.planned', 'message', m.id, { event_id: event.id, plan_kind: plan.kind, occurrence: plan.occurrence.toISOString() }, t);
-      return { message: m, created: true };
+      return { message: m, created: true, reply };
     });
   } catch (err) {
     if ((err as { name?: string })?.name !== 'SequelizeUniqueConstraintError') throw err;

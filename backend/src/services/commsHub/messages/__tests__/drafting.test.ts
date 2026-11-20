@@ -18,7 +18,7 @@ jest.mock('../../../../models/CommsHubMessage', () => ({
   default: {
     create: jest.fn(async (r: Row) => { const m = { id: `m${messages.size + 1}`, occurrence_starts_at: null, ...r }; messages.set(m.id, m); return m; }),
     findByPk: jest.fn(async (id: string) => messages.get(id) ?? null),
-    findOne: jest.fn(async ({ where }: Row) => [...messages.values()].find((m) => m.event_id === where.event_id && m.plan_kind === where.plan_kind && m.occurrence_starts_at?.getTime() === where.occurrence_starts_at.getTime()) ?? null),
+    findOne: jest.fn(async ({ where }: Row) => [...messages.values()].find((m) => m.event_id === where.event_id && m.plan_kind === where.plan_kind && m.occurrence_starts_at?.getTime() === where.occurrence_starts_at.getTime() && (where.status ? m.status !== 'cancelled' : true)) ?? null),
   },
 }));
 jest.mock('../../../../models/CommsHubDraft', () => ({
@@ -169,5 +169,26 @@ describe('CH6.4 createPlanMessage', () => {
     (Msg.findOne as jest.Mock).mockResolvedValueOnce(null).mockResolvedValueOnce(winner);
     (Msg.create as jest.Mock).mockRejectedValueOnce(Object.assign(new Error('uq'), { name: 'SequelizeUniqueConstraintError' }));
     expect(await createPlanMessage(events.get('e1') as never, plan, JACKIE, NOW)).toEqual({ message: winner, created: false });
+  });
+});
+
+describe('CH6.4 attempt 2: createPlanMessage', () => {
+  it('a cancelled plan message does not count: ticking again drafts a new one', async () => {
+    mockLLM.mockResolvedValue(reply());
+    const plan = { kind: 'reminder' as const, occurrence: new Date('2026-12-02T00:00:00Z'), sendAt: new Date('2026-12-01T00:00:00Z') };
+    const a = await createPlanMessage(events.get('e1') as never, plan, JACKIE, NOW);
+    a.message.status = 'cancelled';
+    const b = await createPlanMessage(events.get('e1') as never, plan, JACKIE, NOW);
+    expect([b.created, b.message.id === a.message.id]).toEqual([true, false]);
+  });
+
+  it('a reused reply means no model call, and the facts are still those of this occurrence', async () => {
+    mockLLM.mockResolvedValue(reply());
+    const first = await createPlanMessage(events.get('e1') as never, { kind: 'reminder', occurrence: new Date('2026-12-02T00:00:00Z'), sendAt: new Date('2026-12-01T00:00:00Z') }, JACKIE, NOW);
+    mockLLM.mockClear();
+    events.get('e1')!.repeat_rule = { freq: 'weekly', until: '2027-01-31' };
+    await createPlanMessage(events.get('e1') as never, { kind: 'reminder', occurrence: new Date('2026-12-09T00:00:00Z'), sendAt: new Date('2026-12-08T00:00:00Z') }, JACKIE, NOW, first.reply);
+    expect(mockLLM).not.toHaveBeenCalled();
+    expect(drafts[drafts.length - 2].body).toContain('Tuesday, December 8 at 6:00 PM CST');
   });
 });

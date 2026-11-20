@@ -8,7 +8,7 @@ const withUpdate = (r: Row): Row => Object.assign(r, { update: jest.fn(async (p:
 
 jest.mock('../../../../models/CommsHubEvent', () => ({
   __esModule: true,
-  default: { findByPk: jest.fn(async (id: string) => events.get(id) ?? null), findAll: jest.fn(async () => [...events.values()].filter((e) => ['scheduled', 'live'].includes(e.status))) },
+  default: { findByPk: jest.fn(async (id: string) => events.get(id) ?? null), findAll: jest.fn(async ({ where }: Row) => { const allowed = Object.getOwnPropertySymbols(where.status).map((k) => where.status[k as never])[0] as string[]; return [...events.values()].filter((e) => allowed.includes(e.status)); }) },
 }));
 jest.mock('../../../../models/CommsHubMessage', () => ({
   __esModule: true,
@@ -31,7 +31,7 @@ jest.mock('../approvals', () => {
 // The drafting call is the real createPlanMessage's job (tested in drafting.test); here it is an idempotent store.
 jest.mock('../drafting', () => ({
   createPlanMessage: jest.fn(async (e: Row, plan: Row) => {
-    const hit = messages.find((m) => m.event_id === e.id && m.plan_kind === plan.kind && m.occurrence_starts_at.getTime() === plan.occurrence.getTime());
+    const hit = messages.find((m) => m.event_id === e.id && m.plan_kind === plan.kind && m.status !== 'cancelled' && m.occurrence_starts_at.getTime() === plan.occurrence.getTime());
     if (hit) return { message: hit, created: false };
     const m = { id: `m${messages.length + 1}`, event_id: e.id, plan_kind: plan.kind, occurrence_starts_at: plan.occurrence, send_at: plan.sendAt, status: 'needs_approval' };
     messages.push(m); planned.push(m);
@@ -49,6 +49,17 @@ const ev = (o: Row = {}): Row => withUpdate({ id: 'e1', status: 'scheduled', sta
 const iso = (d: Date): string => d.toISOString();
 
 beforeEach(() => { events.clear(); messages = []; planned.length = 0; cancelled.length = 0; jest.clearAllMocks(); });
+
+describe('CH6.4 attempt 2: early-morning times around the clock changes (a single-pass conversion was an hour off here)', () => {
+  it.each([
+    ['2027-03-15T09:00:00Z', '2027-03-14T09:00:00.000Z'], // Mon Mar 15 4:00 AM CDT -> Sun Mar 14 4:00 AM CDT
+    ['2026-11-02T09:00:00Z', '2026-11-01T09:00:00.000Z'], // Mon Nov 2 3:00 AM CST -> Sun Nov 1 3:00 AM CST
+    ['2027-03-16T07:00:00Z', '2027-03-15T07:00:00.000Z'], // Tue Mar 16 2:00 AM CDT -> Mon Mar 15 2:00 AM CDT
+    ['2026-11-03T09:00:00Z', '2026-11-02T09:00:00.000Z'], // Tue Nov 3 3:00 AM CST -> Mon Nov 2 3:00 AM CST
+  ])('event %s: reminder %s, the same Central clock time the day before', (start, reminder) => {
+    expect(iso(sendTimeFor('reminder', new Date(start), null))).toBe(reminder);
+  });
+});
 
 describe('CH6.4 send times on the Central calendar', () => {
   it('a 6:00 PM CST Tuesday (Dec 1): announcement Fri Nov 27 12:00 PM, reminder Mon Nov 30 6:00 PM, 1 hour before, thanks Wed 10:00 AM', () => {
@@ -105,10 +116,19 @@ describe('CH6.4 ensurePlan', () => {
     expect(planned.map((m) => iso(m.occurrence_starts_at))).toEqual(['2026-11-25T00:00:00.000Z', '2026-12-02T00:00:00.000Z', '2026-12-09T00:00:00.000Z']);
   });
 
-  it('a row whose moment has passed is skipped with the reason, not sent late', async () => {
-    const r = await ensurePlan(ev() as never, JACKIE, new Date('2026-11-30T15:00:00Z'));
-    expect(r.skipped).toEqual([{ kind: 'announcement', occurrence: '2026-12-02T00:00:00.000Z', reason: 'its send time has already passed' }]);
-    expect(planned.map((m) => m.plan_kind)).toEqual(['reminder', 'starting_soon']);
+  it('short notice: a late announcement still goes out soon while the event is more than a day away', async () => {
+    const r = await ensurePlan(ev() as never, JACKIE, new Date('2026-11-30T15:00:00Z')); // 33 hours before
+    expect(r.skipped).toEqual([]);
+    expect(planned.map((m) => [m.plan_kind, iso(m.send_at)])).toEqual([
+      ['announcement', '2026-11-30T15:05:00.000Z'], ['reminder', '2026-12-01T00:00:00.000Z'], ['starting_soon', '2026-12-01T23:00:00.000Z'],
+    ]);
+  });
+
+  it('a reminder (or a late announcement within a day) whose moment has passed is skipped with the reason, not sent late', async () => {
+    const r = await ensurePlan(ev() as never, JACKIE, new Date('2026-12-01T01:00:00Z')); // 23 hours before
+    expect(r.skipped.map((x) => x.kind)).toEqual(['announcement', 'reminder']);
+    expect(r.skipped[0].reason).toBe('its send time has already passed');
+    expect(planned.map((m) => m.plan_kind)).toEqual(['starting_soon']);
   });
 
   it('Recording and thanks is created only after the occurrence ends (and within 3 days), at 10:00 AM the day after', async () => {
@@ -122,8 +142,29 @@ describe('CH6.4 ensurePlan', () => {
     expect(planned).toEqual([]);
   });
 
-  it('a cancelled, draft or ended event gets nothing', async () => {
-    for (const status of ['cancelled', 'draft', 'ended']) expect((await ensurePlan(ev({ status }) as never, JACKIE, NOW)).created).toBe(0);
+  it('a cancelled or draft event gets nothing', async () => {
+    for (const status of ['cancelled', 'draft']) {
+      expect((await ensurePlan(ev({ status, promotion_plan: ['announcement', 'reminder', 'starting_soon', 'recording_thanks'] }) as never, JACKIE, new Date('2026-12-02T02:00:00Z'))).created).toBe(0);
+    }
+  });
+
+  it('an ENDED one-off (its stream ended through the live panel) gets exactly one Recording and thanks, 10:00 AM Central the next day, needs_approval; nothing else', async () => {
+    const e = ev({ status: 'ended', promotion_plan: ['announcement', 'reminder', 'starting_soon', 'recording_thanks'] });
+    await ensurePlan(e as never, JACKIE, new Date('2026-12-02T02:00:00Z'));
+    expect(planned.map((m) => [m.plan_kind, iso(m.send_at), m.status])).toEqual([['recording_thanks', '2026-12-02T16:00:00.000Z', 'needs_approval']]);
+  });
+
+  it('one model reply per row is reused across the dates of a series', async () => {
+    const { createPlanMessage } = jest.requireMock('../drafting');
+    const e = ev({ starts_at: new Date('2026-11-25T00:00:00Z'), ends_at: new Date('2026-11-25T01:00:00Z'), repeat_rule: { freq: 'weekly', until: '2027-01-31' }, promotion_plan: ['reminder'] });
+    (createPlanMessage as jest.Mock).mockImplementationOnce(async (ev2: Row, plan: Row) => {
+      const m = { id: 'x1', event_id: ev2.id, plan_kind: plan.kind, occurrence_starts_at: plan.occurrence, send_at: plan.sendAt, status: 'needs_approval' };
+      messages.push(m);
+      return { message: m, created: true, reply: { the: 'reply' } };
+    });
+    await ensurePlan(e as never, JACKIE, NOW);
+    expect((createPlanMessage as jest.Mock).mock.calls[0][4]).toBeUndefined();
+    expect((createPlanMessage as jest.Mock).mock.calls[1][4]).toEqual({ the: 'reply' });
   });
 });
 
@@ -139,6 +180,23 @@ describe('CH6.4 setPlan and readPlan', () => {
     const { plan } = await setPlan('e1', [], JACKIE, NOW);
     expect(cancelled).toEqual(['m2']); // the reminder (needs_approval); the approved announcement is left alone
     expect(plan.rows.map((r) => [r.kind, r.ticked])).toEqual([['announcement', false], ['reminder', false], ['starting_soon', false], ['recording_thanks', false]]);
+  });
+
+  it('untick then tick again: a fresh message is drafted (the cancelled one stays as history), exactly one live message', async () => {
+    events.set('e1', ev({ promotion_plan: [] }));
+    await setPlan('e1', ['reminder'], JACKIE, NOW);
+    await setPlan('e1', [], JACKIE, NOW);
+    await setPlan('e1', ['reminder'], JACKIE, NOW);
+    expect(messages.map((m) => [m.plan_kind, m.status])).toEqual([['reminder', 'cancelled'], ['reminder', 'needs_approval']]);
+    expect((await readPlan('e1', NOW)).rows[1]).toMatchObject({ kind: 'reminder', ticked: true, next: { status: 'needs_approval' } });
+  });
+
+  it('an ended event may still set its plan (only the thanks applies); the worker hook includes ended events', async () => {
+    events.set('e1', ev({ status: 'ended', promotion_plan: [] }));
+    await setPlan('e1', ['recording_thanks'], JACKIE, new Date('2026-12-02T02:00:00Z'));
+    expect(messages.map((m) => m.plan_kind)).toEqual(['recording_thanks']);
+    messages = []; planned.length = 0;
+    expect(await ensurePlansForUpcoming(JACKIE, new Date('2026-12-02T02:00:00Z'))).toBe(1);
   });
 
   it('readPlan shows each row with its next message', async () => {

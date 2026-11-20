@@ -82,3 +82,18 @@ it('every checkbox is labelled and described by its timing; no axe violations', 
   const r = await axe.run(container, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa'] } });
   expect(r.violations.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
 });
+
+it('an unticked row whose message is already approved says it will still go out, and where to cancel it', async () => {
+  m(api.getPromotionPlan).mockResolvedValue({ event_id: 'e1', rows: [
+    row('announcement', 'Announcement', '4 days before, 12:00 PM', { ticked: false, next: { message_id: 'm1', status: 'approved', send_at: '2026-11-27T18:00:00.000Z', occurrence: '2026-12-02T00:00:00.000Z' } }),
+    PLAN.rows[1], PLAN.rows[2], PLAN.rows[3],
+  ] } as never);
+  await render();
+  expect(container.querySelector('.ch-plan-note')!.textContent).toBe('Unticked, but already approved: it will still go out. Cancel it in Compose if it should not.');
+});
+
+it('an ended event keeps the plan open (its Recording and thanks comes after it ends)', async () => {
+  m(api.getPromotionPlan).mockResolvedValue(PLAN);
+  await render({ ...EVENT, status: 'ended' } as unknown as HubEvent);
+  expect(btn('Draft these messages').disabled).toBe(false);
+});

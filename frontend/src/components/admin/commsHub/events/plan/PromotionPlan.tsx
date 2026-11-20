@@ -29,7 +29,8 @@ export default function PromotionPlan({ event }: Props): React.ReactElement {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const closed = event.status === 'draft' || event.status === 'cancelled' || event.status === 'ended';
+  // An ended event keeps its plan open: its Recording and thanks becomes due after it ends.
+  const closed = event.status === 'draft' || event.status === 'cancelled';
 
   const show = useCallback((p: PlanView) => { setPlan(p); setTicked(new Set(p.rows.filter((r) => r.ticked).map((r) => r.kind))); }, []);
   useEffect(() => { getPromotionPlan(event.id).then(show, (err) => setError(apiErrorMessage(err, 'The promotion plan did not load.'))); }, [event.id, show]);
@@ -78,6 +79,9 @@ export default function PromotionPlan({ event }: Props): React.ReactElement {
                   <span id={`${id}-when`} className="ch-plan-when">{r.next?.send_at ? whenFmt.format(new Date(r.next.send_at)) : r.timing}</span>
                   <span className="ch-plan-channels">{r.channels}</span>
                   <span className={`ch-status ch-status-${status?.tone ?? 'neutral'}`}>{status ? status.text : ticked.has(r.kind) ? 'Not drafted yet' : 'Off'}</span>
+                  {!ticked.has(r.kind) && r.next && (r.next.status === 'approved' || r.next.status === 'scheduled') && (
+                    <span className="ch-plan-note">Unticked, but already approved: it will still go out. Cancel it in Compose if it should not.</span>
+                  )}
                 </li>
               );
             })}
