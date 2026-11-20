@@ -36,6 +36,7 @@ import {
   sourceOverflows,
   type SourceOverflow,
 } from './decomposePrompt';
+import { REQUIREMENT_CHECKLIST } from './requirementCoverage';
 import {
   modelJsonCall, defaultClient, type ChatClient,
 } from './modelJsonCall';
@@ -114,6 +115,12 @@ export function buildRequirementExtractionPrompt(inputs: DecomposeInputs): strin
       + `more than brevity, and a requirement left out is a failure of this task. `
       + `A build of this size typically has around ${t.requirements[0]}-${t.requirements[1]} requirements, `
       + `but if the material states more, include ALL of them.`,
+    // WHAT to capture, not only that it must be complete. ShiftFill (2026-11-19) carried the
+    // sentence above and still lost 13 of 14 stated facts, the success numbers among them; see
+    // requirementCoverage for the incident and for the audit that now backs this up.
+    '',
+    REQUIREMENT_CHECKLIST,
+    '',
     // Said explicitly because the schema enforces it silently. A model told only by a schema
     // tends to produce a story-shaped requirement instead of refusing.
     `Do NOT produce releases or stories. Requirements only.`,

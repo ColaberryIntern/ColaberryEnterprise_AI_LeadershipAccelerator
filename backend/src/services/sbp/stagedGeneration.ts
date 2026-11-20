@@ -1,0 +1,430 @@
+/**
+ * stagedGeneration — build a plan whose size follows the source, not one model reply.
+ *
+ * ## Why
+ *
+ * Until now the whole plan (requirements, releases and every story) came back in ONE gpt-4o
+ * completion, and a completion has a ceiling: about 16k output tokens. Measured on a real plan, a
+ * story costs about 270 tokens and a requirement about 70, so the ceiling sits near 45 stories.
+ * Above it the JSON is cut off mid-object, fails to parse twice, and the build fails outright. Now
+ * that a student can upload a full scope document, a 100-story project is a reasonable thing to
+ * ask for, and the old shape could not produce one at any tier.
+ *
+ * The other half is fidelity. One call that had to do everything compressed: ShiftFill's brief
+ * produced 11 requirements and dropped 13 of the 14 facts the student stated. See
+ * requirementCoverage.
+ *
+ * ## The stages
+ *
+ *   1. extractRequirements    requirements only, with the "what to look for" checklist
+ *   2. completeRequirements   an independent audit against the source; every addition must quote it
+ *   3. outlineReleases        release names, goals and which requirement lands where (small output)
+ *   4. writeReleaseStories    stories for ONE release at a time, a few in parallel
+ *   5. assembleStories        PURE: global STORY ids, release-gating `blocked_by`, dangling refs dropped
+ *
+ * No stage's output grows with the whole project except the requirement list itself, which at
+ * ~70 tokens each leaves room for roughly 200 requirements in one extraction reply.
+ *
+ * The tier the student picked is now a FLOOR on the release count and the "typical size" hint,
+ * not a ceiling on anything. More material yields more requirements, more releases and more
+ * stories; the same material yields the same plan whatever the tier says.
+ *
+ * Kill switch: `SBP_STAGED_GENERATION=off` restores the single-call path in decomposeService.
+ */
+import { BUILD_PLAN_JSON_SCHEMA, BuildPlan, PlanRelease, PlanRequirement, PlanStory } from './planContract';
+import {
+  DecomposeInputs, DECOMPOSE_SYSTEM_PROMPT, PROMPT_SECTIONS, composeSystemPrompt, sourceBlocks,
+} from './decomposePrompt';
+import { modelJsonCall, type ChatClient } from './modelJsonCall';
+import { extractRequirements } from './requirementExtraction';
+import { completeRequirements, contentWords } from './requirementCoverage';
+
+/** Average non-constraint requirements per release before another release is opened. */
+export const REQUIREMENTS_PER_RELEASE = 6;
+/** A release is a demo; more than this in one term stops being a plan anyone can follow. */
+export const MAX_RELEASES = 10;
+/** Release story calls in flight at once. Bounded so one big build cannot starve the queue. */
+export const STORY_CALL_CONCURRENCY = 3;
+
+/** Is the staged path on? ON unless explicitly switched off, like auto-publish. */
+export function stagedGenerationEnabled(): boolean {
+  return (process.env.SBP_STAGED_GENERATION ?? 'on').trim().toLowerCase() !== 'off';
+}
+
+/** The requirements a story is written for. CONSTRAINTs are context and never get a story. */
+function workItems(reqs: PlanRequirement[]): PlanRequirement[] {
+  return reqs.filter((r) => r.kind !== 'CONSTRAINT');
+}
+
+/** How many releases this material needs. The tier is the floor; the material decides above it. */
+export function releaseCountFor(tierReleases: number, requirements: PlanRequirement[]): number {
+  const byMaterial = Math.ceil(workItems(requirements).length / REQUIREMENTS_PER_RELEASE);
+  return Math.max(1, Math.min(MAX_RELEASES, Math.max(tierReleases, byMaterial)));
+}
+
+// ── stage 3: release outline ─────────────────────────────────────────────────
+
+const planProps = (BUILD_PLAN_JSON_SCHEMA as unknown as {
+  properties: { releases: { items: unknown }; stories: { items: unknown } };
+}).properties;
+
+export interface ReleaseOutline {
+  releases: PlanRelease[];
+  assignments: Array<{ requirement_id: string; release: string }>;
+}
+
+export const OUTLINE_JSON_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['releases', 'assignments'],
+  properties: {
+    releases: { type: 'array', items: planProps.releases.items },
+    assignments: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['requirement_id', 'release'],
+        properties: {
+          requirement_id: { type: 'string' },
+          release: { type: 'string', description: 'a release key, r0..rN' },
+        },
+      },
+    },
+  },
+} as const;
+
+export const OUTLINE_SYSTEM_PROMPT = composeSystemPrompt([
+  'You organise an approved requirement set into releases. You do NOT write stories and you do\n'
+  + 'NOT change, add or drop requirements.',
+  PROMPT_SECTIONS.antiInvention,
+  PROMPT_SECTIONS.releasesWalkingSkeleton,
+  PROMPT_SECTIONS.dataNotInstruction,
+]);
+
+export function buildOutlinePrompt(inputs: DecomposeInputs, requirements: PlanRequirement[], releases: number): string {
+  const items = workItems(requirements);
+  return [
+    `Organise the requirements below into exactly ${releases} releases, r0..r${releases - 1}.`,
+    `Assign EVERY requirement that is not a CONSTRAINT to exactly one release (${items.length} assignments).`,
+    'CONSTRAINT requirements are context for the stories that use them: do not assign them.',
+    `Balance the releases: about ${Math.max(1, Math.round(items.length / releases))} requirements each, and no release with`,
+    'more than twice the average. Order them so each release builds on the one before and each one',
+    'ends with something a person can open and see working.',
+    'r0 is the walking skeleton: the thinnest end-to-end path, including the guardrails and approval',
+    'points the owner insisted on, so its demo shows the guarantee holding.',
+    // Live (2026-11-20): "never text a hygienist on leave" landed in r3 while offers went out in
+    // r1, and the success targets sat alone in the last release as a "performance" story.
+    'A SAFE requirement lands in the SAME release as the first behaviour it guards, or earlier, never',
+    'after it: a guardrail that arrives two releases after the thing it guards was not a guardrail.',
+    'An NFR (a target, a volume, a time limit) lands in the release of the behaviour it constrains.',
+    'Give each release a name in the owner\'s own domain language, a goal, a demo line, and week numbers.',
+    '',
+    '<APPROVED_REQUIREMENTS>',
+    ...requirements.map((r) => `- ${r.id} [${r.kind}/${r.priority}] ${r.statement}`),
+    '</APPROVED_REQUIREMENTS>',
+    '',
+    sourceBlocks(inputs),
+  ].join('\n');
+}
+
+const releaseIndex = (k: string): number => Number(k.slice(1));
+
+/**
+ * A guardrail never arrives after the thing it guards. PURE; mutates `byReq` in place.
+ *
+ * Asked in the prompt and NOT obeyed: live (2026-11-20, ShiftFill) the outline put all four SAFE
+ * requirements in the last release, so "never text a hygienist on approved leave" shipped three
+ * releases after the story that texts hygienists. So it is enforced here: each SAFE or NFR
+ * requirement moves to the release of the FUNC requirement it shares the most words with, when that
+ * release is EARLIER. Never later: a guardrail the model placed early stays early. One shared word is
+ * enough on purpose: "never text a hygienist on leave" shares exactly one with each behaviour it
+ * guards, and the only cost of a weak match is a guardrail landing early, which r0 asks for anyway.
+ */
+export function pullGuardsForward(items: PlanRequirement[], byReq: Map<string, string>): void {
+  const funcs = items.filter((r) => r.kind === 'FUNC' || r.kind === 'REL' || r.kind === 'OBS');
+  const words = new Map(items.map((r) => [r.id, contentWords(r.statement)]));
+  for (const g of items.filter((r) => r.kind === 'SAFE' || r.kind === 'NFR')) {
+    const gw = words.get(g.id)!;
+    let best: { id: string; hit: number } | null = null;
+    for (const f of funcs) {
+      const hit = [...gw].filter((w) => words.get(f.id)!.has(w)).length;
+      if (hit >= 1 && (!best || hit > best.hit
+        || (hit === best.hit && releaseIndex(byReq.get(f.id)!) < releaseIndex(byReq.get(best.id)!)))) best = { id: f.id, hit };
+    }
+    if (!best) continue;
+    const target = byReq.get(best.id)!;
+    if (releaseIndex(target) < releaseIndex(byReq.get(g.id)!)) byReq.set(g.id, target);
+  }
+}
+
+/**
+ * Make the outline usable whatever the model did. PURE.
+ *  - releases re-keyed r0..rN in the order given, assignments re-pointed to match
+ *  - an unknown or missing assignment goes to the release with the fewest so far
+ *  - a release nothing landed in is dropped (it would only fail `release_empty`)
+ */
+export function normaliseOutline(outline: ReleaseOutline, requirements: PlanRequirement[]): ReleaseOutline {
+  const items = workItems(requirements);
+  const rels = outline.releases.length ? outline.releases : [{
+    key: 'r0', name: 'First release', goal: 'The thinnest end-to-end path.', demo: 'The core path working end to end.', week_start: 1, week_end: 2,
+  }];
+  const keyOf = new Map(rels.map((r, i) => [r.key, `r${i}`]));
+  const byReq = new Map<string, string>();
+  for (const a of outline.assignments ?? []) {
+    const k = keyOf.get(a.release);
+    if (k && items.some((r) => r.id === a.requirement_id) && !byReq.has(a.requirement_id)) byReq.set(a.requirement_id, k);
+  }
+  const load = new Map(rels.map((_, i) => [`r${i}`, 0]));
+  for (const k of byReq.values()) load.set(k, (load.get(k) ?? 0) + 1);
+  for (const r of items) {
+    if (byReq.has(r.id)) continue;
+    const lightest = [...load.entries()].sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0], 'en', { numeric: true }))[0][0];
+    byReq.set(r.id, lightest);
+    load.set(lightest, (load.get(lightest) ?? 0) + 1);
+  }
+  pullGuardsForward(items, byReq);
+  for (const k of load.keys()) load.set(k, 0);
+  for (const k of byReq.values()) load.set(k, (load.get(k) ?? 0) + 1);
+  // Drop empty releases, then re-key densely so r0..rN has no holes.
+  const kept = rels.map((r, i) => ({ r, old: `r${i}` })).filter(({ old }) => (load.get(old) ?? 0) > 0);
+  const finalKey = new Map(kept.map(({ old }, i) => [old, `r${i}`]));
+  return {
+    releases: kept.map(({ r }, i) => ({ ...r, key: `r${i}` })),
+    assignments: [...byReq.entries()].map(([requirement_id, k]) => ({ requirement_id, release: finalKey.get(k)! })),
+  };
+}
+
+// ── stage 4: stories for one release ─────────────────────────────────────────
+
+export const RELEASE_STORIES_JSON_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['stories'],
+  properties: { stories: { type: 'array', items: planProps.stories.items } },
+} as const;
+
+export function buildReleaseStoriesPrompt(
+  inputs: DecomposeInputs,
+  release: PlanRelease,
+  mine: PlanRequirement[],
+  all: PlanRequirement[],
+  previousKeyStory: string | null,
+): string {
+  const others = all.filter((r) => !mine.some((m) => m.id === r.id));
+  return [
+    `Write the vertical-slice stories for ONE release of a larger plan: ${release.key} "${release.name}".`,
+    `Goal: ${release.goal}`,
+    `Demo: ${release.demo}`,
+    '',
+    'Write as many stories as it takes to deliver EVERY requirement assigned to this release, and no',
+    'more: usually one story per one to three closely related requirements. Every requirement below',
+    'must appear in some story\'s `fulfills`. Never pad, never write a story for a requirement that is',
+    'not assigned here, and never a story that only bundles others.',
+    'Ids: number your stories S1, S2, … within this release. `blocked_by` may cite only earlier',
+    'stories of THIS release (by those S ids) or be empty; gating between releases is added for you.',
+    `Every story's \`release\` is "${release.key}".`,
+    // Named ids, not "every requirement": live (2026-11-20) the story writer skipped all four
+    // NFR targets it was given, which leaves `must_uncovered` for repair to clean up.
+    `Before you answer, check that each of these ids appears in at least one story's \`fulfills\`: ${mine.map((r) => r.id).join(', ')}.`,
+    'An NFR (a target, a volume, a time limit, a way users must be able to use it) is not a story of',
+    'its own: cite it in the `fulfills` of the story whose behaviour it constrains, and make one of',
+    'that story\'s acceptance lines test the number.',
+    release.key === 'r0'
+      ? 'This is r0: it must include the story that proves the guardrail or correctness guarantee end to end. That story\'s "Trust" acceptance line names the audit log entry it writes.'
+      : `The previous release ends with ${previousKeyStory ?? 'its last story'}; do not repeat its work.`,
+    'Use CONSTRAINT requirements as context in task_guidance (the tools to use), and you may cite them',
+    'in `fulfills` alongside the work they serve.',
+    '',
+    '<ASSIGNED_TO_THIS_RELEASE>',
+    ...mine.map((r) => `- ${r.id} [${r.kind}/${r.priority}] ${r.statement}`),
+    '</ASSIGNED_TO_THIS_RELEASE>',
+    '',
+    '<CONSTRAINTS_AND_OTHER_RELEASES (context only, do not write stories for these)>',
+    ...others.map((r) => `- ${r.id} [${r.kind}] ${r.statement}`),
+    '</CONSTRAINTS_AND_OTHER_RELEASES>',
+    '',
+    sourceBlocks(inputs),
+  ].join('\n');
+}
+
+// ── stage 5: assembly ────────────────────────────────────────────────────────
+
+/**
+ * Stitch per-release stories into one plan's story list. PURE.
+ *
+ * - Global ids STORY-001.. in release order, then the order each release returned them.
+ * - `release` forced to the release the story was written for.
+ * - `fulfills` filtered to requirement ids that exist.
+ * - `blocked_by`: local S-ids resolved within the release, only to EARLIER stories (no cycles);
+ *   then the release-gating rule from the prompt, applied in code rather than hoped for: r0 is
+ *   ungated, and every story in r(n) waits on the key (last) story of r(n-1).
+ */
+export function assembleStories(
+  perRelease: Array<{ release: PlanRelease; stories: PlanStory[] }>,
+  requirements: PlanRequirement[],
+): PlanStory[] {
+  const known = new Set(requirements.map((r) => r.id));
+  const out: PlanStory[] = [];
+  let n = 1;
+  let previousKey: string | null = null;
+  for (const { release, stories } of perRelease) {
+    const local = new Map<string, string>();
+    const assigned: PlanStory[] = [];
+    for (const s of stories) {
+      const id = `STORY-${String(n).padStart(3, '0')}`;
+      n += 1;
+      if (s.id) local.set(String(s.id).trim(), id);
+      assigned.push({ ...s, id, release: release.key });
+    }
+    assigned.forEach((s, idx) => {
+      const earlier = new Set(assigned.slice(0, idx).map((x) => x.id));
+      const within = (s.blocked_by ?? [])
+        .map((b) => local.get(String(b).trim()))
+        .filter((b): b is string => !!b && earlier.has(b));
+      s.fulfills = (s.fulfills ?? []).filter((f) => known.has(f));
+      s.blocked_by = release.key === 'r0'
+        ? []
+        : [...new Set([...(previousKey ? [previousKey] : []), ...within])];
+    });
+    out.push(...assigned);
+    if (assigned.length) previousKey = assigned[assigned.length - 1].id;
+  }
+  return out;
+}
+
+// ── the pipeline ─────────────────────────────────────────────────────────────
+
+export interface StagedOptions extends DecomposeInputs {
+  model: string;
+  client: ChatClient;
+  correlationId?: string;
+}
+
+export interface StagedResult {
+  plan: BuildPlan;
+  /** Model calls made, all stages. */
+  attempts: number;
+  /** What each stage produced, for the build log. */
+  stages: {
+    extracted: number;
+    coverage_added: string[];
+    releases: number;
+    stories_per_release: number[];
+  };
+}
+
+function log(event: string, correlationId: string | undefined, outcome: string, ctx: Record<string, unknown>): void {
+  // eslint-disable-next-line no-console
+  console.log(JSON.stringify({
+    timestamp: new Date().toISOString(),
+    level: outcome === 'failure' ? 'error' : 'info',
+    service: 'sbp-staged-generation',
+    event,
+    correlation_id: correlationId ?? null,
+    outcome,
+    context: ctx,
+  }));
+}
+
+/** Run `fn` over `items` with at most `limit` in flight, preserving order. */
+async function mapBounded<T, R>(items: T[], limit: number, fn: (t: T, i: number) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const i = next;
+      next += 1;
+      results[i] = await fn(items[i], i);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
+const isOutline = (v: unknown): v is ReleaseOutline => (
+  !!v && Array.isArray((v as ReleaseOutline).releases) && (v as ReleaseOutline).releases.length > 0
+  && Array.isArray((v as ReleaseOutline).assignments)
+);
+const isStories = (v: unknown): v is { stories: PlanStory[] } => (
+  !!v && Array.isArray((v as { stories?: unknown }).stories) && (v as { stories: unknown[] }).stories.length > 0
+);
+
+/**
+ * Generate a plan in stages. Throws the stage's own error on an upstream or contract failure
+ * (the caller maps it); never returns a half-built plan.
+ */
+export async function generateStagedPlan(opts: StagedOptions): Promise<StagedResult> {
+  const started = Date.now();
+  const { model, client, correlationId } = opts;
+  const tierReleases = opts.targets?.releases ?? 5;
+  let attempts = 0;
+
+  // 1. Requirements only.
+  const extracted = await extractRequirements({ ...opts, model, client, correlationId });
+  attempts += extracted.attempts;
+
+  // 2. Completeness audit against the source. Never fails the build.
+  const completed = await completeRequirements(extracted.requirements.requirements, { ...opts, model, client, correlationId });
+  attempts += completed.rounds;
+  const requirements = completed.requirements;
+
+  // 3. Release outline, sized by the material.
+  const releaseCount = releaseCountFor(tierReleases, requirements);
+  const outlined = await modelJsonCall<ReleaseOutline>({
+    schemaName: 'release_outline',
+    schema: OUTLINE_JSON_SCHEMA as unknown as Record<string, unknown>,
+    systemPrompt: OUTLINE_SYSTEM_PROMPT,
+    userPrompt: buildOutlinePrompt(opts, requirements, releaseCount),
+    isShaped: isOutline,
+    shapeProblem: 'the JSON had no releases or no assignments array',
+    model, client,
+    eventPrefix: 'sbp_release_outline',
+    log: (event, outcome, ctx) => log(event, correlationId, outcome, ctx),
+    describe: (v) => ({ releases: v.releases.length, assignments: v.assignments.length }),
+  });
+  attempts += outlined.attempts;
+  const outline = normaliseOutline(outlined.value, requirements);
+
+  // 4. Stories, one release per call. Sequential knowledge of the previous key story is not
+  //    needed for the prompt to be right (assembly applies the gating), so these run in parallel.
+  const perRelease = await mapBounded(outline.releases, STORY_CALL_CONCURRENCY, async (release, i) => {
+    const mineIds = new Set(outline.assignments.filter((a) => a.release === release.key).map((a) => a.requirement_id));
+    const mine = requirements.filter((r) => mineIds.has(r.id));
+    const res = await modelJsonCall<{ stories: PlanStory[] }>({
+      schemaName: 'release_stories',
+      schema: RELEASE_STORIES_JSON_SCHEMA as unknown as Record<string, unknown>,
+      systemPrompt: DECOMPOSE_SYSTEM_PROMPT,
+      userPrompt: buildReleaseStoriesPrompt(opts, release, mine, requirements, i > 0 ? `release r${i - 1}` : null),
+      isShaped: isStories,
+      shapeProblem: 'the JSON had no stories',
+      model, client,
+      eventPrefix: 'sbp_release_stories',
+      log: (event, outcome, ctx) => log(event, correlationId, outcome, { release: release.key, ...ctx }),
+      describe: (v) => ({ stories: v.stories.length }),
+    });
+    attempts += res.attempts;
+    return { release, stories: res.value.stories };
+  });
+
+  // 5. Assemble.
+  const stories = assembleStories(perRelease, requirements);
+  const plan: BuildPlan = {
+    project_name: extracted.requirements.project_name,
+    descriptor: extracted.requirements.descriptor,
+    requirements,
+    releases: outline.releases,
+    stories,
+  };
+  const stages = {
+    extracted: extracted.requirements.requirements.length,
+    coverage_added: completed.added.map((a) => a.id),
+    releases: outline.releases.length,
+    stories_per_release: perRelease.map((p) => p.stories.length),
+  };
+  log('sbp_staged_generation_completed', correlationId, 'success', {
+    model, attempts, duration_ms: Date.now() - started,
+    requirements: requirements.length, stories: stories.length, ...stages,
+  });
+  return { plan, attempts, stages };
+}
