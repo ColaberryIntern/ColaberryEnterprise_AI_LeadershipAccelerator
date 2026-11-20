@@ -6,9 +6,29 @@ const planned: Row[] = [];
 const cancelled: string[] = [];
 const withUpdate = (r: Row): Row => Object.assign(r, { update: jest.fn(async (p: Row) => Object.assign(r, p)) });
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mockMatches(row: any, where: any): boolean {
+  const { Op } = jest.requireActual('sequelize');
+  return Reflect.ownKeys(where).every((key) => {
+    const v = where[key as never] as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+    if (key === Op.or) return (v as unknown[]).some((w) => mockMatches(row, w));
+    const cell = row[key as string];
+    if (v === null || typeof v !== 'object' || v instanceof Date) return cell === v;
+    return Reflect.ownKeys(v).every((op) => {
+      const x = v[op as never];
+      if (op === Op.in) return (x as unknown[]).includes(cell);
+      if (op === Op.ne) return x === null ? cell !== null && cell !== undefined : cell !== x;
+      if (op === Op.is) return x === null ? cell === null || cell === undefined : cell === x;
+      if (op === Op.gte) return cell !== null && cell !== undefined && cell >= x;
+      throw new Error(`mockMatches: unsupported operator ${String(op)}`);
+    });
+  });
+}
+
 jest.mock('../../../../models/CommsHubEvent', () => ({
   __esModule: true,
-  default: { findByPk: jest.fn(async (id: string) => events.get(id) ?? null), findAll: jest.fn(async ({ where }: Row) => { const allowed = Object.getOwnPropertySymbols(where.status).map((k) => where.status[k as never])[0] as string[]; return [...events.values()].filter((e) => allowed.includes(e.status)); }) },
+  // findAll evaluates the Sequelize where the service passes (Op.or / Op.in / Op.ne / Op.gte / Op.is), so a wrong filter shows up here.
+  default: { findByPk: jest.fn(async (id: string) => events.get(id) ?? null), findAll: jest.fn(async ({ where }: Row) => [...events.values()].filter((e) => mockMatches(e, where))) },
 }));
 jest.mock('../../../../models/CommsHubMessage', () => ({
   __esModule: true,
@@ -217,5 +237,17 @@ describe('CH6.4 setPlan and readPlan', () => {
     events.set('e1', ev());
     events.set('e2', ev({ id: 'e2', promotion_plan: [] }));
     expect(await ensurePlansForUpcoming(JACKIE, NOW)).toBe(3);
+  });
+
+  it('CH7.2: the worker hook (every minute) skips ended events past the thanks window; a recent one or a series still counts', async () => {
+    const FindAll = jest.requireMock('../../../../models/CommsHubEvent').default.findAll as jest.Mock;
+    const now = new Date('2026-12-20T12:00:00Z');
+    events.set('old', ev({ id: 'old', status: 'ended', ends_at: new Date('2026-12-02T01:00:00Z'), updated_at: new Date('2026-12-02T02:00:00Z'), promotion_plan: ['recording_thanks'] }));
+    events.set('recent', ev({ id: 'recent', status: 'ended', starts_at: new Date('2026-12-18T00:00:00Z'), ends_at: new Date('2026-12-18T01:00:00Z'), updated_at: new Date('2026-12-18T02:00:00Z'), promotion_plan: [] }));
+    events.set('series', ev({ id: 'series', status: 'ended', ends_at: new Date('2026-10-01T01:00:00Z'), updated_at: new Date('2026-10-01T02:00:00Z'), repeat_rule: { freq: 'weekly' }, promotion_plan: [] }));
+    events.set('next', ev({ id: 'next', status: 'scheduled', promotion_plan: [] }));
+    await ensurePlansForUpcoming(JACKIE, now);
+    const seen = (await FindAll.mock.results[FindAll.mock.results.length - 1].value as Array<{ id: string }>).map((e) => e.id).sort();
+    expect(seen).toEqual(['next', 'recent', 'series']);
   });
 });

@@ -156,8 +156,26 @@ export async function readPlan(eventId: string, now: Date = new Date()): Promise
 
 /** The worker's hook (CH7.2): keep every event's plan current as occurrences come into the window or end. */
 export async function ensurePlansForUpcoming(actor: Actor, now: Date = new Date()): Promise<number> {
-  // Ended events too: their Recording and thanks becomes due after they end.
-  const events = await CommsHubEvent.findAll({ where: { status: { [Op.in]: ['scheduled', 'live', 'ended'] } } });
+  // Ended events too: their Recording and thanks becomes due after they end, but only recent ones
+  // (the worker runs this every minute; an event that ended months ago has nothing left to draft).
+  // A series is kept whatever its first date says: its last occurrence decides, and ensurePlan reads it.
+  const cutoff = new Date(now.getTime() - (THANKS_WINDOW_DAYS + 1) * 86_400_000);
+  const events = await CommsHubEvent.findAll({
+    where: {
+      [Op.or]: [
+        { status: { [Op.in]: ['scheduled', 'live'] } },
+        {
+          status: 'ended',
+          [Op.or]: [
+            { repeat_rule: { [Op.ne]: null } },
+            { ends_at: { [Op.gte]: cutoff } },
+            { ends_at: { [Op.is]: null }, starts_at: { [Op.gte]: cutoff } },
+            { updated_at: { [Op.gte]: cutoff } },
+          ],
+        },
+      ],
+    },
+  });
   let created = 0;
   for (const e of events) {
     if (!(e.promotion_plan ?? []).length) continue;

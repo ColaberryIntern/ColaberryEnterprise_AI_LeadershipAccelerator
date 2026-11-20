@@ -53,6 +53,7 @@ import { previewProxyMiddleware } from './middlewares/previewProxyMiddleware';
 import { startScheduler } from './services/schedulerService';
 import { startRepoTreeRefresh } from './services/repoTree/repoTreeRefreshService';
 import { startBroadcastHealthLoop } from './services/broadcast/broadcastHealthLoop';
+import { startCommsHubWorker } from './services/commsHub/delivery/commsHubWorkerLoop';
 import { UPLOAD_DIR } from './config/upload';
 import { seedProgramCurriculum } from './seeds/seedProgramCurriculum';
 import { seedDepartments } from './seeds/seedDepartments';
@@ -3822,6 +3823,17 @@ async function start(): Promise<void> {
     startBroadcastHealthLoop();
   } catch (err: any) {
     console.warn('[Broadcast] health loop failed to start (non-fatal):', err?.message);
+  }
+
+  /**
+   * Communications Hub sending worker (CH7.2): every minute it sends what Jackie approved and is due,
+   * re-checking pause, status, approval, recipient and quiet hours before each send; it also repairs
+   * live events and drafts promotion-plan messages. Idempotent start; failures are logged, non-fatal.
+   */
+  try {
+    startCommsHubWorker();
+  } catch (err: any) {
+    console.warn('[CommsHub] worker failed to start (non-fatal):', err?.message);
   }
 
   // AI Ops Command Center metrics_daily rollup — runs on the 5-minute

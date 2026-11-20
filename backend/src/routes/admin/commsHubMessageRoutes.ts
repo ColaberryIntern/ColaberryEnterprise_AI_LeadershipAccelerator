@@ -7,6 +7,7 @@ import { createDraftMessage, DraftModelError, editDraft, regenerateDrafts } from
 import { approveAndSchedule, destinationOptions, listMessages, messageView, setDestinations, setSendTime } from '../../services/commsHub/messages/messageService';
 import { COMMS_HUB_MESSAGE_KINDS, COMMS_HUB_MESSAGE_STATUSES } from '../../db/ensureCommsHubSchema';
 import { actorOf } from './commsHubEventRoutes';
+import { retryFailedDeliveries } from '../../services/commsHub/delivery/messageLifecycle';
 
 /**
  * Compose (CH6.5), under /api/admin/comms-hub/messages. Every write goes through the CH6.2/CH6.3
@@ -101,5 +102,7 @@ router.post(`${base}/:id/approve`, gate, onMessage(null, (id, _b, req) => approv
 router.post(`${base}/:id/reject`, gate, onMessage(RejectBody, (id, b, req) => rejectMessage(id, actorOf(req), b.note ?? null), 'comms_hub_message_reject_failed'));
 router.post(`${base}/:id/undo`, gate, onMessage(null, (id, _b, req) => undoApproval(id, actorOf(req)), 'comms_hub_message_undo_failed'));
 router.post(`${base}/:id/cancel`, gate, onMessage(null, (id, _b, req) => cancelMessage(id, actorOf(req)), 'comms_hub_message_cancel_failed'));
+// CH7.2: retry only the destinations that did not get it (same rows, same idempotency keys).
+router.post(`${base}/:id/retry`, gate, onMessage(null, (id, _b, req) => retryFailedDeliveries(id, actorOf(req)), 'comms_hub_message_retry_failed'));
 
 export default router;
