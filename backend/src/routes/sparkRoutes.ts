@@ -50,6 +50,15 @@ router.get('/api/spark/today', needKey, needSession, async (req, res) => {
   try { res.json({ ...(await S.today(me(req))), reasons: S.SWITCH_REASONS }); } catch (e) { fail(res, e); }
 });
 
+// A Spark's thumbnail (webp). The page fetches it with its key and session, then shows it as a blob.
+router.get('/api/spark/thumb/:id', needKey, needSession, async (req, res) => {
+  try {
+    const img = await S.thumbImage(String(req.params.id));
+    if (!img) return res.status(404).json({ error: 'Not found' });
+    res.set({ 'Content-Type': 'image/webp', 'Cache-Control': 'private, max-age=604800' }).send(img);
+  } catch (e) { fail(res, e); }
+});
+
 router.post('/api/spark/survey', needKey, needSession, async (req, res) => {
   try { res.json({ saved: await S.saveSurvey(me(req), req.body?.answers) }); } catch (e) { fail(res, e); }
 });

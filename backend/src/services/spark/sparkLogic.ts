@@ -25,7 +25,9 @@ const EVENING_PENALTY = 60; // midday still wins when it is open
 export const MIN_WEEKDAY = 2;
 export const HOME_MINUTES = 60;
 export const OUT_MINUTES = 90;
-export const WEEKEND_MINUTES = 180;
+// Ali, 2026-11-19: "keep the weekend at 2 hours but not every weekend". The 2-hour date is every other
+// week (starting the program's first week); the weekends in between get a 1-hour Spark like a weekday.
+export const WEEKEND_MINUTES = 120;
 const STEP = 30;
 const NOON = 12 * 60;
 
@@ -122,14 +124,20 @@ export function pickWeekdaySlots(cands: Slot[], n = 3): Slot[] {
   return days.slice(0, n).map((d) => byDay.get(d) as Slot);
 }
 
-/** Weekend date options (Sat and Sun, morning / afternoon / evening), minus anything busy or past. */
+/** True on the weeks that get the 2-hour weekend date (every other week, from the program's first week). */
+export function bigWeekend(monday: string): boolean {
+  return Math.round((Date.parse(monday) - Date.parse(mondayOf(PROGRAM_START))) / (7 * 86400000)) % 2 === 0;
+}
+
+/** Weekend options (Sat and Sun, morning / afternoon / evening), minus anything busy or past: 2 hours on a date week, else 1. */
 export function weekendSlots(monday: string, busy: Busy[], now: { date: string; time: string }): Slot[] {
   const sat = addDays(monday, 5); const sun = addDays(monday, 6);
+  const len = bigWeekend(monday) ? WEEKEND_MINUTES : HOME_MINUTES;
   const opts: Array<[string, string]> = [[sat, '18:30'], [sat, '10:00'], [sat, '14:00'], [sun, '10:30'], [sun, '14:00'], [sun, '17:30']];
   return opts
     .filter(([d, s]) => isAhead(d, s, now))
-    .filter(([d, s]) => !busy.some((b) => b.date === d && toMin(b.start) < toMin(s) + WEEKEND_MINUTES && toMin(b.end) > toMin(s)))
-    .map(([d, s]) => ({ date: d, start: s, maxEnd: fromMin(toMin(s) + WEEKEND_MINUTES) }));
+    .filter(([d, s]) => !busy.some((b) => b.date === d && toMin(b.start) < toMin(s) + len && toMin(b.end) > toMin(s)))
+    .map(([d, s]) => ({ date: d, start: s, maxEnd: fromMin(toMin(s) + len) }));
 }
 
 /** Weekdays from the program start (or this Monday) through today that still have unanswered daily questions. */
@@ -173,8 +181,9 @@ export function shapeItem(id: string, kind: 'weekday' | 'weekend', slot: Slot, r
   if (place === 'home') drive = 0;
   let minutes: number;
   if (kind === 'weekend') {
-    if (drive > 90) return null; // the weekend date can travel, but not more than 1.5 hours each way
-    minutes = Math.min(WEEKEND_MINUTES, Math.max(90, Math.round(Number(raw.minutes) || 150)));
+    // The 2-hour date (drive included) may go up to 20 minutes away; the 1-hour weekend Spark is walk-first like a weekday.
+    minutes = room >= WEEKEND_MINUTES ? WEEKEND_MINUTES : HOME_MINUTES;
+    if (place === 'out' && drive > (minutes === WEEKEND_MINUTES ? SPECIAL_DRIVE : NEAR_DRIVE)) return null;
   } else {
     // One hour, home or out, drive included. Only a named special occasion gets 90 minutes and a longer drive.
     const special = String(raw.special || '').trim();

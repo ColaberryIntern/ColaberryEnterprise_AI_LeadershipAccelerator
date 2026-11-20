@@ -39,6 +39,8 @@ textarea{width:100%;border:2px solid var(--line);border-radius:10px;padding:10px
 .err{color:#c0392b;font-weight:700;min-height:22px;margin-top:10px}
 .ev{border-radius:16px;padding:14px;margin:10px 0;color:#fff}
 .ev .t{font-size:13px;opacity:.95;font-weight:700}
+.ev .thumb{position:relative;margin:-14px -14px 12px;height:150px;border-radius:16px 16px 0 0;background:rgba(255,255,255,.16) center/cover no-repeat;display:flex;align-items:center;justify-content:center;font-size:54px;overflow:hidden}
+.ev .thumb.has{font-size:0}
 .ev b.title{display:block;font-size:18px;margin:2px 0 6px}
 .ev .why{background:rgba(255,255,255,.18);border-radius:10px;padding:8px 10px;margin-top:8px;font-size:14px}
 .ev .row{display:flex;gap:8px;margin-top:10px}
@@ -147,7 +149,41 @@ textarea{width:100%;border:2px solid var(--line);border-radius:10px;padding:10px
     app.innerHTML = h;
     document.getElementById('lockb').onclick = lock;
     wire();
+    loadThumbs();
     if (s.plan && s.plan.status === 'planning') poll = setInterval(load, 6000);
+  }
+
+  // Spark thumbnails: fetched with the key and session (an <img> cannot send them), kept as blob URLs.
+  // A picture still being drawn is checked again quietly, without re-rendering anything being typed.
+  var thumbs = {}, thumbTries = 0, thumbTimer = null;
+  function showThumb(el, url) { el.style.backgroundImage = 'url(' + url + ')'; el.classList.add('has'); }
+  function loadThumbs() {
+    clearTimeout(thumbTimer);
+    var waiting = false;
+    document.querySelectorAll('.thumb[data-thumb]').forEach(function (el) {
+      var id = el.dataset.thumb, v = el.dataset.v, k = id + ':' + v;
+      if (!v) { waiting = true; return; }
+      if (thumbs[k]) return showThumb(el, thumbs[k]);
+      var h = { 'x-spark-key': KEY }; if (session) h['x-spark-session'] = session;
+      fetch('/api/spark/thumb/' + encodeURIComponent(id) + '?v=' + encodeURIComponent(v), { headers: h })
+        .then(function (r) { if (!r.ok) throw new Error('no thumb'); return r.blob(); })
+        .then(function (b) { thumbs[k] = URL.createObjectURL(b); showThumb(el, thumbs[k]); })
+        .catch(function () { /* the emoji stays */ });
+    });
+    if (waiting && session && thumbTries < 12) {
+      thumbTimer = setTimeout(function () {
+        thumbTries++;
+        api('GET', '/today').then(function (s) {
+          if (!s.plan || !state || !state.plan) return;
+          state.plan.items = s.plan.items;
+          s.plan.items.forEach(function (i) {
+            var el = document.querySelector('.thumb[data-thumb="' + i.id + '"]');
+            if (el && i.thumb) el.dataset.v = i.thumb;
+          });
+          loadThumbs();
+        }).catch(function () {});
+      }, 15000);
+    }
   }
 
   function planningCard(s) {
@@ -199,9 +235,11 @@ textarea{width:100%;border:2px solid var(--line);border-radius:10px;padding:10px
     var h = '<div class="card"><h2>📅 This week\'s Sparks</h2><div class="muted">Spark picks what. You can change when.</div>';
     s.plan.items.forEach(function (i, n) {
       var c = i.kind === 'weekend' ? '#5b2a86' : COLORS[n % 3];
-      var where = PLACE[i.place] + (i.venue ? ' · ' + esc(i.venue) : '') + (i.driveMinutes ? ' · ' + i.driveMinutes + ' min drive' : '');
+      var where = (i.place === 'out' && !i.driveMinutes ? '🚶 Walk from home' : PLACE[i.place]) + (i.venue ? ' · ' + esc(i.venue) : '') + (i.driveMinutes ? ' · ' + i.driveMinutes + ' min drive' : '');
+      var pic = thumbs[i.id + ':' + i.thumb];
       h += '<div class="ev" style="background:' + c + (c === '#f2a516' ? ';color:#1f1a24' : '') + '" data-id="' + esc(i.id) + '">' +
-        '<div class="t">' + (i.kind === 'weekend' ? '💜 Weekend date · ' : '') + esc(i.day) + ' · ' + esc(i.time) + '</div>' +
+        '<div class="thumb' + (pic ? ' has' : '') + '" data-thumb="' + esc(i.id) + '" data-v="' + esc(i.thumb || '') + '"' + (pic ? ' style="background-image:url(' + pic + ')"' : '') + '>' + esc(i.emoji) + '</div>' +
+        '<div class="t">' + (i.kind === 'weekend' ? (i.big ? '💜 Weekend date · ' : '💜 Weekend Spark · ') : '') + esc(i.day) + ' · ' + esc(i.time) + '</div>' +
         '<b class="title">' + esc(i.emoji) + ' ' + esc(i.title) + '</b><div style="font-size:14px">' + where + '</div>' +
         '<div style="font-size:14px;margin-top:6px">' + esc(i.plan) + '</div><div class="why"><b>Why:</b> ' + esc(i.why) + '</div>' +
         '<div class="row"><button data-act="time">🔁 Change the time</button><button data-act="notfit">✋ Not a fit</button></div><div class="chips" hidden></div></div>';

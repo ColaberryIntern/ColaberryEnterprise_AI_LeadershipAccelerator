@@ -25,6 +25,7 @@ import {
   Busy, Slot, PlanItem, RawPick, ctNow, mondayOf, weekDates, addDays, candidateSlots, pickWeekdaySlots,
   weekendSlots, pendingDays, weekdayIndex, shapeItem, nextSlot, fitsSlot, prettyDay, prettyTime, toMin, fromMin,
   isWeekday, prevWeekday, decideWinner, PROGRAM_START, mergeBusy, looksLikeGrid, removeRange, similarPrize,
+  HOME_MINUTES, WEEKEND_MINUTES,
 } from './sparkLogic';
 
 export type Person = 'ali' | 'addie';
@@ -127,6 +128,8 @@ export async function today(p: Person) {
   const partnerCal = await one('calendar', { person: other(p), week });
   const plan = await one('plan', { person: null, week });
   const lessons = (await rows('lesson', {}, 12)).filter((r) => !r.data.private).slice(0, 4).map((r) => String(r.data.text));
+  const thumbs = plan?.data.status === 'ready' ? await thumbMap(week) : new Map<string, string>();
+  if (plan?.data.status === 'ready' && (plan.data.items || []).some((i: PlanItem) => thumbs.get(i.id) !== thumbKey(i))) void ensureThumbs(week);
   return {
     name: PEOPLE[p].name,
     partner: PEOPLE[other(p)].name,
@@ -142,7 +145,7 @@ export async function today(p: Person) {
       retake: !!cal?.data.retake, // Spark asked for a new picture: the page shows only the photo step, then plans by itself
     },
     daily: pendingDays(now.date, answeredDays).map((d) => ({ day: d, label: prettyDay(d), carried: d !== now.date, questions: dailyFor(weekdayIndex(d)) })),
-    plan: plan ? { status: plan.data.status, error: plan.data.status === 'failed' ? 'Planning hit a snag. Tap "Plan our week" to try again.' : null, items: (plan.data.items || []).map(view) } : null,
+    plan: plan ? { status: plan.data.status, error: plan.data.status === 'failed' ? 'Planning hit a snag. Tap "Plan our week" to try again.' : null, items: (plan.data.items || []).map((i: PlanItem) => view(i, thumbs)) } : null,
     learned: lessons,
     calendar: calendarView(cal?.data, week),
     game: await gameState(p, now.date),
@@ -280,11 +283,74 @@ async function reveal(today: string) {
   return { day: prettyDay(day), game: `${g.emoji} ${g.name}`, scores: { Ali: a, Addie: b }, winners, tie: win.length === 2 };
 }
 
-function view(i: PlanItem) {
+function view(i: PlanItem, thumbs: Map<string, string>) {
+  const key = thumbKey(i);
   return {
     id: i.id, kind: i.kind, day: prettyDay(i.date), time: `${prettyTime(i.start)} to ${prettyTime(i.end)}`,
     place: i.place, title: i.title, emoji: i.emoji, plan: i.plan, why: i.why, venue: i.venue, driveMinutes: i.driveMinutes,
+    big: i.kind === 'weekend' && toMin(i.end) - toMin(i.start) >= WEEKEND_MINUTES, // the 2-hour weekend date
+    thumb: thumbs.get(i.id) === key ? key : null, // null while Spark is still drawing it
   };
+}
+
+// ---------------------------------------------------------------------------------- thumbnails
+// Ali, 2026-11-19: "Create thumbnails for the event". One small illustration per Spark, drawn once
+// per activity (a new pick from "Not a fit" gets a new one; a time change keeps it).
+const IMAGE_MODEL = 'gpt-image-1-mini';
+const thumbKey = (i: PlanItem) => sha(`${i.title}|${i.plan}`).slice(0, 16);
+const drawing = new Set<string>();
+
+async function drawThumb(i: PlanItem): Promise<string> {
+  const what = String(i.plan || '').split(/Prompt:/i)[0].trim();
+  const where = i.place === 'home' ? 'at home' : i.venue ? `at ${i.venue}` : 'out in the neighborhood';
+  const prompt = `Warm, cozy flat illustration for a couple's date idea called "${i.title}": ${what} Setting: ${where}, ${toMin(i.start) < 17 * 60 ? 'daytime' : 'evening'}. Soft colors, inviting, simple shapes. If people appear, show them small, from behind or at a distance, no detailed faces. No text, letters, numbers or logos anywhere.`;
+  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 120000);
+  try {
+    const r = await fetch('https://api.openai.com/v1/images/generations', {
+      method: 'POST', signal: ctl.signal,
+      headers: { Authorization: `Bearer ${env.openaiApiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: IMAGE_MODEL, prompt, size: '1536x1024', quality: 'low', output_format: 'webp', output_compression: 55 }),
+    });
+    if (!r.ok) throw new Error(`image ${r.status}`);
+    const j: any = await r.json();
+    const b64 = String(j.data?.[0]?.b64_json || '');
+    if (!b64) throw new Error('no image');
+    return b64;
+  } finally { clearTimeout(t); }
+}
+
+/** Draw any missing or stale thumbnails for a week's Sparks, one at a time, in the background. */
+export async function ensureThumbs(week: string): Promise<number> {
+  if (!env.openaiApiKey || drawing.has(week)) return 0;
+  drawing.add(week);
+  let made = 0;
+  try {
+    const plan = await one('plan', { person: null, week });
+    if (plan?.data.status !== 'ready') return 0;
+    const have = await rows('thumb', { week }, 50);
+    for (const i of (plan.data.items || []) as PlanItem[]) {
+      const row = have.find((r) => r.data.itemId === i.id);
+      if (row && row.data.key === thumbKey(i)) continue;
+      try {
+        const data = { itemId: i.id, key: thumbKey(i), b64: await drawThumb(i) };
+        if (row) await update(row.id, data); else await insert('thumb', null, week, i.date, data);
+        made++;
+      } catch (e: any) { console.warn('[Spark] thumbnail failed for', i.id, e.message); }
+    }
+  } finally { drawing.delete(week); }
+  return made;
+}
+
+async function thumbMap(week: string): Promise<Map<string, string>> {
+  return new Map((await rows('thumb', { week }, 50)).map((r) => [String(r.data.itemId), String(r.data.key)]));
+}
+
+/** One Spark's thumbnail as webp bytes, or null. */
+export async function thumbImage(itemId: string): Promise<Buffer | null> {
+  const week = String(itemId).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(week)) return null;
+  const row = (await rows('thumb', { week }, 50)).find((r) => r.data.itemId === itemId);
+  return row?.data.b64 ? Buffer.from(String(row.data.b64), 'base64') : null;
 }
 
 // ---------------------------------------------------------------------------------- answers
@@ -520,7 +586,7 @@ const RULES = `You plan "Spark Hour" dates for a married couple (Partner 1 and P
 Rules:
 - Weekday Sparks happen at the slot's time: a midday break or a weekday evening. An evening Spark must still work with a young son at home (after bedtime, or something he can be near), unless it is an outing. Every weekday Spark is 60 minutes, "home" or "out". For "out", walk first: a stroll around the neighborhood or the nearest park or spot you can walk to from home (driveMinutesEachWay 0). Drive only when nothing walkable fits, and then to the CLOSEST place of that kind, at most 10 minutes each way (never pass nearer options to reach a farther one), and only well-known, long-standing places that are reliably open at that time. Only for a real special occasion (a birthday, anniversary or holiday that falls that day) set "special" to the occasion's name: then it can be 90 minutes with up to 20 minutes' drive each way. Otherwise "special" is null.
 - It is dark by about 5:30 PM from November through February: an evening outing must be indoors or at a lit, busy spot, never a trail, park walk, sunset or anything that needs daylight.
-- The weekend date can be morning, afternoon or evening, 2 to 3 hours, at most 1.5 hours' drive each way.
+- The weekend slot is either "the 2-hour weekend date" (every other week: morning, afternoon or evening, 2 hours INCLUDING any drive, at most 20 minutes each way, and still walk first when a walkable plan fits) or, on the weeks in between, "a 1-hour weekend Spark" with the same rules as a weekday Spark. The slot line says which.
 - Match what BOTH partners said. When they differ, find the overlap or alternate. Be creative and specific: a concrete plan, not a category. Give each Spark one playful prompt, question or small dare to do during it.
 - "why" must cite their answers WITHOUT revealing who said what: say "one of you", never "Partner 1/2". Say "you both" ONLY when both partners' answers actually say it.
 - Name a specific business only if you are certain it exists in that area and offers that activity. Otherwise describe the kind of place ("a taqueria near home", "a lakeside park in Rowlett") and set venue to that description. Never invent a business, class or event.
@@ -531,7 +597,7 @@ Reply only in JSON.`; // json_object mode refuses any request whose messages nev
 const ITEM_SHAPE = '{"slot": "<slot id>", "place": "home"|"out", "title": "short name", "emoji": "one emoji", "venue": "place name and city, or null for home", "driveMinutesEachWay": number, "minutes": number, "special": "occasion name or null", "plan": "2 to 3 sentences: what you do, plus the playful prompt", "why": "1 to 2 sentences"}';
 
 function slotLine(id: string, s: Slot, kind: string): string {
-  return `${id}: ${kind}, ${prettyDay(s.date)} starting ${prettyTime(s.start)}, up to ${toMin(s.maxEnd) - toMin(s.start)} minutes${kind === 'weekday' ? ' (plan 60; 90 only for a special occasion)' : ''}`;
+  return `${id}: ${kind}, ${prettyDay(s.date)} starting ${prettyTime(s.start)}, up to ${toMin(s.maxEnd) - toMin(s.start)} minutes${kind === 'weekday' ? ' (plan 60; 90 only for a special occasion)' : toMin(s.maxEnd) - toMin(s.start) >= WEEKEND_MINUTES ? ' (the 2-hour weekend date)' : ' (a 1-hour weekend Spark)'}`;
 }
 
 const FALLBACK: RawPick[] = [
@@ -588,6 +654,7 @@ export async function planWeek(week: string, opts: { fill?: boolean } = {}): Pro
     for (const i of items) await insert('reason', null, week, i.date, { text: `Picked "${i.title}" for ${prettyDay(i.date)}: ${i.why}` });
     const all = [...keep, ...items].sort((a, b) => `${a.date} ${a.start}`.localeCompare(`${b.date} ${b.start}`));
     await update(id, { status: 'ready', items: all, busy, missing, plannedAt: new Date().toISOString() });
+    void ensureThumbs(week);
     return { added: items.length };
   } catch (e: any) {
     // A fill that fails must not lose the Sparks the week already had.
@@ -664,7 +731,9 @@ export async function changeTime(p: Person, itemId: string, reason: unknown): Pr
 /** Not a fit: Spark picks a different activity for the same time. They never choose it themselves. */
 export async function notFit(p: Person, itemId: string, reason: unknown): Promise<{ ok: boolean; message: string }> {
   const { row, items, item } = await loadItem(itemId);
-  const slot: Slot = { date: item.date, start: item.start, maxEnd: item.kind === 'weekend' ? fromMin(toMin(item.start) + 180) : fromMin(toMin(item.start) + 90) };
+  // Same length as now: a 2-hour date stays a 2-hour date, an hour stays an hour.
+  const len = Math.max(HOME_MINUTES, toMin(item.end) - toMin(item.start));
+  const slot: Slot = { date: item.date, start: item.start, maxEnd: fromMin(toMin(item.start) + len) };
   const old = item.title;
   const inWeek = items.map((x) => x.title);
   const raw = await pickFor(slot, item.kind, [...inWeek, ...(item.rejected || [])], `"${old}" was not a fit (${cleanReason(reason)})`);
@@ -674,6 +743,7 @@ export async function notFit(p: Person, itemId: string, reason: unknown): Promis
   Object.assign(item, { ...next, tried: item.tried, rejected: [...(item.rejected || []), old], calendarId: item.calendarId, eventId: item.eventId });
   await syncEvent(item);
   await update(row.id, { ...row.data, items });
+  void ensureThumbs(String(row.week)); // the new pick gets its own picture
   await insert('lesson', p, String(row.week), item.date, { text: `"${old}" was not a fit (${cleanReason(reason)}). Fewer picks like it.` });
   return { ok: true, message: `Spark picked something new: "${item.title}".` };
 }
