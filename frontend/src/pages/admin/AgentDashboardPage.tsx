@@ -68,9 +68,19 @@ interface HubGroup {
   readonly title: string;
   readonly definition: string;
   readonly cards: ReadonlyArray<HubCard>;
+  /**
+   * AF12.2. The whole group is withheld from a viewer who does not hold `program`, rather than
+   * rendered with every card marked unavailable.
+   *
+   * A CARD is optimistic (see `HubCardView`): it is already on the page, it has a blocked state,
+   * and it can say why. A GROUP has no such affordance, so three unavailable cards under a
+   * heading is just a longer page that says no. The point of folding these in was to make a
+   * builder's page shorter, not to move the refusal somewhere new.
+   */
+  readonly ownerOnly?: boolean;
 }
 
-function buildGroups(domain: AgentDomainRow | null, mine: ChangeRequest[]): HubGroup[] {
+export function buildGroups(domain: AgentDomainRow | null, mine: ChangeRequest[]): HubGroup[] {
   const stories = domain?.stories ?? 0;
   const verified = domain?.stories_verified ?? 0;
   const open = mine.filter((r) => r.status === 'submitted').length;
@@ -115,6 +125,19 @@ function buildGroups(domain: AgentDomainRow | null, mine: ChangeRequest[]): HubG
           icon: 'list-check-2',
           to: '/admin/change-requests',
           blurb: 'Each task, the tools it needs, and which of them exist yet.',
+          /**
+           * AF12.2. Marked NOT BUILT, and the honesty is the point.
+           *
+           * This card opened `/admin/change-requests`, the same destination as the Change
+           * requests card directly below it, while promising a view grouped by task that that
+           * page does not render. Two cards, two blurbs, one URL, and the blurb of the pair that
+           * was clicked first describes something the reader will not find.
+           *
+           * `notBuilt` already renders it as an unclickable card with a stated badge, which is
+           * the truth until a task view exists. Deleting it instead would delete the only place
+           * the three-noun model names its middle noun on this page.
+           */
+          notBuilt: true,
           stat: 'Grouped by task key',
         },
         {
@@ -150,6 +173,50 @@ function buildGroups(domain: AgentDomainRow | null, mine: ChangeRequest[]): HubG
           blurb: 'What the agent has actually been granted, and who granted it.',
           section: 'program',
           stat: 'A grant is a separate record from an approval',
+        },
+      ],
+    },
+    /**
+     * AF12.2 — the two rows that used to be in the sidebar, as one group that is not about one
+     * agent at all.
+     *
+     * The three groups above are scoped by the strip at the top of the page: pick an agent and
+     * everything under them is that agent. These two are the opposite, which is why they get
+     * their own heading rather than a card wedged into Capability. The definition says so out
+     * loud, because the mistake this group exists to stop is reading a programme-wide total as
+     * though it described the agent currently selected.
+     *
+     * The CAPABILITY BOARD deliberately stays where it is, in the Capability group, even though
+     * it is also programme-wide and also `program`. `BUILDER_STEPS` step 4 points at
+     * `hub-card-capability-board`, and `walkthroughTargets.test.ts` exists because a tour that
+     * names an element the page does not render says "this step is about something that is not
+     * on this page right now" and stays broken for a month. Moving that card would do it again,
+     * for every builder, in the one group they do see.
+     */
+    {
+      key: 'across',
+      title: 'Across everyone',
+      definition: 'Not one agent. The same ten domains read two ways: what they add up to, and '
+        + 'whose move each capability is on.',
+      ownerOnly: true,
+      cards: [
+        {
+          key: 'all-domains',
+          label: 'All Domains',
+          icon: 'stack-line',
+          to: '/admin/all-domains',
+          blurb: 'Every domain project, its stage, its accountable manager and its counts.',
+          section: 'program',
+          stat: 'One row per domain, verified counts beside the story counts',
+        },
+        {
+          key: 'builder-path',
+          label: 'Builder path',
+          icon: 'route-line',
+          to: '/admin/builder-path',
+          blurb: 'Whose move each capability is on, and what the platform owes each builder.',
+          section: 'program',
+          stat: 'The gap board: screens owed and scope sheets owed',
         },
       ],
     },
@@ -206,6 +273,10 @@ export default function AgentDashboardPage() {
     [domains, domainKey],
   );
   const groups = useMemo(() => buildGroups(domain, mine), [domain, mine]);
+  // Split once, here, rather than filtering twice in the JSX: the two halves answer different
+  // questions and are laid out differently, so the render reads better when the split is named.
+  const agentGroups = useMemo(() => groups.filter((g) => !g.ownerOnly), [groups]);
+  const ownerGroups = useMemo(() => groups.filter((g) => g.ownerOnly), [groups]);
 
   const openCount = mine.filter((r) => r.status === 'submitted').length;
 
@@ -243,7 +314,9 @@ export default function AgentDashboardPage() {
         )}
       </div>
 
-      <PageHeader title="Agent dashboard" />
+      {/* AF12.2: matches the sidebar, which now says "Agents". A row and the page it opens
+          disagreeing on their own name is a small thing that makes a surface feel unowned. */}
+      <PageHeader title="Agents" />
 
       {loading && (
         <SectionCard>
@@ -287,7 +360,7 @@ export default function AgentDashboardPage() {
           </div>
 
           <div className="row g-3" data-testid="agent-dashboard-groups">
-            {groups.map((g) => (
+            {agentGroups.map((g) => (
               <div className="col-lg-4" key={g.key}>
                 <div className="text-uppercase small fw-bold text-primary mb-1">{g.title}</div>
                 <div className="small text-muted mb-2">{g.definition}</div>
@@ -301,6 +374,30 @@ export default function AgentDashboardPage() {
               </div>
             ))}
           </div>
+
+          {/*
+            AF12.2. Full width and BELOW the three, because it is a different question: those are
+            about the agent in the strip, this one is about all ten.
+
+            Rendered on `canProgram === true` and not on `!== false`, which is the opposite of the
+            per-card rule a few lines up, deliberately. A card that guesses wrong is already on the
+            page and says so; a GROUP that guesses wrong hands a builder two live links the API
+            will refuse, which is precisely what `adminNav.ts` warns about. Guessing wrong the
+            other way costs an owner one refresh.
+          */}
+          {ownerGroups.length > 0 && canProgram === true && ownerGroups.map((g) => (
+            <div className="mt-4" key={g.key} data-testid={`agent-dashboard-group-${g.key}`}>
+              <div className="text-uppercase small fw-bold text-primary mb-1">{g.title}</div>
+              <div className="small text-muted mb-2">{g.definition}</div>
+              <div className="row g-3">
+                {g.cards.map((c) => (
+                  <div className="col-lg-4" key={c.key}>
+                    <HubCardView card={c} blocked={false} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
         </>
       )}
 
