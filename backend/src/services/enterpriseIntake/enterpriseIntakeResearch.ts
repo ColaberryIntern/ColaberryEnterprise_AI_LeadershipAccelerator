@@ -10,7 +10,8 @@
  * from the admin Clients page after reading it (sendFirstContactAsAli).
  *
  * Rules the model is held to, and checked after (a reply that breaks them is not used):
- *   no prices, never the word "free", no promised time savings or outcomes, no em dashes,
+ *   no prices, never the word 40 TAC 807.172(d) bans (FREE_WORD_RULE), no promised time savings
+ *   or outcomes, no em dashes,
  *   American spelling, facts only from what we were given ("not stated" otherwise).
  */
 import { z } from 'zod';
@@ -23,6 +24,10 @@ import { env } from '../../config/env';
 import { fetchCompanyPage } from './companySiteFetch';
 import { esc, intakeBasecampEnabled, tickStep } from './enterpriseIntakeBasecamp';
 import { writtenBrief } from './enterpriseIntakeService';
+import { FREE_WORD_RULE } from '../content/bannedCopyRule';
+
+/** The word 40 TAC 807.172(d) bans in anything advertising training, from the one canonical rule. */
+const BANNED_WORD = new RegExp(`\\b${FREE_WORD_RULE.word}\\b`, 'i');
 
 export const MAX_RESEARCH_ATTEMPTS = 3;
 
@@ -70,7 +75,7 @@ export type ResearchResult = z.infer<typeof researchSchema>;
 export function ruleBreaks(r: ResearchResult): string[] {
   const all = JSON.stringify(r);
   const out: string[] = [];
-  if (/\bfree\b/i.test(all)) out.push('the word "free"');
+  if (BANNED_WORD.test(all)) out.push(`the word "${FREE_WORD_RULE.word}"`);
   if (/[$€£]\s?\d|\b\d[\d,.]*\s?(dollars|usd)\b/i.test(all)) out.push('a price');
   if (/\b(guarantee|guaranteed)\b/i.test(all)) out.push('a guarantee');
   if (/—|–/.test(all)) out.push('an em or en dash');
@@ -90,7 +95,7 @@ const SYSTEM = [
   'Rules:',
   '- Use ONLY the form, the interview write-up and the website text given. Anything not there is "not stated". Never invent customers, revenue, headcount or news.',
   '- 2 or 3 pilot options, each aimed at the process they named, each small enough to show results in weeks. Tie success_measure to their own figures when they gave any.',
-  '- Never state a price, never use the word "free", never promise a time saving, a return or an outcome. No em or en dashes. American spelling.',
+  `- Never state a price, never use the word "${FREE_WORD_RULE.word}", never promise a time saving, a return or an outcome. No em or en dashes. American spelling.`,
   '- open_questions: what we still need to learn in the first meeting.',
   '- email: from Ali Muwwakkil to the prospect, plain text, under 180 words, first name greeting, warm and direct.',
   '  Thank them for the interview, list the options in one line each, and ask for 30 minutes to walk',

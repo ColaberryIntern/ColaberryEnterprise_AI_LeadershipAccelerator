@@ -80,7 +80,7 @@ describe('send rules', () => {
   it('blocks an empty message, the word free, and an unpriced proposal', () => {
     expect(sendBlockers('Hi', 'Body')).toEqual([]);
     expect(sendBlockers('', 'Body')).toHaveLength(1);
-    expect(sendBlockers('A free pilot', 'Body')).toEqual(['it uses the word "free"']);
+    expect(sendBlockers('A free pilot', 'Body')).toEqual(['it uses the word "free" ($0 to start is the approved phrasing)']);
     expect(sendBlockers('Proposal', `Investment: ${PRICE_PLACEHOLDER}`)).toEqual(['the investment has not been added yet']);
   });
 });

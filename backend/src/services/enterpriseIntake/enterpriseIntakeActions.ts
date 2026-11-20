@@ -21,6 +21,10 @@ import { env } from '../../config/env';
 import { ascii, esc, intakeBasecampEnabled, tickStep } from './enterpriseIntakeBasecamp';
 import { writtenBrief } from './enterpriseIntakeService';
 import { syncListStage } from './enterpriseIntakeSync';
+import { FREE_WORD_RULE } from '../content/bannedCopyRule';
+
+/** The word 40 TAC 807.172(d) bans in anything advertising training, from the one canonical rule. */
+const BANNED_WORD = new RegExp(`\\b${FREE_WORD_RULE.word}\\b`, 'i');
 
 /** The proposal leaves this placeholder for Ali's price. A proposal still carrying it never sends. */
 export const PRICE_PLACEHOLDER = '[Ali to add the investment]';
@@ -48,7 +52,7 @@ export function sendBlockers(subject: string, body: string): string[] {
   const all = `${subject}\n${body}`;
   const out: string[] = [];
   if (!subject.trim() || !body.trim()) out.push('the subject and the message are both needed');
-  if (/\bfree\b/i.test(all)) out.push('it uses the word "free"');
+  if (BANNED_WORD.test(all)) out.push(`it uses the word "${FREE_WORD_RULE.word}" (${FREE_WORD_RULE.approvedAlternatives[0]} is the approved phrasing)`);
   if (all.includes(PRICE_PLACEHOLDER)) out.push('the investment has not been added yet');
   return out;
 }
@@ -150,7 +154,7 @@ const PROPOSAL_SYSTEM = [
   'Sections, each with a short heading line: Where you are today; What the pilot does; How we will',
   'measure it; Timeline (in weeks); What we need from you; Investment; Next step.',
   `Under Investment write exactly: ${PRICE_PLACEHOLDER}`,
-  'Never state a price yourself, never use the word "free", never promise a saving or an outcome,',
+  `Never state a price yourself, never use the word "${FREE_WORD_RULE.word}", never promise a saving or an outcome,`,
   'no em or en dashes, American spelling, no signature. Return JSON {"subject","body"}.',
 ].join(' ');
 
@@ -171,7 +175,7 @@ export async function draftProposal(id: string): Promise<{ subject: string; body
   const r = proposalSchema.safeParse(parsed);
   if (!r.success) throw new ActionRefused('The AI draft did not come back complete. Try again.', 502);
   const body = r.data.body.replace(/[–—]/g, '-');
-  if (/\bfree\b/i.test(body) || !body.includes(PRICE_PLACEHOLDER) || statesAPrice(body.replace(PRICE_PLACEHOLDER, ''))) {
+  if (BANNED_WORD.test(body) || !body.includes(PRICE_PLACEHOLDER) || statesAPrice(body.replace(PRICE_PLACEHOLDER, ''))) {
     throw new ActionRefused('The AI draft broke a proposal rule (price or wording). Try again.', 502);
   }
   await i.update({ proposal_subject: r.data.subject, proposal_body: body, proposal_drafted_at: new Date() });
