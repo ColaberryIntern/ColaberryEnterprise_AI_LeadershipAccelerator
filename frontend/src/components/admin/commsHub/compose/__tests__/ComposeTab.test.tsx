@@ -333,6 +333,23 @@ describe('CH6.5 approve and save act on what is on screen', () => {
     expect(status()).toContain('Saved. It stays a draft');
   });
 
+  it('Submit for approval saves unsaved text first; a double click writes one version', async () => {
+    m(api.getMessage).mockResolvedValue(msg());
+    await render('/admin/comms-hub/compose?message=m1');
+    await type('ch-e-community_post', 'Come build with us on Tuesday, December 1 at 6:00 PM CST.');
+    let release: (v: MessageView) => void = () => undefined;
+    m(api.editMessageDraft).mockReturnValue(new Promise<MessageView>((r) => { release = r; }));
+    m(api.messageAction).mockResolvedValue(msg({ status: 'needs_approval' }));
+    const submit = btn('Submit for approval');
+    await act(async () => { submit.dispatchEvent(new MouseEvent('click', { bubbles: true })); submit.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    await act(async () => { release(msg()); });
+    await settle();
+    expect(api.editMessageDraft).toHaveBeenCalledTimes(1);
+    expect(m(api.editMessageDraft).mock.invocationCallOrder[0]).toBeLessThan(m(api.messageAction).mock.invocationCallOrder[0]);
+    expect(api.messageAction).toHaveBeenCalledTimes(1);
+    expect(api.messageAction).toHaveBeenCalledWith('m1', 'submit');
+  });
+
   it('a refused action reloads the message as it now is', async () => {
     m(api.getMessage).mockResolvedValueOnce(msg({ status: 'needs_approval' })).mockResolvedValueOnce(msg({ status: 'cancelled' }));
     await render('/admin/comms-hub/compose?message=m1');

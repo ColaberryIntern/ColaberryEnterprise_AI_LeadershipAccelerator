@@ -41,6 +41,13 @@ export function useCompose() {
   const register = useCallback((key: string, save: (() => Promise<boolean>) | null) => {
     if (save) pending.current.set(key, save); else pending.current.delete(key);
   }, []);
+  // One save-then-act sequence at a time: a double click must not write a second version.
+  const acting = useRef(false);
+  const once = async (act: () => Promise<unknown>): Promise<void> => {
+    if (acting.current) return;
+    acting.current = true;
+    try { await act(); } finally { acting.current = false; }
+  };
   const flush = async (): Promise<boolean> => {
     for (const [key, save] of Array.from(pending.current)) {
       if (!(await save())) return false;
@@ -105,15 +112,16 @@ export function useCompose() {
     edit: (channel: Channel, text: { title?: string | null; body: string }) => run('edit', () => editMessageDraft(id, channel, text), () => 'Saved as a new draft.'),
     setRecipients: (d: DestinationView[]) => run('recipients', () => setMessageDestinations(id, d)),
     setTime: (iso: string | null) => run('time', () => setMessageSendTime(id, iso)),
-    submit: () => run('submit', () => messageAction(id, 'submit'), () => 'It is ready for approval.'),
+    /** Saves what is on screen first, then submits it, so the approver sees exactly this. */
+    submit: () => once(async () => { if (await flush()) await run('submit', () => messageAction(id, 'submit'), () => 'It is ready for approval.'); }),
     /** Saves what is on screen first, then approves and schedules (a draft is submitted in the same step). */
-    approve: async () => { if (await flush()) await run('approve', () => messageAction(id, 'approve'), () => 'Approved. It is scheduled to go out.'); },
+    approve: () => once(async () => { if (await flush()) await run('approve', () => messageAction(id, 'approve'), () => 'Approved. It is scheduled to go out.'); }),
     reject: (note: string | null) => run('reject', () => rejectHubMessage(id, note), () => 'Rejected. It is back to draft for changes.'),
     undo: () => run('undo', () => messageAction(id, 'undo'), () => 'Approval undone. Nothing will be sent until it is approved again.'),
     cancel: () => run('cancel', () => messageAction(id, 'cancel'), () => 'Cancelled. It will not be sent.'),
     startOver: () => { pending.current.clear(); setParams({}); setMessage(null); setError(null); setProblems([]); setNotice(null); },
     /** Saves every unsaved change on screen; it stays a draft until it is submitted or approved. */
-    keepDraft: async () => { if (await flush()) setNotice('Saved. It stays a draft until you submit it for approval.'); },
+    keepDraft: () => once(async () => { if (await flush()) setNotice('Saved. It stays a draft until you submit it for approval.'); }),
     register,
     /** A step refusing to save (for example a half-typed time) says why in the same alert as the server. */
     refuse: (why: string) => { setProblems([]); setNotice(null); setError(why); },
