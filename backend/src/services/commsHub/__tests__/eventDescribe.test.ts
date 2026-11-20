@@ -33,6 +33,9 @@ describe('cleanDescription', () => {
     'See you 1 December.', 'It runs 2026-12-01.', 'Doors open at 18:30.', 'Starts at 6:30 sharp.', 'Kicks off at noon.',
     'Join at 23:00 UTC.', 'Link: bit.ly/demo1', 'Join at zoom.us/j/123', 'Every Tues.', 'Tickets are €10.', '12.01.2026',
     'Totally fr​ee', 'Totally ｆｒｅｅ.',
+    // attempt-2 verifier leaks
+    'See you Dec. 3.', 'Nov. 24, 2026.', 'It costs 10 bucks.', 'Cost: USD 10.', 'Tickets: 10€.', 'Rs. 500 to join.',
+    'Join us at 7.', 'Join on the 3rd.', 'Starts @ 6.', 'Seats open next week.', 'It starts in 2 days.',
   ])('drops "%s"', (leak) => {
     // A probe with no closing punctuation would run into the next sentence and take it down too
     // (the conservative outcome); terminating it tests exactly the leak.
@@ -46,6 +49,11 @@ describe('cleanDescription', () => {
 
   it('control: ordinary sentences with numbers or short words survive', () => {
     const ok = 'Three builders show 2 projects each. Bring one question about agents. We review 10 pull requests live.';
+    expect(cleanDescription(ok)).toBe(ok);
+  });
+
+  it('control: the over-broad drops the verifier found are gone', () => {
+    const ok = 'We sat down with the founders. Bring 2-3 questions. See the sun and moon projects. Learn how agents work et cetera.';
     expect(cleanDescription(ok)).toBe(ok);
   });
 });

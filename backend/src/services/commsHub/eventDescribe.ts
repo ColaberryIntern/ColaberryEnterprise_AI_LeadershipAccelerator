@@ -36,21 +36,25 @@ const FORBIDDEN: RegExp[] = [
   /\bfree\b/i,
   // links: a scheme, www., or any domain-shaped token (name.tld, optionally with a path)
   /https?:\/\/|www\.|\b[a-z0-9-]+\.(?:com|org|net|io|ai|us|ly|co|me|dev|app|gg|link|page|zoom|edu|gov|info|biz|tv)\b|\b[a-z0-9-]+\.[a-z]{2,}\/\S/i,
-  // prices in any common currency
-  /[$€£¥]\s?\d|\b\d+(?:[.,]\d+)?\s?(?:dollars?|usd|eur|euros?|pounds?|gbp)\b/i,
-  // clock times: 6pm, 6 p.m., 6:30, 18:30, noon, midnight
-  /\b\d{1,2}(?::\d{2})?\s?(?:a\.?m\.?|p\.?m\.?)(?=[\s.,;:!?)]|$)/i,
+  // prices: symbol before or after the number, ISO code before or after, and slang
+  /[$€£¥₹]\s?\d|\d\s?[$€£¥₹]|\b(?:usd|eur|gbp|inr|rs\.?)\s?\d|\b\d+(?:[.,]\d+)?\s?(?:dollars?|usd|eur|euros?|pounds?|gbp|bucks|rupees?)\b/i,
+  // clock times: 6pm, 6 p.m., 6:30, 18:30, noon, midnight, "at 7", "@ 6"
+  /\b\d{1,2}(?::\d{2})?\s?(?:a\.?m\.?|p\.?m\.?|am|pm)(?=[\s.,;:!?)]|$)/i,
   /\b(?:[01]?\d|2[0-3]):[0-5]\d\b/,
   /\b(?:noon|midnight|o'?clock)\b/i,
-  // zones
-  /\b(?:cst|cdt|ct|est|edt|et|pst|pdt|pt|mst|mdt|mt|utc|gmt)\b|\b(?:central|eastern|pacific|mountain)\s+time\b/i,
-  // days, including short forms
-  /\b(?:mon|tue|tues|wed|weds|thu|thur|thurs|fri|sat|sun)(?:day)?s?\b\.?|\b(?:tomorrow|tonight|today|weekend)\b/i,
-  // dates: "Dec 1st", "December 1", "1st of December", "1 December", ISO, 12/01, 12.01.2026
+  /\b(?:at|@)\s?\d{1,2}\b|@\s?\d/i,
+  // zones: codes only in capitals (so "et al." or "pt." in prose survive), names in any case
+  /\b(?:CST|CDT|CT|EST|EDT|ET|PST|PDT|PT|MST|MDT|MT|UTC|GMT)\b/,
+  /\b(?:central|eastern|pacific|mountain)\s+time\b/i,
+  // days: full names in any case; short forms only capitalised ("Sat." yes, "sat down" no)
+  /\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?\b|\b(?:tomorrow|tonight|today|weekend|next week)\b|\bin\s\d+\s(?:days?|weeks?)\b/i,
+  /\b(?:Mon|Tue|Tues|Wed|Weds|Thu|Thur|Thurs|Fri|Sat|Sun)\b\.?/,
+  // dates: "Dec 1st", "Dec. 3", "December 1", "1st of December", "the 3rd", ISO, 12/01, 12.01.2026, 12-01-2026
   new RegExp(`\\b${MONTH}\\s+\\d{1,2}${ORD}\\b`, 'i'),
   new RegExp(`\\b\\d{1,2}${ORD}\\s+(?:of\\s+)?${MONTH}(?=\\W|$)`, 'i'),
+  /\bthe\s\d{1,2}(?:st|nd|rd|th)\b/i,
   /\b\d{4}-\d{2}-\d{2}\b/,
-  /\b\d{1,2}[/.-]\d{1,2}(?:[/.-]\d{2,4})?\b/,
+  /\b\d{1,2}[/.]\d{1,2}(?:[/.]\d{2,4})?\b|\b\d{1,2}-\d{1,2}-\d{2,4}\b/,
 ];
 
 /** Zero-width and compatibility characters a model (or a paste) can hide a forbidden word behind. */
@@ -62,6 +66,8 @@ function normalise(raw: string): string {
 export function cleanDescription(raw: string): string {
   const text = normalise(raw)
     .replace(/\b([ap])\.\s?m\./gi, '$1m') // "6 p.m. sharp." must stay one sentence for the splitter below
+    // "See you Dec. 3." likewise: an abbreviation's period is not a sentence end
+    .replace(/\b(jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec|rs)\.(?=\s)/gi, '$1')
     .replace(/\s*[–—]\s*/g, ', ').replace(/^["'\s]+|["'\s]+$/g, '').replace(/\s+/g, ' ').trim();
   // Split only where punctuation is followed by whitespace, so the dots inside a URL or "a.m." never
   // cut a sentence in two (which once left a stray "com/e/1." behind after the URL sentence was dropped).
