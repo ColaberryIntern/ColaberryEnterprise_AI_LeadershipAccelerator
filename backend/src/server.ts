@@ -203,6 +203,7 @@ import { ensurePublishingSchema } from './db/ensurePublishingSchema';
 import { ensureMarketingAttributionSchema } from './db/ensureMarketingAttributionSchema';
 import { ensureBrandGovernanceSchema } from './db/ensureBrandGovernanceSchema';
 import { ensureChannelAccountSchema } from './db/ensureChannelAccountSchema';
+import { ensureCommsHubSchema } from './db/ensureCommsHubSchema';
 import { ensureLandingPageSchema } from './db/ensureLandingPageSchema';
 import { ensureOpenHouseRegistrationSchema } from './db/ensureOpenHouseRegistrationSchema';
 import { ensureOpenHouseReminderSchema } from './db/ensureOpenHouseReminderSchema';
@@ -2833,6 +2834,8 @@ async function start(): Promise<void> {
   // After brand governance: the FK it adds to content_variants needs the accounts table, and
   // the accounts table references brands.
   await ensureChannelAccountSchema();
+  // Communications Hub (CH2.1): after community_events exists, because it adds hub_event_id to it.
+  await ensureCommsHubSchema();
   await ensureLandingPageSchema();
   // AFTER landing_pages exists: this adds content_items.landing_page_id and its foreign key, so
   // the composer can persist the page an operator picked. The column is also in the content_items
