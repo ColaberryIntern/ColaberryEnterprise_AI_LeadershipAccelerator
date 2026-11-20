@@ -8,13 +8,16 @@ type Row = Record<string, any>;
 const occ = new Map<string, Row>();
 const activity: Row[] = [];
 const sent: string[] = [];
+const locks: string[] = [];
 const KEY = 'SECRET-STREAM-KEY-1234567890abcdef';
 const UID = 'b'.repeat(32);
 
 jest.mock('../../../../config/database', () => ({
   sequelize: {
+    transaction: jest.fn(async (cb: (t: unknown) => unknown) => cb({})),
     query: jest.fn(async (sql: string, opts: Row) => {
       const r = opts.replacements;
+      if (/pg_advisory_xact_lock/.test(sql)) { locks.push(r.k); return [[]]; }
       if (/FROM broadcast_occurrences WHERE id = :id/.test(sql)) return [occ.has(r.id) ? [{ ...occ.get(r.id) }] : []];
       if (/WHERE provider_session_id = :uid/.test(sql)) {
         const hit = [...occ.values()].find((o) => o.provider_session_id === r.uid && r.active.includes(o.editorial_state) && o.id !== r.except);
@@ -40,7 +43,7 @@ jest.mock('../../../broadcast/broadcastCommandService', () => {
   };
 });
 const events = new Map<string, Row>();
-jest.mock('../../../../models/CommsHubEvent', () => ({ __esModule: true, default: { findByPk: jest.fn(async (id: string) => events.get(id) ?? null) } }));
+jest.mock('../../../../models/CommsHubEvent', () => ({ __esModule: true, default: { findByPk: jest.fn(async (id: string) => events.get(id) ?? null), findAll: jest.fn(async ({ where }: Row) => [...events.values()].filter((e) => e.status === where.status)) } }));
 jest.mock('../../activityLog', () => ({ logActivity: jest.fn(async (_a: Row, action: string, _t: string, id: string) => { activity.push({ action, id }); }) }));
 jest.mock('../../../../models/BroadcastOccurrence', () => ({ __esModule: true, default: {} }));
 jest.mock('../../../../models/Cohort', () => ({ __esModule: true, default: {} }));
@@ -55,7 +58,7 @@ jest.mock('../../../broadcast/providers/cloudflareStreamProvider', () => ({
 }));
 
 import { LiveRefusedError } from '../eventOccurrence';
-import { LivePanelError, prepareLive, readIngest, readLivePanel, runLiveCommand } from '../livePanel';
+import { LivePanelError, prepareLive, readIngest, readLivePanel, runLiveCommand, syncLiveEvents } from '../livePanel';
 
 const JACKIE = { id: 'jackie-1', label: 'j' };
 const NOW = new Date('2026-12-01T23:50:00Z');
@@ -68,7 +71,7 @@ const newEvent = (o: Row = {}): Row => {
 const err = async (p: Promise<unknown>): Promise<LivePanelError> => { try { await p; } catch (x) { return x as LivePanelError; } throw new Error('expected a refusal'); };
 
 beforeEach(() => {
-  occ.clear(); events.clear(); activity.length = 0; sent.length = 0; jest.clearAllMocks();
+  occ.clear(); events.clear(); activity.length = 0; sent.length = 0; locks.length = 0; jest.clearAllMocks();
   process.env.BROADCAST_INPUT_STRATEGY = 'shared';
   process.env.CLOUDFLARE_STREAM_LIVE_INPUT_UID = UID;
   events.set('e1', newEvent());
@@ -126,10 +129,11 @@ describe('CH5.2 refusals', () => {
     const a = await err(prepareLive('e1', null, JACKIE, NOW));
     expect([a.status, a.reason]).toEqual([409, 'input_busy']);
     expect(a.message).toBe('"Weekly Live" is live on the stream right now. Only one event can use it at a time; end that one first.');
-    expect(occ.get('o1')!.editorial_state).toBe('scheduled'); // created by ensure, but never opened backstage
+    expect(mockEnsure).not.toHaveBeenCalled(); // checked BEFORE anything is created
+    expect(occ.has('o1')).toBe(false);
     expect(sent).toEqual([]);
     // Ready to go, but the other one is still on the input.
-    Object.assign(occ.get('o1')!, { editorial_state: 'backstage', provider_health: 'ready' });
+    occ.set('o1', newOcc('o1', { editorial_state: 'backstage', provider_health: 'ready' }));
     events.get('e1')!.broadcast_occurrence_id = 'o1';
     const b = await err(runLiveCommand('e1', 'go_live', 1, JACKIE, NOW));
     expect(b.reason).toBe('input_busy');
@@ -197,5 +201,68 @@ describe('CH5.2 the stream key', () => {
     delete process.env.CLOUDFLARE_STREAM_LIVE_INPUT_UID;
     expect((await err(readIngest('e1'))).reason).toBe('no_live_input');
     expect(mockReadLiveInput).not.toHaveBeenCalled();
+  });
+});
+
+describe('CH5.2 attempt 2: the event follows the occurrence however it changes', () => {
+  const liveNow = (o: Row = {}): void => {
+    occ.set('o1', newOcc('o1', { editorial_state: 'live', provider_health: 'ready', content_started_at: NOW, version: 4 }));
+    events.set('e1', newEvent({ status: 'live', broadcast_occurrence_id: 'o1', ...o }));
+  };
+
+  it('the safety net ends the stream outside the panel (auto_stream_gone): reading the panel repairs a one-off to ended', async () => {
+    liveNow();
+    Object.assign(occ.get('o1')!, { editorial_state: 'ended', end_reason: 'auto_stream_gone', version: 5 });
+    await readLivePanel('e1');
+    expect(events.get('e1')!.status).toBe('ended');
+  });
+
+  it('...a series goes back to scheduled; and End pressed afterwards (a no-op) also repairs it', async () => {
+    liveNow({ repeat_rule: { freq: 'weekly', until: '2027-01-31' } });
+    Object.assign(occ.get('o1')!, { editorial_state: 'ended', end_reason: 'auto_stream_gone' });
+    const v = await runLiveCommand('e1', 'end', 4, JACKIE, NOW);
+    expect(v.occurrence!.editorial_state).toBe('ended');
+    expect(events.get('e1')!.status).toBe('scheduled');
+    expect(activity).toEqual([]); // nothing was ended by this call, so nothing is logged as ended
+  });
+
+  it('Go live that is a no-op on an occurrence already live sets the event live (e.g. the first status write failed)', async () => {
+    liveNow({ status: 'scheduled' });
+    await runLiveCommand('e1', 'go_live', 4, JACKIE, NOW);
+    expect(events.get('e1')!.status).toBe('live');
+  });
+
+  it('a retried click with the old version, whose first attempt landed, is a success, not a conflict', async () => {
+    liveNow();
+    occ.get('o1')!.version = 6;
+    await expect(runLiveCommand('e1', 'go_live', 4, JACKIE, NOW)).resolves.toMatchObject({ occurrence: { editorial_state: 'live' } });
+    occ.get('o1')!.editorial_state = 'ended';
+    await expect(runLiveCommand('e1', 'end', 4, JACKIE, NOW)).resolves.toMatchObject({ occurrence: { editorial_state: 'ended' } });
+    // ...but a stale version for something that has NOT happened is still refused.
+    occ.get('o1')!.editorial_state = 'backstage';
+    expect((await err(runLiveCommand('e1', 'go_live', 4, JACKIE, NOW))).reason).toBe('version_conflict');
+  });
+
+  it('an occurrence put back to scheduled elsewhere takes a "live" event back to scheduled', async () => {
+    liveNow();
+    occ.get('o1')!.editorial_state = 'scheduled';
+    await readLivePanel('e1');
+    expect(events.get('e1')!.status).toBe('scheduled');
+  });
+
+  it('syncLiveEvents repairs every stale live event with nobody looking, and leaves a truly live one alone', async () => {
+    liveNow();
+    Object.assign(occ.get('o1')!, { editorial_state: 'ended' });
+    occ.set('o2', newOcc('o2', { editorial_state: 'live', provider_health: 'ready' }));
+    events.set('e2', newEvent({ id: 'e2', status: 'live', broadcast_occurrence_id: 'o2' }));
+    expect(await syncLiveEvents(NOW.getTime())).toBe(1);
+    expect([events.get('e1')!.status, events.get('e2')!.status]).toEqual(['ended', 'live']);
+  });
+
+  it('Prepare and Go live take the input lock (one after the other across organizers)', async () => {
+    await prepareLive('e1', null, JACKIE, NOW);
+    occ.get('o1')!.provider_health = 'ready';
+    await runLiveCommand('e1', 'go_live', occ.get('o1')!.version, JACKIE, NOW);
+    expect(locks).toEqual([`comms_hub_live_input:${UID}`, `comms_hub_live_input:${UID}`]);
   });
 });

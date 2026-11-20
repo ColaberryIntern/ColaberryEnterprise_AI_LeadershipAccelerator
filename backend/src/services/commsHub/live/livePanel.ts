@@ -92,6 +92,8 @@ export async function readLivePanel(eventId: string, nowMs: number = Date.now())
       content_started_at: row.content_started_at, ended_at: row.ended_at, end_reason: row.end_reason as never,
     }, nowMs).filter((c) => PANEL_COMMANDS.includes(c.command))
     : [];
+  // Reading the panel repairs a status left stale by a broadcast that changed outside it (the 5 s poll does this).
+  await syncEventStatus(e, row, nowMs);
   return { input_configured: resolveLiveInput().bound, occurrence, commands, input_held_by: await inputHolder(row?.id ?? null) };
 }
 
@@ -111,21 +113,19 @@ async function command(occurrenceId: string, cmd: ProducerCommand, expectedVersi
   return { version: Number(r.occurrence!.version), noop: r.noop === true, state: r.occurrence!.editorial_state };
 }
 
-/** Prepare stream: the date's occurrence, then backstage (so the provider's health is watched). */
-export async function prepareLive(eventId: string, at: Date | null, actor: Actor, now: Date = new Date()): Promise<LivePanelView> {
-  const e = await eventOr404(eventId);
-  try {
-    const ensured = await ensureOccurrenceForCommunityEvent(e, at, now);
-    const holder = await inputHolder(ensured.occurrenceId);
-    if (holder) throw busy(holder);
-    const row = await readOccurrence(ensured.occurrenceId);
-    if (row && row.editorial_state === 'scheduled') await command(row.id, 'enter_backstage', Number(row.version));
-    await logActivity(actor, 'live.prepared', 'broadcast', ensured.occurrenceId, { event_id: e.id, starts_at: ensured.startsAt.toISOString(), outcome: ensured.outcome, access_mode: ensured.accessMode });
-  } catch (err) {
-    if (err instanceof LiveRefusedError) throw new LivePanelError(err.message, 409, err.reason);
-    throw err;
-  }
-  return readLivePanel(e.id, now.getTime());
+/**
+ * Serialise the one-live check with the command it guards, across requests and processes: a
+ * transaction-scoped Postgres advisory lock keyed on the shared input. Two organizers pressing
+ * Prepare (or Go live) on different events at the same moment are taken one after the other, so
+ * the second sees the first as the holder.
+ */
+async function withInputLock<T>(fn: () => Promise<T>): Promise<T> {
+  const binding = resolveLiveInput();
+  if (!binding.bound) return fn();
+  return sequelize.transaction(async (t) => {
+    await sequelize.query('SELECT pg_advisory_xact_lock(hashtext(:k))', { replacements: { k: `comms_hub_live_input:${binding.providerSessionId}` }, transaction: t });
+    return fn();
+  });
 }
 
 /** Whether the series has a date after this occurrence. */
@@ -133,36 +133,97 @@ function hasLaterDate(e: CommsHubEvent, afterMs: number): boolean {
   return expandOccurrences(e.starts_at, e.ends_at, e.repeat_rule).some((o) => o.starts_at.getTime() > afterMs);
 }
 
-/** Go live, End, or back to scheduled, on the event's occurrence; the event's status follows. */
+const ON_AIR = new Set(['live', 'reconnecting']);
+const OVER = new Set(['ended', 'processing', 'replay_ready']);
+
+/**
+ * The event's status follows the occurrence's ACTUAL state, however it got there: the panel, the
+ * existing producer route or Live Studio, or the L7.4 safety net that ends a stream whose Zoom feed
+ * is gone (end_reason 'auto_stream_gone'). Idempotent; writes only when the status differs.
+ * - on air (live, reconnecting): the event is live;
+ * - over (ended, processing, replay_ready): a series with later dates is scheduled again, a one-off ended;
+ * - anything else: an event left "live" by an occurrence that went back to scheduled returns to scheduled.
+ */
+export async function syncEventStatus(e: CommsHubEvent, row: Pick<Row, 'editorial_state' | 'scheduled_start_at'> | null, nowMs: number = Date.now()): Promise<boolean> {
+  if (!row || e.status === 'cancelled' || e.status === 'draft') return false;
+  let want: CommsHubEvent['status'] = e.status;
+  if (ON_AIR.has(row.editorial_state)) want = 'live';
+  else if (OVER.has(row.editorial_state)) want = hasLaterDate(e, row.scheduled_start_at ? new Date(row.scheduled_start_at).getTime() : nowMs) ? 'scheduled' : 'ended';
+  else if (e.status === 'live') want = 'scheduled';
+  if (want === e.status) return false;
+  await e.update({ status: want });
+  return true;
+}
+
+/**
+ * Repair every hub event still marked live whose occurrence is no longer on air (the broadcast was
+ * ended outside the panel while nobody had the panel open). Run by the hub's worker tick (CH7.1) and
+ * whenever the panel is read.
+ */
+export async function syncLiveEvents(nowMs: number = Date.now()): Promise<number> {
+  const live = await CommsHubEvent.findAll({ where: { status: 'live' } });
+  let fixed = 0;
+  for (const e of live) {
+    // eslint-disable-next-line no-await-in-loop
+    if (await syncEventStatus(e, await readOccurrence(e.broadcast_occurrence_id), nowMs)) fixed += 1;
+  }
+  return fixed;
+}
+
+/** Prepare stream: the date's occurrence, then backstage (so the provider's health is watched). */
+export async function prepareLive(eventId: string, at: Date | null, actor: Actor, now: Date = new Date()): Promise<LivePanelView> {
+  const e = await eventOr404(eventId);
+  try {
+    await withInputLock(async () => {
+      // Checked BEFORE the occurrence is created, so a refused Prepare writes nothing.
+      const before = await inputHolder(e.broadcast_occurrence_id);
+      if (before) throw busy(before);
+      const ensured = await ensureOccurrenceForCommunityEvent(e, at, now);
+      const holder = await inputHolder(ensured.occurrenceId);
+      if (holder) throw busy(holder);
+      const row = await readOccurrence(ensured.occurrenceId);
+      if (row && row.editorial_state === 'scheduled') await command(row.id, 'enter_backstage', Number(row.version));
+      await logActivity(actor, 'live.prepared', 'broadcast', ensured.occurrenceId, { event_id: e.id, starts_at: ensured.startsAt.toISOString(), outcome: ensured.outcome, access_mode: ensured.accessMode });
+    });
+  } catch (err) {
+    if (err instanceof LiveRefusedError) throw new LivePanelError(err.message, 409, err.reason);
+    throw err;
+  }
+  return readLivePanel(e.id, now.getTime());
+}
+
+const ALREADY: Record<'go_live' | 'end' | 'return_to_scheduled', Set<string>> = {
+  go_live: ON_AIR, end: OVER, return_to_scheduled: new Set(['scheduled']),
+};
+
+/** Go live, End, or back to scheduled, on the event's occurrence; the event's status follows the occurrence. */
 export async function runLiveCommand(eventId: string, cmd: 'go_live' | 'end' | 'return_to_scheduled', expectedVersion: number, actor: Actor, now: Date = new Date()): Promise<LivePanelView> {
   const e = await eventOr404(eventId);
   const row = await readOccurrence(e.broadcast_occurrence_id);
   if (!row) throw new LivePanelError('Prepare the stream first.', 409, 'not_prepared');
-  if (Number(row.version) !== expectedVersion) throw new LivePanelError('This changed in another window. The panel has been refreshed; try again.', 409, 'version_conflict');
+  if (Number(row.version) !== expectedVersion) {
+    // A retried click whose first attempt already landed is a success, not a conflict.
+    if (ALREADY[cmd].has(row.editorial_state)) return readLivePanel(e.id, now.getTime());
+    throw new LivePanelError('This changed in another window. The panel has been refreshed; try again.', 409, 'version_conflict');
+  }
   if (cmd === 'go_live') {
-    const holder = await inputHolder(row.id);
-    if (holder) throw busy(holder);
-    let version = Number(row.version);
-    if (!row.content_started_at && row.editorial_state !== 'live') {
-      // Checked here too, so nothing (not even the content mark) is written while the stream is not ready.
-      if (row.provider_health !== 'ready') throw NOT_READY();
-      version = (await command(row.id, 'mark_content_started', version)).version;
-    }
-    const r = await command(row.id, 'go_live', version);
-    if (!r.noop) {
-      await e.update({ status: 'live' });
-      await logActivity(actor, 'live.went_live', 'broadcast', row.id, { event_id: e.id });
-    }
+    const r = await withInputLock(async () => {
+      const holder = await inputHolder(row.id);
+      if (holder) throw busy(holder);
+      let version = Number(row.version);
+      if (!row.content_started_at && !ON_AIR.has(row.editorial_state)) {
+        // Checked here too, so nothing (not even the content mark) is written while the stream is not ready.
+        if (row.provider_health !== 'ready') throw NOT_READY();
+        version = (await command(row.id, 'mark_content_started', version)).version;
+      }
+      return command(row.id, 'go_live', version);
+    });
+    if (!r.noop) await logActivity(actor, 'live.went_live', 'broadcast', row.id, { event_id: e.id });
   } else {
     const r = await command(row.id, cmd, Number(row.version));
-    if (!r.noop && cmd === 'end') {
-      const started = row.scheduled_start_at ? new Date(row.scheduled_start_at).getTime() : now.getTime();
-      await e.update({ status: hasLaterDate(e, started) ? 'scheduled' : 'ended' });
-      await logActivity(actor, 'live.ended', 'broadcast', row.id, { event_id: e.id });
-    } else if (!r.noop) {
-      await logActivity(actor, 'live.back_to_scheduled', 'broadcast', row.id, { event_id: e.id });
-    }
+    if (!r.noop) await logActivity(actor, cmd === 'end' ? 'live.ended' : 'live.back_to_scheduled', 'broadcast', row.id, { event_id: e.id });
   }
+  // Whatever the command did (or did not do), the event follows the occurrence as it now is.
   return readLivePanel(e.id, now.getTime());
 }
 
