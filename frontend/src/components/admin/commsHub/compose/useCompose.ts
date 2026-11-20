@@ -54,7 +54,6 @@ export function useCompose() {
       kind: message.kind, tone: message.tone ?? 'friendly', notes: message.notes ?? '',
       include: { thumbnail: message.include.thumbnail !== false, join_link: message.include.join_link !== false, registration_link: message.include.registration_link !== false },
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [message?.id]);
 
   const run = useCallback(async (what: Busy, call: () => Promise<MessageView>, done?: (before: MessageView | null, after: MessageView) => string | null): Promise<boolean> => {
