@@ -33,13 +33,14 @@
  * who registered before the session existed. This script stays for a manual run and a dry run.
  */
 import { sequelize } from '../config/database';
-import { ensureNextOpenHouseSession, bookCountdownForEarlierRegistrants } from '../services/openHouseSessionSync';
+import { ensureNextOpenHouseSession, ensureRoomAndMeeting, bookCountdownForEarlierRegistrants } from '../services/openHouseSessionSync';
 
 async function main(): Promise<void> {
   const dryRun = process.argv.includes('--dry-run');
   const session = await ensureNextOpenHouseSession({ dryRun });
   if (session.outcome === 'unreadable_start') process.exitCode = 1;
   if (!dryRun && session.id && (session.outcome === 'created' || session.outcome === 'updated')) {
+    await ensureRoomAndMeeting(session.id);
     const booking = await bookCountdownForEarlierRegistrants(session.id);
     process.stdout.write(JSON.stringify({ event: 'booking', ...booking }) + '\n');
   }

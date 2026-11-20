@@ -47,7 +47,7 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     schedule: '20 * * * *',
     category: 'operations',
     description:
-      'Keeps the next announced Open House in live_sessions (create-or-update by Eventbrite id) and books the countdown for any registrant of it who has no countdown row for that session in any status. Before this the session existed only after a manual script run, and anyone who registered earlier was enrolled with zero reminders: all 22 Dec 3 registrants on 2026-11-20. Grants only the event_reminder permission, never overwriting a person\'s own choice. Books only while the countdown campaign is active. Sends nothing itself; every send gate still decides each reminder.',
+      'Keeps the next announced Open House in live_sessions (create-or-update by Eventbrite id), gives it its community room and a platform-minted Zoom meeting when it has none (OH1v: never replaces an existing link), and books the countdown for any registrant of it who has no countdown row for that session in any status. Before this the session existed only after a manual script run, and anyone who registered earlier was enrolled with zero reminders: all 22 Dec 3 registrants on 2026-11-20. Grants only the event_reminder permission, never overwriting a person\'s own choice. Books only while the countdown campaign is active. Sends nothing itself; every send gate still decides each reminder.',
   },
   {
     // Intern nudge cadence (2026-11-11). Seeded rather than added to cronRegistryBaseline.ts,

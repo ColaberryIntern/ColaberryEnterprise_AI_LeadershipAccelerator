@@ -20,9 +20,16 @@ jest.mock('../openHouseCountdown', () => ({
   grantEventReminderPermission: (...a: unknown[]) => grantEventReminderPermission(...a),
 }));
 jest.mock('../sequenceService', () => ({ enrollLeadInSequence: (...a: unknown[]) => enrollLeadInSequence(...a) }));
+const findByPk = jest.fn();
+const resolveRoomId = jest.fn();
+const generateMeetLink = jest.fn();
+jest.mock('../../models', () => ({ LiveSession: { findByPk: (...a: unknown[]) => findByPk(...a) } }));
+jest.mock('../acceleratorService', () => ({ resolveRoomId: (...a: unknown[]) => resolveRoomId(...a) }));
+jest.mock('../meetingService', () => ({ generateMeetLink: (...a: unknown[]) => generateMeetLink(...a) }));
 
 import {
-  ensureNextOpenHouseSession, bookCountdownForEarlierRegistrants, syncOpenHouseCountdown, UNBOOKED_REGISTRANTS_SQL,
+  ensureNextOpenHouseSession, ensureRoomAndMeeting, bookCountdownForEarlierRegistrants, syncOpenHouseCountdown,
+  UNBOOKED_REGISTRANTS_SQL,
 } from '../openHouseSessionSync';
 
 const quiet = () => undefined;
@@ -105,19 +112,55 @@ describe('bookCountdownForEarlierRegistrants', () => {
 describe('syncOpenHouseCountdown', () => {
   it('never throws, even when the event source is down', async () => {
     getCurrentOpenHouseEvent.mockRejectedValue(new Error('CCPP down'));
-    await expect(syncOpenHouseCountdown(quiet)).resolves.toEqual({ session: null, booking: null });
+    await expect(syncOpenHouseCountdown(quiet)).resolves.toEqual({ session: null, venue: null, booking: null });
   });
 
-  it('books only after a session was created or updated', async () => {
+  it('gives the session its room and Zoom, then books, only after a session was created or updated', async () => {
     getCurrentOpenHouseEvent.mockResolvedValue({ announced: false });
     expect((await syncOpenHouseCountdown(quiet)).booking).toBeNull();
     expect(findOpenHouseCountdownCampaign).not.toHaveBeenCalled();
+    expect(findByPk).not.toHaveBeenCalled();
 
     getCurrentOpenHouseEvent.mockResolvedValue(EVENT);
     query.mockResolvedValueOnce([{ id: 'sess-1' }]).mockResolvedValueOnce(undefined).mockResolvedValueOnce([]);
+    findByPk.mockResolvedValue({ id: 'sess-1', meeting_link: null });
+    resolveRoomId.mockResolvedValue('room-1');
+    generateMeetLink.mockResolvedValue('https://colaberry.zoom.us/j/1');
     findOpenHouseCountdownCampaign.mockResolvedValue({ id: 'c1', status: 'active', sequence_id: 's1' });
     const r = await syncOpenHouseCountdown(quiet);
     expect(r.session).toMatchObject({ outcome: 'updated', id: 'sess-1' });
+    expect(r.venue).toEqual({ room_id: 'room-1', meeting: 'minted' });
     expect(r.booking).toMatchObject({ campaign: 'ok', candidates: 0 });
+  });
+});
+
+describe('ensureRoomAndMeeting (OH1v)', () => {
+  it('assigns the room and mints a platform Zoom when the session has no link', async () => {
+    const session = { id: 'sess-1', meeting_link: null };
+    findByPk.mockResolvedValue(session);
+    resolveRoomId.mockResolvedValue('room-1');
+    generateMeetLink.mockResolvedValue('https://colaberry.zoom.us/j/1');
+    expect(await ensureRoomAndMeeting('sess-1', quiet)).toEqual({ room_id: 'room-1', meeting: 'minted' });
+    expect(resolveRoomId).toHaveBeenCalledWith(session);
+    expect(generateMeetLink).toHaveBeenCalledWith(session);
+  });
+
+  it('never mints a second meeting or replaces a link that is already set (idempotent re-run)', async () => {
+    findByPk.mockResolvedValue({ id: 'sess-1', meeting_link: 'https://colaberry.zoom.us/j/1' });
+    resolveRoomId.mockResolvedValue('room-1');
+    expect(await ensureRoomAndMeeting('sess-1', quiet)).toEqual({ room_id: 'room-1', meeting: 'kept' });
+    expect(generateMeetLink).not.toHaveBeenCalled();
+  });
+
+  it('reports a failed mint instead of claiming success, and handles a missing session', async () => {
+    findByPk.mockResolvedValueOnce({ id: 'sess-1', meeting_link: null });
+    resolveRoomId.mockResolvedValue(null);
+    generateMeetLink.mockResolvedValue(null);
+    const logs: Array<[string, Record<string, unknown> | undefined]> = [];
+    expect(await ensureRoomAndMeeting('sess-1', (e, c) => { logs.push([e, c]); })).toEqual({ room_id: null, meeting: 'failed' });
+    expect(logs[0][1]).toMatchObject({ outcome: 'partial' });
+
+    findByPk.mockResolvedValueOnce(null);
+    expect(await ensureRoomAndMeeting('nope', quiet)).toEqual({ room_id: null, meeting: 'no_session' });
   });
 });
