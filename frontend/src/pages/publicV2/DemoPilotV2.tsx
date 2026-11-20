@@ -1,143 +1,55 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import SeoV2 from '../../components/publicV2/SeoV2';
 import Icon from '../../components/publicV2/Icon';
-import { EnterpriseLead, toLeadPayload } from '../../models/EnterpriseLead';
 import { getUTMParams } from '../../services/utmService';
 import { identifyVisitor } from '../../utils/tracker';
-import api from '../../utils/api';
+import { createIntake } from '../../services/enterpriseIntakeApi';
 import { PHONE_CONSENT_TEXT } from '../../config/consentText';
-import { phoneProblem } from '../../utils/phone';
+import DemoPilotIntake from './DemoPilotIntake';
+import {
+  DEPARTMENTS,
+  EMPTY,
+  PilotForm,
+  SERVICES,
+  START_TIMINGS,
+  WHAT_HAPPENS,
+  toIntakeBody,
+  validate,
+} from './demoPilotModel';
 
 /**
- * DemoPilotV2 — /demo-pilot. The single conversion page.
+ * DemoPilotV2 - /demo-pilot. The single conversion page, and since W28 the start of the
+ * Enterprise intake.
  *
- * WHAT THIS REPLACES. /contact and /lab. The v5 site model folds both into one
- * page and points every primary button on the site at it, because the site had
- * two different "get in touch" destinations asking for different things, and a
- * visitor who wanted to start had to guess which one was the real front door.
+ * Ali, 2026-11-20: "an intake process that starts from the moment they decide to fill out
+ * the form... upon completing that they can have the AI call them." So the page has two
+ * steps: this short form, then (DemoPilotIntake) their own time figure and a 10-minute AI
+ * interview, by phone or typed. The form asks only what the interview cannot: who they are,
+ * the process, two numbers, and permission. The interview asks the rest.
  *
- * WHAT IT ASKS FOR. One process and two numbers: what the process costs today,
- * and what AI would have to return to be worth doing. Those two figures are the
- * ones an architect needs to pick a pilot, and they are also the figures the
- * customer will judge the pilot by -- which is the point of asking for them
- * before anyone has sold anything.
+ * CONSENT IS NOT OPTIONAL. The tick to be contacted blocks submission, as /contact always has.
+ * The phone NUMBER is required (PH1, Ali 2026-11-19: every public lead form requires one). The
+ * call/text permission beside it is a separate tick, always shown, unticked and NOT required:
+ * one sentence about being "contacted" must never authorize an automated call. No tick means
+ * no AI call is offered; the interview is typed instead.
  *
- * CONSENT IS NOT OPTIONAL, AND IS NOT IN THE MODEL. The design model's form has
- * name, email, company, role, service, department, process and the two figures,
- * and no consent tick. /contact has always required an explicit
- * `consentContact` before it will submit, and that is a compliance surface, not
- * a styling choice. Replacing a consented lead form with an unconsented one
- * would be a regression dressed as a redesign, so the tick is carried over and
- * submission is blocked without it.
- *
- * PHONE IS REQUIRED (PH1, Ali 2026-11-19: every public signup/lead form requires
- * a phone number). It used to be absent here. The call/text permission beside it
- * is a separate box, always shown, unticked and NOT required - the number is
- * mandatory, permission to ring it is not.
- *
- * It posts to the SAME endpoint as /contact (`/api/leads`) with the same
- * `EnterpriseLead` shape, so these leads land in the pipeline that already
- * exists rather than in a new one nobody is watching. `formType` distinguishes
- * them.
+ * It posts to /api/enterprise/intake, which writes the same lead /api/leads wrote (same form
+ * type, same message, same pipeline) and opens an intake record. Its random id goes in the
+ * URL as `?intake=`, so a reload, or a link we email later, picks the interview back up.
  */
 
 const FORM_TYPE = 'demo_pilot_request';
 
-const SERVICES = ['Build', 'Guide', 'Train', 'Not sure yet'] as const;
-
-const DEPARTMENTS = [
-  'Finance',
-  'Operations',
-  'Customer service',
-  'Sales',
-  'HR',
-  'IT & Data',
-  'Company-wide',
-  'Other',
-] as const;
-
-const WHAT_HAPPENS: readonly { n: string; title: string; body: string }[] = [
-  {
-    n: '1',
-    title: 'An architect reads it',
-    body: 'A person, not a sequence. They will reply to plan a first conversation.',
-  },
-  {
-    n: '2',
-    title: 'We meet the leader and the experts',
-    body: 'The people who own the process, so the pilot targets the right thing.',
-  },
-  {
-    n: '3',
-    title: 'You see the demo pilot',
-    body: 'One process, running, with the ROI case beside it. Then you decide.',
-  },
-];
-
-interface PilotForm {
-  fullName: string;
-  email: string;
-  company: string;
-  role: string;
-  service: string;
-  department: string;
-  process: string;
-  costToday: string;
-  requiredReturn: string;
-  consentContact: boolean;
-  phone: string;
-  phoneConsent: boolean;
-}
-
-const EMPTY: PilotForm = {
-  fullName: '',
-  email: '',
-  company: '',
-  role: '',
-  service: '',
-  department: '',
-  process: '',
-  costToday: '',
-  requiredReturn: '',
-  consentContact: false,
-  phone: '',
-  phoneConsent: false,
-};
-
-/**
- * Fold the pilot-specific answers into the lead's message.
- *
- * EnterpriseLead has no column for "the process you would start with" or for
- * the two figures, and inventing backend fields is a bigger change than this
- * page justifies. Composing them into `message` keeps every answer attached to
- * the lead and readable by whoever picks it up, with labels so nothing is
- * ambiguous once it is out of the form's context.
- */
-function composeMessage(f: PilotForm): string {
-  const lines = [
-    `Service considered: ${f.service || 'not stated'}`,
-    `Department: ${f.department || 'not stated'}`,
-    '',
-    'Process to start with:',
-    f.process.trim() || 'not stated',
-    '',
-    `What it costs today: ${f.costToday.trim() || 'not stated'}`,
-    `What AI needs to return: ${f.requiredReturn.trim() || 'not stated'}`,
-  ];
-  return lines.join('\n');
-}
-
 export function DemoPilotV2(): React.ReactElement {
+  const [params, setParams] = useSearchParams();
+  const token = params.get('intake');
   const [form, setForm] = useState<PilotForm>(EMPTY);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
   const [serverError, setServerError] = useState('');
 
-  const change = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
-  ): void => {
+  const change = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>): void => {
     const { name, value, type } = e.target;
     const checked = (e.target as HTMLInputElement).checked;
     setForm((p) => ({ ...p, [name]: type === 'checkbox' ? checked : value }));
@@ -147,75 +59,77 @@ export function DemoPilotV2(): React.ReactElement {
   const submit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
     setServerError('');
-
-    const next: Record<string, string> = {};
-    if (!form.fullName.trim()) next.fullName = 'Please tell us your name';
-    if (!form.email.trim()) next.email = 'Please give us a work email';
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
-      next.email = 'That does not look like an email address';
-    }
-    const phoneError = phoneProblem(form.phone);
-    if (phoneError) next.phone = phoneError;
-    if (!form.process.trim()) next.process = 'Name one process, even roughly';
-    // Blocking, deliberately: see the consent note in this file's header.
-    if (!form.consentContact) next.consentContact = 'You must agree to be contacted';
-
+    const next = validate(form);
     if (Object.keys(next).length > 0) {
       setErrors(next);
       return;
     }
-
     setSubmitting(true);
     try {
-      const lead: EnterpriseLead = {
-        fullName: form.fullName.trim(),
-        email: form.email.trim(),
-        company: form.company.trim() || undefined,
-        title: form.role.trim() || undefined,
-        phone: form.phone.trim(),
-        phoneConsent: form.phoneConsent,
-        message: composeMessage(form),
-        consentContact: form.consentContact,
-        formType: FORM_TYPE,
-        ...getUTMParams(),
-        pageOrigin: window.location.href,
-      };
-      await api.post('/api/leads', toLeadPayload(lead));
-      identifyVisitor(lead.email, {
-        name: lead.fullName,
-        company: lead.company,
-        phone: lead.phone,
-        metadata: { source_form: FORM_TYPE, title: lead.title },
-      });
-      setSubmitted(true);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch (err) {
-      setServerError(
-        'That did not send. Please try again, or email info@colaberry.com and we will pick it up.',
+      const utm = getUTMParams();
+      const created = await createIntake(
+        toIntakeBody(form, {
+          utmSource: utm.utmSource,
+          utmMedium: utm.utmMedium,
+          utmCampaign: utm.utmCampaign,
+          pageUrl: window.location.href,
+        }),
       );
+      identifyVisitor(form.email.trim(), {
+        name: form.fullName.trim(),
+        company: form.company.trim(),
+        metadata: { source_form: FORM_TYPE, title: form.role.trim() },
+      });
+      setParams({ intake: created.token });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch {
+      setServerError('That did not send. Please try again, or email info@colaberry.com and we will pick it up.');
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (submitted) {
+  const err = (name: string, id: string): React.ReactElement | null =>
+    errors[name] ? (
+      <p className="cbv2-field5__err" id={id}>
+        {errors[name]}
+      </p>
+    ) : null;
+
+  const field = (
+    name: keyof PilotForm,
+    id: string,
+    label: React.ReactNode,
+    extra: React.InputHTMLAttributes<HTMLInputElement> = {},
+  ): React.ReactElement => (
+    <div className="cbv2-field5">
+      <label htmlFor={id}>{label}</label>
+      <input
+        id={id}
+        name={name}
+        value={String(form[name])}
+        onChange={change}
+        aria-invalid={Boolean(errors[name])}
+        aria-describedby={errors[name] ? `${id}-err` : undefined}
+        {...extra}
+      />
+      {err(name, `${id}-err`)}
+    </div>
+  );
+
+  if (token) {
     return (
       <>
-        <SeoV2 title="Thank you" description="Your demo pilot request is with an architect." />
+        <SeoV2 title="Your 10-minute interview" description="The next step of your demo pilot request." />
         <section className="cbv2-prhero5 cbv2-dp5" aria-labelledby="cbv2-dp-done">
           <div className="cbv2-wrap">
-            <p className="cbv2-k5">Thank you</p>
-            <h1 id="cbv2-dp-done">That is with an architect now.</h1>
+            <p className="cbv2-k5">Thank you. One more step</p>
+            <h1 id="cbv2-dp-done">Next, a 10-minute interview.</h1>
             <p className="cbv2-lede">
-              A person will read it and reply to plan a first conversation. If you would
-              rather add anything in the meantime, email{' '}
-              <a href="mailto:info@colaberry.com">info@colaberry.com</a>.
+              Our AI asks about the process you named, so we can research your company and come to
+              our first meeting with options for your pilot.
             </p>
-            <p className="cbv2-btns5">
-              <Link className="cbv2-btn cbv2-btn--line" to="/services">
-                Read about the three services
-              </Link>
-            </p>
+            <DemoPilotIntake token={token} phone={form.phone.trim() || undefined} />
           </div>
         </section>
       </>
@@ -227,19 +141,12 @@ export function DemoPilotV2(): React.ReactElement {
       <SeoV2
         title="Book a demo pilot"
         description={
-          'Tell us about one process and two numbers. An architect will come back to you to ' +
-          'plan a demo pilot, so you can see AI running on your own work before you commit ' +
-          'to anything.'
+          'Tell us about one process and two numbers, then talk to our AI for 10 minutes. Our ' +
+          'first meeting starts with options for your pilot, so you see AI running on your own ' +
+          'work before you commit to anything.'
         }
       />
 
-      {/*
-        LAYOUT IS THE MODEL'S (2026-11-16, page group 3): one light band, the promise and
-        "what happens next" on the left, the form card on the right. The form's data
-        contract is unchanged: same field names, same checks, same consent, same endpoint.
-        The service question is the model's row of chips; they are radio buttons with the
-        same `service` name and values the dropdown had, so the lead message is identical.
-      */}
       <section className="cbv2-prhero5 cbv2-dp5" aria-labelledby="cbv2-dp-title">
         <div className="cbv2-wrap">
           <p className="cbv2-crumb5">
@@ -249,8 +156,8 @@ export function DemoPilotV2(): React.ReactElement {
             <div>
               <h1 id="cbv2-dp-title">See AI run on one of your processes.</h1>
               <p className="cbv2-lede">
-                Tell us about one process and two numbers. An architect will come back to you
-                to plan the demo pilot, for Build or Guide, or to set up Train.
+                Tell us about one process and two numbers. Then talk to our AI for 10 minutes, so our
+                first meeting starts with your pilot options.
               </p>
               <h2 id="cbv2-dp-next" className="cbv2-sr-only">
                 What happens after you send this
@@ -268,103 +175,38 @@ export function DemoPilotV2(): React.ReactElement {
               </ol>
             </div>
 
-            <form
-              className="cbv2-fcard5"
-              onSubmit={submit}
-              noValidate
-              aria-labelledby="cbv2-dp-form"
-            >
+            <form className="cbv2-fcard5" onSubmit={submit} noValidate aria-labelledby="cbv2-dp-form">
               <h2 id="cbv2-dp-form" className="cbv2-sr-only">
                 Book a demo pilot
               </h2>
               <div className="cbv2-fgrid5">
-                <div className="cbv2-field5">
-                  <label htmlFor="dp-name">Your name</label>
-                  <input
-                    id="dp-name"
-                    name="fullName"
-                    value={form.fullName}
-                    onChange={change}
-                    autoComplete="name"
-                    aria-invalid={Boolean(errors.fullName)}
-                    aria-describedby={errors.fullName ? 'dp-name-err' : undefined}
-                  />
-                  {errors.fullName ? (
-                    <p className="cbv2-field5__err" id="dp-name-err">
-                      {errors.fullName}
-                    </p>
-                  ) : null}
-                </div>
-                <div className="cbv2-field5">
-                  <label htmlFor="dp-email">Work email</label>
-                  <input
-                    id="dp-email"
-                    name="email"
-                    type="email"
-                    value={form.email}
-                    onChange={change}
-                    autoComplete="email"
-                    aria-invalid={Boolean(errors.email)}
-                    aria-describedby={errors.email ? 'dp-email-err' : undefined}
-                  />
-                  {errors.email ? (
-                    <p className="cbv2-field5__err" id="dp-email-err">
-                      {errors.email}
-                    </p>
-                  ) : null}
-                </div>
+                {field('fullName', 'dp-name', 'Your name', { autoComplete: 'name' })}
+                {field('email', 'dp-email', 'Work email', { type: 'email', autoComplete: 'email' })}
               </div>
-
               <div className="cbv2-fgrid5">
-                <div className="cbv2-field5">
-                  <label htmlFor="dp-company">Company</label>
-                  <input
-                    id="dp-company"
-                    name="company"
-                    value={form.company}
-                    onChange={change}
-                    autoComplete="organization"
-                  />
-                </div>
-                <div className="cbv2-field5">
-                  <label htmlFor="dp-role">Your role</label>
-                  <input
-                    id="dp-role"
-                    name="role"
-                    value={form.role}
-                    onChange={change}
-                    autoComplete="organization-title"
-                  />
-                </div>
+                {field('company', 'dp-company', 'Company', { autoComplete: 'organization' })}
+                {field('role', 'dp-role', 'Your role', { autoComplete: 'organization-title' })}
               </div>
-
-              <div className="cbv2-field5">
-                <label htmlFor="dp-phone">Phone</label>
-                <input
-                  id="dp-phone"
-                  name="phone"
-                  type="tel"
-                  inputMode="tel"
-                  value={form.phone}
-                  onChange={change}
-                  autoComplete="tel"
-                  required
-                  aria-invalid={Boolean(errors.phone)}
-                  aria-describedby={errors.phone ? 'dp-phone-err' : undefined}
-                />
-                {errors.phone ? (
-                  <p className="cbv2-field5__err" id="dp-phone-err">
-                    {errors.phone}
-                  </p>
-                ) : null}
+              <div className="cbv2-fgrid5">
+                {field('website', 'dp-website', <>Company website <small>optional</small></>, {
+                  autoComplete: 'url',
+                  placeholder: 'e.g. acme.com',
+                })}
+                {field('phone', 'dp-phone', 'Mobile number', {
+                  type: 'tel',
+                  inputMode: 'tel',
+                  autoComplete: 'tel',
+                  required: true,
+                })}
               </div>
-              {/* Always shown beside the phone (PH1), unticked, never required. */}
+              {/* PH1: always shown beside the phone, unticked, never required. It is also the
+                  grant the AI interview call rests on: no tick, no "Call me now". */}
               <div className="cbv2-consent5">
                 <input
                   type="checkbox"
                   id="dp-phone-consent"
-                  name="phoneConsent"
-                  checked={form.phoneConsent}
+                  name="callConsent"
+                  checked={form.callConsent}
                   onChange={change}
                 />
                 <label htmlFor="dp-phone-consent">{PHONE_CONSENT_TEXT}</label>
@@ -394,16 +236,29 @@ export function DemoPilotV2(): React.ReactElement {
                 </div>
               </fieldset>
 
-              <div className="cbv2-field5">
-                <label htmlFor="dp-dept">Department</label>
-                <select id="dp-dept" name="department" value={form.department} onChange={change}>
-                  <option value="">Choose one</option>
-                  {DEPARTMENTS.map((d) => (
-                    <option key={d} value={d}>
-                      {d}
-                    </option>
-                  ))}
-                </select>
+              <div className="cbv2-fgrid5">
+                <div className="cbv2-field5">
+                  <label htmlFor="dp-dept">Department</label>
+                  <select id="dp-dept" name="department" value={form.department} onChange={change}>
+                    <option value="">Choose one</option>
+                    {DEPARTMENTS.map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="cbv2-field5">
+                  <label htmlFor="dp-start">When do you want to start?</label>
+                  <select id="dp-start" name="startTiming" value={form.startTiming} onChange={change}>
+                    <option value="">Choose one</option>
+                    {START_TIMINGS.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div className="cbv2-field5">
@@ -418,49 +273,30 @@ export function DemoPilotV2(): React.ReactElement {
                   aria-invalid={Boolean(errors.process)}
                   aria-describedby={errors.process ? 'dp-process-err' : undefined}
                 />
-                {errors.process ? (
-                  <p className="cbv2-field5__err" id="dp-process-err">
-                    {errors.process}
-                  </p>
-                ) : null}
+                {err('process', 'dp-process-err')}
               </div>
 
-              {/* The two figures are one question asked in two boxes, so they stay a real
-                  fieldset; the legend and its hint are drawn as the model's one tinted callout. */}
+              {/* The two figures: what the process costs today (people and hours, so we can show
+                  it back as hours a year), and what AI has to return. */}
               <fieldset className="cbv2-figs5">
                 <legend className="cbv2-fig5">
                   <span className="cbv2-k5">The two figures</span>
                 </legend>
-                <p className="cbv2-fig5__p">
-                  They are how we pick the pilot, and how you will judge it. Rough is fine.
-                </p>
+                <p className="cbv2-fig5__p">They are how we pick the pilot, and how you will judge it. Rough is fine.</p>
                 <div className="cbv2-fgrid5">
-                  <div className="cbv2-field5">
-                    <label htmlFor="dp-cost">
-                      What it costs today <small>people &times; hours</small>
-                    </label>
-                    <input
-                      id="dp-cost"
-                      name="costToday"
-                      placeholder="e.g. 4 people, ~20 hrs/week"
-                      value={form.costToday}
-                      onChange={change}
-                    />
-                  </div>
-                  <div className="cbv2-field5">
-                    <label htmlFor="dp-return">What AI needs to return</label>
-                    <input
-                      id="dp-return"
-                      name="requiredReturn"
-                      placeholder="e.g. hours back, faster close"
-                      value={form.requiredReturn}
-                      onChange={change}
-                    />
-                  </div>
+                  {field('peopleCount', 'dp-people', 'People who do this today', { inputMode: 'numeric', placeholder: 'e.g. 4' })}
+                  {field('hoursPerWeek', 'dp-hours', <>Hours a week <small>in total</small></>, {
+                    inputMode: 'decimal',
+                    placeholder: 'e.g. 20',
+                  })}
                 </div>
+                {field('requiredReturn', 'dp-return', 'What AI needs to return', { placeholder: 'e.g. hours back, faster close' })}
               </fieldset>
 
-              {/* Consent is not in the model and is not optional (see the note at the top). */}
+              {field('otherDeciders', 'dp-deciders', <>Who else decides? <small>optional</small></>, {
+                placeholder: 'e.g. our CFO and IT lead',
+              })}
+
               <div className="cbv2-consent5">
                 <input
                   type="checkbox"
@@ -471,14 +307,8 @@ export function DemoPilotV2(): React.ReactElement {
                   aria-invalid={Boolean(errors.consentContact)}
                   aria-describedby={errors.consentContact ? 'dp-consent-err' : undefined}
                 />
-                <label htmlFor="dp-consent">
-                  I agree that Colaberry may contact me about this request.
-                </label>
-                {errors.consentContact ? (
-                  <p className="cbv2-field5__err" id="dp-consent-err">
-                    {errors.consentContact}
-                  </p>
-                ) : null}
+                <label htmlFor="dp-consent">I agree that Colaberry may contact me about this request.</label>
+                {err('consentContact', 'dp-consent-err')}
               </div>
 
               {serverError ? (
@@ -487,11 +317,7 @@ export function DemoPilotV2(): React.ReactElement {
                 </p>
               ) : null}
 
-              <button
-                className="cbv2-btn cbv2-btn--primary cbv2-fcard5__go"
-                type="submit"
-                disabled={submitting}
-              >
+              <button className="cbv2-btn cbv2-btn--primary cbv2-fcard5__go" type="submit" disabled={submitting}>
                 {submitting ? 'Sending…' : 'Book my demo pilot'}
                 {submitting ? null : <Icon name="arrowRight" size={16} />}
               </button>

@@ -145,3 +145,30 @@ describe('buildFlotationCallPrompt', () => {
     expect(prompt).toMatch(/Understand the work/);
   });
 });
+
+describe('W28: the Colaberry Enterprise intake call', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { ENTERPRISE_BRAND } = require('../voiceCallPrompt');
+  const prompt = buildFlotationCallPrompt({ name: 'Dana', company: 'Acme', message: 'Dispatch re-keys orders.' }, ENTERPRISE_BRAND);
+
+  it('speaks for Colaberry, from the Enterprise site, never AI Flotation', () => {
+    expect(prompt).toContain('You are the AI interviewer for Colaberry');
+    expect(prompt).toContain('the Colaberry Enterprise website');
+    expect(prompt).not.toMatch(/AI Flotation/);
+  });
+
+  it('aims for under 10 minutes', () => {
+    expect(prompt).toContain('Aim to finish in under 10 minutes');
+  });
+
+  it('promises a first meeting with pilot options, not a project being set up', () => {
+    expect(prompt).toContain('come to the first meeting with options for their pilot');
+    expect(prompt).not.toContain('their project is being set up now');
+  });
+
+  it('leaves the existing brands unchanged', () => {
+    const flotation = buildFlotationCallPrompt({ name: 'Dana' });
+    expect(flotation).toContain('their project is being set up now');
+    expect(flotation).not.toContain('Aim to finish in under 10 minutes');
+  });
+});

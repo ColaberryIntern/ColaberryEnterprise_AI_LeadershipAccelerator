@@ -11,6 +11,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { DemoPilotV2 } from '../DemoPilotV2';
+import { EMPTY, formatHours, hoursPerYear, toIntakeBody, validate } from '../demoPilotModel';
 
 const html = (): string =>
   renderToStaticMarkup(
@@ -44,14 +45,53 @@ describe('DemoPilotV2 — consent', () => {
   });
 
   it('PH1: asks for a REQUIRED phone, with its own optional call/text tick beside it', () => {
-    // Ali, 2026-11-19: every public lead form requires a phone number. Because it now
-    // collects one, it needs the separate permission tick: shown, unticked, not required.
+    // Ali, 2026-11-19: every public lead form requires a phone number. The permission to call
+    // it is a separate tick: always shown, unticked, not required. W28: it is also what lets
+    // the AI interview call them.
     const h = html();
     expect(h).toContain('name="phone"');
     expect(h).toMatch(/id="dp-phone"[^>]*required/);
+    expect(h).toContain('name="callConsent"');
     // Static markup escapes the apostrophe in the wording, so match a span without one.
     expect(textOf(h)).toContain('including with AI-assisted or automated calls');
     expect(h).not.toMatch(/id="dp-phone-consent"[^>]*checked/);
+  });
+});
+
+describe('W28: demoPilotModel', () => {
+  const filled = {
+    ...EMPTY,
+    fullName: 'Dana',
+    email: 'dana@acme.test',
+    phone: '214 555 0100',
+    company: 'Acme',
+    process: 'Re-keying orders',
+    consentContact: true,
+  };
+
+  it('requires a company, because we research it before we meet', () => {
+    expect(validate({ ...filled, company: '' }).company).toBeTruthy();
+    expect(validate(filled)).toEqual({});
+  });
+
+  it('PH1: requires a phone number, and sends the call grant only when ticked', () => {
+    expect(validate({ ...filled, phone: '' }).phone).toBeTruthy();
+    expect(validate({ ...filled, phone: '555 0100' }).phone).toBeTruthy();
+    expect(toIntakeBody(filled, {}).callConsent).toBe(false);
+    expect(toIntakeBody({ ...filled, callConsent: true }, {}).callConsent).toBe(true);
+  });
+
+  it('sends the two cost numbers as numbers, and blanks as null', () => {
+    const body = toIntakeBody({ ...filled, peopleCount: '4', hoursPerWeek: '1,200' }, {});
+    expect(body).toMatchObject({ peopleCount: 4, hoursPerWeek: 1200 });
+    expect(toIntakeBody(filled, {})).toMatchObject({ peopleCount: null, hoursPerWeek: null });
+  });
+
+  it('shows hours a year from their hours a week, and nothing when they gave none', () => {
+    expect(hoursPerYear(20)).toBe(1040);
+    expect(hoursPerYear(null)).toBeNull();
+    expect(hoursPerYear(0)).toBeNull();
+    expect(formatHours(1040)).toBe('1,040');
   });
 });
 
@@ -61,7 +101,9 @@ describe('DemoPilotV2 — the two figures', () => {
     expect(h).toContain('<fieldset');
     expect(h).toContain('<legend');
     expect(textOf(h)).toContain('The two figures');
-    expect(h).toContain('name="costToday"');
+    // W28: the cost is two numbers (people, hours a week), so it can be shown back as hours a year.
+    expect(h).toContain('name="peopleCount"');
+    expect(h).toContain('name="hoursPerWeek"');
     expect(h).toContain('name="requiredReturn"');
   });
 
@@ -82,9 +124,10 @@ describe('DemoPilotV2 — the page', () => {
 
   it('says what happens after you send it', () => {
     const text = textOf(html());
-    expect(text).toContain('An architect reads it');
-    expect(text).toContain('We meet the leader and the experts');
-    expect(text).toContain('You see the demo pilot');
+    // W28: the AI interview comes first, and the first meeting starts with options.
+    expect(text).toContain('Talk to our AI for 10 minutes');
+    expect(text).toContain('We do the homework');
+    expect(text).toContain('Our first meeting starts with your options');
   });
 
   it('offers an email route for anyone who will not fill in a form', () => {

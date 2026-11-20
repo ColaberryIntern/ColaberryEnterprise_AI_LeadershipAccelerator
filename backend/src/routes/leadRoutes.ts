@@ -5,6 +5,12 @@ import { requestSponsorshipKit } from '../controllers/sponsorshipController';
 import { handleLeadIngest } from '../controllers/leadIngestionController';
 import { handleFlotationPreview } from '../controllers/flotationPreviewController';
 import { handleFlotationInterview } from '../controllers/flotationInterviewController';
+import {
+  handleCreateEnterpriseIntake,
+  handleEnterpriseInterviewTurn,
+  handleEnterpriseIntakeCall,
+  handleEnterpriseIntakeStatus,
+} from '../controllers/enterpriseIntakeController';
 import { handleFlotationApp } from '../controllers/flotationAppController';
 import { handleScholarshipInterview } from '../controllers/scholarshipInterviewController';
 import { handleSalesHubCory } from '../controllers/salesHubCoryController';
@@ -86,6 +92,13 @@ router.get('/api/flotation/preview/:token', previewRateLimiter, handleFlotationP
  * caps the exchanges within one conversation separately.
  */
 router.post('/api/flotation/interview', interviewRateLimiter, handleFlotationInterview);
+
+// W28: the Enterprise intake, from "Book a demo pilot". Public, so registered here with the
+// other early public routers. The form shares the lead form's limit; the interview its own.
+router.post('/api/enterprise/intake', leadRateLimiter, handleCreateEnterpriseIntake);
+router.get('/api/enterprise/intake/:token', interviewRateLimiter, handleEnterpriseIntakeStatus);
+router.post('/api/enterprise/intake/:token/interview', interviewRateLimiter, handleEnterpriseInterviewTurn);
+router.post('/api/enterprise/intake/:token/call', leadRateLimiter, handleEnterpriseIntakeCall);
 
 // The OpportunityLift written interview. Same shape and the same limiter as the
 // flotation one above: keyed on the `raw_payload_id` the ingest form returned, one

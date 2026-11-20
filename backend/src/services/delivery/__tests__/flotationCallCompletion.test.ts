@@ -25,6 +25,11 @@ jest.mock('../projectIntake', () => ({
   finishIntake: (...a: any[]) => mockFinish(...a),
 }));
 
+const mockRecordEnterprise = jest.fn();
+jest.mock('../../enterpriseIntake/enterpriseIntakeService', () => ({
+  recordEnterpriseCallOutcome: (...a: any[]) => mockRecordEnterprise(...a),
+}));
+
 import { completeFlotationCall, reconcileFlotationCall, reconcileOpenFlotationCalls, SWEEP_MIN_AGE_MS } from '../flotationCallCompletion';
 
 const TRANSCRIPT = 'agent: Tell me about the project.\nhuman: We run a tool library and track loans on paper.';
@@ -113,6 +118,14 @@ describe('completeFlotationCall', () => {
     const out = await completeFlotationCall({ callId: 'call_1', status: 'completed', transcript: '' });
     expect(mockFinish).not.toHaveBeenCalled();
     expect(out).toEqual({ handled: true, completed: false });
+  });
+
+  it('W28: ends an Enterprise intake call the same way, builds nothing, and records it on the intake', async () => {
+    mockCommFindOne.mockResolvedValue(row({ metadata: { source: 'enterprise-intake', trigger: 'instant_callback' } }));
+    const out = await completeFlotationCall({ callId: 'call_1', status: 'completed', transcript: TRANSCRIPT });
+    expect(out).toMatchObject({ handled: true, completed: true });
+    expect(mockFinish).toHaveBeenCalledWith(expect.objectContaining({ buildFor: { kind: 'none' }, source: 'voice_transcript' }));
+    expect(mockRecordEnterprise).toHaveBeenCalledWith('call_1', expect.objectContaining({ understanding: 'created' }));
   });
 
   it('leaves other brands\' calls alone', async () => {
