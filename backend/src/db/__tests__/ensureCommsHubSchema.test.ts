@@ -8,7 +8,10 @@ import { ensureCommsHubSchema, COMMS_HUB_SCHEMA_STATEMENTS } from '../ensureComm
  * ADD CONSTRAINT throws "already exists", must stay quiet and report ok; a missing table must report
  * ok:false with a SchemaInvariantViolation log.
  */
-const TABLES = ['comms_hub_events', 'comms_hub_thumbnails', 'comms_hub_event_photos', 'comms_hub_settings', 'comms_hub_activity'];
+const TABLES = [
+  'comms_hub_events', 'comms_hub_thumbnails', 'comms_hub_event_photos', 'comms_hub_settings', 'comms_hub_activity',
+  'comms_hub_messages', 'comms_hub_drafts', 'comms_hub_destinations', 'comms_hub_approvals', 'comms_hub_deliveries',
+];
 
 function respond(opts: { presentTables: string[]; hasColumn: boolean; secondBoot: boolean }) {
   mockQuery.mockImplementation(async (sql: string) => {

@@ -13,11 +13,29 @@ import { sequelize } from '../config/database';
  *   middleware still records every admin write, but it cannot say "approved", "paused" or "sent
  *   by the worker" (the worker has no request), so the hub keeps its own.
  *
- * Message tables (drafts, approvals, deliveries) arrive with CH6.1.
+ * Messages (CH6.1), minus WhatsApp groups (after the build, Ali 2026-11-20):
+ * - comms_hub_messages: one message, about an event or a subject, with its status and send time. A
+ *   promotion-plan message (CH6.4) is unique per event + kind + occurrence, so re-ticking cannot
+ *   duplicate it (partial unique index; ad-hoc messages have no plan_kind and are not constrained).
+ * - comms_hub_drafts: the text per channel, VERSIONED: every regenerate or edit is a new row, never
+ *   an update (unique message + channel + version).
+ * - comms_hub_destinations: who it goes to, per channel (a cohort feed, an in-app audience).
+ * - comms_hub_approvals: who approved, when, and the hash of the exact drafts, destinations and send
+ *   time approved. A change voids it (voided_at + reason); rows are never deleted.
+ * - comms_hub_deliveries: one row per destination per send, with a UNIQUE idempotency key, so a
+ *   retried send can never post twice.
  */
 export const COMMS_HUB_EVENT_TYPES = ['session', 'open_house', 'office_hours', 'workshop', 'other'] as const;
 export const COMMS_HUB_EVENT_STATUSES = ['draft', 'scheduled', 'live', 'ended', 'cancelled'] as const;
 export const COMMS_HUB_THUMBNAIL_SOURCES = ['template', 'upload', 'ai'] as const;
+/** CH6: the two channels this build sends to (WhatsApp is added after the build). */
+export const COMMS_HUB_CHANNELS = ['community_post', 'in_app'] as const;
+/** CH6.2's status machine owns the transitions; these are the values the column may hold. */
+export const COMMS_HUB_MESSAGE_STATUSES = ['draft', 'needs_approval', 'approved', 'scheduled', 'sending', 'sent', 'partially_failed', 'failed', 'cancelled'] as const;
+export const COMMS_HUB_MESSAGE_KINDS = ['announcement', 'reminder', 'starting_soon', 'recording_thanks', 'update', 'other'] as const;
+export const COMMS_HUB_PLAN_KINDS = ['announcement', 'reminder', 'starting_soon', 'recording_thanks'] as const;
+export const COMMS_HUB_DESTINATION_TYPES = ['cohort_feed', 'in_app_audience'] as const;
+export const COMMS_HUB_DELIVERY_STATUSES = ['pending', 'sending', 'sent', 'failed', 'cancelled', 'skipped'] as const;
 
 const list = (xs: readonly string[]): string => xs.map((x) => `'${x}'`).join(', ');
 
@@ -110,12 +128,110 @@ export const COMMS_HUB_SCHEMA_STATEMENTS: readonly string[] = [
   `CREATE INDEX IF NOT EXISTS idx_comms_hub_activity_created ON comms_hub_activity (created_at DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_comms_hub_activity_entity ON comms_hub_activity (entity_type, entity_id)`,
 
+  // ---- CH6.1 messages ----
+  `CREATE TABLE IF NOT EXISTS comms_hub_messages (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     event_id UUID REFERENCES comms_hub_events(id),
+     occurrence_starts_at TIMESTAMPTZ,
+     plan_kind VARCHAR(32),
+     subject TEXT,
+     kind VARCHAR(32) NOT NULL DEFAULT 'other',
+     tone VARCHAR(32),
+     notes TEXT,
+     status VARCHAR(24) NOT NULL DEFAULT 'draft',
+     send_at TIMESTAMPTZ,
+     created_by VARCHAR(64),
+     updated_by VARCHAR(64),
+     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+   )`,
+  `ALTER TABLE comms_hub_messages ADD CONSTRAINT comms_hub_messages_status_check
+     CHECK (status IN (${list(COMMS_HUB_MESSAGE_STATUSES)}))`,
+  `ALTER TABLE comms_hub_messages ADD CONSTRAINT comms_hub_messages_kind_check
+     CHECK (kind IN (${list(COMMS_HUB_MESSAGE_KINDS)}))`,
+  `ALTER TABLE comms_hub_messages ADD CONSTRAINT comms_hub_messages_plan_check
+     CHECK (plan_kind IS NULL OR (plan_kind IN (${list(COMMS_HUB_PLAN_KINDS)}) AND event_id IS NOT NULL AND occurrence_starts_at IS NOT NULL))`,
+  `ALTER TABLE comms_hub_messages ADD CONSTRAINT comms_hub_messages_about_check
+     CHECK (event_id IS NOT NULL OR subject IS NOT NULL)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS uq_comms_hub_messages_plan ON comms_hub_messages (event_id, plan_kind, occurrence_starts_at) WHERE plan_kind IS NOT NULL`,
+  `CREATE INDEX IF NOT EXISTS idx_comms_hub_messages_status ON comms_hub_messages (status, send_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_comms_hub_messages_event ON comms_hub_messages (event_id)`,
+
+  `CREATE TABLE IF NOT EXISTS comms_hub_drafts (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     message_id UUID NOT NULL REFERENCES comms_hub_messages(id) ON DELETE CASCADE,
+     channel VARCHAR(24) NOT NULL,
+     version INTEGER NOT NULL,
+     title TEXT,
+     body TEXT NOT NULL,
+     author VARCHAR(64) NOT NULL,
+     instruction VARCHAR(32),
+     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+   )`,
+  `ALTER TABLE comms_hub_drafts ADD CONSTRAINT comms_hub_drafts_channel_check
+     CHECK (channel IN (${list(COMMS_HUB_CHANNELS)}))`,
+  `ALTER TABLE comms_hub_drafts ADD CONSTRAINT comms_hub_drafts_version_check CHECK (version >= 1)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS uq_comms_hub_drafts_version ON comms_hub_drafts (message_id, channel, version)`,
+
+  `CREATE TABLE IF NOT EXISTS comms_hub_destinations (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     message_id UUID NOT NULL REFERENCES comms_hub_messages(id) ON DELETE CASCADE,
+     channel VARCHAR(24) NOT NULL,
+     target_type VARCHAR(32) NOT NULL,
+     target_id VARCHAR(64) NOT NULL,
+     label VARCHAR(255),
+     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+   )`,
+  `ALTER TABLE comms_hub_destinations ADD CONSTRAINT comms_hub_destinations_channel_check
+     CHECK (channel IN (${list(COMMS_HUB_CHANNELS)}))`,
+  `ALTER TABLE comms_hub_destinations ADD CONSTRAINT comms_hub_destinations_type_check
+     CHECK (target_type IN (${list(COMMS_HUB_DESTINATION_TYPES)}))`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS uq_comms_hub_destinations_target ON comms_hub_destinations (message_id, channel, target_type, target_id)`,
+
+  `CREATE TABLE IF NOT EXISTS comms_hub_approvals (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     message_id UUID NOT NULL REFERENCES comms_hub_messages(id) ON DELETE CASCADE,
+     approved_by VARCHAR(64) NOT NULL,
+     approved_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+     content_hash CHAR(64) NOT NULL,
+     voided_at TIMESTAMPTZ,
+     voided_reason VARCHAR(64),
+     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+   )`,
+  `CREATE INDEX IF NOT EXISTS idx_comms_hub_approvals_message ON comms_hub_approvals (message_id, approved_at DESC)`,
+
+  `CREATE TABLE IF NOT EXISTS comms_hub_deliveries (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     message_id UUID NOT NULL REFERENCES comms_hub_messages(id) ON DELETE CASCADE,
+     destination_id UUID NOT NULL REFERENCES comms_hub_destinations(id) ON DELETE CASCADE,
+     channel VARCHAR(24) NOT NULL,
+     idempotency_key VARCHAR(128) NOT NULL,
+     status VARCHAR(16) NOT NULL DEFAULT 'pending',
+     attempt_count INTEGER NOT NULL DEFAULT 0,
+     next_attempt_at TIMESTAMPTZ,
+     provider_message_id VARCHAR(255),
+     error TEXT,
+     sent_at TIMESTAMPTZ,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+   )`,
+  `ALTER TABLE comms_hub_deliveries ADD CONSTRAINT comms_hub_deliveries_status_check
+     CHECK (status IN (${list(COMMS_HUB_DELIVERY_STATUSES)}))`,
+  `ALTER TABLE comms_hub_deliveries ADD CONSTRAINT comms_hub_deliveries_channel_check
+     CHECK (channel IN (${list(COMMS_HUB_CHANNELS)}))`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS uq_comms_hub_deliveries_key ON comms_hub_deliveries (idempotency_key)`,
+  `CREATE INDEX IF NOT EXISTS idx_comms_hub_deliveries_due ON comms_hub_deliveries (status, next_attempt_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_comms_hub_deliveries_message ON comms_hub_deliveries (message_id)`,
+
   // Write-through link: the calendar rows this hub event owns. Nullable, so every existing row is untouched.
   `ALTER TABLE community_events ADD COLUMN IF NOT EXISTS hub_event_id UUID`,
   `CREATE INDEX IF NOT EXISTS idx_community_events_hub_event ON community_events (hub_event_id)`,
 ];
 
-const REQUIRED_TABLES = ['comms_hub_events', 'comms_hub_thumbnails', 'comms_hub_event_photos', 'comms_hub_settings', 'comms_hub_activity'];
+const REQUIRED_TABLES = [
+  'comms_hub_events', 'comms_hub_thumbnails', 'comms_hub_event_photos', 'comms_hub_settings', 'comms_hub_activity',
+  'comms_hub_messages', 'comms_hub_drafts', 'comms_hub_destinations', 'comms_hub_approvals', 'comms_hub_deliveries',
+];
 
 export async function ensureCommsHubSchema(): Promise<{ ok: boolean; missing: string[] }> {
   for (const stmt of COMMS_HUB_SCHEMA_STATEMENTS) {
@@ -142,7 +258,7 @@ export async function ensureCommsHubSchema(): Promise<{ ok: boolean; missing: st
       console.error(JSON.stringify({
         timestamp: new Date().toISOString(), level: 'error', service: 'backend', event: 'SchemaInvariantViolation',
         outcome: 'failure', error_class: 'SchemaInvariantViolation',
-        context: { area: 'comms_hub', missing, impact: 'the Communications Hub cannot save events or show their activity' },
+        context: { area: 'comms_hub', missing, impact: 'the Communications Hub cannot save events, messages or deliveries, or show their activity' },
       }));
     }
   } catch (err: unknown) {
