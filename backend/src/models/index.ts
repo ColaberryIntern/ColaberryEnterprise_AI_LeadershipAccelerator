@@ -430,6 +430,7 @@ import CommsHubEvent from './CommsHubEvent';
 import CommsHubThumbnail from './CommsHubThumbnail';
 import CommsHubSettings from './CommsHubSettings';
 import CommsHubActivity from './CommsHubActivity';
+import CommsHubEventPhoto from './CommsHubEventPhoto';
 // --- Marketing Operations: Content OS ---
 import ContentItem from './ContentItem';
 import ChannelAccount from './ChannelAccount';
@@ -1631,6 +1632,7 @@ export {
   CommsHubThumbnail,
   CommsHubSettings,
   CommsHubActivity,
+  CommsHubEventPhoto,
   // Marketing Operations: Content OS
   ContentItem,
   ChannelAccount,

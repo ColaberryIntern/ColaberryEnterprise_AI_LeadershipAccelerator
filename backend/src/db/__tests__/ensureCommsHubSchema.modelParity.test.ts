@@ -6,12 +6,12 @@ import '../../models';
  * CH2.1 Communications Hub schema: DDL and models agree, every statement is idempotent, and the
  * one change to an existing table is a nullable column.
  */
-const TABLES = ['comms_hub_events', 'comms_hub_thumbnails', 'comms_hub_settings', 'comms_hub_activity'];
+const TABLES = ['comms_hub_events', 'comms_hub_thumbnails', 'comms_hub_event_photos', 'comms_hub_settings', 'comms_hub_activity'];
 
 describe('ensureCommsHubSchema: DDL and models agree', () => {
   const created = parseCreatedTables(COMMS_HUB_SCHEMA_STATEMENTS);
 
-  it('creates exactly the four hub tables', () => {
+  it('creates exactly the five hub tables', () => {
     expect(created.map((t) => t.table).sort()).toEqual([...TABLES].sort());
   });
 

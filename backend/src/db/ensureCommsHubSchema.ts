@@ -72,6 +72,19 @@ export const COMMS_HUB_SCHEMA_STATEMENTS: readonly string[] = [
      CHECK (source IN (${list(COMMS_HUB_THUMBNAIL_SOURCES)}))`,
   `CREATE INDEX IF NOT EXISTS idx_comms_hub_thumbnails_event ON comms_hub_thumbnails (event_id, created_at)`,
 
+  // CH4.1: the pictures an organizer adds to an event (inputs to its thumbnails). The bytes live in
+  // the media library; this row only links them. One picture once per event (the unique index), at
+  // most 6 per event (enforced in eventPhotos.ts, inside a row lock).
+  `CREATE TABLE IF NOT EXISTS comms_hub_event_photos (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     event_id UUID NOT NULL REFERENCES comms_hub_events(id) ON DELETE CASCADE,
+     media_asset_id UUID NOT NULL,
+     position SMALLINT NOT NULL DEFAULT 0,
+     created_by VARCHAR(64),
+     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+   )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS uq_comms_hub_event_photos_asset ON comms_hub_event_photos (event_id, media_asset_id)`,
+
   `CREATE TABLE IF NOT EXISTS comms_hub_settings (
      id SMALLINT PRIMARY KEY DEFAULT 1,
      sending_paused BOOLEAN NOT NULL DEFAULT false,
@@ -102,7 +115,7 @@ export const COMMS_HUB_SCHEMA_STATEMENTS: readonly string[] = [
   `CREATE INDEX IF NOT EXISTS idx_community_events_hub_event ON community_events (hub_event_id)`,
 ];
 
-const REQUIRED_TABLES = ['comms_hub_events', 'comms_hub_thumbnails', 'comms_hub_settings', 'comms_hub_activity'];
+const REQUIRED_TABLES = ['comms_hub_events', 'comms_hub_thumbnails', 'comms_hub_event_photos', 'comms_hub_settings', 'comms_hub_activity'];
 
 export async function ensureCommsHubSchema(): Promise<{ ok: boolean; missing: string[] }> {
   for (const stmt of COMMS_HUB_SCHEMA_STATEMENTS) {
