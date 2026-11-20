@@ -21,7 +21,10 @@ jest.mock('../../../../models/CommsHubDestination', () => ({
 }));
 jest.mock('../../../../models/CommsHubApproval', () => ({ __esModule: true, default: { findOne: jest.fn(async () => null) } }));
 jest.mock('../../../../models/CommsHubDelivery', () => ({ __esModule: true, default: { findAll: jest.fn(async ({ where }: Row) => deliveries.filter((x) => (where.destination_id as string[]).includes(x.destination_id))) } }));
-jest.mock('../../../../models/Cohort', () => ({ __esModule: true, default: { findAll: jest.fn(async () => [{ id: 'c1', name: 'November 2026' }]) } }));
+jest.mock('../../../../models/Cohort', () => ({ __esModule: true, default: { findAll: jest.fn(async () => [{ id: 'c1', name: 'November 2026' }, { id: 'ct', name: 'Hub test' }].slice(0, mockOpenCount)), findByPk: jest.fn(async (id: string) => (id === 'ct' ? { id: 'ct', name: 'Hub test' } : null)) } }));
+let mockOpenCount = 1;
+let mockTestCohort: string | null = null;
+jest.mock('../../../../models/CommsHubSettings', () => ({ __esModule: true, default: { findByPk: jest.fn(async () => ({ id: 1, test_cohort_id: mockTestCohort })) } }));
 jest.mock('../../activityLog', () => ({ logActivity: jest.fn(async () => undefined) }));
 const mockApprove = jest.fn(async () => undefined);
 const mockSchedule = jest.fn(async () => undefined);
@@ -92,6 +95,12 @@ describe('CH6.5 recipients', () => {
 
   it('the options: each open cohort feed, everyone in-app, and each cohort in-app', async () => {
     expect((await destinationOptions()).map((o) => `${o.channel}:${o.target_id}`)).toEqual(['community_post:c1', 'in_app:all_members', 'in_app:c1']);
+    // CH7.1: the settings' test cohort comes first, labelled, and is not listed twice when it is also open.
+    mockTestCohort = 'ct'; mockOpenCount = 2;
+    const withTest = await destinationOptions();
+    expect(withTest.map((o) => `${o.channel}:${o.target_id}`)).toEqual(['community_post:ct', 'in_app:ct', 'community_post:c1', 'in_app:all_members', 'in_app:c1']);
+    expect(withTest[0].label).toBe('Test: Hub test feed');
+    mockTestCohort = null; mockOpenCount = 1;
   });
 });
 

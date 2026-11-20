@@ -12,6 +12,7 @@ import { approveMessage, MessageRuleError, reconcileApproval, scheduleMessage, s
 import { factsFor, problemsFor } from './draftFacts';
 import { recommendDestinations, type Recommendation } from './drafting';
 import { replayLink } from './links';
+import CommsHubSettings from '../../../models/CommsHubSettings';
 
 /**
  * The Compose tab's server side (CH6.5): one message as the organizer sees it, its recipients and
@@ -126,10 +127,21 @@ export async function approveAndSchedule(messageId: string, actor: Actor, now: D
   });
 }
 
-/** What the organizer can send to: each open cohort's feed, and in-app to everyone or one cohort. */
+/**
+ * What the organizer can send to: each open cohort's feed, and in-app to everyone or one cohort.
+ * The test cohort in the hub settings (CH7.1) comes FIRST and says so, so a rehearsal or the E2E run
+ * can send to it without reaching real members; it is listed even when that cohort is not open.
+ */
 export async function destinationOptions(): Promise<DestinationInput[]> {
-  const cohorts = await Cohort.findAll({ where: { status: 'open' }, attributes: ['id', 'name'], order: [['start_date', 'DESC']] });
+  const settings = await CommsHubSettings.findByPk(1);
+  const test = settings?.test_cohort_id ? await Cohort.findByPk(settings.test_cohort_id, { attributes: ['id', 'name'] }) : null;
+  const cohorts = (await Cohort.findAll({ where: { status: 'open' }, attributes: ['id', 'name'], order: [['start_date', 'DESC']] }))
+    .filter((c) => c.id !== test?.id);
   return [
+    ...(test ? [
+      { channel: 'community_post' as const, target_type: 'cohort_feed' as const, target_id: test.id, label: `Test: ${test.name} feed` },
+      { channel: 'in_app' as const, target_type: 'in_app_audience' as const, target_id: test.id, label: `Test: ${test.name} members` },
+    ] : []),
     ...cohorts.map((c) => ({ channel: 'community_post' as const, target_type: 'cohort_feed' as const, target_id: c.id, label: `${c.name} feed` })),
     { channel: 'in_app' as const, target_type: 'in_app_audience' as const, target_id: 'all_members', label: 'Everyone in the program' },
     ...cohorts.map((c) => ({ channel: 'in_app' as const, target_type: 'in_app_audience' as const, target_id: c.id, label: `${c.name} members` })),

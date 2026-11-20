@@ -11,6 +11,8 @@ jest.mock('../../models/CommunityLike', () => ({}));
 jest.mock('../../models/CommunityPostReport', () => ({}));
 jest.mock('../../models/CommunityPointsEvent', () => ({}));
 jest.mock('../../models/CommunityNotification', () => ({ findAll: jest.fn(), findByPk: jest.fn() }));
+jest.mock('../../models/CommsHubDraft', () => ({ __esModule: true, default: { findAll: jest.fn(async () => []) } }));
+jest.mock('../../models/CommsHubMessage', () => ({ __esModule: true, default: { findAll: jest.fn(async () => []) } }));
 // MOCKED AT THE SERVICE BOUNDARY, not the model layer. `communityService` imports
 // `subscriptionService`, whose own line 2 is `import { Enrollment, Cohort, Subscription } from
 // '../models'` - so importing it executes `models/index.ts`, and line 548 there runs
@@ -26,6 +28,8 @@ import { listNotifications, markNotificationRead } from '../../services/communit
 import Enrollment from '../../models/Enrollment';
 import CommunityMember from '../../models/CommunityMember';
 import CommunityNotification from '../../models/CommunityNotification';
+import CommsHubDraft from '../../models/CommsHubDraft';
+import CommsHubMessage from '../../models/CommsHubMessage';
 
 const findByPkEnrollment = Enrollment.findByPk as jest.Mock;
 const findOrCreateMember = CommunityMember.findOrCreate as jest.Mock;
@@ -114,5 +118,35 @@ describe('markNotificationRead', () => {
     });
 
     await expect(markNotificationRead(enrollmentId, 'n1')).rejects.toMatchObject({ error_class: 'ForbiddenError' });
+  });
+});
+
+describe('listNotifications: Communications Hub announcements (CH7.1)', () => {
+  it('an announcement carries the latest in-app words and its event; other kinds are unchanged', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([mockMember, false]);
+    findAllNotifications.mockResolvedValue([
+      { id: 'n1', notification_type: 'announcement', source_type: 'comms_hub', source_id: 'msg-1', read_at: null, created_at: new Date('2026-11-20'), actor: { id: 'team', display_name: 'Colaberry Team', avatar_url: null } },
+      { id: 'n2', notification_type: 'mention', source_type: 'post', source_id: 'post-1', read_at: null, created_at: new Date('2026-11-19'), actor: null },
+    ]);
+    (CommsHubDraft.findAll as jest.Mock).mockResolvedValue([
+      { message_id: 'msg-1', version: 2, title: 'Demo Tuesday, Dec 1', body: '6:00 PM CST' },
+      { message_id: 'msg-1', version: 1, title: 'Old', body: 'old words' },
+    ]);
+    (CommsHubMessage.findAll as jest.Mock).mockResolvedValue([{ id: 'msg-1', event_id: 'e1' }]);
+
+    const items = await listNotifications(enrollmentId);
+
+    expect((CommsHubDraft.findAll as jest.Mock).mock.calls[0][0]).toEqual(expect.objectContaining({ where: { message_id: ['msg-1'], channel: 'in_app' } }));
+    expect(items[0].announcement).toEqual({ title: 'Demo Tuesday, Dec 1', body: '6:00 PM CST', event_id: 'e1' });
+    expect(items[1]).not.toHaveProperty('announcement');
+  });
+
+  it('with no announcements in the list, the hub tables are not read', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([mockMember, false]);
+    findAllNotifications.mockResolvedValue([]);
+    await listNotifications(enrollmentId);
+    expect(CommsHubDraft.findAll).not.toHaveBeenCalled();
   });
 });

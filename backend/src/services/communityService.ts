@@ -292,10 +292,19 @@ function toFeedItem(
   };
 }
 
-export async function createPost(enrollmentId: string, input: CreatePostInput): Promise<PostFeedItem> {
+/**
+ * Options for a post made BY THE PROGRAM, not a member (Communications Hub, CH7.1). Only server code
+ * passes these; the public composer route never does.
+ *  - cohortId: the feed to post into. A member posts into their own enrollment's cohort; the hub's
+ *    "Colaberry Team" identity has no cohort and posts into each feed a message is sent to.
+ *  - reward: false skips the author's post points (the program does not earn points).
+ */
+export interface CreatePostOptions { cohortId?: string; reward?: boolean }
+
+export async function createPost(enrollmentId: string, input: CreatePostInput, opts: CreatePostOptions = {}): Promise<PostFeedItem> {
   const [member, cohortId] = await Promise.all([
     getOrCreateMember(enrollmentId),
-    resolveCohortId(enrollmentId),
+    opts.cohortId ?? resolveCohortId(enrollmentId),
   ]);
 
   const mentionedIds = input.mentioned_member_ids ?? [];
@@ -354,7 +363,7 @@ export async function createPost(enrollmentId: string, input: CreatePostInput): 
   // earns nothing — and released on the first peer like instead (see
   // toggleLike). Flag OFF ⇒ the reward fires on creation exactly as before.
   let pointsAwarded = 0;
-  if (!env.communityPostQualityGateEnabled) {
+  if (!env.communityPostQualityGateEnabled && opts.reward !== false) {
     pointsAwarded = await awardPostReward(enrollmentId, member.id, post.id);
   }
 

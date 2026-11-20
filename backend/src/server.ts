@@ -2278,7 +2278,7 @@ async function ensureMessagingSchema() {
   const statements = [
     `ALTER TABLE room_memberships ADD COLUMN IF NOT EXISTS last_read_at TIMESTAMPTZ`,
     `ALTER TABLE community_notifications DROP CONSTRAINT IF EXISTS ck_community_notifications_type`,
-    `ALTER TABLE community_notifications ADD CONSTRAINT ck_community_notifications_type CHECK (notification_type IN ('mention','reply','like','friend_request','friend_accepted','new_message'))`,
+    `ALTER TABLE community_notifications ADD CONSTRAINT ck_community_notifications_type CHECK (notification_type IN ('mention','reply','like','friend_request','friend_accepted','new_message','announcement'))`,
   ];
   for (const sql of statements) {
     try {
