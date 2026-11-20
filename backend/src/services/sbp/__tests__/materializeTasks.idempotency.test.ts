@@ -108,8 +108,13 @@ const scheduleFrom = (isoStart: string): Schedule => buildSchedule({
 
 const schedule = scheduleFrom('2026-09-07T00:00:00.000Z');
 
+// "Today" is pinned before the cohort starts. Left to the real clock, the never-born-late floor
+// lifted every date to the run day once the calendar passed these schedules (2026-11-20), and the
+// republish test could no longer see the due date move.
+const NOW = new Date('2026-09-01T00:00:00.000Z');
+
 const publish = (over: { schedule?: Schedule | null } = {}) =>
-  materializePlanAsTasks(PROJECT, ENROLLMENT, plan, { schedule: over.schedule ?? schedule });
+  materializePlanAsTasks(PROJECT, ENROLLMENT, plan, { schedule: over.schedule ?? schedule, now: NOW });
 
 beforeEach(() => { listTable.reset(); taskTable.reset(); });
 
@@ -196,7 +201,7 @@ describe('due dates on a republish', () => {
     expect(baseline).toBeInstanceOf(Date);
 
     // The cohort slips a month; the plan is republished against new dates.
-    await materializePlanAsTasks(PROJECT, ENROLLMENT, plan, { schedule: scheduleFrom('2026-10-05T00:00:00.000Z') });
+    await materializePlanAsTasks(PROJECT, ENROLLMENT, plan, { schedule: scheduleFrom('2026-10-05T00:00:00.000Z'), now: NOW });
 
     expect(task.due_baseline_on).toEqual(baseline);   // what we first promised
     expect(task.due_on).not.toEqual(baseline);        // what we now expect

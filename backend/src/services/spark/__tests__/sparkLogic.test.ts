@@ -63,7 +63,19 @@ describe('picking the week', () => {
   });
   test('one weekend option that is not busy', () => {
     const w = L.weekendSlots(MON, [{ date: '2026-11-21', start: '18:00', end: '22:00' }], TUE_7AM);
-    expect(w[0]).toEqual({ date: '2026-11-21', start: '10:00', maxEnd: '13:00' });
+    expect(w[0]).toEqual({ date: '2026-11-21', start: '10:00', maxEnd: '12:00' });
+  });
+  test('a 2-hour weekend date every other week, a 1-hour weekend Spark in between (Ali, 2026-11-19)', () => {
+    expect(L.bigWeekend(MON)).toBe(true);
+    expect(L.bigWeekend('2026-11-23')).toBe(false);
+    expect(L.bigWeekend('2026-11-30')).toBe(true);
+    expect(L.weekendSlots('2026-11-23', [], TUE_7AM)[0]).toEqual({ date: '2026-11-28', start: '18:30', maxEnd: '19:30' });
+    const date = L.weekendSlots(MON, [], TUE_7AM)[0];
+    expect(L.shapeItem('w', 'weekend', date, { place: 'home', title: 'Cook-off' })).toMatchObject({ start: '18:30', end: '20:30' });
+    expect(L.shapeItem('w', 'weekend', date, { place: 'out', title: 'Far', driveMinutesEachWay: 30 })).toBeNull();
+    const small = L.weekendSlots('2026-11-23', [], TUE_7AM)[0];
+    expect(L.shapeItem('w', 'weekend', small, { place: 'out', title: 'Walk', driveMinutesEachWay: 0 })).toMatchObject({ end: '19:30' });
+    expect(L.shapeItem('w', 'weekend', small, { place: 'out', title: 'Drive', driveMinutesEachWay: 15 })).toBeNull();
   });
 });
 
