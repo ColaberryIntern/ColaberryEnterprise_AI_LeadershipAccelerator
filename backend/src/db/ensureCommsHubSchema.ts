@@ -57,6 +57,7 @@ export const COMMS_HUB_SCHEMA_STATEMENTS: readonly string[] = [
      status VARCHAR(16) NOT NULL DEFAULT 'scheduled',
      thumbnail_id UUID,
      broadcast_occurrence_id UUID,
+     promotion_plan JSONB NOT NULL DEFAULT '[]'::jsonb,
      created_by VARCHAR(64),
      updated_by VARCHAR(64),
      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),

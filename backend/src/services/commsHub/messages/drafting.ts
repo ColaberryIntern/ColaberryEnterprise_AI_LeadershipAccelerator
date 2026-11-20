@@ -4,12 +4,15 @@ import { sequelize } from '../../../config/database';
 import CommsHubEvent from '../../../models/CommsHubEvent';
 import CommsHubMessage, { type CommsHubMessageKind } from '../../../models/CommsHubMessage';
 import CommsHubDraft, { type CommsHubChannel } from '../../../models/CommsHubDraft';
+import CommsHubDestination from '../../../models/CommsHubDestination';
+import type { CommsHubPlanKind } from '../../../models/CommsHubMessage';
 import Cohort from '../../../models/Cohort';
 import { callLLMWithAudit } from '../../llmCallWrapper';
 import { COMMS_HUB_LLM_NAMESPACE, TYPE_WORDS } from '../eventDescribe';
 import { audienceCohortIds } from '../eventWriteThrough';
 import { logActivity, type Actor } from '../activityLog';
 import { factsFor, fillFacts, type DraftFacts } from './draftFacts';
+import { replayLink } from './links';
 import { MessageRuleError, reconcileApproval } from './approvals';
 import { MESSAGE_DRAFT_SYSTEM, messageDraftUserPrompt, type DraftPromptInput } from './prompts/messageDraftPrompt';
 
@@ -90,7 +93,7 @@ async function writeDrafts(messageId: string, reply: DraftReply, facts: DraftFac
 /** The facts for a message's event and occurrence, or null for a subject-only message. */
 export async function messageFacts(m: CommsHubMessage, t?: Transaction, now: Date = new Date()): Promise<DraftFacts | null> {
   if (!m.event_id) return null;
-  return factsFor(await eventOr404(m.event_id, t), m.occurrence_starts_at, now);
+  return factsFor(await eventOr404(m.event_id, t), m.occurrence_starts_at, now, replayLink());
 }
 
 /** Who it should go to, with a one-line reason each: the event's audience (or every open cohort). */
@@ -116,12 +119,46 @@ export async function createDraftMessage(input: MessageInput, actor: Actor, now:
   const reply = await askModel({ about: promptAbout(event, subject), kind: input.kind, tone: input.tone ?? null, notes: input.notes ?? null });
   const { message, drafts } = await sequelize.transaction(async (t) => {
     const m = await CommsHubMessage.create({ event_id: event?.id ?? null, subject, kind: input.kind, tone: input.tone ?? null, notes: input.notes ?? null, status: 'draft', created_by: actor.id, updated_by: actor.id }, { transaction: t });
-    const facts = event ? factsFor(event, null, now) : null;
+    const facts = event ? factsFor(event, null, now, replayLink()) : null;
     const d = await writeDrafts(m.id, reply, facts, 'ai', null, t);
     await logActivity(actor, 'message.drafted', 'message', m.id, { event_id: event?.id ?? null, kind: input.kind }, t);
     return { message: m, drafts: d };
   });
   return { message, drafts, recommended: await recommendDestinations(event) };
+}
+
+/**
+ * One promotion-plan message (CH6.4) for one occurrence: drafted by the model with the facts of THAT
+ * occurrence, sent to the recommended recipients, at the plan's send time, and created in
+ * needs_approval (never approved automatically; the approve gate still validates it). Idempotent by
+ * event + kind + occurrence: an existing one is returned untouched, and a lost race converges on the
+ * row that won (the unique index decides).
+ */
+export async function createPlanMessage(event: CommsHubEvent, plan: { kind: CommsHubPlanKind; occurrence: Date; sendAt: Date }, actor: Actor, now: Date = new Date()): Promise<{ message: CommsHubMessage; created: boolean }> {
+  const where = { event_id: event.id, plan_kind: plan.kind, occurrence_starts_at: plan.occurrence };
+  const existing = await CommsHubMessage.findOne({ where });
+  if (existing) return { message: existing, created: false };
+  const reply = await askModel({ about: promptAbout(event, null), kind: plan.kind, tone: null, notes: null });
+  const recommended = await recommendDestinations(event);
+  try {
+    return await sequelize.transaction(async (t) => {
+      const m = await CommsHubMessage.create({
+        event_id: event.id, occurrence_starts_at: plan.occurrence, plan_kind: plan.kind, kind: plan.kind, status: 'needs_approval',
+        send_at: plan.sendAt, created_by: actor.id, updated_by: actor.id,
+      }, { transaction: t });
+      await writeDrafts(m.id, reply, factsFor(event, plan.occurrence, now, replayLink()), 'ai', null, t);
+      for (const r of recommended) {
+        await CommsHubDestination.create({ message_id: m.id, channel: r.channel, target_type: r.target_type, target_id: r.target_id, label: r.label }, { transaction: t });
+      }
+      await logActivity(actor, 'message.planned', 'message', m.id, { event_id: event.id, plan_kind: plan.kind, occurrence: plan.occurrence.toISOString() }, t);
+      return { message: m, created: true };
+    });
+  } catch (err) {
+    if ((err as { name?: string })?.name !== 'SequelizeUniqueConstraintError') throw err;
+    const won = await CommsHubMessage.findOne({ where });
+    if (!won) throw err;
+    return { message: won, created: false };
+  }
 }
 
 async function latest(messageId: string, channel: CommsHubChannel, t?: Transaction): Promise<CommsHubDraft | null> {
@@ -143,7 +180,7 @@ export async function regenerateDrafts(messageId: string, instruction: 'shorter'
     // Re-checked under the row lock: the model call takes seconds, and the message may have started sending meanwhile.
     const fresh = await CommsHubMessage.findByPk(m.id, { transaction: t, lock: t.LOCK.UPDATE });
     if (!fresh || fresh.status === 'sending' || fresh.status === 'sent' || fresh.status === 'cancelled') throw new MessageRuleError(`A ${fresh?.status ?? 'missing'} message cannot be redrafted.`, 409, 'locked');
-    const d = await writeDrafts(m.id, reply, event ? factsFor(event, m.occurrence_starts_at, now) : null, 'ai', instruction, t);
+    const d = await writeDrafts(m.id, reply, event ? factsFor(event, m.occurrence_starts_at, now, replayLink()) : null, 'ai', instruction, t);
     await logActivity(actor, 'message.redrafted', 'message', m.id, { instruction }, t);
     await reconcileApproval(m.id, 'draft_changed', actor, now, t);
     return d;

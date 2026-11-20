@@ -7,6 +7,7 @@ import CommsHubApproval from '../../../models/CommsHubApproval';
 import CommsHubEvent from '../../../models/CommsHubEvent';
 import { logActivity, type Actor } from '../activityLog';
 import { factsFor, problemsFor } from './draftFacts';
+import { replayLink } from './links';
 import { APPROVED_STATUSES, approvalHash, transition, type ApprovalContent, type VoidReason } from './messageStatus';
 
 /**
@@ -46,8 +47,9 @@ export async function loadContent(messageId: string, t?: Transaction): Promise<A
  */
 async function assertDraftsValid(m: CommsHubMessage, content: ApprovalContent, t: Transaction, now: Date, doing: string): Promise<void> {
   const event = m.event_id ? await CommsHubEvent.findByPk(m.event_id, { transaction: t }) : null;
-  const facts = event ? factsFor(event, m.occurrence_starts_at, now) : null;
-  const problems = content.drafts.flatMap((d) => problemsFor({ channel: d.channel as 'community_post' | 'in_app', title: d.title, body: d.body }, facts));
+  const facts = event ? factsFor(event, m.occurrence_starts_at, now, replayLink()) : null;
+  const postEvent = m.kind === 'recording_thanks';
+  const problems = content.drafts.flatMap((d) => problemsFor({ channel: d.channel as 'community_post' | 'in_app', title: d.title, body: d.body }, facts, { postEvent }));
   if (problems.length) throw new MessageRuleError(`Fix the drafts before ${doing}.`, 409, 'draft_invalid', problems);
 }
 

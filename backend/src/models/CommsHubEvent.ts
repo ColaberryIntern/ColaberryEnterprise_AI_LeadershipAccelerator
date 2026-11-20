@@ -29,6 +29,8 @@ export interface CommsHubEventAttributes {
   status?: CommsHubEventStatus;
   thumbnail_id?: string | null;
   broadcast_occurrence_id?: string | null;
+  /** CH6.4: the promotion-plan rows ticked for this event (plan kinds). */
+  promotion_plan?: string[];
   created_by?: string | null;
   updated_by?: string | null;
   created_at?: Date;
@@ -51,6 +53,7 @@ class CommsHubEvent extends Model<CommsHubEventAttributes> implements CommsHubEv
   declare status: CommsHubEventStatus;
   declare thumbnail_id: string | null;
   declare broadcast_occurrence_id: string | null;
+  declare promotion_plan: string[];
   declare created_by: string | null;
   declare updated_by: string | null;
   declare created_at: Date;
@@ -74,6 +77,7 @@ CommsHubEvent.init(
     status: { type: DataTypes.STRING(16), allowNull: false, defaultValue: 'scheduled' },
     thumbnail_id: { type: DataTypes.UUID, allowNull: true },
     broadcast_occurrence_id: { type: DataTypes.UUID, allowNull: true },
+    promotion_plan: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
     created_by: { type: DataTypes.STRING(64), allowNull: true },
     updated_by: { type: DataTypes.STRING(64), allowNull: true },
     created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },

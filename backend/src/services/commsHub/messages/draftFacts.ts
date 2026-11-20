@@ -10,7 +10,7 @@ import { expandOccurrences } from '../eventRecurrence';
  * date and time, and no draft may state another date or time, leave a placeholder unfilled, or use a
  * word the TWC rules ban (the canonical rule in services/content/bannedCopyRule.ts).
  */
-export const PLACEHOLDERS = ['{{DATE}}', '{{TIME}}', '{{JOIN_LINK}}', '{{REGISTRATION_LINK}}', '{{HOSTS}}'] as const;
+export const PLACEHOLDERS = ['{{DATE}}', '{{TIME}}', '{{JOIN_LINK}}', '{{REGISTRATION_LINK}}', '{{HOSTS}}', '{{REPLAY_LINK}}'] as const;
 
 export interface DraftFacts {
   /** "Tuesday, December 1" (Central). */
@@ -19,6 +19,8 @@ export interface DraftFacts {
   time: string;
   join_link: string | null;
   registration_link: string | null;
+  /** CH6.4: where members watch replays (the "Recording and thanks" message links it). */
+  replay_link: string | null;
   /** "Aleem (Design) and Sai", or null when the event names no hosts. */
   hosts: string | null;
   starts_at: Date;
@@ -54,7 +56,7 @@ function joinNames(names: string[]): string | null {
  * The facts for the occurrence a message is about: the one it was created for (a promotion-plan
  * message), else the event's next date that has not started, else its first date.
  */
-export function factsFor(e: Pick<CommsHubEvent, 'starts_at' | 'ends_at' | 'repeat_rule' | 'join_url' | 'registration_url' | 'hosts'>, occurrence: Date | null, now: Date = new Date()): DraftFacts {
+export function factsFor(e: Pick<CommsHubEvent, 'starts_at' | 'ends_at' | 'repeat_rule' | 'join_url' | 'registration_url' | 'hosts'>, occurrence: Date | null, now: Date = new Date(), replayLink: string | null = null): DraftFacts {
   const startsAt = occurrence ?? expandOccurrences(e.starts_at, e.ends_at, e.repeat_rule).find((o) => o.starts_at.getTime() >= now.getTime())?.starts_at ?? e.starts_at;
   const endsAt = e.ends_at ? new Date(startsAt.getTime() + (e.ends_at.getTime() - e.starts_at.getTime())) : null;
   return {
@@ -64,6 +66,7 @@ export function factsFor(e: Pick<CommsHubEvent, 'starts_at' | 'ends_at' | 'repea
     time: timeFmt.format(startsAt),
     join_link: e.join_url ?? null,
     registration_link: e.registration_url ?? null,
+    replay_link: replayLink,
     hosts: joinNames((e.hosts ?? []).map((h) => (h.role ? `${h.name} (${h.role})` : h.name))),
     starts_at: startsAt,
   };
@@ -77,7 +80,8 @@ export function fillFacts(text: string, f: DraftFacts | null): string {
     .split('{{TIME}}').join(f.time)
     .split('{{JOIN_LINK}}').join(f.join_link ?? '{{JOIN_LINK}}')
     .split('{{REGISTRATION_LINK}}').join(f.registration_link ?? '{{REGISTRATION_LINK}}')
-    .split('{{HOSTS}}').join(f.hosts ?? '{{HOSTS}}');
+    .split('{{HOSTS}}').join(f.hosts ?? '{{HOSTS}}')
+    .split('{{REPLAY_LINK}}').join(f.replay_link ?? '{{REPLAY_LINK}}');
 }
 
 /* ---------------------------------------------------------------------------------------------
@@ -144,7 +148,12 @@ export interface DraftForCheck { channel: 'community_post' | 'in_app'; title: st
  * a time zone other than Central (or the wrong one of CST / CDT for that date), or a relative day
  * ("tomorrow", "next week"), which would be wrong if the message went out at another time.
  */
-export function problemsFor(d: DraftForCheck, f: DraftFacts | null): string[] {
+export interface CheckOptions {
+  /** A message sent AFTER the event ("Recording and thanks"): it need not restate the start date and time, but may not state a wrong one. */
+  postEvent?: boolean;
+}
+
+export function problemsFor(d: DraftForCheck, f: DraftFacts | null, opts: CheckOptions = {}): string[] {
   const text = `${d.title ?? ''}\n${d.body}`;
   const where = d.channel === 'community_post' ? 'The community post' : 'The in-app notification';
   const out: string[] = [];
@@ -153,7 +162,7 @@ export function problemsFor(d: DraftForCheck, f: DraftFacts | null): string[] {
   for (const rule of BANNED_COPY_RULES) {
     if (ruleRegex(rule).test(text)) { out.push(`${where} uses a word the TWC rules do not allow on Colaberry promotions. Rewrite that sentence.`); break; }
   }
-  const allowedLinks = new Set([f?.join_link, f?.registration_link].filter((x): x is string => !!x).map(cleanUrl));
+  const allowedLinks = new Set([f?.join_link, f?.registration_link, f?.replay_link].filter((x): x is string => !!x).map(cleanUrl));
   const badLinks = all(URL, text, (m) => m[0]).filter((u) => {
     const c = cleanUrl(u);
     if (allowedLinks.has(c)) return false;
@@ -165,10 +174,10 @@ export function problemsFor(d: DraftForCheck, f: DraftFacts | null): string[] {
   const c = f.central;
   const dates = DATE_FORMS.flatMap(([re, map]) => all(re, text, (m) => ({ text: m[0], v: map(m) })));
   const wrongDates = dates.filter((x) => !x.v || x.v.month !== c.month || x.v.day !== c.day || (x.v.year !== undefined && x.v.year !== c.year));
-  if (!dates.some((x) => x.v && x.v.month === c.month && x.v.day === c.day)) out.push(`${where} must say the date: ${f.date}.`);
+  if (!opts.postEvent && !dates.some((x) => x.v && x.v.month === c.month && x.v.day === c.day)) out.push(`${where} must say the date: ${f.date}.`);
   const times = TIME_FORMS.flatMap(([re, map]) => all(re, text, map));
   const okMinutes = new Set([c.minutes, ...(f.end_minutes !== null ? [f.end_minutes] : [])]);
-  if (!times.some((t) => t.minutes === c.minutes)) out.push(`${where} must say the time: ${f.time}.`);
+  if (!opts.postEvent && !times.some((t) => t.minutes === c.minutes)) out.push(`${where} must say the time: ${f.time}.`);
   const wrongTimes = times.filter((t) => !okMinutes.has(t.minutes));
   const wrongZones = times.filter((t) => t.zone && !CENTRAL_ZONE.test(t.zone) && t.zone.toUpperCase() !== c.zone);
   const days = WEEKDAY_FORMS.flatMap(([re, idx]) => all(re, text, (m) => ({ text: m[0], idx })));

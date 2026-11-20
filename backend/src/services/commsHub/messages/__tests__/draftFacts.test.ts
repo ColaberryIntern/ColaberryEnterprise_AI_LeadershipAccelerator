@@ -114,3 +114,18 @@ describe('CH6.3 attempt 2: the validator reads values, not exact text', () => {
     expect(problemsFor({ channel: 'community_post', title: null, body: 'Office hours Tuesday, December 1 at noon CST.' }, noon)).toEqual([]);
   });
 });
+
+describe('CH6.4 Recording and thanks (after the event)', () => {
+  const f = factsFor(ev(), null, NOW, 'https://enterprise.colaberry.ai/portal/replays');
+  const post = (body: string) => ({ channel: 'community_post' as const, title: null, body });
+  it('need not restate the date and time, may link the replays page, and still may not state a wrong date or a relative day', () => {
+    expect(problemsFor(post('Thank you for coming to Demo Tuesday. The recording: https://enterprise.colaberry.ai/portal/replays'), f, { postEvent: true })).toEqual([]);
+    expect(problemsFor(post('Thanks for joining on December 3.'), f, { postEvent: true }).join(' ')).toMatch(/"December 3"/);
+    expect(problemsFor(post('Thanks for joining today.'), f, { postEvent: true }).join(' ')).toMatch(/"today"/);
+    // Not a thanks message: the date and time are still required.
+    expect(problemsFor(post('Thank you. The recording: https://enterprise.colaberry.ai/portal/replays'), f).join(' ')).toMatch(/must say the date/);
+  });
+  it('fills {{REPLAY_LINK}}', () => {
+    expect(fillFacts('Watch it: {{REPLAY_LINK}}', f)).toBe('Watch it: https://enterprise.colaberry.ai/portal/replays');
+  });
+});

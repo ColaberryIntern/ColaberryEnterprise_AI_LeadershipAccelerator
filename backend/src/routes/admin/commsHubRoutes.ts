@@ -8,6 +8,7 @@ import formRoutes from './commsHubFormRoutes';
 import photoRoutes from './commsHubPhotoRoutes';
 import thumbnailRoutes from './commsHubThumbnailRoutes';
 import liveRoutes from './commsHubLiveRoutes';
+import planRoutes from './commsHubPlanRoutes';
 
 /**
  * Communications Hub admin API (CH1.3 onward). Every route sits under /api/admin/comms-hub, which
@@ -35,5 +36,7 @@ router.use(photoRoutes);
 router.use(thumbnailRoutes);
 // CH5.2 the event's Live panel.
 router.use(liveRoutes);
+// CH6.4 the event's promotion plan.
+router.use(planRoutes);
 
 export default router;

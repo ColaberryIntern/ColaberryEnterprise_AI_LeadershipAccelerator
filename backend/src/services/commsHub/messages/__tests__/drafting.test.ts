@@ -18,6 +18,7 @@ jest.mock('../../../../models/CommsHubMessage', () => ({
   default: {
     create: jest.fn(async (r: Row) => { const m = { id: `m${messages.size + 1}`, occurrence_starts_at: null, ...r }; messages.set(m.id, m); return m; }),
     findByPk: jest.fn(async (id: string) => messages.get(id) ?? null),
+    findOne: jest.fn(async ({ where }: Row) => [...messages.values()].find((m) => m.event_id === where.event_id && m.plan_kind === where.plan_kind && m.occurrence_starts_at?.getTime() === where.occurrence_starts_at.getTime()) ?? null),
   },
 }));
 jest.mock('../../../../models/CommsHubDraft', () => ({
@@ -28,14 +29,15 @@ jest.mock('../../../../models/CommsHubDraft', () => ({
     findOne: jest.fn(async ({ where }: Row) => drafts.filter((d) => d.message_id === where.message_id && d.channel === where.channel).sort((a, b) => b.version - a.version)[0] ?? null),
   },
 }));
-jest.mock('../../../../models/CommsHubDestination', () => ({ __esModule: true, default: {} }));
+const destinationsCreated: Row[] = [];
+jest.mock('../../../../models/CommsHubDestination', () => ({ __esModule: true, default: { create: jest.fn(async (r: Row) => { destinationsCreated.push(r); return r; }) } }));
 jest.mock('../../../../models/CommsHubApproval', () => ({ __esModule: true, default: {} }));
 jest.mock('../../../../models/Cohort', () => ({ __esModule: true, default: { findAll: jest.fn(async ({ where }: Row) => (where.status === 'open' ? [{ id: 'c1', get: () => 'c1' }] : (where.id as string[]).map((id) => ({ id, name: id === 'c1' ? 'November 2026' : 'December 2026' })))) } }));
 jest.mock('../../eventWriteThrough', () => ({ audienceCohortIds: jest.fn(async (e: Row) => (e.audience.kind === 'cohorts' ? e.audience.cohort_ids : ['c1'])) }));
 jest.mock('../../activityLog', () => ({ logActivity: jest.fn(async () => undefined) }));
 jest.mock('../approvals', () => ({ ...jest.requireActual('../approvals'), reconcileApproval: (...a: unknown[]) => mockReconcile(...(a as [])) }));
 
-import { createDraftMessage, DraftModelError, editDraft, regenerateDrafts } from '../drafting';
+import { createDraftMessage, createPlanMessage, DraftModelError, editDraft, regenerateDrafts } from '../drafting';
 import { factsFor, problemsFor } from '../draftFacts';
 import { MESSAGE_DRAFT_SYSTEM } from '../prompts/messageDraftPrompt';
 
@@ -44,7 +46,7 @@ const NOW = new Date('2026-11-20T15:00:00Z');
 const reply = (o: Row = {}) => ({ content: JSON.stringify({ community_post: { body: 'Demo Tuesday is on {{DATE}} at {{TIME}} with {{HOSTS}}. Join here: {{JOIN_LINK}}' }, in_app: { title: 'Demo Tuesday, {{DATE}}', body: 'Starts at {{TIME}}' }, ...o }) });
 
 beforeEach(() => {
-  drafts = []; messages.clear(); events.clear(); jest.clearAllMocks();
+  drafts = []; messages.clear(); events.clear(); destinationsCreated.length = 0; jest.clearAllMocks();
   events.set('e1', { id: 'e1', title: 'Demo Tuesday', event_type: 'session', description: 'Builders demo.', audience: { kind: 'all_members' }, starts_at: new Date('2026-12-02T00:00:00Z'), ends_at: null, repeat_rule: null, join_url: 'https://zoom.us/j/9', registration_url: null, hosts: [{ name: 'Aleem' }] });
 });
 
@@ -134,5 +136,38 @@ describe('CH6.3 the prompt', () => {
     expect(MESSAGE_DRAFT_SYSTEM).toMatch(/Never write a date, day of the week, time, time zone, link, URL or person's name yourself/);
     expect(MESSAGE_DRAFT_SYSTEM).toContain('{{DATE}} {{TIME}} {{JOIN_LINK}} {{REGISTRATION_LINK}} {{HOSTS}}');
     expect(MESSAGE_DRAFT_SYSTEM).toMatch(/No pricing words/);
+  });
+});
+
+describe('CH6.4 createPlanMessage', () => {
+  it('one needs_approval message for the occurrence, drafted with the facts of THAT occurrence, sent to the recommended recipients; never approved', async () => {
+    events.get('e1')!.repeat_rule = { freq: 'weekly', until: '2027-01-31' };
+    mockLLM.mockResolvedValue(reply());
+    const occ = new Date('2026-12-09T00:00:00Z');
+    const r = await createPlanMessage(events.get('e1') as never, { kind: 'reminder', occurrence: occ, sendAt: new Date('2026-12-08T00:00:00Z') }, JACKIE, NOW);
+    expect(r.created).toBe(true);
+    expect(r.message).toMatchObject({ event_id: 'e1', plan_kind: 'reminder', kind: 'reminder', status: 'needs_approval', occurrence_starts_at: occ, send_at: new Date('2026-12-08T00:00:00Z') });
+    expect(drafts[0].body).toContain('Tuesday, December 8 at 6:00 PM CST');
+    expect(destinationsCreated.map((d) => [d.channel, d.target_id])).toEqual([['community_post', 'c1'], ['in_app', 'all_members']]);
+    expect(mockLLM.mock.calls[0][0].userPrompt).toContain('Kind of message: reminder');
+  });
+
+  it('IDEMPOTENT: the same event + kind + occurrence returns the existing message without a model call', async () => {
+    mockLLM.mockResolvedValue(reply());
+    const plan = { kind: 'announcement' as const, occurrence: new Date('2026-12-02T00:00:00Z'), sendAt: new Date('2026-11-27T18:00:00Z') };
+    const a = await createPlanMessage(events.get('e1') as never, plan, JACKIE, NOW);
+    const b = await createPlanMessage(events.get('e1') as never, plan, JACKIE, NOW);
+    expect([a.created, b.created, b.message.id]).toEqual([true, false, a.message.id]);
+    expect(mockLLM).toHaveBeenCalledTimes(1);
+  });
+
+  it('a lost race (the unique index fires) converges on the row that won', async () => {
+    mockLLM.mockResolvedValue(reply());
+    const { default: Msg } = jest.requireMock('../../../../models/CommsHubMessage');
+    const plan = { kind: 'starting_soon' as const, occurrence: new Date('2026-12-02T00:00:00Z'), sendAt: new Date('2026-12-01T23:00:00Z') };
+    const winner = { id: 'winner', event_id: 'e1', plan_kind: 'starting_soon', occurrence_starts_at: plan.occurrence };
+    (Msg.findOne as jest.Mock).mockResolvedValueOnce(null).mockResolvedValueOnce(winner);
+    (Msg.create as jest.Mock).mockRejectedValueOnce(Object.assign(new Error('uq'), { name: 'SequelizeUniqueConstraintError' }));
+    expect(await createPlanMessage(events.get('e1') as never, plan, JACKIE, NOW)).toEqual({ message: winner, created: false });
   });
 });
