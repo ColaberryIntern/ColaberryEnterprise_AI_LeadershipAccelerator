@@ -258,7 +258,13 @@ export const NAV_GROUPS: NavGroup[] = [
     // Program group's 'program' would 403 exactly the people it is for. The four pages keep their
     // routes, so every existing bookmark and deep link still works; they are simply reached from
     // the dashboard now instead of from the sidebar.
-    { path: '/admin/agent-dashboard', label: 'Agent Dashboard', icon: 'robot-2-line', section: 'dashboard' },
+    //
+    // AF12.2, 2026-11-20. Labelled "Agents", not "Agent Dashboard", because it is no longer a
+    // page you visit: it is the door everything agent-shaped is behind. Ali: *"I think they need
+    // to be combined like marketing."* Marketing's own comment below records the same move and the
+    // same reason: eight rows made the rail the navigation; now the page is. The PATH is unchanged,
+    // so every bookmark, deep link and test that names the route keeps working.
+    { path: '/admin/agent-dashboard', label: 'Agents', icon: 'robot-2-line', section: 'dashboard' },
     // AF2.1. Sits in the Program group and is therefore gated on 'program', the same section
     // the backend's agent-domain routes require. The page itself scopes by OWNERSHIP, so a
     // full admin who opens it sees only the domains they are accountable for, not all ten.
@@ -291,13 +297,18 @@ export const NAV_GROUPS: NavGroup[] = [
     // Removed rather than repointed at `/admin/agents/<id>`, because `ai_agents.id` is
     // database-generated and differs per environment, so a nav link to one would be correct in
     // production and broken everywhere else.
-    // The programme-wide view of the same ten. Sits beside My Domain because the pair is
-    // the distinction worth seeing in the nav: one is what you own, one is everything.
-    { path: '/admin/all-domains', label: 'All Domains', icon: 'stack-line' },
-    // The builder PATH across all seven, as distinct from the ten domain PLANS above: this
-    // one answers whose turn each capability is on and what is waiting on Ali. Same group,
-    // because it is the same ten domains seen from the owner's side.
-    { path: '/admin/builder-path', label: 'Builder Path', icon: 'route-line' },
+    // AF12.2. "All Domains" and "Builder Path" were two more rows here until 2026-11-20. Both are
+    // programme-wide reads of the same ten domains, both are 'program', and from the rail there
+    // was no way to tell which of the two you wanted. They now sit in the Agents hub's
+    // "Across everyone" group, which renders only for a viewer who holds 'program' — so a builder
+    // gets a SHORTER page rather than two more cards they cannot open.
+    //
+    // Their routes are unchanged and both are restated in UNLISTED_PATH_SECTIONS below. That
+    // restatement is not optional bookkeeping: without it sectionForPath returns null, and
+    // ProtectedRoute's `section ? canSection(section) : !isScopedRep` would admit every identity
+    // that is not a plain sales rep to two owner-only pages, which would then render and 403 their
+    // own data. Dropping a nav entry without the restatement is the failure this file warns about
+    // twice above, and it has already happened once.
     // Reese manager-growth mission, Phase 3 (T09/T10) — fleet-wide tool/
     // capability catalog, reconciled read-only across every real authority
     // source. Sibling to "AI Organization" (agents), not nested under it.
@@ -454,6 +465,13 @@ export const UNLISTED_PATH_SECTIONS: ReadonlyArray<readonly [string, string]> = 
   // /api/admin/factory/services) and ProtectedRoute does not bounce a scoped identity off it. The Gov
   // Company Dossier sits under it at /admin/gov-services#dossier (/admin/gov-dossier redirects there).
   ['/admin/gov-services', 'program'],
+  // AF12.2. The two programme-wide agent reads left the sidebar on 2026-11-20 and are reached from
+  // the Agents hub's "Across everyone" group instead. 'program' is the section they already had,
+  // inherited from the Program group, so removing the nav entry changes WHERE they are reached
+  // from and nothing at all about WHO may open them. See the Program group above for why these two
+  // rows are load-bearing rather than tidy.
+  ['/admin/all-domains', 'program'],
+  ['/admin/builder-path', 'program'],
 ];
 
 /**

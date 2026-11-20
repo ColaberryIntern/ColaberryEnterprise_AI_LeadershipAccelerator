@@ -134,13 +134,20 @@ describe('every role gets the badge its sections give it', () => {
     expect(badgeLevel(hq)).toBe('ALL-ACCESS BADGE');
   });
 
-  it('mentor: the Executive Floor partly (Dashboard and Portfolio Review), and the Agent Dashboard on Program', () => {
+  it('mentor: the Executive Floor partly (Dashboard and Portfolio Review), and Agents on Program', () => {
     const hq = hqFor('mentor');
     expect(hq.floors[0].access).toBe('some');
     expect(openLabels(hq.floors[0])).toEqual(['Dashboard', 'Portfolio Review']);
     // ONE room where there were two, as of AF12.1. My Domain and Change Requests were folded
     // into the Agent Dashboard along with Tool Requests and the Capability Board, on Ali's
     // instruction that those pages leave the left navigation.
+    //
+    // AF12.2 finished that pass and renamed what is left. All Domains and Builder Path left the
+    // Program group too, so the Program floor is two doors shorter for everyone, and the one row
+    // is "Agents" rather than "Agent Dashboard" because it is now a destination and not a page.
+    // A mentor saw exactly one open room here before and sees exactly one now: this assertion is
+    // about the LABEL, and the count is unchanged because the two rooms that went were 'program'
+    // and a mentor could never open them.
     //
     // It still carries `section: 'dashboard'` as an explicit override rather than inheriting the
     // group's 'program', and that override is load-bearing for exactly the reason the two
@@ -150,7 +157,7 @@ describe('every role gets the badge its sections give it', () => {
     // them. `dashboard` is the one section every mgmt role carries, so a mentor sees it too.
     // Intended, and not the access control: the deciding routes behind it carry `requireAdmin`,
     // and the `program` cards on the page render as unavailable rather than as dead links.
-    expect(openLabels(floorOf(hq.floors, 'Program'))).toEqual(['Agent Dashboard']);
+    expect(openLabels(floorOf(hq.floors, 'Program'))).toEqual(['Agents']);
     expect(openFloors(hq).map((f) => f.label)).toEqual([EXECUTIVE_FLOOR_LABEL, 'Program']);
   });
 

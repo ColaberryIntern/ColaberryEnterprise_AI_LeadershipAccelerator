@@ -189,6 +189,16 @@ export const DOMAINS: readonly DomainDef[] = [
       // to have a domain that holds its section: Operations already holds 'program' (via /admin/orchestration
       // and /admin/brain), and this is delivery/Project-Factory-adjacent work, so it lands here.
       '/admin/gov-services',
+      // AF12.2, same shape as the line above. "All Domains" and "Builder Path" left the sidebar on
+      // 2026-11-20 and are reached from the Agents hub's "Across everyone" group, which made them
+      // UNLISTED_PATH_SECTIONS orphans on 'program'. `domains.test.ts` requires every such orphan
+      // to be placed in a domain that holds its section, so that a path without a nav entry is
+      // still REACHABLE and still PLACED rather than quietly becoming neither.
+      //
+      // Operations, because it is where the agent estate already lives: /admin/workforce is the
+      // AI Organization and /admin/agent-orphans sits here too.
+      '/admin/all-domains',
+      '/admin/builder-path',
     ],
   },
 ];
