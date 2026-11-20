@@ -1,3 +1,4 @@
+import axios from 'axios';
 import api from '../utils/api';
 
 /**
@@ -58,4 +59,36 @@ export async function requestCall(token: string): Promise<CallResult> {
 
 export async function getIntakeStatus(token: string): Promise<IntakeStatus> {
   return (await api.get(path(token))).data;
+}
+
+// --- W32: the client's own view of their pilot (/my-pilot) ---
+
+export interface ClientStep {
+  label: string;
+  done: boolean;
+  at: string | null;
+}
+
+export interface ClientStatus {
+  company: string;
+  firstName: string;
+  steps: ClientStep[];
+  options: string[];
+  next: string;
+  closed: 'signed' | 'lost' | null;
+}
+
+/**
+ * Its own client, not the shared `api`: that one stamps the ADMIN token onto Authorization
+ * whenever one is in localStorage, which would replace the client's sign-in token for anyone
+ * (Ali, testing) who is also signed in to admin.
+ */
+const clientApi = axios.create({ baseURL: process.env.REACT_APP_API_URL || '', headers: { 'Content-Type': 'application/json' } });
+
+export async function requestClientLink(email: string): Promise<void> {
+  await clientApi.post('/api/enterprise/client/request-link', { email });
+}
+
+export async function getClientStatus(token: string): Promise<ClientStatus> {
+  return (await clientApi.get('/api/enterprise/client/status', { headers: { Authorization: `Bearer ${token}` } })).data;
 }

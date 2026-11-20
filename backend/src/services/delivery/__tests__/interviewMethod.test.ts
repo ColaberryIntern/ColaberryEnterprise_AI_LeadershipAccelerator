@@ -96,7 +96,7 @@ describe('conversationWithWrittenBrief - the extractor sees what they wrote too'
   // in full, in writing, minutes earlier.
   it('puts the brief in front of the transcript, marked as written', () => {
     const out = conversationWithWrittenBrief(BRIEF, 'bot: Hello.\nhuman: Hi.');
-    expect(out.startsWith('human (written before the call): ')).toBe(true);
+    expect(out.startsWith('human: (written before the call) ')).toBe(true);
     expect(out).toContain(BRIEF);
     expect(out.endsWith('bot: Hello.\nhuman: Hi.')).toBe(true);
   });
@@ -106,12 +106,37 @@ describe('conversationWithWrittenBrief - the extractor sees what they wrote too'
   });
 
   it('is just the brief when the call produced nothing', () => {
-    expect(conversationWithWrittenBrief(BRIEF, '')).toBe(`human (written before the call): ${BRIEF}`);
+    expect(conversationWithWrittenBrief(BRIEF, '')).toBe(`human: (written before the call) ${BRIEF}`);
   });
 
   it('bounds the brief here too', () => {
     expect(conversationWithWrittenBrief('x'.repeat(WRITTEN_BRIEF_MAX + 100), 'bot: Hi.')).toHaveLength(
-      'human (written before the call): '.length + WRITTEN_BRIEF_MAX + 1 + 'bot: Hi.'.length,
+      'human: (written before the call) '.length + WRITTEN_BRIEF_MAX + 1 + 'bot: Hi.'.length,
     );
+  });
+});
+
+describe('W28 live run: what the person WROTE counts as the person speaking', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { buildQuoteIndex, quoteViolation } = require('../projectUnderstandingExtractor');
+  const BRIEF_LINES = ['Company: Acme Logistics', 'Who does it today: 4 people, 20 hours a week in total', 'What AI needs to return: Hours back'];
+
+  it('keeps a multi-line written brief as one customer turn, so its figures survive', () => {
+    const conversation = conversationWithWrittenBrief(BRIEF_LINES.join('\n'), 'bot: Which system?\nhuman: McLeod.');
+    const index = buildQuoteIndex(conversation, 'voice_transcript');
+    expect(quoteViolation('20 hours a week in total', index)).toBeNull();
+    expect(quoteViolation('Hours back', index)).toBeNull();
+    expect(quoteViolation('Which system?', index)).toBe('source_quote is the agent speaking, not the customer');
+  });
+
+  it('keeps a multi-line typed answer as one customer turn', () => {
+    const { interviewTranscript } = require('../flotationInterviewService');
+    const t = interviewTranscript([
+      { role: 'user', text: BRIEF_LINES.join('\n') },
+      { role: 'assistant', text: 'Which system?' },
+    ]);
+    const index = buildQuoteIndex(t, 'chat');
+    expect(quoteViolation('4 people, 20 hours a week in total', index)).toBeNull();
+    expect(quoteViolation('Which system?', index)).toBe('source_quote is the agent speaking, not the customer');
   });
 });

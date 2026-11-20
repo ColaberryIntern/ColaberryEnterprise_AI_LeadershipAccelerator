@@ -307,6 +307,11 @@ const SENDERS: Array<{ name: string; run: () => Promise<unknown> }> = [
     to: 'client@example.com', displayName: 'Dana Whitfield',
     brandName: 'Northwind Logistics', token: 'tok-client',
   } as never) },
+  // W32: the Enterprise client's /my-pilot sign-in link.
+  { name: 'sendEnterpriseClientLink', run: () => emailService.sendEnterpriseClientLink({
+    to: 'client@example.com', fullName: 'Dana Whitfield', company: 'Northwind Logistics',
+    link: 'https://enterprise.colaberry.ai/my-pilot/status?token=tok-client',
+  }) },
 ];
 
 type Measured = {

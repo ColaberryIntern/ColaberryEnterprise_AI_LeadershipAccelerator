@@ -85,7 +85,7 @@ describe('completeFlotationCall', () => {
     await completeFlotationCall({ callId: 'call_1', status: 'completed', transcript: TRANSCRIPT });
 
     const { conversation } = mockFinish.mock.calls[0][0];
-    expect(conversation).toContain('human (written before the call): Build an AI Proposal Assistant for Patriot AI Solutions.');
+    expect(conversation).toContain('human: (written before the call) Build an AI Proposal Assistant for Patriot AI Solutions.');
     expect(conversation).toContain(TRANSCRIPT);
     expect(conversation.indexOf('Patriot')).toBeLessThan(conversation.indexOf('Tell me about'));
   });
@@ -125,7 +125,7 @@ describe('completeFlotationCall', () => {
     const out = await completeFlotationCall({ callId: 'call_1', status: 'completed', transcript: TRANSCRIPT });
     expect(out).toMatchObject({ handled: true, completed: true });
     expect(mockFinish).toHaveBeenCalledWith(expect.objectContaining({ buildFor: { kind: 'none' }, source: 'voice_transcript' }));
-    expect(mockRecordEnterprise).toHaveBeenCalledWith('call_1', expect.objectContaining({ understanding: 'created' }));
+    expect(mockRecordEnterprise).toHaveBeenCalledWith('call_1', expect.objectContaining({ understanding: 'created' }), expect.any(String));
   });
 
   it('leaves other brands\' calls alone', async () => {

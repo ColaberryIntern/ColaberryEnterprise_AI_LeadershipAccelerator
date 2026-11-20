@@ -102,6 +102,10 @@ export const env = {
   // must not see AI Flotation's caller ID. Unset means "Call me now" is not offered and
   // the call is skipped with `no_agent_id`; the typed interview still runs.
   synthflowEnterpriseIntakeAgentId: process.env.SYNTHFLOW_ENTERPRISE_INTAKE_AGENT_ID || '',
+  // W29: the Basecamp "Colaberry Enterprise Intake" project. Unset = no client lists are written.
+  enterpriseIntakeBcProjectId: process.env.BASECAMP_ENTERPRISE_INTAKE_PROJECT_ID || '',
+  // Q4 A (Ali, 2026-11-20): Ali owns every client list. His Basecamp person id.
+  enterpriseIntakeBcOwnerId: process.env.BASECAMP_ENTERPRISE_INTAKE_OWNER_ID || '17454835',
   // OpportunityLift's own shell agent. Deliberately its own slot rather than reusing
   // the Colaberry callback agent: that one carries a saved training-site script, so a
   // scholarship applicant would have been answered by the bootcamp's callback agent.

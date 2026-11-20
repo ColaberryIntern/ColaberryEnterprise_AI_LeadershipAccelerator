@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   getIntakeStatus,
   interviewTurn,
@@ -260,6 +261,9 @@ export function DemoPilotIntake({ token, phone }: DemoPilotIntakeProps): React.R
               </p>
             </li>
           </ol>
+          <p className="cbv2-dpi__wait" data-testid="intake-my-pilot">
+            See where your pilot stands any time at <Link to="/my-pilot">My pilot</Link>.
+          </p>
         </div>
       ) : null}
     </div>

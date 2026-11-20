@@ -23,6 +23,7 @@ import {
   handleGetLeaderboard,
   handleGetSponsorDashboard,
 } from '../controllers/challengeController';
+import { handleClientStatus, handleRequestClientLink } from '../controllers/enterpriseClientController';
 
 const leadRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -65,6 +66,16 @@ const interviewRateLimiter = rateLimit({
   message: { error: 'Interview rate limit exceeded' },
 });
 
+// W32: client sign-in links. Its own budget, so a prospect who just booked and asked for a call
+// (both on leadRateLimiter) can still ask for a link; small, because each one sends an email.
+const clientLinkRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many link requests. Please try again in a few minutes.' },
+});
+
 const router = Router();
 
 // Sales-hub Cory RAG endpoint. Registered here (an early, public router) on
@@ -99,6 +110,9 @@ router.post('/api/enterprise/intake', leadRateLimiter, handleCreateEnterpriseInt
 router.get('/api/enterprise/intake/:token', interviewRateLimiter, handleEnterpriseIntakeStatus);
 router.post('/api/enterprise/intake/:token/interview', interviewRateLimiter, handleEnterpriseInterviewTurn);
 router.post('/api/enterprise/intake/:token/call', leadRateLimiter, handleEnterpriseIntakeCall);
+// W32: the client's own view of their pilot, by emailed sign-in link.
+router.post('/api/enterprise/client/request-link', clientLinkRateLimiter, handleRequestClientLink);
+router.get('/api/enterprise/client/status', interviewRateLimiter, handleClientStatus);
 
 // The OpportunityLift written interview. Same shape and the same limiter as the
 // flotation one above: keyed on the `raw_payload_id` the ingest form returned, one

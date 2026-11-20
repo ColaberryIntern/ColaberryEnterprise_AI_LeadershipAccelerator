@@ -30,6 +30,13 @@ jest.mock('../../delivery/projectIntake', () => ({
   boundTurns: (t: any) => (Array.isArray(t) ? t.filter((x: any) => x && (x.role === 'user' || x.role === 'assistant')) : []),
 }));
 jest.mock('../../callbackRequestService', () => ({ requestInstantCallback: (...a: any[]) => mockCallback(...a) }));
+const mockOpenList = jest.fn();
+const mockPostInterview = jest.fn();
+jest.mock('../enterpriseIntakeResearch', () => ({ researchSoon: jest.fn() }));
+jest.mock('../enterpriseIntakeBasecamp', () => ({
+  openClientListSoon: (...a: any[]) => mockOpenList(...a),
+  postInterviewSoon: (...a: any[]) => mockPostInterview(...a),
+}));
 
 import {
   writtenBrief,
@@ -119,6 +126,8 @@ describe('the form arrives', () => {
     expect(mockCapture.mock.invocationCallOrder[0]).toBeLessThan(mockIntakeCreate.mock.invocationCallOrder[0]);
     expect(mockIntakeCreate).toHaveBeenCalledWith(expect.objectContaining({ lead_id: 7, email: 'dana@acme.test', people_count: 4 }));
     expect(out).toEqual({ token: 'tok-1', callAvailable: true });
+    // W29: the client's Basecamp list is opened for the new intake, off the request path.
+    expect(mockOpenList).toHaveBeenCalledWith('tok-1');
   });
 
   it('never grants a call without the tick', async () => {
@@ -163,6 +172,34 @@ describe('the typed interview', () => {
     expect(out).toEqual({ done: true, message: 'Thanks.', understood: true });
     expect(intake.update).toHaveBeenCalledWith(expect.objectContaining({ status: 'interviewed', understanding_id: 'u-1', interviewed_via: 'chat' }));
   });
+
+  it('W29: keeps the conversation (without the brief) and sends it to the client list', async () => {
+    mockRunTurn.mockResolvedValue({ done: true, message: 'Thanks, that is what we needed.', understanding: 'created', understanding_id: 'u-1' });
+    const intake = intakeRow();
+    await runEnterpriseInterviewTurn(intake as any, [
+      { role: 'assistant', text: 'Which system holds the orders?' },
+      { role: 'user', text: 'McLeod.' },
+    ]);
+    const saved = (intake.update as jest.Mock).mock.calls[0][0].transcript;
+    expect(saved).toBe('AI: Which system holds the orders?\nThem: McLeod.\nAI: Thanks, that is what we needed.');
+    expect(saved).not.toContain('Process to start with');
+    expect(mockPostInterview).toHaveBeenCalledWith(intake.id);
+  });
+
+  it('W29: a repeated final turn does not overwrite the interview already recorded', async () => {
+    mockRunTurn.mockResolvedValue({ done: true, message: 'Thanks.', understanding: 'deduplicated', understanding_id: 'u-1' });
+    const intake = intakeRow({ understanding_id: 'u-1', interviewed_at: new Date(), status: 'interviewed' });
+    const out = await runEnterpriseInterviewTurn(intake as any, [{ role: 'user', text: 'again' }]);
+    expect(out).toEqual({ done: true, message: 'Thanks.', understood: true });
+    expect(intake.update).not.toHaveBeenCalled();
+    expect(mockPostInterview).not.toHaveBeenCalled();
+  });
+
+  it('W29: posts nothing to Basecamp when there is no write-up', async () => {
+    mockRunTurn.mockResolvedValue({ done: true, message: 'Thanks.', understanding: 'failed' });
+    await runEnterpriseInterviewTurn(intakeRow() as any, []);
+    expect(mockPostInterview).not.toHaveBeenCalled();
+  });
 });
 
 describe('"Call me now"', () => {
@@ -186,7 +223,8 @@ describe('"Call me now"', () => {
   it('records the write-up once the call completes', async () => {
     const intake = intakeRow({ call_id: 'call_9', status: 'call_requested' });
     mockIntakeFindOne.mockResolvedValue(intake);
-    await recordEnterpriseCallOutcome('call_9', { understanding: 'created', understanding_id: 'u-2' });
-    expect(intake.update).toHaveBeenCalledWith(expect.objectContaining({ status: 'interviewed', interviewed_via: 'call' }));
+    await recordEnterpriseCallOutcome('call_9', { understanding: 'created', understanding_id: 'u-2' }, 'AI: Hello\nThem: Hi');
+    expect(intake.update).toHaveBeenCalledWith(expect.objectContaining({ status: 'interviewed', interviewed_via: 'call', transcript: 'AI: Hello\nThem: Hi' }));
+    expect(mockPostInterview).toHaveBeenCalledWith(intake.id);
   });
 });

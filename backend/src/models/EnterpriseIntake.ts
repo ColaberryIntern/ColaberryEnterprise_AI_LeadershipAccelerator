@@ -20,7 +20,9 @@ import { sequelize } from '../config/database';
 export type EnterpriseIntakeStatus =
   | 'form'
   | 'call_requested'
-  | 'interviewed';
+  | 'interviewed'
+  | 'signed'
+  | 'lost';
 
 export interface EnterpriseIntakeAttributes {
   id?: string;
@@ -49,6 +51,44 @@ export interface EnterpriseIntakeAttributes {
   interviewed_at: Date | null;
   /** Phase 2: the client's to-do list in the Basecamp "Colaberry Enterprise Intake" project. */
   bc_todolist_id: string | null;
+  /** Phase 2: the interview as text (typed turns, or the call transcript), for the client's list. */
+  transcript: string | null;
+  /** Phase 2: when the write-up and transcript were posted on the list. Null = still to post. */
+  bc_writeup_posted_at: Date | null;
+  /** Phase 2: the whole checklist is on the list. Null = still to build or repair. */
+  bc_checklist_ready_at?: Date | null;
+  /** Phase 2: the interview to-do is ticked. */
+  bc_interview_ticked_at?: Date | null;
+  /** Phase 3: the company research brief and the draft pilot options (JSON). */
+  research?: unknown | null;
+  pilot_options?: unknown | null;
+  researched_at?: Date | null;
+  research_attempts?: number;
+  /** Phase 3: once the research and options are posted on the client's list. */
+  bc_research_posted_at?: Date | null;
+  bc_research_ticked_at?: Date | null;
+  /** Phase 3: the follow-up email with their options. Drafted by AI, sent only on Ali's approval. */
+  options_email_subject?: string | null;
+  options_email_body?: string | null;
+  options_email_sent_at?: Date | null;
+  /** Phase 4: how far the client's emails and calls have been copied onto their list. */
+  comms_email_synced_through?: Date | null;
+  comms_calls_synced_through?: Date | null;
+  /** Phase 4: call ids already posted, and when this client was last checked (fair rotation). */
+  comms_calls_posted?: string[] | null;
+  comms_checked_at?: Date | null;
+  /** Phase 4: the stage shown in the list's name, so it is renamed only when it changes. */
+  bc_list_stage?: string | null;
+  /** Phase 4: the proposal. Drafted by AI from everything on the list, sent only by Ali. */
+  proposal_subject?: string | null;
+  proposal_body?: string | null;
+  proposal_drafted_at?: Date | null;
+  proposal_sent_at?: Date | null;
+  /** Phase 5: the end of the intake. Signed opens the client's own Basecamp project. */
+  signed_at?: Date | null;
+  lost_at?: Date | null;
+  lost_reason?: string | null;
+  bc_project_id?: string | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -78,6 +118,32 @@ class EnterpriseIntake extends Model<EnterpriseIntakeAttributes> implements Ente
   declare interviewed_via: 'chat' | 'call' | null;
   declare interviewed_at: Date | null;
   declare bc_todolist_id: string | null;
+  declare transcript: string | null;
+  declare bc_writeup_posted_at: Date | null;
+  declare bc_checklist_ready_at: Date | null;
+  declare bc_interview_ticked_at: Date | null;
+  declare research: unknown | null;
+  declare pilot_options: unknown | null;
+  declare researched_at: Date | null;
+  declare research_attempts: number;
+  declare bc_research_posted_at: Date | null;
+  declare bc_research_ticked_at: Date | null;
+  declare options_email_subject: string | null;
+  declare options_email_body: string | null;
+  declare options_email_sent_at: Date | null;
+  declare comms_email_synced_through: Date | null;
+  declare comms_calls_synced_through: Date | null;
+  declare comms_calls_posted: string[] | null;
+  declare comms_checked_at: Date | null;
+  declare bc_list_stage: string | null;
+  declare proposal_subject: string | null;
+  declare proposal_body: string | null;
+  declare proposal_drafted_at: Date | null;
+  declare proposal_sent_at: Date | null;
+  declare signed_at: Date | null;
+  declare lost_at: Date | null;
+  declare lost_reason: string | null;
+  declare bc_project_id: string | null;
   declare createdAt: Date;
   declare updatedAt: Date;
 }
@@ -108,6 +174,32 @@ EnterpriseIntake.init(
     interviewed_via: { type: DataTypes.STRING(10), allowNull: true },
     interviewed_at: { type: DataTypes.DATE, allowNull: true },
     bc_todolist_id: { type: DataTypes.STRING(32), allowNull: true },
+    transcript: { type: DataTypes.TEXT, allowNull: true },
+    bc_writeup_posted_at: { type: DataTypes.DATE, allowNull: true },
+    bc_checklist_ready_at: { type: DataTypes.DATE, allowNull: true },
+    bc_interview_ticked_at: { type: DataTypes.DATE, allowNull: true },
+    research: { type: DataTypes.JSONB, allowNull: true },
+    pilot_options: { type: DataTypes.JSONB, allowNull: true },
+    researched_at: { type: DataTypes.DATE, allowNull: true },
+    research_attempts: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    bc_research_posted_at: { type: DataTypes.DATE, allowNull: true },
+    bc_research_ticked_at: { type: DataTypes.DATE, allowNull: true },
+    options_email_subject: { type: DataTypes.STRING(255), allowNull: true },
+    options_email_body: { type: DataTypes.TEXT, allowNull: true },
+    options_email_sent_at: { type: DataTypes.DATE, allowNull: true },
+    comms_email_synced_through: { type: DataTypes.DATE, allowNull: true },
+    comms_calls_synced_through: { type: DataTypes.DATE, allowNull: true },
+    comms_calls_posted: { type: DataTypes.JSONB, allowNull: true },
+    comms_checked_at: { type: DataTypes.DATE, allowNull: true },
+    bc_list_stage: { type: DataTypes.STRING(30), allowNull: true },
+    proposal_subject: { type: DataTypes.STRING(255), allowNull: true },
+    proposal_body: { type: DataTypes.TEXT, allowNull: true },
+    proposal_drafted_at: { type: DataTypes.DATE, allowNull: true },
+    proposal_sent_at: { type: DataTypes.DATE, allowNull: true },
+    signed_at: { type: DataTypes.DATE, allowNull: true },
+    lost_at: { type: DataTypes.DATE, allowNull: true },
+    lost_reason: { type: DataTypes.STRING(500), allowNull: true },
+    bc_project_id: { type: DataTypes.STRING(32), allowNull: true },
   },
   {
     sequelize,

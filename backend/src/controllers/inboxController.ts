@@ -443,7 +443,11 @@ export async function handleDigestAction(req: Request, res: Response) {
       // repo, which is an auth bypass on an endpoint that takes its action
       // straight off the query string. config/env.ts already refuses to boot in
       // production without JWT_SECRET, so this path cannot regress silently.
-      jwt.verify(token as string, env.jwtSecret);
+      const payload = jwt.verify(token as string, env.jwtSecret) as { aud?: unknown };
+      // W32: an Enterprise client's sign-in link is signed with the same secret and is handed to
+      // anyone who books a pilot. It must never act on Ali's inbox.
+      const aud = Array.isArray(payload?.aud) ? payload.aud : [payload?.aud];
+      if (aud.includes('enterprise-client')) throw new Error('client token');
     } catch {
       return res.status(401).send('<h2>Link expired or invalid</h2><p>Please use the admin console instead.</p>');
     }

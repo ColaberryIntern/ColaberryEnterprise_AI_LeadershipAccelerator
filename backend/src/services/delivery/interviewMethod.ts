@@ -75,11 +75,18 @@ export function writtenBriefLines(written: string | null | undefined): string[] 
  * so the write-up knows what they wrote as well as what they said. Without this the
  * extractor saw only the call: on 2026-09-17 a 37-second call produced a one-item
  * understanding of a project described in full, in writing, ten minutes earlier.
+ *
+ * The brief is ONE `human:` line. The extractor reads a transcript line by line and takes any
+ * "Label: text" line as a new speaker, and it trusts only quotes from customer labels. The
+ * old head, "human (written before the call):", matched no speaker at all, and a multi-line
+ * brief ("Who does it today: 4 people...") made every answer line its own unknown speaker.
+ * So everything the person wrote was rejected as "the agent speaking" (W28 live run,
+ * 2026-11-20: the people, hours and required return were all dropped from the write-up).
  */
 export function conversationWithWrittenBrief(written: string | null | undefined, transcript: string): string {
-  const text = (written || '').trim().slice(0, WRITTEN_BRIEF_MAX);
+  const text = (written || '').trim().slice(0, WRITTEN_BRIEF_MAX).replace(/\s*\r?\n\s*/g, ' ');
   const spoken = (transcript || '').trim();
   if (!text) return spoken;
-  const head = `human (written before the call): ${text}`;
+  const head = `human: (written before the call) ${text}`;
   return spoken ? `${head}\n${spoken}` : head;
 }

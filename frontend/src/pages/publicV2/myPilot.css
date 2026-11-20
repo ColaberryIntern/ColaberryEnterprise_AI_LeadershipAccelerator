@@ -1,0 +1,117 @@
+/* W32: /my-pilot, the client's own view of their pilot. Tokens only (the same declared tokens the
+   intake panel uses); every class is cbv2-mp. */
+
+.cbv2-shell .cbv2-mp__card {
+  display: grid;
+  gap: var(--space-4);
+  max-width: 640px;
+  margin-top: var(--space-6);
+  padding: var(--space-6);
+  border-radius: var(--radius-sm);
+  background: var(--surface-brand-subtle);
+  border: 1px solid var(--border-brand);
+}
+
+.cbv2-shell .cbv2-mp__card form {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.cbv2-shell .cbv2-mp__card label {
+  font-weight: 600;
+  color: var(--text-body);
+}
+
+.cbv2-shell .cbv2-mp__card input {
+  font: inherit;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-brand);
+  border-radius: var(--radius-sm);
+  background: var(--surface-page, #ffffff);
+  color: var(--text-body);
+  min-width: 0;
+}
+
+.cbv2-shell .cbv2-mp__card .cbv2-btn {
+  justify-self: start;
+}
+
+.cbv2-shell .cbv2-mp__h2 {
+  margin: 0;
+  font-size: clamp(20px, 2.4vw, 26px);
+  line-height: 1.25;
+  color: var(--text-body);
+}
+
+.cbv2-shell .cbv2-mp__h3 {
+  margin: 0;
+  font-size: 18px;
+  color: var(--text-body);
+}
+
+.cbv2-shell .cbv2-mp__steps,
+.cbv2-shell .cbv2-mp__options {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cbv2-shell .cbv2-mp__steps li {
+  display: flex;
+  gap: var(--space-3);
+  align-items: baseline;
+  color: var(--text-muted);
+}
+
+.cbv2-shell .cbv2-mp__steps li.is-done {
+  color: var(--text-body);
+}
+
+.cbv2-shell .cbv2-mp__steps small {
+  color: var(--text-muted);
+  margin-left: var(--space-1);
+}
+
+.cbv2-shell .cbv2-mp__dot {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--border-brand);
+  transform: translateY(1px);
+}
+
+.cbv2-shell .cbv2-mp__steps li.is-done .cbv2-mp__dot {
+  background: var(--brand-accent);
+  border-color: var(--brand-accent);
+}
+
+.cbv2-shell .cbv2-mp__options li::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: var(--space-2);
+  border-radius: 50%;
+  background: var(--brand-accent);
+  transform: translateY(-2px);
+}
+
+.cbv2-shell .cbv2-mp__next {
+  margin: 0;
+  color: var(--text-body);
+}
+
+.cbv2-shell .cbv2-mp__warn {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text-body);
+}
+
+.cbv2-shell .cbv2-mp__small {
+  margin: 0;
+  font-size: var(--fs-body-sm);
+  color: var(--text-muted);
+}

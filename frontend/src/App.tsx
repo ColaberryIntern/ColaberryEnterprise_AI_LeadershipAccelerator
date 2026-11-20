@@ -16,6 +16,7 @@ import SegmentPageV2 from './pages/publicV2/SegmentPageV2';
 import HowItWorksV2 from './pages/publicV2/HowItWorksV2';
 import BookV2 from './pages/publicV2/BookV2';
 import DemoPilotV2 from './pages/publicV2/DemoPilotV2';
+import MyPilotV2 from './pages/publicV2/MyPilotV2';
 import DemoV2 from './pages/publicV2/DemoV2';
 import { readySegments } from './config/v2Segments';
 import TryV2 from './pages/publicV2/TryV2';
@@ -153,6 +154,9 @@ function App() {
                 model does not have one.
             */}
             <Route path="demo-pilot" element={<DemoPilotV2 />} />
+            {/* W32: the client signs in by email link and sees where their pilot stands. */}
+            <Route path="my-pilot" element={<MyPilotV2 />} />
+            <Route path="my-pilot/status" element={<MyPilotV2 />} />
             {/*
                 /accelerator folded into Train when the five services became three.
                 The v5 site model merges the Workforce Architect Accelerator and this

@@ -168,6 +168,8 @@ export async function bcPost<T>(urlOrPath: string, body: unknown): Promise<T> {
     }),
   );
   if (!r.ok) await failNonOk('POST', u, r);
+  // Basecamp answers some POSTs (e.g. todo completion) with 204 No Content.
+  if (r.status === 204) return null as T;
   return (await r.json()) as T;
 }
 
