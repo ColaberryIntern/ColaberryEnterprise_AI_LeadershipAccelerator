@@ -37,13 +37,15 @@ function importsOf(file: string): string[] {
     .filter((r): r is string => !!r && r.startsWith(SRC));
 }
 
-function reach(start: string): Set<string> {
+function reach(start: string, boundary: string | null = null): Set<string> {
   const seen = new Set<string>();
   const stack = [start];
   while (stack.length) {
     const file = stack.pop()!;
     if (seen.has(file)) continue;
     seen.add(file);
+    // The boundary is recorded as reached but not walked into.
+    if (boundary && rel(file) === boundary) continue;
     stack.push(...importsOf(file));
   }
   return seen;
@@ -64,6 +66,12 @@ describe('CH6.3 drafting cannot send', () => {
 
   it('1. no chain of imports reaches the hub\'s delivery, connectors or worker', () => {
     expect(reached.map(rel).filter((f) => HUB_SENDER.test(f))).toEqual([]);
+  });
+
+  it('3. STRICT: with the shared LLM wrapper as the only boundary, nothing drafting reaches, at any depth, is a member-messaging service or the models barrel', () => {
+    const inside = [...reach(START, 'services/llmCallWrapper.ts')].map(rel);
+    expect(inside).toContain('services/llmCallWrapper.ts');
+    expect(inside.filter((f) => MEMBER_MESSAGING.test(f) || HUB_SENDER.test(f) || f === 'models/index.ts')).toEqual([]);
   });
 
   it('2. no hub file drafting reaches imports a member-messaging service directly', () => {

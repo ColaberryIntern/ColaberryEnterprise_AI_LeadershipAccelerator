@@ -140,6 +140,9 @@ export async function regenerateDrafts(messageId: string, instruction: 'shorter'
     revise: { instruction, previous: { community_post: post?.body, in_app_title: inApp?.title ?? undefined, in_app_body: inApp?.body } },
   });
   return sequelize.transaction(async (t) => {
+    // Re-checked under the row lock: the model call takes seconds, and the message may have started sending meanwhile.
+    const fresh = await CommsHubMessage.findByPk(m.id, { transaction: t, lock: t.LOCK.UPDATE });
+    if (!fresh || fresh.status === 'sending' || fresh.status === 'sent' || fresh.status === 'cancelled') throw new MessageRuleError(`A ${fresh?.status ?? 'missing'} message cannot be redrafted.`, 409, 'locked');
     const d = await writeDrafts(m.id, reply, event ? factsFor(event, m.occurrence_starts_at, now) : null, 'ai', instruction, t);
     await logActivity(actor, 'message.redrafted', 'message', m.id, { instruction }, t);
     await reconcileApproval(m.id, 'draft_changed', actor, now, t);

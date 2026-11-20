@@ -50,10 +50,10 @@ describe('problemsFor: what blocks a submit', () => {
   });
 
   it('the model wrote a WRONG date or time itself: blocked, naming what it said', () => {
-    const p = problemsFor(post('See you Tuesday, December 1 at 6:00 PM CST, or catch up on Dec 2 at 7 pm.'), f);
+    const p = problemsFor(post('See you Tuesday, December 1 at 6:00 PM CST, or catch up on Dec 2 at 8 pm.'), f);
     expect(p).toHaveLength(1);
     expect(p[0]).toContain('"Dec 2"');
-    expect(p[0]).toContain('"7 pm"');
+    expect(p[0]).toContain('"8 pm"');
     expect(problemsFor(post('Join us Wednesday, December 1 at 6:00 PM CST.'), f)[0]).toContain('"Wednesday"');
   });
 
@@ -65,5 +65,52 @@ describe('problemsFor: what blocks a submit', () => {
   it('a subject-only message needs no date, but the banned-word and placeholder checks still apply', () => {
     expect(problemsFor(post('The new Weekly Live guide is in the library.'), null)).toEqual([]);
     expect(problemsFor(post('The guide is FREE for members.'), null)).toHaveLength(1);
+  });
+});
+
+describe('CH6.3 attempt 2: the validator reads values, not exact text', () => {
+  // Tuesday, December 1, 6:00 PM CST to 7:00 PM (00:00Z-01:00Z December 2).
+  const f = factsFor(ev(), null, NOW);
+  const ok = (body: string): string[] => problemsFor({ channel: 'community_post', title: null, body }, f);
+
+  it.each([
+    'Demo Tuesday is Tuesday, December 1 at 6 PM CST.',
+    'Demo Tuesday is Tue, Dec 1 at 6pm.',
+    'Join us Dec. 1st at 6:00 p.m. CST.',
+    'December 1, 2026, 6:00 PM Central Time.',
+    'Tuesday, 1 December, 6:00 PM CT.',
+    'On 12/1 from 6:00 PM to 7:00 PM CST.',
+    'Tuesday, December 1 at 18:00 Central.',
+  ])('correct, however written: %s', (body) => {
+    expect(ok(body)).toEqual([]);
+  });
+
+  it.each([
+    ['Tuesday, December 1 at 6:00 PM EST.', /time in EST/],
+    ['Tuesday, December 1 at 6:00 PM PT.', /time in PT/],
+    ['Tuesday, December 1 at 6:00 PM CDT.', /time in CDT/], // December is CST
+    ['Tuesday, December 1 at 6:00 PM, or 18:30 for the replay.', /"18:30"/],
+    ['Tuesday, December 1 at 6:00 PM CST, wrap-up at noon.', /"noon"/],
+    ['See you tomorrow, Tuesday, December 1 at 6:00 PM CST.', /"tomorrow"/],
+    ['Tuesday, December 1 at 6:00 PM CST. Next week we go deeper.', /"Next week"/],
+    ['Tuesday, December 1 at 6:00 PM CST (2026-12-02 in UTC).', /"2026-12-02"/],
+    ['Weds, December 1 at 6:00 PM CST.', /"Weds"/],
+    ['Tuesday, December 1 at 6:00 PM CST, doors at eight pm.', /"eight pm"/],
+    ['Tuesday, December 1 at 6:00 PM CST, or 7 o\'clock on the dot.', /"7 o'clock"/],
+    ['Tuesday, 2 December at 6:00 PM CST.', /"2 December"/],
+    ['Tuesday, December 1 at 6:00 PM CST. Details: https://evil.example.com/x', /link that is not this event's/],
+  ])('wrong, and named: %s', (body, pattern) => {
+    expect(ok(body).join(' ')).toMatch(pattern);
+  });
+
+  it('the event\'s own links pass; a subject-only message may link a colaberry.com page and nothing else', () => {
+    expect(ok('Tuesday, December 1 at 6:00 PM CST. Join: https://zoom.us/j/9')).toEqual([]);
+    expect(problemsFor({ channel: 'community_post', title: null, body: 'The guide: https://training.colaberry.com/guide' }, null)).toEqual([]);
+    expect(problemsFor({ channel: 'community_post', title: null, body: 'The guide: https://bit.ly/abc' }, null)[0]).toMatch(/not a Colaberry page/);
+  });
+
+  it('a noon event may say "noon"', () => {
+    const noon = factsFor(ev({ starts_at: new Date('2026-12-01T18:00:00Z'), ends_at: null }), null, NOW);
+    expect(problemsFor({ channel: 'community_post', title: null, body: 'Office hours Tuesday, December 1 at noon CST.' }, noon)).toEqual([]);
   });
 });

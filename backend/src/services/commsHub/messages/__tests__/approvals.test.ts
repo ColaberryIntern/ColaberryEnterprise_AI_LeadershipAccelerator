@@ -227,3 +227,27 @@ describe('CH6.3 the validator blocks submit', () => {
     expect(messages.get('m2')!.status).toBe('needs_approval');
   });
 });
+
+describe('CH6.3 attempt 2: the validator also runs at approval', () => {
+  beforeEach(() => {
+    events.set('e1', { id: 'e1', starts_at: new Date('2026-12-02T00:00:00Z'), ends_at: null, repeat_rule: null, join_url: null, registration_url: null, hosts: [] });
+    messages.set('m3', withUpdate({ id: 'm3', status: 'needs_approval', event_id: 'e1', occurrence_starts_at: null, send_at: null, created_by: 'jackie-1' }));
+    destinations = [{ message_id: 'm3', channel: 'community_post', target_type: 'cohort_feed', target_id: 'c1' }];
+  });
+
+  it('an edit made after submit that adds a banned word or a wrong date is refused at approve, with the reasons', async () => {
+    drafts = [{ message_id: 'm3', channel: 'community_post', version: 2, title: null, body: 'A free session on Wednesday, December 2 at 6:00 PM CST.' }];
+    const e = await err(approveMessage('m3', TAIWO, new Date('2026-11-20T15:00:00Z')));
+    expect(e.reason).toBe('draft_invalid');
+    expect(e.problems.join(' ')).toMatch(/TWC rules/);
+    expect(e.problems.join(' ')).toMatch(/must say the date/);
+    expect(approvals).toEqual([]);
+    expect(messages.get('m3')!.status).toBe('needs_approval');
+  });
+
+  it('CONTROL: a valid edit approves', async () => {
+    drafts = [{ message_id: 'm3', channel: 'community_post', version: 2, title: null, body: 'Demo Tuesday: Tuesday, December 1 at 6 PM CST.' }];
+    await approveMessage('m3', TAIWO, new Date('2026-11-20T15:00:00Z'));
+    expect(messages.get('m3')!.status).toBe('approved');
+  });
+});

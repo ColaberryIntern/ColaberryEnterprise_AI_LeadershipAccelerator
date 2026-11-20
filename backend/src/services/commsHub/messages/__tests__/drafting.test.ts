@@ -36,7 +36,7 @@ jest.mock('../../activityLog', () => ({ logActivity: jest.fn(async () => undefin
 jest.mock('../approvals', () => ({ ...jest.requireActual('../approvals'), reconcileApproval: (...a: unknown[]) => mockReconcile(...(a as [])) }));
 
 import { createDraftMessage, DraftModelError, editDraft, regenerateDrafts } from '../drafting';
-import { problemsFor } from '../draftFacts';
+import { factsFor, problemsFor } from '../draftFacts';
 import { MESSAGE_DRAFT_SYSTEM } from '../prompts/messageDraftPrompt';
 
 const JACKIE = { id: 'jackie-1', label: 'Jackie' };
@@ -55,7 +55,7 @@ describe('CH6.3 create', () => {
     expect(message).toMatchObject({ event_id: 'e1', status: 'draft', created_by: 'jackie-1' });
     expect(d[0]).toMatchObject({ channel: 'community_post', version: 1, author: 'ai', body: 'Demo Tuesday is on Tuesday, December 1 at 6:00 PM CST with Aleem. Join here: https://zoom.us/j/9' });
     expect(d[1]).toMatchObject({ channel: 'in_app', version: 1, title: 'Demo Tuesday, Tuesday, December 1', body: 'Starts at 6:00 PM CST' });
-    for (const x of d) expect(problemsFor(x as never, { date: 'Tuesday, December 1', time: '6:00 PM CST', join_link: null, registration_link: null, hosts: null, starts_at: NOW })).toEqual([]);
+    for (const x of d) expect(problemsFor(x as never, factsFor(events.get('e1') as never, null, NOW))).toEqual([]);
     expect(recommended).toEqual([
       expect.objectContaining({ channel: 'community_post', target_type: 'cohort_feed', target_id: 'c1', label: 'November 2026 feed' }),
       expect.objectContaining({ channel: 'in_app', target_type: 'in_app_audience', target_id: 'all_members', reason: expect.stringMatching(/.+/) }),
@@ -89,7 +89,7 @@ describe('CH6.3 create', () => {
   it('the model writes a WRONG date itself: the draft is kept, and the validator blocks it with the reason', async () => {
     mockLLM.mockResolvedValue(reply({ community_post: { body: 'Demo Tuesday is on Wednesday, December 2 at 7:00 PM CST.' } }));
     const { drafts: d } = await createDraftMessage({ eventId: 'e1', kind: 'announcement' }, JACKIE, NOW);
-    const p = problemsFor(d[0] as never, { date: 'Tuesday, December 1', time: '6:00 PM CST', join_link: null, registration_link: null, hosts: null, starts_at: NOW });
+    const p = problemsFor(d[0] as never, factsFor(events.get('e1') as never, null, NOW));
     expect(p.join(' ')).toMatch(/must say the date/);
     expect(p.join(' ')).toMatch(/"December 2"|"Wednesday"|"7:00 PM CST"/);
   });

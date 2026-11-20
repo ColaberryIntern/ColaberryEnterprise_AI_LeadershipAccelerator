@@ -39,6 +39,18 @@ export async function loadContent(messageId: string, t?: Transaction): Promise<A
   };
 }
 
+/**
+ * The CH6.3 validator, enforced at BOTH gates a draft passes on its way out: submit and approve. An
+ * edit made while a message waits for approval (which voids nothing, because nothing is approved yet)
+ * is therefore checked before it can be approved.
+ */
+async function assertDraftsValid(m: CommsHubMessage, content: ApprovalContent, t: Transaction, now: Date, doing: string): Promise<void> {
+  const event = m.event_id ? await CommsHubEvent.findByPk(m.event_id, { transaction: t }) : null;
+  const facts = event ? factsFor(event, m.occurrence_starts_at, now) : null;
+  const problems = content.drafts.flatMap((d) => problemsFor({ channel: d.channel as 'community_post' | 'in_app', title: d.title, body: d.body }, facts));
+  if (problems.length) throw new MessageRuleError(`Fix the drafts before ${doing}.`, 409, 'draft_invalid', problems);
+}
+
 async function locked(messageId: string, t: Transaction): Promise<CommsHubMessage> {
   const m = await CommsHubMessage.findByPk(messageId, { transaction: t, lock: t.LOCK.UPDATE });
   if (!m) throw new MessageRuleError('That message was not found.', 404, 'not_found');
@@ -65,10 +77,7 @@ export async function submitForApproval(messageId: string, actor: Actor, now: Da
     move(m, 'needs_approval');
     const content = await loadContent(m.id, t);
     if (content.drafts.length === 0) throw new MessageRuleError('There is no text to submit yet.', 409, 'no_draft');
-    const event = m.event_id ? await CommsHubEvent.findByPk(m.event_id, { transaction: t }) : null;
-    const facts = event ? factsFor(event, m.occurrence_starts_at, now) : null;
-    const problems = content.drafts.flatMap((d) => problemsFor({ channel: d.channel as 'community_post' | 'in_app', title: d.title, body: d.body }, facts));
-    if (problems.length) throw new MessageRuleError('Fix the drafts before submitting.', 409, 'draft_invalid', problems);
+    await assertDraftsValid(m, content, t, now, 'submitting');
     await m.update({ status: 'needs_approval', updated_by: actor.id }, { transaction: t });
     await logActivity(actor, 'message.submitted', 'message', m.id, {}, t);
     return m;
@@ -88,6 +97,7 @@ export async function approveMessage(messageId: string, actor: Actor, now: Date 
     const content = await loadContent(m.id, t);
     if (content.drafts.length === 0) throw new MessageRuleError('There is no text to approve yet.', 409, 'no_draft');
     if (content.destinations.length === 0) throw new MessageRuleError('Choose who it goes to before approving.', 409, 'no_destination');
+    await assertDraftsValid(m, content, t, now, 'approving');
     const previous = await inForce(m.id, t);
     if (previous) await previous.update({ voided_at: now, voided_reason: 'superseded' }, { transaction: t });
     const approval = await CommsHubApproval.create({ message_id: m.id, approved_by: approver, approved_at: now, content_hash: approvalHash(content) }, { transaction: t });
