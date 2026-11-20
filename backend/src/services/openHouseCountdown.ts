@@ -27,6 +27,10 @@ import { REPETITION_LIMIT, repetitionScore } from './openHouseBrain';
 
 export const OPEN_HOUSE_COUNTDOWN_KEY = 'open_house_countdown';
 
+/** The brand-gate category the countdown campaign sends under (campaign.settings.communication_category). */
+export const EVENT_REMINDER_CATEGORY = 'event_reminder';
+export const EVENT_REMINDER_PERMISSION_SOURCE = 'open_house_registration';
+
 /** The platform Today page: the one link besides the event's Join link a countdown message may carry. */
 export const PORTAL_TODAY_URL = 'https://enterprise.colaberry.ai/portal/today';
 
@@ -382,6 +386,53 @@ export async function isOpenHouseCountdownLive(): Promise<boolean> {
   return c?.status === 'active';
 }
 
+export type EventReminderGrant = 'granted' | 'kept_existing' | 'no_brand_scope' | 'not_event_reminder' | 'failed';
+
+/**
+ * OH1s: registering for an Open House IS asking for that event's reminders, so the
+ * registrant gets the brand's `event_reminder` permission for email, and for texts only
+ * when they gave express texting consent. Calls stay off (voice is not part of it).
+ *
+ * Before this, nothing wrote that permission, and the countdown campaign carries a
+ * brand: the brand gate found no preference and no relationship and blocked 100% of the
+ * Nov 19 countdown (brand_no_relationship) until a one-off script granted it.
+ *
+ * An existing preference row is NEVER overwritten: a person who turned event reminders
+ * off keeps them off. Only the event_reminder category is ever granted, never marketing.
+ * Never throws (it runs inside the sign-up request).
+ */
+export async function grantEventReminderPermission(campaignId: string, leadId: number): Promise<EventReminderGrant> {
+  try {
+    const rows = await sequelize.query<{ tenant_id: string | null; brand_id: string | null; category: string | null; phone: string | null }>(
+      `SELECT c.tenant_id, c.brand_id, c.settings->>'communication_category' AS category,
+              (SELECT l.phone FROM leads l WHERE l.id = :leadId) AS phone
+         FROM campaigns c WHERE c.id = :campaignId`,
+      { replacements: { campaignId, leadId }, type: QueryTypes.SELECT },
+    );
+    const c = rows[0];
+    if (!c || !c.tenant_id || !c.brand_id) return 'no_brand_scope';
+    if (c.category !== EVENT_REMINDER_CATEGORY) return 'not_event_reminder';
+    const existing = await sequelize.query(
+      `SELECT 1 FROM communication_preferences
+        WHERE lead_id = :leadId AND tenant_id = :tenant AND brand_id = :brand AND category = :category LIMIT 1`,
+      { replacements: { leadId, tenant: c.tenant_id, brand: c.brand_id, category: EVENT_REMINDER_CATEGORY }, type: QueryTypes.SELECT },
+    );
+    if (existing.length) return 'kept_existing';
+    const { setBrandPreference } = await import('../modules/communications/brandPreferenceGate');
+    await setBrandPreference({
+      leadId, tenantId: c.tenant_id, brandId: c.brand_id, category: EVENT_REMINDER_CATEGORY,
+      emailAllowed: true,
+      smsAllowed: await mayContactByPhone('sms', leadId, c.phone),
+      voiceAllowed: false,
+      source: EVENT_REMINDER_PERMISSION_SOURCE,
+    });
+    return 'granted';
+  } catch (err: any) {
+    console.error('[OpenHouseCountdown] event-reminder permission failed (sign-up unaffected):', err?.message);
+    return 'failed';
+  }
+}
+
 /**
  * Enroll one registrant in the countdown. NEVER throws: it runs inside the sign-up
  * request, and a person must get their account and their seat whatever happens here.
@@ -399,6 +450,7 @@ export async function enrollInOpenHouseCountdown(email: string): Promise<'enroll
       { replacements: { email: (email || '').trim().toLowerCase() }, type: QueryTypes.SELECT },
     );
     if (!leads[0]) return 'no_lead';
+    await grantEventReminderPermission(campaign.id, Number(leads[0].id));
     const { enrollLeadsInCampaign } = await import('./campaignService');
     await enrollLeadsInCampaign(campaign.id, [Number(leads[0].id)]);
     return 'enrolled';

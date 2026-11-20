@@ -26,7 +26,7 @@ import * as fs from 'fs';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import {
-  OPEN_HOUSE_COUNTDOWN_KEY, findOpenHouseCountdownCampaign, findNextOpenHouseForEmail, screenEventReminderCopy,
+  OPEN_HOUSE_COUNTDOWN_KEY, EVENT_REMINDER_CATEGORY, findOpenHouseCountdownCampaign, findNextOpenHouseForEmail, screenEventReminderCopy,
   fallbackReminderBody, softenIdioms,
 } from '../services/openHouseCountdown';
 import { gatherBrainPiece, repetitionScore, REPETITION_LIMIT } from '../services/openHouseBrain';
@@ -168,6 +168,10 @@ export const COUNTDOWN_STEPS: SequenceStep[] = [
 /** Campaign settings. The key names are the ones the scheduler reads (campaignSendWindow.ts). */
 export const COUNTDOWN_SETTINGS = {
   campaign_key: OPEN_HOUSE_COUNTDOWN_KEY,
+  // OH1s: the brand gate reads this category. Registering for an Open House grants the
+  // event_reminder permission (openHouseCountdown.grantEventReminderPermission); under the
+  // default 'marketing' category every countdown send was blocked as brand_no_relationship.
+  communication_category: EVENT_REMINDER_CATEGORY,
   agent_name: 'Maya',
   sender_name: MAYA_NAME,
   sender_email: MAYA_EMAIL,

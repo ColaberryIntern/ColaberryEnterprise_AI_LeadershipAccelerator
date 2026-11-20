@@ -39,3 +39,42 @@ export function resolveMaxAgeDays(rawSetting: string | null | undefined): number
   if (Number.isNaN(parsed)) return DEFAULT_MAX_AGE_DAYS;
   return parsed;
 }
+
+// ── OH1s (Nov 19 Open House): claim size and retryable refusals ─────────────
+
+// Rows per campaign per scheduler run. A drip campaign takes 10, so one big
+// campaign cannot starve the others. An Open House countdown step is timed to an
+// event, and 10 per 5-minute run delivered the Nov 19 4-hours-before email an
+// average of 57 minutes late (max 116) and the 30-minutes-before text 22 minutes
+// late. Countdown rows may take the whole run (the scheduler's 40-row ceiling).
+export const PER_CAMPAIGN_CLAIM = 10;
+export const COUNTDOWN_CLAIM = 40;
+export const RUN_CLAIM = 40;
+
+// The candidate query for one scheduler run. Countdown rows sort first so a timed
+// reminder is never queued behind a drip email. The real claim (the lock) is the
+// `status = 'pending'` UPDATE that follows it in processScheduledActions.
+export const CLAIM_CANDIDATES_SQL = `
+        SELECT id FROM (
+          SELECT id, scheduled_for,
+                 (metadata->>'event_countdown') = 'true' AS countdown,
+                 ROW_NUMBER() OVER (PARTITION BY campaign_id ORDER BY scheduled_for ASC) as rn
+          FROM scheduled_emails
+          WHERE status = 'pending'
+            AND scheduled_for <= NOW()
+            AND attempts_made < max_attempts
+        ) ranked
+        WHERE rn <= ${PER_CAMPAIGN_CLAIM} OR (countdown IS TRUE AND rn <= ${COUNTDOWN_CLAIM})
+        ORDER BY (countdown IS TRUE) DESC, rn, scheduled_for ASC
+        LIMIT ${RUN_CLAIM}
+      `;
+
+// A send-gate refusal that says "not now" rather than "not this person". Such a
+// row goes back to pending and is sent on a later run. Before OH1s it was
+// cancelled for good, so a burst past the 20-per-minute global limit silently
+// dropped real messages.
+const RETRYABLE_GATE_REASONS = new Set(['global_rate_limit_exceeded', 'scheduler_paused']);
+
+export function isRetryableGateBlock(reason: string | null | undefined): boolean {
+  return !!reason && RETRYABLE_GATE_REASONS.has(reason);
+}

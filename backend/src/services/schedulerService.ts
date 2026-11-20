@@ -23,7 +23,7 @@ import { recomputeActiveOpportunityScores } from './opportunityScoringService';
 import { getSetting } from './settingsService';
 import { redactForLogs } from '../utils/piiRedaction';
 import { partitionNotifiable, isNotificationSuppressed, isSessionStudentEmailOff } from './notifications/enrollmentNotificationSuppression';
-import { staleCutoff, resolveMaxAgeDays } from './scheduledActionPolicy';
+import { staleCutoff, resolveMaxAgeDays, CLAIM_CANDIDATES_SQL, isRetryableGateBlock } from './scheduledActionPolicy';
 import {
   renewClaim, recoverStaleActions as recoverStaleActionsLeased, recoveryLogLines,
 } from './scheduling/claimLease';
@@ -614,20 +614,10 @@ async function processScheduledActions(): Promise<void> {
   try {
     const t = await sequelize.transaction();
     try {
-      // Round-robin across campaigns: pick up to 10 per campaign, 40 total
+      // Round-robin across campaigns: up to 10 per campaign, 40 total; Open House
+      // countdown rows first and up to 40 (OH1s, see scheduledActionPolicy).
       // Two-step: first identify IDs (with window function), then lock+update
-      const candidates = await sequelize.query(`
-        SELECT id FROM (
-          SELECT id, scheduled_for, ROW_NUMBER() OVER (PARTITION BY campaign_id ORDER BY scheduled_for ASC) as rn
-          FROM scheduled_emails
-          WHERE status = 'pending'
-            AND scheduled_for <= NOW()
-            AND attempts_made < max_attempts
-        ) ranked
-        WHERE rn <= 10
-        ORDER BY rn, scheduled_for ASC
-        LIMIT 40
-      `, { type: QueryTypes.SELECT, transaction: t });
+      const candidates = await sequelize.query(CLAIM_CANDIDATES_SQL, { type: QueryTypes.SELECT, transaction: t });
 
       const candidateIds = (candidates as any[]).map((r: any) => r.id);
       if (candidateIds.length === 0) {
@@ -831,6 +821,15 @@ async function processScheduledActions(): Promise<void> {
         toPhone: action.to_phone,
         source: 'scheduler',
       });
+
+      if (!safetyDecision.allowed && isRetryableGateBlock(safetyDecision.blockedReason)) {
+        // OH1s: "not now" (the global per-minute limit, or the scheduler pause), not "not
+        // this person". Back to pending, sent on a later run. Cancelling here dropped real
+        // messages for good whenever a burst crossed the limit.
+        await action.update({ status: 'pending', processing_started_at: null, processor_id: null } as any);
+        console.log(`[Scheduler] DEFERRED action ${action.id}: ${safetyDecision.blockedReason} (retried next run)`);
+        continue;
+      }
 
       if (!safetyDecision.allowed) {
         // The gate composes its own token family (brand_*, lead_*, consent_*, journey_hold:*),

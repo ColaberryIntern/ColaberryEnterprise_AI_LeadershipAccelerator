@@ -583,6 +583,24 @@ export async function enrollLeadInSequence(leadId: number, sequenceId: string, c
  * The delay between steps is computed from the sequence definition (gap between consecutive delay_days).
  * Returns the created ScheduledEmail, or null if the sequence is complete or N/A.
  */
+/**
+ * True when every step of this sequence is booked at enrollment, timed back from an
+ * appointment (minutes_before_call), a cohort start (days_before_cohort_start) or an
+ * Open House (minutes_before_event). Such a sequence must NEVER be chained step by step
+ * after a send: enrollment already decided which steps exist, when, and (for calls and
+ * texts) whether the person consented.
+ *
+ * OH1s (Nov 19 Open House): the event kind was missing here, so after every countdown
+ * email the text step was chained for "now" with no consent check, and the health
+ * check's gap repair re-created it each time it was cancelled (2,547 stray rows).
+ */
+export function isPreScheduledSequence(steps: SequenceStep[] | null | undefined): boolean {
+  if (!Array.isArray(steps) || steps.length === 0) return false;
+  const allZeroDelay = steps.every((s) => (s.delay_days || 0) === 0);
+  if (!allZeroDelay) return false;
+  return steps.some((s) => s.minutes_before_call != null || s.days_before_cohort_start != null || s.minutes_before_event != null);
+}
+
 export async function scheduleNextStep(completedAction: any): Promise<any | null> {
   if (!completedAction.sequence_id) return null;
 
@@ -593,10 +611,7 @@ export async function scheduleNextStep(completedAction: any): Promise<any | null
   if (nextIndex >= sequence.steps.length) return null; // Sequence complete
 
   // Skip T-minus campaigns — those are pre-scheduled at enrollment
-  const allZeroDelay = sequence.steps.every((s: SequenceStep) => (s.delay_days || 0) === 0);
-  const isTMinus = allZeroDelay && sequence.steps.some((s: SequenceStep) => s.minutes_before_call != null);
-  const isCohortTMinus = allZeroDelay && sequence.steps.some((s: SequenceStep) => s.days_before_cohort_start != null);
-  if (isTMinus || isCohortTMinus) return null;
+  if (isPreScheduledSequence(sequence.steps)) return null;
 
   // Idempotency: check if next step already exists (from pre-scheduled enrollment or duplicate call)
   const existing = await ScheduledEmail.count({
