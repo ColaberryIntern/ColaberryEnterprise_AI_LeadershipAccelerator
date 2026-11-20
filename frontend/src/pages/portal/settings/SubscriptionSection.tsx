@@ -150,7 +150,9 @@ const SubscriptionSection: React.FC<{ onToast?: (m: string) => void }> = ({ onTo
       {creditCents > 0 && (
         <div className="set-credit-banner" style={{ gridColumn: '1 / -1' }}>
           <span className="set-credit-chip">${money(creditCents / 100)} credit</span>
-          <span>{annualOnlyCents > 0
+          <span>{view.has_alumni_credit
+            ? `As a Colaberry alum, you get 50% off the annual plan through December 31. Your $${money(creditFor('annual') / 100)} alumni discount comes off your first payment automatically when you choose the annual plan.`
+            : annualOnlyCents > 0
             ? `Your $${money(creditCents / 100)} Open House credit is on your account. It comes off your first payment automatically when you choose the annual plan${creditFor('monthly') > 0 ? ` ($${money(creditFor('monthly') / 100)} of it also applies to monthly)` : ''}.`
             : `Your $${money(creditCents / 100)} Open House deposit is on your account — it comes off your first payment automatically, whichever plan you choose.`}</span>
         </div>

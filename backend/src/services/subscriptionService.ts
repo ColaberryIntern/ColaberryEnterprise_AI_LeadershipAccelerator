@@ -9,12 +9,19 @@ import {
 } from './accountCreditService';
 import { retireRedundantExplorerAccounts } from './enrollmentService';
 import { MEMBERSHIP_PRICE, ANNUAL_TERM_MONTHS } from './membershipPrice';
+import { ALUMNI_REASON } from './alumniDiscountRules';
 
 /** Grant the Open House flash credit if this member qualifies. Never blocks the caller.
  *  Loaded lazily: it queries the database directly, and this module is unit-tested
  *  against mocked models. */
+/** Grant any annual offer this member qualifies for, as an account credit the
+ *  checkout then applies. Alumni first: it lasts to year end, while a flash
+ *  offer closes the same night, and the two never stack. Best-effort: a failure
+ *  here never blocks a checkout. */
 async function applyFlashOffer(enrollmentId: string, nowMs: number): Promise<void> {
   if (process.env.JEST_WORKER_ID) return;
+  try { const { ensureAlumniCredit } = await import('./alumniDiscountService'); await ensureAlumniCredit(enrollmentId, nowMs); }
+  catch (err: any) { console.error('[Subscription] alumni offer check failed (non-fatal):', err?.message); }
   try { const { ensureFlashCredit } = await import('./openHouseFlashDiscountService'); await ensureFlashCredit(enrollmentId, nowMs); }
   catch (err: any) { console.error('[Subscription] flash offer check failed (non-fatal):', err?.message); }
 }
@@ -188,6 +195,9 @@ export interface SubscriptionView {
    *  annual-only (the Open House scholarship), so the monthly card never shows
    *  it coming off. */
   credit_cents_by_plan: Record<string, number>;
+  /** True when the annual credit is the 2026 alumni discount, so the plans
+   *  page names it correctly instead of calling it an Open House credit. */
+  has_alumni_credit: boolean;
   subscription: null | {
     plan: SubscriptionPlan;
     status: string;
@@ -227,6 +237,7 @@ export async function getSubscription(enrollmentId: string, nowMs: number = Date
     annual: await getAvailableCreditCents(enrollmentId, 'annual'),
     monthly: await getAvailableCreditCents(enrollmentId, 'monthly'),
   };
+  const has_alumni_credit = (await availableCreditRows(enrollmentId, 'annual', nowMs)).some((r) => r.reason === ALUMNI_REASON);
 
   // The class this student's payment counts toward (their selection, else the
   // default target cohort) — lets the UI explain the early-pay billing anchor.
@@ -242,7 +253,7 @@ export async function getSubscription(enrollmentId: string, nowMs: number = Date
     : null;
 
   if (!sub || sub.status === 'pending') {
-    return { plans, needs_subscription: isExplorer, class_start, available_credit_cents, credit_cents_by_plan, subscription: null };
+    return { plans, needs_subscription: isExplorer, class_start, available_credit_cents, credit_cents_by_plan, has_alumni_credit, subscription: null };
   }
 
   const periodEnd = sub.current_period_end ? new Date(sub.current_period_end) : null;
@@ -258,6 +269,7 @@ export async function getSubscription(enrollmentId: string, nowMs: number = Date
     class_start,
     available_credit_cents,
     credit_cents_by_plan,
+    has_alumni_credit,
     subscription: {
       plan: sub.plan,
       status: sub.status,
