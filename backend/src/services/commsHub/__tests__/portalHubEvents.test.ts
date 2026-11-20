@@ -45,19 +45,29 @@ describe('CH2.3 cards', () => {
     expect(cards[0].image_url).toBe('/api/comms-hub/thumbnails/e1/16x9.png?v=t7');
   });
 
-  it('a live event that started before now still shows, marked live', () => {
+  // CH5.3: "live now" comes from the broadcast occurrence for the card's date, not the event's status.
+  const onAir = (startMs: number, state = 'live') => [{ occurrence_id: 'occ-now', editorial_state: state, scheduled_start_at: new Date(startMs) }];
+
+  it('a live event that started before now still shows, marked live, with the occurrence to open', () => {
     const live = ev({ status: 'live', starts_at: new Date(NOW - 600_000), ends_at: new Date(NOW + 3_000_000) });
-    expect(toCards(live, NOW, IN_30)).toEqual([expect.objectContaining({ is_live: true })]);
+    expect(toCards(live, NOW, IN_30, onAir(NOW - 600_000))).toEqual([expect.objectContaining({ is_live: true, live_occurrence_id: 'occ-now', watch_url: null })]);
+  });
+
+  it('status "live" without an on-air occurrence is NOT shown as live (a stream ended outside the panel)', () => {
+    const stale = ev({ status: 'live', starts_at: new Date(NOW - 600_000), ends_at: new Date(NOW + 3_000_000) });
+    expect(toCards(stale, NOW, IN_30)[0]).toMatchObject({ is_live: false, live_occurrence_id: null });
+    expect(toCards(stale, NOW, IN_30, onAir(NOW - 600_000, 'ended'))[0].is_live).toBe(false);
+    expect(toCards(stale, NOW, IN_30, onAir(NOW - 600_000, 'reconnecting'))[0].is_live).toBe(true);
   });
 
   it('a live event with no end time stays visible (treated as running 4 hours)', () => {
     const live = ev({ status: 'live', starts_at: new Date(NOW - 600_000), ends_at: null });
-    expect(toCards(live, NOW, IN_30)).toEqual([expect.objectContaining({ is_live: true })]);
+    expect(toCards(live, NOW, IN_30, onAir(NOW - 600_000))).toEqual([expect.objectContaining({ is_live: true })]);
   });
 
   it('a live weekly series marks only the occurrence happening now as live', () => {
     const series = ev({ status: 'live', starts_at: new Date(NOW - 600_000), ends_at: new Date(NOW + 3_000_000), repeat_rule: { freq: 'weekly', until: '2026-12-31' } });
-    const cards = toCards(series, NOW, IN_30);
+    const cards = toCards(series, NOW, IN_30, onAir(NOW - 600_000));
     expect(cards.length).toBeGreaterThan(1);
     expect(cards.filter((c) => c.is_live)).toHaveLength(1);
     expect(cards[0].is_live).toBe(true);

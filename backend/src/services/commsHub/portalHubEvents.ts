@@ -1,7 +1,8 @@
 import { Op } from 'sequelize';
 import CommsHubEvent from '../../models/CommsHubEvent';
 import type { OpenHouseView } from '../openHouseTypes';
-import { CENTRAL_TZ } from '../centralDate';
+import { CENTRAL_TZ, centralDateKey } from '../centralDate';
+import { occurrencesForEvents, type HubOccurrenceState } from './live/hubBroadcastLinks';
 import { expandOccurrences } from './eventRecurrence';
 import { publicThumbnailPath } from './thumbnails/thumbnailPaths';
 
@@ -18,6 +19,8 @@ export interface PortalEventCard extends OpenHouseView {
   source?: 'ccpp' | 'hub';
   is_live?: boolean;
   watch_url?: string | null;
+  /** CH5.3: the broadcast occurrence on air for this card's date; the card's Watch live opens it in the portal player. */
+  live_occurrence_id?: string | null;
 }
 
 /** Hub events this viewer may see: published to the Events page, active, and in their audience. */
@@ -31,12 +34,21 @@ export function visibleTo(e: CommsHubEvent, cohortId: string | null): boolean {
 /** An occurrence with no end time is treated as running this long, so a live event without one stays visible. */
 export const OPEN_ENDED_MS = 4 * 3_600_000;
 
-export function toCards(e: CommsHubEvent, fromMs: number, toMs: number): PortalEventCard[] {
+const ON_AIR = new Set(['live', 'reconnecting']);
+
+/**
+ * A card is "live now" when the broadcast occurrence for ITS Central date is on air (CH5.3), read from
+ * the occurrence itself rather than the event's status, which can lag a stream ended outside the panel.
+ */
+export function toCards(e: CommsHubEvent, fromMs: number, toMs: number, occurrences: HubOccurrenceState[] = []): PortalEventCard[] {
+  const onAirByDate = new Map(occurrences
+    .filter((x) => ON_AIR.has(x.editorial_state) && x.scheduled_start_at)
+    .map((x) => [centralDateKey(x.scheduled_start_at!.getTime()), x.occurrence_id]));
   return expandOccurrences(e.starts_at, e.ends_at, e.repeat_rule)
     .map((o) => ({ o, end: o.ends_at ? o.ends_at.getTime() : o.starts_at.getTime() + OPEN_ENDED_MS }))
     .filter(({ o, end }) => o.starts_at.getTime() <= toMs && end >= fromMs)
-    .map(({ o, end }) => ({ o, liveNow: e.status === 'live' && o.starts_at.getTime() <= fromMs && end >= fromMs }))
-    .map(({ o, liveNow }) => ({
+    .map(({ o }) => ({ o, liveId: onAirByDate.get(centralDateKey(o.starts_at.getTime())) ?? null }))
+    .map(({ o, liveId }) => ({
       id: `hub:${e.id}:${o.starts_at.toISOString()}`,
       title: e.title,
       description: e.description,
@@ -49,9 +61,10 @@ export function toCards(e: CommsHubEvent, fromMs: number, toMs: number): PortalE
       signup_count: null,
       is_registered: false,
       source: 'hub' as const,
-      is_live: liveNow,
-      // CH5.3 fills this with the broadcast viewer path for the occurrence that is live now.
+      is_live: liveId !== null,
+      // Hub cards open the in-app player by occurrence id (live_occurrence_id); watch_url stays for other sources.
       watch_url: null,
+      live_occurrence_id: liveId,
     }));
 }
 
@@ -92,5 +105,7 @@ export async function getPortalHubEvents(cohortId: string | null, days: number, 
     order: [['starts_at', 'DESC']],
     limit: 500,
   });
-  return rows.filter((e) => visibleTo(e, cohortId)).flatMap((e) => toCards(e, fromMs, toMs));
+  const visible = rows.filter((e) => visibleTo(e, cohortId));
+  const occurrences = await occurrencesForEvents(visible.map((e) => e.id));
+  return visible.flatMap((e) => toCards(e, fromMs, toMs, occurrences.get(e.id) ?? []));
 }

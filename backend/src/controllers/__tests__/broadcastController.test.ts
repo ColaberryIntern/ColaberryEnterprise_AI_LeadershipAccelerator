@@ -46,9 +46,13 @@ jest.mock('../../services/broadcast/broadcastReplayQuery', () => ({
   findReplayOccurrences: jest.fn(),
 }));
 
+// CH5.3: the hub thumbnail lookup for replays. Its SQL is pinned in hubBroadcastLinks.test.ts.
+jest.mock('../../services/commsHub/live/hubBroadcastLinks', () => ({ hubThumbnailsForOccurrences: jest.fn(async () => new Map()) }));
+
 import {
   postProducerCommand, postPlaybackGrant, getActiveBroadcasts, getReplayBroadcasts,
 } from '../broadcastController';
+import { hubThumbnailsForOccurrences } from '../../services/commsHub/live/hubBroadcastLinks';
 import BroadcastOccurrence from '../../models/BroadcastOccurrence';
 import { runProducerCommand } from '../../services/broadcast/broadcastCommandService';
 import { resolveRoomEligibility } from '../../services/broadcast/broadcastRoomEligibility';
@@ -527,6 +531,19 @@ describe('getReplayBroadcasts', () => {
     const body = res.json.mock.calls[0][0];
     expect(body.replays).toHaveLength(1);
     expect(body.replays[0]).toMatchObject({ title: PRIVATE_TITLE, can_watch: true });
+  });
+
+  it('CH5.3: a Communications Hub replay carries its chosen thumbnail; any other replay has none', async () => {
+    replayOccurrences.mockResolvedValue([
+      past({ id: 'occ-hub', access_mode: 'free', room_id: null }),
+      past({ id: 'occ-class', access_mode: 'free', room_id: null }),
+    ]);
+    (hubThumbnailsForOccurrences as jest.Mock).mockResolvedValue(new Map([['occ-hub', '/api/comms-hub/thumbnails/e1/16x9.png?v=t7']]));
+    const res = mockRes();
+    await getReplayBroadcasts(req(), res);
+    const byId = Object.fromEntries(res.json.mock.calls[0][0].replays.map((r: any) => [r.id, r.thumbnail_url]));
+    expect(byId).toEqual({ 'occ-hub': '/api/comms-hub/thumbnails/e1/16x9.png?v=t7', 'occ-class': null });
+    expect((hubThumbnailsForOccurrences as jest.Mock).mock.calls[0][0]).toEqual(['occ-hub', 'occ-class']);
   });
 
   it('dates every replay from its OWN class, even when entitlement omitted an earlier one', async () => {
