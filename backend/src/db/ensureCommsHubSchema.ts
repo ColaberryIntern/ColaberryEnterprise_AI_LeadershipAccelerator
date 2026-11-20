@@ -33,7 +33,7 @@ export const COMMS_HUB_THUMBNAIL_SOURCES = ['template', 'upload', 'ai'] as const
 export const COMMS_HUB_CHANNELS = ['community_post', 'in_app'] as const;
 /** CH6.2's status machine owns the transitions; these are the values the column may hold. */
 export const COMMS_HUB_MESSAGE_STATUSES = ['draft', 'needs_approval', 'approved', 'scheduled', 'sending', 'sent', 'partially_failed', 'failed', 'cancelled'] as const;
-export const COMMS_HUB_MESSAGE_KINDS = ['announcement', 'reminder', 'starting_soon', 'recording_thanks', 'update', 'other'] as const;
+export const COMMS_HUB_MESSAGE_KINDS = ['announcement', 'reminder', 'starting_soon', 'recording_thanks', 'time_change', 'cancellation', 'update', 'other'] as const;
 export const COMMS_HUB_PLAN_KINDS = ['announcement', 'reminder', 'starting_soon', 'recording_thanks'] as const;
 export const COMMS_HUB_DESTINATION_TYPES = ['cohort_feed', 'in_app_audience'] as const;
 export const COMMS_HUB_DELIVERY_STATUSES = ['pending', 'sending', 'sent', 'failed', 'cancelled', 'skipped'] as const;
@@ -140,6 +140,7 @@ export const COMMS_HUB_SCHEMA_STATEMENTS: readonly string[] = [
      kind VARCHAR(32) NOT NULL DEFAULT 'other',
      tone VARCHAR(32),
      notes TEXT,
+     include JSONB NOT NULL DEFAULT '{"thumbnail":true,"join_link":true,"registration_link":true}'::jsonb,
      status VARCHAR(24) NOT NULL DEFAULT 'draft',
      send_at TIMESTAMPTZ,
      created_by VARCHAR(64),

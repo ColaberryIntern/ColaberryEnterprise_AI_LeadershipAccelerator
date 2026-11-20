@@ -7,7 +7,9 @@ import { sequelize } from '../config/database';
  * Columns match ensureCommsHubSchema.ts exactly (modelParity test).
  */
 export type CommsHubMessageStatus = 'draft' | 'needs_approval' | 'approved' | 'scheduled' | 'sending' | 'sent' | 'partially_failed' | 'failed' | 'cancelled';
-export type CommsHubMessageKind = 'announcement' | 'reminder' | 'starting_soon' | 'recording_thanks' | 'update' | 'other';
+export type CommsHubMessageKind = 'announcement' | 'reminder' | 'starting_soon' | 'recording_thanks' | 'time_change' | 'cancellation' | 'update' | 'other';
+/** CH6.5: what the message carries from the event (Compose "Include"). */
+export interface CommsHubInclude { thumbnail: boolean; join_link: boolean; registration_link: boolean }
 export type CommsHubPlanKind = 'announcement' | 'reminder' | 'starting_soon' | 'recording_thanks';
 
 export interface CommsHubMessageAttributes {
@@ -19,6 +21,7 @@ export interface CommsHubMessageAttributes {
   kind?: CommsHubMessageKind;
   tone?: string | null;
   notes?: string | null;
+  include?: CommsHubInclude;
   status?: CommsHubMessageStatus;
   send_at?: Date | null;
   created_by?: string | null;
@@ -36,6 +39,7 @@ class CommsHubMessage extends Model<CommsHubMessageAttributes> implements CommsH
   declare kind: CommsHubMessageKind;
   declare tone: string | null;
   declare notes: string | null;
+  declare include: CommsHubInclude;
   declare status: CommsHubMessageStatus;
   declare send_at: Date | null;
   declare created_by: string | null;
@@ -54,6 +58,7 @@ CommsHubMessage.init(
     kind: { type: DataTypes.STRING(32), allowNull: false, defaultValue: 'other' },
     tone: { type: DataTypes.STRING(32), allowNull: true },
     notes: { type: DataTypes.TEXT, allowNull: true },
+    include: { type: DataTypes.JSONB, allowNull: false, defaultValue: { thumbnail: true, join_link: true, registration_link: true } },
     status: { type: DataTypes.STRING(24), allowNull: false, defaultValue: 'draft' },
     send_at: { type: DataTypes.DATE, allowNull: true },
     created_by: { type: DataTypes.STRING(64), allowNull: true },
