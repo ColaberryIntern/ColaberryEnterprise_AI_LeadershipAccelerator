@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AIA Module Build Plan</title>
+<style>
+:root{
+  --bg:#f4f6fb; --card:#ffffff; --ink:#111827; --mute:#5b6475; --line:#dfe4ee;
+  --navy:#0f1d3d; --blue:#2563eb; --blueSoft:#e3ecff;
+  --green:#15803d; --greenSoft:#dcfce7; --amber:#b45309; --amberSoft:#fef3c7;
+  --red:#b91c1c; --redSoft:#fee2e2; --purple:#7c3aed; --purpleSoft:#ede9fe;
+  --gray:#6b7280; --graySoft:#eef0f4;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0b1020; --card:#141b2e; --ink:#e8ecf5; --mute:#9aa5bb; --line:#26304a;
+    --navy:#0a1430; --blueSoft:#1b2a52; --greenSoft:#0f2e1c; --amberSoft:#33240b;
+    --redSoft:#3a1414; --purpleSoft:#2a1d4d; --graySoft:#1c2438;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0b1020; --card:#141b2e; --ink:#e8ecf5; --mute:#9aa5bb; --line:#26304a;
+  --navy:#0a1430; --blueSoft:#1b2a52; --greenSoft:#0f2e1c; --amberSoft:#33240b;
+  --redSoft:#3a1414; --purpleSoft:#2a1d4d; --graySoft:#1c2438;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "Segoe UI",system-ui,-apple-system,sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:0 16px 60px}
+header.hero{background:linear-gradient(135deg,#0f1d3d,#1e3a8a 60%,#2563eb);color:#fff;padding:40px 16px 34px}
+header.hero .wrap{padding-bottom:0}
+.kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;opacity:.8;font-weight:600}
+h1{font-size:34px;line-height:1.15;margin:8px 0 10px;font-weight:800}
+.answer{font-size:19px;max-width:860px;opacity:.95}
+.answer b{color:#fde68a}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}
+.chip{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25);padding:5px 12px;border-radius:999px;font-size:13px;font-weight:600}
+section{margin-top:34px}
+h2{font-size:22px;margin:0 0 4px;font-weight:800}
+.sub{color:var(--mute);margin:0 0 16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+@media (max-width:820px){.grid2,.grid3{grid-template-columns:1fr} h1{font-size:27px}}
+.tag{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:3px 9px;border-radius:999px}
+.t-green{background:var(--greenSoft);color:var(--green)} .t-blue{background:var(--blueSoft);color:var(--blue)}
+.t-amber{background:var(--amberSoft);color:var(--amber)} .t-red{background:var(--redSoft);color:var(--red)}
+.t-purple{background:var(--purpleSoft);color:var(--purple)} .t-gray{background:var(--graySoft);color:var(--gray)}
+
+/* iceberg */
+.berg{position:relative;border-radius:16px;overflow:hidden;border:1px solid var(--line)}
+.berg .sky{background:linear-gradient(#dbeafe,#eff6ff);padding:18px 20px 10px;color:#0f1d3d}
+.berg .sea{background:linear-gradient(#1e40af,#0f1d3d);color:#e0e7ff;padding:16px 20px 20px}
+.berg .wl{height:4px;background:#60a5fa}
+.berg h3{margin:0 0 8px;font-size:15px}
+.pills{display:flex;flex-wrap:wrap;gap:8px}
+.pill{padding:7px 12px;border-radius:10px;font-weight:600;font-size:13.5px}
+.sky .pill{background:#fff;border:1px solid #bfdbfe;color:#1e3a8a}
+.sea .pill{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.22)}
+.pct{font-size:44px;font-weight:900;line-height:1}
+.berg .row{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+
+/* compare */
+.vs{display:grid;grid-template-columns:1fr 60px 1fr;gap:0;align-items:stretch}
+.vs .mid{display:flex;align-items:center;justify-content:center;font-size:28px;color:var(--mute)}
+@media (max-width:820px){.vs{grid-template-columns:1fr}.vs .mid{transform:rotate(90deg);height:40px}}
+.side h3{margin:6px 0 10px}
+.li{display:flex;gap:10px;padding:8px 0;border-top:1px dashed var(--line)}
+.li:first-of-type{border-top:0}
+.ic{flex:0 0 26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px}
+.ic.g{background:var(--greenSoft);color:var(--green)} .ic.r{background:var(--redSoft);color:var(--red)}
+.ic.b{background:var(--blueSoft);color:var(--blue)} .ic.a{background:var(--amberSoft);color:var(--amber)}
+.ic.p{background:var(--purpleSoft);color:var(--purple)} .ic.x{background:var(--graySoft);color:var(--gray)}
+.li small{display:block;color:var(--mute)}
+
+/* journey */
+.journey{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;position:relative}
+@media (max-width:820px){.journey{grid-template-columns:1fr}}
+.stage{border-radius:16px;padding:16px;border:2px solid var(--line);background:var(--card);position:relative}
+.stage .n{font-size:12px;font-weight:800;color:var(--mute);letter-spacing:.08em}
+.stage h3{margin:4px 0 6px;font-size:18px}
+.stage .when{font-weight:800;font-size:14px}
+.stage.done{border-color:var(--green)} .stage.done .when{color:var(--green)}
+.stage.now{border-color:var(--blue);box-shadow:0 0 0 4px var(--blueSoft)} .stage.now .when{color:var(--blue)}
+.stage.next .when{color:var(--amber)} .stage.later .when{color:var(--gray)}
+.stage ul{margin:8px 0 0;padding-left:18px;color:var(--mute);font-size:13.5px}
+
+/* gantt */
+.gantt{overflow-x:auto}
+.gt{min-width:760px}
+.ghead,.grow{display:grid;grid-template-columns:230px 1fr;align-items:center}
+.ghead .days{display:grid;grid-template-columns:repeat(19,1fr);font-size:11px;color:var(--mute);text-align:center}
+.ghead .days span.we{opacity:.45}
+.ghead .days span.tg{color:var(--red);font-weight:800}
+.grow{padding:6px 0;border-top:1px solid var(--line)}
+.grow .lbl{font-weight:700;font-size:13.5px;padding-right:10px}
+.grow .lbl small{display:block;font-weight:500;color:var(--mute);font-size:12px}
+.track{position:relative;height:30px;display:grid;grid-template-columns:repeat(19,1fr)}
+.track .bg{grid-row:1;border-left:1px dashed var(--line)}
+.bar{grid-row:1;align-self:center;height:24px;border-radius:7px;font-size:11.5px;font-weight:800;color:#fff;display:flex;align-items:center;padding:0 8px;white-space:nowrap;z-index:1}
+.bar.blue{background:var(--blue)} .bar.amber{background:#d97706} .bar.purple{background:var(--purple)} .bar.green{background:var(--green)} .bar.red{background:var(--red)} .bar.navy{background:#1e3a8a}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--mute);margin-top:12px}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+
+/* platform svg */
+svg text{font-family:"Segoe UI",system-ui,sans-serif}
+.svgbox{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px}
+
+.big{font-size:17px}
+.callout{border-left:5px solid var(--purple);background:var(--purpleSoft);padding:14px 16px;border-radius:12px}
+.callout.amber{border-color:var(--amber);background:var(--amberSoft)}
+.callout b{color:var(--ink)}
+.dec{display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-top:1px solid var(--line)}
+.dec:first-child{border-top:0}
+.who{flex:0 0 auto;width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;color:#fff;background:var(--purple)}
+footer{color:var(--mute);font-size:12.5px;margin-top:40px;border-top:1px solid var(--line);padding-top:14px}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="kicker">Middlesex Glass · AIA progress billing · as of Fri 20 Nov 2026</div>
+    <h1>Not a better demo. The demo is the drawing; the module is the building.</h1>
+    <div class="answer">The demo shows <b>what</b> the screens do. It's one web page that keeps everything in the browser it's opened in, so it has no server, no logins and no shared data. The module keeps those screens and adds everything underneath them, so <b>two real project managers can bill a real December run</b> inside glazeoff.ai on Google Cloud.</div>
+    <div class="chips">
+      <span class="chip">Pilot: Tue 8 Dec · 2 PMs</span>
+      <span class="chip">Host: GCP, inside glazeoff.ai</span>
+      <span class="chip">Rollout: about February (your estimate)</span>
+      <span class="chip">Then: sold to other glaziers</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+<!-- 1. ICEBERG -->
+<section>
+  <h2>1 · What the demo already proved, and what's still under the water</h2>
+  <p class="sub">The visible part is done and Jamie has seen it. Most of the December work sits below the waterline, where nobody sees it until it breaks.</p>
+  <div class="berg">
+    <div class="sky">
+      <div class="row">
+        <div>
+          <h3>ABOVE THE WATERLINE: the demo (built, approved in principle)</h3>
+          <div class="pills">
+            <span class="pill">PM % entry screen</span>
+            <span class="pill">Approval chain: PM → Brian Dempster → Nick Arena → Jamie</span>
+            <span class="pill">G702 / G703 layout</span>
+            <span class="pill">Excel round trip</span>
+            <span class="pill">Audit trail (on screen)</span>
+          </div>
+        </div>
+        <div style="text-align:right"><div class="pct">~20%</div><small>of the work</small></div>
+      </div>
+    </div>
+    <div class="wl"></div>
+    <div class="sea">
+      <div class="row">
+        <div>
+          <h3>BELOW THE WATERLINE: the module (December)</h3>
+          <div class="pills">
+            <span class="pill">Real database (Postgres) · S2</span>
+            <span class="pill">Hosting + deploy path on GCP · S1</span>
+            <span class="pill">Backups + a timed restore · S0/S1</span>
+            <span class="pill">Logins: a PM sees only his own jobs · S6</span>
+            <span class="pill">Middlesex as one tenant of many</span>
+            <span class="pill">Real jobs loaded · S3</span>
+            <span class="pill">Revisions keep the original value · Req revisions</span>
+            <span class="pill">Finalize + export a real .xlsx / PDF · S5</span>
+            <span class="pill">Dry run against November · S7</span>
+          </div>
+        </div>
+        <div style="text-align:right"><div class="pct">~80%</div><small>of the work</small></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 2. DEMO vs MODULE -->
+<section>
+  <h2>2 · Same screens, a different machine</h2>
+  <p class="sub">What carries over from the demo, and what gets built new.</p>
+  <div class="card">
+    <div class="vs">
+      <div class="side">
+        <span class="tag t-gray">Today · the demo</span>
+        <h3>One HTML file at a hidden link</h3>
+        <div class="li"><span class="ic x">◻</span><div>Data lives in <b>your browser only</b><small>Jamie's clicks never reach Nick's screen</small></div></div>
+        <div class="li"><span class="ic x">◻</span><div><b>No logins</b><small>anyone with the link can act as anyone</small></div></div>
+        <div class="li"><span class="ic x">◻</span><div><b>Sample jobs</b><small>made-up numbers</small></div></div>
+        <div class="li"><span class="ic x">◻</span><div><b>Clear the browser and it's gone</b><small>no backup, no history</small></div></div>
+        <div class="li"><span class="ic x">◻</span><div><b>Built for one company</b><small>Middlesex is hard-coded</small></div></div>
+      </div>
+      <div class="mid">➜</div>
+      <div class="side">
+        <span class="tag t-blue">December · the module</span>
+        <h3>A glazeoff.ai module on GCP</h3>
+        <div class="li"><span class="ic b">●</span><div>Data in a <b>shared database</b><small>a PM submits, Brian sees it, Jamie gets it</small></div></div>
+        <div class="li"><span class="ic b">●</span><div><b>Real logins and roles</b><small>a PM sees only his own jobs (S6)</small></div></div>
+        <div class="li"><span class="ic b">●</span><div><b>Middlesex's real jobs</b><small>loaded by hand from Jamie's AIAs (S3)</small></div></div>
+        <div class="li"><span class="ic b">●</span><div><b>Backed up and restorable</b><small>a restore gets run once and timed before the pilot</small></div></div>
+        <div class="li"><span class="ic b">●</span><div><b>Multi-company from day one</b><small>Middlesex is tenant #1, so the module can be sold to others</small></div></div>
+      </div>
+    </div>
+    <div class="li" style="margin-top:10px;border-top:1px solid var(--line);padding-top:12px">
+      <span class="ic g">✓</span><div><b>Kept as-is from the demo:</b> the screen layouts, the four-seat approval order, the G702/G703 math and the Excel round trip. The demo becomes the <b>spec</b>: each screen gets rebuilt to talk to the database instead of the browser.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 3. PLATFORM -->
+<section>
+  <h2>3 · Where it lives: one module in the glazeoff.ai building</h2>
+  <p class="sub">Ram: "All of this goes as modules into that domain so that each module can be sold to different companies."</p>
+  <div class="svgbox">
+    <svg viewBox="0 0 1000 400" width="100%" role="img" aria-label="glazeoff.ai platform on GCP with the AIA billing module">
+      <rect x="10" y="10" width="980" height="380" rx="18" fill="none" stroke="#94a3b8" stroke-dasharray="6 6"/>
+      <text x="30" y="40" font-size="15" font-weight="800" fill="#64748b">GOOGLE CLOUD · its own project for the billing module (Karun creates it, Sai deploys)</text>
+
+      <rect x="40" y="60" width="920" height="64" rx="12" fill="#1e3a8a"/>
+      <text x="500" y="88" text-anchor="middle" font-size="18" font-weight="800" fill="#fff">glazeoff.ai: the shared front door</text>
+      <text x="500" y="110" text-anchor="middle" font-size="13" fill="#c7d2fe">sign-in · company accounts · onboarding · document upload / download (what's shared is TO CONFIRM with Sai)</text>
+
+      <rect x="40" y="145" width="290" height="150" rx="14" fill="#e2e8f0"/>
+      <text x="185" y="178" text-anchor="middle" font-size="16" font-weight="800" fill="#334155">Other glazeoff.ai modules</text>
+      <text x="185" y="202" text-anchor="middle" font-size="13" fill="#475569">Karun's work (e.g. ShopDraw)</text>
+      <text x="185" y="222" text-anchor="middle" font-size="13" fill="#475569">not ours to build</text>
+
+      <rect x="355" y="145" width="380" height="150" rx="14" fill="#2563eb"/>
+      <text x="545" y="176" text-anchor="middle" font-size="17" font-weight="800" fill="#fff">AIA Billing module (ours)</text>
+      <text x="545" y="202" text-anchor="middle" font-size="13" fill="#dbeafe">PM entry → approvals → finalize → G702/G703 export</text>
+      <text x="545" y="222" text-anchor="middle" font-size="13" fill="#dbeafe">req revisions · audit trail · per-company data</text>
+      <rect x="380" y="240" width="330" height="38" rx="9" fill="#1d4ed8"/>
+      <text x="545" y="265" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">Postgres (managed) + backups + timed restore</text>
+
+      <rect x="760" y="145" width="200" height="150" rx="14" fill="#ede9fe" stroke="#7c3aed" stroke-width="2"/>
+      <text x="860" y="178" text-anchor="middle" font-size="15" font-weight="800" fill="#6d28d9">Future modules</text>
+      <text x="860" y="202" text-anchor="middle" font-size="13" fill="#6d28d9">backup-doc cascade (S9)</text>
+      <text x="860" y="222" text-anchor="middle" font-size="13" fill="#6d28d9">e-signature (R6)</text>
+      <text x="860" y="242" text-anchor="middle" font-size="13" fill="#6d28d9">intake + reminders (R4)</text>
+      <text x="860" y="272" text-anchor="middle" font-size="12" fill="#7c3aed">scoped, not built in Dec</text>
+
+      <g font-size="13" font-weight="700">
+        <rect x="40" y="318" width="210" height="52" rx="12" fill="#dcfce7" stroke="#15803d"/>
+        <text x="145" y="340" text-anchor="middle" fill="#15803d">Tenant 1: Middlesex</text>
+        <text x="145" y="358" text-anchor="middle" font-weight="500" fill="#166534">2 PMs in Dec, all in Feb</text>
+        <rect x="270" y="318" width="210" height="52" rx="12" fill="#f1f5f9" stroke="#94a3b8" stroke-dasharray="5 4"/>
+        <text x="375" y="349" text-anchor="middle" fill="#64748b">Tenant 2: next glazier</text>
+        <rect x="500" y="318" width="210" height="52" rx="12" fill="#f1f5f9" stroke="#94a3b8" stroke-dasharray="5 4"/>
+        <text x="605" y="349" text-anchor="middle" fill="#64748b">Tenant 3 …</text>
+      </g>
+      <text x="740" y="340" font-size="13" fill="#475569">Same code, separate data.</text>
+      <text x="740" y="358" font-size="13" fill="#475569">That's what makes it sellable.</text>
+    </svg>
+  </div>
+</section>
+
+<!-- 4. JOURNEY -->
+<section>
+  <h2>4 · How it plays out</h2>
+  <p class="sub">Four stages. Each one runs on the same code with more people on it.</p>
+  <div class="journey">
+    <div class="stage done"><div class="n">STAGE 1</div><h3>Demo</h3><div class="when">Done · Nov</div>
+      <ul><li>Shown to Jamie and Nick</li><li>Approval chain fixed to 4 seats</li><li>Becomes the spec</li></ul></div>
+    <div class="stage now"><div class="n">STAGE 2 · NOW</div><h3>Build the module</h3><div class="when">20 Nov → 5 Dec</div>
+      <ul><li>GCP project, database, logins</li><li>Rebuild the demo screens on top</li><li>Dry run against November</li></ul></div>
+    <div class="stage next"><div class="n">STAGE 3</div><h3>Pilot</h3><div class="when">Tue 8 Dec</div>
+      <ul><li>2 PMs bill December for real</li><li>Paper process runs alongside</li><li>Jamie checks every number</li></ul></div>
+    <div class="stage later"><div class="n">STAGE 4</div><h3>Rollout, then resell</h3><div class="when">~Feb 2027</div>
+      <ul><li>All Middlesex PMs</li><li>Add scoped modules (S9, R6, R4)</li><li>Onboard glazier #2</li></ul></div>
+  </div>
+</section>
+
+<!-- 5. GANTT -->
+<section>
+  <h2>5 · The build, ticket by ticket (Fri 20 Nov → Tue 8 Dec)</h2>
+  <p class="sub">The order follows the dependencies. Bars end on the Basecamp due date. Thanksgiving lands in the middle of the data-loading week.</p>
+  <div class="card gantt"><div class="gt">
+    <div class="ghead"><div></div><div class="days">
+      <span>F20</span><span class="we">S21</span><span class="we">S22</span><span>M23</span><span>T24</span><span>W25</span><span class="tg">T26</span><span>F27</span><span class="we">S28</span><span class="we">S29</span><span>M30</span><span>T1</span><span>W2</span><span>T3</span><span>F4</span><span class="we">S5</span><span class="we">S6</span><span>M7</span><span>T8</span>
+    </div></div>
+
+    <div class="grow"><div class="lbl">GCP project + access<small>Karun · not dated in the meeting</small></div>
+      <div class="track"><div class="bar purple" style="grid-column:1/5">Need by Mon 23</div></div></div>
+    <div class="grow"><div class="lbl">S1 · Host + deploy path<small>due Sat 21 · will slip to GCP access</small></div>
+      <div class="track"><div class="bar red" style="grid-column:4/7">blocked on GCP</div></div></div>
+    <div class="grow"><div class="lbl">S2 · Data model + migrations<small>due Sat 21 · needs no host</small></div>
+      <div class="track"><div class="bar blue" style="grid-column:1/5">start now</div></div></div>
+    <div class="grow"><div class="lbl">Req revisions<small>due Wed 25 · original stays on record</small></div>
+      <div class="track"><div class="bar blue" style="grid-column:4/7">in schema + entry</div></div></div>
+    <div class="grow"><div class="lbl">S3 · Load pilot jobs by hand<small>due Sat 28 · Jamie's AIAs arrive Mon 23</small></div>
+      <div class="track"><div class="bar amber" style="grid-column:4/10">needs Jamie's AIAs</div></div></div>
+    <div class="grow"><div class="lbl">S4 · PM entry screen<small>due Sat 28 · replaces the red folder</small></div>
+      <div class="track"><div class="bar navy" style="grid-column:5/10">demo screen → real</div></div></div>
+    <div class="grow"><div class="lbl">S5 · Finalize + export G702/G703<small>due Thu 3</small></div>
+      <div class="track"><div class="bar navy" style="grid-column:10/15">.xlsx + PDF</div></div></div>
+    <div class="grow"><div class="lbl">S6 · Identity / logins<small>due Thu 3 · PM sees own jobs only</small></div>
+      <div class="track"><div class="bar navy" style="grid-column:11/15">roles</div></div></div>
+    <div class="grow"><div class="lbl">S7 · Dry run vs November<small>due Sat 5</small></div>
+      <div class="track"><div class="bar green" style="grid-column:14/17">match Nov to the penny</div></div></div>
+    <div class="grow"><div class="lbl">PILOT<small>2 project managers</small></div>
+      <div class="track"><div class="bar green" style="grid-column:19/20">GO</div></div></div>
+  </div>
+  <div class="legend"><span><i style="background:var(--purple)"></i>waiting on someone else</span><span><i style="background:var(--red)"></i>blocked</span><span><i style="background:var(--blue)"></i>can start now</span><span><i style="background:#d97706"></i>needs client input</span><span><i style="background:#1e3a8a"></i>build</span><span><i style="background:var(--green)"></i>proof + go</span><span><i style="background:var(--red);border-radius:50%"></i>red date = Thanksgiving</span></div>
+  </div>
+</section>
+
+<!-- 6. NOT IN DECEMBER -->
+<section>
+  <h2>6 · What December deliberately leaves out</h2>
+  <p class="sub">Each item has a scoping ticket, so it's on the roadmap even though it isn't being built yet.</p>
+  <div class="grid3">
+    <div class="card"><span class="tag t-gray">Not in Dec</span><h3 style="margin:8px 0 4px">Upload screen</h3><div class="sub" style="margin:0">Jobs get loaded by hand (S3). Answers Ram's question: download yes, upload no.</div></div>
+    <div class="card"><span class="tag t-red">Ruled out</span><h3 style="margin:8px 0 4px">GC portals</h3><div class="sub" style="margin:0">Jamie ruled out portal integration. Module 3 gets re-scoped (S8).</div></div>
+    <div class="card"><span class="tag t-purple">Scoping</span><h3 style="margin:8px 0 4px">Backup-doc cascade</h3><div class="sub" style="margin:0">The part of the job Jamie actually hates (S9). The best candidate for the first paid add-on.</div></div>
+    <div class="card"><span class="tag t-purple">Scoping</span><h3 style="margin:8px 0 4px">E-signature + notarization</h3><div class="sub" style="margin:0">R6. Exports in December still get signed the way they're signed today.</div></div>
+    <div class="card"><span class="tag t-purple">Scoping</span><h3 style="margin:8px 0 4px">Intake + reminder ladder</h3><div class="sub" style="margin:0">R4. Comes after the database exists.</div></div>
+    <div class="card"><span class="tag t-gray">Parked</span><h3 style="margin:8px 0 4px">Sage / NetSuite</h3><div class="sub" style="margin:0">No accounting-system link. Export only.</div></div>
+  </div>
+</section>
+
+<!-- 7. WHAT IT NEEDS -->
+<section>
+  <h2>7 · What has to happen for 8 Dec to hold</h2>
+  <p class="sub">Purple means someone has to decide or deliver. These four gate the build.</p>
+  <div class="card">
+    <div class="dec"><div class="who">K</div><div><b>Karun: GCP project, with you and Sai given access, by Mon 23 Nov.</b><br><span class="sub">Agreed at the 19 Nov sync, but no date was set. S1 is blocked until it exists. The WhatsApp draft is ready.</span></div></div>
+    <div class="dec"><div class="who">S</div><div><b>Sai: which glazeoff.ai pieces to plug into.</b><br><span class="sub">Sign-in, company accounts and upload/download. If glazeoff.ai already has them, the module uses those rather than building its own, and S6 shrinks.</span></div></div>
+    <div class="dec"><div class="who">J</div><div><b>Jamie: AIAs and the job list, Mon 23 Nov.</b><br><span class="sub">S3 can't start without them. If nothing arrives by Tue 24 Nov, we build on October's numbers.</span></div></div>
+    <div class="dec"><div class="who">A</div><div><b>You: "go" on the board changes, and the three subscription points for William.</b><br><span class="sub">S2 can start today without a host. The William reply was due Thu 19 Nov.</span></div></div>
+  </div>
+</section>
+
+<section>
+  <div class="callout amber big"><b>The one-line answer for Ram:</b> the demo was the spec. December turns it into a real glazeoff.ai module (shared database, logins, backups, Middlesex as tenant #1) and tests it with two PMs on 8 Dec. February puts every Middlesex PM on it, and from there it's the same module sold to the next glazier.</div>
+</section>
+
+<footer>Sources: Basecamp list 10443345153 (read 20 Nov), the hosted demo file, Ram's WhatsApp of 18 Nov, and the Glazing technical sync of 19 Nov. The ~20% / ~80% split is an estimate of effort, not a measurement. February is Ali's estimate from the meeting, not an agreed date.</footer>
+</div>
+</body>
+</html>
