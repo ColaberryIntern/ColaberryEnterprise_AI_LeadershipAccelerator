@@ -56,8 +56,10 @@ interface Props {
   /** Start playing immediately (no poster click) — used when the user's click
    *  already expressed play intent (opening a video card's drawer). */
   autoplay?: boolean;
-  /** Live watch-progress reporter — see the header comment. */
-  onWatchBeat?: (beat: WatchBeatPayload, meta?: WatchBeatMeta) => void;
+  /** Live watch-progress reporter. Returning a promise is optional; if one is returned and it
+   *  REJECTS, the buffered seconds are re-credited instead of being silently destroyed. A
+   *  caller that returns void keeps the old fire-and-forget behavior. */
+  onWatchBeat?: (beat: WatchBeatPayload, meta?: WatchBeatMeta) => void | Promise<unknown>;
   /** Duration fallback in seconds (e.g. card.estimated_time * 60) for providers
    *  that never report one — powers the dwell fallback's percentage. */
   fallbackDurationS?: number | null;
@@ -68,6 +70,9 @@ const PlayIcon = () => (
 );
 
 const FLUSH_AFTER_S = 15;          // flush a beat after this much new play time
+// Ceiling on seconds re-credited after failed sends. Past this the backlog is a broken server,
+// not a learner's watch time, and replaying it as one beat would be a lie about what was watched.
+const MAX_REBUFFERED_S = 600;
 
 const addParam = (u: string, p: string) => u + (u.includes('?') ? '&' : '?') + p;
 
@@ -81,6 +86,8 @@ const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded, badge, au
   const lastTickAtRef = useRef<number | null>(null);
   const beatRef = useRef<Props['onWatchBeat']>(onWatchBeat);
   beatRef.current = onWatchBeat;
+  // Whether tracking is on at all. Stable across the parent's re-renders, unlike the callback.
+  const hasBeat = !!onWatchBeat;
   const fallbackRef = useRef<number>(0);
   fallbackRef.current = Math.max(0, Number(fallbackDurationS) || 0);
 
@@ -91,6 +98,10 @@ const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded, badge, au
   flushRef.current = (provider: string, exiting = false) => {
     const b = bufRef.current;
     if (!beatRef.current || b.delta <= 0) return;
+    // The buffer is cleared BEFORE the send, so a slow network cannot double-count these seconds
+    // into the next beat. The cost is that a FAILED send used to destroy them permanently -- the
+    // caller swallowed the rejection and nobody put the time back. If the callback hands back a
+    // promise, a rejection now re-credits the delta so the next beat carries it. (19 Nov 2026)
     bufRef.current = { delta: 0, position: b.position, duration: b.duration };
     const beat: WatchBeatPayload = {
       delta_s: Math.round(b.delta * 10) / 10,
@@ -99,8 +110,18 @@ const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded, badge, au
       provider,
     };
     // One argument on an ordinary beat, so existing callers and tests see exactly what they always did.
-    if (exiting || pageHidden()) beatRef.current(beat, { exiting: true });
-    else beatRef.current(beat);
+    const sent = (exiting || pageHidden())
+      ? beatRef.current(beat, { exiting: true })
+      : beatRef.current(beat);
+
+    // A caller that returns nothing behaves exactly as before.
+    if (sent && typeof (sent as Promise<unknown>).then === 'function') {
+      (sent as Promise<unknown>).then(undefined, () => {
+        // Re-credit, bounded: a server that is down for an hour must not grow an unbounded
+        // buffer that is then posted as one implausible beat.
+        bufRef.current.delta = Math.min(bufRef.current.delta + b.delta, MAX_REBUFFERED_S);
+      });
+    }
   };
 
   /** Fold one playhead tick into the buffer (media elements + iframe messages). */
@@ -192,7 +213,17 @@ const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded, badge, au
       if (bufRef.current.delta >= FLUSH_AFTER_S) flushRef.current('dwell');
     }, 5000);
     return () => { window.clearInterval(dwell); flushRef.current('dwell'); };
-  }, [playing, kind, provider, onWatchBeat]);
+  // `hasBeat`, NOT `onWatchBeat`. The callback's identity changes on every render of the parent
+  // (TimelineCard passes an inline arrow), and listing it here tore this effect down and rebuilt
+  // it that often -- re-running the provider handshake and, because the cleanup FLUSHES, emitting
+  // a beat per render. `beatRef.current` is reassigned on every render anyway, so the effect
+  // always calls the newest callback; the only thing it needs to react to is the callback
+  // appearing or disappearing, which is a boolean. (19 Nov 2026)
+  // Deliberately NOT exhaustive, and deliberately carrying no lint-suppression comment: this
+  // project ships no ESLint config, so the react-hooks rules are unresolvable here and a
+  // suppression directive naming one is a HARD ERROR under `CI=true` in the separate Frontend
+  // build gate (which passes typecheck and unit tests first, so it fails on its own).
+  }, [playing, kind, provider, hasBeat]);
 
   // C119: leaving the page sends the buffered watch time now, as an exit beat. `pagehide` covers a closed tab,
   // `visibilitychange` to hidden covers a backgrounded app or locked phone (where pagehide may never fire). When both
