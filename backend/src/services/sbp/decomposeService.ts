@@ -28,6 +28,8 @@ import {
   StoryNotAuthorizedError,
 } from './storyAuthorization';
 import { FLAGS } from '../../config/featureFlags';
+import { generateStagedPlan } from './stagedGeneration';
+import type { ModelCallError } from './modelJsonCall';
 
 /** Bounded per CLAUDE.md: no unbounded external call. Decomposition is a big completion. */
 const REQUEST_TIMEOUT_MS = 240_000;
@@ -73,6 +75,12 @@ export interface DecomposeOptions extends DecomposeInputs {
    * it is skipping the gate, which is why the orchestrator passes it.
    */
   projectId?: string;
+  /**
+   * Generate in stages (see stagedGeneration). The orchestrator passes
+   * `stagedGenerationEnabled()`; absent keeps the single call, which is what every existing
+   * caller and test of this function means.
+   */
+  staged?: boolean;
 }
 
 export interface DecomposeResult {
@@ -175,6 +183,25 @@ export async function decomposeBuild(opts: DecomposeOptions): Promise<DecomposeR
           message: err instanceof Error ? err.message : String(err),
         });
       }
+    }
+  }
+
+  // THE STAGED PATH (L12.3). Requirements, a completeness audit, a release outline, then stories
+  // one release at a time, so the plan's size follows the material instead of one reply's token
+  // ceiling. Reached AFTER the story gate above, so enforcement is identical on both paths. A
+  // human-refined requirement set (`opts.requirements`) keeps the single call it was built for.
+  if (opts.staged && !opts.requirements) {
+    try {
+      const staged = await generateStagedPlan({ ...opts, model, client, correlationId: opts.correlationId });
+      return { plan: staged.plan, attempts: staged.attempts, model, client };
+    } catch (err) {
+      if (err instanceof DecomposeError) throw err;
+      const cls = (err as ModelCallError)?.errorClass;
+      const errorClass: DecomposeErrorClass = cls ?? 'UpstreamError';
+      log('sbp_decompose_failed', opts.correlationId, 'failure', {
+        error_class: errorClass, model, path: 'staged', message: (err as Error)?.message,
+      });
+      throw new DecomposeError(errorClass, `staged generation failed (${errorClass}): ${(err as Error)?.message}`);
     }
   }
 

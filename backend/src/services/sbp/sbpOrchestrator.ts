@@ -35,6 +35,7 @@
 import { randomUUID } from 'crypto';
 import { decomposeBuild } from './decomposeService';
 import { tierTargets } from './buildTiers';
+import { stagedGenerationEnabled } from './stagedGeneration';
 import { GateResult, formatViolations, blockingViolations, advisoryViolations, isPublishable } from './planGate';
 import { gateAndRepair } from './planRepair';
 import { scopeAgents, agentScopingEnabledFor } from './scopeAgents';
@@ -337,6 +338,9 @@ async function runGeneration(input: StartBuildInput, correlationId: string): Pro
       // FR-002: the tier the student picked has to change the plan's depth.
       // Without this every tier produced the same shared DEFAULT_TARGETS.
       targets: tierTargets(input.size),
+      // L12.3: requirements, a completeness audit, then stories per release, so the plan's
+      // size follows the material. SBP_STAGED_GENERATION=off is the kill switch.
+      staged: stagedGenerationEnabled(),
       correlationId,
     });
 
