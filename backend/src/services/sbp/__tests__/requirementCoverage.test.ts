@@ -1,6 +1,6 @@
 import {
   REQUIREMENT_CHECKLIST, mergeMissed, quoteIsInSource, completeRequirements, buildCoveragePrompt,
-  COVERAGE_JSON_SCHEMA, MAX_COVERAGE_ROUNDS,
+  COVERAGE_JSON_SCHEMA, MAX_COVERAGE_ROUNDS, restatesExisting,
 } from '../requirementCoverage';
 import { buildRequirementExtractionPrompt } from '../requirementExtraction';
 import { BUILD_PLAN_JSON_SCHEMA, PlanRequirement } from '../planContract';
@@ -88,6 +88,27 @@ describe('mergeMissed', () => {
   });
 });
 
+describe('restatesExisting: the near-duplicates the live re-run produced (2026-11-20)', () => {
+  const SET = [
+    REQ('REQ-008', 'The system must never text a hygienist who is on approved leave.', 'SAFE'),
+    REQ('REQ-009', "The system must never share one employee's reason for calling out with anyone else.", 'SAFE'),
+    REQ('REQ-011', 'The system must fill gaps within 30 minutes of the call-out on 9 mornings out of 10.', 'NFR'),
+    REQ('REQ-012', 'The system must ensure Dana spends under 10 minutes per gap.', 'NFR'),
+    REQ('REQ-013', 'The system must send a weekly summary of gaps, fill times, and overtime approved to Dana.'),
+  ];
+  it.each([
+    'The system must never text anyone on approved leave.',
+    'The system must never share why someone called out.',
+    'The system must ensure gaps are filled within 30 minutes on 9 mornings out of 10 and Dana spends under 10 minutes per gap.',
+  ])('refuses "%s"', (s) => expect(restatesExisting(s, SET)).toBe(true));
+
+  it.each([
+    'The system must require Dana\'s approval before sending any message to a temp agency.',
+    'The system must send Dana an end-of-day summary explaining each decision in plain words.',
+    'The system must offer the shift to the two temp agencies after the hygienists.',
+  ])('keeps "%s"', (s) => expect(restatesExisting(s, SET)).toBe(false));
+});
+
 describe('completeRequirements', () => {
   const reply = (missing: unknown[]) => ({ choices: [{ message: { content: JSON.stringify({ missing }) } }] });
   const temp = {
@@ -95,19 +116,35 @@ describe('completeRequirements', () => {
     requirement: { statement: 'Dana must approve any message to a temp agency before it is sent.', kind: 'SAFE', priority: 'must', cluster: 'Approvals', from_dimensions: ['approval_points'] },
   };
 
-  it('runs a second round when the first added something, and stops when a round adds nothing', async () => {
+  const target = {
+    quote: 'Gaps filled within 30 minutes on 9 mornings out of 10',
+    requirement: { statement: 'Gaps must be filled within 30 minutes on 9 mornings out of 10.', kind: 'NFR', priority: 'must', cluster: 'Outcomes', from_dimensions: ['success_definition'] },
+  };
+  const speed = {
+    quote: "under 10 minutes of Dana's time",
+    requirement: { statement: 'Dana must spend under 10 minutes on each gap.', kind: 'NFR', priority: 'must', cluster: 'Outcomes', from_dimensions: ['success_definition'] },
+  };
+
+  it('keeps reading while a round yields real additions, and stops on a trickle', async () => {
     const create = jest.fn()
-      .mockResolvedValueOnce(reply([temp]))
+      .mockResolvedValueOnce(reply([temp, target, speed]))
       .mockResolvedValueOnce(reply([]));
     const out = await completeRequirements(EXISTING, { brief: SOURCE, document: '', model: 'm', client: { create } as any });
     expect(create).toHaveBeenCalledTimes(2);
-    expect(out.added.map((a) => a.id)).toEqual(['REQ-003']);
+    expect(out.added.map((a) => a.id)).toEqual(['REQ-003', 'REQ-004', 'REQ-005']);
     expect(out.requirements[2].kind).toBe('SAFE');
+  });
+
+  it('a round of one or two additions ends the audit', async () => {
+    const create = jest.fn().mockResolvedValueOnce(reply([temp]));
+    await completeRequirements(EXISTING, { brief: SOURCE, document: '', model: 'm', client: { create } as any });
+    expect(create).toHaveBeenCalledTimes(1);
   });
 
   it('is bounded', async () => {
     let i = 0;
-    const create = jest.fn(async () => reply([{ ...temp, requirement: { ...temp.requirement, statement: `Variant ${i += 1} of the temp agency rule.` } }]));
+    const fresh = () => { i += 1; return { ...temp, requirement: { ...temp.requirement, statement: `Zone w${i}a w${i}b quorum.` } }; };
+    const create = jest.fn(async () => reply([fresh(), fresh(), fresh()]));
     await completeRequirements(EXISTING, { brief: SOURCE, document: '', model: 'm', client: { create } as any });
     expect(create).toHaveBeenCalledTimes(MAX_COVERAGE_ROUNDS);
   });

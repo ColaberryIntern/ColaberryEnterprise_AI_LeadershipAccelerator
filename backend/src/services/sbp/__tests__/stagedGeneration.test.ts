@@ -1,7 +1,7 @@
 import {
   releaseCountFor, normaliseOutline, assembleStories, generateStagedPlan, stagedGenerationEnabled,
   buildReleaseStoriesPrompt, buildOutlinePrompt, OUTLINE_JSON_SCHEMA, RELEASE_STORIES_JSON_SCHEMA,
-  MAX_RELEASES,
+  MAX_RELEASES, pullGuardsForward,
 } from '../stagedGeneration';
 import { decomposeBuild } from '../decomposeService';
 import { BUILD_PLAN_JSON_SCHEMA, PlanRelease, PlanRequirement, PlanStory } from '../planContract';
@@ -73,6 +73,46 @@ describe('normaliseOutline', () => {
   });
 });
 
+describe('pullGuardsForward: the live ShiftFill outline that shipped every guardrail last (2026-11-20)', () => {
+  const live = (id: string, kind: PlanRequirement['kind'], statement: string): PlanRequirement => ({ id, kind, statement, priority: 'must', cluster: 'c', from_dimensions: [] });
+  const R = [
+    live('REQ-001', 'FUNC', "The system must read the call-out text or email the moment it arrives and open a 'gap' for the specified office, date, and hours."),
+    live('REQ-002', 'FUNC', 'The system must rank hygienists to offer the shift based on being off that day, licensed for that office, under 40 hours that week, and nearest by commute.'),
+    live('REQ-003', 'FUNC', 'The system must text shift offers in waves of three people, with a 10-minute window to reply YES.'),
+    live('REQ-018', 'FUNC', 'The system must offer the shift to the two temp agencies if no hygienist accepts.'),
+    live('REQ-007', 'SAFE', 'The system must never offer a shift that would push someone over 40 hours without Dana approving overtime.'),
+    live('REQ-008', 'SAFE', 'The system must never text a hygienist who is on approved leave.'),
+    live('REQ-009', 'SAFE', "The system must never share one employee's reason for calling out with anyone else."),
+    live('REQ-017', 'SAFE', "The system must require Dana's approval before sending any message to a temp agency."),
+  ];
+  const placed = () => new Map([
+    ['REQ-001', 'r0'], ['REQ-002', 'r1'], ['REQ-003', 'r1'], ['REQ-018', 'r2'],
+    ['REQ-007', 'r4'], ['REQ-008', 'r4'], ['REQ-009', 'r4'], ['REQ-017', 'r4'],
+  ]);
+
+  it('moves each guardrail to the release of the behaviour it guards', () => {
+    const m = placed();
+    pullGuardsForward(R, m);
+    expect(m.get('REQ-007')).toBe('r1'); // overtime: guards the ranking and offering
+    expect(['r0', 'r1']).toContain(m.get('REQ-008')); // leave: no later than texting hygienists (r1)
+    expect(['r0']).toContain(m.get('REQ-009')); // call-out reasons: no later than reading the call-out (r0)
+    expect(m.get('REQ-017')).toBe('r2'); // temp-agency approval: guards the temp-agency offer
+  });
+
+  it('never moves a guardrail later than the model put it', () => {
+    const m = placed();
+    m.set('REQ-008', 'r0');
+    pullGuardsForward(R, m);
+    expect(m.get('REQ-008')).toBe('r0');
+  });
+
+  it('leaves the behaviour requirements where they were', () => {
+    const m = placed();
+    pullGuardsForward(R, m);
+    expect(['REQ-001', 'REQ-002', 'REQ-003', 'REQ-018'].map((id) => m.get(id))).toEqual(['r0', 'r1', 'r1', 'r2']);
+  });
+});
+
 describe('assembleStories', () => {
   const R = reqs(6);
   it('numbers globally, forces the release, gates releases in code, and keeps only backward local deps', () => {
@@ -95,6 +135,7 @@ describe('prompts', () => {
     const p = buildOutlinePrompt({ brief: 'b', document: '' }, reqs(12, 2), 4);
     expect(p).toContain('exactly 4 releases, r0..r3');
     expect(p).toContain('(12 assignments)');
+    expect(p).toMatch(/SAFE requirement lands in the SAME release as the first behaviour it guards/);
   });
   it('asks a release for its own requirements only, as context for the rest', () => {
     const all = reqs(4);

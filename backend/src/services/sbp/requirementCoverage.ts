@@ -128,6 +128,8 @@ export function buildCoveragePrompt(inputs: DecomposeInputs, requirements: PlanR
     'A requirement that is only partly captured is missing: report the missing part as its own',
     'requirement rather than restating the existing one.',
     'Report nothing that is already captured, and nothing the owner deferred or put out of scope.',
+    'The source often says the same thing twice (typed answers and an uploaded document, a summary and',
+    'its detail). A statement already captured in different words is NOT missing.',
     'An empty list is the correct answer when the set is complete.',
     '',
     '<EXISTING_REQUIREMENTS>',
@@ -154,6 +156,45 @@ export function quoteIsInSource(quote: string, source: string): boolean {
   const q = normaliseForQuote(quote).replace(/^["'.\s]+|["'.\s]+$/g, '');
   if (q.length < 12) return false;
   return normaliseForQuote(source).includes(q);
+}
+
+const STOPWORDS = new Set([
+  'the', 'a', 'an', 'and', 'or', 'of', 'to', 'for', 'in', 'on', 'at', 'by', 'with', 'from', 'is', 'are',
+  'be', 'it', 'its', 'that', 'this', 'than', 'any', 'each', 'every', 'all', 'must', 'should', 'system',
+  'will', 'can', 'who', 'what', 'when', 'one', 'else', 'anyone', 'someone', 'their', 'they', 'them',
+]);
+
+/** Content words, crudely stemmed, so "calling" meets "called" and "gaps" meets "gap". */
+export function contentWords(s: string): Set<string> {
+  return new Set(
+    s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/)
+      .filter((w) => w && !STOPWORDS.has(w))
+      .map((w) => w.replace(/(ing|ed|es|s)$/, '') || w),
+  );
+}
+
+/**
+ * Is this proposal already said by the set, in other words?
+ *
+ * Measured live (ShiftFill re-run, 2026-11-20): the audit's second round re-proposed "never text
+ * anyone on approved leave" next to "never text a hygienist who is on approved leave", because the
+ * student said it twice (typed, and in the PDF), and both quotes are real. Exact-statement matching
+ * cannot see that. Containment can: most of the proposal's words already sit in ONE existing
+ * requirement, or in the two that share the most with it (a combined restatement of two targets).
+ */
+export function restatesExisting(statement: string, existing: PlanRequirement[]): boolean {
+  const mine = contentWords(statement);
+  if (mine.size === 0) return true;
+  const scored = existing
+    .map((r) => { const w = contentWords(r.statement); return { w, hit: [...mine].filter((x) => w.has(x)).length }; })
+    .sort((a, b) => b.hit - a.hit);
+  if (!scored.length) return false;
+  if (scored[0].hit / mine.size >= 0.65) return true;
+  if (scored.length > 1) {
+    const union = new Set([...scored[0].w, ...scored[1].w]);
+    if ([...mine].filter((x) => union.has(x)).length / mine.size >= 0.85) return true;
+  }
+  return false;
 }
 
 /** Next free REQ-nnn. */
@@ -188,7 +229,10 @@ export function mergeMissed(
   for (const m of missed) {
     if (!quoteIsInSource(m.quote, source)) { refused.push({ quote: m.quote, reason: 'quote_not_in_source' }); continue; }
     const key = normaliseForQuote(m.requirement.statement);
-    if (seen.has(key)) { refused.push({ quote: m.quote, reason: 'duplicate_statement' }); continue; }
+    if (seen.has(key) || restatesExisting(m.requirement.statement, out)) {
+      refused.push({ quote: m.quote, reason: 'duplicate_statement' });
+      continue;
+    }
     if (!KNOWN_KINDS.has(m.requirement.kind)) { refused.push({ quote: m.quote, reason: 'deferred_kind' }); continue; }
     const id = `REQ-${String(n).padStart(3, '0')}`;
     n += 1;
@@ -199,8 +243,13 @@ export function mergeMissed(
   return { requirements: out, added, refused };
 }
 
-/** Audit rounds. Two: the second catches what the first round's additions made visible. Bounded. */
-export const MAX_COVERAGE_ROUNDS = 2;
+/**
+ * Audit rounds. Bounded. A round that adds fewer than `COVERAGE_CONTINUE_AT` ends the audit: a
+ * large document (46k characters, live 2026-11-20) was still yielding 4 real additions in round 2,
+ * so a third round is allowed, but a trickle of one or two is not worth another full read.
+ */
+export const MAX_COVERAGE_ROUNDS = 3;
+export const COVERAGE_CONTINUE_AT = 3;
 
 export interface CoverageOptions extends DecomposeInputs {
   model: string;
@@ -272,7 +321,7 @@ export async function completeRequirements(
     });
     current = merged.requirements;
     allAdded.push(...merged.added);
-    if (merged.added.length === 0) break;
+    if (merged.added.length < COVERAGE_CONTINUE_AT) break;
   }
   return { requirements: current, added: allAdded, rounds };
 }

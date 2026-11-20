@@ -37,7 +37,7 @@ import {
 } from './decomposePrompt';
 import { modelJsonCall, type ChatClient } from './modelJsonCall';
 import { extractRequirements } from './requirementExtraction';
-import { completeRequirements } from './requirementCoverage';
+import { completeRequirements, contentWords } from './requirementCoverage';
 
 /** Average non-constraint requirements per release before another release is opened. */
 export const REQUIREMENTS_PER_RELEASE = 6;
@@ -113,6 +113,11 @@ export function buildOutlinePrompt(inputs: DecomposeInputs, requirements: PlanRe
     'ends with something a person can open and see working.',
     'r0 is the walking skeleton: the thinnest end-to-end path, including the guardrails and approval',
     'points the owner insisted on, so its demo shows the guarantee holding.',
+    // Live (2026-11-20): "never text a hygienist on leave" landed in r3 while offers went out in
+    // r1, and the success targets sat alone in the last release as a "performance" story.
+    'A SAFE requirement lands in the SAME release as the first behaviour it guards, or earlier, never',
+    'after it: a guardrail that arrives two releases after the thing it guards was not a guardrail.',
+    'An NFR (a target, a volume, a time limit) lands in the release of the behaviour it constrains.',
     'Give each release a name in the owner\'s own domain language, a goal, a demo line, and week numbers.',
     '',
     '<APPROVED_REQUIREMENTS>',
@@ -121,6 +126,36 @@ export function buildOutlinePrompt(inputs: DecomposeInputs, requirements: PlanRe
     '',
     sourceBlocks(inputs),
   ].join('\n');
+}
+
+const releaseIndex = (k: string): number => Number(k.slice(1));
+
+/**
+ * A guardrail never arrives after the thing it guards. PURE; mutates `byReq` in place.
+ *
+ * Asked in the prompt and NOT obeyed: live (2026-11-20, ShiftFill) the outline put all four SAFE
+ * requirements in the last release, so "never text a hygienist on approved leave" shipped three
+ * releases after the story that texts hygienists. So it is enforced here: each SAFE or NFR
+ * requirement moves to the release of the FUNC requirement it shares the most words with, when that
+ * release is EARLIER. Never later: a guardrail the model placed early stays early. One shared word is
+ * enough on purpose: "never text a hygienist on leave" shares exactly one with each behaviour it
+ * guards, and the only cost of a weak match is a guardrail landing early, which r0 asks for anyway.
+ */
+export function pullGuardsForward(items: PlanRequirement[], byReq: Map<string, string>): void {
+  const funcs = items.filter((r) => r.kind === 'FUNC' || r.kind === 'REL' || r.kind === 'OBS');
+  const words = new Map(items.map((r) => [r.id, contentWords(r.statement)]));
+  for (const g of items.filter((r) => r.kind === 'SAFE' || r.kind === 'NFR')) {
+    const gw = words.get(g.id)!;
+    let best: { id: string; hit: number } | null = null;
+    for (const f of funcs) {
+      const hit = [...gw].filter((w) => words.get(f.id)!.has(w)).length;
+      if (hit >= 1 && (!best || hit > best.hit
+        || (hit === best.hit && releaseIndex(byReq.get(f.id)!) < releaseIndex(byReq.get(best.id)!)))) best = { id: f.id, hit };
+    }
+    if (!best) continue;
+    const target = byReq.get(best.id)!;
+    if (releaseIndex(target) < releaseIndex(byReq.get(g.id)!)) byReq.set(g.id, target);
+  }
 }
 
 /**
@@ -148,6 +183,9 @@ export function normaliseOutline(outline: ReleaseOutline, requirements: PlanRequ
     byReq.set(r.id, lightest);
     load.set(lightest, (load.get(lightest) ?? 0) + 1);
   }
+  pullGuardsForward(items, byReq);
+  for (const k of load.keys()) load.set(k, 0);
+  for (const k of byReq.values()) load.set(k, (load.get(k) ?? 0) + 1);
   // Drop empty releases, then re-key densely so r0..rN has no holes.
   const kept = rels.map((r, i) => ({ r, old: `r${i}` })).filter(({ old }) => (load.get(old) ?? 0) > 0);
   const finalKey = new Map(kept.map(({ old }, i) => [old, `r${i}`]));
@@ -186,8 +224,14 @@ export function buildReleaseStoriesPrompt(
     'Ids: number your stories S1, S2, … within this release. `blocked_by` may cite only earlier',
     'stories of THIS release (by those S ids) or be empty; gating between releases is added for you.',
     `Every story's \`release\` is "${release.key}".`,
+    // Named ids, not "every requirement": live (2026-11-20) the story writer skipped all four
+    // NFR targets it was given, which leaves `must_uncovered` for repair to clean up.
+    `Before you answer, check that each of these ids appears in at least one story's \`fulfills\`: ${mine.map((r) => r.id).join(', ')}.`,
+    'An NFR (a target, a volume, a time limit, a way users must be able to use it) is not a story of',
+    'its own: cite it in the `fulfills` of the story whose behaviour it constrains, and make one of',
+    'that story\'s acceptance lines test the number.',
     release.key === 'r0'
-      ? 'This is r0: it must include the story that proves the guardrail or correctness guarantee end to end, with its audit trail.'
+      ? 'This is r0: it must include the story that proves the guardrail or correctness guarantee end to end. That story\'s "Trust" acceptance line names the audit log entry it writes.'
       : `The previous release ends with ${previousKeyStory ?? 'its last story'}; do not repeat its work.`,
     'Use CONSTRAINT requirements as context in task_guidance (the tools to use), and you may cite them',
     'in `fulfills` alongside the work they serve.',
