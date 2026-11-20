@@ -62,12 +62,17 @@ jest.mock('../marketing/bugReport/ReportAProblem', () => ({
 
 // The page probes its own access by CALLING the API rather than reading a role off the token, so
 // the probe is what this test drives to produce an owner and a builder.
-const probe = jest.fn();
-jest.mock('../../../utils/api', () => ({ __esModule: true, default: { get: (...a: unknown[]) => probe(...a) } }));
+//
+// Declared INSIDE the factory and read back below, for the reason AdminAllDomainsPage.test.tsx
+// records: babel hoists jest.mock above const declarations, so a factory closing over an outer
+// `const probe` fails the whole suite with "Invalid variable access".
+jest.mock('../../../utils/api', () => ({ __esModule: true, default: { get: jest.fn() } }));
 
 import AgentDashboardPage, { buildGroups } from '../AgentDashboardPage';
+import apiClient from '../../../utils/api';
 import * as api from '../../../services/agentDomainApi';
 
+const probe = (apiClient as unknown as { get: jest.Mock }).get;
 const fetchMine = api.fetchMyDomains as jest.Mock;
 const fetchReqs = api.fetchMyChangeRequests as jest.Mock;
 
