@@ -64,6 +64,44 @@ export async function fetchAlumniFromCCPP(): Promise<AlumniRecord[]> {
   return result.recordset;
 }
 
+// ── Placement lookup (one person) ───────────────────────────────────────
+
+/** Upper bound on the live CCPP lookup: it runs on the checkout path. */
+export const CCPP_PLACEMENT_LOOKUP_TIMEOUT_MS = 5000;
+
+/**
+ * The CCPP placement (hired) date for one email, or null if CCPP has none.
+ * Unlike fetchAlumniFromCCPP this does NOT require a phone number or the first
+ * group order, so every placed alumnus is found. Throws on a connection error
+ * or after `timeoutMs`; callers decide whether that is fatal.
+ */
+export async function findCcppPlacementDate(email: string, timeoutMs = CCPP_PLACEMENT_LOOKUP_TIMEOUT_MS): Promise<Date | null> {
+  const normalized = String(email || '').trim().toLowerCase();
+  if (!normalized) return null;
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(Object.assign(new Error(`CCPP placement lookup exceeded ${timeoutMs}ms`), { name: 'TimeoutError' })), timeoutMs);
+  });
+  try {
+    const lookup = (async () => {
+      const db = await connectMssql();
+      const result = await db.request()
+        .input('email', sql.NVarChar(320), normalized)
+        .query<{ HiredDate: Date | null }>(`
+          SELECT TOP 1 HiredDate
+          FROM CCPP.dbo.vw_QS_MetricsDashboard_ActiveUsers
+          WHERE LOWER(LTRIM(RTRIM(Email))) = @email
+            AND HiredDate IS NOT NULL
+          ORDER BY HiredDate DESC
+        `);
+      return result.recordset[0]?.HiredDate ?? null;
+    })();
+    return await Promise.race([lookup, timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 // ── Import Alumni as Leads ──────────────────────────────────────────────
 
 export interface AlumniImportResult {

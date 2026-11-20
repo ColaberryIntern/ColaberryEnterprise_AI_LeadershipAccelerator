@@ -41,6 +41,9 @@ export interface SubscriptionView {
    *  when a credit is annual-only (the Open House scholarship). Older servers
    *  omit it, in which case the total applies to every plan. */
   credit_cents_by_plan?: Record<string, number>;
+  /** True when the annual credit is the 2026 alumni discount (50% off the
+   *  annual plan through Dec 31). Older servers omit it. */
+  has_alumni_credit?: boolean;
   subscription: SubscriptionState | null;
 }
 
