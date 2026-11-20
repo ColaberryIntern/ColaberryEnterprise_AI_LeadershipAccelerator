@@ -78,7 +78,12 @@ async function bcSend(method: string, url: string, send: (signal: AbortSignal) =
       r = await send(AbortSignal.timeout(timeoutMs));
     } catch (err) {
       if (!isAbortError(err)) throw err;
-      if (attempt < BC_MAX_RETRIES) {
+      // A POST creates something. If it timed out, Basecamp may still have created it, and a
+      // retry would make a second list, to-do or comment. So a POST is never retried after a
+      // timeout: it fails, and the caller's own once-only logic decides what happens next.
+      // (A 429/503 below is different: Basecamp refused it, so nothing was created.) GET and
+      // PUT are safe to repeat and keep their retries.
+      if (attempt < BC_MAX_RETRIES && method !== 'POST') {
         await sleep(bcBackoffMs(null, attempt));
         continue;
       }

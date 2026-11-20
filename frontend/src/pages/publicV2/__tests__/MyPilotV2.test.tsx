@@ -100,6 +100,19 @@ describe('the status', () => {
     expect(container.querySelectorAll('.cbv2-mp__steps li.is-done')).toHaveLength(2);
   });
 
+  it('takes the sign-in token out of the address bar once it has read it', async () => {
+    statusMock.mockResolvedValue({ company: 'Acme', firstName: 'Dana', steps: [], options: [], next: 'x', closed: null });
+    window.history.pushState({}, '', '/my-pilot/status?token=tok-secret');
+    try {
+      await mount('/my-pilot/status?token=tok-secret');
+      expect(statusMock).toHaveBeenCalledWith('tok-secret');
+      expect(window.location.search).toBe('');
+      expect(window.location.pathname).toBe('/my-pilot/status');
+    } finally {
+      window.history.pushState({}, '', '/');
+    }
+  });
+
   it('offers a new link when the token has expired', async () => {
     statusMock.mockRejectedValue(new Error('401'));
     await mount('/my-pilot/status?token=old');

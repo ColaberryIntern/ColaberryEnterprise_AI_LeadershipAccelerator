@@ -310,7 +310,7 @@ function ClientView({ id }: { id: string }): React.ReactElement {
                 <MessageEditor
                   label="proposal"
                   message={c.proposal}
-                  sendLabel="Approve and send from Ali"
+                  sendLabel="Approve and send from Ali (Ali only)"
                   note={
                     <p className="small text-muted mb-2">
                       Replace <code>{c.pricePlaceholder}</code> with the investment. It will not send until you do.
@@ -339,7 +339,7 @@ function ClientView({ id }: { id: string }): React.ReactElement {
             ) : (
               <div className="d-flex flex-wrap gap-2 align-items-center">
                 <button type="button" className="btn btn-success btn-sm" disabled={Boolean(busy)} onClick={() => act('signed', 'signed').catch(() => undefined)}>
-                  {busy === 'signed' ? 'Opening their project...' : 'Mark signed (opens their Basecamp project)'}
+                  {busy === 'signed' ? 'Opening their project...' : 'Mark signed: opens their Basecamp project (Ali only)'}
                 </button>
                 <input
                   aria-label="Why it was lost"

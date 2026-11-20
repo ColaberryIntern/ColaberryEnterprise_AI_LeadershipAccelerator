@@ -18385,3 +18385,56 @@ Steps 1-4 are safe without 5: the form accepts, the lead is captured and attribu
   - What changed: FOUR TICKETS, one branch, one PR. **AF11.12** `toolRequestDrafter.ts` + `toolRequestDraftService.ts` + `toolRequestDraftController.ts` + `toolRequestDraftRoutes.ts` (all NEW), a `dashboard` row in `mgmtSectionGate.ts`, and two buttons on `ToolRequestForm.tsx` - Ali told seven builders on the 17 Nov internship call "Click a button, and then it fills out the whole request for you", and nothing of the sort existed; the form had twenty-four hand-typed fields. **AF11.15** `DUPLICATE_SCOPE` stated in the contract with the reason for each clause, and `hasOpenRequestFor` became `findOpenRequestFor` so the refusal quotes the request it collided with. **AF11.14** `ensureCapabilityInstructionSchema.ts` + `capabilityInstructionContract.ts` + `capabilityInstructionService.ts` + controller + routes (all NEW), and `agentToolGovernanceService.ts` now carries the instructions with the grant. **AF11.13** the drafter also writes the ten-block case and the filing route accepts it, so a request arrives finished.
   - Verification: backend `tsc --noEmit` exit **0**, frontend `tsc --noEmit` exit **0**, **frontend build exit 0** (a separate CI gate from tsc and unit). Full backend suite **47,277 passed / 47,767**. Route-auth lint OK across **175** admin route files. 24 drafter tests, 12 instruction-contract tests, 7 duplicate-scope tests, 60 frontend tests in the touched suites. **13 failing suites PROVEN pre-existing, not asserted**: the only one in territory this touches, `adminRoutes.test.ts`, fails identically with this change's route mounts reverted and its error originates in `authRoutes.ts`, which nothing here touches; `mgmtRbac.test.ts` likewise fails with the gate edit reverted. NOT VERIFIED: nothing is deployed, and all eight pipeline tables still hold zero rows, so no request has crossed a single seam between filing, decision, build, validation and grant.
   - Notes: THREE THINGS WERE CAUGHT BY RUNNING SOMETHING RATHER THAN REASONING. **(1)** The compile-time pin tying the drafter's field list to the contract was written as `const x: Unlisted[] = []`, which cannot fail, because an empty array is assignable to an array of anything. Planting a control field left `tsc` green. Replaced with `[T] extends [never]` and re-proven by planting the same drift, which now fails naming the missing field. **(2)** The instruction log ordered by `created_at DESC`. Proving the DDL in `accelerator_dev1` inside BEGIN/ROLLBACK showed `DEFAULT NOW()` is the TRANSACTION timestamp, so two entries written in one transaction tie and `DISTINCT ON` picks arbitrarily - it picked the older one, meaning a capability whose instructions had just been CLEARED still reported the rule it had replaced. That is an agent running under a rule a human had removed, with the screen agreeing. Replaced with `BIGSERIAL seq` and re-proven side by side. **(3) I GOT A FACT WRONG AND SHIPPED IT TO BASECAMP BEFORE CATCHING IT.** I filed AF11.13 claiming AF11.8 Part One never shipped, having queried `agent_domain_tool_request_details` for the ten block names and found none. The package is a SEPARATE table and always was. Part One shipped in full. Corrected in the ticket, in a comment on AF11.8, and in the HTML Ali had already read. The real gap was narrower and still real: nothing ever writes a package, zero rows, so no request would ever reach him carrying an argument. ONE THING DELIBERATELY NOT FABRICATED: the drafter is forbidden from writing `simulated_action`, `simulated_against` and `simulated_at`, because those record a run that really happened and a drafted one is invented evidence in the block whose whole job is to be evidence. The prompt says not to; the normalizer deletes them whatever comes back, because a prompt is a request and a normalizer is a guarantee. AF11.16, the per-capability off switch, was NOT built and its ticket stays open: there is no runtime reader for capability enablement at all, and the nearest thing, `capabilityRegistry.ts`, has a hardcoded `enabled` literal that `agentEffectiveAccessService.ts` already documents as never reading the agent's real state. Shipping a switch on top of that would look like it worked.
+
+- [x] **Enterprise client intake, Phase 1 (W28): the form starts the intake, then their own time figure and a 10-minute AI interview, call or type**
+  - Date: 2026-11-20
+  - Session: CC-20261120-l5j6
+  - What changed:
+    - **The form.** `/demo-pilot` adds mobile number (required, PH1), the standard call/text tick, company website, start timing and other deciders. The cost becomes two numbers: people, and hours a week.
+    - **The intake.** `POST /api/enterprise/intake` writes the same lead `/api/leads` wrote and opens an `enterprise_intakes` row. Its UUID is the visitor's token.
+    - **The interview.** `DemoPilotIntake.tsx` shows their own hours a year, then "Call me now" or "Type it instead". Both run the one shared intake (`runIntakeTurn` and `finishIntake`) with `buildFor: none`.
+    - **The voice.** `ENTERPRISE_BRAND` and `SYNTHFLOW_ENTERPRISE_INTAKE_AGENT_ID` are added, with no fallback agent.
+    - PR #4250. Ali's answers: Q1 A, Q2 A, Q3 A, Q4 A.
+  - Verification: backend 1,896 and frontend 1,204 tests pass; CI green. Live on enterprise.colaberry.ai: a test identity completed a typed interview and the write-up was recorded.
+  - Notes:
+    - The first merge attempt was blocked by main's PH1 change to the same form and by `modelTimestampTypeLies`. Both were fixed, not bypassed.
+    - "Call me now" stays hidden until the Synthflow Enterprise agent exists. That is Ali's decision A; Kes is setting the agent up.
+
+- [x] **Enterprise client intake, Phases 2-5 (W29-W32): a Basecamp list per client, research and pilot options, every touch synced, the admin Clients page, client sign-in**
+  - Date: 2026-11-20
+  - Session: CC-20261120-l5j6
+  - What changed:
+    - **Basecamp lists** (`enterpriseIntakeBasecamp.ts`). Every intake gets a list in the new "Colaberry Enterprise Intake" project (49670056), with a 9-step dated checklist owned by Ali. The interview write-up and transcript are posted to it.
+    - **Research** (`companySiteFetch.ts`, `enterpriseIntakeResearch.ts`). An SSRF-safe read of the company website, then a research brief, 2-3 pilot options and a draft email.
+    - **Comms sync** (`enterpriseIntakeSync.ts`). Work-mailbox emails and calls become list comments with a Next to-do, and the list name shows the stage.
+    - **Actions** (`enterpriseIntakeActions.ts`). Options email, proposal draft and send, signed (opens the client's own project), lost.
+    - **Sending.** `sendFirstContactAsAli` is added beside `sendReplyAsAli`.
+    - **Admin page.** `/admin/enterprise-clients`, with routes, section gate and nav entry.
+    - **Client sign-in.** `/my-pilot`, a 7-day signed link with audience `enterprise-client`, plus `sendEnterpriseClientLink`.
+    - **Schema.** `addMissingColumns` lets boot add new columns to an existing table.
+    - **Shared fix.** Transcripts are built one line per turn, so the write-up keeps what the person wrote. This also applies to AI Flotation.
+    - PR #4261. One PR and one deploy, as Ali asked.
+  - Verification:
+    - Each phase passed an independent loop-architect task review: 11, 11, 12 and 11 out of 12, after first-round FAILs that were each fixed.
+    - CI is green, including the Postgres tier (`enterpriseIntakeSync.integration`, 5/5).
+    - Live: a test client's list opened 3 seconds after the form; the write-up (10 facts) and research (2 options) posted within 10 seconds; the stage name was set; the sign-in link was sent.
+  - Notes: The reviewers caught real defects, and the first-round tests had not:
+    - an IPv4-mapped IPv6 SSRF bypass that reached loopback and cloud metadata;
+    - substring email matching, so bob@ matched jimbob@;
+    - a repost loop when a Next to-do failed;
+    - user enumeration by response time.
+    - **Known, not changed:** the shared lead service merged two test identities into one lead. The likely cause is the shared phone number.
+
+- [x] **Enterprise intake hardening: proposals and signed are Ali's, POSTs never retried after a timeout, digest links act only for their own emails**
+  - Date: 2026-11-20
+  - Session: CC-20261120-l5j6
+  - What changed:
+    - **Ali only** (Ali: "proposals Ali only"). In `enterpriseClientsRoutes.ts`, `requireAli` uses `isCoryAuthorizedIdentity` (ali@colaberry.com or super_admin) on proposal send and mark signed. Other admins keep every other step.
+    - **No POST retry after a timeout.** `basecampClient.ts` no longer retries a POST that timed out, because Basecamp may already have created the item. A refused 429/503 still retries.
+    - **Digest links.** `inboxController.handleDigestAction` accepts only a digest token (`batch_id` plus `email_ids`) naming the email being acted on. Admin, participant and client tokens are all refused.
+    - **Sign-in token.** A test that /my-pilot removes the token from the address bar.
+    - **Test data.** The W28 and W29 test clients were deleted in one transaction (Ali: "D yes"). The backup is at `/root/w28_w29_test_rows_backup_20261120.txt` on prod. Their two Basecamp lists were trashed.
+  - Verification:
+    - Backend: Basecamp client and callers 854 pass; admin and client routes 30/30; digest action 5/5.
+    - Frontend: MyPilot 5/5 and admin page 15/15; tsc clean.
+  - Notes: The digest-action tightening also closes an older hole: any token signed with the app secret (participant, alumni) could reclassify inbox email. The only minter, `askUserDigestService`, always sets `email_ids`, so real digest links still work.

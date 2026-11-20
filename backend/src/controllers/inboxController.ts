@@ -443,11 +443,17 @@ export async function handleDigestAction(req: Request, res: Response) {
       // repo, which is an auth bypass on an endpoint that takes its action
       // straight off the query string. config/env.ts already refuses to boot in
       // production without JWT_SECRET, so this path cannot regress silently.
-      const payload = jwt.verify(token as string, env.jwtSecret) as { aud?: unknown };
-      // W32: an Enterprise client's sign-in link is signed with the same secret and is handed to
-      // anyone who books a pilot. It must never act on Ali's inbox.
+      const payload = jwt.verify(token as string, env.jwtSecret) as { aud?: unknown; batch_id?: unknown; email_ids?: unknown };
+      // Only a DIGEST token, and only for an email it was minted for. Every token in this app is
+      // signed with the same secret (admin, participant, alumni, and since W32 the Enterprise
+      // client link handed to anyone who books a pilot), so a valid signature alone proves
+      // nothing about this action. askUserDigestService mints exactly { batch_id, email_ids }.
       const aud = Array.isArray(payload?.aud) ? payload.aud : [payload?.aud];
       if (aud.includes('enterprise-client')) throw new Error('client token');
+      const ids = Array.isArray(payload?.email_ids) ? payload.email_ids.map(String) : null;
+      if (typeof payload?.batch_id !== 'string' || !ids || !ids.includes(String(emailId))) {
+        throw new Error('not a digest token for this email');
+      }
     } catch {
       return res.status(401).send('<h2>Link expired or invalid</h2><p>Please use the admin console instead.</p>');
     }

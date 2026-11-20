@@ -11,7 +11,7 @@
  */
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import { requireAdmin } from '../../middlewares/authMiddleware';
+import { isCoryAuthorizedIdentity, requireAdmin } from '../../middlewares/authMiddleware';
 import EnterpriseIntake from '../../models/EnterpriseIntake';
 import ProjectUnderstandingRecord from '../../models/ProjectUnderstandingRecord';
 import { env } from '../../config/env';
@@ -27,6 +27,17 @@ import {
 } from '../../services/enterpriseIntake/enterpriseIntakeActions';
 
 const router = Router();
+
+/**
+ * Ali, 2026-11-20: "proposals Ali only". Sending a proposal and marking a client signed (which
+ * opens their Basecamp project) are Ali's alone; every other step stays open to admins. Runs after
+ * requireAdmin, which verified the token and set req.admin. "Ali" is the repo's one definition of
+ * it: ali@colaberry.com or the owner role (super_admin).
+ */
+function requireAli(req: Request, res: Response, next: NextFunction): void {
+  if (isCoryAuthorizedIdentity(req.admin)) return next();
+  res.status(403).json({ error: 'Only Ali can send a proposal or mark a client signed.' });
+}
 const BASE = '/api/admin/enterprise-clients';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -123,11 +134,11 @@ router.post(`${BASE}/:id/options-email`, requireAdmin, act((id, b) => {
   return sendOptionsEmail(id, m.subject, m.body);
 }));
 router.post(`${BASE}/:id/proposal/draft`, requireAdmin, act((id) => draftProposal(id)));
-router.post(`${BASE}/:id/proposal/send`, requireAdmin, act((id, b) => {
+router.post(`${BASE}/:id/proposal/send`, requireAdmin, requireAli, act((id, b) => {
   const m = messageSchema.parse(b);
   return sendProposal(id, m.subject, m.body);
 }));
-router.post(`${BASE}/:id/signed`, requireAdmin, act((id) => markSigned(id)));
+router.post(`${BASE}/:id/signed`, requireAdmin, requireAli, act((id) => markSigned(id)));
 router.post(`${BASE}/:id/lost`, requireAdmin, act((id, b) => markLost(id, lostSchema.parse(b || {}).reason)));
 
 export default router;
