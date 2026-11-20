@@ -29,6 +29,12 @@ jest.mock('../../media/mediaAssetService', () => ({
 }));
 const mockActivity = jest.fn();
 jest.mock('../activityLog', () => ({ logActivity: (...a: unknown[]) => mockActivity(...a) }));
+// The test bytes are magic-number stubs, not decodable images, so orientation (real sharp, covered in
+// eventPhotos.exif.test.ts) is a pass-through here.
+jest.mock('sharp', () => {
+  const chain = (b: Buffer) => ({ rotate: () => chain(b), jpeg: () => chain(b), png: () => chain(b), toBuffer: async () => b });
+  return (b: Buffer) => chain(b);
+});
 
 import { addPhoto, removePhoto, sniffImage, MAX_PHOTOS, PhotoRuleError } from '../eventPhotos';
 
@@ -81,10 +87,11 @@ describe('CH4.1 addPhoto / removePhoto', () => {
     expect(mockActivity).toHaveBeenCalledTimes(1);
   });
 
-  it('a cancelled event takes no pictures; an unknown event is a 404', async () => {
+  it('a cancelled event takes no pictures; an unknown event is a 404; neither writes any bytes', async () => {
     events.set('e2', { id: 'e2', status: 'cancelled' });
     await expect(addPhoto('e2', pic(1), JACKIE)).rejects.toMatchObject({ status: 409 });
     await expect(addPhoto('nope', pic(1), JACKIE)).rejects.toMatchObject({ status: 404 });
+    expect(mockIngest).not.toHaveBeenCalled(); // checked before anything is decoded or stored
   });
 
   it('a missing or ambiguous media brand is a plain error, never a guess', async () => {

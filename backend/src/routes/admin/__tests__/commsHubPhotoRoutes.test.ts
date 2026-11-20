@@ -66,6 +66,13 @@ describe('CH4.1 POST /events/:id/photos', () => {
     expect(svc.addPhoto).toHaveBeenCalledWith(EVENT, { bytes: JPG, originalName: 'aleem.jpg', altText: 'Aleem, smiling' }, expect.any(Object));
   });
 
+  it('exactly at the 10 MB cap: accepted, all bytes reach the service (busboy counts reaching its limit as over it)', async () => {
+    const exact = Buffer.alloc(MAX_IMAGE_BYTES, 1);
+    const res = await call('post', '/api/admin/comms-hub/events/:id/photos', { id: EVENT }, multipart([{ name: 'alt_text', value: 'exactly ten' }, { name: 'file', filename: 'ten.jpg', bytes: exact }]));
+    expect(res.statusCode).toBe(201);
+    expect(((svc.addPhoto as jest.Mock).mock.calls[0][1] as { bytes: Buffer }).bytes.length).toBe(MAX_IMAGE_BYTES);
+  });
+
   it('over the size cap: 413 with the limit in words, the service never called', async () => {
     const big = Buffer.alloc(MAX_IMAGE_BYTES + 1, 1);
     const res = await call('post', '/api/admin/comms-hub/events/:id/photos', { id: EVENT }, multipart([{ name: 'alt_text', value: 'big one' }, { name: 'file', filename: 'big.jpg', bytes: big }]));

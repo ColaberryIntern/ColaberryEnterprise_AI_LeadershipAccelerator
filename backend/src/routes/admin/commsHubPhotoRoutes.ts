@@ -12,7 +12,10 @@ import { actorOf } from './commsHubEventRoutes';
  * memory (never written under an operator-chosen name) and capped by multer at the library's image
  * limit before the body is even fully read.
  */
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_IMAGE_BYTES, files: 1 } });
+// +1 because busboy reports the limit as hit when a file REACHES it, which would refuse an exactly-10 MB
+// picture with a false "over the limit" message. The library's own gate (assertAcceptable) still
+// refuses anything larger than MAX_IMAGE_BYTES.
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_IMAGE_BYTES + 1, files: 1 } });
 const Params = z.object({ id: z.string().uuid() }).strict();
 const PhotoParams = z.object({ id: z.string().uuid(), photoId: z.string().uuid() }).strict();
 const Body = z.object({ alt_text: z.string().trim().min(3, 'Describe the picture for people who cannot see it (3 characters or more).').max(300) }).strict();

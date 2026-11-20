@@ -1,4 +1,7 @@
+import type { Transaction } from 'sequelize';
 import { sequelize } from '../../config/database';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const sharp = require('sharp');
 import Brand from '../../models/Brand';
 import CommsHubEvent from '../../models/CommsHubEvent';
 import CommsHubEventPhoto from '../../models/CommsHubEventPhoto';
@@ -59,15 +62,33 @@ export async function listPhotos(eventId: string): Promise<PhotoView[]> {
 
 export interface PhotoUpload { bytes: Buffer; originalName: string | null; altText: string }
 
+/** Refuse before any bytes are decoded or written: unknown events and finished events take no pictures. */
+async function assertEventTakesPictures(eventId: string, transaction?: Transaction): Promise<void> {
+  const event = await CommsHubEvent.findByPk(eventId, transaction ? { transaction, lock: transaction.LOCK.UPDATE } : {});
+  if (!event) throw new PhotoRuleError('Event not found.', 404);
+  if (event.status === 'cancelled' || event.status === 'ended') throw new PhotoRuleError(`This event is ${event.status}; it cannot take new pictures.`, 409);
+}
+
+/**
+ * Turn the picture upright before it is stored. The library's re-encode drops EXIF (on purpose),
+ * and with it the Orientation flag a phone uses instead of rotating pixels; without this step a
+ * portrait phone photo would be stored, and rendered into every thumbnail, sideways.
+ */
+export async function upright(bytes: Buffer, mime: 'image/png' | 'image/jpeg'): Promise<Buffer> {
+  const img = sharp(bytes).rotate();
+  return mime === 'image/png' ? img.png().toBuffer() : img.jpeg({ quality: 92 }).toBuffer();
+}
+
 export async function addPhoto(eventId: string, upload: PhotoUpload, actor: Actor): Promise<PhotoView[]> {
   const mime = sniffImage(upload.bytes);
   if (!mime) throw new PhotoRuleError('Use a PNG or JPEG photo. That file is not one, whatever its name says.', 415);
+  await assertEventTakesPictures(eventId);
   const brand = await hubBrand();
-  const ingest = await ingestFileBytes(brand.id, upload.bytes, mime);
+  let oriented: Buffer;
+  try { oriented = await upright(upload.bytes, mime); } catch { throw new PhotoRuleError('That picture could not be read. Try exporting it again as JPEG or PNG.', 415); }
+  const ingest = await ingestFileBytes(brand.id, oriented, mime);
   await sequelize.transaction(async (t) => {
-    const event = await CommsHubEvent.findByPk(eventId, { transaction: t, lock: t.LOCK.UPDATE });
-    if (!event) throw new PhotoRuleError('Event not found.', 404);
-    if (event.status === 'cancelled' || event.status === 'ended') throw new PhotoRuleError(`This event is ${event.status}; it cannot take new pictures.`, 409);
+    await assertEventTakesPictures(eventId, t); // again, under the row lock: the event may have changed meanwhile
     const count = await CommsHubEventPhoto.count({ where: { event_id: eventId }, transaction: t });
     const { asset } = await findOrCreateLibraryAsset({ tenantId: brand.tenantId, brandId: brand.id, ingest, originalFilename: upload.originalName, altText: upload.altText, uploadedBy: actor.id });
     const already = await CommsHubEventPhoto.findOne({ where: { event_id: eventId, media_asset_id: asset.id }, transaction: t });

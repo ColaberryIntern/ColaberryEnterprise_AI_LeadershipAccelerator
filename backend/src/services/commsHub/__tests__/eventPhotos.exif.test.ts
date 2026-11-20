@@ -13,7 +13,7 @@ process.env.MEDIA_ROOT = ROOT;
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const sharp = require('sharp');
 import { ingestFileBytes } from '../../media/mediaAssetService';
-import { sniffImage } from '../eventPhotos';
+import { sniffImage, upright } from '../eventPhotos';
 
 const BRAND = '10ebfb01-dc51-450d-bbef-a2c10e42efa8';
 
@@ -33,6 +33,17 @@ describe('CH4.1 uploaded pictures lose their EXIF', () => {
     expect(meta.exif).toBeUndefined();
     expect([meta.width, meta.height]).toEqual([40, 30]);
     expect(onDisk.toString('latin1')).not.toContain('owner-name');
+  });
+
+  it('a phone photo carrying an Orientation flag is stored upright, because the flag is lost with the EXIF', async () => {
+    // 40 wide x 30 tall pixels, flagged "rotate 90 clockwise" (Orientation 6), as a phone writes a portrait shot.
+    const sideways: Buffer = await sharp({ create: { width: 40, height: 30, channels: 3, background: { r: 10, g: 200, b: 10 } } })
+      .jpeg().withMetadata({ orientation: 6 }).toBuffer();
+    expect((await sharp(sideways).metadata()).orientation).toBe(6); // control
+    const stored = await ingestFileBytes(BRAND, await upright(sideways, 'image/jpeg'), 'image/jpeg');
+    const meta = await sharp(fs.readFileSync(path.join(ROOT, stored.storageKey.replace(/^media\//, '')))).metadata();
+    expect([meta.width, meta.height]).toEqual([30, 40]);
+    expect(meta.orientation === undefined || meta.orientation === 1).toBe(true);
   });
 
   it('the same bytes twice land on the same key (content-addressed, stored once)', async () => {
