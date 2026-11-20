@@ -105,6 +105,8 @@ export interface CheckinInfo {
   start_label: string;
   /** False only when an operator explicitly closed this class to guests on Studio setup. */
   accepts_guests: boolean;
+  /** The class's meeting link, for Open House sessions only (null otherwise). */
+  meeting_link: string | null;
 }
 
 /**
@@ -119,7 +121,7 @@ export interface CheckinInfo {
  */
 export async function getCheckinInfo(sessionId: string, now: Date = new Date()): Promise<CheckinInfo | null> {
   const session = await LiveSession.findByPk(sessionId, {
-    attributes: ['title', 'session_date', 'start_time', 'end_time', 'status', 'cohort_id', 'guest_access'],
+    attributes: ['title', 'session_date', 'start_time', 'end_time', 'status', 'cohort_id', 'guest_access', 'meeting_link'],
   });
   if (!session) return null;
 
@@ -144,5 +146,9 @@ export async function getCheckinInfo(sessionId: string, now: Date = new Date()):
     }),
     start_label: formatCentralClock(session.session_date, session.start_time),
     accepts_guests: session.guest_access !== false,
+    // An Open House is a public event whose Zoom link already goes to every
+    // registrant, so its check-in page shows a "Join on Zoom" button. A regular
+    // class keeps the link behind login, as documented above.
+    meeting_link: /open house/i.test(String(session.title || '')) ? (session.meeting_link || null) : null,
   };
 }
