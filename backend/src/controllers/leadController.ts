@@ -1,12 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
-import { leadSchema, createLead } from '../services/leadService';
+import { publicLeadSchema, createLead } from '../services/leadService';
 import { ZodError } from 'zod';
 import { redactForLogs } from '../utils/piiRedaction';
 import { capturePhoneConsent } from '../services/consent/capturePhoneConsent';
 
 export async function submitLead(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const data = leadSchema.parse(req.body);
+    // Phone REQUIRED on this public route (PH1); consent to call stays optional.
+    const data = publicLeadSchema.parse(req.body);
     const { lead } = await createLead(data);
 
     // Phone permission, BEFORE the response and not after it.

@@ -429,15 +429,16 @@ describe('the phone number is mandatory (Ali, 2026-11-11)', () => {
  * fifteen landing pages once collected numbers with no consent row behind any of them.
  */
 describe('permission to call is asked, separately and never assumed', () => {
-  it('does not ask before a number is typed', async () => {
-    // Permission to call somebody we have no number for grants nothing, and a box above
-    // an empty field reads as a condition of submitting.
+  it('asks from the start, beside the required phone, UNTICKED and not required (PH1)', async () => {
+    // The number is mandatory; the permission is not, and its wording says so.
     await mount();
-    expect(field('cboh-phone-consent')).toBeNull();
-    expect(text()).not.toContain(PHONE_CONSENT_TEXT);
+    expect(field('cboh-phone-consent')).not.toBeNull();
+    expect(field('cboh-phone-consent').checked).toBe(false);
+    expect(field('cboh-phone-consent').required).toBe(false);
+    expect(text()).toContain(PHONE_CONSENT_TEXT);
   });
 
-  it('asks once a number is typed, and starts UNTICKED', async () => {
+  it('stays UNTICKED once a number is typed', async () => {
     await mount();
     await act(async () => { type(field('cboh-phone'), '(512) 555-0142'); });
     expect(field('cboh-phone-consent')).not.toBeNull();

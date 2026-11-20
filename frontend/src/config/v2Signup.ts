@@ -4,7 +4,9 @@
  * THE SHAPE OF THIS IS DICTATED BY TWO REAL CONTRACTS, NOT BY PREFERENCE
  *
  * 1. `POST /api/portal/org/register` (services/orgApi.ts) accepts exactly
- *    `{ name, company?, email }` and returns a JWT. It is passwordless. Asking
+ *    `{ name, company?, email, phone, phone_consent? }` and returns a JWT. The
+ *    phone is REQUIRED since PH1 (Ali, 2026-11-19: every public signup form
+ *    requires a phone number), so it moved from step 2 to the account step. It is passwordless. Asking
  *    for twelve fields before it would invent friction the product does not
  *    require, and every extra required field on a signup form costs signups.
  *
@@ -23,6 +25,7 @@
  */
 
 import type { IconName } from '../components/publicV2/Icon';
+import { phoneProblem } from '../utils/phone';
 
 /* ─────────────────────────────────────────────────────────── step 1: account ── */
 
@@ -30,12 +33,20 @@ export interface AccountInput {
   readonly fullName: string;
   readonly workEmail: string;
   readonly company: string;
+  /** REQUIRED (PH1). */
+  readonly phone: string;
+  /**
+   * Permission to call or text that number. OPTIONAL, separate from the number,
+   * and separate from `consentContact` (which is channel-blind). Starts false.
+   */
+  readonly phoneConsent: boolean;
 }
 
 export interface AccountErrors {
   fullName?: string;
   workEmail?: string;
   company?: string;
+  phone?: string;
 }
 
 /** Domains that suggest a personal address. Not rejected -- flagged in copy only. */
@@ -65,6 +76,8 @@ export function validateAccount(input: AccountInput): AccountErrors {
     errors.workEmail = 'That address does not look right.';
   }
   if (!input.company.trim()) errors.company = 'Your organization names the workspace.';
+  const phoneError = phoneProblem(input.phone);
+  if (phoneError) errors.phone = phoneError;
   return errors;
 }
 
@@ -73,12 +86,16 @@ export function buildAccountBody(input: AccountInput): {
   name: string;
   email: string;
   company?: string;
+  phone: string;
+  phone_consent: boolean;
 } {
   const company = input.company.trim();
   return {
     name: input.fullName.trim(),
     email: input.workEmail.trim(),
     company: company || undefined,
+    phone: input.phone.trim(),
+    phone_consent: input.phoneConsent === true,
   };
 }
 
@@ -132,22 +149,10 @@ export interface ContextInput {
   readonly teamSize: string;
   readonly timeline: string;
   readonly goal: string;
-  readonly phone: string;
   readonly notes: string;
   readonly evaluating90Days: boolean;
   readonly sponsorshipInterest: boolean;
   readonly consentContact: boolean;
-  /**
-   * Permission to call or text the number above.
-   *
-   * SEPARATE from `consentContact`, deliberately. That box reads "You may contact
-   * me about this", which is channel-blind — and the phone field's own label ("if
-   * you would rather be called") states a preference, not a grant. Neither is the
-   * express written permission a voice or SMS send is looked up against, so this is
-   * its own field, shown with its own wording, and recorded per channel keyed on
-   * the number.
-   */
-  readonly phoneConsent: boolean;
 }
 
 export const SIGNUP_FORM_TYPE = 'business_account';
@@ -188,7 +193,8 @@ export function buildContextPayload(
     company: account.company.trim(),
     role: ctx.role,
     title: labelFor(ROLE_OPTIONS, ctx.role),
-    phone: ctx.phone.trim(),
+    // The number and its permission come from the account step (PH1).
+    phone: account.phone.trim(),
     company_size: ctx.teamSize,
     timeline: ctx.timeline,
     interest_area: ctx.goal,
@@ -196,7 +202,7 @@ export function buildContextPayload(
     evaluating_90_days: ctx.evaluating90Days,
     corporate_sponsorship_interest: ctx.sponsorshipInterest,
     consent_contact: ctx.consentContact,
-    phone_consent: ctx.phoneConsent,
+    phone_consent: account.phoneConsent === true,
     form_type: SIGNUP_FORM_TYPE,
     source: 'website',
     page_url: pageUrl,

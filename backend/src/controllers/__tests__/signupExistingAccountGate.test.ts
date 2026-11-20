@@ -44,7 +44,7 @@ describe('POST /api/portal/free-signup', () => {
   it('existing email: emails a sign-in link and returns no session or account details', async () => {
     createFreeAccount.mockResolvedValue({ jwt: null, enrollment, created: false, disposition: 'reused' });
 
-    const r = await run(handleFreeSignup, { full_name: 'Attacker', email: 'member@example.com' });
+    const r = await run(handleFreeSignup, { phone: '(214) 555-0100', full_name: 'Attacker', email: 'member@example.com' });
 
     expect(requestMagicLink).toHaveBeenCalledWith('member@example.com');
     expect(r.status).toHaveBeenCalledWith(200);
@@ -55,7 +55,7 @@ describe('POST /api/portal/free-signup', () => {
   it('new email: signs them straight in, as before (the ad funnel is not slowed down)', async () => {
     createFreeAccount.mockResolvedValue({ jwt: 'new.jwt', enrollment, created: true, disposition: 'created' });
 
-    const r = await run(handleFreeSignup, { full_name: 'New Person', email: 'new@example.com' });
+    const r = await run(handleFreeSignup, { phone: '(214) 555-0100', full_name: 'New Person', email: 'new@example.com' });
 
     expect(requestMagicLink).not.toHaveBeenCalled();
     expect(r.status).toHaveBeenCalledWith(201);
@@ -66,7 +66,7 @@ describe('POST /api/portal/free-signup', () => {
     createFreeAccount.mockResolvedValue({ jwt: null, enrollment, created: false, disposition: 'reused' });
     requestMagicLink.mockRejectedValue(new Error('mandrill down'));
 
-    const r = await run(handleFreeSignup, { full_name: 'X', email: 'member@example.com' });
+    const r = await run(handleFreeSignup, { phone: '(214) 555-0100', full_name: 'X', email: 'member@example.com' });
 
     expect(r.next).toHaveBeenCalledWith(expect.any(Error));
     expect(r.json).not.toHaveBeenCalled();
@@ -76,7 +76,7 @@ describe('POST /api/portal/free-signup', () => {
     createFreeAccount.mockResolvedValue({ jwt: null, enrollment, created: false, disposition: 'reused' });
     requestMagicLink.mockResolvedValue({ success: false, message: 'Your enrollment is pending admin approval.' });
 
-    const r = await run(handleFreeSignup, { full_name: 'X', email: 'member@example.com' });
+    const r = await run(handleFreeSignup, { phone: '(214) 555-0100', full_name: 'X', email: 'member@example.com' });
 
     expect(r.body).toEqual({ check_email: true, message: 'Your enrollment is pending admin approval.' });
   });
@@ -88,7 +88,7 @@ describe('POST /api/portal/org/register', () => {
   it('existing email: emails a sign-in link and returns no session or org details', async () => {
     registerManager.mockResolvedValue({ ...orgResult, jwt: null, existing_account: true });
 
-    const r = await run(handleOrgRegister, { name: 'Attacker', email: 'Member@Example.com' });
+    const r = await run(handleOrgRegister, { phone: '(214) 555-0100', name: 'Attacker', email: 'Member@Example.com' });
 
     expect(requestMagicLink).toHaveBeenCalledWith('member@example.com');
     expect(r.status).toHaveBeenCalledWith(200);
@@ -98,7 +98,7 @@ describe('POST /api/portal/org/register', () => {
   it('new email: returns the session and org, as before', async () => {
     registerManager.mockResolvedValue({ ...orgResult, jwt: 'new.jwt', existing_account: false });
 
-    const r = await run(handleOrgRegister, { name: 'New', email: 'new@example.com' });
+    const r = await run(handleOrgRegister, { phone: '(214) 555-0100', name: 'New', email: 'new@example.com' });
 
     expect(requestMagicLink).not.toHaveBeenCalled();
     expect(r.status).toHaveBeenCalledWith(201);

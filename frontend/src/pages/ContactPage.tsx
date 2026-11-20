@@ -12,7 +12,7 @@ import { Card } from '../colaberry/components/core/Card';
 import { Input } from '../colaberry/components/core/Input';
 import { Textarea } from '../colaberry/components/core/Textarea';
 import { Checkbox } from '../colaberry/components/core/Checkbox';
-import { shouldAskPhoneConsent } from '../components/PhoneConsentCheckbox';
+import { phoneProblem } from '../utils/phone';
 import { PHONE_CONSENT_TEXT } from '../config/consentText';
 
 const TRY_PATH = '/try';
@@ -97,6 +97,9 @@ function ContactPage() {
       form as unknown as Record<string, unknown>,
       CONTACT_RULES,
     );
+    // PH1 (Ali, 2026-11-19): every public lead form requires a phone number.
+    const phoneError = phoneProblem(form.phone);
+    if (phoneError) validationErrors.phone = phoneError;
     if (!form.consentContact) {
       validationErrors.consentContact = 'You must agree to be contacted';
     }
@@ -110,7 +113,7 @@ function ContactPage() {
       const lead: EnterpriseLead = {
         fullName: form.fullName,
         email: form.email,
-        phone: form.phone || undefined,
+        phone: form.phone.trim(),
         company: form.company || undefined,
         title: form.title || undefined,
         companySize: form.companySize || undefined,
@@ -327,6 +330,7 @@ function ContactPage() {
                     <div className="col-md-6">
                       <Input
                         label="Phone"
+                        required
                         type="tel"
                         name="phone"
                         value={form.phone}
@@ -339,24 +343,22 @@ function ContactPage() {
                         Beside the field it belongs to, not down with the required
                         consent box, so it is unmistakably about this number.
                         Rendered with this page's own Checkbox primitive rather than
-                        the shared Bootstrap one — the shared rule is
-                        `shouldAskPhoneConsent` and the shared wording is
-                        PHONE_CONSENT_TEXT; the markup belongs to the page.
+                        the shared Bootstrap one; the shared wording is
+                        PHONE_CONSENT_TEXT and the markup belongs to the page.
+                        Always shown (PH1), never pre-ticked, never required.
                       */}
-                      {shouldAskPhoneConsent(form.phone) && (
-                        <div style={{ marginTop: 'var(--space-2)' }}>
-                          <Checkbox
-                            name="phoneConsent"
-                            checked={form.phoneConsent}
-                            onChange={handleChange}
-                            label={
-                              <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)' }}>
-                                {PHONE_CONSENT_TEXT}
-                              </span>
-                            }
-                          />
-                        </div>
-                      )}
+                      <div style={{ marginTop: 'var(--space-2)' }}>
+                        <Checkbox
+                          name="phoneConsent"
+                          checked={form.phoneConsent}
+                          onChange={handleChange}
+                          label={
+                            <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)' }}>
+                              {PHONE_CONSENT_TEXT}
+                            </span>
+                          }
+                        />
+                      </div>
                     </div>
                     <div className="col-md-6">
                       <Input

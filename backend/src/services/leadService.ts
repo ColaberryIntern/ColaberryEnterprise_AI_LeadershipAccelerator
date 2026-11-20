@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { Op, literal, col, fn, type Order } from 'sequelize';
 import Lead from '../models/Lead';
+import { requiredPhone } from '../schemas/phone';
 import { AdminUser, AutomationLog, Campaign, FollowUpSequence } from '../models';
 import { Parser } from 'json2csv';
 import { enrollLeadInSequence } from './sequenceService';
@@ -122,6 +123,19 @@ export const leadSchema = z.object({
 });
 
 export type LeadInput = z.infer<typeof leadSchema>;
+
+/**
+ * The body POST /api/leads validates against (PH1, Ali 2026-11-19: every public signup/lead
+ * form requires a phone number).
+ *
+ * A separate schema rather than a change to `leadSchema`, because `LeadInput` (inferred from
+ * `leadSchema`) is the type every internal `createLead` caller writes through - the sponsor
+ * inquiry, ingest, scripts - and none of those is a public form that can be made to ask. The
+ * public route is, and every form in this repo that posts to it now sends a number.
+ *
+ * The number is REQUIRED; `phone_consent` stays optional and absent records nothing.
+ */
+export const publicLeadSchema = leadSchema.extend({ phone: requiredPhone });
 
 const FREE_EMAIL_DOMAINS = ['gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'aol.com', 'icloud.com'];
 const EXECUTIVE_TITLE_PATTERN = /\b(director|vp|vice\s*president|cto|cio|cdo|chief|head\s+of|svp|evp)\b/i;

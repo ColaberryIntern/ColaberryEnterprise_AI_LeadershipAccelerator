@@ -3,9 +3,10 @@ import { Navigate, Outlet } from 'react-router-dom';
 import { useParticipantAuth } from '../contexts/ParticipantAuthContext';
 import { usePortalTracking } from '../hooks/usePortalTracking';
 import { useCampusLanding } from './campus/useCampusLanding';
+import PortalPhoneGate from './PortalPhoneGate';
 
 function PortalProtectedRoute() {
-  const { isAuthenticated } = useParticipantAuth();
+  const { isAuthenticated, token } = useParticipantAuth();
 
   // Every authenticated portal page passes through here — both the Design E surfaces
   // (TodayShell and friends, which render their own chrome) and the legacy pages still
@@ -24,7 +25,14 @@ function PortalProtectedRoute() {
     return <Navigate to="/portal/login" replace />;
   }
 
-  return <Outlet />;
+  // PH1: a signed-in learner with no phone on file adds one before any portal page renders.
+  // Staff and an admin's read-only "View as" session are never asked (see PortalPhoneGate).
+  // Keyed on the token so a different account signing in on this tab is checked afresh.
+  return (
+    <PortalPhoneGate key={token ?? 'none'}>
+      <Outlet />
+    </PortalPhoneGate>
+  );
 }
 
 export default PortalProtectedRoute;

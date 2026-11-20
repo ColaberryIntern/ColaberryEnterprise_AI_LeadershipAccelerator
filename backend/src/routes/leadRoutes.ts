@@ -77,6 +77,7 @@ router.post('/api/sponsorship-kit-request', leadRateLimiter, requestSponsorshipK
 // Door B "Sponsor Your Team" inquiry — public, must stay on leadRoutes (mounted
 // before the auth guard). Reuses the lead rate limiter.
 router.post('/api/sponsor-inquiry', leadRateLimiter, handleSponsorInquiry);
+// Phone stays OPTIONAL here on purpose (PH1, 2026-11-19): external sources post to ingest and FormDefinition.required_fields governs them; requiring it would break their leads.
 router.post('/api/leads/ingest', ingestRateLimiter, handleLeadIngest);
 router.get('/api/flotation/preview/:token', previewRateLimiter, handleFlotationPreview);
 /**

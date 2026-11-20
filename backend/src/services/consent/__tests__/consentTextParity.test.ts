@@ -41,8 +41,10 @@ const FRONTEND_CONSENT = path.join(
 function readFrontendConsentText(src: string, name = 'SIGNUP_CONSENT_TEXT'): string | null {
   // Built from the export NAME so one extractor serves every constant here, rather than growing a
   // near-identical copy per string - which is the same duplication this file exists to catch.
-  const m = new RegExp(`export const ${name}\\s*=\\s*\\r?\\n?\\s*'([^']*)'`).exec(src);
-  return m ? m[1] : null;
+  // Either quote style: the PH1 phone wording contains an apostrophe ("isn't"), so it is a
+  // double-quoted literal. The backreference makes the closing quote match the opening one.
+  const m = new RegExp(`export const ${name}\\s*=\\s*\\r?\\n?\\s*(["'])((?:(?!\\1).)*)\\1`).exec(src);
+  return m ? m[2] : null;
 }
 
 describe('signup consent wording, backend and frontend', () => {
@@ -116,6 +118,14 @@ describe('phone consent wording, backend and frontend', () => {
   it('names calls and texts, so the record says what was agreed to', () => {
     expect(PHONE_CONSENT_TEXT.toLowerCase()).toContain('call');
     expect(PHONE_CONSENT_TEXT.toLowerCase()).toContain('text');
+  });
+
+  it('names AI-assisted or automated calls and says consent is optional (PH1)', () => {
+    // The number is now required everywhere; the permission must say it is not.
+    expect(PHONE_CONSENT_TEXT).toContain('AI-assisted or automated calls');
+    expect(PHONE_CONSENT_TEXT).toContain("Consent isn't required to sign up.");
+    expect(PHONE_CONSENT_TEXT).toMatch(/Reply STOP/);
+    expect(PHONE_CONSENT_TEXT).not.toMatch(/\bfree\b/i);
   });
 });
 

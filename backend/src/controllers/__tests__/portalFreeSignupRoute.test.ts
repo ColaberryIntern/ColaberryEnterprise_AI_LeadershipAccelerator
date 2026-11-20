@@ -41,11 +41,11 @@ describe('T204 — the route returns 400, not 500, for every rejected body', () 
 
   it.each([
     ['an empty body', {}, 'full_name and email are required'],
-    ['a missing email', { full_name: 'Maya' }, 'full_name and email are required'],
-    ['a falsy numeric name', { full_name: 0, email: 'a@b.co' }, 'full_name and email are required'],
-    ['a malformed email', { full_name: 'Maya', email: 'nope' }, 'A valid email is required'],
-    ['a non-URL page_url', { full_name: 'Maya', email: 'a@b.co', page_url: 'not a url' }, 'page_url must be a URL'],
-    ['a javascript: page_url', { full_name: 'Maya', email: 'a@b.co', page_url: 'javascript:alert(1)' }, 'page_url must be a URL'],
+    ['a missing email', { phone: '(214) 555-0100', full_name: 'Maya' }, 'full_name and email are required'],
+    ['a falsy numeric name', { phone: '(214) 555-0100', full_name: 0, email: 'a@b.co' }, 'full_name and email are required'],
+    ['a malformed email', { phone: '(214) 555-0100', full_name: 'Maya', email: 'nope' }, 'A valid email is required'],
+    ['a non-URL page_url', { phone: '(214) 555-0100', full_name: 'Maya', email: 'a@b.co', page_url: 'not a url' }, 'page_url must be a URL'],
+    ['a javascript: page_url', { phone: '(214) 555-0100', full_name: 'Maya', email: 'a@b.co', page_url: 'javascript:alert(1)' }, 'page_url must be a URL'],
   ])('400s on %s with the right message', async (_label, body, message) => {
     const { status, json, next } = await run(body);
     expect(status).toHaveBeenCalledWith(400);
@@ -55,14 +55,14 @@ describe('T204 — the route returns 400, not 500, for every rejected body', () 
   });
 
   it.each([
-    ['an over-long full_name', { full_name: 'x'.repeat(256), email: 'a@b.co' }],
-    ['an over-long email', { full_name: 'Maya', email: `${'x'.repeat(320)}@b.co` }],
-    ['an over-long source', { full_name: 'Maya', email: 'a@b.co', source: 'x'.repeat(51) }],
-    ['an over-long page_url', { full_name: 'Maya', email: 'a@b.co', page_url: `https://x.io/${'a'.repeat(500)}` }],
-    ['a non-UUID source_id', { full_name: 'Maya', email: 'a@b.co', source_id: 42 }],
-    ['an unexpected key', { full_name: 'Maya', email: 'a@b.co', nope: 1 }],
-    ['a referrer, which has no column', { full_name: 'Maya', email: 'a@b.co', referrer: 'https://x.io' }],
-    ['a non-string, non-number name', { full_name: {}, email: 'a@b.co' }],
+    ['an over-long full_name', { phone: '(214) 555-0100', full_name: 'x'.repeat(256), email: 'a@b.co' }],
+    ['an over-long email', { phone: '(214) 555-0100', full_name: 'Maya', email: `${'x'.repeat(320)}@b.co` }],
+    ['an over-long source', { phone: '(214) 555-0100', full_name: 'Maya', email: 'a@b.co', source: 'x'.repeat(51) }],
+    ['an over-long page_url', { phone: '(214) 555-0100', full_name: 'Maya', email: 'a@b.co', page_url: `https://x.io/${'a'.repeat(500)}` }],
+    ['a non-UUID source_id', { phone: '(214) 555-0100', full_name: 'Maya', email: 'a@b.co', source_id: 42 }],
+    ['an unexpected key', { phone: '(214) 555-0100', full_name: 'Maya', email: 'a@b.co', nope: 1 }],
+    ['a referrer, which has no column', { phone: '(214) 555-0100', full_name: 'Maya', email: 'a@b.co', referrer: 'https://x.io' }],
+    ['a non-string, non-number name', { phone: '(214) 555-0100', full_name: {}, email: 'a@b.co' }],
     ['a missing body entirely', undefined],
   ])('400s on %s without reaching the service', async (_label, body) => {
     const { status, next } = await run(body);
@@ -78,7 +78,7 @@ describe('T204 — the route returns 400, not 500, for every rejected body', () 
    * is the exact defect this phase exists to close.
    */
   it('400s rather than letting a caller choose its own programme', async () => {
-    const { status } = await run({ full_name: 'Maya', email: 'a@b.co', programme: 'standard' });
+    const { status } = await run({ phone: '(214) 555-0100', full_name: 'Maya', email: 'a@b.co', programme: 'standard' });
     expect(status).toHaveBeenCalledWith(400);
     expect(createFreeAccount).not.toHaveBeenCalled();
   });
@@ -89,7 +89,7 @@ describe('T204 — the route on the accepting path', () => {
 
   it('passes programme: learner and the acquisition fields through, and 201s on a new account', async () => {
     const { status } = await run({
-      full_name: '  Maya  ',
+      phone: '(214) 555-0100', full_name: '  Maya  ',
       email: 'maya@example.com',
       source: 'cpn_landing',
       source_id: '11111111-1111-4111-8111-111111111111',
@@ -117,13 +117,13 @@ describe('T204 — the route on the accepting path', () => {
       disposition: 'reused',
     });
 
-    const { status } = await run({ full_name: 'Maya', email: 'maya@example.com' });
+    const { status } = await run({ phone: '(214) 555-0100', full_name: 'Maya', email: 'maya@example.com' });
     expect(status).toHaveBeenCalledWith(200);
   });
 
   it('hands a service failure to next(), rather than reporting a signup that did not happen', async () => {
     createFreeAccount.mockRejectedValue(new Error('db down'));
-    const { next, status } = await run({ full_name: 'Maya', email: 'maya@example.com' });
+    const { next, status } = await run({ phone: '(214) 555-0100', full_name: 'Maya', email: 'maya@example.com' });
     expect(next).toHaveBeenCalled();
     expect(status).not.toHaveBeenCalledWith(201);
   });

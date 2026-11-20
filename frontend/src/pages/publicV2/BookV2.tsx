@@ -6,6 +6,8 @@ import { EnterpriseLead, toLeadPayload } from '../../models/EnterpriseLead';
 import { getUTMParams } from '../../services/utmService';
 import { identifyVisitor } from '../../utils/tracker';
 import api from '../../utils/api';
+import { PHONE_CONSENT_TEXT } from '../../config/consentText';
+import { phoneProblem } from '../../utils/phone';
 import { Claim, canShow } from '../../components/publicV2/Claim';
 import ClosingCtaV5 from '../../components/publicV2/ClosingCtaV5';
 
@@ -47,6 +49,9 @@ import ClosingCtaV5 from '../../components/publicV2/ClosingCtaV5';
  *
  * A known limit: `createLead` returns the existing row for an email it already
  * has, so a person who is already a lead keeps their first source.
+ *
+ * PHONE IS REQUIRED (PH1, Ali 2026-11-19: every public signup/lead form requires a
+ * phone number). The call/text box beside it is always shown, unticked and optional.
  */
 
 const ROUTE = '/book';
@@ -63,6 +68,8 @@ interface EbookFields {
   company: string;
   role: string;
   consentContact: boolean;
+  phone: string;
+  phoneConsent: boolean;
 }
 
 const EMPTY_EBOOK: EbookFields = {
@@ -71,6 +78,8 @@ const EMPTY_EBOOK: EbookFields = {
   company: '',
   role: '',
   consentContact: false,
+  phone: '',
+  phoneConsent: false,
 };
 
 /** The lead the form sends. Exported so the test can pin the brand source without a DOM. */
@@ -80,6 +89,8 @@ export function ebookLeadPayload(f: EbookFields, pageUrl: string): Record<string
     email: f.email.trim(),
     company: f.company.trim() || undefined,
     title: f.role.trim() || undefined,
+    phone: f.phone.trim(),
+    phoneConsent: f.phoneConsent,
     message: 'Asked for the Trust Before Intelligence e-book on enterprise.colaberry.ai/book.',
     consentContact: f.consentContact,
     formType: EBOOK_FORM_TYPE,
@@ -159,6 +170,8 @@ function EbookForm(): React.ReactElement {
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
       next.email = 'That does not look like an email address';
     }
+    const phoneError = phoneProblem(form.phone);
+    if (phoneError) next.phone = phoneError;
     if (!form.consentContact) next.consentContact = 'You must agree to be contacted';
     if (Object.keys(next).length > 0) {
       setErrors(next);
@@ -172,6 +185,7 @@ function EbookForm(): React.ReactElement {
       identifyVisitor(form.email.trim(), {
         name: form.fullName.trim(),
         company: form.company.trim() || undefined,
+        phone: form.phone.trim(),
         metadata: { source_form: EBOOK_FORM_TYPE, title: form.role.trim() || undefined },
       });
       setDone(true);
@@ -271,6 +285,38 @@ function EbookForm(): React.ReactElement {
             autoComplete="organization-title"
           />
         </div>
+      </div>
+
+      <div className="cbv2-field5">
+        <label htmlFor="bk-phone">Phone</label>
+        <input
+          id="bk-phone"
+          name="phone"
+          type="tel"
+          inputMode="tel"
+          value={form.phone}
+          onChange={change}
+          autoComplete="tel"
+          required
+          aria-invalid={Boolean(errors.phone)}
+          aria-describedby={errors.phone ? 'bk-phone-err' : undefined}
+        />
+        {errors.phone ? (
+          <p className="cbv2-field5__err" id="bk-phone-err">
+            {errors.phone}
+          </p>
+        ) : null}
+      </div>
+      {/* Always shown beside the phone (PH1), unticked, never required. */}
+      <div className="cbv2-consent5">
+        <input
+          type="checkbox"
+          id="bk-phone-consent"
+          name="phoneConsent"
+          checked={form.phoneConsent}
+          onChange={change}
+        />
+        <label htmlFor="bk-phone-consent">{PHONE_CONSENT_TEXT}</label>
       </div>
 
       <div className="cbv2-consent5">

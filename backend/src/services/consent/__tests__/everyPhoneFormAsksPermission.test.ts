@@ -23,8 +23,9 @@ import path from 'path';
  *
  * ── HOW TO MAKE IT PASS WHEN IT FAILS ───────────────────────────────────────
  *
- * Either wire the form up — `shouldAskPhoneConsent(phone)` for the gate and
- * `PHONE_CONSENT_TEXT` for the wording, then send `phone_consent` — or, if the
+ * Either wire the form up — `PhoneConsentCheckbox`, or `PHONE_CONSENT_TEXT` rendered
+ * with the page's own primitives, always shown beside the phone (PH1) and never
+ * required, then send `phone_consent` — or, if the
  * surface genuinely is not a public consent surface, add it to INTERNAL_SURFACES
  * below WITH A REASON. The list is deliberately explicit: an exemption should cost
  * somebody a sentence of justification, because "it is fine, it is internal" is
@@ -75,8 +76,7 @@ function collectsAPhone(src: string): boolean {
 function asksPermission(src: string): boolean {
   return (
     src.includes('PHONE_CONSENT_TEXT') ||
-    src.includes('PhoneConsentCheckbox') ||
-    src.includes('shouldAskPhoneConsent')
+    src.includes('PhoneConsentCheckbox')
   );
 }
 
@@ -140,6 +140,9 @@ describe('the backend endpoints those forms post to record the grant', () => {
     'controllers/enrollmentController.ts': 'POST /api/create-free-account — /enroll',
     'controllers/openHouseController.ts':
       'POST /api/v1/open-house/signup — the Open House landing page, where the number is REQUIRED (2026-11-11), which is precisely why the permission must be recorded separately',
+    'controllers/orgController.ts': 'POST /api/org/register — /try, where the number is REQUIRED since PH1 (2026-11-19)',
+    'controllers/sponsorController.ts': 'POST /api/sponsor/redeem — the /enroll seat-code form, phone REQUIRED since PH1',
+    'services/portalPhoneGate.ts': 'PUT /api/portal/phone — the blocking "Add your phone" step in the portal (PH1)',
   };
 
   it.each(Object.entries(ENTRY_POINTS))(

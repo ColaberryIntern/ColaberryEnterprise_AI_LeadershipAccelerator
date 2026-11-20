@@ -133,8 +133,8 @@ export async function freeSignup(
     full_name: string;
     email: string;
     marketing_opt_in?: boolean;
-    /** Optional, and only sent when given: the route is `.strict()`. */
-    phone?: string;
+    /** REQUIRED since PH1 (2026-11-19): every public signup form requires a phone number. */
+    phone: string;
     /** Permission to call or text. Separate from `marketing_opt_in`, which is email only. */
     phone_consent?: boolean;
     /**

@@ -2,6 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 import { z, ZodError } from 'zod';
 import { sequelize } from '../config/database';
 import { createLead } from '../services/leadService';
+import { requiredPhone } from '../schemas/phone';
+import { capturePhoneConsent } from '../services/consent/capturePhoneConsent';
 import { requestSponsorPortalLink, verifySponsorPortalToken } from '../services/sponsorAuthService';
 import { Cohort, Enrollment } from '../models';
 // These four models are not (yet) re-exported from the models barrel, so they
@@ -52,6 +54,7 @@ const sponsorInquirySchema = z.object({
   email: z.string().trim().email('Invalid email address').max(255),
   company: z.string().trim().min(1, 'Company is required').max(255),
   title: z.string().trim().max(255).optional().default(''),
+  // Stays OPTIONAL (PH1, 2026-11-19): no form in this repo posts here, so any caller is external and cannot be updated with this change.
   phone: z.string().trim().max(50).optional().default(''),
   company_size: z.string().trim().max(50).optional().default(''),
   seats_interested: z.coerce.number().int().min(0).max(100000).optional().default(0),
@@ -133,7 +136,11 @@ const redeemSeatSchema = z.object({
   full_name: z.string().trim().min(1, 'Full name is required').max(255),
   email: z.string().trim().email('Invalid email address').max(255),
   title: z.string().trim().max(255).optional().default(''),
-  phone: z.string().trim().max(50).optional().default(''),
+  // REQUIRED (PH1, Ali 2026-11-19): every public signup form requires a phone. The /enroll
+  // redeem form is the only caller and sends it.
+  phone: requiredPhone,
+  // Permission to call or text, OPTIONAL and separate from the number. Absent records nothing.
+  phone_consent: z.union([z.boolean(), z.literal('true'), z.literal('on')]).optional(),
 });
 
 type RedeemInput = z.infer<typeof redeemSeatSchema>;
@@ -282,6 +289,16 @@ export async function handleRedeemSeat(
     console.log(
       `[SponsorController] Seat redeemed (code: ${data.code}, enrollment: ${result.enrollmentId}, alreadyRedeemed: ${result.alreadyRedeemed}).`,
     );
+
+    // Only a tick writes a grant; the required number alone writes nothing. Never throws.
+    await capturePhoneConsent({
+      phone: data.phone,
+      email: data.email,
+      phoneConsent: data.phone_consent,
+      source: 'sponsor_redeem',
+      ipAddress: req.ip ?? null,
+      userAgent: typeof (req as any).get === 'function' ? req.get('user-agent') ?? null : null,
+    });
 
     res.status(result.alreadyRedeemed ? 200 : 201).json({
       message: result.alreadyRedeemed

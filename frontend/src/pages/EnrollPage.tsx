@@ -11,8 +11,8 @@ import { Card } from '../colaberry/components/core/Card';
 import { Button } from '../colaberry/components/core/Button';
 import { Badge } from '../colaberry/components/core/Badge';
 import { Input } from '../colaberry/components/core/Input';
-import { shouldAskPhoneConsent } from '../components/PhoneConsentCheckbox';
-import { PHONE_CONSENT_TEXT } from '../config/consentText';
+import { PHONE_CONSENT_TEXT, SIGNUP_CONSENT_TEXT } from '../config/consentText';
+import { phoneProblem } from '../utils/phone';
 
 interface FormErrors {
   [key: string]: string;
@@ -71,7 +71,11 @@ function EnrollPage() {
     code: '',
     full_name: '',
     email: '',
+    // REQUIRED (PH1): the seat-code form is a public signup form too.
+    phone: '',
   });
+  // Permission to call or text, separate from the number. Unticked and optional.
+  const [sponsorPhoneConsent, setSponsorPhoneConsent] = useState(false);
   const [sponsorErrors, setSponsorErrors] = useState<SponsorErrors>({});
   const [sponsorServerError, setSponsorServerError] = useState('');
   const [redeeming, setRedeeming] = useState(false);
@@ -85,6 +89,9 @@ function EnrollPage() {
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       newErrors.email = 'Please enter a valid email address';
     }
+    // PH1 (Ali, 2026-11-19): every public signup form requires a phone number.
+    const phoneError = phoneProblem(formData.phone);
+    if (phoneError) newErrors.phone = phoneError;
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -180,6 +187,8 @@ function EnrollPage() {
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(sponsorData.email)) {
       next.email = 'Please enter a valid email address';
     }
+    const phoneError = phoneProblem(sponsorData.phone);
+    if (phoneError) next.phone = phoneError;
     setSponsorErrors(next);
     return Object.keys(next).length === 0;
   };
@@ -196,6 +205,8 @@ function EnrollPage() {
         code: sponsorData.code.trim(),
         full_name: sponsorData.full_name.trim(),
         email: sponsorData.email.trim(),
+        phone: sponsorData.phone.trim(),
+        phone_consent: sponsorPhoneConsent,
         ...getUTMPayloadFields(),
         form_type: 'sponsor_redemption',
       });
@@ -411,20 +422,22 @@ function EnrollPage() {
                 <div className="col-md-6">
                   <Input
                     label="Phone"
+                    required
                     type="tel"
                     id="phone"
                     name="phone"
                     autoComplete="tel"
                     value={formData.phone}
                     onChange={handleChange}
+                    error={errors.phone}
                   />
                   {/*
                     Beside the number, not down with the email box, so there is no
-                    doubt which permission is which. Shown only once something is
-                    typed and never pre-ticked; leaving it alone still creates the
-                    account. `handleChange` already reads `checked` for a checkbox.
+                    doubt which permission is which. Always shown (PH1) and never
+                    pre-ticked; the number is required, this is not, and leaving it
+                    alone still creates the account. `handleChange` already reads
+                    `checked` for a checkbox.
                   */}
-                  {shouldAskPhoneConsent(formData.phone) && (
                     <label
                       htmlFor="phone_consent"
                       style={{
@@ -443,7 +456,6 @@ function EnrollPage() {
                       />
                       <span>{PHONE_CONSENT_TEXT}</span>
                     </label>
-                  )}
                 </div>
 
                 {/* Company Size */}
@@ -482,10 +494,8 @@ function EnrollPage() {
                         onChange={handleChange}
                         style={{ marginTop: '0.2rem', flexShrink: 0 }}
                       />
-                      <span>
-                        Email me about Colaberry courses, events and AI resources.
-                        You can unsubscribe at any time.
-                      </span>
+                      {/* The shared wording, so what is shown is what the backend records. */}
+                      <span>{SIGNUP_CONSENT_TEXT}</span>
                     </label>
                   </div>
 
@@ -635,6 +645,37 @@ function EnrollPage() {
                     onChange={handleSponsorChange}
                     error={sponsorErrors.email}
                   />
+                  <div>
+                    <Input
+                      label="Phone"
+                      required
+                      type="tel"
+                      id="sponsor_phone"
+                      name="phone"
+                      autoComplete="tel"
+                      value={sponsorData.phone}
+                      onChange={handleSponsorChange}
+                      error={sponsorErrors.phone}
+                    />
+                    {/* Always shown beside the phone (PH1), unticked, never required. */}
+                    <label
+                      htmlFor="sponsor_phone_consent"
+                      style={{
+                        display: 'flex', gap: '0.6rem', alignItems: 'flex-start',
+                        cursor: 'pointer', fontSize: '0.825rem', lineHeight: 1.45,
+                        marginTop: 'var(--space-2)', color: 'var(--text-muted)',
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        id="sponsor_phone_consent"
+                        checked={sponsorPhoneConsent}
+                        onChange={(e) => setSponsorPhoneConsent(e.target.checked)}
+                        style={{ marginTop: '0.2rem', flexShrink: 0 }}
+                      />
+                      <span>{PHONE_CONSENT_TEXT}</span>
+                    </label>
+                  </div>
 
                   <Button type="submit" size="lg" fullWidth disabled={redeeming}>
                     {redeeming ? 'Redeeming code...' : 'Redeem & Claim My Seat'}

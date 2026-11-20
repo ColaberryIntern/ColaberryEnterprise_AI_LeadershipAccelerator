@@ -3,6 +3,7 @@ import api from '../utils/api';
 import { getUTMPayloadFields } from '../services/utmService';
 import { identifyVisitor } from '../utils/tracker';
 import PhoneConsentCheckbox from './PhoneConsentCheckbox';
+import { phoneProblem } from '../utils/phone';
 
 interface FormErrors {
   [key: string]: string;
@@ -35,7 +36,7 @@ interface LeadCaptureFormProps {
 
 function LeadCaptureForm({
   formType,
-  fields = ['name', 'email', 'company'],
+  fields: requestedFields = ['name', 'email', 'company'],
   submitLabel = 'Submit',
   successMessage = 'Thank you! We\'ll be in touch shortly.',
   className = '',
@@ -44,6 +45,10 @@ function LeadCaptureForm({
   captureUtm = false,
   onSuccess,
 }: LeadCaptureFormProps) {
+  // PH1 (Ali, 2026-11-19): every public lead form requires a phone number, so the phone field is
+  // ALWAYS present and required, whatever `fields` a host page passes. POST /api/leads refuses a
+  // body without one. The call/text permission beside it stays optional and unticked.
+  const fields: FieldName[] = requestedFields.includes('phone') ? requestedFields : [...requestedFields, 'phone'];
   const [formData, setFormData] = useState<Record<string, string>>({
     name: '',
     email: '',
@@ -77,6 +82,8 @@ function LeadCaptureForm({
         newErrors.email = 'Please enter a valid email address';
       }
     }
+    const phoneError = phoneProblem(formData.phone);
+    if (phoneError) newErrors.phone = phoneError;
     if (showConsent && !consentChecked) {
       newErrors.consent = 'You must agree to be contacted';
     }
@@ -113,11 +120,8 @@ function LeadCaptureForm({
       if (showConsent) {
         payload.consent_contact = consentChecked;
       }
-      // Only when this form actually collects a number. Sending it from a form
-      // with no phone field would claim an answer to a question nobody was asked.
-      if (fields.includes('phone')) {
-        payload.phone_consent = phoneConsent;
-      }
+      // Every instance collects a number now (PH1), so the answer is always sent.
+      payload.phone_consent = phoneConsent;
       const utmFields = getUTMPayloadFields();
       Object.assign(payload, utmFields);
       const visitorFp = localStorage.getItem('cb_visitor_fp');
@@ -255,24 +259,30 @@ function LeadCaptureForm({
         {fields.includes('phone') && (
           <div className="col-md-6">
             <label htmlFor={`${formType}-phone`} className="form-label">
-              Phone Number
+              Phone Number <span className="text-danger">*</span>
             </label>
             <input
               type="tel"
-              className="form-control"
+              className={`form-control ${errors.phone ? 'is-invalid' : ''}`}
               id={`${formType}-phone`}
               name="phone"
               value={formData.phone}
               onChange={handleChange}
               placeholder="+1 (555) 123-4567"
+              autoComplete="tel"
+              required
+              aria-required="true"
+              aria-describedby={errors.phone ? `${formType}-phone-error` : undefined}
             />
+            {errors.phone && (
+              <div className="invalid-feedback" id={`${formType}-phone-error`}>{errors.phone}</div>
+            )}
           </div>
         )}
         {fields.includes('phone') && (
           <div className="col-12">
             <PhoneConsentCheckbox
               id={`${formType}-phone-consent`}
-              phone={formData.phone}
               checked={phoneConsent}
               onChange={setPhoneConsent}
               disabled={submitting}
