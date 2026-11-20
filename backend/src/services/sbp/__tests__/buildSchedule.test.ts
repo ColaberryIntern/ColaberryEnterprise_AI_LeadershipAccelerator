@@ -11,6 +11,7 @@
  */
 import {
   buildSchedule, prepTasks, weekStart, TASKS_PER_WEEK_LOW, TASKS_PER_WEEK_HIGH,
+  DEFAULT_PREP_WEEK, DEFAULT_START_WEEK,
 } from '../buildSchedule';
 
 /** July 2026 cohort, week 1 day 1. */
@@ -254,12 +255,35 @@ describe('a build is never born overdue', () => {
     expect(withAsOf.tasks.map((t) => iso(t.dueOn))).toEqual(without.tasks.map((t) => iso(t.dueOn)));
   });
 
-  it('degrades safely when the plan is published after the build window closed', () => {
-    const tooLate = new Date('2026-10-05T00:00:00.000Z'); // inside prep week
+  it('re-anchors on the publish day when the build window had already closed', () => {
+    // The ShiftFill case: published 2026-11-19 against a cohort whose prep week
+    // opened 2026-10-01. It used to clamp every story onto 2026-10-01, in the past.
+    const tooLate = new Date('2026-11-19T15:00:00.000Z');
     const s = scheduleFor([3, 3], { cohortStart: JULY, asOf: tooLate });
-    expect(s.buildWeeks).toBeGreaterThanOrEqual(1);
-    expect(s.buildStart.getTime()).toBeLessThanOrEqual(s.buildEnd.getTime());
-    s.tasks.forEach((t) => expect(t.dueOn.getTime()).toBeLessThanOrEqual(s.buildEnd.getTime()));
+    expect(s.windowRolledForward).toBe(true);
+    expect(iso(s.buildStart)).toBe('2026-11-19'); // a Thursday, the cohort's weekday
+    expect(s.buildWeeks).toBe(DEFAULT_PREP_WEEK - DEFAULT_START_WEEK);
+    expect(s.demoDay.getTime()).toBeGreaterThan(s.buildEnd.getTime());
+    s.tasks.forEach((t) => {
+      expect(t.dueOn.getTime()).toBeGreaterThanOrEqual(s.buildStart.getTime());
+      expect(t.dueOn.getTime()).toBeLessThanOrEqual(s.buildEnd.getTime());
+    });
+    expect(new Set(s.tasks.map((t) => iso(t.dueOn))).size).toBeGreaterThan(1);
+    expect(s.verdict).toMatch(/window had closed before this plan existed/);
+  });
+
+  it('re-anchors when the plan lands inside prep week, too', () => {
+    const inPrep = new Date('2026-10-05T00:00:00.000Z');
+    const s = scheduleFor([3, 3], { cohortStart: JULY, asOf: inPrep });
+    expect(s.windowRolledForward).toBe(true);
+    expect(s.buildStart.getTime()).toBeGreaterThanOrEqual(inPrep.getTime());
+    s.tasks.forEach((t) => expect(t.dueOn.getTime()).toBeGreaterThanOrEqual(s.buildStart.getTime()));
+  });
+
+  it('does not re-anchor while the window is still open', () => {
+    const s = scheduleFor([3, 3], { cohortStart: JULY, asOf: new Date('2026-09-10T00:00:00.000Z') });
+    expect(s.windowRolledForward).toBe(false);
+    expect(iso(s.buildEnd)).toBe('2026-10-01');
   });
 });
 

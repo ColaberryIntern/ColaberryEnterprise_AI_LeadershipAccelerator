@@ -43,6 +43,11 @@ import {
   BuildPlan, PlanAgent, PlanRelease, PlanRequirement, PlanStory,
 } from './planContract';
 import type { Schedule } from './buildSchedule';
+import type { UnderstandingItem } from '../delivery/projectUnderstanding';
+import {
+  understandingFor, handoffsFor, artifactsFor,
+  type ProjectUnderstandingDoc, type AgentHandoff, type PlanArtifact,
+} from './planDocumentInsights';
 
 /**
  * Bumped only for a BREAKING change. Additive fields do not bump it.
@@ -123,6 +128,16 @@ export interface PlanDocDerived {
     /** Agents by how much they are allowed to decide alone. */
     agents_by_autonomy: Record<string, number>;
   };
+  /**
+   * The student's own account of the project (intake truth), quoted, each with
+   * how settled it is, plus the questions nobody has answered. Empty entries
+   * mean no intake was recorded. See planDocumentInsights.
+   */
+  understanding: ProjectUnderstandingDoc;
+  /** Agent A's output is agent B's input, by name. The workflow diagram's edges. */
+  handoffs: AgentHandoff[];
+  /** Every named thing agents read or produce, and who does which. Data-model seeds. */
+  artifacts: PlanArtifact[];
 }
 
 export interface PlanDocument {
@@ -154,6 +169,12 @@ export interface PlanDocInput {
   schedule?: Schedule | null;
   /** story_id ⇒ `YYYY-MM-DD`, read from `student_tasks.due_baseline_on`. */
   baselineByStory?: Record<string, string | null> | null;
+  /**
+   * The project's intake truth. Changes only when the truth is revised, so it
+   * is safe in a committed, hash-compared file. Omitted renders an empty
+   * `derived.understanding` rather than no key.
+   */
+  truth?: readonly UnderstandingItem[] | null;
 }
 
 const byKey = <T>(items: T[], key: (t: T) => string): T[] =>
@@ -280,7 +301,7 @@ function tally(values: string[]): Record<string, number> {
  * demands byte-identical output, and it is right to: the whole no-churn
  * guarantee rests on two structurally identical plans producing identical bytes.
  */
-function buildDerived(plan: BuildPlan): PlanDocDerived {
+function buildDerived(plan: BuildPlan, truth: readonly UnderstandingItem[] | null): PlanDocDerived {
   const requirements = byKey(plan.requirements, (r) => r.id);
   const stories = byKey(plan.stories, (s) => s.id);
   const agents = byKey(plan.agents ?? [], (a) => a.id);
@@ -302,6 +323,9 @@ function buildDerived(plan: BuildPlan): PlanDocDerived {
       failure_paths_total: failurePaths.size,
       agents_by_autonomy: tally(agents.map((a) => a.autonomy_level)),
     },
+    understanding: understandingFor(truth),
+    handoffs: handoffsFor(agents),
+    artifacts: artifactsFor(agents),
   };
 }
 
@@ -376,7 +400,7 @@ export function buildPlanDocument(plan: BuildPlan, input: PlanDocInput = {}): Pl
       plan_sha256: input.planSha256 ?? null,
     },
     schedule,
-    derived: buildDerived(plan),
+    derived: buildDerived(plan, input.truth ?? null),
   };
 }
 

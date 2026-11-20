@@ -57,6 +57,7 @@ jest.mock('../buildProgressSnapshot', () => ({
 jest.mock('../scheduleForEnrollment', () => ({
   __esModule: true,
   scheduleForEnrollment: jest.fn(async () => null),
+  truthForRender: jest.fn(async () => null),
 }));
 
 // The error CLASS must be the real one — `err instanceof RepoWriteError` is what

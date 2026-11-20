@@ -55,6 +55,7 @@ import { BuildPlan } from './planContract';
 import { RepoConnectError } from './repoConnect/connectErrors';
 import { CONNECT_FILE_PATH } from './repoConnect/connectChallenge';
 import { isSafeToOverwrite, seedPathFor } from './fileOwnership';
+import { scheduleForProject, truthForRender } from './scheduleForEnrollment';
 
 export const BUNDLE_NOTICE_PATH = 'docs/CONNECT-YOUR-REPO.md';
 
@@ -185,6 +186,17 @@ export async function buildDocsBundle(projectId: string, opts: { generatedAt?: D
   const commandCenterOverride =
     await domainCommandCenterOverrideForProject(projectId, stored.correlation_id ?? null);
 
+  // The SAME schedule and truth the repo path renders with. This zip used to
+  // carry neither: its plan.json said `schedule: null` while the portal's copy
+  // of the Story 000 prompt named release dates and a demo target, so an agent
+  // following the prompt hard-coded dates the file did not have. Both helpers
+  // return null rather than throw, and null renders undated, as before.
+  const schedule = await scheduleForProject(
+    projectId, plan, stored.published_at ?? null,
+    stored.correlation_id ?? null,
+  );
+  const truth = await truthForRender(projectId, stored.correlation_id ?? null);
+
   // Same renderer, same context shape as a repo write. `repoUrl` is null on
   // purpose: with no repo, prompts must not cite a clone URL that does not
   // exist (FR-031).
@@ -196,6 +208,8 @@ export async function buildDocsBundle(projectId: string, opts: { generatedAt?: D
     correlationId: stored.correlation_id ?? undefined,
     projectId,
     truthRevision: stored.truth_revision ?? null,
+    truth,
+    schedule,
     repoWriteAccess,
     commandCenterOverride,
   });

@@ -23,6 +23,8 @@ import { PLAN_FILE_PATH, buildPlanDocument, serialisePlanDocument } from './plan
 import { PROFILE_FILE_PATH, renderProfileSeed, serialiseProfileFile } from './profileContract';
 import { STUDENT_DATA_CONTRACT_PATH, renderStudentDataContract } from './studentDataContract';
 import type { Schedule } from './buildSchedule';
+import type { UnderstandingItem } from '../delivery/projectUnderstanding';
+import { NOJEKYLL_PATH } from './commandCenterLocation';
 import {
   COMMAND_CENTER_STORY_ID,
   commandCenterStoryDoc,
@@ -98,6 +100,16 @@ export interface RenderContext {
   /** Real cohort dates. Null ⇒ the plan renders without due dates, as before. */
   schedule?: Schedule | null;
   /**
+   * The project's intake truth, and the revision it is at.
+   *
+   * Feeds two places that were both missing it: `derived.understanding` in
+   * plan.json (so the Command Center can quote the student's own words) and the
+   * "What the platform understands about this project" section of STORY-000.md,
+   * which every story prompt tells the agent to read and which no production
+   * caller ever rendered. Omitted ⇒ both render without it, as before.
+   */
+  truth?: { items: readonly UnderstandingItem[]; revision?: number | null } | null;
+  /**
    * Server-side build progress, mirrored into progress.json so a static page
    * can show what is verified with no API call. Omitted ⇒ the plan side only.
    */
@@ -149,7 +161,16 @@ export interface RenderContext {
  * every sync, and an artifact must never be at risk of being rewritten by a
  * plan republish.
  */
-export const PATH_ALLOWLIST = [/^CLAUDE\.md$/, /^docs\/.+/, /^\.colaberry\/.+/, /^artifacts\/.+/];
+export const PATH_ALLOWLIST = [
+  /^CLAUDE\.md$/, /^docs\/.+/, /^\.colaberry\/.+/, /^artifacts\/.+/,
+  // `.nojekyll`, exactly, and nothing else at the root. Without it GitHub Pages
+  // runs Jekyll, Jekyll skips every path that starts with a dot, and a
+  // published Command Center 404s on `.colaberry/plan.json`: correct page,
+  // no data. The file's content is irrelevant to Pages; only its presence is.
+  /^\.nojekyll$/,
+];
+
+const NOJEKYLL_CONTENT = 'GitHub Pages: serve this repo as-is, so the Command Center can read .colaberry/*.json.\n';
 
 export function isAllowedPath(path: string): boolean {
   return PATH_ALLOWLIST.some((re) => re.test(path));
@@ -265,9 +286,19 @@ export function renderDocs(plan: BuildPlan, ctx: RenderContext = {}): RenderedFi
       // criteria are seeded. Threaded rather than assumed: this same renderer
       // produces the repo write AND the downloadable bundle, and the bundle goes
       // to students whose repos the platform cannot touch.
+      //
+      // The schedule and the truth ARE passed now. The doc used to be rendered
+      // with neither, while the portal copy of the same prompt carried the
+      // schedule: the student's pasted prompt named release dates and a demo
+      // target that the repo copy and plan.json did not, and the enrichment
+      // step sent every agent to read a truth section that was never rendered.
+      // Same inputs as plan.json below, so the three cannot disagree.
       content: override
         ? override.doc
-        : commandCenterStoryDoc(orderedPlan, null, { writeAccess: ctx.repoWriteAccess ?? null }),
+        : commandCenterStoryDoc(orderedPlan, ctx.schedule ?? null, {
+          writeAccess: ctx.repoWriteAccess ?? null,
+          truth: ctx.truth ?? undefined,
+        }),
     });
   }
 
@@ -294,6 +325,7 @@ export function renderDocs(plan: BuildPlan, ctx: RenderContext = {}): RenderedFi
       planSha256: ctx.planSha256 ?? null,
       schedule: ctx.schedule ?? null,
       baselineByStory: ctx.baselineByStory ?? null,
+      truth: ctx.truth?.items ?? null,
     })),
   });
   // The two-way contract. The platform writes the plan side — every story, every
@@ -352,6 +384,8 @@ export function renderDocs(plan: BuildPlan, ctx: RenderContext = {}): RenderedFi
   for (const extra of [...(override?.files ?? [])].sort((a, b) => a.path.localeCompare(b.path))) {
     files.push({ path: extra.path, content: extra.content });
   }
+  // Constant content, so it costs one commit per repo ever and never churns.
+  files.push({ path: NOJEKYLL_PATH, content: NOJEKYLL_CONTENT });
   files.push({
     path: '.colaberry/manifest.json',
     content: `${JSON.stringify({

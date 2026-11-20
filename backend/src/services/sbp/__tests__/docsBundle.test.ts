@@ -35,6 +35,17 @@ jest.mock('../../agentDomain/agentDomainCommandCenterForSync', () => ({
   domainCommandCenterOverrideForProject: (...a: unknown[]) => mockDomainOverride(...(a as [])),
 }));
 
+// The bundle now renders with the SAME schedule and truth as the repo path
+// (its plan.json used to say `schedule: null` while the portal prompt named
+// dates). Both lookups reach Sequelize, so they are mocked; the parity tests
+// below default them to null, and one test proves a real answer is threaded.
+const mockScheduleForProject = jest.fn(async (..._a: unknown[]): Promise<unknown> => null);
+const mockTruthForRender = jest.fn(async (..._a: unknown[]): Promise<unknown> => null);
+jest.mock('../scheduleForEnrollment', () => ({
+  scheduleForProject: (...a: unknown[]) => mockScheduleForProject(...a),
+  truthForRender: (...a: unknown[]) => mockTruthForRender(...a),
+}));
+
 import { buildDocsBundle, renderBundleNotice, BUNDLE_NOTICE_PATH } from '../docsBundle';
 import { renderDocs } from '../renderDocs';
 import { isSafeToOverwrite, seedPathFor } from '../fileOwnership';
@@ -106,6 +117,31 @@ describe('buildDocsBundle', () => {
       const at = isSafeToOverwrite(file.path) ? file.path : seedPathFor(file.path);
       expect(entries[at]).toBe(file.content);
     }
+  });
+
+  it('renders with the SAME schedule and truth the repo path uses', async () => {
+    // The ShiftFill bundle shipped `schedule: null` in plan.json while the
+    // portal prompt named dates and a demo target. Now both come from one lookup.
+    const { buildSchedule } = await import('../buildSchedule');
+    const schedule = buildSchedule({
+      window: { cohortStart: new Date('2026-07-23T00:00:00Z'), asOf: new Date('2026-08-14T00:00:00Z') },
+      releases: pilot.releases,
+      storiesByRelease: new Map(pilot.releases.map((r) => [r.key, pilot.stories.filter((s) => s.release === r.key).map((s) => s.id)])),
+    });
+    const truth = {
+      items: [{ dimension: 'problem', value: 'Sponsor dashboard', classification: 'FACT', provenance: 'source_message' }],
+      revision: 2,
+    };
+    mockScheduleForProject.mockResolvedValueOnce(schedule);
+    mockTruthForRender.mockResolvedValueOnce(truth);
+
+    const entries = readZip((await buildDocsBundle(PRJ, { generatedAt: AT })).bytes);
+    expect(mockScheduleForProject).toHaveBeenCalledWith(PRJ, pilot, '2026-08-14T00:00:00Z', 'corr-1');
+    const planJson = JSON.parse(entries[seedPathFor('.colaberry/plan.json')]);
+    expect(planJson.schedule).not.toBeNull();
+    expect(planJson.stories.every((s: { due_on: string | null }) => s.due_on)).toBe(true);
+    expect(planJson.derived.understanding.entries[0].statement).toBe('Sponsor dashboard');
+    expect(entries['docs/stories/STORY-000.md']).toContain('What the platform understands about this project');
   });
 
   it('cites no clone URL, because there is no repo to clone', async () => {

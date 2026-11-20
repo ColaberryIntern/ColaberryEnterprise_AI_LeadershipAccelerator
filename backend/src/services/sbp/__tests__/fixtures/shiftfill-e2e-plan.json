@@ -1,0 +1,584 @@
+{
+  "project_name": "ShiftFill",
+  "descriptor": "An AI agent to fill last-minute hygienist shift gaps across three dental offices.",
+  "requirements": [
+    {
+      "id": "REQ-001",
+      "kind": "FUNC",
+      "cluster": "Gap Management",
+      "priority": "must",
+      "statement": "The system must read call-out texts or emails the moment they arrive and open a 'gap' for the office, date, and hours.",
+      "from_dimensions": [
+        "problem",
+        "desired_outcome",
+        "inputs"
+      ]
+    },
+    {
+      "id": "REQ-002",
+      "kind": "FUNC",
+      "cluster": "Ranking and Offers",
+      "priority": "must",
+      "statement": "The system must rank hygienists to offer the shift based on being off that day, licensed for that office, under 40 hours that week, and nearest by commute.",
+      "from_dimensions": [
+        "desired_outcome",
+        "current_workflow"
+      ]
+    },
+    {
+      "id": "REQ-003",
+      "kind": "FUNC",
+      "cluster": "Communication",
+      "priority": "must",
+      "statement": "The system must text shift offers in waves of three people, with a 10-minute window to reply YES.",
+      "from_dimensions": [
+        "desired_outcome",
+        "current_workflow"
+      ]
+    },
+    {
+      "id": "REQ-004",
+      "kind": "FUNC",
+      "cluster": "Integration",
+      "priority": "must",
+      "statement": "The system must update the shared schedule in Google Sheets and notify the front desk via Slack.",
+      "from_dimensions": [
+        "systems",
+        "integrations"
+      ]
+    },
+    {
+      "id": "REQ-005",
+      "kind": "FUNC",
+      "cluster": "Escalation",
+      "priority": "must",
+      "statement": "The system must page Dana with the gap and the list of who was asked if nobody accepts by 7:30.",
+      "from_dimensions": [
+        "desired_outcome",
+        "pain_points"
+      ]
+    },
+    {
+      "id": "REQ-006",
+      "kind": "SAFE",
+      "cluster": "Compliance",
+      "priority": "must",
+      "statement": "The system must never offer a shift that would push someone over 40 hours without Dana approving overtime.",
+      "from_dimensions": [
+        "approval_points",
+        "constraints"
+      ]
+    },
+    {
+      "id": "REQ-007",
+      "kind": "SAFE",
+      "cluster": "Compliance",
+      "priority": "must",
+      "statement": "The system must never text a hygienist who is on approved leave.",
+      "from_dimensions": [
+        "constraints"
+      ]
+    },
+    {
+      "id": "REQ-008",
+      "kind": "SAFE",
+      "cluster": "Privacy",
+      "priority": "must",
+      "statement": "The system must never share one employee's reason for calling out with anyone else.",
+      "from_dimensions": [
+        "constraints"
+      ]
+    },
+    {
+      "id": "REQ-009",
+      "kind": "FUNC",
+      "cluster": "Reporting",
+      "priority": "must",
+      "statement": "The system must send Dana a summary at the end of the day.",
+      "from_dimensions": [
+        "desired_outcome"
+      ]
+    },
+    {
+      "id": "REQ-010",
+      "kind": "FUNC",
+      "cluster": "Fairness",
+      "priority": "should",
+      "statement": "The system must spread shift offers more fairly among hygienists.",
+      "from_dimensions": [
+        "desired_outcome"
+      ]
+    },
+    {
+      "id": "REQ-011",
+      "kind": "CONSTRAINT",
+      "cluster": "Integration",
+      "priority": "must",
+      "statement": "The system must use Gmail, Slack, Google Sheets, and Twilio SMS for communication and data handling.",
+      "from_dimensions": [
+        "systems",
+        "integrations"
+      ]
+    }
+  ],
+  "releases": [
+    {
+      "key": "r0",
+      "demo": "Show a gap being created from a call-out and the system correctly identifying eligible hygienists without breaking compliance rules.",
+      "goal": "Establish the basic functionality to manage shift gaps and ensure compliance with core rules.",
+      "name": "Initial Setup and Gap Management",
+      "week_end": 1,
+      "week_start": 1
+    },
+    {
+      "key": "r1",
+      "demo": "Demonstrate sending offers to hygienists and escalating to Dana if no response is received.",
+      "goal": "Implement communication with hygienists and escalation to Dana if needed.",
+      "name": "Communication and Escalation",
+      "week_end": 2,
+      "week_start": 2
+    },
+    {
+      "key": "r2",
+      "demo": "Show updates to the schedule in Google Sheets and notifications sent to Slack, along with a daily summary report.",
+      "goal": "Integrate with Google Sheets and Slack, and provide end-of-day summaries to Dana.",
+      "name": "Integration and Reporting",
+      "week_end": 3,
+      "week_start": 3
+    },
+    {
+      "key": "r3",
+      "demo": "Demonstrate the system's ability to distribute offers fairly among hygienists.",
+      "goal": "Implement fairness in offer distribution and optimize decision-making processes.",
+      "name": "Fairness and Optimization",
+      "week_end": 4,
+      "week_start": 4
+    },
+    {
+      "key": "r4",
+      "demo": "Showcase the complete system with all enhancements and adjustments in place.",
+      "goal": "Make final adjustments and enhancements based on feedback and ensure system robustness.",
+      "name": "Final Adjustments and Enhancements",
+      "week_end": 6,
+      "week_start": 5
+    }
+  ],
+  "stories": [
+    {
+      "id": "STORY-001",
+      "title": "Create Gap from Call-out",
+      "release": "r0",
+      "fulfills": [
+        "REQ-001",
+        "REQ-002"
+      ],
+      "narrative": "As a scheduler, I want to create a gap when a hygienist calls out, so that the system can manage shift offers.",
+      "workspace": {
+        "ref": "Scheduler Dashboard",
+        "kind": "workspace",
+        "action": "Create Gap"
+      },
+      "acceptance": [
+        "Given a hygienist calls out, when I record the call-out, then a gap is created in the schedule.",
+        "Given a gap is created, when the system ranks hygienists, then the ranking considers availability, licensing, hours, and commute.",
+        "Trust: Given a gap is created, when the system logs the event, then the audit trail records the gap creation and ranking process."
+      ],
+      "blocked_by": [],
+      "owner_agent": "Gap Creator",
+      "failure_paths": [
+        "Hygienist not found",
+        "Invalid license for office",
+        "Over 40 hours already",
+        "Commute data unavailable"
+      ],
+      "task_guidance": "Implement the gap creation logic and integrate the ranking algorithm to consider the specified criteria."
+    },
+    {
+      "id": "STORY-002",
+      "title": "Ensure Compliance with Overtime and Leave",
+      "release": "r0",
+      "fulfills": [
+        "REQ-006",
+        "REQ-007",
+        "REQ-008"
+      ],
+      "narrative": "As an operations manager, I want the system to ensure compliance with overtime and leave policies, so that no unauthorized offers are made.",
+      "workspace": {
+        "ref": "Compliance Check Service",
+        "kind": "headless",
+        "action": null
+      },
+      "acceptance": [
+        "Given a shift offer is being prepared, When a hygienist is on approved leave, Then the system does not send an offer to them.",
+        "Given a shift offer is being prepared, When a hygienist would exceed 40 hours, Then the system requires Dana's approval before sending.",
+        "Trust: The system logs all compliance checks and approvals."
+      ],
+      "blocked_by": [],
+      "owner_agent": "Compliance Checker",
+      "failure_paths": [
+        "Leave status not checked",
+        "Overtime approval not requested",
+        "Incorrect compliance logging",
+        "Unauthorized offer sent",
+        "Approval request fails"
+      ],
+      "task_guidance": "Implement checks against the schedule and leave records before sending offers."
+    },
+    {
+      "id": "STORY-003",
+      "title": "Send Shift Offers to Hygienists",
+      "release": "r1",
+      "fulfills": [
+        "REQ-003"
+      ],
+      "narrative": "As an operations manager, I want the system to send shift offers to hygienists, so that shifts can be filled quickly.",
+      "workspace": {
+        "ref": "Offer Management",
+        "kind": "workspace",
+        "action": "send offer"
+      },
+      "acceptance": [
+        "Given a gap is open, When the system ranks hygienists, Then it sends offers to the top three ranked hygienists.",
+        "Given a hygienist replies YES, When within the 10-minute window, Then the system confirms the shift is filled.",
+        "Trust: The system logs all offers sent and responses received."
+      ],
+      "blocked_by": [
+        "STORY-001"
+      ],
+      "owner_agent": "Shift Offer Sender",
+      "failure_paths": [
+        "SMS not sent",
+        "Response not received",
+        "Incorrect ranking",
+        "Offer sent to wrong hygienist",
+        "Timing window error"
+      ],
+      "task_guidance": "Use Twilio SMS to send offers and handle responses, ensuring timing and logging are accurate."
+    },
+    {
+      "id": "STORY-004",
+      "title": "Escalate Unfilled Gaps to Dana",
+      "release": "r1",
+      "fulfills": [
+        "REQ-005"
+      ],
+      "narrative": "As an operations manager, I want the system to escalate unfilled gaps to me, so that I can take manual action if needed.",
+      "workspace": {
+        "ref": "Escalation Management",
+        "kind": "workspace",
+        "action": "page Dana"
+      },
+      "acceptance": [
+        "Given a gap is open, When no responses are received by 7:30, Then the system pages Dana with details.",
+        "Given a gap is escalated, When Dana receives the page, Then she sees the list of who was asked.",
+        "Trust: The system logs all escalations and pages sent."
+      ],
+      "blocked_by": [
+        "STORY-003"
+      ],
+      "owner_agent": "Gap Escalator",
+      "failure_paths": [
+        "Page not sent",
+        "Incorrect details in page",
+        "Escalation not logged",
+        "Page sent to wrong person",
+        "Timing error in escalation"
+      ],
+      "task_guidance": "Implement a paging system to notify Dana via Slack or SMS when escalation is needed."
+    },
+    {
+      "id": "STORY-005",
+      "title": "Update Schedule and Notify Front Desk",
+      "release": "r2",
+      "fulfills": [
+        "REQ-004"
+      ],
+      "narrative": "As an operations manager, I want the system to update the schedule and notify the front desk, so that everyone is informed of shift changes.",
+      "workspace": {
+        "ref": "Schedule Management",
+        "kind": "workspace",
+        "action": "update schedule"
+      },
+      "acceptance": [
+        "Given a shift is filled, When the system confirms it, Then it updates the Google Sheets schedule.",
+        "Given a shift is filled, When the system confirms it, Then it sends a notification to the front desk via Slack.",
+        "Trust: The system logs all schedule updates and notifications sent."
+      ],
+      "blocked_by": [
+        "STORY-004"
+      ],
+      "owner_agent": "Schedule Updater",
+      "failure_paths": [
+        "Schedule not updated",
+        "Notification not sent",
+        "Incorrect schedule data",
+        "Notification sent to wrong desk",
+        "API integration error"
+      ],
+      "task_guidance": "Integrate with Google Sheets API for schedule updates and Slack API for notifications."
+    },
+    {
+      "id": "STORY-006",
+      "title": "Send End-of-Day Summary to Dana",
+      "release": "r2",
+      "fulfills": [
+        "REQ-009"
+      ],
+      "narrative": "As an operations manager, I want the system to send me a summary at the end of the day, so that I can review the day's activities.",
+      "workspace": {
+        "ref": "Daily Summary",
+        "kind": "workspace",
+        "action": "send summary"
+      },
+      "acceptance": [
+        "Given the day ends, When the system compiles data, Then it sends a summary to Dana.",
+        "Given a summary is sent, When Dana reviews it, Then it includes gaps, fill times, and overtime approvals.",
+        "Trust: The system logs all summaries sent and their contents."
+      ],
+      "blocked_by": [
+        "STORY-005"
+      ],
+      "owner_agent": "Summary Sender",
+      "failure_paths": [
+        "Summary not sent",
+        "Incorrect data in summary",
+        "Summary sent to wrong person",
+        "Formatting error",
+        "Data compilation error"
+      ],
+      "task_guidance": "Compile data from the day's activities and format it into a summary email for Dana."
+    },
+    {
+      "id": "STORY-007",
+      "title": "Implement Fairness in Offer Distribution",
+      "release": "r3",
+      "fulfills": [
+        "REQ-010"
+      ],
+      "narrative": "As an operations manager, I want the system to distribute offers more fairly, so that no hygienist is overburdened.",
+      "workspace": {
+        "ref": "Fairness Adjustment Service",
+        "kind": "headless",
+        "action": null
+      },
+      "acceptance": [
+        "Given a shift offer is being prepared, When the system checks past acceptances, Then it adjusts the ranking to spread offers fairly.",
+        "Given a shift offer is sent, When fairness adjustments are applied, Then the system logs the adjustment reason.",
+        "Trust: The system logs all fairness adjustments and their outcomes."
+      ],
+      "blocked_by": [
+        "STORY-006"
+      ],
+      "owner_agent": "Fairness Implementer",
+      "failure_paths": [
+        "Fairness logic error",
+        "Incorrect adjustment",
+        "Data analysis failure",
+        "Offer sent without adjustment",
+        "Logging error"
+      ],
+      "task_guidance": "Analyze past acceptance data to adjust rankings and ensure fair distribution of offers."
+    },
+    {
+      "id": "STORY-008",
+      "title": "Final System Enhancements",
+      "release": "r4",
+      "fulfills": [],
+      "narrative": "As an operations manager, I want the system to be robust and efficient, so that it operates smoothly under all conditions.",
+      "workspace": {
+        "ref": "System Enhancement Service",
+        "kind": "headless",
+        "action": null
+      },
+      "acceptance": [
+        "Given the system is running, When enhancements are applied, Then it operates without errors.",
+        "Given enhancements are applied, When the system is tested, Then all functionalities work as expected.",
+        "Trust: The system logs all enhancement applications and their effects."
+      ],
+      "blocked_by": [
+        "STORY-007"
+      ],
+      "owner_agent": "AI Agent",
+      "failure_paths": [
+        "Enhancement application error",
+        "System crash",
+        "Performance degradation",
+        "Incorrect enhancement",
+        "Logging error"
+      ],
+      "task_guidance": "Review system performance and apply enhancements to improve efficiency and robustness."
+    }
+  ],
+  "agents": [
+    {
+      "id": "AGENT-001",
+      "name": "Gap Creator",
+      "owns": [
+        "STORY-001"
+      ],
+      "inputs": [
+        "Call-out text",
+        "Call-out email"
+      ],
+      "skills": [
+        "read email",
+        "read SMS",
+        "extract data"
+      ],
+      "outputs": [
+        "Gap record"
+      ],
+      "purpose": "Creates a shift gap record when a call-out text or email is received.",
+      "trigger": "Call-out text or email arrival",
+      "trigger_type": "event",
+      "approval_gates": [],
+      "autonomy_level": "acts_autonomously",
+      "escalation_rules": []
+    },
+    {
+      "id": "AGENT-002",
+      "name": "Compliance Checker",
+      "owns": [
+        "STORY-002"
+      ],
+      "inputs": [
+        "Gap record",
+        "Hygienist schedule",
+        "Leave records"
+      ],
+      "skills": [
+        "check schedule",
+        "verify leave status"
+      ],
+      "outputs": [
+        "Eligible hygienist list"
+      ],
+      "purpose": "Ensures compliance with overtime and leave policies before offering shifts.",
+      "trigger": "Gap record creation",
+      "trigger_type": "event",
+      "approval_gates": [
+        "REQ-006 — The system must never offer a shift that would push someone over 40 hours without Dana approving overtime.",
+        "REQ-007 — The system must never text a hygienist who is on approved leave.",
+        "REQ-008 — The system must never share one employee's reason for calling out with anyone else."
+      ],
+      "autonomy_level": "acts_with_approval",
+      "escalation_rules": [
+        "If a shift would push someone over 40 hours, require Dana's approval"
+      ]
+    },
+    {
+      "id": "AGENT-003",
+      "name": "Shift Offer Sender",
+      "owns": [
+        "STORY-003"
+      ],
+      "inputs": [
+        "Eligible hygienist list"
+      ],
+      "skills": [
+        "send SMS",
+        "manage responses"
+      ],
+      "outputs": [
+        "Shift offer SMS"
+      ],
+      "purpose": "Sends shift offers to eligible hygienists in waves and manages responses.",
+      "trigger": "Eligible hygienist list creation",
+      "trigger_type": "event",
+      "approval_gates": [],
+      "autonomy_level": "acts_autonomously",
+      "escalation_rules": []
+    },
+    {
+      "id": "AGENT-004",
+      "name": "Gap Escalator",
+      "owns": [
+        "STORY-004"
+      ],
+      "inputs": [
+        "Gap record",
+        "Response records"
+      ],
+      "skills": [
+        "send page"
+      ],
+      "outputs": [
+        "Escalation page to Dana"
+      ],
+      "purpose": "Escalates unfilled gaps to Dana if no hygienist accepts by 7:30.",
+      "trigger": "7:30 AM daily check",
+      "trigger_type": "schedule",
+      "approval_gates": [],
+      "autonomy_level": "acts_autonomously",
+      "escalation_rules": []
+    },
+    {
+      "id": "AGENT-005",
+      "name": "Schedule Updater",
+      "owns": [
+        "STORY-005"
+      ],
+      "inputs": [
+        "Accepted shift details"
+      ],
+      "skills": [
+        "update Google Sheets",
+        "send Slack message"
+      ],
+      "outputs": [
+        "Updated Google Sheets schedule",
+        "Slack notification"
+      ],
+      "purpose": "Updates the shared schedule and notifies the front desk of changes.",
+      "trigger": "Shift acceptance",
+      "trigger_type": "event",
+      "approval_gates": [],
+      "autonomy_level": "acts_autonomously",
+      "escalation_rules": []
+    },
+    {
+      "id": "AGENT-006",
+      "name": "Summary Sender",
+      "owns": [
+        "STORY-006"
+      ],
+      "inputs": [
+        "Daily activity log"
+      ],
+      "skills": [
+        "send email"
+      ],
+      "outputs": [
+        "End-of-day summary email"
+      ],
+      "purpose": "Sends an end-of-day summary to Dana.",
+      "trigger": "End of day",
+      "trigger_type": "schedule",
+      "approval_gates": [],
+      "autonomy_level": "acts_autonomously",
+      "escalation_rules": []
+    },
+    {
+      "id": "AGENT-007",
+      "name": "Fairness Implementer",
+      "owns": [
+        "STORY-007"
+      ],
+      "inputs": [
+        "Shift offer history"
+      ],
+      "skills": [
+        "analyze offer distribution"
+      ],
+      "outputs": [
+        "Updated fairness metrics"
+      ],
+      "purpose": "Implements fairness in the distribution of shift offers among hygienists.",
+      "trigger": "Shift offer cycle completion",
+      "trigger_type": "event",
+      "approval_gates": [],
+      "autonomy_level": "acts_autonomously",
+      "escalation_rules": []
+    }
+  ]
+}
