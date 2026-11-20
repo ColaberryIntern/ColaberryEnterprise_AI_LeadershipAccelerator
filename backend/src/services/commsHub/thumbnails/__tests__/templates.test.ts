@@ -97,6 +97,32 @@ describe('CH4.2 rendering (real sharp)', () => {
     expect(rr + gg + bb).toBeGreaterThan(600); // near-white template background
   });
 
+  // CH4.2 attempt 1: a flat 0.6 em estimate let wide bold capitals run under the photo and off the
+  // canvas. This measures RENDERED pixels: bold cherry draws text in white on red, the photo is solid
+  // blue, so any near-white pixel right of the text box is text that overflowed.
+  const WIDE = [
+    'FORWARD DEPLOYED AI ENGINEER OPEN HOUSE',
+    'AI WORKFLOW MASTERMIND FOR WOMEN IN MANAGEMENT',
+    'MLOPS WORKSHOP: MEMORY, MODELS AND MCP',
+    'Women Who Work With AI: Make Momentum Now',
+    'WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW',
+  ];
+  const CASES: Array<[ThumbSize, number]> = [['16x9', 1], ['3x1', 1], ['1x1', 0], ['16x9', 0]];
+  it.each(WIDE.flatMap((h) => CASES.map(([s, n]) => [h, s, n] as const)))('rendered text stays inside its box: "%s" at %s with %i photo(s)', async (headline, size, n) => {
+    const r = await renderTemplate('bold_cherry', size, { headline, supporting: 'MMMM WWWW MAKE MOMENTUM WITH WORKFLOWS NOW', badge: 'WED · 10:00 AM CST' }, n ? [photo] : []);
+    const { data, info } = await sharp(r.png).raw().toBuffer({ resolveWithObject: true });
+    const { text } = regions(size, n);
+    const tolerance = 2; // antialiasing at the very edge of a glyph
+    let worst = -1;
+    for (let y = 0; y < info.height; y += 1) {
+      for (let x = Math.ceil(text.x + text.w) + tolerance; x < info.width; x += 1) {
+        const i = (y * info.width + x) * info.channels;
+        if (data[i] > 225 && data[i + 1] > 225 && data[i + 2] > 225) worst = Math.max(worst, x);
+      }
+    }
+    expect(worst).toBe(-1);
+  }, 60_000);
+
   it('a very long title still renders and reports that it was shortened', async () => {
     const r = await renderTemplate('bold_cherry', '1x1', { headline: LONG.repeat(2), supporting: null, badge: null }, []);
     expect(r.truncated).toBe(true);

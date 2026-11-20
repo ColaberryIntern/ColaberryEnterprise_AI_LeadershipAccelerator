@@ -1,4 +1,4 @@
-import { FONT_STACK, PALETTE, SIZES, escapeXml, fitText, regions, type Box, type FittedText, type ThumbSize } from './templateLayout';
+import { FONT_STACK, PALETTE, SIZES, escapeXml, estimateWidth, fitText, regions, type Box, type FittedText, type ThumbSize } from './templateLayout';
 
 /**
  * The three branded templates from design 02 (CH4.2): bold cherry, berry night, clean white. Each
@@ -56,9 +56,12 @@ export function renderTemplateSvg(id: TemplateId, size: ThumbSize, text: Templat
   if (t.accent) parts.push(`<rect x="${box.x - Math.round(unit * 0.03)}" y="${box.y}" width="${Math.max(6, Math.round(unit * 0.012))}" height="${box.h}" fill="${t.accent}"/>`);
   let y = box.y + Math.max(0, (space - m.total) / 2);
   if (text.badge) {
-    const bw = Math.min(box.w, Math.round(text.badge.length * m.badgeSize * 0.58 + m.badgeSize * 1.6));
+    // Measured, and shrunk if a long badge would not fit the text column.
+    const pad = m.badgeSize * 0.8;
+    const fs = Math.min(m.badgeSize, Math.floor(m.badgeSize * (box.w - 2 * pad) / Math.max(1, estimateWidth(text.badge, m.badgeSize))));
+    const bw = Math.round(estimateWidth(text.badge, fs) + 2 * pad);
     parts.push(`<rect x="${box.x}" y="${Math.round(y)}" width="${bw}" height="${m.badgeH}" rx="${Math.round(m.badgeH / 2)}" fill="${t.badgeBg}"/>`);
-    parts.push(textLines([text.badge], box.x + Math.round(m.badgeSize * 0.8), y + m.badgeSize * 1.3, 0, m.badgeSize, t.badgeFg, 700));
+    parts.push(textLines([text.badge], box.x + Math.round(pad), y + m.badgeH / 2 + fs * 0.36, 0, fs, t.badgeFg, 700));
     y += m.badgeH + m.gap;
   }
   parts.push(textLines(m.head.lines, box.x, y + m.head.fontSize * 0.92, m.head.lineHeight, m.head.fontSize, t.head, 800));

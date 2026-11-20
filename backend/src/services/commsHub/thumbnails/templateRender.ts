@@ -5,7 +5,7 @@ import { renderTemplateSvg, type TemplateId, type TemplateText } from './templat
 
 /**
  * Rasterise a template (CH4.2): the SVG becomes a PNG with sharp, then each picture is cropped to
- * fill its slot (cover, centred on attention) and composited in. Deterministic: the same template,
+ * fill its slot (cover, centred) and composited in. Deterministic: the same template,
  * size, text and picture bytes give the same PNG bytes on the same machine.
  */
 export interface RenderedThumb { size: ThumbSize; png: Buffer; width: number; height: number; truncated: boolean }

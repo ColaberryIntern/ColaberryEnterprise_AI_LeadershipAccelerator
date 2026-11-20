@@ -25,28 +25,62 @@ export const PALETTE = {
 
 export interface Box { x: number; y: number; w: number; h: number }
 
-/** Average advance of a bold sans glyph as a fraction of the font size, with a margin for wider fallbacks. */
-const CHAR_EM = 0.6;
+/**
+ * Advance widths of a BOLD sans in 1/1000 em: the Helvetica-Bold metrics that Arial Bold and Liberation
+ * Sans Bold are drawn to match (Liberation is metric-compatible with Arial by design). CH4.2 attempt 1
+ * used a flat 0.6 em, which bold capitals exceed (W = 0.944, M = 0.833), so all-caps headlines ran
+ * under the photo. Unknown characters count as 0.72 em, and every width carries a 6% margin for
+ * DejaVu, the wider fallback.
+ */
+const BOLD_ADVANCE: Record<string, number> = {
+  ' ': 278, '!': 333, '"': 474, '#': 556, $: 556, '%': 889, '&': 722, "'": 238, '(': 333, ')': 333, '*': 389, '+': 584, ',': 278, '-': 333, '.': 278, '/': 278,
+  ':': 333, ';': 333, '<': 584, '=': 584, '>': 584, '?': 611, '@': 975, '[': 333, '\\': 278, ']': 333, '_': 556, '·': 278,
+  A: 722, B: 722, C: 722, D: 722, E: 667, F: 611, G: 778, H: 722, I: 278, J: 556, K: 722, L: 611, M: 833, N: 722, O: 778, P: 667, Q: 778, R: 722, S: 667,
+  T: 611, U: 722, V: 667, W: 944, X: 667, Y: 667, Z: 611,
+  a: 556, b: 611, c: 556, d: 611, e: 556, f: 333, g: 611, h: 611, i: 278, j: 278, k: 556, l: 278, m: 889, n: 611, o: 611, p: 611, q: 611, r: 389, s: 556,
+  t: 333, u: 611, v: 556, w: 778, x: 556, y: 556, z: 500,
+};
+for (const d of '0123456789') BOLD_ADVANCE[d] = 556;
+const UNKNOWN_ADVANCE = 720;
+const MARGIN = 1.06;
 
 export function estimateWidth(text: string, fontSize: number): number {
-  return [...text].length * fontSize * CHAR_EM;
+  let units = 0;
+  for (const ch of text) units += BOLD_ADVANCE[ch] ?? UNKNOWN_ADVANCE;
+  return (units / 1000) * fontSize * MARGIN;
 }
 
-/** Greedy word wrap. A single word longer than the line is split, so nothing can overflow sideways. */
+/** Split one word that is wider than the line into pieces that each fit. */
+function splitWord(word: string, fontSize: number, maxWidth: number): string[] {
+  const pieces: string[] = [];
+  let piece = '';
+  for (const ch of word) {
+    if (piece && estimateWidth(piece + ch, fontSize) > maxWidth) { pieces.push(piece); piece = ch; } else piece += ch;
+  }
+  if (piece) pieces.push(piece);
+  return pieces;
+}
+
+/** Greedy word wrap on measured widths. A word wider than the line is split, so nothing can overflow sideways. */
 export function wrap(text: string, fontSize: number, maxWidth: number): string[] {
-  const perLine = Math.max(1, Math.floor(maxWidth / (fontSize * CHAR_EM)));
   const lines: string[] = [];
   let line = '';
   for (const raw of text.trim().split(/\s+/).filter(Boolean)) {
-    const words = raw.length > perLine ? raw.match(new RegExp(`.{1,${perLine}}`, 'g')) ?? [raw] : [raw];
-    for (const word of words) {
+    for (const word of estimateWidth(raw, fontSize) > maxWidth ? splitWord(raw, fontSize, maxWidth) : [raw]) {
       const next = line ? `${line} ${word}` : word;
-      if (next.length <= perLine) line = next;
+      if (estimateWidth(next, fontSize) <= maxWidth) line = next;
       else { if (line) lines.push(line); line = word; }
     }
   }
   if (line) lines.push(line);
   return lines;
+}
+
+/** Shorten a line until it and "..." fit the width. */
+function ellipsize(line: string, fontSize: number, maxWidth: number): string {
+  let s = line;
+  while (s.length > 1 && estimateWidth(`${s.trimEnd()}...`, fontSize) > maxWidth) s = s.slice(0, -1);
+  return `${s.trimEnd()}...`;
 }
 
 export interface FittedText { lines: string[]; fontSize: number; lineHeight: number; truncated: boolean }
@@ -66,10 +100,7 @@ export function fitText(text: string, box: Box, opts: { maxSize: number; minSize
   const all = wrap(text, size, box.w);
   const keep = Math.max(1, Math.min(opts.maxLines, Math.floor(box.h / (size * leading))));
   const lines = all.slice(0, keep);
-  if (all.length > keep) {
-    const perLine = Math.floor(box.w / (size * CHAR_EM));
-    lines[keep - 1] = `${lines[keep - 1].slice(0, Math.max(1, perLine - 3)).trimEnd()}...`;
-  }
+  if (all.length > keep) lines[keep - 1] = ellipsize(lines[keep - 1], size, box.w);
   return { lines, fontSize: size, lineHeight: size * leading, truncated: all.length > keep };
 }
 
