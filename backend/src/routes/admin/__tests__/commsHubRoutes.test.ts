@@ -33,6 +33,9 @@ async function call(payload: Record<string, unknown>) {
   return res;
 }
 
+// The router imports the events feature, which registers its own counters on load (CH2.2). These
+// tests are about the summary route itself, so each starts from an empty registry.
+beforeEach(() => { resetSummaryCounters(); });
 afterEach(() => { resetSummaryCounters(); jest.clearAllMocks(); });
 
 describe('CH1.3 GET /api/admin/comms-hub/summary', () => {
