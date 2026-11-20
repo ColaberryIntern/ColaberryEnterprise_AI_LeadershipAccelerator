@@ -25,6 +25,19 @@ export interface PackageDoc {
 
 export interface PackageReadiness { ok: boolean; blocking: string[] }
 
+/**
+ * PURE: is a Gold approval valid for the document's CURRENT version? Approval is bound to the exact version it was
+ * granted on — an approval whose `version_id` points at a now-superseded version is stale and does NOT count, so any
+ * edit (which mints a new current version) forces re-approval. (spec defect #6 / T18). Keeping this pure makes the
+ * version-binding rule directly unit-testable without a DB.
+ */
+export function goldApprovedForVersion(
+  gold: { status?: string | null; version_id?: string | null } | null | undefined,
+  currentVersionId: string | null | undefined,
+): boolean {
+  return !!gold && gold.status === 'approved' && gold.version_id != null && currentVersionId != null && gold.version_id === currentVersionId;
+}
+
 /** PURE: can the package be exported? Blocked on any failing document, any unapproved Gold gate, or any fatal item. */
 export function evaluatePackageReadiness(docs: PackageDoc[]): PackageReadiness {
   const rows = Array.isArray(docs) ? docs : [];
