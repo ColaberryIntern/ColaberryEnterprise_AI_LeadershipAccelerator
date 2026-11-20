@@ -36,7 +36,8 @@ disagrees with either, `CLAUDE.md` wins, except for the rulings below. Do not re
   `['dashboard']` (:111). `COMMUNITY_MODERATOR_ROLES` is at :228.
 - `backend/src/middlewares/mgmtSectionGate.ts`: `/api/admin/communications` maps to campaigns
   (:31); `/api/admin/community` and `/api/admin/accelerator` map to program (:127). Unmapped
-  prefixes are denied to scoped roles (:86-87).
+  prefixes are denied to scoped roles: `pathToSection` :446, then the final `res.status(403)` :486
+  (corrected in CH0.1; the earlier ":86-87" pointed at comment text).
 - The frontend mirrors `SECTION_KEYS` in
   `frontend/src/pages/admin/communityRoles/ExtraSectionsEditor.tsx:11`. Nav:
   `frontend/src/components/Layout/adminNav.ts` (`NAV_GROUPS` :59, `UNLISTED_PATH_SECTIONS` :400).
