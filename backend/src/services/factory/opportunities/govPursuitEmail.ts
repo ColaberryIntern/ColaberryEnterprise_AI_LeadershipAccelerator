@@ -53,6 +53,30 @@ export function daysUntil(closeDate: string | null | undefined, today: string): 
   return Number.isNaN(a) || Number.isNaN(b) ? null : Math.round((a - b) / 86400000);
 }
 
+/**
+ * Ali, 2026-11-20: a bid closing in under 10 days is too late to start, so the email leaves it out unless it is already a
+ * current project with interns. Current projects always show. A bid with no close date stays, since its deadline is unknown.
+ */
+export const MIN_DAYS_TO_SHOW = 10;
+const tooSoon = (closeDate: string | null | undefined, today: string): boolean => {
+  const days = daysUntil(closeDate, today);
+  return days !== null && days < MIN_DAYS_TO_SHOW;
+};
+
+export interface EmailView { board: DiscoveryBoard; hidden: HideDecision[]; leftOut: number }
+
+/** PURE. The board and hides the email shows: bids closing too soon are removed, and the counts drop to match. */
+export function forTheEmail(board: DiscoveryBoard, hidden: readonly HideDecision[], today: string): EmailView {
+  const counts = { ...board.counts };
+  const rows = board.rows.filter((r) => {
+    if (!tooSoon(r.opportunity.closeDate, today)) return true;
+    counts[r.stage] = Math.max(0, counts[r.stage] - 1);
+    return false;
+  });
+  const keptHidden = hidden.filter((h) => !tooSoon(h.opportunity.closeDate, today));
+  return { board: { ...board, rows, counts }, hidden: keptHidden, leftOut: board.rows.length - rows.length };
+}
+
 function chips(r: BoardRow, today: string): string {
   const o = r.opportunity;
   const days = daysUntil(o.closeDate, today);
@@ -190,7 +214,7 @@ export function govPursuitSubject(board: DiscoveryBoard): string {
 
 const byDeadline = (a: BoardRow, b: BoardRow): number => String(a.opportunity.closeDate ?? '9999').localeCompare(String(b.opportunity.closeDate ?? '9999'));
 
-export function renderGovPursuitEmail(board: DiscoveryBoard, hidden: readonly HideDecision[], today: string): string {
+export function renderGovPursuitEmail(board: DiscoveryBoard, hidden: readonly HideDecision[], today: string, leftOut = 0): string {
   const of = (stage: BoardRow['stage']) => board.rows.filter((r) => r.stage === stage).sort(byDeadline);
   const c = board.counts;
   const open = (r: BoardRow) => link(qualifyUrl(r.opportunity.uuid, r.opportunity.title, r.opportunity.agency), 'Open and read');
@@ -237,6 +261,6 @@ export function renderGovPursuitEmail(board: DiscoveryBoard, hidden: readonly Hi
     + section('✅ Approved: waiting for an intern', 'Approved by a second admin. Assigning an intern moves it to Interns > Gov Contracts.', TONES.good.bar, approved)
     + section('📦 Upload the ZIP', 'These passed the first check. Download each ZIP from Bonfire and upload it. The AI runs the rest on its own.', TONES.info.bar, uploadCards, Math.max(0, uploads.length - LIST_CAP))
     + section('🙈 Hidden this morning', 'Off your board now. Restore any of them from the Hidden list on the board.', TONES.mute.bar, hiddenRows, Math.max(0, hiddenOnce.length - LIST_CAP))
-    + `<div style="font-size:12px;color:${MUTED};padding:4px 2px 0">AI verdicts and fit scores are advisory. Verify every deadline on the Bonfire cover page and addenda. ${board.dismissedCount} hidden in all. ${link(`${APP_BASE}/admin/gov-opportunities`, 'Open the board')}</div>`
+    + `<div style="font-size:12px;color:${MUTED};padding:4px 2px 0">AI verdicts and fit scores are advisory. Verify every deadline on the Bonfire cover page and addenda. ${leftOut > 0 ? `${plural(leftOut, 'bid closing', 'bids closing')} in under ${MIN_DAYS_TO_SHOW} days ${leftOut === 1 ? 'is' : 'are'} left out. ` : ''}${board.dismissedCount} hidden in all. ${link(`${APP_BASE}/admin/gov-opportunities`, 'Open the board')}</div>`
     + `</td></tr></table></div>`;
 }

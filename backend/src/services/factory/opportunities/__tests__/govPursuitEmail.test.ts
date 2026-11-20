@@ -1,4 +1,4 @@
-import { daysTone, daysUntil, fitTone, govPursuitSubject, projectHealth, qualifyUrl, renderGovPursuitEmail, summaryNote } from '../govPursuitEmail';
+import { daysTone, daysUntil, fitTone, forTheEmail, govPursuitSubject, projectHealth, qualifyUrl, renderGovPursuitEmail, summaryNote } from '../govPursuitEmail';
 import type { BoardRow, DiscoveryBoard } from '../govDiscoveryBoard';
 
 const TODAY = '2026-11-04';
@@ -244,5 +244,52 @@ describe('email-safe markup and house style', () => {
   });
   it('holds the bar chart inside the 600px layout', () => {
     expect(out).toContain('max-width:600px');
+  });
+});
+
+describe('bids closing in under 10 days are left out of the email', () => {
+  // TODAY is 2026-11-04, so 2026-11-13 is 9 days out and 2026-11-14 is exactly 10.
+  const nine = row('needs_zip', { uuid: 'n9', title: 'Nine Days Out', closeDate: '2026-11-13' });
+  const ten = row('needs_zip', { uuid: 'n10', title: 'Ten Days Out', closeDate: '2026-11-14' });
+  const late = row('vetted', { uuid: 'v3', title: 'Three Days Out', closeDate: '2026-11-07' });
+  const undated = row('needs_read', { uuid: 'nd', title: 'No Close Date', closeDate: null });
+  const full = board([nine, ten, late, undated], { needs_zip: 2, vetted: 1, needs_read: 1 });
+
+  it('drops rows under 10 days, keeps 10 days and keeps an unknown close date', () => {
+    const v = forTheEmail(full, [], TODAY);
+    expect(v.board.rows.map((r) => r.opportunity.uuid)).toEqual(['n10', 'nd']);
+    expect(v.leftOut).toBe(2);
+  });
+  it('lowers the counts so the subject and tiles match what is listed', () => {
+    const v = forTheEmail(full, [], TODAY);
+    expect(v.board.counts).toMatchObject({ needs_zip: 1, vetted: 0, needs_read: 1 });
+    expect(govPursuitSubject(v.board)).toBe('🏛️ Gov pursuit: 1 to read, 1 ZIP to upload');
+  });
+  it('always keeps current projects, whatever their deadline', () => {
+    const project = { deliveryProjectId: 'dp1', title: 'Closing Friday Portal', agency: 'City', closeDate: '2026-11-06', interns: ['Sam Lee'], build: null, establishedCount: 0 };
+    const v = forTheEmail({ ...full, currentProjects: [project] }, [], TODAY);
+    expect(v.board.currentProjects).toHaveLength(1);
+    expect(renderGovPursuitEmail(v.board, v.hidden, TODAY, v.leftOut)).toContain('Closing Friday Portal');
+  });
+  it('drops hides under 10 days too', () => {
+    const v = forTheEmail(board([]), [{ opportunity: nine.opportunity, reason: 'ai_not_a_fit' }, { opportunity: ten.opportunity, reason: 'ai_not_a_fit' }], TODAY);
+    expect(v.hidden.map((h) => h.opportunity.uuid)).toEqual(['n10']);
+  });
+  it('says in the footer how many were left out, and names none of them', () => {
+    const v = forTheEmail(full, [], TODAY);
+    const out = renderGovPursuitEmail(v.board, v.hidden, TODAY, v.leftOut);
+    expect(out).toContain('2 bids closing in under 10 days are left out.');
+    expect(out).not.toContain('Nine Days Out');
+    expect(out).not.toContain('Three Days Out');
+    expect(out).toContain('Ten Days Out');
+  });
+  it('is idempotent: filtering twice changes nothing more', () => {
+    const once = forTheEmail(full, [], TODAY);
+    const twice = forTheEmail(once.board, once.hidden, TODAY);
+    expect(twice.board).toEqual(once.board);
+    expect(twice.leftOut).toBe(0);
+  });
+  it('says nothing in the footer when none were left out', () => {
+    expect(html(board([ten], { needs_zip: 1 }))).not.toContain('left out');
   });
 });
