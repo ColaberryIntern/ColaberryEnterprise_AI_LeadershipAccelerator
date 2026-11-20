@@ -43,14 +43,13 @@ Before planning or editing code, read these files in full:
 
 1. Root `CLAUDE.md` and every nested `CLAUDE.md` governing changed files.
 2. `.claude/skills/loop-architect/SKILL.md` and every reference it requires for this run.
-3. `.claude/skills/onboard-ai-agent/SKILL.md`.
-4. `.claude/skills/build-platform-agent/SKILL.md`.
-5. `docs/architecture/ai-workforce-management/CURRENT_STATE.md`.
-6. `docs/architecture/ai-workforce-management/TARGET_ARCHITECTURE.md`.
-7. `docs/architecture/ai-workforce-management/DOMAIN_REUSE_MAP.md`.
-8. `docs/architecture/ai-workforce-management/MIGRATION_STRATEGY.md`.
-9. `docs/architecture/ai-workforce-management/MANAGER_AUTHORIZATION_MAP.md`.
-10. `backend/src/services/agentRegistrySeed.ts` and the complete Reese implementation under `backend/src/services/reese/`.
+3. `.claude/skills/build-platform-agent/SKILL.md` (and its `references/trust-and-hierarchy.md`) — as of 2026-09-30 this is the single, reconciled skill for building, migrating, or auditing an AI employee; it was formerly two separate skills (`build-platform-agent` and `onboard-ai-agent`) that have since been merged into this one file. If an older instruction or document still cites `.claude/skills/onboard-ai-agent/SKILL.md`, that path no longer exists — this is its successor.
+4. `docs/architecture/ai-workforce-management/CURRENT_STATE.md`.
+5. `docs/architecture/ai-workforce-management/TARGET_ARCHITECTURE.md`.
+6. `docs/architecture/ai-workforce-management/DOMAIN_REUSE_MAP.md`.
+7. `docs/architecture/ai-workforce-management/MIGRATION_STRATEGY.md`.
+8. `docs/architecture/ai-workforce-management/MANAGER_AUTHORIZATION_MAP.md`.
+9. `backend/src/services/agentRegistrySeed.ts` and the complete Reese implementation under `backend/src/services/reese/`.
 
 Use `/loop-architect` as the execution controller, but apply the consultation override in Section 3. User instructions in this mission override the skill's normal no-pause behavior.
 
@@ -211,7 +210,7 @@ An employee is not complete merely because it has an `AGENT_REGISTRY` entry or a
 - Activity, ticket, cost and authorization evidence.
 - Production smoke test by the responsible human.
 
-Use `.claude/skills/onboard-ai-agent/SKILL.md` as the minimum checklist, then extend it to enforce this 2.0 standard.
+Use `.claude/skills/build-platform-agent/SKILL.md` as the minimum checklist — its "Reese's real configuration today" table and Known Gaps section are the concrete floor and the honest exceptions to it — then extend it to enforce this 2.0 standard where this section asks for more than that floor covers (metric quarantine, stateful work plans, inter-agent handoff contracts, and individual kill switches are not yet in that skill's own obligations list as of 2026-09-30).
 
 ---
 
