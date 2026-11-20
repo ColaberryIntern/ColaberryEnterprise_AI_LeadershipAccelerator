@@ -22,7 +22,7 @@ export type DescribeInput = z.infer<typeof DescribeInput>;
 
 export class DescribeRefusedError extends Error {}
 
-const TYPE_WORDS: Record<string, string> = { session: 'live session', open_house: 'open house', office_hours: 'office hours', workshop: 'workshop', other: 'community event' };
+export const TYPE_WORDS: Record<string, string> = { session: 'live session', open_house: 'open house', office_hours: 'office hours', workshop: 'workshop', other: 'community event' };
 
 const MONTH = '(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\\.?';
 const ORD = '(?:st|nd|rd|th)?';

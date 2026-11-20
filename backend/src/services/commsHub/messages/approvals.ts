@@ -4,7 +4,9 @@ import CommsHubMessage, { type CommsHubMessageStatus } from '../../../models/Com
 import CommsHubDraft from '../../../models/CommsHubDraft';
 import CommsHubDestination from '../../../models/CommsHubDestination';
 import CommsHubApproval from '../../../models/CommsHubApproval';
+import CommsHubEvent from '../../../models/CommsHubEvent';
 import { logActivity, type Actor } from '../activityLog';
+import { factsFor, problemsFor } from './draftFacts';
 import { APPROVED_STATUSES, approvalHash, transition, type ApprovalContent, type VoidReason } from './messageStatus';
 
 /**
@@ -19,7 +21,7 @@ import { APPROVED_STATUSES, approvalHash, transition, type ApprovalContent, type
  * voided (never deleted) and the message goes back to needs_approval.
  */
 export class MessageRuleError extends Error {
-  constructor(message: string, public readonly status: number, public readonly reason: string) { super(message); }
+  constructor(message: string, public readonly status: number, public readonly reason: string, public readonly problems: string[] = []) { super(message); }
 }
 
 /** The latest version of each channel's draft, the destinations, and the send time. */
@@ -52,11 +54,21 @@ async function inForce(messageId: string, t: Transaction): Promise<CommsHubAppro
   return CommsHubApproval.findOne({ where: { message_id: messageId, voided_at: { [Op.is]: null } }, transaction: t });
 }
 
-/** Submit for approval: draft -> needs_approval. */
-export async function submitForApproval(messageId: string, actor: Actor): Promise<CommsHubMessage> {
+/**
+ * Submit for approval: draft -> needs_approval, only when every channel's latest draft passes the
+ * CH6.3 validator (the event's correct Central date and time, nothing else dated, no unfilled
+ * placeholder, no banned word). The refusal carries each problem as a sentence.
+ */
+export async function submitForApproval(messageId: string, actor: Actor, now: Date = new Date()): Promise<CommsHubMessage> {
   return sequelize.transaction(async (t) => {
     const m = await locked(messageId, t);
     move(m, 'needs_approval');
+    const content = await loadContent(m.id, t);
+    if (content.drafts.length === 0) throw new MessageRuleError('There is no text to submit yet.', 409, 'no_draft');
+    const event = m.event_id ? await CommsHubEvent.findByPk(m.event_id, { transaction: t }) : null;
+    const facts = event ? factsFor(event, m.occurrence_starts_at, now) : null;
+    const problems = content.drafts.flatMap((d) => problemsFor({ channel: d.channel as 'community_post' | 'in_app', title: d.title, body: d.body }, facts));
+    if (problems.length) throw new MessageRuleError('Fix the drafts before submitting.', 409, 'draft_invalid', problems);
     await m.update({ status: 'needs_approval', updated_by: actor.id }, { transaction: t });
     await logActivity(actor, 'message.submitted', 'message', m.id, {}, t);
     return m;

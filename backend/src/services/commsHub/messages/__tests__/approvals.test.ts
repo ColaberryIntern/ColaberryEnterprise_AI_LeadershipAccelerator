@@ -14,6 +14,8 @@ const withUpdate = (r: Row): Row => Object.assign(r, { update: jest.fn(async (p:
 
 jest.mock('../../../../config/database', () => ({ sequelize: { transaction: jest.fn(async (cb: (t: unknown) => unknown) => cb({ LOCK: { UPDATE: 'UPDATE' } })) } }));
 jest.mock('../../../../models/CommsHubMessage', () => ({ __esModule: true, default: { findByPk: jest.fn(async (id: string) => messages.get(id) ?? null) } }));
+const events = new Map<string, Row>();
+jest.mock('../../../../models/CommsHubEvent', () => ({ __esModule: true, default: { findByPk: jest.fn(async (id: string) => events.get(id) ?? null) } }));
 jest.mock('../../../../models/CommsHubDraft', () => ({ __esModule: true, default: { findAll: jest.fn(async ({ where }: Row) => drafts.filter((d) => d.message_id === where.message_id).sort((a, b) => (a.channel < b.channel ? -1 : a.channel > b.channel ? 1 : b.version - a.version))) } }));
 jest.mock('../../../../models/CommsHubDestination', () => ({ __esModule: true, default: { findAll: jest.fn(async ({ where }: Row) => destinations.filter((d) => d.message_id === where.message_id)) } }));
 jest.mock('../../../../models/CommsHubApproval', () => ({
@@ -196,5 +198,32 @@ describe('CH6.2 attempt 2', () => {
     const outer = { LOCK: { UPDATE: 'UPDATE' } } as never;
     expect(await reconcileApproval('m1', 'destinations_changed', JACKIE, AT, outer)).toBe(true);
     expect(sequelize.transaction).not.toHaveBeenCalled();
+  });
+});
+
+describe('CH6.3 the validator blocks submit', () => {
+  beforeEach(() => {
+    events.set('e1', { id: 'e1', starts_at: new Date('2026-12-02T00:00:00Z'), ends_at: null, repeat_rule: null, join_url: null, registration_url: null, hosts: [] });
+    messages.set('m2', withUpdate({ id: 'm2', status: 'draft', event_id: 'e1', occurrence_starts_at: null, send_at: null, created_by: 'jackie-1' }));
+  });
+
+  it('a draft with the wrong date is refused, with each problem as a sentence; nothing changes', async () => {
+    drafts = [
+      { message_id: 'm2', channel: 'community_post', version: 1, title: null, body: 'Demo Tuesday is on Wednesday, December 2 at 7:00 PM CST.' },
+      { message_id: 'm2', channel: 'in_app', version: 1, title: 'Demo Tuesday', body: 'Tuesday, December 1, 6:00 PM CST' },
+    ];
+    const e = await err(submitForApproval('m2', JACKIE, new Date('2026-11-20T15:00:00Z')));
+    expect(e.reason).toBe('draft_invalid');
+    expect(e.problems.join(' ')).toMatch(/must say the date: Tuesday, December 1/);
+    expect(messages.get('m2')!.status).toBe('draft');
+  });
+
+  it('CONTROL: the corrected draft submits', async () => {
+    drafts = [
+      { message_id: 'm2', channel: 'community_post', version: 1, title: null, body: 'Demo Tuesday is on Tuesday, December 1 at 6:00 PM CST.' },
+      { message_id: 'm2', channel: 'in_app', version: 1, title: 'Demo Tuesday', body: 'Tuesday, December 1, 6:00 PM CST' },
+    ];
+    await submitForApproval('m2', JACKIE, new Date('2026-11-20T15:00:00Z'));
+    expect(messages.get('m2')!.status).toBe('needs_approval');
   });
 });
