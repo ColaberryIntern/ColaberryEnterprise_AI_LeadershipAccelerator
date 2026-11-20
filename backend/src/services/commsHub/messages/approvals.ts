@@ -45,8 +45,19 @@ export async function loadContent(messageId: string, t?: Transaction): Promise<A
  * edit made while a message waits for approval (which voids nothing, because nothing is approved yet)
  * is therefore checked before it can be approved.
  */
+/**
+ * CH7.3: once an event is cancelled, the only message about it that may still go out is the one
+ * saying it is cancelled. Everything else about it is stopped (submit, approve, the worker's start).
+ */
+export function stoppedByCancelledEvent(m: Pick<CommsHubMessage, 'kind'>, event: Pick<CommsHubEvent, 'status'> | null): boolean {
+  return !!event && event.status === 'cancelled' && m.kind !== 'cancellation';
+}
+
 async function assertDraftsValid(m: CommsHubMessage, content: ApprovalContent, t: Transaction, now: Date, doing: string): Promise<void> {
   const event = m.event_id ? await CommsHubEvent.findByPk(m.event_id, { transaction: t }) : null;
+  if (stoppedByCancelledEvent(m, event)) {
+    throw new MessageRuleError('This event is cancelled, so only a message saying it is cancelled can go out about it.', 409, 'event_cancelled');
+  }
   const facts = event ? factsFor(event, m.occurrence_starts_at, now, replayLink()) : null;
   const postEvent = m.kind === 'recording_thanks';
   const problems = content.drafts.flatMap((d) => problemsFor({ channel: d.channel as 'community_post' | 'in_app', title: d.title, body: d.body }, facts, { postEvent }));

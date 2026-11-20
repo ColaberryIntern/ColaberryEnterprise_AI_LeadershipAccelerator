@@ -32,11 +32,22 @@ it('the cascade, then the prepared stream, then a cancellation draft offered: al
   expect(r).toEqual({ event: EVENT, cancellation: { ...CASCADE, broadcast: 'cancelled', draft_message_id: '11111111-1111-4111-8111-111111111111' } });
 });
 
-it('already cancelled: nothing new happens (no stream call, no second draft)', async () => {
+it('already cancelled, stream already cancelled: nothing new happens (no second draft)', async () => {
   mockCascade.mockResolvedValue({ event: EVENT, cascade: null });
+  mockLive.mockResolvedValue('none');
   const drafter = jest.fn();
   expect(await cancelEventAndOffer('e1', JACKIE, drafter)).toEqual({ event: EVENT, cancellation: null });
-  expect(mockLive).not.toHaveBeenCalled();
+  expect(drafter).not.toHaveBeenCalled();
+});
+
+it('cancelling again retries a stream that could not be cancelled the first time, and reports only that', async () => {
+  mockCascade.mockResolvedValue({ event: EVENT, cascade: null });
+  mockLive.mockResolvedValue('cancelled');
+  const drafter = jest.fn();
+  expect(await cancelEventAndOffer('e1', JACKIE, drafter)).toEqual({
+    event: EVENT, cancellation: { messages_cancelled: 0, deliveries_cancelled: 0, sending_voided: 0, broadcast: 'cancelled', draft_message_id: null },
+  });
+  expect(mockLive).toHaveBeenCalledWith(EVENT, JACKIE);
   expect(drafter).not.toHaveBeenCalled();
 });
 

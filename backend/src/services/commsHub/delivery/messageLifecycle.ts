@@ -3,9 +3,10 @@ import { sequelize } from '../../../config/database';
 import CommsHubApproval from '../../../models/CommsHubApproval';
 import CommsHubDelivery from '../../../models/CommsHubDelivery';
 import CommsHubDestination from '../../../models/CommsHubDestination';
+import CommsHubEvent from '../../../models/CommsHubEvent';
 import CommsHubMessage, { type CommsHubMessageStatus } from '../../../models/CommsHubMessage';
 import { logActivity, WORKER_ACTOR, type Actor } from '../activityLog';
-import { loadContent, MessageRuleError, reconcileApproval } from '../messages/approvals';
+import { cancelMessage, loadContent, MessageRuleError, reconcileApproval, stoppedByCancelledEvent } from '../messages/approvals';
 import { approvalHash, transition } from '../messages/messageStatus';
 import { resultOf } from './resultOf';
 import type { StartResult } from './types';
@@ -48,6 +49,11 @@ export async function startMessage(messageId: string, now: Date): Promise<StartR
   return sequelize.transaction(async (t) => {
     const m = await CommsHubMessage.findOne({ where: { id: messageId, status: 'scheduled' }, lock: t.LOCK.UPDATE, skipLocked: true, transaction: t });
     if (!m || (m.send_at && m.send_at.getTime() > now.getTime())) return 'not_due';
+    const event = m.event_id ? await CommsHubEvent.findByPk(m.event_id, { attributes: ['id', 'status'], transaction: t }) : null;
+    if (stoppedByCancelledEvent(m, event)) {
+      await cancelMessage(m.id, WORKER_ACTOR, now, t);
+      return 'event_cancelled';
+    }
     if (!(await approvalStillMatches(m.id, t))) {
       await reconcileApproval(m.id, 'draft_changed', WORKER_ACTOR, now, t);
       return 'approval_changed';
@@ -71,8 +77,16 @@ export async function finishMessage(messageId: string, now: Date): Promise<Comms
       sent: rows.filter((r) => r.status === 'sent').length, not_sent: rows.filter((r) => r.status !== 'sent').length,
       errors: rows.filter((r) => r.error).map((r) => r.error).slice(0, 5),
     }, t);
+    if (result === 'sent') return result;
+    // CH7.3: its event was cancelled while it was sending: what did not go out never will. It ends
+    // cancelled (not back in the approval queue, where approving it would send it after all).
+    const event = m.event_id ? await CommsHubEvent.findByPk(m.event_id, { attributes: ['id', 'status'], transaction: t }) : null;
+    if (stoppedByCancelledEvent(m, event)) {
+      await cancelMessage(m.id, WORKER_ACTOR, now, t);
+      return 'cancelled';
+    }
     // A message edited while it was sending is not voided then (CH6.2); once the attempt ends, it is.
-    if (result !== 'sent') await reconcileApproval(m.id, 'draft_changed', WORKER_ACTOR, now, t);
+    await reconcileApproval(m.id, 'draft_changed', WORKER_ACTOR, now, t);
     return result;
   });
 }

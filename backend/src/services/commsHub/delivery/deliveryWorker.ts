@@ -120,6 +120,7 @@ export async function runDeliveryTick(deps: WorkerDeps, now: Date = new Date()):
       const r = await deps.repo.startMessage(id, now);
       if (r === 'started') { result.started += 1; touched.add(id); }
       if (r === 'approval_changed') deps.log('warn', 'comms_hub_send_approval_changed', { correlation_id, message_id: id, outcome: 'partial' });
+      if (r === 'event_cancelled') deps.log('warn', 'comms_hub_send_event_cancelled', { correlation_id, message_id: id, outcome: 'partial' });
     } catch (err) {
       fail('comms_hub_send_start_failed', err, { message_id: id });
     }

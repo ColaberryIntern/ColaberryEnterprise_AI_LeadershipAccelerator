@@ -10,7 +10,8 @@ const queries: Array<{ sql: string; replacements: Row; transaction: unknown }> =
 const mockCancel = jest.fn(async () => undefined);
 const mockVoid = jest.fn(async (..._a: unknown[]) => true);
 const mockLog = jest.fn(async () => undefined);
-const tx = { id: 'tx' };
+const tx = { id: 'tx', LOCK: { UPDATE: 'UPDATE' } };
+const findAllOpts: Row[] = [];
 
 jest.mock('../../../../config/database', () => ({
   sequelize: { query: jest.fn(async (sql: string, o: { replacements: Row; transaction: unknown }) => { queries.push({ sql, replacements: o.replacements, transaction: o.transaction }); return [{ id: 'dl1' }, { id: 'dl2' }]; }) },
@@ -18,7 +19,9 @@ jest.mock('../../../../config/database', () => ({
 jest.mock('../../../../models/CommsHubMessage', () => ({
   __esModule: true,
   default: {
-    findAll: jest.fn(async ({ where }: { where: { status: Record<symbol, string[]> } }) => {
+    findAll: jest.fn(async (o: { where: { status: Record<symbol, string[]> } }) => {
+      findAllOpts.push(o as unknown as Row);
+      const { where } = o;
       const allowed = Object.getOwnPropertySymbols(where.status).map((s) => where.status[s])[0];
       return messages.filter((m) => allowed.includes(m.status as string));
     }),
@@ -34,7 +37,7 @@ const NOW = new Date('2026-11-20T16:00:00Z');
 const START = new Date('2026-12-02T00:00:00Z');
 const event = (o: Row = {}) => ({ id: 'e1', starts_at: START, ends_at: new Date('2026-12-02T01:00:00Z'), repeat_rule: null, ...o }) as never;
 
-beforeEach(() => { jest.clearAllMocks(); queries.length = 0; });
+beforeEach(() => { jest.clearAllMocks(); queries.length = 0; findAllOpts.length = 0; });
 
 describe('cancel cascade', () => {
   beforeEach(() => {
@@ -112,5 +115,15 @@ describe('edit cascade', () => {
     await cascadeEventEdit(event({ repeat_rule: weekly, join_url: 'https://zoom.us/j/2' }), ['join_url'], JACKIE, NOW, tx as never);
     expect(mockCancel).not.toHaveBeenCalled();
     expect(mockVoid).toHaveBeenCalledWith('m-week2', 'event_changed', JACKIE, NOW, tx);
+  });
+});
+
+describe('the branch is taken on the locked row (no race with the worker)', () => {
+  it('both cascades read the messages FOR UPDATE, in id order, inside the event transaction', async () => {
+    messages = [{ id: 'm1', status: 'scheduled', plan_kind: null }];
+    await cascadeEventCancel('e1', JACKIE, NOW, tx as never);
+    await cascadeEventEdit(event(), ['starts_at'], JACKIE, NOW, tx as never);
+    expect(findAllOpts).toHaveLength(2);
+    for (const o of findAllOpts) expect(o).toEqual(expect.objectContaining({ lock: 'UPDATE', order: [['id', 'ASC']], transaction: tx }));
   });
 });

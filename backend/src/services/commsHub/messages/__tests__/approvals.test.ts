@@ -277,3 +277,22 @@ describe('CH7.3 voidForEvent: the event changed or was cancelled', () => {
     expect(await voidForEvent('m1', 'event_changed', JACKIE, AT, T)).toBe(false);
   });
 });
+
+describe('CH7.3 a message about a cancelled event cannot be submitted or approved, except the cancellation itself', () => {
+  beforeEach(() => {
+    events.set('e1', { id: 'e1', status: 'cancelled', title: 'Demo Tuesday', starts_at: new Date('2026-12-02T00:00:00Z'), ends_at: null, repeat_rule: null, hosts: [], join_url: null, registration_url: null });
+  });
+  it('a reminder about it is refused at approve and at submit, with the reason', async () => {
+    Object.assign(messages.get('m1')!, { event_id: 'e1', kind: 'reminder' });
+    const e1 = await err(approveMessage('m1', TAIWO, AT));
+    expect([e1.status, e1.reason]).toEqual([409, 'event_cancelled']);
+    messages.get('m1')!.status = 'draft';
+    expect((await err(submitForApproval('m1', JACKIE, AT))).reason).toBe('event_cancelled');
+    expect(approvals).toHaveLength(0);
+  });
+  it('the cancellation message is not stopped by it (it may still be refused for its text, never for the cancel)', async () => {
+    Object.assign(messages.get('m1')!, { event_id: 'e1', kind: 'cancellation' });
+    const r = await approveMessage('m1', TAIWO, AT).then(() => 'approved', (e: MessageRuleError) => e.reason);
+    expect(r).not.toBe('event_cancelled');
+  });
+});

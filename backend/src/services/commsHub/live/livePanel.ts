@@ -171,8 +171,14 @@ export async function syncLiveEvents(nowMs: number = Date.now()): Promise<number
 }
 
 /** Prepare stream: the date's occurrence, then backstage (so the provider's health is watched). */
+/** CH7.3: a cancelled event cannot be taken live (End stays allowed, so a stream that is on air can always stop). */
+function refuseCancelled(e: CommsHubEvent): void {
+  if (e.status === 'cancelled') throw new LivePanelError('This event is cancelled, so it cannot be streamed.', 409, 'event_cancelled');
+}
+
 export async function prepareLive(eventId: string, at: Date | null, actor: Actor, now: Date = new Date()): Promise<LivePanelView> {
   const e = await eventOr404(eventId);
+  refuseCancelled(e);
   try {
     await withInputLock(async () => {
       // Checked BEFORE the occurrence is created, so a refused Prepare writes nothing.
@@ -199,6 +205,7 @@ const ALREADY: Record<'go_live' | 'end' | 'return_to_scheduled', Set<string>> = 
 /** Go live, End, or back to scheduled, on the event's occurrence; the event's status follows the occurrence. */
 export async function runLiveCommand(eventId: string, cmd: 'go_live' | 'end' | 'return_to_scheduled', expectedVersion: number, actor: Actor, now: Date = new Date()): Promise<LivePanelView> {
   const e = await eventOr404(eventId);
+  if (cmd !== 'end') refuseCancelled(e);
   const row = await readOccurrence(e.broadcast_occurrence_id);
   if (!row) throw new LivePanelError('Prepare the stream first.', 409, 'not_prepared');
   if (Number(row.version) !== expectedVersion) {
@@ -227,7 +234,6 @@ export async function runLiveCommand(eventId: string, cmd: 'go_live' | 'end' | '
   return readLivePanel(e.id, now.getTime());
 }
 
-/** The Zoom push details for the shared input. Returned to the caller only; never logged or stored. */
 /**
  * CH7.3: the event was cancelled; a broadcast prepared for it that is not live yet (scheduled or
  * backstage) is cancelled too, so the stream cannot be taken live. Live is refused before this runs
@@ -241,6 +247,7 @@ export async function cancelPreparedLive(e: CommsHubEvent, actor: Actor): Promis
   return 'cancelled';
 }
 
+/** The Zoom push details for the shared input. Returned to the caller only; never logged or stored. */
 export async function readIngest(eventId: string): Promise<{ rtmps_url: string; stream_key: string }> {
   await eventOr404(eventId);
   const binding = resolveLiveInput();

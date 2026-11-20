@@ -36,10 +36,16 @@ async function cancelPendingDeliveries(messageId: string, reason: string, now: D
 
 export interface CancelCascade { messages_cancelled: number; deliveries_cancelled: number; sending_voided: number }
 
-/** The event is cancelled: every message about it that has not gone out is cancelled, and nothing more is sent. */
+/**
+ * The event is cancelled: every message about it that has not gone out is cancelled, and nothing more
+ * is sent. One that is sending stops sending now and ends cancelled when its attempt closes
+ * (messageLifecycle.finishMessage); it never returns to the approval queue.
+ */
 export async function cascadeEventCancel(eventId: string, actor: Actor, now: Date, t: Transaction): Promise<CancelCascade> {
   const out: CancelCascade = { messages_cancelled: 0, deliveries_cancelled: 0, sending_voided: 0 };
-  const messages = await CommsHubMessage.findAll({ where: { event_id: eventId, status: { [Op.in]: [...CANCELLABLE, 'sending'] } }, attributes: ['id', 'status'], transaction: t });
+  // Locked, in id order: the branch below is taken on the status as it is now, not as it was a moment
+  // ago (the worker may start or finish a message concurrently; it waits for us, or we for it).
+  const messages = await CommsHubMessage.findAll({ where: { event_id: eventId, status: { [Op.in]: [...CANCELLABLE, 'sending'] } }, attributes: ['id', 'status', 'kind'], order: [['id', 'ASC']], lock: t.LOCK.UPDATE, transaction: t });
   for (const m of messages) {
     if (m.status === 'sending') {
       // eslint-disable-next-line no-await-in-loop
@@ -69,7 +75,7 @@ export async function cascadeEventEdit(e: CommsHubEvent, changed: string[], acto
   const occurrences = new Set(expandOccurrences(e.starts_at, e.ends_at, e.repeat_rule).map((o) => o.starts_at.getTime()));
   const messages = await CommsHubMessage.findAll({
     where: { event_id: e.id, status: { [Op.in]: [...CANCELLABLE, 'sending'] } },
-    attributes: ['id', 'status', 'plan_kind', 'occurrence_starts_at'], transaction: t,
+    attributes: ['id', 'status', 'plan_kind', 'occurrence_starts_at'], order: [['id', 'ASC']], lock: t.LOCK.UPDATE, transaction: t,
   });
   for (const m of messages) {
     const gone = m.plan_kind && m.occurrence_starts_at && !occurrences.has(m.occurrence_starts_at.getTime());

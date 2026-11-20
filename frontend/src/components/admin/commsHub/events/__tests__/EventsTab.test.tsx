@@ -194,7 +194,18 @@ describe('CH3.2 the editor', () => {
     await click(btn('Cancel this event'));
     await click(btn('Yes, cancel the event'));
     const status = container.querySelector('[role="status"]')!.textContent ?? '';
-    expect(status).toContain('could not be cancelled; cancel it on the Live panel.');
+    expect(status).toContain('could not be cancelled yet. It cannot go live while the event is cancelled; try cancelling it again below.');
+    // The retry is real: cancelling again retries the stream.
+    (api.cancelHubEvent as jest.Mock).mockResolvedValueOnce({
+      event: ev(1, { status: 'cancelled' }),
+      cancellation: { messages_cancelled: 0, deliveries_cancelled: 0, sending_voided: 0, broadcast: 'cancelled', draft_message_id: null },
+    });
+    await click(btn('Try cancelling the stream again'));
+    expect(api.cancelHubEvent).toHaveBeenCalledTimes(2);
+    const after = container.querySelector('[role="status"]')!.textContent ?? '';
+    expect(after).toContain('The live stream prepared for it was cancelled too.');
+    expect(after).not.toContain('Tell people');
+    expect(btn('Try cancelling the stream again')).toBeUndefined();
     expect(status).not.toContain('will not be sent');
     const link = Array.from(container.querySelectorAll('a')).find((x) => x.textContent === 'Write a cancellation message') as HTMLAnchorElement;
     expect(link.getAttribute('href')).toBe('/admin/comms-hub/compose?text=Event%201%20is%20cancelled');

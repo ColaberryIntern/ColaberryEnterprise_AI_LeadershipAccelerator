@@ -9,6 +9,8 @@ let message: Row | null;
 let deliveries: Row[] = [];
 let destinations: Array<Record<string, unknown>> = [];
 let approval: { content_hash: string } | null;
+let eventStatus: string | null = 'scheduled';
+const mockCancelMsg = jest.fn(async () => { if (message) message.status = 'cancelled'; });
 const mockReconcile = jest.fn(async () => true);
 const mockLog = jest.fn(async () => undefined);
 const tx = { LOCK: { UPDATE: 'UPDATE' } };
@@ -21,6 +23,7 @@ jest.mock('../../../../models/CommsHubMessage', () => ({
     findByPk: jest.fn(async () => message),
   },
 }));
+jest.mock('../../../../models/CommsHubEvent', () => ({ __esModule: true, default: { findByPk: jest.fn(async () => (eventStatus ? { id: 'e1', status: eventStatus } : null)) } }));
 jest.mock('../../../../models/CommsHubApproval', () => ({ __esModule: true, default: { findOne: jest.fn(async () => approval) } }));
 jest.mock('../../../../models/CommsHubDestination', () => ({ __esModule: true, default: { findAll: jest.fn(async () => destinations) } }));
 jest.mock('../../../../models/CommsHubDelivery', () => ({
@@ -43,7 +46,13 @@ jest.mock('../../../../models/CommsHubDelivery', () => ({
 jest.mock('../../activityLog', () => ({ logActivity: (...a: unknown[]) => mockLog(...(a as [])), WORKER_ACTOR: { id: null, label: 'Scheduled sender' } }));
 jest.mock('../../messages/approvals', () => {
   class MessageRuleError extends Error { constructor(m: string, public status: number, public reason: string) { super(m); } }
-  return { MessageRuleError, loadContent: jest.fn(async () => ({ drafts: [], destinations: [], send_at: null })), reconcileApproval: (...a: unknown[]) => mockReconcile(...(a as [])) };
+  return {
+    MessageRuleError, loadContent: jest.fn(async () => ({ drafts: [], destinations: [], send_at: null })),
+    reconcileApproval: (...a: unknown[]) => mockReconcile(...(a as [])),
+    cancelMessage: (...a: unknown[]) => mockCancelMsg(...(a as [])),
+    // Same rule as approvals.stoppedByCancelledEvent (tested there through submit and approve).
+    stoppedByCancelledEvent: (m: { kind: string }, e: { status: string } | null) => !!e && e.status === 'cancelled' && m.kind !== 'cancellation',
+  };
 });
 jest.mock('../../messages/messageStatus', () => ({
   approvalHash: jest.fn(() => 'H-now'),
@@ -57,7 +66,8 @@ const JACKIE = { id: 'jackie-1', label: 'Jackie' };
 
 beforeEach(() => {
   jest.clearAllMocks();
-  message = rowOf({ id: 'm1', status: 'scheduled', send_at: null });
+  message = rowOf({ id: 'm1', status: 'scheduled', send_at: null, event_id: 'e1', kind: 'reminder' });
+  eventStatus = 'scheduled';
   deliveries = [];
   destinations = [{ id: 'd1', channel: 'community_post' }, { id: 'd2', channel: 'in_app' }];
   approval = { content_hash: 'H-now' };
@@ -157,5 +167,38 @@ describe('retryFailedDeliveries', () => {
     const { sequelize } = jest.requireMock('../../../../config/database');
     await expect(sequelize.transaction.mock.results[0].value).resolves.toBe('approval_changed');
     expect(deliveries[1].status).toBe('failed');
+  });
+});
+
+describe('CH7.3 a cancelled event stops its messages at the worker too', () => {
+  it('start: a scheduled reminder for a cancelled event is cancelled, never started', async () => {
+    eventStatus = 'cancelled';
+    expect(await startMessage('m1', NOW)).toBe('event_cancelled');
+    expect(mockCancelMsg).toHaveBeenCalledWith('m1', expect.objectContaining({ id: null }), NOW, tx);
+    expect(deliveries).toHaveLength(0);
+  });
+  it('start: the cancellation message itself still goes out', async () => {
+    eventStatus = 'cancelled';
+    message!.kind = 'cancellation';
+    expect(await startMessage('m1', NOW)).toBe('started');
+  });
+  it('finish: a message that was sending when its event was cancelled ends cancelled, not back in the approval queue', async () => {
+    eventStatus = 'cancelled';
+    message!.status = 'sending';
+    deliveries = [rowOf({ status: 'sent' }), rowOf({ status: 'cancelled', error: 'event_cancelled' })];
+    expect(await finishMessage('m1', NOW)).toBe('cancelled');
+    expect(mockCancelMsg).toHaveBeenCalledWith('m1', expect.anything(), NOW, tx);
+    expect(mockReconcile).not.toHaveBeenCalled();
+  });
+  it('finish: everything had gone out before the cancel: it stays sent', async () => {
+    eventStatus = 'cancelled';
+    message!.status = 'sending';
+    deliveries = [rowOf({ status: 'sent' })];
+    expect(await finishMessage('m1', NOW)).toBe('sent');
+    expect(mockCancelMsg).not.toHaveBeenCalled();
+  });
+  it('a message with no event (a subject) is unaffected', async () => {
+    message!.event_id = null; eventStatus = null;
+    expect(await startMessage('m1', NOW)).toBe('started');
   });
 });

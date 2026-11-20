@@ -64,6 +64,11 @@ export default function EventEditor({ eventId, onClose, onSaved }: Props): React
               <Link className="btn btn-primary comms-hub-action" to={ed.cancelled.draft_message_id ? `/admin/comms-hub/compose?message=${ed.cancelled.draft_message_id}` : `/admin/comms-hub/compose?text=${encodeURIComponent(`${ed.event?.title ?? 'This event'} is cancelled`)}`}>
                 {ed.cancelled.draft_message_id ? 'Review the cancellation message' : 'Write a cancellation message'}
               </Link>
+              {ed.cancelled.broadcast === 'failed' && (
+                <button type="button" className="btn btn-outline-danger comms-hub-action ms-2" disabled={ed.busy !== null} onClick={() => { void ed.act('cancel'); }}>
+                  {ed.busy === 'cancel' ? 'Cancelling...' : 'Try cancelling the stream again'}
+                </button>
+              )}
             </div>
           )}
         </div>

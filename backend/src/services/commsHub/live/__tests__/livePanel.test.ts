@@ -287,3 +287,17 @@ describe('CH7.3 cancelling the event cancels a prepared stream that is not live 
     expect(sent.length).toBe(before);
   });
 });
+
+describe('CH7.3 a cancelled event cannot be streamed', () => {
+  it('Prepare and Go live are refused; End is still allowed so a stream on air can always stop', async () => {
+    events.get('e1')!.status = 'cancelled';
+    expect((await err(prepareLive('e1', null, JACKIE, NOW))).reason).toBe('event_cancelled');
+    occ.set('o1', newOcc('o1', { editorial_state: 'backstage', provider_health: 'ready' }));
+    events.get('e1')!.broadcast_occurrence_id = 'o1';
+    expect((await err(runLiveCommand('e1', 'go_live', 1, JACKIE, NOW))).reason).toBe('event_cancelled');
+    expect((await err(runLiveCommand('e1', 'return_to_scheduled', 1, JACKIE, NOW))).reason).toBe('event_cancelled');
+    const ended = await runLiveCommand('e1', 'end', 1, JACKIE, NOW).then(() => 'ran', (e: LivePanelError) => e.reason);
+    expect(ended).not.toBe('event_cancelled');
+  });
+});
+

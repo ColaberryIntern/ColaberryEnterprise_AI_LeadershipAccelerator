@@ -13,7 +13,9 @@ export function cancelNotice(c: CancelCascade | null): string {
   const stopped = c.messages_cancelled + c.sending_voided;
   if (stopped > 0) parts.push(`${stopped} ${stopped === 1 ? 'message' : 'messages'} about it will not be sent.`);
   if (c.broadcast === 'cancelled') parts.push('The live stream prepared for it was cancelled too.');
-  if (c.broadcast === 'failed') parts.push('The live stream prepared for it could not be cancelled; cancel it on the Live panel.');
+  if (c.broadcast === 'failed') parts.push('The live stream prepared for it could not be cancelled yet. It cannot go live while the event is cancelled; try cancelling it again below.');
+  // A retried stream cancel reports only the stream (the messages were handled the first time).
+  if (c.messages_cancelled + c.deliveries_cancelled + c.sending_voided === 0 && !c.draft_message_id && c.broadcast === 'cancelled') return parts.join(' ');
   parts.push(c.draft_message_id ? 'A message telling people it is cancelled is ready for you to review.' : 'Tell people it is cancelled from Compose.');
   return parts.join(' ');
 }

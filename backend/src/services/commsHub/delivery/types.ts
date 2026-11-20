@@ -46,7 +46,7 @@ export type SendOutcome =
   /** Never sent: the message is no longer sending (cancelled), or the destination is not allowed. */
   | { kind: 'skip'; status: 'cancelled' | 'skipped'; reason: string };
 
-export type StartResult = 'started' | 'not_due' | 'approval_changed';
+export type StartResult = 'started' | 'not_due' | 'approval_changed' | 'event_cancelled';
 
 export interface DeliveryRepo {
   settings(): Promise<WorkerSettings>;
