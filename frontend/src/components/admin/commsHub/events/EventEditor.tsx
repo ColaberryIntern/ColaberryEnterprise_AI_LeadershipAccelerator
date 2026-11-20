@@ -7,6 +7,7 @@ import { useEventEditor } from './useEventEditor';
 import { cancelSummary } from './eventDisplay';
 import ThumbnailStudio from './studio/ThumbnailStudio';
 import LivePanel from './live/LivePanel';
+import PromotionPlan from './plan/PromotionPlan';
 
 /**
  * The event editor (design 02, CH3.2): the form, then Save event, Save as draft, Duplicate and Cancel
@@ -83,6 +84,8 @@ export default function EventEditor({ eventId, onClose, onSaved }: Props): React
         <LivePanel key={`live-${ed.event.id}`} event={ed.event} locked={ed.event.status === 'cancelled'} onStatusChange={() => void ed.refresh()} />
       </div>
       <ThumbnailStudio key={ed.event.id} event={ed.event} locked={locked} />
+      {/* Design 02: the promotion plan spans the full width under the details and the studio. */}
+      <div className="ch-editor-wide"><PromotionPlan key={`plan-${ed.event.id}`} event={ed.event} /></div>
     </div>
   );
 }

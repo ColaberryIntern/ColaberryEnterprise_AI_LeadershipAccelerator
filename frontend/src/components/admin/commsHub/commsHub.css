@@ -166,3 +166,16 @@
 .ch-health-unknown { color: var(--neutral-600); }
 .ch-live-field { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .ch-live-field input { flex: 1 1 14rem; min-width: 0; }
+
+/* CH6.4 promotion plan (design 02): full width under the editor grid. */
+.ch-editor-wide { grid-column: 1 / -1; }
+.ch-editor-wide > .admin-section-card { margin: 0; }
+.ch-plan-rows { margin: 0; padding: 0; }
+.ch-plan-row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.2fr) minmax(0, 1.6fr) auto; gap: 0.75rem; align-items: center; padding: 0.75rem 0; border-bottom: 1px solid var(--neutral-200); }
+.ch-plan-row:last-child { border-bottom: 0; }
+.ch-plan-when, .ch-plan-channels { color: var(--neutral-700); font-size: 0.9rem; }
+.ch-status-warning { color: var(--neutral-900); background: var(--neutral-100); border-color: var(--neutral-500); }
+@media (max-width: 767.98px) {
+  .ch-plan-row { grid-template-columns: 1fr auto; }
+  .ch-plan-when, .ch-plan-channels { grid-column: 1 / -1; }
+}

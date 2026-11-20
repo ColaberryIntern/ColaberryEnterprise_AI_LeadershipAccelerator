@@ -12,7 +12,7 @@ jest.mock('../../../../../services/commsHubApi', () => ({
   listHubEvents: jest.fn(), getHubEvent: jest.fn(), listHubCohorts: jest.fn(), createHubEvent: jest.fn(), updateHubEvent: jest.fn(),
   duplicateHubEvent: jest.fn(), cancelHubEvent: jest.fn(), describeHubEvent: jest.fn(),
   // CH4.4 the editor now holds the thumbnail studio; its own test covers it.
-  listThumbnails: jest.fn(), listEventPhotos: jest.fn(), getLivePanel: jest.fn(),
+  listThumbnails: jest.fn(), listEventPhotos: jest.fn(), getLivePanel: jest.fn(), getPromotionPlan: jest.fn(),
 }));
 
 /** CH3.1 + CH3.2 rendered: the list in training-site shape, the editor, save/duplicate/cancel, Write with AI, a11y. */
@@ -41,6 +41,7 @@ async function renderAt(url: string): Promise<void> {
 beforeEach(() => {
   (api.listThumbnails as jest.Mock).mockResolvedValue({ options: [], chosen_id: null, ai: { enabled: true, used_today: 0, daily_limit: 12, batch: 3 } });
   (api.listEventPhotos as jest.Mock).mockResolvedValue([]);
+  (api.getPromotionPlan as jest.Mock).mockResolvedValue({ event_id: 'x', rows: [] });
   (api.getLivePanel as jest.Mock).mockResolvedValue({ input_configured: true, occurrence: null, commands: [], input_held_by: null });
 });
 beforeEach(() => { (api.listHubCohorts as jest.Mock).mockResolvedValue([{ id: '77777777-7777-4777-8777-777777777777', name: 'November 2026', status: 'open', start_date: '2026-11-03' }]); });

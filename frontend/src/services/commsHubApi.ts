@@ -218,3 +218,22 @@ export async function getLiveIngest(eventId: string): Promise<{ rtmps_url: strin
   const { data } = await api.get<{ rtmps_url: string; stream_key: string }>(`${live(eventId)}/ingest`);
   return data;
 }
+
+/* Promotion plan (CH6.4: backend/src/routes/admin/commsHubPlanRoutes.ts). */
+export type PlanKind = 'announcement' | 'reminder' | 'starting_soon' | 'recording_thanks';
+export type HubMessageStatus = 'draft' | 'needs_approval' | 'approved' | 'scheduled' | 'sending' | 'sent' | 'partially_failed' | 'failed' | 'cancelled';
+export interface PlanRow {
+  kind: PlanKind; label: string; timing: string; channels: string; ticked: boolean;
+  next: { message_id: string; status: HubMessageStatus; send_at: string | null; occurrence: string } | null;
+}
+export interface PlanView { event_id: string; rows: PlanRow[] }
+export interface PlanResult { created: number; existing: number; skipped: Array<{ kind: PlanKind; occurrence: string; reason: string }> }
+
+export async function getPromotionPlan(eventId: string): Promise<PlanView> {
+  const { data } = await api.get<PlanView>(`/api/admin/comms-hub/events/${eventId}/plan`);
+  return data;
+}
+export async function savePromotionPlan(eventId: string, kinds: PlanKind[]): Promise<PlanView & { result: PlanResult }> {
+  const { data } = await api.put<PlanView & { result: PlanResult }>(`/api/admin/comms-hub/events/${eventId}/plan`, { kinds });
+  return data;
+}
