@@ -1,10 +1,22 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  apiErrorMessage, cancelHubEvent, createHubEvent, describeHubEvent, duplicateHubEvent, getHubEvent, listHubCohorts, updateHubEvent,
+  apiErrorMessage, cancelHubEvent, type CancelCascade, createHubEvent, describeHubEvent, duplicateHubEvent, getHubEvent, listHubCohorts, updateHubEvent,
   type HubCohort, type HubEvent,
 } from '../../../../services/commsHubApi';
 import { emptyForm, fromEvent, toInput, validate, type EventFormState, type FormErrors } from './eventForm';
 import type { DescribeControls } from './EventFormFields';
+
+/** What the organizer is told after cancelling (CH7.3): what stopped, and what is still to do. */
+export function cancelNotice(c: CancelCascade | null): string {
+  const parts = ['Cancelled. It is off the calendar and the Events page.'];
+  if (!c) return parts[0];
+  const stopped = c.messages_cancelled + c.sending_voided;
+  if (stopped > 0) parts.push(`${stopped} ${stopped === 1 ? 'message' : 'messages'} about it will not be sent.`);
+  if (c.broadcast === 'cancelled') parts.push('The live stream prepared for it was cancelled too.');
+  if (c.broadcast === 'failed') parts.push('The live stream prepared for it could not be cancelled; cancel it on the Live panel.');
+  parts.push(c.draft_message_id ? 'A message telling people it is cancelled is ready for you to review.' : 'Tell people it is cancelled from Compose.');
+  return parts.join(' ');
+}
 
 /**
  * The event editor's state and actions (CH3.2). Every server call reports failure in plain words
@@ -47,13 +59,21 @@ export function useEventEditor(eventId: string | null, onSaved: (ev: HubEvent) =
     } finally { setBusy(null); }
   };
 
+  const [cancelled, setCancelled] = useState<CancelCascade | null>(null);
   const act = async (kind: 'duplicate' | 'cancel'): Promise<void> => {
     if (!event) return;
     setBusy(kind);
     try {
-      const result = kind === 'duplicate' ? await duplicateHubEvent(event.id) : await cancelHubEvent(event.id);
-      setNotice(kind === 'duplicate' ? 'Copied as a draft. Change the date, then save.' : 'Cancelled. It is off the calendar and the Events page.');
-      if (kind === 'duplicate') onSaved(result); else { setEvent(result); setForm(fromEvent(result)); }
+      if (kind === 'duplicate') {
+        const copy = await duplicateHubEvent(event.id);
+        setNotice('Copied as a draft. Change the date, then save.');
+        onSaved(copy);
+      } else {
+        const { event: done, cancellation } = await cancelHubEvent(event.id);
+        setEvent(done); setForm(fromEvent(done));
+        setCancelled(cancellation);
+        setNotice(cancelNotice(cancellation));
+      }
     } catch (err) {
       setErrors({ form: apiErrorMessage(err, kind === 'duplicate' ? 'The copy was not made.' : 'The event was not cancelled.') });
     } finally { setBusy(null); }
@@ -66,7 +86,7 @@ export function useEventEditor(eventId: string | null, onSaved: (ev: HubEvent) =
     try { setEvent(await getHubEvent(eventId)); } catch { /* the panel already said what went wrong */ }
   }, [eventId]);
 
-  return { load, event, cohorts, form, errors, busy, notice, change, save, act, describe, refresh };
+  return { load, event, cohorts, form, errors, busy, notice, cancelled, change, save, act, describe, refresh };
 }
 
 /** "Write with AI" for the description, with one-step undo of the AI text. */

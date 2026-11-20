@@ -1,6 +1,7 @@
 jest.mock('jsonwebtoken', () => ({ verify: jest.fn() }));
 jest.mock('../../../config/env', () => require('../../../__tests__/testSupport/configMocks')
   .envModuleMock({ jwtSecret: 'test-secret' }));
+jest.mock('../../../services/commsHub/eventCancel', () => ({ cancelEventAndOffer: jest.fn() }));
 jest.mock('../../../services/commsHub/eventService', () => {
   const actual = jest.requireActual('../../../services/commsHub/eventService');
   return {
@@ -13,6 +14,7 @@ jest.mock('../../../services/commsHub/eventService', () => {
 import jwt from 'jsonwebtoken';
 import router from '../commsHubEventRoutes';
 import * as svc from '../../../services/commsHub/eventService';
+import * as cancelSvc from '../../../services/commsHub/eventCancel';
 
 /** CH2.2 events API: guard, Zod before the service, error mapping. The service is mocked; its rules have their own tests. */
 const verify = jwt.verify as unknown as jest.Mock;
@@ -77,7 +79,7 @@ describe('CH2.2 events API', () => {
   it('service errors map to 404, 409 and a plain 500', async () => {
     (svc.updateEvent as jest.Mock).mockRejectedValueOnce(new svc.EventNotFoundError('Event not found.'));
     expect((await call('put', '/api/admin/comms-hub/events/:id', { params: { id: ID }, body })).statusCode).toBe(404);
-    (svc.cancelEvent as jest.Mock).mockRejectedValueOnce(new svc.EventStateError('End the live stream before cancelling this event.'));
+    (cancelSvc.cancelEventAndOffer as jest.Mock).mockRejectedValueOnce(new svc.EventStateError('End the live stream before cancelling this event.'));
     expect((await call('post', '/api/admin/comms-hub/events/:id/cancel', { params: { id: ID } })).statusCode).toBe(409);
     (svc.duplicateEvent as jest.Mock).mockRejectedValueOnce(new Error('db down'));
     const spy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -94,4 +96,16 @@ describe('CH2.2 events API', () => {
       expect((await call(m, p, { who, params: { id: ID }, body })).statusCode).toBe(403);
     }
   });
+
+  it('CH7.3 cancel answers with the event and what else it did, in the declared shape', async () => {
+    const cancellation = { messages_cancelled: 2, deliveries_cancelled: 1, sending_voided: 0, broadcast: 'cancelled', draft_message_id: '11111111-1111-4111-8111-111111111111' };
+    (cancelSvc.cancelEventAndOffer as jest.Mock).mockResolvedValueOnce({ event: { ...VIEW, status: 'cancelled' }, cancellation });
+    const r = await call('post', '/api/admin/comms-hub/events/:id/cancel', { params: { id: ID } });
+    expect(r.statusCode).toBe(200);
+    expect(r.body).toEqual({ event: expect.objectContaining({ status: 'cancelled' }), cancellation });
+    expect(cancelSvc.cancelEventAndOffer).toHaveBeenCalledWith(ID, expect.objectContaining({ id: 'jackie-1' }));
+    (cancelSvc.cancelEventAndOffer as jest.Mock).mockResolvedValueOnce({ event: { ...VIEW, status: 'cancelled' }, cancellation: null });
+    expect((await call('post', '/api/admin/comms-hub/events/:id/cancel', { params: { id: ID } })).body.cancellation).toBeNull();
+  });
 });
+

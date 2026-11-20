@@ -33,7 +33,7 @@ jest.mock('../../../../models/CommsHubApproval', () => ({
 jest.mock('../../activityLog', () => ({ logActivity: jest.fn(async (_a: Row, action: string, _t: string, id: string, detail: Row) => { activity.push({ action, id, ...detail }); }) }));
 
 import { sequelize } from '../../../../config/database';
-import { approveMessage, cancelMessage, MessageRuleError, reconcileApproval, rejectMessage, scheduleMessage, submitForApproval, undoApproval } from '../approvals';
+import { approveMessage, cancelMessage, MessageRuleError, reconcileApproval, rejectMessage, scheduleMessage, submitForApproval, undoApproval, voidForEvent } from '../approvals';
 import { approvalHash } from '../messageStatus';
 
 const JACKIE = { id: 'jackie-1', label: 'Jackie' };
@@ -249,5 +249,31 @@ describe('CH6.3 attempt 2: the validator also runs at approval', () => {
     drafts = [{ message_id: 'm3', channel: 'community_post', version: 2, title: null, body: 'Demo Tuesday: Tuesday, December 1 at 6 PM CST.' }];
     await approveMessage('m3', TAIWO, new Date('2026-11-20T15:00:00Z'));
     expect(messages.get('m3')!.status).toBe('approved');
+  });
+});
+
+describe('CH7.3 voidForEvent: the event changed or was cancelled', () => {
+  const T = { LOCK: { UPDATE: 'UPDATE' } } as never;
+  it('an approved or scheduled message goes back to needs_approval with the reason recorded', async () => {
+    await approveMessage('m1', TAIWO, AT);
+    await scheduleMessage('m1', TAIWO);
+    expect(await voidForEvent('m1', 'event_changed', JACKIE, AT, T)).toBe(true);
+    expect(messages.get('m1')!.status).toBe('needs_approval');
+    expect(approvals[0]).toEqual(expect.objectContaining({ voided_at: AT, voided_reason: 'event_changed' }));
+  });
+  it('a sending message keeps its status (the worker finishes the attempt) but loses its approval, so nothing more is sent', async () => {
+    await approveMessage('m1', TAIWO, AT);
+    messages.get('m1')!.status = 'sending';
+    expect(await voidForEvent('m1', 'event_cancelled', JACKIE, AT, T)).toBe(true);
+    expect(messages.get('m1')!.status).toBe('sending');
+    expect(approvals[0]).toEqual(expect.objectContaining({ voided_at: AT, voided_reason: 'event_cancelled' }));
+    expect(activity).toContainEqual(expect.objectContaining({ action: 'message.approval_voided', id: 'm1', reason: 'event_cancelled', while: 'sending' }));
+  });
+  it('a message with no approval in force (draft, waiting, or already voided) is left as it is', async () => {
+    expect(await voidForEvent('m1', 'event_changed', JACKIE, AT, T)).toBe(false); // needs_approval
+    messages.get('m1')!.status = 'sending';
+    expect(await voidForEvent('m1', 'event_changed', JACKIE, AT, T)).toBe(false); // sending, nothing in force
+    messages.get('m1')!.status = 'sent';
+    expect(await voidForEvent('m1', 'event_changed', JACKIE, AT, T)).toBe(false);
   });
 });

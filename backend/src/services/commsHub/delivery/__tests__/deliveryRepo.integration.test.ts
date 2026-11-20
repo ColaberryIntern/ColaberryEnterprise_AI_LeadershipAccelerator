@@ -58,7 +58,7 @@ describeIfDb('CH7.2 sending worker on a scratch Postgres', () => {
   });
 
   beforeEach(async () => {
-    await sequelize.query('DELETE FROM comms_hub_activity; DELETE FROM comms_hub_deliveries; DELETE FROM comms_hub_approvals; DELETE FROM comms_hub_destinations; DELETE FROM comms_hub_drafts; DELETE FROM comms_hub_messages; DELETE FROM cohorts');
+    await sequelize.query('DELETE FROM comms_hub_activity; DELETE FROM comms_hub_deliveries; DELETE FROM comms_hub_approvals; DELETE FROM comms_hub_destinations; DELETE FROM comms_hub_drafts; DELETE FROM comms_hub_messages; DELETE FROM comms_hub_events; DELETE FROM cohorts');
     await sequelize.query('UPDATE comms_hub_settings SET sending_paused = false, quiet_hours = NULL');
   });
 
@@ -176,6 +176,26 @@ describeIfDb('CH7.2 sending worker on a scratch Postgres', () => {
     expect(await repo.settledSendingIds(10)).toEqual([m]);
     expect(await repo.finishMessage(m, NOW)).toBe('sent');
     expect(await repo.settledSendingIds(10)).toEqual([]);
+  });
+
+  it('CH7.3 cancelling the event mid-send: pending deliveries cancelled, the approval voided, the worker sends nothing more', async () => {
+    const ev = (await q<{ id: string }>(`INSERT INTO comms_hub_events (title, starts_at) VALUES ('Demo Tuesday', '2026-12-02T00:00:00Z') RETURNING id`))[0].id;
+    const feeds = [await cohort('A'), await cohort('B')];
+    const m = await approvedMessage(feeds);
+    await sequelize.query(`UPDATE comms_hub_messages SET event_id = '${ev}' WHERE id = '${m}'`);
+    // Approval hash does not include the event, so it still matches after linking.
+    await repo.startMessage(m, NOW);
+    const { cascadeEventCancel } = await import('../../messages/eventCascade');
+    const out = await sequelize.transaction((t) => cascadeEventCancel(ev, { id: 'jackie-1', label: 'Jackie' }, NOW, t));
+    expect(out).toEqual({ messages_cancelled: 0, deliveries_cancelled: 2, sending_voided: 1 });
+    expect((await deliveriesOf(m)).map((d) => d.status)).toEqual(['cancelled', 'cancelled']);
+    const calls: ConnectorDelivery[] = [];
+    const ch: Connector = { channel: 'community_post', async send(d) { calls.push(d); return { provider_message_id: 'x', reached: 1, already_done: false }; } };
+    const r = await runDeliveryTick({ repo, connector: () => ch, log: () => undefined }, new Date(NOW.getTime() + 60_000));
+    expect(calls).toHaveLength(0);
+    expect(r.finished).toEqual({ [m]: 'failed' });
+    // Its result reconciled the voided approval: back to Jackie, not retryable as approved.
+    expect((await q<{ status: string }>('SELECT status FROM comms_hub_messages WHERE id = $1', [m]))[0].status).toBe('needs_approval');
   });
 
   it('paused in the settings row: nothing starts', async () => {

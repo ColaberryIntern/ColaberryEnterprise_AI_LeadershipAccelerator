@@ -128,6 +128,24 @@ async function voidInForce(m: CommsHubMessage, reason: VoidReason, actor: Actor,
   return true;
 }
 
+/**
+ * The event this message is about changed or was cancelled (CH7.3): its approval no longer stands.
+ * An approved, scheduled or failed message goes back to needs_approval. A message that is SENDING
+ * cannot change status, so only its approval is voided: the worker re-checks the approval under its
+ * send lock before every send, so nothing more goes out, and when the attempt ends the message's
+ * reconcile puts it back to needs_approval. Returns whether an approval (or status) changed.
+ */
+export async function voidForEvent(messageId: string, reason: 'event_changed' | 'event_cancelled', actor: Actor, now: Date, t: Transaction): Promise<boolean> {
+  const m = await locked(messageId, t);
+  if (APPROVED_STATUSES.includes(m.status)) return voidInForce(m, reason, actor, t, now);
+  if (m.status !== 'sending') return false;
+  const a = await inForce(m.id, t);
+  if (!a) return false;
+  await a.update({ voided_at: now, voided_reason: reason }, { transaction: t });
+  await logActivity(actor, 'message.approval_voided', 'message', m.id, { approval_id: a.id, reason, while: 'sending' }, t);
+  return true;
+}
+
 /** Undo approval: approved | scheduled -> needs_approval, the approval voided as 'undone'. */
 export async function undoApproval(messageId: string, actor: Actor, now: Date = new Date(), outer?: Transaction): Promise<CommsHubMessage> {
   return inTx(outer, async (t) => {

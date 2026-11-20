@@ -81,4 +81,6 @@ export function approvalHash(c: ApprovalContent): string {
 }
 
 /** Why an approval in force was voided (recorded on the approval row). */
-export type VoidReason = 'draft_changed' | 'destinations_changed' | 'send_time_changed' | 'undone' | 'cancelled';
+export type VoidReason = 'draft_changed' | 'destinations_changed' | 'send_time_changed' | 'undone' | 'cancelled'
+  // CH7.3: the event's date, time or links changed, or the event was cancelled.
+  | 'event_changed' | 'event_cancelled';

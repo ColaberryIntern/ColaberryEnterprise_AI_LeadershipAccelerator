@@ -34,3 +34,14 @@ export type EventView = z.infer<typeof EventView>;
 
 export const EventListResponse = z.object({ events: z.array(EventView) }).strict();
 export const EventResponse = z.object({ event: EventView }).strict();
+/** CH7.3: what cancelling did beyond the event (null when it was already cancelled). */
+export const CancelResponse = z.object({
+  event: EventView,
+  cancellation: z.object({
+    messages_cancelled: z.number().int().nonnegative(),
+    deliveries_cancelled: z.number().int().nonnegative(),
+    sending_voided: z.number().int().nonnegative(),
+    broadcast: z.enum(['cancelled', 'none', 'failed']),
+    draft_message_id: z.string().uuid().nullable(),
+  }).strict().nullable(),
+}).strict();

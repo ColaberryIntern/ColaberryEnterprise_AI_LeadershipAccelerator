@@ -58,7 +58,7 @@ jest.mock('../../../broadcast/providers/cloudflareStreamProvider', () => ({
 }));
 
 import { LiveRefusedError } from '../eventOccurrence';
-import { LivePanelError, prepareLive, readIngest, readLivePanel, runLiveCommand, syncLiveEvents } from '../livePanel';
+import { cancelPreparedLive, LivePanelError, prepareLive, readIngest, readLivePanel, runLiveCommand, syncLiveEvents } from '../livePanel';
 
 const JACKIE = { id: 'jackie-1', label: 'j' };
 const NOW = new Date('2026-12-01T23:50:00Z');
@@ -264,5 +264,26 @@ describe('CH5.2 attempt 2: the event follows the occurrence however it changes',
     occ.get('o1')!.provider_health = 'ready';
     await runLiveCommand('e1', 'go_live', occ.get('o1')!.version, JACKIE, NOW);
     expect(locks).toEqual([`comms_hub_live_input:${UID}`, `comms_hub_live_input:${UID}`]);
+  });
+});
+
+describe('CH7.3 cancelling the event cancels a prepared stream that is not live yet', () => {
+  it('backstage (prepared) or scheduled: cancelled through the broadcast state machine, and logged', async () => {
+    await prepareLive('e1', null, JACKIE, NOW);
+    expect(occ.get('o1')!.editorial_state).toBe('backstage');
+    expect(await cancelPreparedLive(events.get('e1') as never, JACKIE)).toBe('cancelled');
+    expect(sent[sent.length - 1]).toBe('cancel');
+    expect(occ.get('o1')!.editorial_state).toBe('cancelled');
+    expect(activity).toContainEqual({ action: 'broadcast.cancelled', id: 'o1' });
+    occ.set('o2', newOcc('o2', { editorial_state: 'scheduled' }));
+    expect(await cancelPreparedLive(newEvent({ broadcast_occurrence_id: 'o2' }) as never, JACKIE)).toBe('cancelled');
+    expect(occ.get('o2')!.editorial_state).toBe('cancelled');
+  });
+  it('nothing prepared, or a stream already over: nothing to cancel', async () => {
+    expect(await cancelPreparedLive(events.get('e1') as never, JACKIE)).toBe('none');
+    occ.set('o3', newOcc('o3', { editorial_state: 'ended' }));
+    const before = sent.length;
+    expect(await cancelPreparedLive(newEvent({ broadcast_occurrence_id: 'o3' }) as never, JACKIE)).toBe('none');
+    expect(sent.length).toBe(before);
   });
 });

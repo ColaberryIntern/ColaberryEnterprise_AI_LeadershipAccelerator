@@ -92,9 +92,14 @@ export async function duplicateHubEvent(id: string): Promise<HubEvent> {
   return data.event;
 }
 
-export async function cancelHubEvent(id: string): Promise<HubEvent> {
-  const { data } = await api.post<{ event: HubEvent }>(`/api/admin/comms-hub/events/${id}/cancel`);
-  return data.event;
+/** What cancelling an event also did (CH7.3); null when it was already cancelled. */
+export interface CancelCascade {
+  messages_cancelled: number; deliveries_cancelled: number; sending_voided: number;
+  broadcast: 'cancelled' | 'none' | 'failed'; draft_message_id: string | null;
+}
+export async function cancelHubEvent(id: string): Promise<{ event: HubEvent; cancellation: CancelCascade | null }> {
+  const { data } = await api.post<{ event: HubEvent; cancellation: CancelCascade | null }>(`/api/admin/comms-hub/events/${id}/cancel`);
+  return data;
 }
 
 export async function getHubEvent(id: string): Promise<HubEvent> {

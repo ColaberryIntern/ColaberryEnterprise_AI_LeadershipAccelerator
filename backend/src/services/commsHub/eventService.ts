@@ -8,6 +8,7 @@ import { syncCalendarRows } from './eventWriteThrough';
 import { logActivity, type Actor } from './activityLog';
 import { registerSummaryCounters } from './commsHubSummary';
 import type { EventView } from './eventSchemas';
+import { cascadeEventCancel, cascadeEventEdit, type CancelCascade } from './messages/eventCascade';
 
 /**
  * Communications Hub events (CH2.2): create, update, duplicate, cancel, list. Every mutation runs in
@@ -108,6 +109,8 @@ export async function updateEvent(id: string, input: EventInput, actor: Actor): 
     await e.update({ ...next, updated_by: actor.id }, { transaction: t });
     const rows = await syncCalendarRows(e, t);
     await logActivity(actor, 'event.updated', 'event', e.id, { changed, calendar_rows: rows }, t);
+    // CH7.3: a new date, time or link voids the approvals on its messages, in this same transaction.
+    await cascadeEventEdit(e, changed, actor, new Date(), t);
     return e;
   });
   return toView(updated);
@@ -127,20 +130,30 @@ export async function duplicateEvent(id: string, actor: Actor): Promise<EventVie
   return toView(copy);
 }
 
-/** Cancel is idempotent: cancelling a cancelled event changes nothing and logs nothing. */
-export async function cancelEvent(id: string, actor: Actor): Promise<EventView> {
-  const result = await sequelize.transaction(async (t) => {
+/**
+ * Cancel is idempotent: cancelling a cancelled event changes nothing and logs nothing (cascade null).
+ * CH7.3: in the SAME transaction, every message about the event that has not gone out is cancelled
+ * and its pending deliveries stop (eventCascade.ts). What happens after the commit (the prepared
+ * broadcast, the offered cancellation draft) is eventCancel.ts.
+ */
+export async function cancelEventWithCascade(id: string, actor: Actor, now: Date = new Date()): Promise<{ event: CommsHubEvent; cascade: CancelCascade | null }> {
+  return sequelize.transaction(async (t) => {
     const e = await CommsHubEvent.findByPk(id, { transaction: t, lock: t.LOCK.UPDATE });
     if (!e) throw new EventNotFoundError('Event not found.');
-    if (e.status === 'cancelled') return e;
+    if (e.status === 'cancelled') return { event: e, cascade: null };
     if (e.status === 'live') throw new EventStateError('End the live stream before cancelling this event.');
     await e.update({ status: 'cancelled', updated_by: actor.id }, { transaction: t });
     await syncCalendarRows(e, t);
     await logActivity(actor, 'event.cancelled', 'event', e.id, { title: e.title }, t);
-    return e;
+    return { event: e, cascade: await cascadeEventCancel(e.id, actor, now, t) };
   });
-  return toView(result);
 }
+
+export async function cancelEvent(id: string, actor: Actor): Promise<EventView> {
+  return toView((await cancelEventWithCascade(id, actor)).event);
+}
+
+export { toView as eventView };
 
 /** The Today tiles this feature owns. */
 registerSummaryCounters({

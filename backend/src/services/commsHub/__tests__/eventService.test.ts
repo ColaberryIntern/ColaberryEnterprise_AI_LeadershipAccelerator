@@ -65,9 +65,16 @@ const mockBulk = jest.fn(async (rows: Row[]) => rows);
 jest.mock('../../../models/CommunityEvent', () => ({ __esModule: true, default: { destroy: (...a: unknown[]) => mockDestroy(...(a as [])), bulkCreate: (...a: unknown[]) => mockBulk(...(a as [Row[]])) } }));
 jest.mock('../../../models/Cohort', () => ({ __esModule: true, default: { findAll: jest.fn(async () => [{ get: () => 'c-open-1' }, { get: () => 'c-open-2' }, { get: () => 'c-open-3' }]) } }));
 const mockActivity = jest.fn(async (r: Row) => r);
+// CH7.3: what an event change does to its messages is eventCascade's (its own tests); here, that it runs in the event's transaction.
+const mockCascadeCancel = jest.fn(async () => ({ messages_cancelled: 2, deliveries_cancelled: 1, sending_voided: 0 }));
+const mockCascadeEdit = jest.fn(async () => ({ voided: 1, plan_cancelled: 0 }));
+jest.mock('../messages/eventCascade', () => ({
+  cascadeEventCancel: (...a: unknown[]) => mockCascadeCancel(...(a as [])),
+  cascadeEventEdit: (...a: unknown[]) => mockCascadeEdit(...(a as [])),
+}));
 jest.mock('../../../models/CommsHubActivity', () => ({ __esModule: true, default: { create: (...a: unknown[]) => mockActivity(...(a as [Row])) } }));
 
-import { createEvent, updateEvent, cancelEvent, duplicateEvent, listEvents, EventStateError } from '../eventService';
+import { createEvent, updateEvent, cancelEvent, cancelEventWithCascade, duplicateEvent, listEvents, EventStateError } from '../eventService';
 import { EventInput } from '../eventInput';
 import { getSummary } from '../commsHubSummary';
 
@@ -169,5 +176,43 @@ describe('CH2.2 lists and the Today tiles', () => {
     const s = await getSummary(now);
     expect(s.upcoming_events).toBe(1);
     expect(s.events_missing_thumbnail).toBe(1);
+  });
+});
+
+describe('CH7.3 the message cascades run inside the event transaction', () => {
+  it('cancel: the cascade runs once, with the cancelled event, in the same transaction; a second cancel runs nothing', async () => {
+    const v = await createEvent(input(), JACKIE);
+    mockCascadeCancel.mockClear();
+    const r = await cancelEventWithCascade(v.id, JACKIE);
+    expect(r.event.status).toBe('cancelled');
+    expect(r.cascade).toEqual({ messages_cancelled: 2, deliveries_cancelled: 1, sending_voided: 0 });
+    expect(mockCascadeCancel).toHaveBeenCalledTimes(1);
+    const [eventId, actor, , tx] = mockCascadeCancel.mock.calls[0] as unknown[];
+    expect([eventId, actor]).toEqual([v.id, JACKIE]);
+    expect(tx).toBeDefined();
+    expect((await cancelEventWithCascade(v.id, JACKIE)).cascade).toBeNull();
+    expect(mockCascadeCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('a live event is refused before any message is touched', async () => {
+    const v = await createEvent(input(), JACKIE);
+    await store.get(v.id)!.update({ status: 'live' });
+    mockCascadeCancel.mockClear();
+    await expect(cancelEventWithCascade(v.id, JACKIE)).rejects.toThrow(/End the live stream/);
+    expect(mockCascadeCancel).not.toHaveBeenCalled();
+  });
+
+  it('edit: the cascade gets the changed fields, in the same transaction; an edit that changes nothing does not run it', async () => {
+    const v = await createEvent(input(), JACKIE);
+    mockCascadeEdit.mockClear();
+    await updateEvent(v.id, input({ start_time: '17:30' }), JACKIE);
+    expect(mockCascadeEdit).toHaveBeenCalledTimes(1);
+    const [ev, changed, actor, , tx] = mockCascadeEdit.mock.calls[0] as unknown[];
+    expect((ev as Row).id).toBe(v.id);
+    expect(changed).toEqual(expect.arrayContaining(['starts_at']));
+    expect(actor).toEqual(JACKIE);
+    expect(tx).toBeDefined();
+    await updateEvent(v.id, input({ start_time: '17:30' }), JACKIE);
+    expect(mockCascadeEdit).toHaveBeenCalledTimes(1);
   });
 });

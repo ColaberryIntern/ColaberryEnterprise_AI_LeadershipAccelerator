@@ -3,9 +3,10 @@ import { z } from 'zod';
 import { requireSection } from '../../middlewares/authMiddleware';
 import { logFailure, sendValidated } from '../campusRoutes';
 import { EventInput, EventInputError } from '../../services/commsHub/eventInput';
-import { EventListResponse, EventResponse } from '../../services/commsHub/eventSchemas';
+import { CancelResponse, EventListResponse, EventResponse } from '../../services/commsHub/eventSchemas';
+import { cancelEventAndOffer } from '../../services/commsHub/eventCancel';
 import {
-  listEvents, getEvent, createEvent, updateEvent, duplicateEvent, cancelEvent,
+  listEvents, getEvent, createEvent, updateEvent, duplicateEvent,
   EventNotFoundError, EventStateError, type EventScope,
 } from '../../services/commsHub/eventService';
 import type { Actor } from '../../services/commsHub/activityLog';
@@ -77,7 +78,8 @@ export async function duplicateRoute(req: Request, res: Response): Promise<void>
 export async function cancelRoute(req: Request, res: Response): Promise<void> {
   const p = IdParams.safeParse(req.params);
   if (!p.success) { badRequest(res, p.error.issues); return; }
-  try { sendValidated(res, EventResponse, { event: await cancelEvent(p.data.id, actorOf(req)) }, 'comms_hub_event_cancel'); } catch (err) { sendError(res, err, 'comms_hub_event_cancel_failed'); }
+  // CH7.3: the event and its unsent messages are cancelled together; then the prepared stream, and a cancellation draft offered.
+  try { sendValidated(res, CancelResponse, await cancelEventAndOffer(p.data.id, actorOf(req)), 'comms_hub_event_cancel'); } catch (err) { sendError(res, err, 'comms_hub_event_cancel_failed'); }
 }
 
 const gate = requireSection('comms_hub');

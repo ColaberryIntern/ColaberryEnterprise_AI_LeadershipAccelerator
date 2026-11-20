@@ -228,6 +228,19 @@ export async function runLiveCommand(eventId: string, cmd: 'go_live' | 'end' | '
 }
 
 /** The Zoom push details for the shared input. Returned to the caller only; never logged or stored. */
+/**
+ * CH7.3: the event was cancelled; a broadcast prepared for it that is not live yet (scheduled or
+ * backstage) is cancelled too, so the stream cannot be taken live. Live is refused before this runs
+ * (an event that is live cannot be cancelled). Returns what happened.
+ */
+export async function cancelPreparedLive(e: CommsHubEvent, actor: Actor): Promise<'cancelled' | 'none'> {
+  const row = await readOccurrence(e.broadcast_occurrence_id);
+  if (!row || !['scheduled', 'backstage'].includes(row.editorial_state)) return 'none';
+  await command(row.id, 'cancel', Number(row.version));
+  await logActivity(actor, 'broadcast.cancelled', 'broadcast', row.id, { event_id: e.id, was: row.editorial_state });
+  return 'cancelled';
+}
+
 export async function readIngest(eventId: string): Promise<{ rtmps_url: string; stream_key: string }> {
   await eventOr404(eventId);
   const binding = resolveLiveInput();

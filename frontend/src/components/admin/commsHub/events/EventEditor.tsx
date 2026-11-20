@@ -8,6 +8,7 @@ import { cancelSummary } from './eventDisplay';
 import ThumbnailStudio from './studio/ThumbnailStudio';
 import LivePanel from './live/LivePanel';
 import PromotionPlan from './plan/PromotionPlan';
+import { Link } from 'react-router-dom';
 
 /**
  * The event editor (design 02, CH3.2): the form, then Save event, Save as draft, Duplicate and Cancel
@@ -54,7 +55,19 @@ export default function EventEditor({ eventId, onClose, onSaved }: Props): React
     <SectionCard title={title} icon="calendar-event-line" actions={ed.event ? <EventStatusChip status={ed.event.status} /> : undefined}>
       {back}
       {ed.errors.form && <div className="alert alert-danger" role="alert">{ed.errors.form}</div>}
-      {ed.notice && <div className="alert alert-info" role="status">{ed.notice}</div>}
+      {ed.notice && (
+        <div className="alert alert-info" role="status">
+          {ed.notice}
+          {ed.cancelled && (
+            <div className="mt-2">
+              {/* CH7.3: the offered cancellation message opens in Compose; nothing is sent until it is approved. */}
+              <Link className="btn btn-primary comms-hub-action" to={ed.cancelled.draft_message_id ? `/admin/comms-hub/compose?message=${ed.cancelled.draft_message_id}` : `/admin/comms-hub/compose?text=${encodeURIComponent(`${ed.event?.title ?? 'This event'} is cancelled`)}`}>
+                {ed.cancelled.draft_message_id ? 'Review the cancellation message' : 'Write a cancellation message'}
+              </Link>
+            </div>
+          )}
+        </div>
+      )}
       {locked && <div className="alert alert-secondary">This event is {ed.event?.status}. Duplicate it to run it again.</div>}
       <fieldset disabled={locked || ed.busy !== null}>
         <legend className="visually-hidden">{title}</legend>
