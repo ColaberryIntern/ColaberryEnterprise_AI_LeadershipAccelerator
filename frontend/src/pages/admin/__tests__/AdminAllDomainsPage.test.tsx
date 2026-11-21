@@ -60,6 +60,7 @@ function row(over: Record<string, unknown> = {}) {
     manager_email: 'manager@example.com',
     manager_can_reach: true,
     manager_blocker: null,
+    intended_builder: null,
     intended_builder_state: 'verified_active',
     agent_id: null,
     // AF10.6: null is the normal state, and this page does not render it.
@@ -249,5 +250,100 @@ describe('it surfaces the bad parts rather than defaulting them', () => {
     await render();
     expect(text()).toContain('Managers blocked');
     expect(text()).toContain('Missing lifecycle row');
+  });
+});
+
+// ───────────────── AF12.16: the intern, their links, and their admin layer ─────────────────
+
+/**
+ * Ali, 21 Nov 2026, after signing in as Quincy and several other interns:
+ * *"none of them have an entry to a door to the mgmt screen."*
+ *
+ * All seven have one. `getMgmtStatus` returns `is_mgmt: true` for every builder, each with a real
+ * `mgmt_role` and the `agents` section granted on top. What hid the door was the read-only
+ * view-as rule, which withholds employee tools on purpose, so impersonating a builder is the one
+ * method guaranteed never to show their admin access.
+ *
+ * The fix is to stop needing impersonation: report the grant here, where an owner reads it
+ * without becoming anybody. These tests pin that, and pin the two refusals around it, because a
+ * screen that guesses which person a name means would report somebody else's access as this
+ * builder's.
+ */
+describe('the intern building it, and the admin layer they already hold', () => {
+  const quincy = () => row({
+    domain_key: 'platform',
+    intended_builder: 'Quincy Nkwain Ninying',
+    intended_builder_mgmt_role: 'platform',
+    intended_builder_mgmt_label: 'Platform',
+    intended_builder_sections: ['dashboard', 'system', 'agents'],
+    agent_id: 'agent-123',
+    agent_display_name: 'Atlas',
+    student_project_id: 'proj-abc',
+  });
+
+  it('names the intern, which this screen never did before', async () => {
+    fetchAll.mockResolvedValue(payload({ domains: [quincy()] }));
+    await render();
+    expect(text()).toContain('Quincy Nkwain Ninying');
+  });
+
+  it('reports the admin door they hold, and the sections it opens', async () => {
+    fetchAll.mockResolvedValue(payload({ domains: [quincy()] }));
+    await render();
+    expect(text()).toContain('Opens the admin portal as');
+    expect(text()).toContain('Platform');
+    for (const s of ['dashboard', 'system', 'agents']) expect(text()).toContain(s);
+  });
+
+  it('REFUSAL 1: an ambiguous name resolves to nothing rather than to someone', async () => {
+    fetchAll.mockResolvedValue(payload({
+      domains: [row({
+        intended_builder: 'Two People Share This Name',
+        intended_builder_name_is_ambiguous: true,
+      })],
+    }));
+    await render();
+    expect(text()).toContain('More than one member carries this name');
+    expect(text()).not.toContain('Opens the admin portal as');
+  });
+
+  it('REFUSAL 2: a builder with no management role is said to have no door', async () => {
+    fetchAll.mockResolvedValue(payload({
+      domains: [row({ intended_builder: 'No Grant Yet', intended_builder_mgmt_role: null })],
+    }));
+    await render();
+    expect(text()).toContain('No management role, so no admin door');
+  });
+
+  it('CONTROL: an unstaffed domain says so, and claims no access for nobody', async () => {
+    fetchAll.mockResolvedValue(payload({ domains: [row({ intended_builder: null })] }));
+    await render();
+    expect(text()).toContain('nobody assigned');
+    expect(text()).not.toContain('Opens the admin portal as');
+    expect(text()).not.toContain('No management role');
+  });
+
+  it('links the domain to its build project, its agent, and the roster, each in a new tab', async () => {
+    fetchAll.mockResolvedValue(payload({ domains: [quincy()] }));
+    await render();
+    const hrefs = Array.from(container.querySelectorAll('a'))
+      .map((a) => ({ href: a.getAttribute('href'), target: a.getAttribute('target') }));
+    const find = (frag: string) => hrefs.find((h) => (h.href ?? '').includes(frag));
+
+    expect(find('/admin/accelerator?project=proj-abc')).toBeTruthy();
+    expect(find('/admin/agents/agent-123')).toBeTruthy();
+    expect(find('/admin/students?search=Quincy')).toBeTruthy();
+    // Ali asked for these to open away from the board he is reading.
+    for (const frag of ['/admin/accelerator?project=', '/admin/agents/', '/admin/students?search=']) {
+      expect(find(frag)?.target).toBe('_blank');
+    }
+  });
+
+  it('draws no agent link when no agent exists, rather than a dead one', async () => {
+    fetchAll.mockResolvedValue(payload({ domains: [row({ agent_id: null })] }));
+    await render();
+    const hrefs = Array.from(container.querySelectorAll('a')).map((a) => a.getAttribute('href') ?? '');
+    expect(hrefs.some((h) => h.includes('/admin/agents/'))).toBe(false);
+    expect(text()).toContain('none built yet');
   });
 });

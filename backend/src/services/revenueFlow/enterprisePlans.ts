@@ -45,12 +45,28 @@
 /** The grouping key for one enterprise service. Stable across any rewrite of the copy. */
 export type EnterprisePlanKey = 'build' | 'guide' | 'train';
 
+/**
+ * How the money arrives, which is NOT the same question as what we sell.
+ *
+ * Ali, 2026-11-21, describing Plan A: "more along what Will is going through right now
+ * with Middlesex. We are looking at a retainer, a monthly fee."
+ *
+ * That distinction earns a field of its own because it changes what a recorded deal value
+ * MEANS. A retainer's natural figure is a monthly fee; a project's is a total. Both end up
+ * in `enterprise_deal_values.deal_value_cents`, which always holds the TOTAL, so the shape
+ * has to be visible to whoever enters it or a $4,500 monthly retainer gets filed as a
+ * $4,500 deal. See `enterpriseDealValueService`, where the shape is required, not guessed.
+ */
+export type EngagementShape = 'monthly_retainer' | 'guided_project' | 'training_program';
+
 export interface EnterprisePlan {
   key: EnterprisePlanKey;
   /** How the funnel labels it. Ali's words, because this is read by Ram, not by a buyer. */
   label: string;
   /** What a prospect is asking for when they pick this one. */
   means: string;
+  /** How the money arrives. Drives how a deal value for this plan must be entered. */
+  shape: EngagementShape;
 }
 
 /**
@@ -64,19 +80,57 @@ export const ENTERPRISE_PLANS: readonly EnterprisePlan[] = [
   {
     key: 'build',
     label: 'A new build',
-    means: 'We build the thing. The prospect wants a system that does not exist yet.',
+    shape: 'monthly_retainer',
+    means:
+      'We build it for them, on a retainer. Ali, 2026-11-21: "more along what Will is going '
+      + 'through right now with Middlesex. We are looking at a retainer, a monthly fee." So '
+      + 'this plan is RECURRING revenue, not a one-off project fee, which is why its shape '
+      + 'is monthly_retainer and not guided_project.',
   },
   {
     key: 'guide',
     label: 'Work with your team',
-    means: 'We build alongside their people. The prospect has a team and wants it led.',
+    shape: 'guided_project',
+    means:
+      'Their people build it and we lead the work. Ali, 2026-11-21: this is "when they do '
+      + 'not want plan A because they want their people to build it." The deliverable is the '
+      + 'same system; who writes it is the difference.',
   },
   {
     key: 'train',
     label: 'Training your team',
-    means: 'We teach their people. The prospect wants capability left behind, not a system.',
+    shape: 'training_program',
+    means:
+      'We upgrade their people. Ali, 2026-11-21: "for people that want to upgrade their '
+      + 'people and create Forward Deployed Engineers." The thing left behind is capability '
+      + 'in their staff, not a system we wrote.',
   },
 ];
+
+/**
+ * The fourth motion, which is NOT one of the three plans and is deliberately not listed
+ * above.
+ *
+ * Ali, 2026-11-21, after describing A, B and C: "Then you can also talk about how we create
+ * our own Developers and they produce real projects that are all documented Case Studies so
+ * when seeing who you want to hire. The cost is 10% of the 1st year annual salary."
+ *
+ * It belongs to the `hire_fde` stream (hire.refactored.ai), not to `enterprise_site`, and
+ * the separation is load bearing in both directions. An enterprise plan is a company buying
+ * our work; a placement is a company hiring a person we trained, and the case studies are
+ * the evidence they shop with. Counting a placement as an enterprise plan would overstate
+ * the three plans and understate the hiring motion, and the two have different funnels:
+ * one ends at a signed engagement, the other at a hire.
+ *
+ * Recorded here anyway, because the three plans and this are one conversation with a buyer,
+ * and the next person reading `ENTERPRISE_PLANS` will otherwise wonder where the fourth
+ * thing Ali described went.
+ */
+export const FDE_PLACEMENT_NOTE =
+  'Not an enterprise plan: companies hire forward-deployed engineers we trained, through '
+  + 'hire.refactored.ai, at 10% of first year salary (set by Ali 2026-11-21, corrected from '
+  + 'a mistaken 1%). Lives on the hire_fde stream, which is declared and priced but not yet '
+  + 'wired to anything that records a placement.';
 
 export const ENTERPRISE_PLAN_KEYS: readonly EnterprisePlanKey[] = ENTERPRISE_PLANS.map((p) => p.key);
 
