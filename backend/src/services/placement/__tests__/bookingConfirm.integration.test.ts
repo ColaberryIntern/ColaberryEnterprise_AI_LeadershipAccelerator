@@ -33,6 +33,7 @@ jest.setTimeout(120_000);
 describeIfDb('after-booking work against Postgres', () => {
   let sequelize: import('sequelize').Sequelize;
   let schema: typeof import('../../../db/ensurePlacementSchema');
+  let prepSchema: typeof import('../../../db/ensureCareerPrepSchema');
   let svc: typeof import('../bookingService');
   let fin: typeof import('../bookingConfirm');
   let sweep: typeof import('../bookingConfirmSweep');
@@ -45,6 +46,7 @@ describeIfDb('after-booking work against Postgres', () => {
   beforeAll(async () => {
     ({ sequelize } = await import('../../../config/database'));
     schema = await import('../../../db/ensurePlacementSchema');
+    prepSchema = await import('../../../db/ensureCareerPrepSchema');
     svc = await import('../bookingService');
     fin = await import('../bookingConfirm');
     sweep = await import('../bookingConfirmSweep');
@@ -58,10 +60,12 @@ describeIfDb('after-booking work against Postgres', () => {
     await sequelize.query(`CREATE TABLE IF NOT EXISTS hire_interviews (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), enrollment_id UUID NOT NULL,
       status VARCHAR(20) NOT NULL, starts_at TIMESTAMPTZ NOT NULL, minutes INTEGER NOT NULL)`);
     for (const sql of schema.PLACEMENT_SCHEMA_ROLLBACK) await sequelize.query(sql);
+    await prepSchema.ensureCareerPrepSchema(); // CP8.3: the booking links the learner's prep row (career_interviews)
     await schema.ensurePlacementSchema();
   });
   afterAll(async () => {
     for (const sql of schema.PLACEMENT_SCHEMA_ROLLBACK) await sequelize.query(sql);
+    for (const sql of prepSchema.CAREER_PREP_ROLLBACK) await sequelize.query(sql);
     await sequelize.close();
   });
 
@@ -82,6 +86,8 @@ describeIfDb('after-booking work against Postgres', () => {
     expect((await one("SELECT COUNT(*)::int AS n FROM placement_events WHERE event = 'booking_confirm_done'")).n).toBe(1);
     expect(mockCreate.mock.calls[0][0]).toMatchObject({ autoRecording: 'none' });
     expect(new Set(mockSent).size).toBe(3); // learner, employer, one interviewer
+    // CP8.3: ONE prep row for the learner (the in-app notice), from the real upsert on the real partial unique index
+    expect(await one(`SELECT COUNT(*)::int AS n, MIN(source) AS source, MIN(company) AS company FROM career_interviews WHERE placement_interview_id = '${r.interviewId}'`)).toEqual({ n: 1, source: 'real', company: 'Acme' });
     expect(await sweep.sweepBookingConfirms(new Date(NOW.getTime() + 60 * 60_000), { read: ON, learnerAllowed: allowed })).toEqual({ tried: 0, done: 0, gaveUp: 0 });
   });
 
@@ -131,5 +137,32 @@ describeIfDb('after-booking work against Postgres', () => {
     expect(mockCreate.mock.calls.map((c) => (c[0] as { requestId: string }).requestId)).toEqual([
       `placement-interview-${a.interviewId}-2026-11-23T15:00:00.000Z`, `placement-interview-${a.interviewId}-2026-11-23T16:00:00.000Z`]);
     expect(await room()).toBe('zm-12');
+    // CP8.3: the same prep row followed the booking to the new time
+    const prep = await one(`SELECT COUNT(*)::int AS n, MIN(starts_at) AS starts_at FROM career_interviews WHERE placement_interview_id = '${a.interviewId}'`);
+    expect([prep.n, new Date(prep.starts_at as string).toISOString()]).toEqual([1, '2026-11-23T16:00:00.000Z']);
+  });
+
+  it('CP8.3 on Postgres: the booked interview reaches the card and anchors (loadPrepData), and leaves them once cancelled or moved', async () => {
+    const { newBookingToken } = await import('../bookingToken');
+    const { loadPrepData } = await import('../../careerPrep/prepData');
+    const E3 = '7fffffff-ffff-4fff-8fff-ffffffffffff';
+    await sequelize.query(`INSERT INTO enrollments (id, full_name, email) VALUES ('${E3}', 'Cy Diaz', 'cy.personal@mail.example') ON CONFLICT DO NOTHING`);
+    const t = newBookingToken(NOW);
+    await sequelize.query(`INSERT INTO placement_interviews (enrollment_id, source_event_id, company, position, type, contact_email, state, booking_token_hash, token_expires_at)
+      VALUES ('${E3}', 'confirm:d', 'Delta', 'Data Analyst', 'technical', 'ro@delta.example', 'new', '${t.hash}', '${t.expiresAt.toISOString()}')`);
+    mockCreate.mockReset().mockResolvedValue({ providerEventId: 'zm-31', joinUrl: 'https://zoom.example/j/SECRET' });
+    const b = await svc.confirmBooking(t.token, { slot: '2026-11-23T15:00:00.000Z', tz: 'America/Chicago', interviewers: [] }, NOW);
+    if (b.status !== 'booked') throw new Error(`not booked: ${b.status}`);
+    expect((await fin.finishBooking(b.interviewId, { now: NOW, read: ON, learnerAllowed: allowed })).status).toBe('done');
+    const shown = async () => (await loadPrepData(E3, NOW)).interviews.map((i) => [i.source, i.company, i.role, i.type, i.startsAt?.toISOString()]);
+    expect(await shown()).toEqual([['real', 'Delta', 'Data Analyst', 'technical', '2026-11-23T15:00:00.000Z']]);
+    // rescheduled (back to new at another time, not booked again yet): gone from the card and the anchors
+    await sequelize.query(`UPDATE placement_interviews SET state = 'new', starts_at = NULL WHERE id = '${b.interviewId}'`);
+    expect(await shown()).toEqual([]);
+    // booked again at the row's time: back; then cancelled: gone
+    await sequelize.query(`UPDATE placement_interviews SET state = 'booked', starts_at = '2026-11-23T15:00:00Z' WHERE id = '${b.interviewId}'`);
+    expect(await shown()).toHaveLength(1);
+    await sequelize.query(`UPDATE placement_interviews SET state = 'cancelled' WHERE id = '${b.interviewId}'`);
+    expect(await shown()).toEqual([]);
   });
 });

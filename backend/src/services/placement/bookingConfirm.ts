@@ -5,6 +5,8 @@ import { sendOnce } from '../email/idempotentSend';
 import { getMeetingProvider } from '../communityRooms/meetingProvider';
 import { buildInterviewIcs } from '../hire/hireInterviewIcs';
 import { careerPrepEnabled } from '../careerPrep/careerPrepFlag';
+import { linkPlacementInterview } from '../careerPrep/placementLink';
+import type { InterviewType } from '../careerPrep/readiness';
 import { isSwitchOn, SWITCHES, type Read } from './darkSwitches';
 import { candidateRoomUrl, roomPageUrl } from './roomLink';
 import { FROM_NAME } from './bookingReplyEmail';
@@ -19,7 +21,9 @@ import { employerBookedEmail, learnerBookedEmail, type ConfirmFacts, type Confir
  *             T22). The provider's id and join link are stored on the interview, WHERE none is stored yet and the booking
  *             still stands; the join link is NEVER put in any message.
  *   learner   one email to the PERSONAL address with an .ics, when the learner is on the Career Prep allow-list (only
- *             Ali at ship). In the app, the booked interview is the notice: the Interviews sheet (T20) shows it.
+ *             Ali at ship). In the app, the booked interview is the notice: it is linked first as the learner's prep row
+ *             (careerPrep/interviews.linkPlacementInterview, one row per interview), so the Interviews sheet, the campus
+ *             card and the room's anchors show it even when the room or a send fails.
  *   employer  one email (and .ics) to the employer and to each interviewer, each their own message, ONLY when
  *             career_prep_employer_mail_enabled is on; off: one keyed `booking_confirm_held` row, nothing sent.
  * Every message and .ics carries the consent-room PAGE link (learner: the portal page; employer: the signed hire-site
@@ -43,10 +47,10 @@ export const ROOM_TIMEOUT_MS = 25_000;
  */
 export const LEASE_MS = 2 * 60_000;
 export type Part = 'sent' | 'skipped' | 'held' | 'failed';
-export interface FinishResult { status: 'done' | 'incomplete' | 'busy' | 'not_booked' | 'not_found'; room?: 'ok' | 'failed'; learner?: Part; employer?: Part; gaveUp?: boolean }
+export interface FinishResult { status: 'done' | 'incomplete' | 'busy' | 'not_booked' | 'not_found'; room?: 'ok' | 'failed'; prep?: 'ok' | 'failed'; learner?: Part; employer?: Part; gaveUp?: boolean }
 export interface FinishOpts { now?: Date; read?: Read; learnerAllowed?: (enrollmentId: string) => Promise<boolean> }
 
-type Row = { id: string; enrollment_id: string; state: string; company: string | null; position: string | null; contact_email: string | null;
+type Row = { id: string; enrollment_id: string; state: string; company: string | null; position: string | null; type: string | null; contact_email: string | null;
   starts_at: Date | string | null; minutes: number | null; interviewer_emails: string[] | null; booker_tz: string | null; room_provider_id: string | null;
   confirm_done_at: Date | null; full_name: string | null; personal_email: string | null; job_address: string | null };
 
@@ -58,7 +62,7 @@ function log(level: 'info' | 'warn' | 'error', event: string, context: Record<st
   if (level === 'error') console.error(line); else if (level === 'warn') console.warn(line); else console.log(line);
 }
 
-const LOAD = `SELECT i.id, i.enrollment_id, i.state, i.company, i.position, i.contact_email, i.starts_at, i.minutes, i.interviewer_emails, i.booker_tz,
+const LOAD = `SELECT i.id, i.enrollment_id, i.state, i.company, i.position, i.type, i.contact_email, i.starts_at, i.minutes, i.interviewer_emails, i.booker_tz,
     i.room_provider_id, i.confirm_done_at, e.full_name, e.email AS personal_email, j.address AS job_address
   FROM placement_interviews i JOIN enrollments e ON e.id = i.enrollment_id LEFT JOIN job_search_inboxes j ON j.enrollment_id = i.enrollment_id
   WHERE i.id = :id`;
@@ -91,6 +95,25 @@ async function ensureRoom(r: Row, start: Date, minutes: number): Promise<boolean
   } catch (err) {
     log('error', 'placement_room_create_failed', { interview_id: r.id }, errClass(err));
     return false;
+  }
+}
+
+/**
+ * The learner's IN-APP notice (CP8.3): the booked interview becomes their prep row (source 'real'), so it shows in the
+ * Interviews sheet, on the campus card and as an anchor in the room. Idempotent (one row per placement interview); a
+ * failure leaves the run incomplete, so the sweep links it on its next try.
+ */
+async function linkPrep(r: Row, startsAt: Date): Promise<'ok' | 'failed'> {
+  try {
+    const prepId = await linkPlacementInterview({ placementInterviewId: r.id, enrollmentId: r.enrollment_id, company: r.company, position: r.position,
+      type: (r.type as InterviewType | null) ?? null, startsAt });
+    if (prepId) return 'ok';
+    // the link exists for ANOTHER learner (it should never happen): left alone, and surfaced through the capped retries
+    log('error', 'placement_prep_link_conflict', { interview_id: r.id }, 'ContractViolation');
+    return 'failed';
+  } catch (err) {
+    log('error', 'placement_prep_link_failed', { interview_id: r.id }, errClass(err));
+    return 'failed';
   }
 }
 
@@ -159,23 +182,24 @@ export async function finishBooking(interviewId: string, opts: FinishOpts = {}):
   if (!attempt) return { status: 'busy' }; // another run holds the lease (or the booking changed under us)
   const f: ConfirmFacts = { candidateName: r.full_name, company: r.company, position: r.position, startsAt, minutes: Number(r.minutes ?? 30), bookerTz: r.booker_tz };
   const key = `placement_interview:${r.id}:booked:${start}`;
+  const prep = await linkPrep(r, startsAt);
   const room = (await ensureRoom(r, startsAt, f.minutes)) ? 'ok' : 'failed';
   const learner = await notifyLearner(r, f, key, opts, now).catch((e: unknown) => { log('warn', 'placement_booking_learner_failed', { interview_id: r.id }, errClass(e)); return 'failed' as Part; });
   const employer = await notifyEmployer(r, f, key, start, opts, now).catch((e: unknown) => { log('warn', 'placement_booking_employer_failed', { interview_id: r.id }, errClass(e)); return 'failed' as Part; });
-  if (room === 'ok' && learner !== 'failed' && employer !== 'failed') {
+  if (room === 'ok' && prep === 'ok' && learner !== 'failed' && employer !== 'failed') {
     await sequelize.query('UPDATE placement_interviews SET confirm_done_at = :now WHERE id = :id AND state = \'booked\' AND starts_at = :start AND confirm_done_at IS NULL',
       { replacements: { now, id: r.id, start: startsAt } });
     await recordEvent(r.id, 'done', start, { learner, employer });
     log('info', 'placement_booking_confirmed', { interview_id: r.id, learner, employer });
-    return { status: 'done', room, learner, employer };
+    return { status: 'done', room, prep, learner, employer };
   }
-  await recordEvent(r.id, 'failed', start, { room, learner, employer, attempt });
+  await recordEvent(r.id, 'failed', start, { room, prep, learner, employer, attempt });
   const gaveUp = attempt >= MAX_CONFIRM_ATTEMPTS;
   if (gaveUp) {
-    await recordEvent(r.id, 'gave_up', start, { room, learner, employer });
-    log('error', 'placement_booking_confirm_gave_up', { interview_id: r.id, room, learner, employer, fix: 'check Zoom and Mandrill, then set confirm_attempts = 0' }, 'RetriesExhausted');
+    await recordEvent(r.id, 'gave_up', start, { room, prep, learner, employer });
+    log('error', 'placement_booking_confirm_gave_up', { interview_id: r.id, room, prep, learner, employer, fix: 'check Zoom, Mandrill and the database, then set confirm_attempts = 0' }, 'RetriesExhausted');
   }
-  return { status: 'incomplete', room, learner, employer, gaveUp };
+  return { status: 'incomplete', room, prep, learner, employer, gaveUp };
 }
 
 /** The route's hook: start the work after the commit without making the booker wait; anything thrown is logged. */

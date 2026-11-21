@@ -2,6 +2,7 @@ const mockEnsure = jest.fn();
 jest.mock('../../db/ensurePlacementSchema', () => ({ ensurePlacementSchema: (...a: unknown[]) => mockEnsure(...a) }));
 // The real routers import the app config; the wiring under test only needs something mountable.
 jest.mock('../../routes/careerPrepInboxRoutes', () => { const { Router: R } = jest.requireActual('express'); return { __esModule: true, default: R() }; });
+jest.mock('../../routes/careerPrepPlacementInterviewsRoutes', () => { const { Router: R } = jest.requireActual('express'); return { __esModule: true, default: R() }; });
 jest.mock('../../routes/integrationsInboxRoutes', () => { const { Router: R } = jest.requireActual('express'); return { __esModule: true, default: R() }; });
 jest.mock('../../routes/publicBookingRoutes', () => { const { Router: R } = jest.requireActual('express'); return { bookingRouters: { view: R(), confirm: R() } }; });
 const mockStartInboxTests = jest.fn();
@@ -54,7 +55,8 @@ describe('placementBoot', () => {
 
   it('registers the CP6.1 inbox routes as a public (participant-gated) router', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    expect(saved.p).toEqual([require('../../routes/careerPrepInboxRoutes').default, require('../../routes/publicBookingRoutes').bookingRouters.view]); // T17: the booking page's data
+    expect(saved.p).toEqual([require('../../routes/careerPrepInboxRoutes').default, require('../../routes/publicBookingRoutes').bookingRouters.view, // T17: the booking page's data
+      require('../../routes/careerPrepPlacementInterviewsRoutes').default]); // T20: the learner's placement interviews
   });
 
   it('T12: registers the signed inbox events router as an INTEGRATION router (mounted before the JSON parser)', () => {

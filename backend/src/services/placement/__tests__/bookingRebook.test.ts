@@ -7,7 +7,8 @@
  */
 type Row = Record<string, unknown> & { id: string; state: string; starts_at: Date | null; room_provider_id: string | null };
 type R = Record<string, unknown>;
-const db = { iv: [] as Row[], events: new Set<string>(), clock: new Date('2026-11-20T18:00:00Z') };
+import { prepLinkAnswer, prepStore } from './helpers/fakePrepLink';
+const db = { iv: [] as Row[], events: new Set<string>(), clock: new Date('2026-11-20T18:00:00Z'), prep: prepStore() };
 const byId = (id: unknown) => db.iv.find((x) => x.id === id) as Row;
 
 /** One SET assignment's value, evaluated against the OLD row (SQL semantics). */
@@ -46,6 +47,8 @@ function answer(sql: string, r: R): [unknown[], number] {
   }
   if (sql.includes('SET room_provider_id = :pid')) { if (!i.room_provider_id) Object.assign(i, { room_provider_id: r.pid, room_url: r.url }); return [[], 1]; }
   if (sql.includes('SET confirm_done_at = :now')) { if (!i.confirm_done_at) i.confirm_done_at = r.now; return [[], 1]; }
+  const linked = prepLinkAnswer(db.prep, sql, r);
+  if (linked) return linked;
   throw new Error(`unexpected SQL: ${sql.slice(0, 80)}`);
 }
 jest.mock('../../../config/database', () => ({ sequelize: {
@@ -95,7 +98,7 @@ beforeEach(() => {
     full_name: 'Ann Lee', personal_email: 'ann.personal@mail.example', job_address: 'ann.jobs@mail.example', booking_token_hash: t.hash, token_expires_at: t.expiresAt,
     token_used_at: null, starts_at: null, interviewer_emails: [], booker_tz: null, room_provider_id: null, room_url: null, confirm_attempts: 0,
     confirm_last_attempt_at: null, confirm_done_at: null }];
-  db.events.clear(); db.clock = NOW; mockSent.clear(); mockMail.mockClear();
+  db.events.clear(); db.clock = NOW; db.prep = prepStore(); mockSent.clear(); mockMail.mockClear();
   let n = 0;
   mockCreate.mockReset().mockImplementation(async () => ({ providerEventId: `zm-${++n}`, joinUrl: `https://zoom.example/j/${n}` }));
   first = t.token;
@@ -118,6 +121,8 @@ describe('reschedule, then book again', () => {
     expect((await finishBooking('iv-1', { now: db.clock })).status).toBe('done');
     expect(ids()).toEqual([`placement-interview-iv-1-${MON9}`, `placement-interview-iv-1-${TUE9}`]);
     expect(db.iv[0].room_provider_id).toBe('zm-2');
+    // CP8.3: the SAME prep row moved to the new time (the card, the anchors and any plan follow the booking)
+    expect(db.prep.rows.map((p) => [p.placement_interview_id, p.starts_at.toISOString()])).toEqual([['iv-1', TUE9]]);
     expect(mockMail.mock.calls.slice(2).every((c) => /Tue, Nov 24, 9:00 AM CST/.test((c[0] as { text: string }).text))).toBe(true);
   });
   it('the SAME time keeps its room: a double-click replay, and a rebook at that time after a reschedule', async () => {

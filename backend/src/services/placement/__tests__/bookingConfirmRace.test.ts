@@ -9,10 +9,13 @@ type Iv = { id: string; enrollment_id: string; state: string; company: string; p
   interviewer_emails: string[]; booker_tz: string; room_provider_id: string | null; room_url: string | null; confirm_attempts: number;
   confirm_last_attempt_at: Date | null; confirm_done_at: Date | null; updated_at: Date; full_name: string; personal_email: string; job_address: string };
 type R = Record<string, unknown>;
+import { prepLinkAnswer, prepStore } from './helpers/fakePrepLink';
 // clock = the DATABASE clock (what NOW() answers); a test moves it to model a slow pass.
-const db = { iv: [] as Iv[], events: new Set<string>(), clock: new Date(0), ledger: new Map<string, { state: string; meeting_id: string | null; join_url: string | null; host_email: string }>() };
+const db = { iv: [] as Iv[], events: new Set<string>(), clock: new Date(0), ledger: new Map<string, { state: string; meeting_id: string | null; join_url: string | null; host_email: string }>(), prep: prepStore() };
 const t = (d: unknown) => (d as Date).getTime();
 function placement(sql: string, r: R): [unknown[], number] | null {
+  const linked = prepLinkAnswer(db.prep, sql, r);
+  if (linked) return linked;
   const i = db.iv.find((x) => x.id === r.id);
   if (sql.includes('LEFT JOIN job_search_inboxes j')) return [i ? [{ ...i, room_url: undefined }] : [], 0];
   if (sql.includes('SET confirm_attempts = confirm_attempts + 1')) {
@@ -93,7 +96,7 @@ beforeEach(() => {
     starts_at: new Date('2026-11-23T15:00:00Z'), minutes: 30, interviewer_emails: ['kim@acme.example'], booker_tz: 'America/Chicago', room_provider_id: null,
     room_url: null, confirm_attempts: 0, confirm_last_attempt_at: null, confirm_done_at: null, updated_at: NOW, full_name: 'Ann Lee',
     personal_email: 'ann.personal@mail.example', job_address: 'ann.jobs@mail.example' }];
-  db.clock = LATER; mockOnPost = () => undefined;
+  db.clock = LATER; mockOnPost = () => undefined; db.prep = prepStore();
   db.events.clear(); db.ledger.clear(); mockPosts.length = 0; mockListed.length = 0; mockSent.clear(); mockMail.mockClear();
   jest.spyOn(console, 'log').mockImplementation(() => undefined);
   jest.spyOn(console, 'warn').mockImplementation(() => undefined);
@@ -109,6 +112,8 @@ it('the original run, a replayed confirm and the sweep at once: ONE Zoom POST, o
   expect([...mockSent.values()]).toEqual([1, 1, 1]); // learner, employer, one interviewer
   expect(mockMail).toHaveBeenCalledTimes(3);
   expect(runs.slice(0, 2).map((r) => (r as { status: string }).status).sort()).toEqual(['busy', 'done']);
+  // CP8.3: the learner's prep row (the in-app notice) is ONE row however many runs raced
+  expect(db.prep.rows.map((p) => [p.placement_interview_id, p.enrollment_id, p.source])).toEqual([['iv-1', 'enr-ann', 'real']]);
   // and a later run (lease lapsed, booking done) creates nothing more
   await finishBooking('iv-1', { now: new Date(LATER.getTime() + 10 * 60_000) });
   expect(mockPosts).toHaveLength(1);

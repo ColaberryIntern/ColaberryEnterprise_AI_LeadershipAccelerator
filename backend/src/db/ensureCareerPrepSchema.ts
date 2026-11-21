@@ -18,7 +18,9 @@ import { sequelize } from '../config/database';
  *                         employer interview, today from hire_interviews; Release 2 adds the
  *                         inbox), added (the student added it), practice (made by Cora, no date).
  *                         hire_interview_id is UNIQUE, so linking the same Hire interview twice
- *                         yields one row.
+ *                         yields one row. placement_interview_id (CP8.3, added column) is UNIQUE
+ *                         where set: one row per booked placement interview, however often the
+ *                         booking work retries.
  *   prep_skills           the skills readiness is built from. Seeded with 9 (the kit's 10 minus
  *                         "Eye contact": no face analysis, Ali's 2026-11-14 ruling, M1 Q1).
  *   prep_skill_sources    maps a training source (quiz, lesson) to a skill.
@@ -79,6 +81,10 @@ export const CAREER_PREP_STATEMENTS: readonly string[] = [
      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
    )`,
   'CREATE INDEX IF NOT EXISTS career_interviews_enrollment_idx ON career_interviews (enrollment_id, starts_at)',
+  // CP8.3 (Release 2): the placement interview a 'real' row was booked from (bookingConfirm links it once per booking).
+  // No foreign key: placement_interviews is created after this schema at boot. Revert by hand: PLACEMENT_LINK_ROLLBACK.
+  'ALTER TABLE career_interviews ADD COLUMN IF NOT EXISTS placement_interview_id UUID',
+  'CREATE UNIQUE INDEX IF NOT EXISTS uq_career_interviews_placement ON career_interviews (placement_interview_id) WHERE placement_interview_id IS NOT NULL',
   `CREATE TABLE IF NOT EXISTS prep_skills (
      key VARCHAR(40) PRIMARY KEY,
      label VARCHAR(80) NOT NULL,
@@ -184,6 +190,9 @@ export const CAREER_PREP_STATEMENTS: readonly string[] = [
    )`,
   SKILL_SEED,
 ];
+
+/** Run by hand to remove only CP8.3's link column (its unique index goes with it). Never run at boot. */
+export const PLACEMENT_LINK_ROLLBACK = 'ALTER TABLE career_interviews DROP COLUMN IF EXISTS placement_interview_id';
 
 /** Run by hand to roll CP1.2 back. Never run at boot. Dependents first. */
 export const CAREER_PREP_ROLLBACK: readonly string[] = [

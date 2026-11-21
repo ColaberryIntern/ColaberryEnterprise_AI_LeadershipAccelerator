@@ -19,7 +19,25 @@
 .cp-room .cp-inbox-form input{flex:1 1 220px;min-width:0;min-height:44px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg-elevated);color:var(--fg);font:inherit}
 .cp-room .cp-inbox-table{width:100%;border-collapse:collapse;font-size:.9rem}
 .cp-room .cp-inbox-table th,.cp-room .cp-inbox-table td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+/* CP8.3: the #interviews sheet (KPIs, the next interview, every interview, its history). The table reuses .cp-inbox-table. */
+.cp-room .cp-ivs{display:flex;flex-direction:column;gap:12px}
+.cp-room .cp-ivs h3{margin-top:6px;font-size:1rem}
+.cp-room .cp-ivs-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0}
+.cp-room .cp-ivs-kpis>div{padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg-elevated)}
+.cp-room .cp-ivs-kpis dt{font-size:.78rem;font-weight:600;color:var(--fg-muted)}
+.cp-room .cp-ivs-kpis dd{margin:2px 0 0;font:600 1.4rem var(--cp-mono);color:var(--fg)}
+.cp-room .cp-ivs-next{padding:12px 14px;border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--bg-elevated)}
+.cp-room .cp-ivs-kicker{font:600 .72rem var(--cp-mono);letter-spacing:.04em;text-transform:uppercase;color:var(--fg-muted)}
+.cp-room .cp-ivs-next p{margin:2px 0}
+.cp-room .cp-ivs-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:8px}
+.cp-room .cp-ivs-history{padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--cp-sunk)}
+.cp-room .cp-ivs-history-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.cp-room .cp-ivs-history h4{margin:0;font-size:.95rem}
+.cp-room .cp-ivs-history-list{margin:8px 0 0;padding-left:1.2rem}
+.cp-room .cp-ivs-history time{font-family:var(--cp-mono);font-size:.82rem;color:var(--fg-muted)}
+.cp-room .cp-ivs-how{margin:0;padding-left:1.2rem;display:flex;flex-direction:column;gap:4px}
 @media (max-width:600px){
+  .cp-room .cp-ivs-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
   .cp-room .cp-inbox-table thead{display:none}
   .cp-room .cp-inbox-table tr{display:block;padding:6px 0;border-bottom:1px solid var(--line)}
   .cp-room .cp-inbox-table td{display:block;border:0;padding:2px 0}

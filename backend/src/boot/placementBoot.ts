@@ -1,6 +1,7 @@
 import type { Express, Router } from 'express';
 import { ensurePlacementSchema } from '../db/ensurePlacementSchema';
 import careerPrepInboxRoutes from '../routes/careerPrepInboxRoutes';
+import careerPrepPlacementInterviewsRoutes from '../routes/careerPrepPlacementInterviewsRoutes';
 import integrationsInboxRoutes from '../routes/integrationsInboxRoutes';
 import { bookingRouters } from '../routes/publicBookingRoutes';
 import { startInboxTestCron } from '../services/placement/inboxTestJob';
@@ -32,6 +33,7 @@ export const INTEGRATION_ROUTERS: Router[] = [
 export const PUBLIC_ROUTERS: Router[] = [
   careerPrepInboxRoutes, // CP6.1: the student's job-search inbox (participant + Career Prep gated per route)
   bookingRouters.view, // CP8.2: the public booking page's data (the token is the key; no login; 60/min per link)
+  careerPrepPlacementInterviewsRoutes, // CP8.3: the learner's own placement interviews for the Interviews sheet (participant + Career Prep gated)
 ];
 export const SCHEDULERS: Array<{ name: string; start: () => void }> = [
   { name: 'inbox-tests', start: startInboxTestCron }, // CP6.1c: daily forwarding test + broken alerts (switch-gated per pass)

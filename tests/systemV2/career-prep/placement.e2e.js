@@ -7,11 +7,20 @@
  *       forwarding path to the central inbox, "Nothing has arrived yet" and "What we never do"; saving a Gmail address
  *       ticks steps 1 and 2 and shows the address, still "Not set up yet" (forwarding not verified)
  *   PL2 (CP6.1) the #inbox sheet fits a phone (390 wide): no horizontal scroll
+ *   PL3 (CP8.3) a booked interview appears on the card (the floor's summary line), as an anchor card in the room and in
+ *       #interviews (KPIs, the next-interview card, its row, Join waiting for 10 minutes before); Continue prep opens the
+ *       room anchored on that same interview
+ *   PL4 (CP8.3) the #interviews sheet fits a phone (390 wide): no horizontal scroll
  *   PLX zero console errors in these flows
  *
  * Usage (repo root): node tests/systemV2/career-prep/placement.e2e.js, or runAll.js (env: see harness.js)
  */
 const { BASE, check, newPage, tid, runSuite } = require('./harness');
+
+/** Elements that scroll sideways inside the room, and the page itself when it does (a phone layout must have none). */
+const sideways = () => [document.documentElement, ...document.querySelectorAll('.cp-room *')]
+  .filter((el) => el.scrollWidth > el.clientWidth + 1 && ['auto', 'scroll'].includes(getComputedStyle(el).overflowX)).map((el) => el.className).slice(0, 3)
+  .concat(document.documentElement.scrollWidth > innerWidth + 1 ? ['page'] : []);
 
 async function inboxSheet(browser, viewport) {
   const { ctx, page, errors, api } = await newPage(browser, viewport ? { viewport } : {});
@@ -55,9 +64,7 @@ async function flowInbox(browser) {
 async function flowInboxPhone(browser) {
   const { ctx, page, errors } = await inboxSheet(browser, { width: 390, height: 844 });
   try {
-    const wide = await page.evaluate(() => [document.documentElement, ...document.querySelectorAll('.cp-room *')]
-      .filter((el) => el.scrollWidth > el.clientWidth + 1 && ['auto', 'scroll'].includes(getComputedStyle(el).overflowX)).map((el) => el.className).slice(0, 3)
-      .concat(document.documentElement.scrollWidth > innerWidth + 1 ? ['page'] : []));
+    const wide = await page.evaluate(sideways);
     check('PL2 the #inbox sheet fits a phone (390): no horizontal scroll', wide.length === 0, JSON.stringify(wide));
   } catch (e) {
     check('PL2 the phone #inbox ran', false, String(e && e.message).split('\n')[0].slice(0, 200));
@@ -66,7 +73,57 @@ async function flowInboxPhone(browser) {
   return errors;
 }
 
-runSuite(3, async (browser) => {
-  const errs = [...await flowInbox(browser), ...await flowInboxPhone(browser)];
+async function flowBooked(browser) {
+  const { ctx, page, errors } = await newPage(browser, { api: { placement: true } });
+  page.setDefaultTimeout(8000);
+  try {
+    await page.goto(`${BASE}/portal/career`);
+    await page.waitForSelector(tid('cp-greeting'));
+    const card = await page.textContent(tid('cp-greeting'));
+    await page.goto(`${BASE}/portal/career/room`);
+    await page.waitForSelector(tid('cp-card-i7'));
+    const anchor = await page.textContent(tid('cp-card-i7'));
+    await page.goto(`${BASE}/portal/career/room#interviews`);
+    await page.waitForSelector(tid('cp-ivs-row-pi-7'));
+    const sheet = await page.evaluate(() => ({
+      kpis: [...document.querySelectorAll('[data-testid^="cp-ivs-kpi-"]')].map((e) => e.textContent).join(),
+      next: document.querySelector('[data-testid="cp-ivs-next"]')?.textContent || '',
+      row: document.querySelector('[data-testid="cp-ivs-row-pi-7"]')?.textContent || '',
+      joinNow: !!document.querySelector('[data-testid="cp-ivs-join"]'),
+      joinLater: document.querySelector('[data-testid="cp-ivs-join-later"]')?.textContent || '',
+      links: [...document.querySelectorAll('.cp-ivs a')].map((a) => a.getAttribute('href')).filter((h) => /zoom/i.test(h || '')),
+    }));
+    await page.click(tid('cp-ivs-prep'));
+    await page.waitForFunction(() => /Northwind/.test(document.querySelector('[data-testid="cp-anchor"]')?.textContent || ''));
+    const after = { search: new URL(page.url()).search, hash: new URL(page.url()).hash, pill: await page.textContent(tid('cp-anchor')) };
+    check('PL3 a booked interview shows on the card, as an anchor and in #interviews; Continue prep anchors the room on it',
+      /Your Northwind interview is/.test(card || '') && /Northwind · ML Engineer/.test(anchor || '') && sheet.kpis === '1,0,0,0'
+        && /Northwind · ML Engineer/.test(sheet.next) && /Northwind/.test(sheet.row) && /Booked/.test(sheet.row) && /Recruiter screen 97%/.test(sheet.row)
+        && !sheet.joinNow && /^Join opens /.test(sheet.joinLater) && sheet.links.length === 0
+        && after.search === '?anchor=i7' && after.hash === '' && /Preparing for Northwind/.test(after.pill || ''), JSON.stringify({ card, anchor, sheet, after }));
+  } catch (e) {
+    check('PL3 the booked-interview flow ran', false, String(e && e.message).split('\n')[0].slice(0, 200));
+  }
+  await ctx.close();
+  return errors;
+}
+
+async function flowInterviewsPhone(browser) {
+  const { ctx, page, errors } = await newPage(browser, { viewport: { width: 390, height: 844 }, api: { placement: true } });
+  page.setDefaultTimeout(8000);
+  try {
+    await page.goto(`${BASE}/portal/career/room#interviews`);
+    await page.waitForSelector(tid('cp-ivs-row-pi-7'));
+    const wide = await page.evaluate(sideways);
+    check('PL4 the #interviews sheet fits a phone (390): no horizontal scroll', wide.length === 0, JSON.stringify(wide));
+  } catch (e) {
+    check('PL4 the phone #interviews ran', false, String(e && e.message).split('\n')[0].slice(0, 200));
+  }
+  await ctx.close();
+  return errors;
+}
+
+runSuite(5, async (browser) => {
+  const errs = [...await flowInbox(browser), ...await flowInboxPhone(browser), ...await flowBooked(browser), ...await flowInterviewsPhone(browser)];
   check('PLX zero console errors in the placement flows', errs.length === 0, errs.slice(0, 3).join(' | '));
 });

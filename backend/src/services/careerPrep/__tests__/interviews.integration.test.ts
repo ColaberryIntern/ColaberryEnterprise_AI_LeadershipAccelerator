@@ -64,4 +64,23 @@ describeIfDb('career interviews against Postgres', () => {
     expect(await interviews.linkHireInterviews(E1)).toBe(0);
     expect(await count(`hire_interview_id = '${hid}' AND length(company) = 120`)).toBe(1);
   });
+
+  it('CP8.3: links a booked placement interview once (also two at once); a rebook moves the same row; another learner cannot take it', async () => {
+    const link = await import('../placementLink');
+    const pid = '78888888-8888-4888-8888-888888888888';
+    const at = new Date('2026-11-23T15:00:00Z');
+    const input = { placementInterviewId: pid, enrollmentId: E1, company: 'Y'.repeat(150), position: null, type: null, startsAt: at };
+    const [a, b] = await Promise.all([link.linkPlacementInterview(input), link.linkPlacementInterview(input)]);
+    expect(a).not.toBeNull();
+    expect(a).toBe(b);
+    expect(await count(`placement_interview_id = '${pid}' AND source = 'real' AND length(company) = 120 AND role = 'Interview' AND type = 'recruiter'`)).toBe(1);
+    const moved = new Date('2026-11-24T15:00:00Z');
+    expect(await link.linkPlacementInterview({ ...input, startsAt: moved })).toBe(a);
+    expect(await count(`placement_interview_id = '${pid}' AND starts_at = '${moved.toISOString()}'`)).toBe(1);
+    const E2 = '79999999-9999-4999-8999-999999999999';
+    await sequelize.query(`INSERT INTO enrollments (id) VALUES ('${E2}') ON CONFLICT DO NOTHING`);
+    expect(await link.linkPlacementInterview({ ...input, enrollmentId: E2, startsAt: at })).toBeNull();
+    expect(await count(`placement_interview_id = '${pid}' AND enrollment_id = '${E1}' AND starts_at = '${moved.toISOString()}'`)).toBe(1);
+    expect(await count(`placement_interview_id = '${pid}'`)).toBe(1);
+  });
 });

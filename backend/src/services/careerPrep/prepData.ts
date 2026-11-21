@@ -39,8 +39,24 @@ function planDays(raw: unknown): Array<{ date: string; minutes: number }> {
   }));
 }
 
+/**
+ * CP8.3: a prep row linked to a placement interview counts only while that interview is still booked (or held) AT the
+ * row's time: a cancelled one, or one rescheduled and not booked again yet, leaves the card and the anchors at once
+ * (bookingConfirm moves the row when it is booked again). Before the placement tables exist (they are created right
+ * after this schema at boot; some test databases never have them) no linked row can exist, so linked rows are left out.
+ */
+let placementTable = false;
+export async function linkedRowFilter(): Promise<string> {
+  if (!placementTable) placementTable = (await rows("SELECT to_regclass('placement_interviews') IS NOT NULL AS ok", {}))[0]?.ok === true;
+  return placementTable
+    ? `AND (placement_interview_id IS NULL OR EXISTS (SELECT 1 FROM placement_interviews p WHERE p.id = career_interviews.placement_interview_id
+         AND p.enrollment_id = career_interviews.enrollment_id AND p.state IN ('booked','done') AND p.starts_at = career_interviews.starts_at))`
+    : 'AND placement_interview_id IS NULL';
+}
+
 export async function loadPrepData(enrollmentId: string, now: Date): Promise<PrepData> {
   const r = { e: enrollmentId, now };
+  const linked = await linkedRowFilter();
   const [person, obs, sessions, interviews, trend, plans] = await Promise.all([
     rows(`SELECT NULLIF(split_part(trim(full_name), ' ', 1), '') AS first_name FROM enrollments WHERE id = :e`, r),
     rows(`SELECT skill_key, value, source, source_ref, observed_at, weight FROM prep_observations
@@ -48,7 +64,7 @@ export async function loadPrepData(enrollmentId: string, now: Date): Promise<Pre
     rows(`SELECT started_at, seconds_active, status FROM prep_sessions
            WHERE enrollment_id = :e AND started_at > :now::timestamptz - INTERVAL '400 days'`, r),
     rows(`SELECT id, source, company, role, type, starts_at, target_readiness, practice_until, questions FROM career_interviews
-           WHERE enrollment_id = :e AND (starts_at IS NULL OR starts_at > :now::timestamptz - INTERVAL '1 day')
+           WHERE enrollment_id = :e AND (starts_at IS NULL OR starts_at > :now::timestamptz - INTERVAL '1 day') ${linked}
            ORDER BY starts_at NULLS LAST, created_at`, r),
     rows(`SELECT date::text AS date, interview_id, readiness FROM prep_readiness_daily
            WHERE enrollment_id = :e AND date > (:now::timestamptz - INTERVAL '84 days')::date ORDER BY date`, r),

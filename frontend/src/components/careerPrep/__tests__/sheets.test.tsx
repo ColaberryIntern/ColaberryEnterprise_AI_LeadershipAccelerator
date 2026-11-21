@@ -7,7 +7,7 @@ import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
 import { filterJump, JUMP_ITEMS, sheetFromHash, SHEETS } from '../logic/sheets';
 import { useSheet } from '../useSheet';
 import { PageSheet } from '../PageSheet';
-import { InterviewsSheet, joinOpen, SheetBody } from '../SheetBodies';
+import { BookedAndAdded, joinOpen, SheetBody } from '../SheetBodies';
 import { JumpBar } from '../JumpBar';
 import { fetchHireInterviews, type HireInterview } from '../../../services/hireStudioApi';
 
@@ -118,7 +118,7 @@ describe('Your interviews sheet (CP4.6)', () => {
   });
   it('lists booked interviews in Central with their status, and the ones the student added', async () => {
     hire.mockResolvedValue([booked()]);
-    const h = mount(<MemoryRouter><InterviewsSheet now={Date.parse('2026-11-17T19:55:00Z')} prep={[
+    const h = mount(<MemoryRouter><BookedAndAdded now={Date.parse('2026-11-17T19:55:00Z')} prep={[
       { id: 'i1', source: 'real', company: 'Meridian Freight', role: 'AI Engineer', type: 'technical', target: 75 },
       { id: 'i2', source: 'practice', company: 'Practice', role: 'Data Analyst', type: 'behavioral', target: 70 }]} /></MemoryRouter>);
     await flush();
@@ -129,12 +129,12 @@ describe('Your interviews sheet (CP4.6)', () => {
     expect(h.textContent).not.toContain('Meridian Freight · AI Engineer · Added by you');
   });
   it('says so when nothing is booked, and when the list cannot load', async () => {
-    const h = mount(<MemoryRouter><InterviewsSheet prep={[]} /></MemoryRouter>);
+    const h = mount(<MemoryRouter><BookedAndAdded prep={[]} /></MemoryRouter>);
     await flush();
     expect(h.textContent).toContain('No employer has booked an interview with you yet.');
     act(() => { root!.unmount(); }); root = null; host?.remove();
     hire.mockRejectedValue(new Error('offline'));
-    const h2 = mount(<MemoryRouter><InterviewsSheet prep={[]} /></MemoryRouter>);
+    const h2 = mount(<MemoryRouter><BookedAndAdded prep={[]} /></MemoryRouter>);
     await flush();
     expect(h2.querySelector('[role="alert"]')?.textContent).toContain('Could not load your booked interviews');
   });

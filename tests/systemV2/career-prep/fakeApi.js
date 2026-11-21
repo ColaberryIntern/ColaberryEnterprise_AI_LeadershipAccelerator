@@ -9,6 +9,8 @@
  * Two students: the default one has eight weeks of history (readiness trend, every skill scored, minutes per week, a
  * streak), so Your progress draws every chart; `{ empty: true }` is a student with no data yet (no readiness, every
  * skill short of a score, zero minutes), for the honest empty state. Dates are relative to "now", weeks are Central.
+ * `{ placement: true }` (CP8.3) adds an interview an employer BOOKED from the job-search inbox: its prep row (what
+ * bookingConfirm links) leads the summary and the anchors, and GET /interviews/placement lists it, in the server's shapes.
  */
 const DAY = 86_400_000;
 const CT = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit' });
@@ -29,9 +31,12 @@ function makeState(now, opts = {}) {
   const skill = (key, label, score, change30, sources) => (empty
     ? { key, label, count: key === 'pace_clarity' ? 1 : 0, sources: key === 'pace_clarity' ? ['video'] : [] }
     : { key, label, score, change30, count: 4, sources });
+  // CP8.3: the booked placement interview (pi-7) and the prep row the booking linked for it (i7), two days out.
+  const north = { id: 'i7', source: 'real', company: 'Northwind', role: 'ML Engineer', type: 'recruiter', startsAt: new Date(now + 2 * DAY).toISOString(), target: 65 };
   return {
     empty,
-    interviews: [acme, globex],
+    interviews: opts.placement ? [north, acme, globex] : [acme, globex],
+    placement: opts.placement ? [placementBooked(north)] : [],
     skills: [
       skill('pace_clarity', 'Pace and clarity', 48, 4, ['video', 'phone_mock']),
       skill('ending_with_number', 'Ending on a result with a number', 57, 9, ['video', 'real_interview']),
@@ -60,6 +65,14 @@ function makeState(now, opts = {}) {
     planDelayMs: opts.planDelayMs || 0,
     now,
   };
+}
+
+/** The server's shape (placementInterviewsView.toView) for a booked interview; Join is the consent-room page. */
+function placementBooked(prep) {
+  const start = Date.parse(prep.startsAt);
+  return { id: 'pi-7', company: prep.company, role: prep.role, state: 'booked', stateLabel: 'Booked', startsAt: prep.startsAt, minutes: 30, readAs: 'Recruiter screen',
+    confidence: 0.97, roomPage: '/portal/career/interview/pi-7', joinOpensAt: new Date(start - 10 * 60_000).toISOString(), joinClosesAt: new Date(start + 30 * 60_000).toISOString(),
+    prepId: prep.id, history: [{ at: new Date(start - 3 * DAY).toISOString(), label: 'Found in your job-search inbox' }, { at: new Date(start - 2.5 * DAY).toISOString(), label: 'Booked' }] };
 }
 
 const segs = (state) => [
@@ -153,6 +166,7 @@ function route(state, method, path, query, body) {
   if (path === `${P}/inbox` && method === 'PUT') { state.inbox = { ...state.inbox, address: String(body.address || '').trim().toLowerCase().replace(/@googlemail\.com$/, '@gmail.com'), health: 'setup', healthLabel: 'Not set up yet', steps: { create: true, added: true, forwarding: false, tested: false } }; return { inbox: state.inbox }; }
   if (path === `${P}/inbox`) return { inbox: state.inbox };
   if (path === `${P}/inbox/received`) return { items: [] };
+  if (path === `${P}/interviews/placement`) return { kpis: { upcoming: state.placement.length, waiting: 0, recruiter: 0, held: 0 }, interviews: state.placement };
   if (path === `${P}/read-aloud/line`) return { line: { id: 'ra-02', text: 'The problem was simple to describe and hard to solve, so I started by talking to the people who lived with it.' } };
   const line = /name="lineId"\r?\n\r?\n([^\r\n]+)/.exec((body && body.raw) || '');
   if (attempt && method === 'POST' && line) {

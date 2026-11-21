@@ -6,14 +6,15 @@
  * like the real adapter's ledger, one meeting per requestId. Nothing leaves the process.
  */
 import { SENTINEL_PROVIDER_URL, expectNoRoomUrl } from './helpers/noRoomUrl';
+import { prepLinkAnswer, prepStore } from './helpers/fakePrepLink';
 
-type Iv = { id: string; enrollment_id: string; state: string; company: string | null; position: string | null; contact_email: string | null;
+type Iv = { id: string; enrollment_id: string; state: string; company: string | null; position: string | null; type?: string | null; contact_email: string | null;
   starts_at: Date | null; minutes: number | null; interviewer_emails: string[]; booker_tz: string | null; room_provider_id: string | null; room_url: string | null;
   confirm_attempts: number; confirm_last_attempt_at: Date | null; confirm_done_at: Date | null; updated_at: Date;
   full_name: string | null; personal_email: string | null; job_address: string | null };
-type R = { id?: string; now?: Date; lease?: Date; start?: Date; pid?: string; url?: string; event?: string; payload?: string; src?: string; };
+type R = { id?: string; now?: Date; lease?: Date; start?: Date; pid?: string; url?: string; event?: string; payload?: string; src?: string; e?: string; company?: string; role?: string; type?: string };
 // clock: the DATABASE clock (what NOW() answers); tests move it with at(), which also returns the caller's matching now.
-const db = { iv: [] as Iv[], events: [] as Array<{ event: string; src: string; payload: string }>, sql: [] as string[], clock: new Date(0) };
+const db = { iv: [] as Iv[], events: [] as Array<{ event: string; src: string; payload: string }>, sql: [] as string[], clock: new Date(0), prep: prepStore() };
 const byId = (id: unknown) => db.iv.find((x) => x.id === id) as Iv;
 const same = (a: Date | null, b: Date | undefined) => !!a && !!b && a.getTime() === b.getTime();
 function answer(sql: string, r: R): [unknown[], number] {
@@ -60,6 +61,8 @@ function answer(sql: string, r: R): [unknown[], number] {
         || (i.confirm_attempts >= 2 && t(i.confirm_last_attempt_at) < ago(1800))));
     return [owed.map((i) => ({ id: i.id })), 0];
   }
+  const linked = prepLinkAnswer(db.prep, sql, r as Record<string, unknown>);
+  if (linked) return linked;
   throw new Error(`unexpected SQL: ${sql.slice(0, 70)}`);
 }
 jest.mock('../../../config/database', () => ({ sequelize: { query: async (s: string, o: { replacements?: R } = {}) => answer(s, o.replacements ?? {}) } }));
@@ -105,7 +108,7 @@ const sent = () => mockMail.mock.calls.map((c) => c[0] as Sent);
 const meetings = new Map<string, { providerEventId: string; joinUrl: string }>();
 
 beforeEach(() => {
-  db.iv = [iv()]; db.events = []; db.sql = []; db.clock = NOW; mockLedger.clear(); meetings.clear();
+  db.iv = [iv()]; db.events = []; db.sql = []; db.clock = NOW; db.prep = prepStore(); mockLedger.clear(); meetings.clear();
   mockMail.mockReset().mockImplementation(async () => ({ messageId: `m-${mockMail.mock.calls.length}` }));
   mockCreate.mockReset().mockImplementation(async (i: { requestId: string }) => {
     if (!meetings.has(i.requestId)) meetings.set(i.requestId, { providerEventId: `zm-${meetings.size + 1}`, joinUrl: SENTINEL_PROVIDER_URL });
@@ -120,7 +123,7 @@ afterEach(() => { jest.restoreAllMocks(); jest.useRealTimers(); });
 describe('finishBooking: room and invites after the commit', () => {
   it('one room with recording OFF; the learner and every employer recipient get one message each; done', async () => {
     const r = await finishBooking('iv-1', { now: NOW, read: ON, learnerAllowed: allowed });
-    expect(r).toEqual({ status: 'done', room: 'ok', learner: 'sent', employer: 'sent' });
+    expect(r).toEqual({ status: 'done', room: 'ok', prep: 'ok', learner: 'sent', employer: 'sent' });
     expect(mockCreate).toHaveBeenCalledTimes(1);
     expect(mockCreate.mock.calls[0][0]).toMatchObject({ autoRecording: 'none', requestId: 'placement-interview-iv-1-2026-11-23T15:00:00.000Z', startAt: START, endAt: new Date('2026-11-23T15:30:00Z') });
     expect(db.iv[0]).toMatchObject({ room_provider_id: 'zm-1', room_url: SENTINEL_PROVIDER_URL, confirm_done_at: NOW, confirm_attempts: 1 });
@@ -182,6 +185,38 @@ describe('finishBooking: room and invites after the commit', () => {
     expect([mockCreate.mock.calls.length, mockMail.mock.calls.length, db.iv[0].confirm_attempts]).toEqual([0, 0, 0]);
   });
   // A rebook at a NEW time (new room, new messages) runs the REAL confirmBooking statement: bookingRebook.test.ts.
+});
+
+describe('CP8.3: the in-app notice is the learner\'s prep row', () => {
+  it('a booking becomes ONE source=real prep row for that learner, however often the work runs', async () => {
+    db.iv = [iv({ type: 'technical' })];
+    await finishBooking('iv-1', { now: NOW, read: ON, learnerAllowed: allowed });
+    db.iv[0].confirm_done_at = null; // a forced re-run after the lease lapsed, then the sweep
+    await finishBooking('iv-1', { now: at(3 * 60_000), read: ON, learnerAllowed: allowed });
+    await sweepBookingConfirms(at(60 * 60_000), { read: ON, learnerAllowed: allowed });
+    expect(db.prep.rows).toEqual([{ id: 'prep-1', enrollment_id: 'enr-ann', source: 'real', company: 'Acme', role: 'Data Analyst', type: 'technical', starts_at: START, placement_interview_id: 'iv-1' }]);
+    expect(db.prep.statements.length).toBeGreaterThanOrEqual(2);
+  });
+  it('what the email did not say: company "An employer", role "Interview", type recruiter; a long name is cut to the column', async () => {
+    db.iv = [iv({ company: null, position: '   ', type: null }), iv({ id: 'iv-2', company: 'X'.repeat(200) })];
+    await finishBooking('iv-1', { now: NOW, read: ON, learnerAllowed: allowed });
+    await finishBooking('iv-2', { now: NOW, read: ON, learnerAllowed: allowed });
+    expect(db.prep.rows.map((p) => [p.company.length > 20 ? p.company.length : p.company, p.role, p.type])).toEqual([['An employer', 'Interview', 'recruiter'], [120, 'Data Analyst', 'recruiter']]);
+  });
+  it('the link failing (a database error) leaves the booking incomplete; the sweep links it later and sends nothing twice', async () => {
+    db.prep.failures = 1;
+    expect(await finishBooking('iv-1', { now: NOW, read: ON, learnerAllowed: allowed })).toMatchObject({ status: 'incomplete', room: 'ok', prep: 'failed', learner: 'sent', employer: 'sent' });
+    expect(db.prep.rows).toHaveLength(0);
+    expect(db.events.map((e) => e.event)).toEqual(['booking_confirm_failed']);
+    expect(await sweepBookingConfirms(at(6 * 60_000), { read: ON, learnerAllowed: allowed })).toEqual({ tried: 1, done: 1, gaveUp: 0 });
+    expect(db.prep.rows).toHaveLength(1);
+    expect(sent()).toHaveLength(3);
+  });
+  it('another learner\'s row is never moved by this link (the update is guarded to the same learner); the run stays incomplete', async () => {
+    db.prep.rows.push({ id: 'prep-x', enrollment_id: 'enr-other', source: 'real', company: 'Theirs', role: 'R', type: 'technical', starts_at: NOW, placement_interview_id: 'iv-1' });
+    expect(await finishBooking('iv-1', { now: NOW, read: ON, learnerAllowed: allowed })).toMatchObject({ status: 'incomplete', prep: 'failed' });
+    expect(db.prep.rows).toEqual([{ id: 'prep-x', enrollment_id: 'enr-other', source: 'real', company: 'Theirs', role: 'R', type: 'technical', starts_at: NOW, placement_interview_id: 'iv-1' }]);
+  });
 });
 
 describe('failure paths and the recovery sweep', () => {
