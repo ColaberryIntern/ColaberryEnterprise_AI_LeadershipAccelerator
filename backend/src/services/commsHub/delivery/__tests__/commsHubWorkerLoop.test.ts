@@ -11,6 +11,9 @@ const mockTick = jest.fn(async () => ({ paused: false, started: 0, attempted: 0,
 jest.mock('../../live/livePanel', () => ({ syncLiveEvents: (...a: unknown[]) => mockSync(...(a as [])) }));
 jest.mock('../../messages/promotionPlan', () => ({ ensurePlansForUpcoming: (...a: unknown[]) => mockPlans(...(a as [])) }));
 jest.mock('../deliveryRepo', () => ({ deliveryRepo: {} }));
+const mockAlerts = jest.fn(async () => ({ queued: 0, sent: 0, retried: 0, failed: 0 }));
+jest.mock('../../alerts/alertRepo', () => ({ alertRepo: {} }));
+jest.mock('../../alerts/failureAlerts', () => ({ runFailureAlerts: (...a: unknown[]) => mockAlerts(...(a as [])), defaultAlertSenders: {} }));
 jest.mock('../deliveryWorker', () => ({ runDeliveryTick: (...a: unknown[]) => mockTick(...(a as [])), defaultConnector: jest.fn() }));
 const mockSchedule = jest.fn(() => ({ stop: jest.fn() }));
 jest.mock('node-cron', () => ({ __esModule: true, default: { schedule: (...a: unknown[]) => mockSchedule(...(a as [])) } }));
@@ -38,8 +41,13 @@ it('start is idempotent: one schedule, every minute', () => {
   expect(COMMS_HUB_WORKER_CRON).toBe('* * * * *');
 });
 
-it('each tick repairs live events, drafts plan messages as the worker, then sends', async () => {
+it('each tick repairs live events, drafts plan messages as the worker, sends, then alerts on failures (CH7.5)', async () => {
+  const order: string[] = [];
+  mockTick.mockImplementationOnce(async () => { order.push('send'); return { paused: false, started: 0, attempted: 0, sent: 0, finished: {} }; });
+  mockAlerts.mockImplementationOnce(async () => { order.push('alerts'); return { queued: 0, sent: 0, retried: 0, failed: 0 }; });
   expect(await runCommsHubTick(deps, NOW)).toBe('ran');
+  expect(order).toEqual(['send', 'alerts']);
+  expect(mockAlerts).toHaveBeenCalledWith(expect.objectContaining({ repo: {} }), NOW);
   expect(mockSync).toHaveBeenCalledWith(NOW.getTime());
   expect(mockPlans).toHaveBeenCalledWith(WORKER_ACTOR, NOW);
   expect(mockTick).toHaveBeenCalledWith(deps, NOW);
@@ -60,7 +68,10 @@ it('a tick still running is not stacked: the next minute is skipped and says so'
 it('a failing step is logged and the others still run', async () => {
   mockSync.mockRejectedValueOnce(new Error('stream api down'));
   mockPlans.mockRejectedValueOnce(new Error('model down'));
+  mockTick.mockRejectedValueOnce(new Error('pg down'));
   expect(await runCommsHubTick(deps, NOW)).toBe('ran');
-  expect(logs).toEqual(expect.arrayContaining(['comms_hub_live_sync_failed', 'comms_hub_plan_sync_failed']));
+  expect(logs).toEqual(expect.arrayContaining(['comms_hub_live_sync_failed', 'comms_hub_plan_sync_failed', 'comms_hub_send_tick_failed']));
   expect(mockTick).toHaveBeenCalledTimes(1);
+  // A failed send tick still alerts on failures already recorded.
+  expect(mockAlerts).toHaveBeenCalledTimes(1);
 });

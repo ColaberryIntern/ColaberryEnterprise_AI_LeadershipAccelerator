@@ -436,6 +436,7 @@ import CommsHubDraft from './CommsHubDraft';
 import CommsHubDestination from './CommsHubDestination';
 import CommsHubApproval from './CommsHubApproval';
 import CommsHubDelivery from './CommsHubDelivery';
+import CommsHubAlert from './CommsHubAlert';
 // --- Marketing Operations: Content OS ---
 import ContentItem from './ContentItem';
 import ChannelAccount from './ChannelAccount';
@@ -1643,6 +1644,7 @@ export {
   CommsHubDestination,
   CommsHubApproval,
   CommsHubDelivery,
+  CommsHubAlert,
   // Marketing Operations: Content OS
   ContentItem,
   ChannelAccount,

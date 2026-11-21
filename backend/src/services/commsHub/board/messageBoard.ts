@@ -48,7 +48,8 @@ function windowWhere(scope: BoardScope, now: Date): WhereOptions {
   return { [Op.or]: [{ send_at: { [Op.lte]: until } }, { send_at: { [Op.is]: null }, status: { [Op.in]: ON_APPROVAL } }] } as WhereOptions;
 }
 
-function titleOf(m: CommsHubMessage, ev: CommsHubEvent | undefined): string {
+/** "Demo Tuesday: reminder, 1 day before", or the subject of a message with no event. Shared with the CH7.5 alerts. */
+export function messageTitle(m: Pick<CommsHubMessage, 'plan_kind' | 'kind' | 'subject'>, ev: Pick<CommsHubEvent, 'title'> | null | undefined): string {
   const what = (m.plan_kind && PLAN_LABEL[m.plan_kind]?.label) || KIND_LABEL[m.kind] || 'Message';
   if (ev) return `${ev.title}: ${what.charAt(0).toLowerCase()}${what.slice(1)}`;
   return m.subject?.trim() || what;
@@ -101,7 +102,7 @@ export async function listBoard(f: BoardFilter, now: Date = new Date()): Promise
     const missed = mine.filter((d) => d.status === 'failed' || (d.status === 'cancelled' && m.status === 'partially_failed'));
     const showFailure = m.status === 'failed' || m.status === 'partially_failed' || m.status === 'cancelled';
     return {
-      id: m.id, status: m.status, kind: m.kind, title: titleOf(m, ev),
+      id: m.id, status: m.status, kind: m.kind, title: messageTitle(m, ev),
       event: ev ? { id: ev.id, title: ev.title, thumbnail_id: ev.thumbnail_id } : null,
       send_at: m.send_at ? m.send_at.toISOString() : null, updated_at: m.updated_at.toISOString(),
       destinations: dests.filter((d) => d.message_id === m.id).map((d) => ({ channel: d.channel, label: d.label })),

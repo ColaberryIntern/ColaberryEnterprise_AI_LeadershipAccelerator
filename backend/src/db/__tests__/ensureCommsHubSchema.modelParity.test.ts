@@ -13,12 +13,14 @@ const TABLES = [
   'comms_hub_events', 'comms_hub_thumbnails', 'comms_hub_event_photos', 'comms_hub_settings', 'comms_hub_activity',
   // CH6.1
   'comms_hub_messages', 'comms_hub_drafts', 'comms_hub_destinations', 'comms_hub_approvals', 'comms_hub_deliveries',
+  // CH7.5
+  'comms_hub_alerts',
 ];
 
 describe('ensureCommsHubSchema: DDL and models agree', () => {
   const created = parseCreatedTables(COMMS_HUB_SCHEMA_STATEMENTS);
 
-  it('creates exactly the ten hub tables', () => {
+  it('creates exactly the eleven hub tables', () => {
     expect(created.map((t) => t.table).sort()).toEqual([...TABLES].sort());
   });
 

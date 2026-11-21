@@ -4,6 +4,8 @@ import { syncLiveEvents } from '../live/livePanel';
 import { ensurePlansForUpcoming } from '../messages/promotionPlan';
 import { deliveryRepo } from './deliveryRepo';
 import { defaultConnector, runDeliveryTick, type WorkerDeps } from './deliveryWorker';
+import { alertRepo } from '../alerts/alertRepo';
+import { defaultAlertSenders, runFailureAlerts, type AlertDeps } from '../alerts/failureAlerts';
 
 /**
  * The Communications Hub worker's wiring (CH7.2): every minute, on the house scheduler (node-cron, as
@@ -12,7 +14,8 @@ import { defaultConnector, runDeliveryTick, type WorkerDeps } from './deliveryWo
  *  - repairs events left "live" by a stream that ended outside the panel (CH5.2 carry-forward);
  *  - drafts promotion-plan messages for occurrences entering the window, and Recording and thanks
  *    after one ends (CH6.4 carry-forward);
- *  - sends what is due (deliveryWorker.ts).
+ *  - sends what is due (deliveryWorker.ts);
+ *  - alerts the settings' recipients about messages that ended failed or partly sent (CH7.5), once each.
  * Each part's failure is logged and does not stop the others. Nothing is sent while the hub's global
  * pause is on; nothing is ever sent that a person did not approve.
  */
@@ -24,10 +27,11 @@ function log(level: 'info' | 'warn' | 'error', event: string, ctx: Record<string
 }
 
 export const workerDeps: WorkerDeps = { repo: deliveryRepo, connector: defaultConnector, log };
+export const alertDeps: AlertDeps = { repo: alertRepo, senders: defaultAlertSenders, log };
 
 let running = false;
 
-export async function runCommsHubTick(deps: WorkerDeps = workerDeps, now: Date = new Date()): Promise<'ran' | 'skipped_overlap'> {
+export async function runCommsHubTick(deps: WorkerDeps = workerDeps, now: Date = new Date(), alerts: AlertDeps = alertDeps): Promise<'ran' | 'skipped_overlap'> {
   if (running) {
     deps.log('warn', 'comms_hub_tick_overlap', { outcome: 'partial' });
     return 'skipped_overlap';
@@ -42,6 +46,8 @@ export async function runCommsHubTick(deps: WorkerDeps = workerDeps, now: Date =
     await step('comms_hub_live_sync_failed', () => syncLiveEvents(now.getTime()));
     await step('comms_hub_plan_sync_failed', () => ensurePlansForUpcoming(WORKER_ACTOR, now));
     await step('comms_hub_send_tick_failed', () => runDeliveryTick(deps, now));
+    // After the send tick, so a message that ended failed in this tick is alerted in this tick.
+    await step('comms_hub_alerts_failed', () => runFailureAlerts(alerts, now));
     return 'ran';
   } finally {
     running = false;

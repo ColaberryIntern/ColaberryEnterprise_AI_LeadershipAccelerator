@@ -25,6 +25,10 @@ import { sequelize } from '../config/database';
  * - comms_hub_deliveries: ONE row per destination per message (unique), with a UNIQUE idempotency key,
  *   so neither a retry nor a re-approval can post twice; a destination with deliveries cannot be
  *   deleted (its history stays).
+ * - comms_hub_alerts (CH7.5): one row per failure state change per alert recipient (the dashboard is
+ *   a recipient too). state_event_id is the activity row the worker wrote when the message ended
+ *   failed or partially_failed, so UNIQUE (state_event_id, recipient) makes the alert once per state
+ *   change: a re-run queues nothing new, and a retry that fails again is a new state change.
  */
 export const COMMS_HUB_EVENT_TYPES = ['session', 'open_house', 'office_hours', 'workshop', 'other'] as const;
 export const COMMS_HUB_EVENT_STATUSES = ['draft', 'scheduled', 'live', 'ended', 'cancelled'] as const;
@@ -37,6 +41,8 @@ export const COMMS_HUB_MESSAGE_KINDS = ['announcement', 'reminder', 'starting_so
 export const COMMS_HUB_PLAN_KINDS = ['announcement', 'reminder', 'starting_soon', 'recording_thanks'] as const;
 export const COMMS_HUB_DESTINATION_TYPES = ['cohort_feed', 'in_app_audience'] as const;
 export const COMMS_HUB_DELIVERY_STATUSES = ['pending', 'sending', 'sent', 'failed', 'cancelled', 'skipped'] as const;
+export const COMMS_HUB_ALERT_STATUSES = ['pending', 'sending', 'sent', 'failed'] as const;
+export const COMMS_HUB_ALERT_STATES = ['failed', 'partially_failed'] as const;
 
 const list = (xs: readonly string[]): string => xs.map((x) => `'${x}'`).join(', ');
 
@@ -240,6 +246,29 @@ export const COMMS_HUB_SCHEMA_STATEMENTS: readonly string[] = [
   `CREATE INDEX IF NOT EXISTS idx_comms_hub_deliveries_due ON comms_hub_deliveries (status, next_attempt_at)`,
   `CREATE INDEX IF NOT EXISTS idx_comms_hub_deliveries_message ON comms_hub_deliveries (message_id)`,
 
+  `CREATE TABLE IF NOT EXISTS comms_hub_alerts (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     state_event_id UUID NOT NULL REFERENCES comms_hub_activity(id) ON DELETE CASCADE,
+     message_id UUID NOT NULL REFERENCES comms_hub_messages(id) ON DELETE CASCADE,
+     failure_state VARCHAR(24) NOT NULL,
+     -- An email address, or 'dashboard' for the admin alerts list.
+     recipient VARCHAR(254) NOT NULL,
+     status VARCHAR(16) NOT NULL DEFAULT 'pending',
+     attempt_count INTEGER NOT NULL DEFAULT 0,
+     next_attempt_at TIMESTAMPTZ,
+     claimed_at TIMESTAMPTZ,
+     error TEXT,
+     sent_at TIMESTAMPTZ,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+   )`,
+  `ALTER TABLE comms_hub_alerts ADD CONSTRAINT comms_hub_alerts_status_check
+     CHECK (status IN (${list(COMMS_HUB_ALERT_STATUSES)}))`,
+  `ALTER TABLE comms_hub_alerts ADD CONSTRAINT comms_hub_alerts_state_check
+     CHECK (failure_state IN (${list(COMMS_HUB_ALERT_STATES)}))`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS uq_comms_hub_alerts_once ON comms_hub_alerts (state_event_id, recipient)`,
+  `CREATE INDEX IF NOT EXISTS idx_comms_hub_alerts_due ON comms_hub_alerts (status, next_attempt_at)`,
+
   // Write-through link: the calendar rows this hub event owns. Nullable, so every existing row is untouched.
   `ALTER TABLE community_events ADD COLUMN IF NOT EXISTS hub_event_id UUID`,
   `CREATE INDEX IF NOT EXISTS idx_community_events_hub_event ON community_events (hub_event_id)`,
@@ -248,6 +277,7 @@ export const COMMS_HUB_SCHEMA_STATEMENTS: readonly string[] = [
 const REQUIRED_TABLES = [
   'comms_hub_events', 'comms_hub_thumbnails', 'comms_hub_event_photos', 'comms_hub_settings', 'comms_hub_activity',
   'comms_hub_messages', 'comms_hub_drafts', 'comms_hub_destinations', 'comms_hub_approvals', 'comms_hub_deliveries',
+  'comms_hub_alerts',
 ];
 
 export async function ensureCommsHubSchema(): Promise<{ ok: boolean; missing: string[] }> {
