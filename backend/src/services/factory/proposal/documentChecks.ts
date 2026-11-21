@@ -65,6 +65,20 @@ function hasConcreteDetail(plainText: string): boolean {
   return /\d/.test(plainText) || SPECIFIC_RE.test(plainText);
 }
 
+/** PURE: is this requirement purely a SUBMISSION INSTRUCTION — it governs only HOW/WHEN/WHERE/FORMAT the proposal is
+ *  submitted (email vs portal, copies, file type, page/font limits, deadlines, labeling) rather than any technical or
+ *  functional capability? Such a requirement belongs in the compliance matrix; a technical response must NOT draft a
+ *  method/workflow/acceptance-test for it (the independent-review failure: submission instructions written up as
+ *  technical strategy). A requirement that mentions a submission mechanic BUT also names a technical capability is NOT
+ *  classified here as submission-only. */
+const SUBMISSION_RE = /\b(submit|submission|submittal|shall be submitted|electronic\s+copy|pdf\s+copy|number of copies|one \(1\) (electronic|pdf|hard)|hard cop(y|ies)|email to|deliver(ed)? to|no later than|due (date|by)|deadline|page limit|page count|font size|margin|cover letter|table of contents|sealed|envelope|label(ed|ing)|file naming|portal|bonfire|upload)\b/i;
+const TECH_CAPABILITY_RE = /\b(GIS|ArcGIS|work order|integration|interface|API|SCADA|offline|SWPPP|stormwater|asset|permit|inspection|dashboard|report|workflow|migration|SSO|RBAC|mobile|field|sync|schema|database|preventive|preventative|maintenance|SLA|uptime|security|encryption|audit\s+trail|role)\b/i;
+export function isSubmissionInstructionRequirement(statement: string | null | undefined): boolean {
+  const t = plain(statement);
+  if (!t) return false;
+  return SUBMISSION_RE.test(t) && !TECH_CAPABILITY_RE.test(t);
+}
+
 /** PURE: is this section a SUBSTANTIVE answer (not just present / not just boilerplate)? A requirement is only
  *  "covered" when its answer clears a minimum informative length AND names something concrete. This is the fix for
  *  the headline defect: a bare `data-req` anchor, any-nonempty-text, or a generic "we comply" no longer counts. */

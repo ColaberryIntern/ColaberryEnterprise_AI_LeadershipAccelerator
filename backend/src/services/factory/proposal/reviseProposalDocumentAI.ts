@@ -27,7 +27,16 @@ export async function reviseDocument(currentHtml: string, findings: CheckFinding
   const findingsBlock = failing.map((f) => `- [${f.check}${f.sectionKey ? `/${f.sectionKey}` : ''}] ${f.message}`).join('\n');
   const system =
     'You REVISE a government-proposal document to fix the listed review findings, changing ONLY what the findings call ' +
-    'out and leaving the rest of the document intact. CRITICAL: use ONLY the facts in the grounding below; never invent ' +
+    'out and leaving the rest of the document intact. ' +
+    // When a finding says a requirement is thin/generic/boilerplate, REWRITE it into substance, do not re-restate it.
+    'When a finding says an answer is thin, generic or boilerplate, REPLACE it with a real RESPONSE: the proposed ' +
+    'approach, the concrete workflow/architecture, how data moves and how any NAMED system is integrated (mapping, ' +
+    'auth, sync direction, error handling), the security/control, the implementation step, and a verifiable acceptance ' +
+    'test. Address a named system BY NAME with the proposed integration approach. A requirement that only governs HOW/' +
+    'WHEN/WHERE/FORMAT the proposal is submitted is an administrative compliance item, NOT a technical strategy — never ' +
+    'write a technical approach for it. Never answer with "we comply"/"we understand"/a Benefit-Proof-Compliance ' +
+    'template. ' +
+    'CRITICAL: use ONLY the facts in the grounding below for SPECIFIC facts; never invent ' +
     'a client, metric, date, dollar figure, certification or person. Where a fix WOULD need a specific fact not in the ' +
     'grounding, insert a visible [PLACEHOLDER: …] and ALSO return it as a question. Return STRICT JSON ' +
     '{"html":"<full revised document, allowed tags only>","gaps":[{"question":"...","suggestions":["..."]}],"changeSummary":"<one line>"}. ' +

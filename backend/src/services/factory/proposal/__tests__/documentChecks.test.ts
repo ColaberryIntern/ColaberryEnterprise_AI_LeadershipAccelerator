@@ -2,7 +2,7 @@
  * documentChecks — the deterministic checks + the pure pass rule. Table-driven. Includes the hazard-3.2 guard: a
  * build-track (scope) requirement is EXCLUDED from the coverage denominator, so it is never counted as "uncovered".
  */
-import { checkCoverage, checkLocationCoverage, checkFormat, checkFact, passes, runDocumentChecks, isSubstantiveAnswer, isBoilerplateAnswer, type DocumentCheckInput } from '../documentChecks';
+import { checkCoverage, checkLocationCoverage, checkFormat, checkFact, passes, runDocumentChecks, isSubstantiveAnswer, isBoilerplateAnswer, isSubmissionInstructionRequirement, type DocumentCheckInput } from '../documentChecks';
 import type { CheckScores } from '../proposalReviewTypes';
 
 const scoreAll = (n: number): CheckScores => ({ coverage: n, format: n, fact: n, evaluator: n, proof: n, clarity: n });
@@ -23,6 +23,21 @@ describe('isSubstantiveAnswer / isBoilerplateAnswer', () => {
   });
   it('a bare anchor / tiny text is not substantive', () => {
     expect(isSubstantiveAnswer('<p>answered</p>')).toBe(false);
+  });
+});
+
+describe('isSubmissionInstructionRequirement', () => {
+  it('flags pure submission logistics (the independent-review failure: these were written up as technical strategy)', () => {
+    expect(isSubmissionInstructionRequirement('One (1) electronic (PDF) copy of responses shall be submitted by email to Herriman City.')).toBe(true);
+    expect(isSubmissionInstructionRequirement('Proposals must be submitted no later than 5:00 p.m. MDT on November 30, 2026.')).toBe(true);
+    expect(isSubmissionInstructionRequirement('Responses are limited to a 25 page limit, 11pt font.')).toBe(true);
+  });
+  it('does NOT flag a technical/functional requirement as submission logistics', () => {
+    expect(isSubmissionInstructionRequirement('The system shall provide two-way GIS synchronization with ArcGIS, including conflict handling.')).toBe(false);
+    expect(isSubmissionInstructionRequirement('Provide a work order management workflow with preventive maintenance scheduling.')).toBe(false);
+  });
+  it('a requirement that mentions submission BUT also names a technical capability is NOT submission-only', () => {
+    expect(isSubmissionInstructionRequirement('Responses shall be submitted via the Bonfire portal and the solution must support offline field data capture.')).toBe(false);
   });
 });
 
