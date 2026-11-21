@@ -11,6 +11,7 @@ import {
   annualizedCents,
   confirmDealValue,
   dealValueTableExists,
+  monthlyCents,
   getDealValueHistory,
   getLiveDealValues,
 } from '../enterpriseDealValueService';
@@ -36,6 +37,7 @@ import {
 
 const GOOD = {
   enterpriseIntakeId: '11111111-1111-4111-8111-111111111111',
+  valueKind: 'total_contract' as const,
   dealValueCents: 4500000,
   valueBasis: 'SOW dated 2026-12-02, three phases at $15,000 each, countersigned by their CTO',
   basisSource: 'statement_of_work' as const,
@@ -221,6 +223,84 @@ describe('a revision supersedes rather than overwrites', () => {
     const updates = m.query.mock.calls
       .filter((c: any[]) => /UPDATE enterprise_deal_values/.test(String(c[0])));
     expect(updates).toHaveLength(0);
+  });
+});
+
+describe('a monthly retainer is Plan A, and cannot be filed as a one-month deal', () => {
+  const RETAINER = {
+    enterpriseIntakeId: GOOD.enterpriseIntakeId,
+    valueKind: 'monthly_retainer' as const,
+    monthlyFeeCents: 450000, // $4,500 a month - the Middlesex shape
+    periodMonths: 12,
+    valueBasis: 'Retainer agreement dated 2026-12-01, $4,500 per month for twelve months',
+    basisSource: 'signed_agreement' as const,
+    confirmedBy: 'ali@colaberry.com',
+  };
+
+  function wireInsert(capture: { cents?: unknown; period?: unknown }) {
+    m.transaction.mockImplementation(async (fn: any) => fn({}));
+    m.query.mockImplementation((sql: string, opts: any) => {
+      const s = String(sql);
+      if (s.includes('information_schema.tables')) return Promise.resolve([{ n: 1 }]);
+      if (s.includes('SELECT * FROM enterprise_deal_values')) return Promise.resolve([]);
+      if (s.includes('INSERT INTO enterprise_deal_values')) {
+        capture.cents = opts.replacements.cents;
+        capture.period = opts.replacements.period;
+        return Promise.resolve([{
+          id: 'v1', enterprise_intake_id: RETAINER.enterpriseIntakeId,
+          deal_value_cents: String(opts.replacements.cents), currency: 'USD',
+          period_months: opts.replacements.period, value_basis: RETAINER.valueBasis,
+          basis_source: 'signed_agreement', confirmed_by: 'ali@colaberry.com',
+          confirmed_at: '2026-11-21T00:00:00Z', superseded_at: null, superseded_by_id: null,
+          notes: null,
+        }]);
+      }
+      return Promise.resolve([]);
+    });
+  }
+
+  it('stores the TOTAL, not the monthly fee - the defect this shape exists to prevent', async () => {
+    const got: { cents?: unknown; period?: unknown } = {};
+    wireInsert(got);
+    const out = await confirmDealValue(RETAINER);
+
+    // $4,500 x 12 = $54,000. Before this change the same intent stored 450000 ($4,500) and
+    // understated the engagement by its own term.
+    expect(got.cents).toBe(5400000);
+    expect(got.period).toBe(12);
+    expect(out.value.dealValueCents).toBe(5400000);
+  });
+
+  it('round-trips back to the negotiated monthly fee exactly', async () => {
+    const got: { cents?: unknown } = {};
+    wireInsert(got);
+    const out = await confirmDealValue(RETAINER);
+    // Exact, because the total was built by multiplying this figure by the term.
+    expect(monthlyCents(out.value)).toBe(450000);
+    expect(annualizedCents(out.value)).toBe(5400000);
+  });
+
+  it('REFUSES a retainer with no term, instead of treating it as one month', async () => {
+    await expect(confirmDealValue({ ...RETAINER, periodMonths: undefined as any }))
+      .rejects.toThrow(/A monthly retainer needs periodMonths/);
+    await expect(confirmDealValue({ ...RETAINER, periodMonths: 0 }))
+      .rejects.toThrow(/understate the deal by the length of its own term/);
+    expect(m.transaction).not.toHaveBeenCalled();
+  });
+
+  it('names the field the caller actually passed when the amount is wrong', async () => {
+    await expect(confirmDealValue({ ...RETAINER, monthlyFeeCents: 4500.5 }))
+      .rejects.toThrow(/monthlyFeeCents must be a whole number of CENTS/);
+    // And the total-contract shape names its own field, not the retainer's.
+    await expect(confirmDealValue({ ...GOOD, dealValueCents: 45000.5 }))
+      .rejects.toThrow(/dealValueCents must be a whole number of CENTS/);
+  });
+
+  it('refuses a shape it does not recognise rather than guessing one', async () => {
+    await expect(confirmDealValue({ ...GOOD, valueKind: 'whatever' as any }))
+      .rejects.toThrow(/valueKind must be/);
+    await expect(confirmDealValue({ ...GOOD, valueKind: 'whatever' as any }))
+      .rejects.toThrow(/twelve-month retainer being filed as a single month/);
   });
 });
 
