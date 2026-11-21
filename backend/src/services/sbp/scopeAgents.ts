@@ -18,9 +18,14 @@
  * TWO RULES ARE ENFORCED IN CODE, NOT ASKED FOR IN THE PROMPT, because they
  * are the difference between a safe system and a plausible one:
  *
- *   1. An agent that touches a SAFE requirement cannot be autonomous. Whatever
- *      the model returns, its autonomy is capped at acts_with_approval and the
- *      SAFE requirement is recorded as its approval gate.
+ *   1. An agent whose stories touch a SAFE requirement a PERSON can let through
+ *      ("without Dana approving overtime") cannot be autonomous. Whatever the
+ *      model returns, its autonomy is capped at acts_with_approval and that
+ *      requirement is recorded as its approval gate. A SAFE requirement nobody
+ *      can let through ("never text anyone on leave") is a HARD RULE: recorded
+ *      in `hard_rules`, enforced by the agent, and it does not make it wait.
+ *      ShiftFill v3 (2026-11-20) showed "hygienists never need an app" as the
+ *      approval gate of the agent that sends texts, with nobody to approve it.
  *   2. Every story keeps an owner. If scoping returns a roster that does not
  *      cover a story, that story keeps the owner it had rather than being
  *      silently unassigned.
@@ -32,6 +37,7 @@
  * scoped.
  */
 import { BuildPlan, PlanAgent, PlanRequirement } from './planContract';
+import { guardrailGate, rolesFrom } from './planPeople';
 
 const MODEL_DEFAULT = 'gpt-4o';
 
@@ -132,6 +138,9 @@ const SYSTEM_PROMPT = [
   '  approve something, the agent that produces it is not autonomous.',
   '- Take triggers, inputs and outputs from the requirements. Do not invent a system that',
   '  is not named there.',
+  '- When an agent works on something another agent produces, list it in its inputs using',
+  '  EXACTLY that agent\'s output name. If one agent outputs "Gap record", the agent that',
+  '  ranks people for that gap reads "Gap record", not "gap details", and not nothing.',
 ].join('\n');
 
 function userPrompt(plan: BuildPlan): string {
@@ -153,8 +162,8 @@ function safeIds(plan: BuildPlan): Set<string> {
   return new Set(plan.requirements.filter((r) => r.kind === 'SAFE').map((r) => r.id));
 }
 
-/** The SAFE requirements an agent's own stories touch. */
-function gatesFor(agent: PlanAgent, plan: BuildPlan, safes: Set<string>): PlanRequirement[] {
+/** The SAFE requirements an agent's own stories touch, approvals and hard rules alike. */
+function safesFor(agent: PlanAgent, plan: BuildPlan, safes: Set<string>): PlanRequirement[] {
   const owned = new Set(agent.owns);
   const ids = new Set<string>();
   for (const s of plan.stories) {
@@ -259,11 +268,17 @@ export async function scopeAgents(plan: BuildPlan, deps: ScopeAgentsDeps): Promi
   // rather than asked for, because a model that gets this wrong produces a
   // system that quietly breaks the one promise the student cared about.
   const safes = safeIds(plan);
+  const roles = rolesFrom(plan.stories);
+  const isApproval = (r: PlanRequirement) => guardrailGate(r.statement, roles).kind === 'approval';
+  const label = (r: PlanRequirement) => `${r.id} — ${r.statement}`;
   const gated: string[] = [];
   for (const a of agents) {
-    const gates = gatesFor(a, plan, safes);
+    const touched = safesFor(a, plan, safes);
+    const rules = touched.filter((r) => !isApproval(r));
+    if (rules.length) a.hard_rules = rules.map(label);
+    const gates = touched.filter(isApproval);
     if (!gates.length) continue;
-    a.approval_gates = gates.map((g) => `${g.id} — ${g.statement}`);
+    a.approval_gates = gates.map(label);
     if (a.autonomy_level === 'acts_autonomously') {
       a.autonomy_level = 'acts_with_approval';
       gated.push(a.name);

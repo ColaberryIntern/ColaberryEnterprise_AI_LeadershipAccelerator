@@ -130,6 +130,7 @@ export function renderStudentDataContract(): string {
     '',
     'agents[]         id, name, purpose, trigger_type, trigger, inputs[], outputs[],',
     '                 autonomy_level, approval_gates[], escalation_rules[], skills[], owns[]',
+    '                 hard_rules[]  rules nobody can override; may be absent',
     '',
     'project          name, descriptor, repo_url, plan_version, plan_sha256',
     '',

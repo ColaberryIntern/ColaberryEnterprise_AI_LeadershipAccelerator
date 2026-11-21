@@ -242,10 +242,17 @@ export interface PlanAgent {
   /** The LEAST autonomy the requirements permit. */
   autonomy_level: 'suggests' | 'acts_with_approval' | 'acts_autonomously';
   /**
-   * SAFE requirements this agent's own stories touch. Populated by scopeAgents,
-   * never by the model: an agent with a gate here cannot be autonomous.
+   * SAFE requirements this agent's own stories touch that a PERSON can let
+   * through ("without Dana approving overtime"). Populated by scopeAgents, never
+   * by the model: an agent with a gate here cannot be autonomous.
    */
   approval_gates: string[];
+  /**
+   * SAFE requirements this agent's stories touch that NOBODY can let through
+   * ("never text anyone on leave"). The agent enforces them; they do not make it
+   * wait for a person. Populated by scopeAgents. Absent on older plans.
+   */
+  hard_rules?: string[];
   escalation_rules: string[];
   skills: string[];
   /** Story ids this agent owns. */
