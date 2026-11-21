@@ -17,7 +17,7 @@
 .cp-room .cp-ra-v{grid-area:v;text-align:right;font-family:var(--cp-mono)}
 .cp-room .cp-ra-row small{grid-area:val}
 @media (max-width:600px){
-  /* The label column sizes to its longest word ("Completeness"), never breaking it mid-word. */
-  .cp-room .cp-ra-row{grid-template-columns:max-content minmax(40px,1fr) 32px}
+  /* One fixed label column, wide enough for "Completeness" (never broken mid-word), so every bar starts at the same x. */
+  .cp-room .cp-ra-row{grid-template-columns:7.75rem minmax(40px,1fr) 32px}
   .cp-room .cp-ra-line{font-size:1.05rem}
 }
