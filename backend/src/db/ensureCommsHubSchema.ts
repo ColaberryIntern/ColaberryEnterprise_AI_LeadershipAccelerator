@@ -1,3 +1,4 @@
+import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 
 /**
@@ -293,16 +294,20 @@ export async function ensureCommsHubSchema(): Promise<{ ok: boolean; missing: st
   }
   let missing: string[] = [];
   try {
-    const [rows] = await sequelize.query(
-      `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN (:names)`,
-      { replacements: { names: REQUIRED_TABLES } },
+    // Typed SELECT and a text cast: information_schema columns are sql_identifier, and an untyped raw
+    // query did not come back as one row object per table on a real Postgres (CH8.1 found every
+    // table reported missing although all were created). Same form as the other ensure* checks.
+    const rows = await sequelize.query<{ table_name: string }>(
+      `SELECT table_name::text AS table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name = ANY($names)`,
+      { bind: { names: REQUIRED_TABLES }, type: QueryTypes.SELECT },
     );
-    const present = new Set((rows as Array<{ table_name: string }>).map((r) => r.table_name));
-    const [cols] = await sequelize.query(
-      `SELECT 1 FROM information_schema.columns WHERE table_name = 'community_events' AND column_name = 'hub_event_id'`,
+    const present = new Set(rows.map((r) => r.table_name));
+    const cols = await sequelize.query(
+      `SELECT 1 AS present FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'community_events' AND column_name = 'hub_event_id'`,
+      { type: QueryTypes.SELECT },
     );
     missing = REQUIRED_TABLES.filter((t) => !present.has(t));
-    if ((cols as unknown[]).length === 0) missing.push('community_events.hub_event_id');
+    if (cols.length === 0) missing.push('community_events.hub_event_id');
     if (missing.length > 0) {
       console.error(JSON.stringify({
         timestamp: new Date().toISOString(), level: 'error', service: 'backend', event: 'SchemaInvariantViolation',

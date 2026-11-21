@@ -63,8 +63,8 @@ describeIfDb('CH7.2 sending worker on a scratch Postgres', () => {
   });
 
   async function cohort(name: string): Promise<string> {
-    return (await q<{ id: string }>(`INSERT INTO cohorts (id, name, start_date, core_day, core_time, max_seats, seats_taken, status, created_at, updated_at)
-      VALUES (gen_random_uuid(), $1, '2026-11-01', 'Tuesday', '18:00', 50, 0, 'open', now(), now()) RETURNING id`, [name]))[0].id;
+    return (await q<{ id: string }>(`INSERT INTO cohorts (id, name, start_date, core_day, core_time, max_seats, seats_taken, status, created_at)
+      VALUES (gen_random_uuid(), $1, '2026-11-01', 'Tuesday', '18:00', 50, 0, 'open', now()) RETURNING id`, [name]))[0].id;
   }
   /** An approved, scheduled message to the given feeds, approved on its real content hash. */
   async function approvedMessage(feeds: string[], body = 'Demo Tuesday is Tuesday, December 1 at 6:00 PM CST.'): Promise<string> {

@@ -17,8 +17,10 @@ const TABLES = [
 
 function respond(opts: { presentTables: string[]; hasColumn: boolean; secondBoot: boolean }) {
   mockQuery.mockImplementation(async (sql: string) => {
-    if (/FROM information_schema\.tables/.test(sql)) return [opts.presentTables.map((table_name) => ({ table_name }))];
-    if (/FROM information_schema\.columns/.test(sql)) return [opts.hasColumn ? [{ '?column?': 1 }] : []];
+    // The checks are typed SELECTs (QueryTypes.SELECT), which answer with the rows themselves. An earlier
+    // untyped form passed against this mock but reported every table missing on a real Postgres (CH8.1).
+    if (/FROM information_schema\.tables/.test(sql)) return opts.presentTables.map((table_name) => ({ table_name }));
+    if (/FROM information_schema\.columns/.test(sql)) return opts.hasColumn ? [{ present: 1 }] : [];
     if (opts.secondBoot && /ADD CONSTRAINT/.test(sql)) throw new Error('constraint "x" for relation "y" already exists');
     return [[]];
   });

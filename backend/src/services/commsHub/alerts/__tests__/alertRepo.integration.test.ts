@@ -108,8 +108,8 @@ describeIfDb('CH7.5 failure alerts on a scratch Postgres', () => {
     expect((await runFailureAlerts(deps as never, new Date(NOW.getTime() + 60_000))).sent).toBe(0);
     expect(sent.sort()).toEqual([
       'dashboard:Communications Hub: Holiday hours did not send',
-      'jackie@colaberry.com:0 of 2 recipients receive',
-      'ops@colaberry.com:0 of 2 recipients receive',
+      'jackie@colaberry.com:0 of 2 recipients received',
+      'ops@colaberry.com:0 of 2 recipients received',
     ]);
   });
 });
