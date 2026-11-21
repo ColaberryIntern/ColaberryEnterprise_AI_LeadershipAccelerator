@@ -10,11 +10,56 @@ const LIB = path.join(__dirname, '..', '..', '..', '..', 'backend', 'src', 'scri
 const K = require(path.join(LIB, 'emailLayoutKit'));
 const { SIG_HTML, SIG_TEXT } = require(path.join(LIB, 'internDeliveryEmailSend'));
 
+const B = require('./brand');
+const HM = require('./heatmap');
+
 const { C, esc } = K;
 const TONE = { good: [C.okSoft, C.ok], bad: [C.actionSoft, C.action], warn: [C.warnSoft, C.warn], ok: [C.warnSoft, C.warn], info: [C.infoSoft, C.info], low: [C.lineSoft, C.ink2], none: [C.lineSoft, C.ink2] };
 const VERDICT = { good: 'Holding so far', bad: 'Not holding', low: 'Too few to judge', none: 'No data yet', retracted: 'Retracted' };
 
 const prettyDate = (ymd) => new Date(`${ymd}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+
+/**
+ * The Colaberry Training masthead.
+ *
+ * THE LOGO IS A REMOTE IMAGE AND MUST SURVIVE BEING BLOCKED. Most clients hide remote images
+ * until the reader allows them, so the wordmark beside it is real text rather than part of the
+ * artwork, the `alt` carries the brand name, and the band is painted with a `bgcolor`
+ * attribute as well as a style so the brand is still there when the image is not. An email
+ * whose identity lives only inside a PNG is unbranded for the first read, which is the read
+ * that matters.
+ *
+ * Width and height are set as ATTRIBUTES, not only CSS: Outlook ignores the CSS and would
+ * otherwise draw the asset at its full pixel size, pushing the 600px column apart.
+ */
+function masthead() {
+  return `
+<tr><td bgcolor="${B.cherryDeep}" style="background:${B.cherryDeep};padding:18px 22px">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
+    <td valign="middle" style="padding-right:14px" width="150">
+      <img src="${B.LOGO.onDark}" alt="${esc(B.LOGO.alt)}" width="150" height="29" style="display:block;width:150px;height:29px;border:0;outline:none;text-decoration:none"/>
+    </td>
+    <td valign="middle" align="right" style="font-family:${K.FONT};color:#ffffff">
+      <div style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;font-weight:700">${esc(B.WORDMARK)}</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.85);margin-top:2px">Open House funnel, weekly</div>
+    </td>
+  </tr></table>
+</td></tr>`;
+}
+
+/**
+ * The heat map, as much of it as an email can carry.
+ *
+ * It is a SUMMARY on purpose. The placement of each click needs the drawing, the drawing needs
+ * SVG, and SVG does not render in Outlook at all. So the email carries the shape of the
+ * drop-off and the click totals, and says where the full placement lives.
+ */
+function heatCard(heat) {
+  if (!heat.ok) return '';
+  return `${K.sectionOpen('Landing page heat map')}${K.hTitle('How far down the page people get, and what they click',
+    `The page is ${heat.geom.screens} phone screens long. Each bar is one section, and its length is how many of the ${heat.visitors} visitors had that section on screen.`)}
+    ${HM.heatEmailRows(heat, K)}${K.sectionClose()}`;
+}
 
 function starCard(rec) {
   const s = rec.star;
@@ -38,7 +83,7 @@ function starCard(rec) {
 function topTenCard(top10) {
   const rows = top10.map((f) => {
     const [bg, fg] = TONE[f.tone] || TONE.info;
-    return `<tr><td valign="top" style="padding:7px 10px 7px 0;width:26px"><span style="display:inline-block;width:22px;height:22px;line-height:22px;text-align:center;background:${C.navy};color:#fff;font-size:11px;font-weight:700">${f.rank}</span></td>
+    return `<tr><td valign="top" style="padding:7px 10px 7px 0;width:26px"><span style="display:inline-block;width:22px;height:22px;line-height:22px;text-align:center;background:${B.cherryDeep};color:#fff;font-size:11px;font-weight:700">${f.rank}</span></td>
       <td valign="top" style="padding:7px 0;border-bottom:1px solid ${C.lineSoft}"><div style="font-size:13.5px;font-weight:600;color:${C.ink}"><span style="display:inline-block;width:8px;height:8px;background:${fg};margin-right:6px"></span>${esc(f.text)}</div>
       ${f.why ? `<div style="font-size:12px;color:${C.ink2};margin-top:2px;background:${bg};display:inline-block;padding:1px 6px">${esc(f.why)}</div>` : ''}</td></tr>`;
   }).join('');
@@ -72,6 +117,7 @@ function storyCard(story) {
 function renderEmail(view) {
   const { cur, rec, weekOf } = view;
   const j = cur.journey;
+  const heat = HM.buildHeat(cur, HM.loadGeometry(view.snap));
   const subject = `Open House funnel, week of ${prettyDate(weekOf)}: ${rec.star ? rec.star.title : 'no move this week'}`;
   const stats = `<table role="presentation" cellpadding="0" cellspacing="6" border="0" width="100%"><tr>
     ${K.statCard('Visitors', String(cur.visitors), 'from the ads')}${K.statCard('Sign-ups', String(cur.signups.landing_page), `${view.funnel[2].pctTop ?? 0}% of visitors`, 'good')}
@@ -80,15 +126,24 @@ function renderEmail(view) {
   const attached = `${K.sectionOpen('Attached')}<div style="font-size:13px;line-height:1.6">
     <b>OPEN_HOUSE_WEEKLY_REPORT.html</b>: the full report with the guided tour, the flow of every person, every fork, the hypothesis board and the decision timeline. Open it in a browser.<br/>
     <b>ONE_MOVE_PROMPT.md</b>: the detailed prompt that makes the starred move and records it in the story, so next week's report grades it.</div>${K.sectionClose()}`;
-  const body = [hero, starCard(rec), topTenCard(view.top10), overviewCard(view.overview), storyCard(view.story), attached].join('\n')
+  const body = [masthead(), hero, starCard(rec), topTenCard(view.top10), overviewCard(view.overview), heatCard(heat), storyCard(view.story), attached].join('\n')
     + `\n<tr><td style="padding:0 16px 8px 16px">${SIG_HTML}</td></tr>`;
-  const html = K.shell({ title: subject, preheaderText: rec.star ? `The one move: ${rec.star.title}` : 'No move this week', banner: 'OPEN HOUSE FUNNEL · WEEKLY REPORT', body });
+  const html = K.shell({
+    title: subject,
+    preheaderText: rec.star ? `The one move: ${rec.star.title}` : 'No move this week',
+    banner: 'COLABERRY TRAINING · OPEN HOUSE FUNNEL · WEEKLY REPORT',
+    bannerBg: B.ink, pageBg: B.bgElevated, body,
+  });
 
   const text = [`OPEN HOUSE FUNNEL, WEEK OF ${prettyDate(weekOf).toUpperCase()}`, `${cur.from_ct} to ${cur.to_ct} CT`, '',
     `Visitors ${cur.visitors} · Sign-ups ${cur.signups.landing_page} · Entered ${j.entered} of ${j.new_account} new accounts`, '',
     '***** THE ONE MOVE *****', rec.star ? rec.star.title : 'None this week', ...(rec.star ? rec.star.how.map((h, i) => `${i + 1}. ${h}`) : []), '',
     'THE 10 NUMBERS THAT MATTER MOST', ...view.top10.map((f) => `${f.rank}. ${f.text}${f.why ? ` (${f.why})` : ''}`), '',
     'EVERY STEP AGAINST ITS TARGET', ...view.overview.map((r) => `- ${r.label}: ${r.d ? `${r.pct}% (${r.n}/${r.d})` : 'n/a'}, target ${r.target}%`), '',
+    ...(heat.ok ? ['LANDING PAGE HEAT MAP',
+      ...heat.bands.map((b) => `- ${(b.eyebrow || b.heading || b.type || 'section')}: ${b.reachTop.n} people (${b.pctTop}% of visitors)`),
+      ...heat.marks.concat(heat.unplaced).map((m) => `- clicked "${m.label}": ${m.clicks}`),
+      ...HM.heatNotes(heat).map((n) => `  ${n}`), ''] : []),
     'HYPOTHESES', ...view.story.hypotheses.map((h) => `- ${h.title}: ${h.grade.label || VERDICT[h.grade.status]}`), '',
     'Attached: OPEN_HOUSE_WEEKLY_REPORT.html (open in a browser) and ONE_MOVE_PROMPT.md (say "make the Open House move" in inbox zero).',
     '', SIG_TEXT].join('\n');

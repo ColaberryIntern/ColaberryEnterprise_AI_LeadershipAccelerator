@@ -70,6 +70,17 @@ function blindSpots(snap) {
     { icon: '💵', what: 'Ad spend, cost per sign-up', why: 'Meta spend is not in our database.', next: 'Add weekly spend by campaign, then cost per sign-up and per finished video.' },
     { icon: '📄', what: 'The /open-house form page itself', why: 'It records no page views, so "opened the form, did not submit" is inferred from the button click.', next: 'Add page tracking to the form page.' },
     { icon: '🔗', what: 'Which email a sign-in link came from', why: 'Every link sign-in looks the same.', next: 'Tag the welcome email link so its sign-ins are counted separately.' },
+    // C125. The heat map is only as good as these three, so they are named beside it rather
+    // than left for a reader to infer from a caveat under the chart.
+    { icon: '📍', what: 'Where on the page a click happened',
+      why: 'No click anywhere in page_events carries a coordinate, so a click is only ever known by the element it names. The heat map places it by measuring where that element sits.',
+      next: 'Record the click position and the page height alongside the label, and the placement stops being an inference.' },
+    { icon: '📏', what: 'Anything between the five scroll points',
+      why: 'Scrolling is recorded at 25, 50, 75, 90 and 100% only. On a page nine screens long the first of those is already three screens down, so the whole first stretch reads as "arrived" and nothing finer.',
+      next: 'Fire the scroll beat every 10%, which is a one-line change to the thresholds in /v1/track.js.' },
+    { icon: '🔀', what: 'Which copy of a repeated button was clicked',
+      why: 'The three Save my seat buttons share one data-track value, so their clicks arrive as one number that cannot be split between the sticky header, the hero and the closing band.',
+      next: 'Give each copy its own data-track value, for example "Save my seat (header)".' },
   ];
   const em = snap.email;
   if (!em) list.push({ icon: '✉️', what: 'Welcome email opens and clicks', why: 'Mandrill was not read for this run.', next: 'Run with Mandrill (run.sh does by default).' });
