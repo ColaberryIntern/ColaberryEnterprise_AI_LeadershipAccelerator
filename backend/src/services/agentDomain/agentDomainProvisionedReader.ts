@@ -304,15 +304,31 @@ async function withBuilderMgmt(
       };
     }
     const m = hits[0];
-    const isStaff = m.role === 'staff';
-    const role = isStaff && isMgmtRole(m.mgmt_role) ? (m.mgmt_role as string) : null;
+    // Both halves of the bridge's own rule, in its order: community role 'staff' AND a real
+    // mgmt_role. Lifted into a plain const first, because `isMgmtRole` narrows a local reliably
+    // while narrowing a property of an array element is the sort of thing that type checks on one
+    // compiler version and not the next. The narrowed value is what indexes MGMT_ROLE_DEFS.
+    const mgmtRole = m.mgmt_role;
+    if (m.role !== 'staff' || !isMgmtRole(mgmtRole)) {
+      return {
+        ...r,
+        intended_builder_mgmt_role: null,
+        intended_builder_mgmt_label: null,
+        intended_builder_sections: [],
+        intended_builder_name_is_ambiguous: false,
+      };
+    }
+    const role = mgmtRole;
+    // `mgmt_extra_sections` arrives as jsonb, so it is `unknown` until proven to be a list.
+    // `normalizeExtraSections` drops anything that is not a real section key.
+    const extras = Array.isArray(m.mgmt_extra_sections)
+      ? (m.mgmt_extra_sections as readonly unknown[])
+      : null;
     return {
       ...r,
       intended_builder_mgmt_role: role,
-      intended_builder_mgmt_label: role ? MGMT_ROLE_DEFS[role as never].label : null,
-      intended_builder_sections: role
-        ? effectiveSections(role as never, normalizeExtraSections(role as never, m.mgmt_extra_sections as never))
-        : [],
+      intended_builder_mgmt_label: MGMT_ROLE_DEFS[role].label,
+      intended_builder_sections: effectiveSections(role, normalizeExtraSections(role, extras)),
       intended_builder_name_is_ambiguous: false,
     };
   });
