@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import api from '../../utils/api';
 import CampaignSimulatorPanel from '../../pages/admin/ai-settings/CampaignSimulatorPanel';
+import MembershipSettingsCard, { OnCompleteValue } from './MembershipSettingsCard';
 
 interface CampaignSettings {
   test_mode_enabled: boolean;
@@ -22,6 +23,9 @@ interface CampaignSettings {
   voicemail_enabled: boolean;
   pass_prior_conversations: boolean;
   auto_reply_enabled: boolean;
+  /** OH1w: membership rules (MembershipSettingsCard). */
+  on_complete?: OnCompleteValue;
+  takes_precedence?: boolean;
 }
 
 const DEFAULT_SETTINGS: CampaignSettings = {
@@ -67,6 +71,7 @@ export default function SettingsTab({ campaignId, headers, campaignMode, campaig
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [interestGroup, setInterestGroup] = useState<string | null>(null);
   const [showSimulator, setShowSimulator] = useState(false);
   const [simStatus, setSimStatus] = useState<{ id: string; status: string; current_step_index: number; total_steps: number } | null>(null);
@@ -147,11 +152,17 @@ export default function SettingsTab({ campaignId, headers, campaignMode, campaig
     setSaving(true);
     setSaved(false);
     try {
-      await fetch(`/api/admin/campaigns/${campaignId}/settings`, {
+      const res = await fetch(`/api/admin/campaigns/${campaignId}/settings`, {
         method: 'PATCH',
         headers,
         body: JSON.stringify({ settings }),
       });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setSaveError(body?.error || `Save failed (${res.status})`);
+        return;
+      }
+      setSaveError(null);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (err) {
@@ -591,6 +602,14 @@ export default function SettingsTab({ campaignId, headers, campaignMode, campaig
         </div>
       </div>
 
+      <MembershipSettingsCard
+        campaignId={campaignId}
+        onComplete={settings.on_complete}
+        takesPrecedence={settings.takes_precedence}
+        onChange={(patch) => setSettings({ ...settings, ...patch })}
+      />
+
+      {saveError && <div className="alert alert-danger py-2 small" role="alert">{saveError}</div>}
       <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
         {saving ? 'Saving Settings...' : saved ? 'Settings Saved!' : 'Save Settings'}
       </button>
