@@ -17,7 +17,7 @@ import { useMediaBeats, FLUSH_AFTER_S, type WatchBeatPayload } from '../useMedia
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
 let handlers: ReturnType<typeof useMediaBeats>;
-const Harness: React.FC<{ onBeat: (b: WatchBeatPayload) => void }> = ({ onBeat }) => {
+const Harness: React.FC<{ onBeat: (b: WatchBeatPayload) => void | Promise<unknown> }> = ({ onBeat }) => {
   handlers = useMediaBeats(onBeat, 'audio');
   return null;
 };
@@ -59,7 +59,10 @@ beforeEach(() => {
   jest.spyOn(Date, 'now').mockImplementation(() => nowMs);
   container = document.createElement('div');
   document.body.appendChild(container);
-  act(() => { root = createRoot(container); root.render(<Harness onBeat={(b) => beats.push(b)} />); });
+  // Braces matter: `(b) => beats.push(b)` returns a NUMBER, which a `=> void` callback type
+  // accepts under TypeScript's void-returning rule but the widened `void | Promise<unknown>`
+  // union rightly does not. VideoEmbed's own tests already use the block form.
+  act(() => { root = createRoot(container); root.render(<Harness onBeat={(b) => { beats.push(b); }} />); });
 });
 afterEach(() => { act(() => root.unmount()); container.remove(); jest.restoreAllMocks(); });
 
@@ -113,4 +116,62 @@ it('never emits an empty beat', () => {
   handlers.onPauseOrEnd();
   handlers.flush();
   expect(beats).toHaveLength(0);
+});
+
+/**
+ * A failed save must not cost a listener the minutes they actually listened (21 Nov 2026).
+ *
+ * The podcast path reached this last. VideoEmbed learned on 19 Nov to put the seconds back when a
+ * beat rejects, but only ONE of its four callers returned the promise that makes that possible,
+ * and this hook's callback type said `=> void`, so TimelineCard's `mediaBeat` swallowed its
+ * rejection and the hook had nothing to react to. Both halves are fixed together, because
+ * returning the promise without teaching the hook to handle it would turn a lost beat into an
+ * unhandled rejection.
+ *
+ * Every test above still passes a VOID-returning callback, which is the backward-compatibility
+ * guarantee: a caller that ignores the promise behaves exactly as it always did.
+ */
+describe('a rejected beat is re-credited, and not retried on the next sample', () => {
+  /** Rejects the first send and resolves after that, recording every attempt. */
+  const failFirst = () => {
+    let failed = false;
+    return (b: WatchBeatPayload) => {
+      beats.push(b);
+      if (!failed) { failed = true; return Promise.reject(new Error('Network Error')); }
+      return Promise.resolve();
+    };
+  };
+  const play = (from: number, to: number) => { for (let t = from; t <= to; t += 1) tick(t); };
+
+  it('puts the seconds back instead of destroying them', async () => {
+    act(() => { root.render(<Harness onBeat={failFirst()} />); });
+
+    play(0, FLUSH_AFTER_S + 1);
+    expect(beats).toHaveLength(1);
+    const lost = beats[0].delta_s;
+    expect(lost).toBeGreaterThanOrEqual(FLUSH_AFTER_S);
+
+    await act(async () => { await Promise.resolve(); });   // let the rejection handler run
+
+    // Just past the post-failure wait, and no further. The beat that follows carries the rejected
+    // seconds as well as the new ones, rather than starting again from zero. The span is kept
+    // short on purpose: play 25s more instead of 10 and a THIRD, ordinary beat flushes behind
+    // this one, which says nothing about re-crediting and only makes the count ambiguous.
+    play(FLUSH_AFTER_S + 2, FLUSH_AFTER_S + 12);
+    expect(beats).toHaveLength(2);
+    expect(beats[1].delta_s).toBeGreaterThan(lost);
+  });
+
+  it('holds the next send back rather than resending immediately', async () => {
+    act(() => { root.render(<Harness onBeat={failFirst()} />); });
+
+    play(0, FLUSH_AFTER_S + 1);
+    expect(beats).toHaveLength(1);
+    await act(async () => { await Promise.resolve(); });
+
+    // Two more seconds. The buffer is over the flush threshold for both of them, because the
+    // rejected seconds were put back -- so without the wait, each of these samples would send.
+    play(FLUSH_AFTER_S + 2, FLUSH_AFTER_S + 3);
+    expect(beats).toHaveLength(1);
+  });
 });
