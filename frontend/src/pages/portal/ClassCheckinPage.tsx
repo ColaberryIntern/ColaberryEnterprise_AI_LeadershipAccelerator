@@ -44,6 +44,8 @@ interface CheckinInfo {
   class_window?: ClassWindow;
   start_label?: string;
   accepts_guests?: boolean;
+  /** Open House sessions only: the Zoom link, shown as a "Join the class on Zoom" button. */
+  meeting_link?: string | null;
 }
 
 type Phase = 'loading' | 'load_error' | 'ready';
@@ -353,6 +355,23 @@ const ClassCheckinPage: React.FC = () => {
               this is the only thing identifying whose page this is, so it carries an alt. */}
           <ColaberryLockup height={32} alt="Colaberry" />
         </div>
+
+        {phase === 'ready' && info?.meeting_link && (
+          <a
+            href={info.meeting_link}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-testid="checkin-join-meeting"
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+              margin: '4px 0 18px', padding: '16px 20px', borderRadius: 999,
+              background: '#2D8CFF', color: '#fff', fontWeight: 800, fontSize: 18,
+              textDecoration: 'none', boxShadow: '0 10px 26px rgba(45,140,255,.35)',
+            }}
+          >
+            Join the class on Zoom
+          </a>
+        )}
 
         {phase === 'loading' && (
           <div className="cbck-state" aria-live="polite">
