@@ -80,6 +80,19 @@ export interface PlanDocRelease extends PlanRelease {
   ends_on: DateOnly | null;
   /** True for the release this term actually demos. Later releases are roadmap. */
   is_demo_target: boolean;
+  /** True for a release after the demo: post-class work, dated after demo day. */
+  is_roadmap: boolean;
+}
+
+/**
+ * Build weeks (1-based) a release's dates span, counted from the first build day.
+ * The end rounds UP: `build_end` is the boundary after the last week (day 49 of
+ * a 7-week window), so a story due on it closes week 7, not opens week 8.
+ */
+function weeksOf(buildStart: DateOnly, first: DateOnly, last: DateOnly): { week_start: number; week_end: number } {
+  const day = (d: DateOnly) => (Date.parse(`${d}T00:00:00Z`) - Date.parse(`${buildStart}T00:00:00Z`)) / 86_400_000;
+  const weekStart = Math.max(1, Math.floor(day(first) / 7) + 1);
+  return { week_start: weekStart, week_end: Math.max(weekStart, Math.ceil(day(last) / 7)) };
 }
 
 export interface PlanDocStory extends PlanStory {
@@ -370,15 +383,26 @@ export function buildPlanDocument(source: BuildPlan, input: PlanDocInput = {}): 
     ? (input.schedule.demoReleaseKey ?? lastWithStories)
     : null;
 
+  const roadmapKeys = new Set(input.schedule?.roadmapReleaseKeys ?? []);
+  const buildStart = dateOnly(input.schedule?.buildStart);
   const releases: PlanDocRelease[] = byKey(plan.releases, (r) => r.key).map((r) => {
     const inRel = stories.filter((s) => s.release === r.key);
     const dates = inRel.map((s) => s.due_on).filter((d): d is DateOnly => Boolean(d)).sort();
+    const startsOn = dates[0] ?? null;
+    const endsOn = dates[dates.length - 1] ?? null;
     return {
       ...r,
+      // With dates, the week numbers are READ from them, so a release track drawn by week and one
+      // drawn by date are the same picture. ShiftFill v4 had the outline's weeks 1-6 for all five
+      // releases beside a schedule that dated three of them as post-class roadmap.
+      ...(buildStart && startsOn && endsOn
+        ? weeksOf(buildStart, startsOn, endsOn)
+        : {}),
       story_ids: inRel.map((s) => s.id),
-      starts_on: dates[0] ?? null,
-      ends_on: dates[dates.length - 1] ?? null,
+      starts_on: startsOn,
+      ends_on: endsOn,
       is_demo_target: Boolean(demoReleaseKey && demoReleaseKey === r.key),
+      is_roadmap: roadmapKeys.has(r.key),
     };
   });
 

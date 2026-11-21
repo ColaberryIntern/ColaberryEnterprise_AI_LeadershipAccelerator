@@ -39,6 +39,7 @@ import { modelJsonCall, type ChatClient } from './modelJsonCall';
 import { extractRequirements } from './requirementExtraction';
 import { completeRequirements, contentWords } from './requirementCoverage';
 import { alignMeasuresToDemos } from './outlineAlignment';
+import { adoptNamedPerson } from './planPeople';
 
 /** Average non-constraint requirements per release before another release is opened. */
 export const REQUIREMENTS_PER_RELEASE = 6;
@@ -136,16 +137,23 @@ const releaseIndex = (k: string): number => Number(k.slice(1));
  *
  * Asked in the prompt and NOT obeyed: live (2026-11-20, ShiftFill) the outline put all four SAFE
  * requirements in the last release, so "never text a hygienist on approved leave" shipped three
- * releases after the story that texts hygienists. So it is enforced here: each SAFE or NFR
- * requirement moves to the release of the FUNC requirement it shares the most words with, when that
- * release is EARLIER. Never later: a guardrail the model placed early stays early. One shared word is
- * enough on purpose: "never text a hygienist on leave" shares exactly one with each behaviour it
- * guards, and the only cost of a weak match is a guardrail landing early, which r0 asks for anyway.
+ * releases after the story that texts hygienists. So it is enforced here: each SAFE requirement
+ * moves to the release of the FUNC requirement it shares the most words with, when that release is
+ * EARLIER. Never later: a guardrail the model placed early stays early. One shared word is enough on
+ * purpose: "never text a hygienist on leave" shares exactly one with each behaviour it guards, and the
+ * only cost of a weak match is a guardrail landing early, which r0 asks for anyway.
+ *
+ * SAFE ONLY, NOT NFRs. This used to pull NFRs too, and one shared word is exactly wrong for a
+ * target: ShiftFill v4 (2026-11-20) moved "fill gaps within 30 minutes of the call-out" into r0 on
+ * the word "call-out", two releases before any offer could be sent, while r4's demo, written by the
+ * outline for its own placement, still promised it. A guardrail must come early; a target can only
+ * be shown once the behaviour it measures exists. NFRs stay where the outline put them, beside the
+ * demo it wrote for them, and `alignMeasuresToDemos` moves one only when a demo states its figure.
  */
 export function pullGuardsForward(items: PlanRequirement[], byReq: Map<string, string>): void {
   const funcs = items.filter((r) => r.kind === 'FUNC' || r.kind === 'REL' || r.kind === 'OBS');
   const words = new Map(items.map((r) => [r.id, contentWords(r.statement)]));
-  for (const g of items.filter((r) => r.kind === 'SAFE' || r.kind === 'NFR')) {
+  for (const g of items.filter((r) => r.kind === 'SAFE')) {
     const gw = words.get(g.id)!;
     let best: { id: string; hit: number } | null = null;
     for (const f of funcs) {
@@ -459,7 +467,11 @@ export async function generateStagedPlan(opts: StagedOptions): Promise<StagedRes
   });
 
   // 5. Assemble.
-  const stories = assembleStories(perRelease, requirements);
+  // Named people are judged against the student's own words, never the generated document.
+  const stories = adoptNamedPerson(
+    assembleStories(perRelease, requirements),
+    [opts.brief, ...requirements.map((r) => r.statement)].join('\n'),
+  );
   const storyCount = new Map<string, number>();
   for (const s of stories) storyCount.set(s.release, (storyCount.get(s.release) ?? 0) + 1);
   const plan: BuildPlan = {

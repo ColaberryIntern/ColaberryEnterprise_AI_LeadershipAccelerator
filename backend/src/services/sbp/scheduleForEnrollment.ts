@@ -134,6 +134,8 @@ export async function scheduleForEnrollment(
       },
       releases: plan.releases,
       storiesByRelease,
+      // The verdict says the releases after the demo are post-class; date them that way.
+      roadmapAfterDemo: true,
     });
     log('sbp_schedule_built', correlationId, 'success', {
       // Which clock dated this build. Without it, a self-paced learner's dates
