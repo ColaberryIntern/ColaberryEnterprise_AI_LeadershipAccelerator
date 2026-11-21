@@ -25,6 +25,25 @@ import { buildStoryPrompt } from './buildStoryPrompt';
 import { Schedule } from './buildSchedule';
 import { COMMAND_CENTER_STORY_ID } from './commandCenterStory';
 import { commandCenterTaskColumns } from './commandCenterTaskColumns';
+import { CONNECTED_DEMO_STORY_ID, connectedDemoTaskColumns } from './connectedDemoStory';
+
+/**
+ * One working day after `from`, skipping Saturday and Sunday.
+ *
+ * STORY-900 is due the day after STORY-000, which is due on `buildStart`. Sliding over a weekend
+ * matters: a demo that falls due on a Saturday reads as already late by Monday morning, and the
+ * overdue count on a student's board is the first thing they see.
+ *
+ * UTC throughout, like every other date computation in this pipeline, so the result does not
+ * depend on the timezone of the machine that materialized the board.
+ */
+function nextWorkingDay(from: Date): Date {
+  const d = new Date(from.getTime() + 86_400_000);
+  while (d.getUTCDay() === 0 || d.getUTCDay() === 6) {
+    d.setUTCDate(d.getUTCDate() + 1);
+  }
+  return d;
+}
 
 export interface MaterializeResult {
   lists: number;
@@ -126,6 +145,12 @@ export async function materializePlanAsTasks(
      * reproducible in a test instead of depending on the day the suite runs.
      */
     now?: Date;
+    /**
+     * Materialize STORY-900, the Connected Demo, as a board row.
+     *
+     * OMITTED MEANS OFF, so every existing caller creates exactly the rows it creates today.
+     */
+    connectedDemo?: boolean;
   } = {},
 ): Promise<MaterializeResult> {
   const ordered = [...plan.releases].sort((a, b) => a.key.localeCompare(b.key));
@@ -202,6 +227,52 @@ export async function materializePlanAsTasks(
           );
         }
         result.tasks += 1;
+
+        /*
+         * STORY-900, the Connected Demo. Same release, immediately after STORY-000.
+         *
+         * `blocked_by: [COMMAND_CENTER_STORY_ID]` is the dependency made visible on the board,
+         * not just described in a prompt. The demo's sample data takes its shape from
+         * `command-center/data-model.json`, which STORY-000 authors; a student who starts here
+         * first has nothing to build against and the platform-side generator refuses for the
+         * same reason.
+         *
+         * `build` and `acceptance` come from ONE call, for the reason spelled out above the
+         * Command Center row: splitting them is what put 19 of 20 live builds three versions
+         * behind on their criteria.
+         */
+        if (ctx.connectedDemo === true) {
+          const demo = connectedDemoTaskColumns(plan);
+          const demoAttrs = {
+            project_id: projectId, task_list_id: list.id, story_id: demo.story_id,
+            title: demo.title, description: demo.title,
+            narrative: demo.narrative,
+            status: 'not_started', position: taskPos, release_key: rel.key,
+            acceptance: demo.acceptance, fulfills: [],
+            build: demo.build,
+            blocked_by: [COMMAND_CENTER_STORY_ID],
+            // One working day after the Command Center, which is due on buildStart. Null when
+            // there is no schedule, exactly as every other row behaves without one.
+            due_on: ctx.schedule?.buildStart ? nextWorkingDay(ctx.schedule.buildStart) : null,
+          };
+          taskPos += 1;
+          const [demoRow, demoCreated] = await StudentTask.findOrCreate({
+            where: { project_id: projectId, story_id: CONNECTED_DEMO_STORY_ID },
+            defaults: { ...demoAttrs, due_baseline_on: demoAttrs.due_on } as any,
+            transaction: t,
+          });
+          if (!demoCreated) {
+            // The same keep-complete rule. A re-materialize must never un-finish work somebody
+            // has already done and been credited for.
+            const keepComplete = demoRow.status === 'complete';
+            if (keepComplete) result.preservedComplete += 1;
+            await demoRow.update(
+              { ...demoAttrs, status: keepComplete ? 'complete' : demoRow.status } as any,
+              { transaction: t },
+            );
+          }
+          result.tasks += 1;
+        }
       }
       for (const story of inRel) {
         const computedDue = dueByStory.get(story.id) ?? null;

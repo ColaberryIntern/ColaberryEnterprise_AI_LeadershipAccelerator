@@ -71,6 +71,7 @@ import { materializePlanAsTasks } from '../materializeTasks';
 import { BuildPlan } from '../planContract';
 import { buildSchedule, Schedule } from '../buildSchedule';
 import { COMMAND_CENTER_STORY_ID } from '../commandCenterStory';
+import { CONNECTED_DEMO_STORY_ID, CONNECTED_DEMO_ACCEPTANCE } from '../connectedDemoStory';
 
 const PROJECT = '11111111-1111-1111-1111-111111111111';
 const ENROLLMENT = '22222222-2222-2222-2222-222222222222';
@@ -213,5 +214,145 @@ describe('due dates on a republish', () => {
     await materializePlanAsTasks(PROJECT, ENROLLMENT, plan, { schedule: null });
     expect(taskTable.creates).toBe(created);
     expect(taskTable.find((r) => r.story_id === 'STORY-001')!.due_on).toBeNull();
+  });
+});
+
+/**
+ * STORY-900, the Connected Demo row.
+ *
+ * Added with the same three guarantees the suite above holds for STORY-000, because a board row
+ * created by auto-publish is replayed every time a plan regenerates. The fourth property is the
+ * one specific to this row: the flag is OFF by default, so a board materialized by any existing
+ * caller must contain exactly the rows it contains today.
+ */
+describe('STORY-900 on the board', () => {
+  const publishDemo = (over: { schedule?: Schedule | null } = {}) =>
+    materializePlanAsTasks(PROJECT, ENROLLMENT, plan, {
+      schedule: over.schedule ?? schedule,
+      now: NOW,
+      connectedDemo: true,
+    });
+
+  it('creates NO row when the flag is omitted', async () => {
+    await publish();
+    expect(taskTable.find((r) => r.story_id === CONNECTED_DEMO_STORY_ID)).toBeUndefined();
+  });
+
+  it('creates exactly one row when the flag is on', async () => {
+    await publishDemo();
+    const rows = taskTable.all.filter((r) => r.story_id === CONNECTED_DEMO_STORY_ID);
+    expect(rows).toHaveLength(1);
+  });
+
+  it('creates ONE row across two publishes, which is the replay guarantee', async () => {
+    await publishDemo();
+    const afterFirst = taskTable.creates;
+    await publishDemo();
+    expect(taskTable.all.filter((r) => r.story_id === CONNECTED_DEMO_STORY_ID)).toHaveLength(1);
+    // Nothing new created at all on the second pass: not a second demo row, not anything else.
+    expect(taskTable.creates).toBe(afterFirst);
+  });
+
+  it('is blocked by the Command Center, on the row rather than only in the prompt', async () => {
+    await publishDemo();
+    const row = taskTable.find((r) => r.story_id === CONNECTED_DEMO_STORY_ID)!;
+    expect(row.blocked_by).toEqual([COMMAND_CENTER_STORY_ID]);
+  });
+
+  it('carries the prompt AND the criteria, which come from one call', async () => {
+    await publishDemo();
+    const row = taskTable.find((r) => r.story_id === CONNECTED_DEMO_STORY_ID)!;
+    expect(typeof row.build).toBe('string');
+    expect(row.build.length).toBeGreaterThan(200);
+    expect(Array.isArray(row.acceptance)).toBe(true);
+    expect(row.acceptance.length).toBeGreaterThan(3);
+    // The pair has to agree. Splitting them put 19 of 20 live builds three versions behind.
+    expect(row.acceptance).toEqual([...CONNECTED_DEMO_ACCEPTANCE]);
+  });
+
+  it('falls due AFTER the Command Center, and never on a weekend', async () => {
+    await publishDemo();
+    const cc = taskTable.find((r) => r.story_id === COMMAND_CENTER_STORY_ID)!;
+    const demo = taskTable.find((r) => r.story_id === CONNECTED_DEMO_STORY_ID)!;
+    expect(new Date(demo.due_on).getTime()).toBeGreaterThan(new Date(cc.due_on).getTime());
+    const day = new Date(demo.due_on).getUTCDay();
+    expect(day).not.toBe(0);
+    expect(day).not.toBe(6);
+  });
+
+  it('slides over a weekend rather than landing on one', async () => {
+    // A Friday cohort start puts the Command Center on Friday, so the naive "+1 day" would put
+    // the demo on a Saturday and the student would see it overdue on Monday morning.
+    const friday = scheduleFrom('2026-09-11T00:00:00.000Z');
+    await materializePlanAsTasks(PROJECT, ENROLLMENT, plan, {
+      schedule: friday, now: NOW, connectedDemo: true,
+    });
+    const demo = taskTable.find((r) => r.story_id === CONNECTED_DEMO_STORY_ID)!;
+    const day = new Date(demo.due_on).getUTCDay();
+    expect([1, 2, 3, 4, 5]).toContain(day);
+  });
+
+  it('materializes without a schedule, with no due date, rather than failing', async () => {
+    await materializePlanAsTasks(PROJECT, ENROLLMENT, plan, { schedule: null, now: NOW, connectedDemo: true });
+    const row = taskTable.find((r) => r.story_id === CONNECTED_DEMO_STORY_ID)!;
+    expect(row.due_on).toBeNull();
+  });
+
+  it('does not reopen a demo the student already finished', async () => {
+    await publishDemo();
+    const row = taskTable.find((r) => r.story_id === CONNECTED_DEMO_STORY_ID)!;
+    await row.update({ status: 'complete' });
+    await publishDemo();
+    expect(taskTable.find((r) => r.story_id === CONNECTED_DEMO_STORY_ID)!.status).toBe('complete');
+  });
+
+  it('adds exactly one row to the board compared with the flag off', async () => {
+    await publish();
+    const withoutDemo = taskTable.all.length;
+    taskTable.reset();
+    await publishDemo();
+    expect(taskTable.all.length).toBe(withoutDemo + 1);
+  });
+});
+
+/**
+ * The keep-complete override, tested where it actually bites.
+ *
+ * A mutation setting `keepComplete = false` for the demo row SURVIVED, and the reason matters:
+ * the expression is `status: keepComplete ? 'complete' : demoRow.status`, and when the row is
+ * already complete BOTH branches yield 'complete'. The flag does not protect the status at all.
+ *
+ * What protects it is the presence of that `status:` key after the `...demoAttrs` spread, since
+ * the spread carries `status: 'not_started'` and would otherwise reset a finished task. The flag
+ * drives `result.preservedComplete`, which is the number an operator reads to know a republish
+ * did not quietly reopen work. Both are asserted here, separately, because they are different
+ * guarantees that happened to share one line.
+ */
+describe('STORY-900 keep-complete, the part that actually protects the row', () => {
+  const publishDemo = () =>
+    materializePlanAsTasks(PROJECT, ENROLLMENT, plan, { schedule, now: NOW, connectedDemo: true });
+
+  it('counts the finished demo in preservedComplete on a republish', async () => {
+    await publishDemo();
+    const row = taskTable.find((r) => r.story_id === CONNECTED_DEMO_STORY_ID)!;
+    await row.update({ status: 'complete' });
+    const second = await publishDemo();
+    expect(second.preservedComplete).toBeGreaterThanOrEqual(1);
+  });
+
+  it('reports zero preserved when nothing was finished, so the count means something', async () => {
+    await publishDemo();
+    const second = await publishDemo();
+    expect(second.preservedComplete).toBe(0);
+  });
+
+  it('does not reset an in-progress demo to not_started either', async () => {
+    // The spread carries status: 'not_started'. Any status the student has moved to must survive
+    // a republish, not only 'complete'.
+    await publishDemo();
+    const row = taskTable.find((r) => r.story_id === CONNECTED_DEMO_STORY_ID)!;
+    await row.update({ status: 'in_progress' });
+    await publishDemo();
+    expect(taskTable.find((r) => r.story_id === CONNECTED_DEMO_STORY_ID)!.status).toBe('in_progress');
   });
 });

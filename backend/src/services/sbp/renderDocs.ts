@@ -30,6 +30,12 @@ import {
   commandCenterStoryDoc,
   commandCenterStorySeed,
 } from './commandCenterStory';
+import {
+  CONNECTED_DEMO_STORY_ID,
+  connectedDemoStoryDoc,
+  connectedDemoStorySeed,
+} from './connectedDemoStory';
+import { demoKitFiles } from './demoKit';
 import type { RepoWriteAccess } from './repoConnect/connectionAccess';
 import {
   BUILDER_PATH_CHECKLIST_PATH,
@@ -147,6 +153,16 @@ export interface RenderContext {
    * are different statements and only one of them is about the builder.
    */
   existingRepoPaths?: ReadonlyArray<string> | null;
+  /**
+   * Render STORY-900, the Connected Demo, and ship the demo kit with it.
+   *
+   * OMITTED MEANS OFF. Every existing caller - `docsBundle.ts`, `refreshRepoDocuments.ts`,
+   * `studentProgressFile.ts` - therefore compiles and renders byte-for-byte what it renders
+   * today until it deliberately passes the flag. That is the whole reason this is an optional
+   * boolean on the context rather than a module-level flag read in here: a renderer that changes
+   * its output because of an environment variable is one nobody can test in both states.
+   */
+  connectedDemo?: boolean;
 }
 
 /**
@@ -209,10 +225,20 @@ export function renderDocs(plan: BuildPlan, ctx: RenderContext = {}): RenderedFi
     stories: byKey(plan.stories, (s) => s.id),
   };
 
+  /*
+   * Whether this render includes STORY-900. Computed ONCE, up here, and read by three places:
+   * the STORIES.md index, the story doc and kit below, and the progress seed.
+   *
+   * One expression rather than three, because three copies of `ctx.connectedDemo && !planHasDemo`
+   * is exactly how a plan ends up indexed in STORIES.md with no doc behind the link.
+   */
+  const planHasDemo = plan.stories.some((s) => s.id === CONNECTED_DEMO_STORY_ID);
+  const rendersDemo = ctx.connectedDemo === true && !planHasDemo;
+
   const releaseByKey = new Map(plan.releases.map((r) => [r.key, r]));
   const files: RenderedFile[] = [
     { path: 'docs/REQUIREMENTS.md', content: renderRequirements(plan) },
-    { path: 'docs/STORIES.md', content: renderStories(plan) },
+    { path: 'docs/STORIES.md', content: renderStories(plan, rendersDemo) },
     { path: 'docs/TRACEABILITY.md', content: renderTraceability(plan) },
     // The field-by-field spec of `.colaberry/plan.json` and `.colaberry/progress.json`.
     // Plan-independent by design (see studentDataContract), so it costs one
@@ -302,6 +328,33 @@ export function renderDocs(plan: BuildPlan, ctx: RenderContext = {}): RenderedFi
     });
   }
 
+  /*
+   * STORY-900, the Connected Demo, beside STORY-000 and gated.
+   *
+   * It is HARD-dependent on STORY-000: the sample data takes its shape from
+   * `command-center/data-model.json`, which STORY-000 authors. The story's own prompt tells the
+   * agent to stop if that file is absent rather than invent tables, and `connectedDemoSpec.ts`
+   * refuses on the platform side for the same reason. Rendering it here is cheap and does not
+   * create that dependency; it documents it.
+   *
+   * The same defensive dedup as above: if a plan ever carries its own STORY-900, the PLAN wins,
+   * because the plan is the authority on every story it actually contains.
+   *
+   * The kit ships WITH the story, not separately. Four files under `docs/demo-kit/`, which the
+   * `docs/` rule in PATH_ALLOWLIST already permits. The demo the builder writes lives in
+   * `demo/`, which is deliberately NOT on the allowlist: that directory belongs to their agent,
+   * exactly as `index.html` does for STORY-000.
+   */
+  if (rendersDemo) {
+    files.push({
+      path: `docs/stories/${CONNECTED_DEMO_STORY_ID}.md`,
+      // Ordered plan, for the reason the Command Center doc above gives: array order must not
+      // reach the bytes, or a sync commits a file whose only change is the order it was built in.
+      content: connectedDemoStoryDoc(orderedPlan),
+    });
+    files.push(...demoKitFiles());
+  }
+
   // Machine-readable bookkeeping, and the data half of the Command Center. The
   // manifest is what conflict detection and prompt-path assertion both read, so
   // it is built from the files above rather than restated — it cannot describe a
@@ -356,6 +409,10 @@ export function renderDocs(plan: BuildPlan, ctx: RenderContext = {}): RenderedFi
       : [override
         ? { id: override.storyId, release: override.release, acceptance: [...override.acceptance] }
         : commandCenterStorySeed()]),
+    // Seeded for the same reason STORY-000 is: without an entry the agent retypes the acceptance
+    // criteria from memory, and the verifier then matches nothing it wrote. `rendersDemo` and
+    // not `ctx.connectedDemo`, so a plan that carries its own STORY-900 is seeded from the plan.
+    ...(rendersDemo ? [connectedDemoStorySeed()] : []),
   ];
   files.push({
     path: PROGRESS_FILE_PATH,

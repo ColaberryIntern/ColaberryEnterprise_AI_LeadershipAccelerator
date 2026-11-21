@@ -21,6 +21,7 @@
 import { getPublishedPlan } from '../planStore';
 import type { BuildPlan } from '../planContract';
 import { COMMAND_CENTER_STORY_ID, COMMAND_CENTER_ACCEPTANCE } from '../commandCenterStory';
+import { CONNECTED_DEMO_STORY_ID, CONNECTED_DEMO_ACCEPTANCE } from '../connectedDemoStory';
 import {
   domainCommandCenterStoryId,
   COMMAND_CENTER_ACCEPTANCE as DOMAIN_COMMAND_CENTER_ACCEPTANCE,
@@ -124,14 +125,33 @@ export function planStorySpecs(
     id: COMMAND_CENTER_STORY_ID,
     acceptance: [...COMMAND_CENTER_ACCEPTANCE],
   },
+  /**
+   * Append STORY-900's spec too. OMITTED MEANS OFF, so every existing caller judges exactly the
+   * stories it judges today.
+   *
+   * Without this the Connected Demo task can be materialized, built and pushed, and then never
+   * verified and never paid: the verifier only grades stories it has a spec for. That is
+   * precisely the gap AF3.9 hit for domain Command Centers, and it is being closed in the same
+   * change that creates the opportunity for it rather than after somebody loses a week's credit.
+   */
+  connectedDemo = false,
 ): PlanStorySpec[] {
   const planSpecs: PlanStorySpec[] = (plan.stories ?? []).map((s) => ({
     id: s.id,
     acceptance: Array.isArray(s.acceptance) ? s.acceptance.map(String) : [],
   }));
-  return planSpecs.some((s) => s.id === commandCenter.id)
+  const withCommandCenter = planSpecs.some((s) => s.id === commandCenter.id)
     ? planSpecs
     : [...planSpecs, { id: commandCenter.id, acceptance: [...commandCenter.acceptance] }];
+
+  if (!connectedDemo) return withCommandCenter;
+  // The same defensive dedup: a plan carrying its own STORY-900 is the authority on it.
+  return withCommandCenter.some((s) => s.id === CONNECTED_DEMO_STORY_ID)
+    ? withCommandCenter
+    : [...withCommandCenter, {
+      id: CONNECTED_DEMO_STORY_ID,
+      acceptance: [...CONNECTED_DEMO_ACCEPTANCE],
+    }];
 }
 
 export interface StoryPoints {

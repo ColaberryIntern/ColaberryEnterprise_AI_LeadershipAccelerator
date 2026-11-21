@@ -25,6 +25,7 @@
 import { BuildPlan, PlanRelease, PlanRequirement, PlanStory, isConstraint } from './planContract';
 import { STUDENT_DATA_CONTRACT_PATH } from './studentDataContract';
 import { COMMAND_CENTER_STORY_ID } from './commandCenterStory';
+import { CONNECTED_DEMO_STORY_ID } from './connectedDemoStory';
 
 /**
  * The only part of the render context these renderers read.
@@ -179,7 +180,7 @@ export function renderStoryFile(plan: BuildPlan, story: PlanStory, release?: Pla
   ].join('\n');
 }
 
-export function renderStories(plan: BuildPlan): string {
+export function renderStories(plan: BuildPlan, connectedDemo = false): string {
   const releases = byKey(plan.releases, (r) => r.key);
   const lines: string[] = [
     `# ${plan.project_name} — Stories`,
@@ -204,6 +205,20 @@ export function renderStories(plan: BuildPlan): string {
       'the page you keep open for the rest of the programme and demo from. It belongs to no',
       'release and fulfils none of your requirements, because it is the window onto your',
       'system rather than a part of it.',
+      '',
+    );
+  }
+  // STORY-900, beside it, for the same reason: an agent scanning STORIES.md to find the work
+  // would otherwise never learn the story exists. Gated, so a plan rendered without the demo
+  // reads exactly as it does today.
+  if (connectedDemo && !plan.stories.some((s) => s.id === CONNECTED_DEMO_STORY_ID)) {
+    lines.push(
+      `- **[${CONNECTED_DEMO_STORY_ID}](stories/${CONNECTED_DEMO_STORY_ID}.md)** — Build your connected demo`,
+      '',
+      'The clickable walkthrough of the finished system, built from your plan and your data',
+      'model rather than from screenshots. It needs your Command Center first: the sample data',
+      'takes its shape from the data model that story produces. Everything in it is invented,',
+      'and every screen says so.',
       '',
     );
   }
