@@ -22,6 +22,7 @@ import { ascii, esc, intakeBasecampEnabled, tickStep } from './enterpriseIntakeB
 import { writtenBrief } from './enterpriseIntakeService';
 import { syncListStage } from './enterpriseIntakeSync';
 import { FREE_WORD_RULE } from '../content/bannedCopyRule';
+import { statesRoiFigure } from './enterpriseIntakeRoi';
 
 /** The word 40 TAC 807.172(d) bans in anything advertising training, from the one canonical rule. */
 const BANNED_WORD = new RegExp(`\\b${FREE_WORD_RULE.word}\\b`, 'i');
@@ -86,6 +87,12 @@ async function load(id: string): Promise<EnterpriseIntake> {
 
 async function send(i: EnterpriseIntake, kind: 'options' | 'proposal', subject: string, body: string) {
   const blockers = sendBlockers(subject, body);
+  // v2: the ROI estimates are internal. The options email (AI-drafted, any admin can send) must
+  // not carry a percent or an hour figure, even after editing. The proposal is Ali's own and
+  // its draft never reads the estimates, so it is not held to this.
+  if (kind === 'options' && statesRoiFigure(`${subject}\n${body}`)) {
+    blockers.push('the options email states a percent or an hour figure (our return estimates stay internal)');
+  }
   if (blockers.length) throw new ActionRefused(`Not sent: ${blockers.join('; ')}.`, 422);
   try {
     const out = await sendFirstContactAsAli({

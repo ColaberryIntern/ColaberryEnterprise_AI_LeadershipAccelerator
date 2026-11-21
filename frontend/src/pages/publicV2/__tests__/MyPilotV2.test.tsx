@@ -100,6 +100,18 @@ describe('the status', () => {
     expect(container.querySelectorAll('.cbv2-mp__steps li.is-done')).toHaveLength(2);
   });
 
+  it('v2: offers the Meet link for an upcoming meeting, and not for one long past', async () => {
+    const base = { company: 'Acme', firstName: 'Dana', steps: [], options: [], next: 'Meet Ali on Monday.', closed: null };
+    statusMock.mockResolvedValue({ ...base, meeting: { start: '2099-11-23T15:00:00Z', link: 'https://meet.google.com/x' } });
+    await mount('/my-pilot/status?token=t1');
+    expect((q('[data-testid="my-pilot-meet"]') as HTMLAnchorElement).href).toBe('https://meet.google.com/x');
+    act(() => root.unmount());
+    container.remove();
+    statusMock.mockResolvedValue({ ...base, meeting: { start: '2020-01-01T15:00:00Z', link: 'https://meet.google.com/x' } });
+    await mount('/my-pilot/status?token=t2');
+    expect(q('[data-testid="my-pilot-meet"]')).toBeNull();
+  });
+
   it('takes the sign-in token out of the address bar once it has read it', async () => {
     statusMock.mockResolvedValue({ company: 'Acme', firstName: 'Dana', steps: [], options: [], next: 'x', closed: null });
     window.history.pushState({}, '', '/my-pilot/status?token=tok-secret');

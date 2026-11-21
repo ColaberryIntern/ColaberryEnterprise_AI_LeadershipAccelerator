@@ -198,4 +198,27 @@ export async function bcPut<T>(urlOrPath: string, body?: unknown): Promise<T | n
   return (await r.json()) as T;
 }
 
+/**
+ * Upload raw bytes as a Basecamp attachment and return its attachable_sgid, which a comment
+ * then embeds as <bc-attachment sgid="...">. Basecamp API: POST /attachments.json?name=<file>
+ * with the bytes as the body and the file's Content-Type (the call
+ * backend/src/scripts/backfillMissedBcAttachments.js makes). A POST, so like bcPost it is never
+ * retried after a timeout: an orphan attachment is harmless, but the caller decides.
+ */
+export async function bcUploadAttachment(name: string, bytes: Buffer, contentType: string): Promise<string> {
+  const u = `${BC_API}/attachments.json?name=${encodeURIComponent(name)}`;
+  const r = await bcSend('POST', u, (signal) =>
+    fetch(u, {
+      method: 'POST',
+      headers: bcHeaders(getBcToken(), { 'Content-Type': contentType, 'Content-Length': String(bytes.length) }),
+      body: new Uint8Array(bytes),
+      signal,
+    }),
+  );
+  if (!r.ok) await failNonOk('POST', u, r);
+  const sgid = ((await r.json()) as { attachable_sgid?: string }).attachable_sgid;
+  if (!sgid) throw new Error(`BC POST ${u} -> no attachable_sgid`);
+  return sgid;
+}
+
 export const BC_BASE_URL = BC_API;

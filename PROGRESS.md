@@ -18439,3 +18439,25 @@ Steps 1-4 are safe without 5: the form accepts, the lead is captured and attribu
     - Backend: `npx jest src/services/enterpriseIntake src/services/ops src/services/inboxCase src/scripts/__tests__/syncLifecycleLadder` gives 856 passed (5 skipped); admin and client routes 30/30; digest action 5/5.
     - Frontend: MyPilotV2 5/5 and AdminEnterpriseClientsPage 6/6 (11/11 together); tsc clean.
   - Notes: The digest-action tightening also closes an older hole: any token signed with the app secret (participant, alumni) could reclassify inbox email. The only minter, `askUserDigestService`, always sets `email_ids`, so real digest links still work.
+
+- [x] **Enterprise intake v2: purpose made clear, AI interview now or later, meeting with Ali booked in the same visit, client research uploads, news + AI trends + ROI-ranked options, Ali's meeting brief email**
+  - Date: 2026-11-21
+  - Session: CC-20261120-l5j6
+  - What changed:
+    - **Page (/demo-pilot after the form).** Ali: "It's not clear what the interview is for - make it clear." New steps: what the 10-minute AI interview is for; AI (10 minutes, one person) against a 20 to 30 minute discovery call with everyone (people count adjustable); the four-step path; the AI interview now or later; book the meeting with Ali; then the interview or a summary. `DemoPilotIntake.tsx` is now a stage orchestrator; the pieces live in `pages/publicV2/intake/`. A reload or emailed link resumes at the right step (`resumeStage`).
+    - **Scheduling.** `enterpriseIntakeSchedule.ts`: slots come from ALI'S calendar (`defaultCalendar()`, ali@colaberry.com; Ali: "these go on my calendar and not admissions"), starting the next business day (Central) after the AI interview, done or scheduled (Ali chose 1 business day). Booking is once only (atomic claim, adopts a tagged event after a lost response, re-checks the slot), with a 15s timeout on every calendar call. Routes: GET `/slots`, POST `/interview-plan`, POST `/meeting` on a new `intakePlanRateLimiter` (30 per 15 min; the form's 5 would cut a client off mid-flow).
+    - **Their research.** POST `/files`: PDF, Word, PowerPoint or text, 25 MB, 5 per intake, checked by magic bytes, stored on the uploads volume, text extracted (60s timeout), fenced as data in the interview and research prompts, and attached to their Basecamp list once (5 attempts, then dead-letter). nginx raises ONLY this exact path to 26m (Ali approved "Raise to 25 MB").
+    - **Research.** Google News RSS (keyless, 10s timeout): company news and AI news for their industry. Only headlines we fetched survive. Options carry an estimated share of their stated hours and are ranked by potential return, computed from their numbers (`enterpriseIntakeRoi.ts`). Internal only: a percent or hour figure in the client email fails the research rules and blocks the options send.
+    - **Reminder.** A "later" interview gets its link by email at the chosen time (or the AI calls, once voice is configured), once, 3 attempts.
+    - **Ali's brief.** One HTML email per client, led by the meeting date in large type, once research is done and a meeting is booked (or 24h before the meeting, flagged if no interview). Once only, including when recording "sent" fails after the email went out. The meeting also posts to the Basecamp list and ticks "Book the scoping meeting".
+    - **Sweep.** `enterpriseIntakeSweep.ts` runs the seven intake steps every 5 minutes, each with its own catch and a 4-minute limit, one run at a time; `server.ts` shrank by 12 lines.
+    - **Admin + /my-pilot.** A "Meeting and plan" card on the client page (meeting in Central, interview plan, files, brief status) and the ROI line per option; /my-pilot shows the meeting step and a Join link.
+  - Verification:
+    - Every task passed an independent loop-architect review: T1 12, T2 11, T3 11, T4 12 (2nd), T5 12, T6 12 (2nd), T7 11, T8 12 out of 12.
+    - Backend `npx jest src/services/enterpriseIntake` 279 passed (5 skipped), plus controller, route, basecampClient and portal suites; `tsc` clean apart from the known local-only exceljs/playwright errors.
+    - Frontend `react-scripts test src/pages/publicV2 src/pages/admin` 199 suites, 2,919 tests passed; `tsc` clean; `npm run build` passed.
+    - CI scripts run locally: secret-scan, route-auth lint, explorer-copy lint, price agreement, knowledge-hub claims all OK; test-typecheck shows only the local-only exceljs/playwright files.
+  - Notes:
+    - The reviews caught real defects before shipping: ROI figures could reach the client options email; a duplicate brief to Ali if the "sent" write failed after the send.
+    - Uploaded files are kept while the intake exists; `deleteIntakeFiles` removes them with test-row cleanup.
+    - Not live until Synthflow: the "call me then" option for a later interview stays hidden until the Enterprise agent ID is set.
