@@ -100,7 +100,7 @@ JWT_SECRET=<the backend's> node tests/systemV2/commsHub.e2e.js
 
 If the database has no `colaberry-training` media brand, a tenant and that brand are created too.
 
-**Removed:** all of it is deleted in a `finally`, even on failure, and the last check confirms nothing is left. The stream preparation matters most: left behind, it holds the one shared live input, and the next Prepare is refused with "... is getting ready to stream right now."
+**Removed:** all of it is deleted in a `finally`, even on failure, child rows first: posts, alerts, deliveries, approvals, drafts, recipients, and the activity rows about the event, its messages, thumbnails and stream, or written as this run's organizer. A cleanup step that fails is logged and fails the run. The last check counts each of those for the run and must find none. The stream preparation matters most: left behind, it holds the one shared live input, and the next Prepare is refused with "... is getting ready to stream right now."
 
 **Kept:** the Colaberry Team identity the hub creates on its first post. It is the hub's own and is created once.
 

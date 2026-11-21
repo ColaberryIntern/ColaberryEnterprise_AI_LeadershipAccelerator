@@ -16,7 +16,9 @@ const TABLES = [
 ];
 
 function respond(opts: { presentTables: string[]; hasColumn: boolean; secondBoot: boolean }) {
-  mockQuery.mockImplementation(async (sql: string) => {
+  mockQuery.mockImplementation(async (sql: string, o?: { type?: string }) => {
+    // An untyped query on information_schema is the CH8.1 defect: refuse it here, as the real database did.
+    if (/information_schema/.test(sql) && o?.type !== 'SELECT') throw new Error('untyped information_schema query');
     // The checks are typed SELECTs (QueryTypes.SELECT), which answer with the rows themselves. An earlier
     // untyped form passed against this mock but reported every table missing on a real Postgres (CH8.1).
     if (/FROM information_schema\.tables/.test(sql)) return opts.presentTables.map((table_name) => ({ table_name }));
@@ -54,8 +56,8 @@ describe('ensureCommsHubSchema()', () => {
   it('a real failure is warned, not swallowed', async () => {
     mockQuery.mockImplementation(async (sql: string) => {
       if (/CREATE TABLE IF NOT EXISTS comms_hub_activity/.test(sql)) throw new Error('permission denied for schema public');
-      if (/information_schema\.tables/.test(sql)) return [TABLES.map((table_name) => ({ table_name }))];
-      if (/information_schema\.columns/.test(sql)) return [[{}]];
+      if (/information_schema\.tables/.test(sql)) return TABLES.map((table_name) => ({ table_name }));
+      if (/information_schema\.columns/.test(sql)) return [{ present: 1 }];
       return [[]];
     });
     await ensureCommsHubSchema();

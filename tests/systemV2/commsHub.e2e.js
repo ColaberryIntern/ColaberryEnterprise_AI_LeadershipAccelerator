@@ -60,7 +60,9 @@ async function main() {
   }
   const cohortId = (await db.query(`INSERT INTO cohorts (id, name, start_date, core_day, core_time, max_seats, seats_taken, status, created_at)
     VALUES (gen_random_uuid(), $1, CURRENT_DATE, 'Tuesday', '18:00', 50, 0, 'open', now()) RETURNING id`, [COHORT])).rows[0].id;
-  const token = jwt.sign({ sub: crypto.randomUUID(), email: 'e2e-organizer@example.invalid', role: 'admin', mgmt_role: 'community_organizer' }, process.env.JWT_SECRET, { expiresIn: '1h' });
+  // A fresh organizer id per run: every activity row this run writes as the organizer carries it.
+  const organizerId = crypto.randomUUID();
+  const token = jwt.sign({ sub: organizerId, email: 'e2e-organizer@example.invalid', role: 'admin', mgmt_role: 'community_organizer' }, process.env.JWT_SECRET, { expiresIn: '1h' });
   fs.mkdirSync(SHOTS, { recursive: true });
 
   const browser = await chromium.launch({ channel: process.env.PW_CHANNEL || 'msedge', headless: process.env.HEADED !== '1' });
@@ -165,9 +167,17 @@ async function main() {
     await page.getByRole('button', { name: 'Save event', exact: true }).click();
     await page.getByText(/Saved/).first().waitFor();
     await page.getByRole('button', { name: 'Prepare stream' }).click();
-    await page.getByText('Getting ready').first().waitFor({ timeout: 30_000 });
-    const occ = (await db.query('SELECT o.editorial_state FROM comms_hub_events e JOIN broadcast_occurrences o ON o.id = e.broadcast_occurrence_id WHERE e.id = $1', [eventId]).catch(() => ({ rows: [] }))).rows[0];
-    check('Prepare stream puts the stream backstage', occ ? occ.editorial_state === 'backstage' : true, occ ? occ.editorial_state : 'state shown on the panel');
+    // Proof is the stream row itself: a refused Prepare writes nothing (livePanel.prepareLive), so no row,
+    // or a row in any other state, fails. The panel must also show no refusal (another event holding the
+    // shared input reads "... is getting ready to stream right now").
+    let occ;
+    for (let i = 0; i < 30 && !(occ && occ.editorial_state === 'backstage'); i += 1) {
+      await new Promise((r) => setTimeout(r, 1000)); // eslint-disable-line no-await-in-loop
+      occ = (await db.query('SELECT o.editorial_state FROM comms_hub_events e JOIN broadcast_occurrences o ON o.id = e.broadcast_occurrence_id WHERE e.id = $1', [eventId])).rows[0]; // eslint-disable-line no-await-in-loop
+    }
+    const refused = await page.getByText(/getting ready to stream right now|no batch room|could not be prepared/i).count();
+    check("Prepare stream puts this event's stream backstage, with no refusal on the panel", !!occ && occ.editorial_state === 'backstage' && refused === 0,
+      `${occ ? occ.editorial_state : 'no stream row'}${refused ? `, ${refused} refusal(s) shown` : ''}`);
     await shot('08-live');
 
     check('no page errors on the way', errors.length === 0, errors.slice(0, 3).join(' | '));
@@ -176,31 +186,62 @@ async function main() {
     await shot('failure');
   } finally {
     await browser.close();
-    // Cleanup, also on failure: the event and everything the hub hangs off it, the posts, the cohort.
+    // Cleanup, also on failure: everything this run made, child rows first (a database whose tables were
+    // created by a model sync has no cascading foreign keys, so nothing is left to the database). A step
+    // that fails is logged with its class and fails the cleanup check; nothing is swallowed.
+    const problems = [];
+    const step = async (label, sql, args) => {
+      try { await db.query(sql, args); } catch (e) {
+        problems.push(`${label}: ${e.message}`);
+        console.error(JSON.stringify({ event: 'comms_hub_e2e_cleanup_failed', outcome: 'failure', step: label, error_class: e.name, message: e.message }));
+      }
+    };
+    const ids = async (label, sql, args) => {
+      try { return (await db.query(sql, args)).rows.map((r) => r.id).filter(Boolean); } catch (e) { problems.push(`${label}: ${e.message}`); return []; }
+    };
+    const msgIds = eventId ? await ids('message ids', 'SELECT id FROM comms_hub_messages WHERE event_id = $1', [eventId]) : [];
+    const thumbIds = eventId ? await ids('thumbnail ids', 'SELECT id FROM comms_hub_thumbnails WHERE event_id = $1', [eventId]) : [];
+    const occIds = eventId ? await ids('stream ids', 'SELECT broadcast_occurrence_id AS id FROM comms_hub_events WHERE id = $1', [eventId]) : [];
+    const touched = [...msgIds, ...thumbIds, ...occIds, ...(eventId ? [eventId] : [])];
+    await step('posts', 'DELETE FROM community_posts WHERE id::text IN (SELECT provider_message_id FROM comms_hub_deliveries WHERE message_id = ANY($1::uuid[]) AND provider_message_id IS NOT NULL)', [msgIds]);
+    for (const t of ['comms_hub_alerts', 'comms_hub_deliveries', 'comms_hub_approvals', 'comms_hub_drafts', 'comms_hub_destinations']) {
+      await step(t, `DELETE FROM ${t} WHERE message_id = ANY($1::uuid[])`, [msgIds]); // eslint-disable-line no-await-in-loop
+    }
+    await step('activity', 'DELETE FROM comms_hub_activity WHERE entity_id = ANY($1::uuid[]) OR actor_id = $2', [touched, organizerId]);
+    await step('messages', 'DELETE FROM comms_hub_messages WHERE id = ANY($1::uuid[])', [msgIds]);
+    if (eventId) {
+      // The stream preparation holds the one shared live input: left behind, it blocks the next Prepare.
+      await step('event links', 'UPDATE comms_hub_events SET thumbnail_id = NULL, broadcast_occurrence_id = NULL WHERE id = $1', [eventId]);
+      await step('stream preparation', 'DELETE FROM broadcast_occurrences WHERE id = ANY($1::uuid[])', [occIds]);
+      await step('thumbnails', 'DELETE FROM comms_hub_thumbnails WHERE event_id = $1', [eventId]);
+      await step('calendar rows', 'DELETE FROM community_events WHERE hub_event_id = $1', [eventId]);
+      await step('event', 'DELETE FROM comms_hub_events WHERE id = $1', [eventId]);
+    }
+    await step('test cohort setting', 'UPDATE comms_hub_settings SET test_cohort_id = NULL WHERE test_cohort_id = $1', [cohortId]);
+    await step('cohort', 'DELETE FROM cohorts WHERE id = $1', [cohortId]);
+    if (madeTenant) {
+      await step('media', 'DELETE FROM media_assets WHERE brand_id IN (SELECT id FROM brands WHERE tenant_id = $1)', [madeTenant]);
+      await step('tenant', 'DELETE FROM tenants WHERE id = $1', [madeTenant]);
+    }
     try {
-      if (eventId) {
-        await db.query(`DELETE FROM community_posts WHERE id::text IN (SELECT provider_message_id FROM comms_hub_deliveries d JOIN comms_hub_messages m ON m.id = d.message_id WHERE m.event_id = $1 AND provider_message_id IS NOT NULL)`, [eventId]).catch(() => undefined);
-        await db.query(`DELETE FROM comms_hub_activity WHERE entity_id IN (SELECT id FROM comms_hub_messages WHERE event_id = $1) OR entity_id = $1`, [eventId]);
-        await db.query('DELETE FROM comms_hub_messages WHERE event_id = $1', [eventId]);
-        // The stream preparation holds the one shared live input: left behind, it blocks the next Prepare.
-        const occId = (await db.query('SELECT broadcast_occurrence_id FROM comms_hub_events WHERE id = $1', [eventId])).rows[0]?.broadcast_occurrence_id;
-        await db.query('UPDATE comms_hub_events SET thumbnail_id = NULL, broadcast_occurrence_id = NULL WHERE id = $1', [eventId]);
-        if (occId) await db.query('DELETE FROM broadcast_occurrences WHERE id = $1', [occId]);
-        await db.query('DELETE FROM comms_hub_thumbnails WHERE event_id = $1', [eventId]).catch(() => undefined);
-        await db.query('DELETE FROM community_events WHERE hub_event_id = $1', [eventId]).catch(() => undefined);
-        await db.query('DELETE FROM comms_hub_events WHERE id = $1', [eventId]);
-      }
-      await db.query('UPDATE comms_hub_settings SET test_cohort_id = NULL WHERE test_cohort_id = $1', [cohortId]);
-      await db.query('DELETE FROM cohorts WHERE id = $1', [cohortId]).catch(() => undefined);
-      if (madeTenant) {
-        await db.query(`DELETE FROM media_assets WHERE brand_id IN (SELECT id FROM brands WHERE tenant_id = $1)`, [madeTenant]).catch(() => undefined);
-        await db.query('DELETE FROM tenants WHERE id = $1', [madeTenant]).catch(() => undefined);
-      }
-      const left = (await db.query(`SELECT (SELECT count(*) FROM comms_hub_events WHERE title LIKE $1) + (SELECT count(*) FROM broadcast_occurrences WHERE title LIKE $1)
-        + (SELECT count(*) FROM cohorts WHERE name LIKE $1) AS n`, [`%${RUN}`])).rows[0].n;
-      check('cleanup removed the e2e rows (event, stream preparation, cohort)', Number(left) === 0, `${left} left`);
+      const counts = (await db.query(`SELECT
+          (SELECT count(*) FROM comms_hub_events WHERE title LIKE $1) AS events,
+          (SELECT count(*) FROM broadcast_occurrences WHERE title LIKE $1) AS streams,
+          (SELECT count(*) FROM cohorts WHERE name LIKE $1) AS cohorts,
+          (SELECT count(*) FROM comms_hub_messages WHERE id = ANY($2::uuid[])) AS messages,
+          (SELECT count(*) FROM comms_hub_deliveries WHERE message_id = ANY($2::uuid[])) AS deliveries,
+          (SELECT count(*) FROM comms_hub_drafts WHERE message_id = ANY($2::uuid[])) AS drafts,
+          (SELECT count(*) FROM comms_hub_destinations WHERE message_id = ANY($2::uuid[])) AS destinations,
+          (SELECT count(*) FROM comms_hub_approvals WHERE message_id = ANY($2::uuid[])) AS approvals,
+          (SELECT count(*) FROM comms_hub_alerts WHERE message_id = ANY($2::uuid[])) AS alerts,
+          (SELECT count(*) FROM comms_hub_thumbnails WHERE id = ANY($3::uuid[])) AS thumbnails,
+          (SELECT count(*) FROM comms_hub_activity WHERE entity_id = ANY($4::uuid[]) OR actor_id = $5) AS activity`,
+      [`%${RUN}`, msgIds, thumbIds, touched, organizerId])).rows[0];
+      const left = Object.entries(counts).filter(([, n]) => Number(n) > 0).map(([k, n]) => `${k} ${n}`);
+      const detail = left.length || problems.length ? [...left, ...problems].join('; ') : 'nothing left';
+      check('cleanup removed every row this run made', left.length === 0 && problems.length === 0, detail);
     } catch (e) {
-      check('cleanup removed the e2e rows', false, e.message);
+      check('cleanup removed every row this run made', false, `${e.name}: ${e.message}`);
     }
     await db.end();
   }
