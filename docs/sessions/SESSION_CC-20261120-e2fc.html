@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Saturday, November 21, 2026 at 6:21 AM</div>
-    <div><span class="sid">CC-20261120-e2fc</span><span class="count">5 changes</span></div>
+    <div class="meta">Generated Saturday, November 21, 2026 at 7:11 AM</div>
+    <div><span class="sid">CC-20261120-e2fc</span><span class="count">6 changes</span></div>
   </header>
   <main>
     
@@ -126,6 +126,20 @@
         <div class="card-body">
           <div class="row"><span class="k">What changed</span><span class="v">new pure `storyOwners.ts`. `homeOrphanStories` gives a story the scoped roster missed to the best-fitting agent: 3 points per requirement it shares with the agent&#39;s stories, 1 per shared content word, 1 for the same release, ties to roster order. `attachGuardrails` then attaches that story&#39;s SAFE requirements (approval gate + autonomy cap, or hard rule). It only adds, and only lowers autonomy. `scopeAgents` homes orphans before rule 1, replacing &quot;keep the stale owner&quot;. `planDocument` and `commandCenterTabSections` apply `rosterWithEveryStoryOwned` at render, so existing plans (v5&#39;s STORY-003 -&gt; Gap Creator, which now enforces REQ-010) are fixed on their next sync. Runbook row added. BC L12.8 (https://app.basecamp.com/3945211/buckets/7463955/todos/10534806659).</span></div>
           <div class="row"><span class="k">Verification</span><span class="v ver">`storyOwners.test.ts` 10/10 on the v5 roster verbatim. `jest src/services/sbp src/services/factory` + runbook coverage: 307 suites / 4,192 tests pass. Backend tsc clean; `checkTestTypecheck` shows only the 3 known missing-package files.</span></div>
+          
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">06</span>
+          <h2>#4277 deployed: v5&#39;s STORY-003 owned by Gap Creator on prod</h2>
+          <span class="badge">2026-11-21</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">deployed fd07e9d8a (registry mode, marker `homeOrphanStories` in `storyOwners.js`). No code change in this entry. BC L12.8 closed with a verification comment.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">home 200. v5&#39;s bundle, re-rendered on prod, has STORY-003 owned by Gap Creator, which carries REQ-010 as a hard rule. No story has an owner outside the roster, and &quot;AI Agent&quot; appears 0 times in the Story 000 brief. The other five agents are unchanged.</span></div>
           
           
         </div>
