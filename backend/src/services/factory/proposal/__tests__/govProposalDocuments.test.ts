@@ -54,3 +54,35 @@ describe('deriveProposalDocuments', () => {
     expect(deriveProposalDocuments([null, { statement: '' }, { canonical_req_id: 'X' }] as any)).toEqual([]);
   });
 });
+
+/**
+ * F01 regression (HERRIMAN_ROOT_CAUSE_MATRIX.md): a submission-instruction obligation must never become a
+ * Technical Proposal section. These are the EXACT passages that opened the Nov 21 Herriman 02-technical.pdf
+ * ("This section responds to requirement REQ-003. Submission Requirement: One (1) electronic (PDF) copy ...
+ * submitted by email"). Before the fix they fell through the /.*/ catch-all into the technical narrative.
+ */
+describe('deriveProposalDocuments — submission-instruction requirements never leak into the Technical Proposal (F01)', () => {
+  it('drops a submit-by-email / deadline obligation from derivation — it is covered by the generated Compliance Matrix, never drafted as Technical', () => {
+    const docs = deriveProposalDocuments([
+      req('REQ-003', 'One (1) electronic (PDF) copy of Responses are required to be submitted by email to Herriman City/Steven Brown.', 'administrative'),
+      req('REQ-004', 'Proposals must be submitted no later than 5:00 p.m. MDT on November 30, 2026.', 'administrative'),
+    ]);
+    // The exact passages that OPENED the failing technical PDF are no longer drafted as a technical section (or any).
+    expect(docs.find((d) => d.key === 'technical')).toBeUndefined();
+    expect(docs).toEqual([]);
+  });
+
+  it('still routes a genuine "the proposal must include a technical approach" requirement to the Technical Proposal', () => {
+    const docs = deriveProposalDocuments([
+      req('T1', 'The proposal must include a technical approach describing the methodology and architecture.'),
+    ]);
+    expect(docs.find((d) => d.key === 'technical')?.requirements.map((r) => r.canonicalReqId)).toEqual(['T1']);
+  });
+
+  it('does NOT drop a requirement that names a technical capability, even when it says "submit"', () => {
+    const docs = deriveProposalDocuments([
+      req('T2', 'Submit a description of the GIS integration and offline work-order sync.'),
+    ]);
+    expect(docs.find((d) => d.key === 'technical')?.requirements.map((r) => r.canonicalReqId)).toEqual(['T2']);
+  });
+});
