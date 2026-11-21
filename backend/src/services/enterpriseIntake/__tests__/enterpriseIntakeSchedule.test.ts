@@ -25,6 +25,7 @@ jest.mock('../enterpriseIntakeMeetingPost', () => ({ postMeetingSoon: (id: strin
 jest.mock('../enterpriseIntakeAliBrief', () => ({ aliBriefSoon: (id: string) => mockBriefSoon(id) }));
 
 import {
+  isHoliday,
   bookMeeting,
   earliestMeetingStart,
   filterSlots,
@@ -81,6 +82,27 @@ describe('earliestMeetingStart: next business day, Central time', () => {
     ['fall back: Friday (CDT) -> Monday at CST midnight', '2026-10-30T17:00:00Z', '2026-11-02T06:00:00.000Z'],
   ])('%s', (_label, at, want) => {
     expect(iso(earliestMeetingStart(new Date(at)))).toBe(want);
+  });
+});
+
+describe('holidays (live check: Thanksgiving was bookable)', () => {
+  it.each([
+    [2026, 11, 26, true], [2026, 11, 27, true], [2027, 11, 25, true], [2027, 11, 26, true],
+    [2026, 12, 25, true], [2026, 12, 24, true], [2027, 1, 1, true], [2027, 5, 31, true], [2027, 9, 6, true], [2027, 7, 4, true],
+    [2026, 11, 23, false], [2026, 11, 25, false], [2027, 5, 24, false],
+  ])('%i-%i-%i holiday %s', (y, m, d, want) => expect(isHoliday(y as number, m as number, d as number)).toBe(want));
+
+  it('the day before Thanksgiving goes to the Monday after', () => {
+    expect(earliestMeetingStart(new Date('2026-11-25T18:00:00Z')).toISOString()).toBe('2026-11-30T06:00:00.000Z');
+  });
+
+  it('slots on holidays are not offered, and cannot be booked', () => {
+    const avail = { timezone: 'America/Chicago', dates: [
+      { date: '2026-11-26', slots: [{ start: '2026-11-26T15:00:00-06:00', end: '2026-11-26T15:30:00-06:00' }] },
+      { date: '2026-11-30', slots: [{ start: '2026-11-30T15:00:00-06:00', end: '2026-11-30T15:30:00-06:00' }] },
+    ] };
+    expect(filterSlots(avail, new Date('2026-11-23T06:00:00Z')).map((d) => d.date)).toEqual(['2026-11-30']);
+    expect(isBookableShape(new Date('2026-11-27T15:00:00Z'))).toBe(false);
   });
 });
 
