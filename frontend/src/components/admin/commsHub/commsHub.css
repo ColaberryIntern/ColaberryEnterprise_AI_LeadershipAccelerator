@@ -1,0 +1,241 @@
+/*
+ * Communications Hub (CH3.1): the Events list in the shape of training.colaberry.com/events.
+ * Tokens only (src/colaberry/tokens); no hex values. Status is carried by text and an icon;
+ * these colours only reinforce it.
+ */
+
+.ch-featured {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  border-radius: var(--radius-2xl);
+  overflow: hidden;
+  background: var(--neutral-950);
+  color: var(--neutral-0);
+  box-shadow: var(--shadow-md);
+  margin-bottom: var(--space-6, 1.5rem);
+}
+.ch-featured-pic {
+  min-height: 240px;
+  background: var(--red-600);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ch-featured-body { padding: 1.75rem; display: flex; flex-direction: column; justify-content: center; }
+.ch-featured-title { font-size: clamp(1.5rem, 2.4vw, 2.1rem); font-weight: 800; line-height: 1.15; margin: 0 0 0.5rem; }
+.ch-featured-meta { color: var(--neutral-300); margin-bottom: 0.75rem; }
+.ch-featured-blurb {
+  color: var(--neutral-200);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.ch-letter { font-size: 4rem; font-weight: 800; color: var(--neutral-0); }
+
+.ch-type-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  border-radius: var(--radius-pill);
+  background: var(--neutral-800);
+  color: var(--green-300);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.ch-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 1rem;
+}
+.ch-event-card {
+  display: flex;
+  flex-direction: column;
+  padding: 1.25rem;
+  border: 1px solid var(--neutral-200);
+  border-radius: var(--radius-xl);
+  background: var(--neutral-0);
+  min-height: 260px;
+}
+.ch-date-chip {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: var(--radius-lg);
+  background: var(--red-50);
+  color: var(--red-600);
+}
+.ch-date-day { font-size: 1.6rem; font-weight: 800; line-height: 1; }
+.ch-date-month { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em; }
+.ch-type-line { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--blue-700); }
+.ch-event-title { font-size: 1.1rem; font-weight: 800; margin: 0 0 0.25rem; }
+.ch-event-when { color: var(--neutral-600); font-size: 0.9rem; margin-bottom: 0.5rem; }
+.ch-event-blurb {
+  color: var(--neutral-600);
+  font-size: 0.9rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.ch-notes { font-size: 0.8rem; font-weight: 600; color: var(--neutral-500); }
+.ch-featured .ch-notes { color: var(--neutral-300); }
+
+.ch-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.6rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.75rem;
+  font-weight: 700;
+  border: 1px solid currentColor;
+}
+.ch-status-neutral { color: var(--neutral-600); background: var(--neutral-50); }
+.ch-status-info { color: var(--blue-700); background: var(--blue-50); }
+.ch-status-danger { color: var(--red-700); background: var(--red-50); }
+.ch-status-success { color: var(--green-700); background: var(--green-50); }
+.ch-status-muted { color: var(--neutral-500); background: var(--neutral-100); text-decoration: line-through; }
+
+@media (max-width: 767.98px) {
+  .ch-featured { grid-template-columns: 1fr; }
+  .ch-featured-pic { min-height: 160px; }
+}
+
+/* CH4.4 thumbnail studio (design 02): its own card beside the event details. Selection is carried by a
+   border and the "Selected" text, not colour alone. */
+.ch-editor-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 1.25rem; align-items: start; }
+.ch-editor-grid > .admin-section-card, .ch-editor-left > .admin-section-card { margin: 0; }
+.ch-editor-left { display: flex; flex-direction: column; gap: 1.25rem; min-width: 0; }
+.ch-studio-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.25rem; }
+.ch-studio-step { margin-top: 1.25rem; }
+.ch-studio-top .ch-studio-step { margin-top: 0.5rem; }
+.ch-studio-h { font-size: 0.95rem; font-weight: 700; margin: 0 0 0.6rem; }
+.ch-studio-hint { color: var(--neutral-600); font-size: 0.85rem; }
+.ch-studio-photos { display: flex; flex-wrap: wrap; gap: 0.6rem; margin: 0; padding: 0; }
+.ch-studio-photo { position: relative; width: 84px; height: 84px; border-radius: var(--radius-md); overflow: hidden; background: var(--neutral-100); }
+.ch-studio-photo img { width: 100%; height: 100%; object-fit: cover; }
+.ch-studio-photo-remove { position: absolute; top: 4px; right: 4px; width: 28px; height: 28px; border-radius: var(--radius-circle); border: 0; background: var(--neutral-0); color: var(--neutral-900); box-shadow: var(--shadow-sm); display: flex; align-items: center; justify-content: center; padding: 0; }
+.ch-studio-photo-remove:focus-visible { outline: 3px solid var(--blue-500); outline-offset: 1px; }
+.ch-studio-photo-missing { display: block; padding: 0.5rem; font-size: 0.75rem; }
+.ch-studio-add { border: 1.5px dashed var(--neutral-400); background: var(--neutral-0); }
+.ch-studio-add label { display: flex; width: 100%; height: 100%; align-items: center; justify-content: center; font-weight: 700; cursor: pointer; margin: 0; }
+.ch-studio-add:focus-within { outline: 3px solid var(--blue-500); outline-offset: 2px; }
+.ch-studio-add.is-disabled label { cursor: not-allowed; color: var(--neutral-500); }
+.ch-studio-photo-form { margin-top: 0.75rem; }
+.ch-studio-generate { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin-top: 1.25rem; }
+.ch-btn-berry { background: var(--blue-700); border-color: var(--blue-700); color: var(--neutral-0); font-weight: 700; }
+.ch-btn-berry:hover, .ch-btn-berry:focus-visible { background: var(--blue-800); border-color: var(--blue-800); color: var(--neutral-0); }
+.ch-studio-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; border: 0; padding: 0; margin: 0; }
+.ch-studio-option { border-radius: var(--radius-lg); }
+.ch-studio-option label { display: block; cursor: pointer; margin: 0; }
+.ch-studio-option img, .ch-studio-noimg { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius-md); border: 3px solid transparent; }
+.ch-studio-option.is-selected img { border-color: var(--blue-700); }
+.ch-studio-option:focus-within { outline: 3px solid var(--blue-500); outline-offset: 2px; }
+.ch-studio-noimg { display: flex; align-items: center; justify-content: center; background: var(--neutral-100); color: var(--neutral-600); }
+.ch-studio-caption { display: block; padding: 0.4rem 0 0; }
+.ch-studio-selected { color: var(--blue-700); font-weight: 700; }
+.ch-studio-inuse { color: var(--green-700); font-weight: 700; }
+.ch-studio-prompt summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-size: 0.85rem; }
+.ch-studio-preview { margin-top: 0.75rem; max-width: 420px; }
+.ch-studio-preview img { display: block; width: 100%; border-radius: var(--radius-md); }
+.ch-studio-preview.ch-size-1x1 { max-width: 240px; }
+
+@media (max-width: 1199.98px) {
+  .ch-editor-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 575.98px) {
+  .ch-studio-top, .ch-studio-options { grid-template-columns: 1fr; }
+}
+/* Beside the studio the details card is narrow, so its viewport-sized columns become halves and full rows. */
+@media (min-width: 1200px) {
+  .ch-editor-left > .admin-section-card:first-child .row > .col-md-4 { flex: 0 0 50%; max-width: 50%; }
+  .ch-editor-left > .admin-section-card:first-child .row > .col-md-8 { flex: 0 0 100%; max-width: 100%; }
+}
+
+/* CH5.2 Live panel: health is said in words; colour only reinforces it. */
+.ch-live-health { font-weight: 600; }
+.ch-health-ready { color: var(--green-700); }
+.ch-health-down, .ch-health-degraded { color: var(--red-700); }
+.ch-health-unknown { color: var(--neutral-600); }
+.ch-live-field { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.ch-live-field input { flex: 1 1 14rem; min-width: 0; }
+
+/* CH6.4 promotion plan (design 02): full width under the editor grid. */
+.ch-editor-wide { grid-column: 1 / -1; }
+.ch-editor-wide > .admin-section-card { margin: 0; }
+.ch-plan-rows { margin: 0; padding: 0; }
+.ch-plan-row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.2fr) minmax(0, 1.6fr) auto; gap: 0.75rem; align-items: center; padding: 0.75rem 0; border-bottom: 1px solid var(--neutral-200); }
+.ch-plan-row:last-child { border-bottom: 0; }
+.ch-plan-when, .ch-plan-channels { color: var(--neutral-700); font-size: 0.9rem; }
+.ch-plan-note { grid-column: 1 / -1; color: var(--neutral-900); font-size: 0.85rem; font-weight: 600; }
+.ch-status-warning { color: var(--neutral-900); background: var(--neutral-100); border-color: var(--neutral-500); }
+@media (max-width: 767.98px) {
+  .ch-plan-row { grid-template-columns: 1fr auto; }
+  .ch-plan-when, .ch-plan-channels { grid-column: 1 / -1; }
+}
+
+/* CH6.5 Compose (design 03). Previews follow the member feed card and the notification bell row. */
+.ch-compose-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
+.ch-compose-step { border: 1px solid var(--neutral-200); border-radius: var(--radius-lg); background: var(--neutral-0); padding: 1rem 1.1rem; }
+.ch-compose-tabs { display: flex; gap: 0.25rem; border-bottom: 1px solid var(--neutral-200); margin-bottom: 0.75rem; }
+.ch-compose-tab { border: 0; background: none; padding: 0.6rem 0.75rem; min-height: 44px; font-weight: 600; color: var(--neutral-700); border-bottom: 3px solid transparent; }
+.ch-prev-event { display: flex; flex-direction: column; border: 1px solid var(--neutral-200); border-radius: var(--radius-md); padding: 0.5rem 0.75rem; margin-top: 0.5rem; }
+.ch-prev-link { display: block; font-weight: 600; color: var(--blue-700); margin-top: 0.25rem; }
+.ch-compose-tab.active { color: var(--neutral-900); border-bottom-color: var(--red-600); }
+.ch-compose-tab:focus-visible { outline: 3px solid var(--blue-500); outline-offset: 2px; }
+@media (max-width: 1199.98px) { .ch-compose-grid { grid-template-columns: 1fr; } }
+.ch-prev-h { font-size: 0.85rem; font-weight: 700; color: var(--neutral-700); margin: 0 0 0.5rem; }
+.ch-prev-feed { border: 1px solid var(--neutral-200); border-radius: var(--radius-lg); background: var(--neutral-0); padding: 0.85rem; margin: 0; }
+.ch-prev-head { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.6rem; }
+.ch-prev-avatar { width: 34px; height: 34px; border-radius: var(--radius-circle); background: var(--red-600); color: var(--neutral-0); display: flex; align-items: center; justify-content: center; font-weight: 800; }
+.ch-prev-sub { display: block; font-size: 0.78rem; color: var(--neutral-600); }
+.ch-prev-banner { display: block; width: 100%; aspect-ratio: 3 / 1; object-fit: cover; border-radius: var(--radius-md); margin-bottom: 0.6rem; }
+.ch-prev-body { margin: 0; white-space: pre-wrap; }
+.ch-prev-bell { display: flex; gap: 0.6rem; align-items: flex-start; border: 1px solid var(--neutral-200); border-radius: var(--radius-lg); background: var(--neutral-0); padding: 0.75rem; margin: 0; }
+.ch-prev-bell-ic { width: 32px; height: 32px; border-radius: var(--radius-circle); background: var(--neutral-100); display: flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+.ch-prev-time { display: block; font-size: 0.75rem; color: var(--neutral-600); }
+.ch-compose-versions summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }
+.ch-compose-summary { border: 1px solid var(--neutral-200); border-radius: var(--radius-lg); padding: 0.85rem 1rem; background: var(--neutral-50); }
+.ch-reject-note { max-width: 260px; }
+.ch-compose-step legend { font-size: 0.9rem; font-weight: 600; margin-bottom: 0.35rem; }
+.ch-compose-step h2.ch-studio-h { margin-bottom: 0.75rem; }
+
+/* CH7.4 Today and Schedule & history. */
+.ch-paused { border-left: 4px solid var(--neutral-900); }
+.ch-aq { display: flex; flex-direction: column; gap: 0.75rem; }
+.ch-aq-card { border: 1px solid var(--neutral-200); border-radius: var(--radius-md, 0.5rem); padding: 0.875rem 1rem; }
+.ch-aq-title { font-size: 1rem; font-weight: 700; }
+.ch-aq-preview { color: var(--neutral-700); font-style: italic; overflow-wrap: anywhere; }
+.ch-aq-facts { display: grid; gap: 0.15rem; margin-bottom: 0.75rem; font-size: 0.875rem; }
+.ch-aq-facts > div { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.ch-aq-facts dt { font-weight: 700; }
+.ch-aq-facts dd { margin: 0; overflow-wrap: anywhere; }
+.ch-next-row, .ch-sched-row, .ch-channel-row, .ch-up-row, .ch-activity-row {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem;
+  padding: 0.6rem 0; border-bottom: 1px solid var(--neutral-200);
+}
+.ch-next-row:last-child, .ch-sched-row:last-child, .ch-channel-row:last-child, .ch-up-row:last-child, .ch-activity-row:last-child { border-bottom: 0; }
+.ch-next-when, .ch-sched-time { font-weight: 700; min-width: 6.5rem; }
+.ch-next-title, .ch-sched-main { flex: 1 1 12rem; min-width: 0; overflow-wrap: anywhere; }
+.ch-next-title { font-weight: 600; }
+.ch-next-where { flex-basis: 100%; font-size: 0.8rem; color: var(--neutral-600); }
+.ch-channel-row { justify-content: space-between; }
+.ch-up-thumb { width: 96px; height: 54px; flex: none; border-radius: 0.375rem; object-fit: cover; }
+.ch-up-none { display: inline-flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; color: var(--neutral-600); background: var(--neutral-100); border: 1px dashed var(--neutral-500); }
+.ch-up-text { display: flex; flex-direction: column; min-width: 0; }
+.ch-up-title { font-weight: 700; overflow-wrap: anywhere; }
+.ch-up-when { font-size: 0.8rem; color: var(--neutral-600); }
+.ch-day + .ch-day { margin-top: 1rem; }
+.ch-day-h { font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--neutral-600); margin-bottom: 0.25rem; }
+.ch-failure { color: var(--red-700); }
+.ch-history td { overflow-wrap: anywhere; }
+.ch-activity-row { display: block; }
+/* Form controls on the hub tabs meet the 44 px target too (the filters, quiet hours, test cohort). */
+.comms-hub .form-select, .comms-hub .form-control:not(textarea) { min-height: 44px; }

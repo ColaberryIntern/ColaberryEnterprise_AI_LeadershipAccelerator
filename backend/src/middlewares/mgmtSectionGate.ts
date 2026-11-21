@@ -31,6 +31,9 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   // W32: Enterprise clients (Book a demo pilot to signed). Revenue, with the pipeline it feeds.
   ['/api/admin/enterprise-clients', 'revenue'],
   ['/api/admin/campaigns', 'campaigns'], ['/api/admin/communications', 'campaigns'],
+  // CH1.1: the Communications Hub. A distinct prefix: matchesPrefix is '/'-boundary, so neither '/api/admin/communications'
+  // nor '/api/admin/community' can capture it, and it cannot capture them.
+  ['/api/admin/comms-hub', 'comms_hub'],
   // BEFORE the broad marketing row below, deliberately: pathToSection returns the FIRST
   // match in array order, not the longest prefix, so a narrower path placed after it is
   // never reached. This one is the catalog of connectors a brand can post through, which

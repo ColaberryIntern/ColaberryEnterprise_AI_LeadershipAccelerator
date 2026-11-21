@@ -187,6 +187,22 @@ describe('createPost', () => {
     (env as any).communityPostQualityGateEnabled = false;
   });
 
+  it('Communications Hub (CH7.1): a program post goes into the named cohort and earns no points', async () => {
+    findByPkEnrollment.mockResolvedValue({ ...mockEnrollment, cohort_id: null });
+    findOrCreateMember.mockResolvedValue([mockMember, false]);
+    createPostMock.mockResolvedValue({
+      id: 'post-hub', body: 'Demo Tuesday is tomorrow at 6:00 PM CST.', media_urls: [], category: 'General', pinned: false,
+      like_count: 0, comment_count: 0, mentioned_member_ids: [], min_level: 0, created_at: new Date('2026-11-20'),
+    });
+
+    await createPost(enrollmentId, { body: 'Demo Tuesday is tomorrow at 6:00 PM CST.', category: 'General' }, { cohortId: 'cohort-nov', reward: false });
+
+    expect(createPostMock).toHaveBeenCalledWith(expect.objectContaining({ cohort_id: 'cohort-nov', member_id: memberId, category: 'General' }));
+    expect(incrementMember).not.toHaveBeenCalled();
+    expect(createPointsEvent).not.toHaveBeenCalled();
+    expect(award).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ eventType: 'community_post' }));
+  });
+
   it('failure path: rejects a mention outside the author\'s cohort', async () => {
     findByPkEnrollment.mockResolvedValue(mockEnrollment);
     findOrCreateMember.mockResolvedValue([mockMember, false]);

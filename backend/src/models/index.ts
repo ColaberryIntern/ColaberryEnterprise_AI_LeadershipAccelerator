@@ -426,6 +426,18 @@ import ExplorerContentAsset from './ExplorerContentAsset';
 import TrackedLink from './TrackedLink';
 import LinkClick from './LinkClick';
 
+// --- Communications Hub (CH2.1) ---
+import CommsHubEvent from './CommsHubEvent';
+import CommsHubThumbnail from './CommsHubThumbnail';
+import CommsHubSettings from './CommsHubSettings';
+import CommsHubActivity from './CommsHubActivity';
+import CommsHubEventPhoto from './CommsHubEventPhoto';
+import CommsHubMessage from './CommsHubMessage';
+import CommsHubDraft from './CommsHubDraft';
+import CommsHubDestination from './CommsHubDestination';
+import CommsHubApproval from './CommsHubApproval';
+import CommsHubDelivery from './CommsHubDelivery';
+import CommsHubAlert from './CommsHubAlert';
 // --- Marketing Operations: Content OS ---
 import ContentItem from './ContentItem';
 import ChannelAccount from './ChannelAccount';
@@ -1623,6 +1635,18 @@ export {
   // Marketing Operations: tracked links and click capture
   TrackedLink,
   LinkClick,
+  // Communications Hub (CH2.1)
+  CommsHubEvent,
+  CommsHubThumbnail,
+  CommsHubSettings,
+  CommsHubActivity,
+  CommsHubEventPhoto,
+  CommsHubMessage,
+  CommsHubDraft,
+  CommsHubDestination,
+  CommsHubApproval,
+  CommsHubDelivery,
+  CommsHubAlert,
   // Marketing Operations: Content OS
   ContentItem,
   ChannelAccount,

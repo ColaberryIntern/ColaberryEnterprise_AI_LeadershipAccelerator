@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Communications Hub — Schedule, history and groups</title>
+<!-- DESIGN REFERENCE ONLY. Static mockup of the Communications Hub. All events, dates, counts and names are sample data;
+     [BRACKETED] values are placeholders. Inline hex colors map to tokens in frontend/src/colaberry/tokens/colors.css. Do not copy the inline styles into the app. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Quicksand:wght@700&family=Roboto:wght@400;500;700&display=swap">
+<style>
+body{margin:0}
+a{color:#2E6A86}a:hover{color:#1A3947}
+</style>
+</head>
+<body>
+<div style="display: flex; flex-wrap: wrap; background: #F8F8F7; color: #2B2B2B; font-family: 'Roboto', system-ui, sans-serif; font-size: 14px; line-height: 1.45; min-height: 1700px">
+
+<nav aria-label="Admin sections" style="flex: 1 1 232px; background: #1B1516; padding: 20px 14px; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px">
+<div style="display: flex; align-items: center; gap: 10px; padding: 0 8px">
+<span aria-hidden="true" style="width: 28px; height: 28px; border-radius: 50%; background: #FB2832; display: inline-block"></span>
+<span style="font-family: 'Quicksand', sans-serif; font-weight: 700; font-size: 16px; color: #FFFFFF">Colaberry Admin</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<a href="#" style="color: #CFC9CA; text-decoration: none; padding: 10px 10px; border-radius: 8px">Dashboard</a>
+<a href="#" style="color: #CFC9CA; text-decoration: none; padding: 10px 10px; border-radius: 8px">Student Story</a>
+</div>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<div style="color: #A39C9D; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 0 10px 6px">Campaigns</div>
+<a href="#" style="color: #CFC9CA; text-decoration: none; padding: 10px 10px; border-radius: 8px">Campaigns</a>
+<a href="01-today.html" aria-current="page" style="color: #FFFFFF; font-weight: 700; text-decoration: none; padding: 10px 10px; border-radius: 8px; background: #3A2F31">Communications Hub</a>
+<a href="#" style="color: #CFC9CA; text-decoration: none; padding: 10px 10px; border-radius: 8px">Message log</a>
+<a href="#" style="color: #CFC9CA; text-decoration: none; padding: 10px 10px; border-radius: 8px">Visitors</a>
+</div>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<div style="color: #A39C9D; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 0 10px 6px">Program</div>
+<a href="#" style="color: #CFC9CA; text-decoration: none; padding: 10px 10px; border-radius: 8px">Accelerator</a>
+<a href="#" style="color: #CFC9CA; text-decoration: none; padding: 10px 10px; border-radius: 8px">Live Studio setup</a>
+<a href="#" style="color: #CFC9CA; text-decoration: none; padding: 10px 10px; border-radius: 8px">Community roles</a>
+</div>
+</nav>
+
+<main style="flex: 999 1 560px; min-width: 0; padding: 28px 32px 48px; box-sizing: border-box; display: flex; flex-direction: column; gap: 24px">
+
+<header style="display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; justify-content: space-between">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h1 style="margin: 0; font-size: 28px; line-height: 1.2; font-weight: 700; color: #1A1A1A">Communications Hub</h1>
+<p style="margin: 0; color: #6B6B6B">Everything that is going out, everything that went out, and who can receive it.</p>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center">
+<button type="button" style="min-height: 44px; padding: 0 16px; border-radius: 8px; border: 1px solid #C20E1E; background: #FFFFFF; color: #C20E1E; font: inherit; font-weight: 700; cursor: pointer">Pause all sending</button>
+<a href="02-events-thumbnail-studio.html" style="min-height: 44px; padding: 0 16px; border-radius: 8px; border: 1px solid #B4B4B4; background: #FFFFFF; color: #1A1A1A; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center">New event</a>
+<a href="03-compose-approve.html" style="min-height: 44px; padding: 0 18px; border-radius: 8px; background: #E5121D; color: #FFFFFF; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center">New message</a>
+</div>
+</header>
+
+<nav aria-label="Hub sections" style="display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid #D8D8D8">
+<a href="01-today.html" style="padding: 12px 16px; color: #4A4A4A; font-weight: 500; text-decoration: none; border-bottom: 3px solid transparent">Today</a>
+<a href="02-events-thumbnail-studio.html" style="padding: 12px 16px; color: #4A4A4A; font-weight: 500; text-decoration: none; border-bottom: 3px solid transparent">Events</a>
+<a href="03-compose-approve.html" style="padding: 12px 16px; color: #4A4A4A; font-weight: 500; text-decoration: none; border-bottom: 3px solid transparent">Compose</a>
+<a href="04-schedule-history-groups.html" aria-current="page" style="padding: 12px 16px; color: #1A1A1A; font-weight: 700; text-decoration: none; border-bottom: 3px solid #E5121D">Schedule &amp; history</a>
+</nav>
+
+<section aria-label="Filters" style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center">
+<input type="search" aria-label="Search messages" placeholder="Search messages, events or groups" style="flex: 2 1 260px; min-height: 44px; padding: 0 14px; border: 1px solid #B4B4B4; border-radius: 8px; font: inherit; box-sizing: border-box; background: #FFFFFF">
+<select aria-label="Status" style="flex: 1 1 150px; min-height: 44px; padding: 0 10px; border: 1px solid #B4B4B4; border-radius: 8px; font: inherit; background: #FFFFFF"><option>Any status</option><option>Draft</option><option>Needs approval</option><option>Approved</option><option>Scheduled</option><option>Sending</option><option>Sent</option><option>Partially failed</option><option>Failed</option><option>Cancelled</option></select>
+<select aria-label="Channel" style="flex: 1 1 150px; min-height: 44px; padding: 0 10px; border: 1px solid #B4B4B4; border-radius: 8px; font: inherit; background: #FFFFFF"><option>Any channel</option><option>Community feed</option><option>In-app notification</option><option>WhatsApp</option></select>
+<select aria-label="Event" style="flex: 1 1 150px; min-height: 44px; padding: 0 10px; border: 1px solid #B4B4B4; border-radius: 8px; font: inherit; background: #FFFFFF"><option>Any event</option><option>Demo Tuesday</option><option>Office Hours</option><option>Open House</option></select>
+</section>
+
+<section style="background: #FFFFFF; border: 1px solid #E4E4E3; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 4px">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 12px; padding-bottom: 8px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 700; color: #1A1A1A">Going out · next 7 days</h2>
+<span style="color: #6B6B6B; font-size: 13px">Central time · sends from the server, even when this page is closed</span>
+</div>
+
+<h3 style="margin: 12px 0 0; font-size: 13px; font-weight: 700; color: #4A4A4A; text-transform: uppercase; letter-spacing: 0.06em">Today · Fri, Nov 20</h3>
+<div style="display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; padding: 10px 0; border-top: 1px solid #E4E4E3">
+<span style="flex: 0 0 90px; font-weight: 700; color: #1A1A1A">12:00 PM</span>
+<span style="flex: 1 1 260px; min-width: 0">Demo Tuesday: announcement <span style="color: #6B6B6B">· Community feed, 2 WhatsApp groups</span></span>
+<span style="padding: 4px 10px; border-radius: 999px; background: #CFE0E9; color: #1A3947; font-size: 12px; font-weight: 700">Scheduled</span>
+<button type="button" style="min-height: 44px; padding: 0 12px; border-radius: 8px; border: 1px solid #B4B4B4; background: #FFFFFF; color: #1A1A1A; font: inherit; cursor: pointer">Cancel</button>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; padding: 10px 0; border-top: 1px solid #E4E4E3">
+<span style="flex: 0 0 90px; font-weight: 700; color: #1A1A1A">On approval</span>
+<span style="flex: 1 1 260px; min-width: 0">Open House: announcement <span style="color: #6B6B6B">· Community feed, in-app</span></span>
+<span style="padding: 4px 10px; border-radius: 999px; background: #FCF1DD; color: #7A4A00; font-size: 12px; font-weight: 700">Needs approval</span>
+<a href="03-compose-approve.html" style="min-height: 44px; padding: 0 12px; border-radius: 8px; background: #E5121D; color: #FFFFFF; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center">Review</a>
+</div>
+
+<h3 style="margin: 16px 0 0; font-size: 13px; font-weight: 700; color: #4A4A4A; text-transform: uppercase; letter-spacing: 0.06em">Mon, Nov 23</h3>
+<div style="display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; padding: 10px 0; border-top: 1px solid #E4E4E3">
+<span style="flex: 0 0 90px; font-weight: 700; color: #1A1A1A">8:00 AM</span>
+<span style="flex: 1 1 260px; min-width: 0">Office Hours: weekly reminder <span style="color: #6B6B6B">· In-app</span></span>
+<span style="padding: 4px 10px; border-radius: 999px; background: #CFE0E9; color: #1A3947; font-size: 12px; font-weight: 700">Scheduled</span>
+<button type="button" style="min-height: 44px; padding: 0 12px; border-radius: 8px; border: 1px solid #B4B4B4; background: #FFFFFF; color: #1A1A1A; font: inherit; cursor: pointer">Cancel</button>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; padding: 10px 0; border-top: 1px solid #E4E4E3">
+<span style="flex: 0 0 90px; font-weight: 700; color: #1A1A1A">9:00 AM</span>
+<span style="flex: 1 1 260px; min-width: 0">Thanksgiving week: office hours moved <span style="color: #6B6B6B">· 3 WhatsApp groups</span></span>
+<span style="padding: 4px 10px; border-radius: 999px; background: #FCF1DD; color: #7A4A00; font-size: 12px; font-weight: 700">Needs approval</span>
+<a href="03-compose-approve.html" style="min-height: 44px; padding: 0 12px; border-radius: 8px; background: #E5121D; color: #FFFFFF; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center">Review</a>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; padding: 10px 0; border-top: 1px solid #E4E4E3">
+<span style="flex: 0 0 90px; font-weight: 700; color: #1A1A1A">6:00 PM</span>
+<span style="flex: 1 1 260px; min-width: 0">Demo Tuesday: reminder, 1 day before <span style="color: #6B6B6B">· Community feed, 2 WhatsApp groups</span></span>
+<span style="padding: 4px 10px; border-radius: 999px; background: #FCF1DD; color: #7A4A00; font-size: 12px; font-weight: 700">Needs approval</span>
+<a href="03-compose-approve.html" style="min-height: 44px; padding: 0 12px; border-radius: 8px; background: #E5121D; color: #FFFFFF; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center">Review</a>
+</div>
+
+<h3 style="margin: 16px 0 0; font-size: 13px; font-weight: 700; color: #4A4A4A; text-transform: uppercase; letter-spacing: 0.06em">Tue, Nov 24 to Fri, Nov 27</h3>
+<div style="display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; padding: 10px 0; border-top: 1px solid #E4E4E3">
+<span style="flex: 0 0 90px; font-weight: 700; color: #1A1A1A">Tue 5:00 PM</span>
+<span style="flex: 1 1 260px; min-width: 0">Demo Tuesday: starting in 1 hour <span style="color: #6B6B6B">· 2 WhatsApp groups</span></span>
+<span style="padding: 4px 10px; border-radius: 999px; background: #CFE0E9; color: #1A3947; font-size: 12px; font-weight: 700">Scheduled</span>
+<button type="button" style="min-height: 44px; padding: 0 12px; border-radius: 8px; border: 1px solid #B4B4B4; background: #FFFFFF; color: #1A1A1A; font: inherit; cursor: pointer">Cancel</button>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; padding: 10px 0; border-top: 1px solid #E4E4E3">
+<span style="flex: 0 0 90px; font-weight: 700; color: #1A1A1A">Tue 6:00 PM</span>
+<span style="flex: 1 1 260px; min-width: 0">Demo Tuesday: we are live <span style="color: #6B6B6B">· In-app</span></span>
+<span style="padding: 4px 10px; border-radius: 999px; background: #CFE0E9; color: #1A3947; font-size: 12px; font-weight: 700">Scheduled</span>
+<button type="button" style="min-height: 44px; padding: 0 12px; border-radius: 8px; border: 1px solid #B4B4B4; background: #FFFFFF; color: #1A1A1A; font: inherit; cursor: pointer">Cancel</button>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; padding: 10px 0; border-top: 1px solid #E4E4E3">
+<span style="flex: 0 0 90px; font-weight: 700; color: #1A1A1A">Wed 10:00 AM</span>
+<span style="flex: 1 1 260px; min-width: 0">Demo Tuesday: recording and thanks <span style="color: #6B6B6B">· Community feed</span></span>
+<span style="padding: 4px 10px; border-radius: 999px; background: #F1F1F0; color: #4A4A4A; font-size: 12px; font-weight: 700">Draft</span>
+<a href="03-compose-approve.html" style="min-height: 44px; padding: 0 12px; border-radius: 8px; border: 1px solid #B4B4B4; background: #FFFFFF; color: #1A1A1A; text-decoration: none; display: inline-flex; align-items: center">Open</a>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; padding: 10px 0; border-top: 1px solid #E4E4E3">
+<span style="flex: 0 0 90px; font-weight: 700; color: #1A1A1A">Fri 12:00 PM</span>
+<span style="flex: 1 1 260px; min-width: 0">Open House: one week to go <span style="color: #6B6B6B">· Community feed</span></span>
+<span style="padding: 4px 10px; border-radius: 999px; background: #CFE0E9; color: #1A3947; font-size: 12px; font-weight: 700">Scheduled</span>
+<button type="button" style="min-height: 44px; padding: 0 12px; border-radius: 8px; border: 1px solid #B4B4B4; background: #FFFFFF; color: #1A1A1A; font: inherit; cursor: pointer">Cancel</button>
+</div>
+</section>
+
+<section style="background: #FFFFFF; border: 1px solid #E4E4E3; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 12px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 700; color: #1A1A1A">History</h2>
+<button type="button" style="min-height: 44px; padding: 0 14px; border-radius: 8px; border: 1px solid #B4B4B4; background: #FFFFFF; color: #1A1A1A; font: inherit; cursor: pointer">Export</button>
+</div>
+<div style="overflow-x: auto">
+<table style="width: 100%; min-width: 760px; border-collapse: collapse; text-align: left">
+<thead>
+<tr style="color: #4A4A4A; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em">
+<th scope="col" style="padding: 10px 12px 10px 0; border-bottom: 1px solid #D8D8D8">When</th>
+<th scope="col" style="padding: 10px 12px; border-bottom: 1px solid #D8D8D8">Message</th>
+<th scope="col" style="padding: 10px 12px; border-bottom: 1px solid #D8D8D8">Went to</th>
+<th scope="col" style="padding: 10px 12px; border-bottom: 1px solid #D8D8D8">Status</th>
+<th scope="col" style="padding: 10px 12px; border-bottom: 1px solid #D8D8D8">Approved by</th>
+<th scope="col" style="padding: 10px 0 10px 12px; border-bottom: 1px solid #D8D8D8"><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Actions</span></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="padding: 12px 12px 12px 0; border-bottom: 1px solid #E4E4E3; white-space: nowrap">Wed, Nov 18 · 10:00 AM</td>
+<td style="padding: 12px; border-bottom: 1px solid #E4E4E3; color: #1A1A1A; font-weight: 500">Demo Tuesday: recording and thanks</td>
+<td style="padding: 12px; border-bottom: 1px solid #E4E4E3">Community feed</td>
+<td style="padding: 12px; border-bottom: 1px solid #E4E4E3"><span style="padding: 4px 10px; border-radius: 999px; background: #DEF0CC; color: #2A521E; font-size: 12px; font-weight: 700">Sent</span></td>
+<td style="padding: 12px; border-bottom: 1px solid #E4E4E3">Jackie</td>
+<td style="padding: 12px 0 12px 12px; border-bottom: 1px solid #E4E4E3"><a href="#">Details</a></td>
+</tr>
+<tr>
+<td style="padding: 12px 12px 12px 0; border-bottom: 1px solid #E4E4E3; white-space: nowrap">Tue, Nov 17 · 5:00 PM</td>
+<td style="padding: 12px; border-bottom: 1px solid #E4E4E3; color: #1A1A1A; font-weight: 500">Demo Tuesday: starting in 1 hour</td>
+<td style="padding: 12px; border-bottom: 1px solid #E4E4E3">2 WhatsApp groups, in-app</td>
+<td style="padding: 12px; border-bottom: 1px solid #E4E4E3"><span style="padding: 4px 10px; border-radius: 999px; background: #DEF0CC; color: #2A521E; font-size: 12px; font-weight: 700">Sent</span></td>
+<td style="padding: 12px; border-bottom: 1px solid #E4E4E3">Jackie</td>
+<td style="padding: 12px 0 12px 12px; border-bottom: 1px solid #E4E4E3"><a href="#">Details</a></td>
+</tr>
+<tr>
+<td style="padding: 12px 12px 12px 0; border-bottom: 1px solid #E4E4E3; white-space: nowrap">Mon, Nov 16 · 11:00 AM</td>
+<td style="padding: 12px; border-bottom: 1px solid #E4E4E3; color: #1A1A1A; font-weight: 500">Office Hours: starting in 1 hour<br><span style="color: #7A1016; font-weight: 400; font-size: 13px">Delivered to 2 of 3 groups. [ALUMNI GROUP] did not receive it.</span></td>
+<td style="padding: 12px; border-bottom: 1px solid #E4E4E3">3 WhatsApp groups</td>
+<td style="padding: 12px; border-bottom: 1px solid #E4E4E3"><span style="padding: 4px 10px; border-radius: 999px; background: #FFDBDD; color: #7A1016; font-size: 12px; font-weight: 700; white-space: nowrap">Partially failed</span></td>
+<td style="padding: 12px; border-bottom: 1px solid #E4E4E3">Jackie</td>
+<td style="padding: 12px 0 12px 12px; border-bottom: 1px solid #E4E4E3"><button type="button" style="min-height: 44px; padding: 0 12px; border-radius: 8px; border: 1px solid #C20E1E; background: #FFFFFF; color: #C20E1E; font: inherit; font-weight: 700; cursor: pointer; white-space: nowrap">Retry 1 group</button></td>
+</tr>
+<tr>
+<td style="padding: 12px 12px 12px 0; border-bottom: 1px solid #E4E4E3; white-space: nowrap">Fri, Nov 13 · 12:00 PM</td>
+<td style="padding: 12px; border-bottom: 1px solid #E4E4E3; color: #1A1A1A; font-weight: 500">[CANCELLED EVENT]: announcement<br><span style="color: #6B6B6B; font-weight: 400; font-size: 13px">Stopped automatically when the event was cancelled.</span></td>
+<td style="padding: 12px; border-bottom: 1px solid #E4E4E3">Community feed, 2 WhatsApp groups</td>
+<td style="padding: 12px; border-bottom: 1px solid #E4E4E3"><span style="padding: 3px 10px; border-radius: 999px; background: #FFFFFF; border: 1px solid #8C8C8C; color: #4A4A4A; font-size: 12px; font-weight: 700">Cancelled</span></td>
+<td style="padding: 12px; border-bottom: 1px solid #E4E4E3">Jackie</td>
+<td style="padding: 12px 0 12px 12px; border-bottom: 1px solid #E4E4E3"><a href="#">Details</a></td>
+</tr>
+<tr>
+<td style="padding: 12px 12px 12px 0; white-space: nowrap">Thu, Nov 12 · 9:00 AM</td>
+<td style="padding: 12px; color: #1A1A1A; font-weight: 500">Office Hours: weekly reminder<br><span style="color: #7A1016; font-weight: 400; font-size: 13px">Tried 3 times, then stopped. Nothing was delivered.</span></td>
+<td style="padding: 12px">In-app</td>
+<td style="padding: 12px"><span style="padding: 4px 10px; border-radius: 999px; background: #C20E1E; color: #FFFFFF; font-size: 12px; font-weight: 700">Failed</span></td>
+<td style="padding: 12px">Jackie</td>
+<td style="padding: 12px 0 12px 12px"><button type="button" style="min-height: 44px; padding: 0 12px; border-radius: 8px; border: 1px solid #C20E1E; background: #FFFFFF; color: #C20E1E; font: inherit; font-weight: 700; cursor: pointer; white-space: nowrap">Send again</button></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; border-top: 1px solid #E4E4E3; padding-top: 12px">
+<span style="color: #6B6B6B; font-size: 13px">Every status:</span>
+<span style="padding: 4px 10px; border-radius: 999px; background: #F1F1F0; color: #4A4A4A; font-size: 12px; font-weight: 700">Draft</span>
+<span style="padding: 4px 10px; border-radius: 999px; background: #FCF1DD; color: #7A4A00; font-size: 12px; font-weight: 700">Needs approval</span>
+<span style="padding: 4px 10px; border-radius: 999px; background: #EAF2F6; color: #265A72; font-size: 12px; font-weight: 700">Approved</span>
+<span style="padding: 4px 10px; border-radius: 999px; background: #CFE0E9; color: #1A3947; font-size: 12px; font-weight: 700">Scheduled</span>
+<span style="padding: 3px 10px; border-radius: 999px; background: #FFFFFF; border: 1px solid #2E6A86; color: #265A72; font-size: 12px; font-weight: 700">Sending</span>
+<span style="padding: 4px 10px; border-radius: 999px; background: #DEF0CC; color: #2A521E; font-size: 12px; font-weight: 700">Sent</span>
+<span style="padding: 4px 10px; border-radius: 999px; background: #FFDBDD; color: #7A1016; font-size: 12px; font-weight: 700">Partially failed</span>
+<span style="padding: 4px 10px; border-radius: 999px; background: #C20E1E; color: #FFFFFF; font-size: 12px; font-weight: 700">Failed</span>
+<span style="padding: 3px 10px; border-radius: 999px; background: #FFFFFF; border: 1px solid #8C8C8C; color: #4A4A4A; font-size: 12px; font-weight: 700">Cancelled</span>
+</div>
+</section>
+
+<div style="display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start">
+
+<section style="flex: 1.5 1 420px; min-width: 0; background: #FFFFFF; border: 1px solid #E4E4E3; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 4px">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; padding-bottom: 8px">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 700; color: #1A1A1A">WhatsApp groups</h2>
+<span style="color: #6B6B6B; font-size: 13px">Company pilot number · connected · last synced today, 5:40 AM</span>
+</div>
+<button type="button" style="min-height: 44px; padding: 0 14px; border-radius: 8px; border: 1px solid #2E6A86; background: #FFFFFF; color: #2E6A86; font: inherit; font-weight: 700; cursor: pointer">Sync groups now</button>
+</div>
+<label style="display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; min-height: 48px; border-top: 1px solid #E4E4E3">
+<span style="flex: 1 1 200px; min-width: 0; font-weight: 500; color: #1A1A1A">Internal test group</span>
+<span style="flex: 1 1 160px; color: #6B6B6B; font-size: 13px">Test sends land here first</span>
+<span style="display: flex; gap: 8px; align-items: center"><input type="checkbox" checked style="width: 18px; height: 18px"> Can receive</span>
+</label>
+<label style="display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; min-height: 48px; border-top: 1px solid #E4E4E3">
+<span style="flex: 1 1 200px; min-width: 0; font-weight: 500; color: #1A1A1A">[COHORT GROUP 1]</span>
+<span style="flex: 1 1 160px; color: #6B6B6B; font-size: 13px">Linked to: [COHORT]</span>
+<span style="display: flex; gap: 8px; align-items: center"><input type="checkbox" checked style="width: 18px; height: 18px"> Can receive</span>
+</label>
+<label style="display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; min-height: 48px; border-top: 1px solid #E4E4E3">
+<span style="flex: 1 1 200px; min-width: 0; font-weight: 500; color: #1A1A1A">[COHORT GROUP 2]</span>
+<span style="flex: 1 1 160px; color: #6B6B6B; font-size: 13px">Linked to: [COHORT]</span>
+<span style="display: flex; gap: 8px; align-items: center"><input type="checkbox" checked style="width: 18px; height: 18px"> Can receive</span>
+</label>
+<label style="display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; min-height: 48px; border-top: 1px solid #E4E4E3">
+<span style="flex: 1 1 200px; min-width: 0; font-weight: 500; color: #1A1A1A">[ALUMNI GROUP]</span>
+<span style="flex: 1 1 160px; color: #7A1016; font-size: 13px">Last message failed · check that the number is still in the group</span>
+<span style="display: flex; gap: 8px; align-items: center"><input type="checkbox" checked style="width: 18px; height: 18px"> Can receive</span>
+</label>
+<label style="display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; min-height: 48px; border-top: 1px solid #E4E4E3">
+<span style="flex: 1 1 200px; min-width: 0; font-weight: 500; color: #1A1A1A">[OTHER GROUP]</span>
+<span style="flex: 1 1 160px; color: #6B6B6B; font-size: 13px">Not linked to an audience</span>
+<span style="display: flex; gap: 8px; align-items: center"><input type="checkbox" style="width: 18px; height: 18px"> Can receive</span>
+</label>
+<p style="margin: 8px 0 0; color: #6B6B6B; font-size: 13px">Only groups marked "Can receive" ever appear as choices when composing. A group shows up here after its admin adds the company number.</p>
+</section>
+
+<div style="flex: 1 1 300px; min-width: 0; display: flex; flex-direction: column; gap: 24px">
+<section style="background: #FFFFFF; border: 1px solid #E4E4E3; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 700; color: #1A1A1A">Safety controls</h2>
+<label style="display: flex; gap: 10px; align-items: center; min-height: 36px"><input type="checkbox" checked style="width: 18px; height: 18px"> Quiet hours, 9:00 PM to 8:00 AM Central</label>
+<label style="display: flex; gap: 10px; align-items: center; min-height: 36px"><input type="checkbox" checked style="width: 18px; height: 18px"> Block the same message to the same group twice</label>
+<label style="display: flex; gap: 10px; align-items: center; min-height: 36px"><input type="checkbox" checked style="width: 18px; height: 18px"> Email me when something fails</label>
+<button type="button" style="min-height: 44px; padding: 0 16px; border-radius: 8px; border: 0; background: #C20E1E; color: #FFFFFF; font: inherit; font-weight: 700; cursor: pointer">Pause all sending</button>
+<span style="color: #6B6B6B; font-size: 13px">Pausing holds every scheduled message on every channel until you turn it back on. Nothing is lost.</span>
+</section>
+
+<section style="background: #FFFFFF; border: 1px solid #E4E4E3; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 4px">
+<h2 style="margin: 0 0 8px; font-size: 18px; font-weight: 700; color: #1A1A1A">Activity log</h2>
+<div style="padding: 10px 0; border-top: 1px solid #E4E4E3"><strong style="color: #1A1A1A">Jackie approved</strong> Demo Tuesday: announcement<br><span style="color: #6B6B6B; font-size: 13px">Thu, Nov 19 · 4:12 PM · draft 3 · 3 destinations</span></div>
+<div style="padding: 10px 0; border-top: 1px solid #E4E4E3"><strong style="color: #1A1A1A">AI drafted</strong> Demo Tuesday: reminder, 1 day before<br><span style="color: #6B6B6B; font-size: 13px">Thu, Nov 19 · 4:13 PM · waiting for approval</span></div>
+<div style="padding: 10px 0; border-top: 1px solid #E4E4E3"><strong style="color: #1A1A1A">Jackie edited</strong> Open House: announcement<br><span style="color: #6B6B6B; font-size: 13px">Thu, Nov 19 · 3:50 PM · draft 1 to draft 2</span></div>
+<a href="#" style="font-size: 13px; font-weight: 500; padding-top: 8px">See the full log</a>
+</section>
+</div>
+
+</div>
+</main>
+</div>
+
+</body>
+</html>

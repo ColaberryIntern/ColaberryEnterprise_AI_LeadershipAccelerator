@@ -3,8 +3,10 @@ import { sequelize } from '../config/database';
 
 export type CommunityNotificationType =
   | 'mention' | 'reply' | 'like'
-  | 'friend_request' | 'friend_accepted' | 'new_message';
-export type CommunityNotificationSourceType = 'post' | 'comment' | 'friendship' | 'dm';
+  | 'friend_request' | 'friend_accepted' | 'new_message'
+  // Communications Hub (CH7.1): a program announcement; source_id is the comms_hub_messages id.
+  | 'announcement';
+export type CommunityNotificationSourceType = 'post' | 'comment' | 'friendship' | 'dm' | 'comms_hub';
 
 export interface CommunityNotificationAttributes {
   id?: string;

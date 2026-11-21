@@ -14,6 +14,8 @@ export interface NotificationPlace { buildingId: BuildingId; route: string }
 
 export const FEED_PLACE: NotificationPlace = { buildingId: 'commons', route: '/portal/community' };
 export const PEOPLE_PLACE: NotificationPlace = { buildingId: 'commons', route: '/portal/community/people' };
+/** A program announcement (Communications Hub) is about an event: it opens Events, a Commons room. */
+export const EVENTS_PLACE: NotificationPlace = { buildingId: 'commons', route: '/portal/events' };
 
 export function notificationPlace(type: CommunityNotification['notification_type']): NotificationPlace {
   switch (type) {
@@ -25,6 +27,8 @@ export function notificationPlace(type: CommunityNotification['notification_type
     case 'friend_accepted':
     case 'new_message':
       return PEOPLE_PLACE;
+    case 'announcement':
+      return EVENTS_PLACE;
     default: {
       const unknownType: never = type;
       void unknownType;

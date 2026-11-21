@@ -94,6 +94,39 @@ describe('the bell, campus on: through the door to the place', () => {
   });
 });
 
+describe('Communications Hub announcements (CH7.1)', () => {
+  const announce = (a: CommunityNotification['announcement']): CommunityNotification => ({
+    id: 'n-ann', notification_type: 'announcement', source_type: 'comms_hub', source_id: 'msg-1', read: true, created_at: new Date().toISOString(),
+    actor: { id: 't', display_name: 'Colaberry Team', avatar_url: null }, announcement: a,
+  } as CommunityNotification);
+  async function open(n: CommunityNotification): Promise<void> {
+    mockItems = [n];
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    await act(async () => { root = createRoot(container); root.render(<NotificationBell />); });
+    await act(async () => { (container.querySelector('.cm-bell-btn') as HTMLButtonElement).click(); });
+    for (let i = 0; i < 3; i++) await act(async () => { await Promise.resolve(); });
+  }
+  it('has its own campus place: Events, in the commons', () => {
+    expect(notificationPlace('announcement')).toEqual({ buildingId: 'commons', route: '/portal/events' });
+  });
+  it("shows the message's own words, and opens Events (campus off)", async () => {
+    mockActive = false;
+    await open(announce({ title: 'Demo Tuesday, Dec 1', body: '6:00 PM CST', event_id: 'e1' }));
+    expect(container.querySelector('.cm-notif-text')!.textContent).toBe('Demo Tuesday, Dec 1: 6:00 PM CST');
+    await act(async () => { (container.querySelector('.cm-notif') as HTMLButtonElement).click(); });
+    expect(assigned).toEqual(['/portal/events']);
+  });
+  it('through the campus door to Events (campus on); words missing still reads sensibly', async () => {
+    mockActive = true;
+    await open(announce(null));
+    expect(container.querySelector('.cm-notif-text')!.textContent).toBe('Colaberry Team posted an announcement');
+    await act(async () => { (container.querySelector('.cm-notif') as HTMLButtonElement).click(); });
+    expect(mockDoor).toEqual(['/portal/events']);
+    expect(assigned).toEqual([]);
+  });
+});
+
 describe("C23 (rule R10): the bell closing without a pick", () => {
   it("tells the campus home to recenter, from the bell again or a press outside; a pick does not", async () => {
     mockActive = true;

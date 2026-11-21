@@ -28,6 +28,7 @@ import { signLivePlayback, CloudflareStreamError } from '../services/broadcast/p
 import BroadcastOccurrence from '../models/BroadcastOccurrence';
 // The producer test, moved out when a second controller needed it — see participantStaff.ts.
 import { isStaff } from '../middlewares/participantStaff';
+import { hubThumbnailsForOccurrences } from '../services/commsHub/live/hubBroadcastLinks';
 
 /**
  * Broadcast HTTP surface.
@@ -581,6 +582,9 @@ export async function getReplayBroadcasts(req: Request, res: Response): Promise<
     // D13, keyed the same way and for the same reason: the projection omits rows, so position
     // cannot be trusted to line the two arrays up.
     const playableById = new Map(occurrences.map((o) => [o.id, o.playable]));
+    // CH5.3: a Communications Hub event's replay shows the thumbnail the organizer chose. Read once for
+    // the whole list; it degrades to no picture (never a failed list) if the lookup fails.
+    const hubThumbs = await hubThumbnailsForOccurrences(occurrences.map((o) => o.id));
 
     res.json({
       states: REPLAY_DISCOVERY_STATES,
@@ -604,6 +608,8 @@ export async function getReplayBroadcasts(req: Request, res: Response): Promise<
          * from a permission they did not have.
          */
         playable: playableById.get(item.id) ?? false,
+        /** The chosen Communications Hub thumbnail (public, 16:9), or null for any other replay. */
+        thumbnail_url: hubThumbs.get(item.id) ?? null,
       })),
     });
   } catch (err) {

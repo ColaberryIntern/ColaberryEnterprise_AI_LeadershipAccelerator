@@ -5,6 +5,11 @@ import AdminLayout from '../components/Layout/AdminLayout';
 const AdminChangePasswordPage = lazy(() => import('../pages/admin/AdminChangePasswordPage'));
 const CareerReviewPage = lazy(() => import('../pages/admin/CareerReviewPage'));
 const PlacementStudentsPage = lazy(() => import('../pages/admin/PlacementStudentsPage'));
+const CommsHubLayout = lazy(() => import('../components/admin/commsHub/CommsHubLayout'));
+const CommsHubTodayTab = lazy(() => import('../components/admin/commsHub/TodayTab'));
+const CommsHubEventsTab = lazy(() => import('../components/admin/commsHub/EventsTab'));
+const CommsHubComposeTab = lazy(() => import('../components/admin/commsHub/ComposeTab'));
+const CommsHubScheduleTab = lazy(() => import('../components/admin/commsHub/ScheduleTab'));
 const AdminLoginPage = lazy(() => import('../pages/admin/AdminLoginPage'));
 const AdminEnterpriseClientsPage = lazy(() => import('../pages/admin/AdminEnterpriseClientsPage'));
 const AdminDashboardPage = lazy(() => import('../pages/admin/AdminDashboardPage'));
@@ -204,6 +209,13 @@ const adminRoutes = (
             missing sidebar was the visible symptom of the missing guard. */}
         <Route path="/admin/career-review" element={<CareerReviewPage />} />
         <Route path="/admin/placement/students" element={<PlacementStudentsPage />} />
+        {/* Communications Hub (CH1.3): one route, four tabs as child routes so a refresh keeps the tab. */}
+        <Route path="/admin/comms-hub" element={<CommsHubLayout />}>
+          <Route index element={<CommsHubTodayTab />} />
+          <Route path="events" element={<CommsHubEventsTab />} />
+          <Route path="compose" element={<CommsHubComposeTab />} />
+          <Route path="schedule" element={<CommsHubScheduleTab />} />
+        </Route>
         {/* Account self-service: reachable by every admin identity regardless
             of section scope (see UNIVERSAL_ADMIN_PATHS in adminNav.ts). */}
         <Route path="/admin/change-password" element={<AdminChangePasswordPage />} />

@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import PortalShell from '../today/PortalShell';
 import CondensedHeaderCard from '../today/CondensedHeaderCard';
 import { fetchPublicEvents, OpenHouseView } from '../../../services/onboardingApi';
+import HubWatchLive, { watchOccurrenceId } from '../../../components/portal/HubWatchLive';
 import './EventsPage.css';
 
 /**
@@ -57,6 +58,18 @@ export function truncateBlurb(text: string | null, max = BLURB_MAX): { text: str
   return { text: slice.slice(0, lastSpace > 40 ? lastSpace : max).trimEnd(), cut: true };
 }
 
+/**
+ * CH2.3: where a member watches an event that is live now, or null. Only an internal portal path
+ * counts (the hub's broadcast viewer), so a stray absolute URL can never become a "Watch live" link.
+ */
+export function watchLiveHref(ev: Pick<OpenHouseView, 'is_live' | 'watch_url'>): string | null {
+  if (!ev.is_live || !ev.watch_url) return null;
+  return ev.watch_url.startsWith('/portal/') ? ev.watch_url : null;
+}
+
+/** CH5.3: kept as a named export for callers of this page module. */
+export { watchOccurrenceId };
+
 /** Group events by calendar month so a long list stays scannable. */
 export function groupByMonth(events: OpenHouseView[]): Array<{ key: string; label: string; items: OpenHouseView[] }> {
   const out: Array<{ key: string; label: string; items: OpenHouseView[] }> = [];
@@ -80,6 +93,7 @@ const EventCard: React.FC<{ ev: OpenHouseView; focused?: boolean }> = ({ ev, foc
   // An Eventbrite CDN URL can 404 or be blocked; fall back to the lettered tile
   // rather than leaving a broken-image frame in the grid.
   const [imgBroken, setImgBroken] = useState(false);
+  const liveId = watchOccurrenceId(ev);
   const blurb = truncateBlurb(ev.description);
   const showImage = Boolean(ev.image_url) && !imgBroken;
 
@@ -153,11 +167,24 @@ const EventCard: React.FC<{ ev: OpenHouseView; focused?: boolean }> = ({ ev, foc
         )}
       </div>
 
+      {/* CH2.3: a Communications Hub event streaming now; same tab, it is a portal page. */}
+      {watchLiveHref(ev) && !liveId && (
+        <div className="evt-foot">
+          <a className="evt-btn" href={watchLiveHref(ev) as string} data-testid={`evt-watch-${ev.id}`}>Watch live</a>
+        </div>
+      )}
+      {/* CH5.3: a hub event on air opens in the portal's own player (the mini-player keeps playing as the member moves around). */}
+      {liveId && (
+        <div className="evt-foot">
+          <HubWatchLive ev={ev} />
+        </div>
+      )}
       {/* C27 (v6 D5): one-tap Sign up (Eventbrite is the record), or "You're going" once Eventbrite has you */}
       {ev.is_registered && (
         <div className="evt-foot"><span className="evt-going" data-testid={`evt-going-${ev.id}`}>✓ You&rsquo;re going</span></div>
       )}
-      {ev.registration_url && !ev.is_registered && (
+      {/* While an event is live, Watch live is the one action; signing up for it has passed. */}
+      {ev.registration_url && !ev.is_registered && !watchLiveHref(ev) && !liveId && (
         <div className="evt-foot">
           <a
             className="evt-btn"

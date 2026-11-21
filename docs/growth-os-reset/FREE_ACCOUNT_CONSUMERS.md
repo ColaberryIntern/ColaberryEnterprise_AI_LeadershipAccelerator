@@ -57,7 +57,7 @@ Two refinements the first scan needed, both recorded because they changed the an
    consumer into the reporting bucket, where it would never have been given a behaviour test. A
    rule was added for that form and the file is now row 29. Branching: 31 → 28 → **29**.
 
-## BRANCHING — 37 files
+## BRANCHING — 38 files
 
 **Row 17 is retired, and why is worth recording.** It was `services/freeSignupService.ts`, which
 used to decide `tier: 'guest'` itself. T202b made it delegate to the canonical service, so it no
@@ -108,6 +108,7 @@ any row does not.
 | 36 | `services/agentDomain/domainAgentIdentitySeed.ts` | writes `'standard'` | unchanged | unchanged | **Added by AF3.1.** Seeds the ten Agent Factory domain agents, one `Enrollment` each, as `'standard'` with `portal_enabled: false` so none of them appears as a learner. Same reasoning as rows 25 to 27: an agent identity is not a free account, neither population moves, and the T207 backfill skips it. One difference is worth recording rather than inheriting. These addresses are **derived** from the domain key at runtime, not written as string literals, so `AGENT_IDENTITY_EMAILS` cannot pin them and the drift guard that re-derives that list from the seed files finds nothing here to pin. What actually excludes them is the `staff_email` and `staff_role` terms, which is the open-ended case `freeAccountCoherenceBackfill.test.ts` already covers by name. |
 | 37 | `services/mayaIdentitySeed.ts` | writes `'standard'` | unchanged | unchanged | **Added 2026-10-27, when Maya was given a real staff identity.** Seeds her `Enrollment` as `'standard'` with `portal_enabled: false`, so she is not a learner. Same reasoning as rows 25 to 27 and 36: an agent identity is not a free account and neither population moves. Unlike row 36's ten domain agents, whose addresses are derived from the domain key at runtime, hers is a string literal in the seed file, so it is pinned by name in `AGENT_IDENTITY_EMAILS` rather than relying on the `staff_email` term alone. (The address itself is deliberately not written here: `verifyGrowthOsResetCitations.js` forbids email addresses in these docs, and it was right to reject the first version of this row.) Finding that out exposed a real gap: the drift guard that is supposed to re-derive that list scans a **hardcoded** list of seed paths, so a brand-new seed file is invisible to it. `mayaIdentitySeed.ts` was added to that list; globbing it would close the class and is left as its own change. |
 | 38 | `services/maya/mayaWelcomeService.ts` | `e.enrollment_type !== 'explorer'` | **CHANGES** | unchanged | **Added by M32 (2026-11-09).** Maya's in-app welcome considers ONLY Explorer enrollments, so population A, which gains `enrollment_type: 'explorer'`, becomes eligible for it and population B already was. It is shadow by default: an eligible person gets one ledger row and NO message until Ali promotes `sendInAppWelcome` and turns on the M29 flags. It never reads `tier`. Behavior test: `services/maya/__tests__/mayaWelcomeService.test.ts` ("not an Explorer -> nothing"). |
+| 39 | `services/commsHub/connectors/teamIdentity.ts` | writes `'standard'` | unchanged | unchanged | **Added by the Communications Hub (CH7.1, 2026-11-20).** Find-or-creates the one "Colaberry Team" `Enrollment` that authors hub posts and in-app announcements, as `'standard'` with `tier: 'member'`, `portal_enabled: false`, `cohort_id` null and `payment_mode: 'test'`. A program identity, not a person and not a free account, so neither population moves. It is outside the T207 backfill population by its tier (that backfill selects `'standard'` with `tier = 'guest'`), and its address is on the hub's program domain, which `IS_STAFF_SQL` counts as staff, so it is out of revenue and funnel numbers. Missed at CH7.1 and caught by this file's test at the CH7.6 checkpoint. |
 
 **Row 31 was `services/appPaymentReconcileService.ts` and is gone, C10.17 Phase 2.** It was in
 this table because it assigned `enrollment_type = 'standard'` in raw SQL beside the paid flag.
@@ -136,8 +137,8 @@ asserts them from the parsed cells so they cannot drift again:
 | Changes for population A | **15** | `grep -cE '^\| [0-9]+ \| ` + "`[^`]+`" + ` \| [^\|]*\| \*\*CHANGES\*\* \|'` |
 | Changes for population B | **3** (rows 1, 13 and 32) | `grep -cE '\| — \| \*\*CHANGES\*\* \|'` |
 | Writers | **5** | `grep -c "\| writer \| writer \|"` |
-| Unchanged, with a stated reason | **14** | `grep -c "\| unchanged \| unchanged \|"` |
-| **Total** | **37** | matches the generator's `BRANCHING` count |
+| Unchanged, with a stated reason | **15** | `grep -c "\| unchanged \| unchanged \|"` |
+| **Total** | **38** | matches the generator's `BRANCHING` count |
 
 ## REPORTING — 19 files
 

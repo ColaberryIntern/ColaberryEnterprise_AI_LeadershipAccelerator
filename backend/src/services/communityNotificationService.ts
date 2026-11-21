@@ -1,6 +1,8 @@
 import CommunityNotification, { CommunityNotificationType, CommunityNotificationSourceType } from '../models/CommunityNotification';
 import CommunityMember from '../models/CommunityMember';
 import { getOrCreateMember } from './communityService';
+import CommsHubDraft from '../models/CommsHubDraft';
+import CommsHubMessage from '../models/CommsHubMessage';
 
 export interface NotificationItem {
   id: string;
@@ -12,6 +14,23 @@ export interface NotificationItem {
   read: boolean;
   created_at: Date;
   actor: { id: string; display_name: string; avatar_url: string | null } | null;
+  /** A Communications Hub announcement's own words (the in-app draft) and the event it is about. */
+  announcement?: { title: string | null; body: string; event_id: string | null } | null;
+}
+
+/** The in-app words for each announced hub message, read once for the whole list (CH7.1). */
+async function announcementsFor(messageIds: string[]): Promise<Map<string, NonNullable<NotificationItem['announcement']>>> {
+  const out = new Map<string, NonNullable<NotificationItem['announcement']>>();
+  if (messageIds.length === 0) return out;
+  const [drafts, messages] = await Promise.all([
+    CommsHubDraft.findAll({ where: { message_id: messageIds, channel: 'in_app' }, order: [['version', 'DESC']] }),
+    CommsHubMessage.findAll({ where: { id: messageIds }, attributes: ['id', 'event_id'] }),
+  ]);
+  const eventOf = new Map(messages.map((m) => [m.id, m.event_id ?? null]));
+  for (const d of drafts) {
+    if (!out.has(d.message_id)) out.set(d.message_id, { title: d.title ?? null, body: d.body, event_id: eventOf.get(d.message_id) ?? null });
+  }
+  return out;
 }
 
 /**
@@ -56,6 +75,9 @@ export async function listNotifications(enrollmentId: string): Promise<Notificat
     limit: 50,
   });
 
+  const announced = await announcementsFor(
+    Array.from(new Set(notifications.filter((n: any) => n.source_type === 'comms_hub').map((n: any) => n.source_id as string))),
+  );
   return notifications.map((n: any) => ({
     id: n.id,
     notification_type: n.notification_type,
@@ -64,6 +86,7 @@ export async function listNotifications(enrollmentId: string): Promise<Notificat
     read: n.read_at !== null,
     created_at: n.created_at,
     actor: n.actor ? { id: n.actor.id, display_name: n.actor.display_name, avatar_url: n.actor.avatar_url } : null,
+    ...(n.source_type === 'comms_hub' ? { announcement: announced.get(n.source_id) ?? null } : {}),
   }));
 }
 

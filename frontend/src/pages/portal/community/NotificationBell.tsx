@@ -12,6 +12,12 @@ import { OPEN_BELL_EVENT } from '../../../components/campus/art/BuildingBadges';
 
 function notifText(n: CommunityNotification): string {
   const who = n.actor?.display_name ?? 'Someone';
+  // A program announcement (Communications Hub) shows its own words: the title, then the short text.
+  if (n.notification_type === 'announcement') {
+    const a = n.announcement;
+    if (!a) return `${who} posted an announcement`;
+    return a.title ? `${a.title}: ${a.body}` : a.body;
+  }
   if (n.notification_type === 'friend_request') return `${who} sent you a friend request`;
   if (n.notification_type === 'friend_accepted') return `${who} accepted your friend request`;
   if (n.notification_type === 'new_message') return `${who} sent you a message`;
@@ -75,6 +81,8 @@ const NotificationBell: React.FC<{ onDismissed?: () => void }> = ({ onDismissed 
     if (campusActive) { enterThroughDoor(notificationPlace(n.notification_type).route, null); return; }
     // Friend / DM notifications point at the rail (present on every page) — no jump.
     if (n.source_type === 'friendship' || n.source_type === 'dm') return;
+    // A program announcement is about an event: open Events.
+    if (n.notification_type === 'announcement') { window.location.assign('/portal/events'); return; }
     window.location.assign('/portal/community');
   };
 

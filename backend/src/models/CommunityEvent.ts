@@ -12,6 +12,8 @@ export interface CommunityEventAttributes {
   starts_at: Date;
   ends_at?: Date | null;
   location_url?: string | null;
+  // CH2.1: set when a Communications Hub event wrote this calendar row (one per audience cohort).
+  hub_event_id?: string | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -25,6 +27,7 @@ class CommunityEvent extends Model<CommunityEventAttributes> implements Communit
   declare starts_at: Date;
   declare ends_at: Date | null;
   declare location_url: string | null;
+  declare hub_event_id: string | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -65,6 +68,10 @@ CommunityEvent.init(
     },
     location_url: {
       type: DataTypes.STRING(500),
+      allowNull: true,
+    },
+    hub_event_id: {
+      type: DataTypes.UUID,
       allowNull: true,
     },
   },

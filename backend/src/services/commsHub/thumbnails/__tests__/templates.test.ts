@@ -1,0 +1,150 @@
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const sharp = require('sharp');
+import { createHash } from 'crypto';
+import { SIZES, estimateWidth, fitText, photoSlots, regions, wrap, escapeXml, type ThumbSize } from '../templateLayout';
+import { TEMPLATES, renderTemplateSvg } from '../templateSvg';
+import { renderAllSizes, renderTemplate, renderOverlayAllSizes } from '../templateRender';
+
+/** CH4.2 branded templates: text always fits its box, text and pictures never overlap, 9 PNGs, deterministic. */
+const LONG = 'Forward Deployed AI Engineer Accelerator Open House and Info Session for Working Professionals Everywhere';
+const SIZE_KEYS = Object.keys(SIZES) as ThumbSize[];
+
+describe('CH4.2 text fitting (pure)', () => {
+  it('wrap never produces a line wider than the box, even for one very long word', () => {
+    for (const text of [LONG, 'Supercalifragilisticexpialidocious'.repeat(4), 'a']) {
+      for (const width of [200, 600, 900]) {
+        for (const line of wrap(text, 40, width)) expect(estimateWidth(line, 40)).toBeLessThanOrEqual(width);
+      }
+    }
+  });
+
+  it('fitText picks the largest size that fits; a short title stays big, a long one shrinks', () => {
+    const box = { x: 0, y: 0, w: 800, h: 400 };
+    const short = fitText('Demo Tuesday', box, { maxSize: 140, minSize: 40, maxLines: 3 });
+    const long = fitText(LONG, box, { maxSize: 140, minSize: 40, maxLines: 3 });
+    expect(short.fontSize).toBeGreaterThan(long.fontSize);
+    for (const f of [short, long]) {
+      expect(f.lines.length).toBeLessThanOrEqual(3);
+      expect(f.lines.length * f.lineHeight).toBeLessThanOrEqual(box.h + 1);
+      for (const l of f.lines) expect(estimateWidth(l, f.fontSize)).toBeLessThanOrEqual(box.w);
+    }
+  });
+
+  it('when even the smallest size cannot fit, the text is shortened with ... and says so', () => {
+    const f = fitText(LONG.repeat(3), { x: 0, y: 0, w: 300, h: 120 }, { maxSize: 60, minSize: 30, maxLines: 2 });
+    expect(f.truncated).toBe(true);
+    expect(f.lines[f.lines.length - 1].endsWith('...')).toBe(true);
+    for (const l of f.lines) expect(estimateWidth(l, f.fontSize)).toBeLessThanOrEqual(300);
+  });
+
+  it('text is escaped, so a headline cannot inject SVG', () => {
+    expect(escapeXml('<script>&"\'')).toBe('&lt;script&gt;&amp;&quot;&apos;');
+    const { svg } = renderTemplateSvg('bold_cherry', '16x9', { headline: '<image href="x"/>', supporting: null, badge: null }, 0);
+    expect(svg).not.toContain('<image');
+  });
+});
+
+describe('CH4.2 layout: text and pictures never overlap', () => {
+  it.each(SIZE_KEYS)('%s with 0 to 3 pictures', (size) => {
+    const { w, h } = SIZES[size];
+    for (let n = 0; n <= 3; n += 1) {
+      const r = regions(size, n);
+      expect(r.text.x + r.text.w).toBeLessThanOrEqual(w);
+      expect(r.text.y + r.text.h).toBeLessThanOrEqual(h);
+      if (n === 0) { expect(r.photos).toBeNull(); continue; }
+      const p = r.photos!;
+      const overlapX = r.text.x < p.x + p.w && p.x < r.text.x + r.text.w;
+      const overlapY = r.text.y < p.y + p.h && p.y < r.text.y + r.text.h;
+      expect(overlapX && overlapY).toBe(false);
+      const slots = photoSlots(p, n);
+      expect(slots).toHaveLength(n);
+      expect(slots.reduce((s, x) => s + x.w, 0)).toBe(p.w);
+    }
+  });
+});
+
+describe('CH4.2 rendering (real sharp)', () => {
+  const text = { headline: 'Demo Tuesday', supporting: 'Live builds. Real feedback.', badge: 'TUE \u00B7 6:00 PM CST' };
+  let photo: Buffer;
+  beforeAll(async () => { photo = await sharp({ create: { width: 600, height: 800, channels: 3, background: { r: 30, g: 90, b: 140 } } }).jpeg().toBuffer(); });
+
+  it('3 templates x 3 sizes = 9 PNGs at exactly the stated dimensions', async () => {
+    let count = 0;
+    for (const t of TEMPLATES) {
+      for (const r of await renderAllSizes(t, text, [photo])) {
+        const meta = await sharp(r.png).metadata();
+        expect(meta.format).toBe('png');
+        expect([meta.width, meta.height]).toEqual([SIZES[r.size].w, SIZES[r.size].h]);
+        count += 1;
+      }
+    }
+    expect(count).toBe(9);
+  }, 60_000);
+
+  it('deterministic: the same inputs give the same bytes', async () => {
+    const a = await renderTemplate('berry_night', '16x9', text, [photo]);
+    const b = await renderTemplate('berry_night', '16x9', text, [photo]);
+    const hash = (x: Buffer) => createHash('sha256').update(x).digest('hex');
+    expect(hash(a.png)).toBe(hash(b.png));
+  });
+
+  it('the picture really lands in its region (the photo colour is there, the text side is the template colour)', async () => {
+    const r = await renderTemplate('clean_white', '16x9', text, [photo]);
+    const { data, info } = await sharp(r.png).raw().toBuffer({ resolveWithObject: true });
+    const px = (x: number, y: number) => { const i = (y * info.width + x) * info.channels; return [data[i], data[i + 1], data[i + 2]]; };
+    expect(px(1500, 450)).toEqual([30, 90, 140]);
+    const [rr, gg, bb] = px(20, 880);
+    expect(rr + gg + bb).toBeGreaterThan(600); // near-white template background
+  });
+
+  // CH4.2 attempt 1: a flat 0.6 em estimate let wide bold capitals run under the photo and off the
+  // canvas. This measures RENDERED pixels: bold cherry draws text in white on red, the photo is solid
+  // blue, so any near-white pixel right of the text box is text that overflowed.
+  const WIDE = [
+    'FORWARD DEPLOYED AI ENGINEER OPEN HOUSE',
+    'AI WORKFLOW MASTERMIND FOR WOMEN IN MANAGEMENT',
+    'MLOPS WORKSHOP: MEMORY, MODELS AND MCP',
+    'Women Who Work With AI: Make Momentum Now',
+    'WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW',
+  ];
+  const CASES: Array<[ThumbSize, number]> = [['16x9', 1], ['3x1', 1], ['1x1', 0], ['16x9', 0]];
+  it.each(WIDE.flatMap((h) => CASES.map(([s, n]) => [h, s, n] as const)))('rendered text stays inside its box: "%s" at %s with %i photo(s)', async (headline, size, n) => {
+    const r = await renderTemplate('bold_cherry', size, { headline, supporting: 'MMMM WWWW MAKE MOMENTUM WITH WORKFLOWS NOW', badge: 'WED \u00B7 10:00 AM CST' }, n ? [photo] : []);
+    const { data, info } = await sharp(r.png).raw().toBuffer({ resolveWithObject: true });
+    const { text } = regions(size, n);
+    const tolerance = 2; // antialiasing at the very edge of a glyph
+    let worst = -1;
+    for (let y = 0; y < info.height; y += 1) {
+      for (let x = Math.ceil(text.x + text.w) + tolerance; x < info.width; x += 1) {
+        const i = (y * info.width + x) * info.channels;
+        if (data[i] > 225 && data[i + 1] > 225 && data[i + 2] > 225) worst = Math.max(worst, x);
+      }
+    }
+    expect(worst).toBe(-1);
+  }, 60_000);
+
+  it('CH4.3 overlay: exact text over AI art, every size at its dimensions, text inside its box, the art kept on the far side', async () => {
+    const art: Buffer = await sharp({ create: { width: 1536, height: 1024, channels: 3, background: { r: 20, g: 120, b: 60 } } }).png().toBuffer();
+    const renders = await renderOverlayAllSizes(art, 'berry_night', { headline: 'FORWARD DEPLOYED AI ENGINEER OPEN HOUSE', supporting: 'See how it works.', badge: 'EVERY TUESDAY \u00B7 6:00 PM CST' });
+    expect(renders.map((r) => r.size).sort()).toEqual(['16x9', '1x1', '3x1']);
+    for (const r of renders) {
+      const { data, info } = await sharp(r.png).raw().toBuffer({ resolveWithObject: true });
+      expect([info.width, info.height]).toEqual([SIZES[r.size].w, SIZES[r.size].h]);
+      const { text } = regions(r.size, 1);
+      for (let y = 0; y < info.height; y += 2) {
+        for (let x = Math.ceil(text.x + text.w) + 2; x < info.width; x += 2) {
+          const i = (y * info.width + x) * info.channels;
+          expect(data[i] > 225 && data[i + 1] > 225 && data[i + 2] > 225).toBe(false);
+        }
+      }
+      // The top-right corner is untouched art at every size (wide scrims cover the left 66%, the square one the bottom 60%).
+      const i = (2 * info.width + (info.width - 3)) * info.channels;
+      expect([data[i], data[i + 1], data[i + 2]]).toEqual([20, 120, 60]);
+    }
+  }, 60_000);
+
+  it('a very long title still renders and reports that it was shortened', async () => {
+    const r = await renderTemplate('bold_cherry', '1x1', { headline: LONG.repeat(2), supporting: null, badge: null }, []);
+    expect(r.truncated).toBe(true);
+  });
+});

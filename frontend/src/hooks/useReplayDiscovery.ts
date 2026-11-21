@@ -32,6 +32,8 @@ import { isTerminalDiscoveryError, type DiscoveryBroadcast } from './useBroadcas
 export interface ReplayBroadcast extends DiscoveryBroadcast {
   /** Epoch ms when the class finished, or null. The list's sort key and its only date. */
   ended_at: number | null;
+  /** CH5.3: a Communications Hub event's chosen thumbnail (16:9), or null/absent for any other replay. */
+  thumbnail_url?: string | null;
   /**
    * D13: whether a recording is bound and there is therefore something to play.
    *

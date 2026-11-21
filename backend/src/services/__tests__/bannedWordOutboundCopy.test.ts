@@ -120,6 +120,10 @@ const BASELINE = {
   // Two occurrences, both inside rule 1: the word itself, and the phrase "feel free",
   // which is also rule 8 (a decline must not reopen the conversation).
   'services/coraPromptRules.ts': [2, "POLICY LIST: Cora's own rule 1 forbids the word and the phrase \"feel free\""],
+  // Added 2026-11-20 (Communications Hub CH3.2), same reasoning as Maya and Cora: the "Write with AI"
+  // event-description prompt NAMES the word in order to forbid it. eventDescribe.ts also drops any
+  // sentence containing it in code (that occurrence is a regex literal, which the scanner does not count).
+  'services/commsHub/prompts/eventDescriptionPrompt.ts': [1, 'POLICY LIST: the event-description prompt forbids the word (807.172(d))'],
   // Moved out of `bannedCopyScanner.ts` when knowledge grounding needed the canonical rule
   // from a pure runtime module: the scanner imports the TypeScript compiler and so cannot be
   // imported outside tests. Same three occurrences, same authority, one fewer declaration of

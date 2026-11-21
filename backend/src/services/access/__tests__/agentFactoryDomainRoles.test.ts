@@ -90,7 +90,9 @@ describe('AF2.3 no existing role was widened', () => {
     revenue: ['dashboard', 'revenue', 'leads'],
     admissions: ['dashboard', 'lead_ingestion', 'internship'],
     support: ['students'],
-    community_organizer: ['dashboard'],
+    // Widened on purpose by CH1.1 (Communications Hub, Ali 2026-11-20): the organizer's job is that page.
+    // It gained only the new key; nothing that existed when AF2.3 was written was added to it.
+    community_organizer: ['dashboard', 'comms_hub'],
     mentor: ['dashboard', 'career_review'],
   };
 

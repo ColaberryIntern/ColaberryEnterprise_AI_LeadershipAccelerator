@@ -32,6 +32,7 @@ import sparkRoutes from './routes/sparkRoutes';
 import trackedLinkRedirectRoutes from './routes/trackedLinkRedirectRoutes';
 import openclawShortLinkRoutes from './routes/openclawShortLinkRoutes';
 import mediaFetchRoutes from './routes/mediaFetchRoutes';
+import commsHubPublicThumbnailRoutes from './routes/commsHubPublicThumbnailRoutes';
 import publicLandingPageRoutes from './routes/publicLandingPageRoutes';
 import publicSnackbarFeedRoutes from './routes/publicSnackbarFeedRoutes';
 import publicTrackingConfigRoutes from './routes/publicTrackingConfigRoutes';
@@ -52,6 +53,7 @@ import { previewProxyMiddleware } from './middlewares/previewProxyMiddleware';
 import { startScheduler } from './services/schedulerService';
 import { startRepoTreeRefresh } from './services/repoTree/repoTreeRefreshService';
 import { startBroadcastHealthLoop } from './services/broadcast/broadcastHealthLoop';
+import { startCommsHubWorker } from './services/commsHub/delivery/commsHubWorkerLoop';
 import { UPLOAD_DIR } from './config/upload';
 import { seedProgramCurriculum } from './seeds/seedProgramCurriculum';
 import { seedDepartments } from './seeds/seedDepartments';
@@ -203,6 +205,7 @@ import { ensurePublishingSchema } from './db/ensurePublishingSchema';
 import { ensureMarketingAttributionSchema } from './db/ensureMarketingAttributionSchema';
 import { ensureBrandGovernanceSchema } from './db/ensureBrandGovernanceSchema';
 import { ensureChannelAccountSchema } from './db/ensureChannelAccountSchema';
+import { ensureCommsHubSchema } from './db/ensureCommsHubSchema';
 import { ensureLandingPageSchema } from './db/ensureLandingPageSchema';
 import { ensureOpenHouseRegistrationSchema } from './db/ensureOpenHouseRegistrationSchema';
 import { ensureOpenHouseReminderSchema } from './db/ensureOpenHouseReminderSchema';
@@ -323,6 +326,9 @@ app.use(openclawShortLinkRoutes);
 // Signed media fetch (/m/...) - public, a provider fetches it at publish time with no session.
 // Same rule as /r/ and /i/: above adminRoutes or the guard 401s it. Pinned by its own test.
 app.use(mediaFetchRoutes);
+// Communications Hub chosen event thumbnails (CH4.4) - public for the same reason: the portal Events
+// card's <img> sends no Bearer token. Above adminRoutes; pinned by commsHubPublicThumbnailRoutes.test.ts.
+app.use(commsHubPublicThumbnailRoutes);
 // Hosted landing pages (GET /p/:brand/:slug) - public server-rendered HTML, the destination of
 // social posts. Same rule as /r/ /i/ /m/ above: a visitor clicking a link in a post has no
 // session, so mounted below adminRoutes this would 401 every click on every campaign. Pinned by
@@ -2291,7 +2297,7 @@ async function ensureMessagingSchema() {
   const statements = [
     `ALTER TABLE room_memberships ADD COLUMN IF NOT EXISTS last_read_at TIMESTAMPTZ`,
     `ALTER TABLE community_notifications DROP CONSTRAINT IF EXISTS ck_community_notifications_type`,
-    `ALTER TABLE community_notifications ADD CONSTRAINT ck_community_notifications_type CHECK (notification_type IN ('mention','reply','like','friend_request','friend_accepted','new_message'))`,
+    `ALTER TABLE community_notifications ADD CONSTRAINT ck_community_notifications_type CHECK (notification_type IN ('mention','reply','like','friend_request','friend_accepted','new_message','announcement'))`,
   ];
   for (const sql of statements) {
     try {
@@ -2851,6 +2857,8 @@ async function start(): Promise<void> {
   // After brand governance: the FK it adds to content_variants needs the accounts table, and
   // the accounts table references brands.
   await ensureChannelAccountSchema();
+  // Communications Hub (CH2.1): after community_events exists, because it adds hub_event_id to it.
+  await ensureCommsHubSchema();
   await ensureLandingPageSchema();
   // AFTER landing_pages exists: this adds content_items.landing_page_id and its foreign key, so
   // the composer can persist the page an operator picked. The column is also in the content_items
@@ -3835,6 +3843,17 @@ async function start(): Promise<void> {
     startBroadcastHealthLoop();
   } catch (err: any) {
     console.warn('[Broadcast] health loop failed to start (non-fatal):', err?.message);
+  }
+
+  /**
+   * Communications Hub sending worker (CH7.2): every minute it sends what Jackie approved and is due,
+   * re-checking pause, status, approval, recipient and quiet hours before each send; it also repairs
+   * live events and drafts promotion-plan messages. Idempotent start; failures are logged, non-fatal.
+   */
+  try {
+    startCommsHubWorker();
+  } catch (err: any) {
+    console.warn('[CommsHub] worker failed to start (non-fatal):', err?.message);
   }
 
   // AI Ops Command Center metrics_daily rollup — runs on the 5-minute

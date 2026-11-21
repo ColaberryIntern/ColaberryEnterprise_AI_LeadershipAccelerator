@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Communications Hub — Events and thumbnail studio</title>
+<!-- DESIGN REFERENCE ONLY. Static mockup of the Communications Hub. All events, dates, counts and names are sample data;
+     [BRACKETED] values are placeholders. Inline hex colors map to tokens in frontend/src/colaberry/tokens/colors.css. Do not copy the inline styles into the app. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Quicksand:wght@700&family=Roboto:wght@400;500;700&display=swap">
+<style>
+body{margin:0}
+a{color:#2E6A86}a:hover{color:#1A3947}
+</style>
+</head>
+<body>
+<div style="display: flex; flex-wrap: wrap; background: #F8F8F7; color: #2B2B2B; font-family: 'Roboto', system-ui, sans-serif; font-size: 14px; line-height: 1.45; min-height: 1760px">
+
+<nav aria-label="Admin sections" style="flex: 1 1 232px; background: #1B1516; padding: 20px 14px; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px">
+<div style="display: flex; align-items: center; gap: 10px; padding: 0 8px">
+<span aria-hidden="true" style="width: 28px; height: 28px; border-radius: 50%; background: #FB2832; display: inline-block"></span>
+<span style="font-family: 'Quicksand', sans-serif; font-weight: 700; font-size: 16px; color: #FFFFFF">Colaberry Admin</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<a href="#" style="color: #CFC9CA; text-decoration: none; padding: 10px 10px; border-radius: 8px">Dashboard</a>
+<a href="#" style="color: #CFC9CA; text-decoration: none; padding: 10px 10px; border-radius: 8px">Student Story</a>
+</div>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<div style="color: #A39C9D; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 0 10px 6px">Campaigns</div>
+<a href="#" style="color: #CFC9CA; text-decoration: none; padding: 10px 10px; border-radius: 8px">Campaigns</a>
+<a href="01-today.html" aria-current="page" style="color: #FFFFFF; font-weight: 700; text-decoration: none; padding: 10px 10px; border-radius: 8px; background: #3A2F31">Communications Hub</a>
+<a href="#" style="color: #CFC9CA; text-decoration: none; padding: 10px 10px; border-radius: 8px">Message log</a>
+<a href="#" style="color: #CFC9CA; text-decoration: none; padding: 10px 10px; border-radius: 8px">Visitors</a>
+</div>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<div style="color: #A39C9D; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 0 10px 6px">Program</div>
+<a href="#" style="color: #CFC9CA; text-decoration: none; padding: 10px 10px; border-radius: 8px">Accelerator</a>
+<a href="#" style="color: #CFC9CA; text-decoration: none; padding: 10px 10px; border-radius: 8px">Live Studio setup</a>
+<a href="#" style="color: #CFC9CA; text-decoration: none; padding: 10px 10px; border-radius: 8px">Community roles</a>
+</div>
+</nav>
+
+<main style="flex: 999 1 560px; min-width: 0; padding: 28px 32px 48px; box-sizing: border-box; display: flex; flex-direction: column; gap: 24px">
+
+<header style="display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; justify-content: space-between">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h1 style="margin: 0; font-size: 28px; line-height: 1.2; font-weight: 700; color: #1A1A1A">Communications Hub</h1>
+<p style="margin: 0; color: #6B6B6B">Create an event once. It lands on the platform, gets a thumbnail, and feeds every message about it.</p>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center">
+<button type="button" style="min-height: 44px; padding: 0 16px; border-radius: 8px; border: 1px solid #C20E1E; background: #FFFFFF; color: #C20E1E; font: inherit; font-weight: 700; cursor: pointer">Pause all sending</button>
+<a href="03-compose-approve.html" style="min-height: 44px; padding: 0 18px; border-radius: 8px; background: #E5121D; color: #FFFFFF; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center">New message</a>
+</div>
+</header>
+
+<nav aria-label="Hub sections" style="display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid #D8D8D8">
+<a href="01-today.html" style="padding: 12px 16px; color: #4A4A4A; font-weight: 500; text-decoration: none; border-bottom: 3px solid transparent">Today</a>
+<a href="02-events-thumbnail-studio.html" aria-current="page" style="padding: 12px 16px; color: #1A1A1A; font-weight: 700; text-decoration: none; border-bottom: 3px solid #E5121D">Events</a>
+<a href="03-compose-approve.html" style="padding: 12px 16px; color: #4A4A4A; font-weight: 500; text-decoration: none; border-bottom: 3px solid transparent">Compose</a>
+<a href="04-schedule-history-groups.html" style="padding: 12px 16px; color: #4A4A4A; font-weight: 500; text-decoration: none; border-bottom: 3px solid transparent">Schedule &amp; history</a>
+</nav>
+
+<section aria-label="Your events" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px">
+<button type="button" aria-pressed="true" style="text-align: left; background: #FFFFFF; border: 2px solid #2E6A86; border-radius: 12px; padding: 14px 16px; font: inherit; color: #2B2B2B; cursor: pointer; display: flex; flex-direction: column; gap: 2px; min-height: 76px">
+<strong style="color: #1A1A1A">Demo Tuesday</strong>
+<span style="color: #6B6B6B; font-size: 13px">Tue, Nov 24 · 6:00 PM CST · weekly</span>
+<span style="color: #2E6A86; font-size: 12px; font-weight: 700">Editing now</span>
+</button>
+<button type="button" style="text-align: left; background: #FFFFFF; border: 1px solid #E4E4E3; border-radius: 12px; padding: 14px 16px; font: inherit; color: #2B2B2B; cursor: pointer; display: flex; flex-direction: column; gap: 2px; min-height: 76px">
+<strong style="color: #1A1A1A">Office Hours</strong>
+<span style="color: #6B6B6B; font-size: 13px">Mon, Nov 30 · 12:00 PM CST · weekly</span>
+<span style="color: #2A521E; font-size: 12px; font-weight: 700">On the platform</span>
+</button>
+<button type="button" style="text-align: left; background: #FFFFFF; border: 1px solid #E4E4E3; border-radius: 12px; padding: 14px 16px; font: inherit; color: #2B2B2B; cursor: pointer; display: flex; flex-direction: column; gap: 2px; min-height: 76px">
+<strong style="color: #1A1A1A">Open House</strong>
+<span style="color: #6B6B6B; font-size: 13px">Thu, Dec 3 · 12:00 PM CST</span>
+<span style="color: #7A4A00; font-size: 12px; font-weight: 700">Needs a thumbnail</span>
+</button>
+<button type="button" style="text-align: left; background: transparent; border: 1px dashed #8C8C8C; border-radius: 12px; padding: 14px 16px; font: inherit; color: #1A1A1A; font-weight: 700; cursor: pointer; min-height: 76px">+ New event</button>
+</section>
+
+<div style="display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start">
+
+<section style="flex: 1 1 400px; min-width: 0; background: #FFFFFF; border: 1px solid #E4E4E3; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; justify-content: space-between; align-items: center; gap: 12px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 700; color: #1A1A1A">Event details</h2>
+<span style="padding: 4px 10px; border-radius: 999px; background: #DEF0CC; color: #2A521E; font-size: 12px; font-weight: 700">On the platform</span>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="ev-title" style="font-weight: 500; color: #1A1A1A">Title</label>
+<input id="ev-title" type="text" value="Demo Tuesday" style="min-height: 44px; padding: 0 12px; border: 1px solid #B4B4B4; border-radius: 8px; font: inherit; box-sizing: border-box; width: 100%">
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="ev-type" style="font-weight: 500; color: #1A1A1A">Type</label>
+<select id="ev-type" style="min-height: 44px; padding: 0 10px; border: 1px solid #B4B4B4; border-radius: 8px; font: inherit; background: #FFFFFF; box-sizing: border-box; width: 100%"><option>Live session</option><option>Open house</option><option>Office hours</option><option>Other</option></select>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="ev-aud" style="font-weight: 500; color: #1A1A1A">Who it is for</label>
+<select id="ev-aud" style="min-height: 44px; padding: 0 10px; border: 1px solid #B4B4B4; border-radius: 8px; font: inherit; background: #FFFFFF; box-sizing: border-box; width: 100%"><option>All active cohorts</option><option>One cohort</option><option>Alumni</option><option>Public</option></select>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="ev-date" style="font-weight: 500; color: #1A1A1A">Date</label>
+<input id="ev-date" type="text" value="Tue, Nov 24, 2026" style="min-height: 44px; padding: 0 12px; border: 1px solid #B4B4B4; border-radius: 8px; font: inherit; box-sizing: border-box; width: 100%">
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="ev-time" style="font-weight: 500; color: #1A1A1A">Time (Central)</label>
+<input id="ev-time" type="text" value="6:00 PM to 7:00 PM" style="min-height: 44px; padding: 0 12px; border: 1px solid #B4B4B4; border-radius: 8px; font: inherit; box-sizing: border-box; width: 100%">
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="ev-rep" style="font-weight: 500; color: #1A1A1A">Repeats</label>
+<select id="ev-rep" style="min-height: 44px; padding: 0 10px; border: 1px solid #B4B4B4; border-radius: 8px; font: inherit; background: #FFFFFF; box-sizing: border-box; width: 100%"><option>Every week on Tuesday</option><option>Does not repeat</option><option>Every 2 weeks</option><option>Monthly</option></select>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="ev-join" style="font-weight: 500; color: #1A1A1A">Join link</label>
+<input id="ev-join" type="url" placeholder="[ZOOM OR LIVE STUDIO LINK]" style="min-height: 44px; padding: 0 12px; border: 1px solid #B4B4B4; border-radius: 8px; font: inherit; box-sizing: border-box; width: 100%">
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="ev-reg" style="font-weight: 500; color: #1A1A1A">Registration link <span style="color: #6B6B6B; font-weight: 400">(optional)</span></label>
+<input id="ev-reg" type="url" placeholder="[REGISTRATION LINK]" style="min-height: 44px; padding: 0 12px; border: 1px solid #B4B4B4; border-radius: 8px; font: inherit; box-sizing: border-box; width: 100%">
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="ev-host" style="font-weight: 500; color: #1A1A1A">Hosts and speakers</label>
+<input id="ev-host" type="text" placeholder="[HOST AND SPEAKER NAMES]" style="min-height: 44px; padding: 0 12px; border: 1px solid #B4B4B4; border-radius: 8px; font: inherit; box-sizing: border-box; width: 100%">
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<div style="display: flex; justify-content: space-between; align-items: center; gap: 12px">
+<label for="ev-desc" style="font-weight: 500; color: #1A1A1A">What it is about</label>
+<button type="button" style="min-height: 44px; padding: 0 12px; border-radius: 8px; border: 1px solid #2E6A86; background: #FFFFFF; color: #2E6A86; font: inherit; font-weight: 700; cursor: pointer">Write with AI</button>
+</div>
+<textarea id="ev-desc" rows="4" style="padding: 10px 12px; border: 1px solid #B4B4B4; border-radius: 8px; font: inherit; box-sizing: border-box; width: 100%; resize: vertical">Three builders demo what they shipped this week and get live feedback. Open to every cohort. Bring one question.</textarea>
+</div>
+
+<fieldset style="border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px">
+<legend style="font-weight: 500; color: #1A1A1A; padding: 0 0 6px">Where it shows on the platform</legend>
+<label style="display: flex; gap: 10px; align-items: center; min-height: 36px"><input type="checkbox" checked style="width: 18px; height: 18px"> Community calendar</label>
+<label style="display: flex; gap: 10px; align-items: center; min-height: 36px"><input type="checkbox" checked style="width: 18px; height: 18px"> Campus events rail</label>
+<label style="display: flex; gap: 10px; align-items: center; min-height: 36px"><input type="checkbox" style="width: 18px; height: 18px"> Public events page</label>
+</fieldset>
+
+<div style="display: flex; flex-wrap: wrap; gap: 10px; padding-top: 4px; border-top: 1px solid #E4E4E3; padding-top: 16px">
+<button type="button" style="min-height: 44px; padding: 0 18px; border-radius: 8px; border: 0; background: #E5121D; color: #FFFFFF; font: inherit; font-weight: 700; cursor: pointer">Save event</button>
+<button type="button" style="min-height: 44px; padding: 0 16px; border-radius: 8px; border: 1px solid #B4B4B4; background: #FFFFFF; color: #1A1A1A; font: inherit; font-weight: 500; cursor: pointer">Duplicate</button>
+<button type="button" style="min-height: 44px; padding: 0 16px; border-radius: 8px; border: 1px solid transparent; background: transparent; color: #C20E1E; font: inherit; font-weight: 500; cursor: pointer">Cancel this event</button>
+</div>
+<p style="margin: 0; color: #6B6B6B; font-size: 13px">Cancelling stops every pending message for this event and offers to draft a cancellation notice.</p>
+</section>
+
+<section style="flex: 1.6 1 520px; min-width: 0; background: #FFFFFF; border: 1px solid #E4E4E3; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 18px">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 700; color: #1A1A1A">AI thumbnail studio</h2>
+<p style="margin: 0; color: #6B6B6B">Add a few pictures and say what the meeting is about. AI builds on-brand options for the video, the feed and WhatsApp.</p>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 16px">
+<div style="flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; gap: 8px">
+<span style="font-weight: 500; color: #1A1A1A">1. Pictures</span>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+<div style="aspect-ratio: 1 / 1; border-radius: 8px; background: #E4E4E3; color: #4A4A4A; font-size: 12px; display: flex; align-items: center; justify-content: center; text-align: center">Speaker photo</div>
+<div style="aspect-ratio: 1 / 1; border-radius: 8px; background: #E4E4E3; color: #4A4A4A; font-size: 12px; display: flex; align-items: center; justify-content: center; text-align: center">Speaker photo</div>
+<button type="button" style="aspect-ratio: 1 / 1; border-radius: 8px; border: 1px dashed #8C8C8C; background: #FFFFFF; color: #1A1A1A; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer">+ Add</button>
+</div>
+<span style="color: #6B6B6B; font-size: 13px">Drop photos, screenshots or a logo. Up to 6.</span>
+</div>
+
+<div style="flex: 1.4 1 280px; min-width: 0; display: flex; flex-direction: column; gap: 10px">
+<span style="font-weight: 500; color: #1A1A1A">2. What it should say</span>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="th-head" style="font-size: 13px; color: #4A4A4A">Headline</label>
+<input id="th-head" type="text" value="Demo Tuesday" style="min-height: 44px; padding: 0 12px; border: 1px solid #B4B4B4; border-radius: 8px; font: inherit; box-sizing: border-box; width: 100%">
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="th-sub" style="font-size: 13px; color: #4A4A4A">Supporting line</label>
+<input id="th-sub" type="text" value="Live builds. Real feedback." style="min-height: 44px; padding: 0 12px; border: 1px solid #B4B4B4; border-radius: 8px; font: inherit; box-sizing: border-box; width: 100%">
+</div>
+<label style="display: flex; gap: 10px; align-items: center; min-height: 36px"><input type="checkbox" checked style="width: 18px; height: 18px"> Show date and time from the event</label>
+</div>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center">
+<button type="button" style="min-height: 44px; padding: 0 18px; border-radius: 8px; border: 0; background: #2E6A86; color: #FFFFFF; font: inherit; font-weight: 700; cursor: pointer">Generate thumbnails</button>
+<button type="button" style="min-height: 44px; padding: 0 16px; border-radius: 8px; border: 1px solid #B4B4B4; background: #FFFFFF; color: #1A1A1A; font: inherit; font-weight: 500; cursor: pointer">Try 3 more</button>
+<span style="color: #6B6B6B; font-size: 13px">Uses Colaberry colors and fonts automatically.</span>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span style="font-weight: 500; color: #1A1A1A">3. Pick one</span>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px">
+
+<button type="button" data-pick="A" aria-pressed="true" style="padding: 0; border: 0; background: transparent; cursor: pointer; font: inherit; text-align: left; display: flex; flex-direction: column; gap: 8px">
+<span style="display: flex; aspect-ratio: 16 / 9; width: 100%; border-radius: 8px; background: #E5121D; box-sizing: border-box; padding: 12px; gap: 8px; align-items: center; outline: 3px solid #2E6A86; outline-offset: 3px">
+<span style="flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 4px">
+<span style="color: #FFFFFF; font-family: 'Quicksand', sans-serif; font-weight: 700; font-size: 20px; line-height: 1.05">Demo Tuesday</span>
+<span style="color: #FFFFFF; font-size: 11px">Live builds. Real feedback.</span>
+<span style="color: #7A1016; background: #FFFFFF; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; align-self: flex-start">TUE · 6 PM CT</span>
+</span>
+<span style="flex: 0 0 34%; aspect-ratio: 1 / 1; border-radius: 50%; background: #FFDBDD; color: #7A1016; font-size: 9px; display: flex; align-items: center; justify-content: center">Photo</span>
+</span>
+<span style="color: #1A1A1A; font-weight: 700">Bold cherry <span style="color: #2E6A86; font-weight: 700">· Selected</span></span>
+</button>
+
+<button type="button" data-pick="B" aria-pressed="false" style="padding: 0; border: 0; background: transparent; cursor: pointer; font: inherit; text-align: left; display: flex; flex-direction: column; gap: 8px">
+<span style="display: flex; aspect-ratio: 16 / 9; width: 100%; border-radius: 8px; background: #1A3947; box-sizing: border-box; overflow: hidden; outline: 3px solid transparent; outline-offset: 3px">
+<span style="flex: 0 0 42%; background: #A6C5D5; color: #1A3947; font-size: 9px; display: flex; align-items: center; justify-content: center">Photo</span>
+<span style="flex: 1 1 0; min-width: 0; padding: 12px; display: flex; flex-direction: column; justify-content: center; gap: 4px">
+<span style="color: #FFFFFF; font-size: 10px; font-weight: 700; letter-spacing: 0.08em">LIVE · TUE 6 PM CT</span>
+<span style="color: #FFFFFF; font-family: 'Quicksand', sans-serif; font-weight: 700; font-size: 18px; line-height: 1.05">Demo Tuesday</span>
+<span style="color: #CFE0E9; font-size: 11px">Live builds. Real feedback.</span>
+</span>
+</span>
+<span style="color: #1A1A1A; font-weight: 700">Berry night <span style="color: #2E6A86; font-weight: 700"></span></span>
+</button>
+
+<button type="button" data-pick="C" aria-pressed="false" style="padding: 0; border: 0; background: transparent; cursor: pointer; font: inherit; text-align: left; display: flex; flex-direction: column; gap: 8px">
+<span style="display: flex; flex-direction: column; aspect-ratio: 16 / 9; width: 100%; border-radius: 8px; background: #FFFFFF; border: 1px solid #D8D8D8; box-sizing: border-box; overflow: hidden; outline: 3px solid transparent; outline-offset: 3px">
+<span style="flex: 1 1 0; min-height: 0; padding: 10px 12px; display: flex; gap: 8px; align-items: center">
+<span style="flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 3px">
+<span style="color: #1A1A1A; font-family: 'Quicksand', sans-serif; font-weight: 700; font-size: 18px; line-height: 1.05">Demo Tuesday</span>
+<span style="color: #4A4A4A; font-size: 11px">Live builds. Real feedback.</span>
+</span>
+<span style="flex: 0 0 24%; aspect-ratio: 1 / 1; border-radius: 6px; background: #E4E4E3; color: #4A4A4A; font-size: 9px; display: flex; align-items: center; justify-content: center">Photo</span>
+</span>
+<span style="background: #C20E1E; color: #FFFFFF; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; padding: 5px 12px">TUE · 6 PM CT · COLABERRY</span>
+</span>
+<span style="color: #1A1A1A; font-weight: 700">Clean white <span style="color: #2E6A86; font-weight: 700"></span></span>
+</button>
+
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<label for="th-fix" style="font-weight: 500; color: #1A1A1A">4. Ask for a change <span style="color: #6B6B6B; font-weight: 400">(optional)</span></label>
+<div style="display: flex; flex-wrap: wrap; gap: 10px">
+<input id="th-fix" type="text" placeholder="e.g. Make the headline bigger and put both speakers side by side" style="flex: 1 1 280px; min-height: 44px; padding: 0 12px; border: 1px solid #B4B4B4; border-radius: 8px; font: inherit; box-sizing: border-box">
+<button type="button" style="min-height: 44px; padding: 0 16px; border-radius: 8px; border: 1px solid #2E6A86; background: #FFFFFF; color: #2E6A86; font: inherit; font-weight: 700; cursor: pointer">Update</button>
+</div>
+</div>
+
+<fieldset style="border: 0; border-top: 1px solid #E4E4E3; padding: 16px 0 0; margin: 0; display: flex; flex-direction: column; gap: 4px">
+<legend style="font-weight: 500; color: #1A1A1A; padding: 0; float: left; width: 100%; margin-bottom: 6px">Sizes to save</legend>
+<label style="display: flex; gap: 10px; align-items: center; min-height: 36px; clear: both"><input type="checkbox" checked style="width: 18px; height: 18px"> Video thumbnail, 16:9 <span style="color: #6B6B6B">· recording and Live Studio</span></label>
+<label style="display: flex; gap: 10px; align-items: center; min-height: 36px"><input type="checkbox" checked style="width: 18px; height: 18px"> Square flyer, 1:1 <span style="color: #6B6B6B">· WhatsApp groups</span></label>
+<label style="display: flex; gap: 10px; align-items: center; min-height: 36px"><input type="checkbox" checked style="width: 18px; height: 18px"> Wide banner, 3:1 <span style="color: #6B6B6B">· community feed and campus rail</span></label>
+<div style="display: flex; flex-wrap: wrap; gap: 10px; padding-top: 10px">
+<button type="button" style="min-height: 44px; padding: 0 18px; border-radius: 8px; border: 0; background: #E5121D; color: #FFFFFF; font: inherit; font-weight: 700; cursor: pointer">Use for this event</button>
+<button type="button" style="min-height: 44px; padding: 0 16px; border-radius: 8px; border: 1px solid #B4B4B4; background: #FFFFFF; color: #1A1A1A; font: inherit; font-weight: 500; cursor: pointer">Download</button>
+<button type="button" style="min-height: 44px; padding: 0 16px; border-radius: 8px; border: 1px solid #B4B4B4; background: #FFFFFF; color: #1A1A1A; font: inherit; font-weight: 500; cursor: pointer">Upload my own instead</button>
+</div>
+</fieldset>
+</section>
+</div>
+
+<section style="background: #FFFFFF; border: 1px solid #E4E4E3; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 4px">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; padding-bottom: 10px">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 700; color: #1A1A1A">Promotion plan for this event</h2>
+<p style="margin: 0; color: #6B6B6B">AI suggests the messages and timing. Each one still comes to you for approval, and repeats every week with the event.</p>
+</div>
+<a href="03-compose-approve.html" style="min-height: 44px; padding: 0 18px; border-radius: 8px; background: #2E6A86; color: #FFFFFF; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center">Draft these messages</a>
+</div>
+
+<label style="display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; padding: 12px 0; border-top: 1px solid #E4E4E3">
+<input type="checkbox" checked style="width: 18px; height: 18px">
+<span style="flex: 1 1 200px; min-width: 0; font-weight: 700; color: #1A1A1A">Announcement</span>
+<span style="flex: 1 1 180px; color: #4A4A4A">4 days before, 12:00 PM</span>
+<span style="flex: 1.4 1 240px; color: #4A4A4A">Community feed, WhatsApp groups</span>
+<span style="padding: 4px 10px; border-radius: 999px; background: #CFE0E9; color: #1A3947; font-size: 12px; font-weight: 700">Scheduled</span>
+</label>
+<label style="display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; padding: 12px 0; border-top: 1px solid #E4E4E3">
+<input type="checkbox" checked style="width: 18px; height: 18px">
+<span style="flex: 1 1 200px; min-width: 0; font-weight: 700; color: #1A1A1A">Reminder</span>
+<span style="flex: 1 1 180px; color: #4A4A4A">1 day before, 6:00 PM</span>
+<span style="flex: 1.4 1 240px; color: #4A4A4A">Community feed, WhatsApp groups</span>
+<span style="padding: 4px 10px; border-radius: 999px; background: #FCF1DD; color: #7A4A00; font-size: 12px; font-weight: 700">Needs approval</span>
+</label>
+<label style="display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; padding: 12px 0; border-top: 1px solid #E4E4E3">
+<input type="checkbox" checked style="width: 18px; height: 18px">
+<span style="flex: 1 1 200px; min-width: 0; font-weight: 700; color: #1A1A1A">Starting in 1 hour</span>
+<span style="flex: 1 1 180px; color: #4A4A4A">Day of, 5:00 PM</span>
+<span style="flex: 1.4 1 240px; color: #4A4A4A">WhatsApp groups, in-app notification</span>
+<span style="padding: 4px 10px; border-radius: 999px; background: #CFE0E9; color: #1A3947; font-size: 12px; font-weight: 700">Scheduled</span>
+</label>
+<label style="display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; padding: 12px 0; border-top: 1px solid #E4E4E3">
+<input type="checkbox" checked style="width: 18px; height: 18px">
+<span style="flex: 1 1 200px; min-width: 0; font-weight: 700; color: #1A1A1A">Recording and thanks</span>
+<span style="flex: 1 1 180px; color: #4A4A4A">Day after, 10:00 AM</span>
+<span style="flex: 1.4 1 240px; color: #4A4A4A">Community feed</span>
+<span style="padding: 4px 10px; border-radius: 999px; background: #F1F1F0; color: #4A4A4A; font-size: 12px; font-weight: 700">Draft</span>
+</label>
+</section>
+
+</main>
+</div>
+<script>
+document.querySelectorAll('[data-pick]').forEach(function(b){b.addEventListener('click',function(){
+  document.querySelectorAll('[data-pick]').forEach(function(o){var on=o===b;
+    o.setAttribute('aria-pressed',on);o.firstElementChild.style.outline=on?'3px solid #2E6A86':'3px solid transparent';
+    o.lastElementChild.lastElementChild.textContent=on?'\u00b7 Selected':'';});});});
+</script>
+</body>
+</html>

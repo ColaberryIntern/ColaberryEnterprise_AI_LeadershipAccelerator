@@ -167,6 +167,12 @@ const PAID_FILES: Record<string, string> = {
     + 'placeholders on the required Enrollment columns, and portal_enabled is false, so this is '
     + 'not a learner row. This tripwire is what forced the classification - the file was a '
     + 'newcomer to the matched set and failed the build until it was named here.',
+  'services/commsHub/connectors/teamIdentity.ts':
+    'PROGRAM IDENTITY, not a person (Comms Hub CH7.1). The "Colaberry Team" enrollment that '
+    + 'authors hub posts and in-app announcements. paid + invoice + standard are placeholders on '
+    + 'the required Enrollment columns, payment_mode is test, portal_enabled is false and cohort_id '
+    + 'is null. Its address is on PROGRAM_IDENTITY_DOMAIN (comms-hub.invalid), which IS_STAFF_SQL '
+    + 'counts as staff, so it is out of revenue and funnel numbers.',
 };
 
 /**
@@ -245,6 +251,10 @@ const OFF_EXPLORER_FILES: Record<string, string> = {
     + 'which is a resting state and not a transition: these rows do not exist before this '
     + 'file makes them, so there is no explorer for anybody to be moved off. portal_enabled '
     + 'is false on every one, so none of them is a learner either.',
+  'services/commsHub/connectors/teamIdentity.ts':
+    'PROGRAM IDENTITY, not a person (Comms Hub CH7.1). Writes enrollment_type standard at CREATE '
+    + '(find-or-create of the one Colaberry Team row): a resting state, not a transition, so no '
+    + 'explorer is moved off. portal_enabled is false, so it is not a learner.',
   'scripts/backfillExplorerEnteredAt.ts':
     'SHAPE MATCH, NOT A TRANSITION (M21). It matches because its WHERE clause reads '
     + "enrollment_type = 'explorer' to SELECT the population. It writes one column, "
