@@ -135,10 +135,19 @@ export function deriveProposalDocuments(
     const canonicalReqId = String(r.canonical_req_id ?? r.canonicalReqId ?? r.id ?? '').trim();
     if (!statement || !canonicalReqId) continue;
     const kind = String(r.kind ?? '').trim().toLowerCase();
-    // A scope requirement is build work (solution_build), never a submittal document.
-    if (kind !== 'pricing' && classifyRequirementCategory(statement) === 'scope') continue;
+    const isScope = kind !== 'pricing' && classifyRequirementCategory(statement) === 'scope';
+    // F03 (R2): a scope requirement is the buyer's functional/technical ask (GIS integration, Bluestakes,
+    // offline work, data migration, the citizen portal...). It still feeds the solution_build track for the
+    // pilot (govBuildPlan.ts, unchanged), but a GOVERNMENT technical proposal must ALSO answer each functional
+    // requirement IN WRITING, so it belongs in the Technical Proposal narrative and is no longer dropped. This
+    // is the substance of the response; without it the technical document had nothing real to say. See
+    // HERRIMAN_ROOT_CAUSE_MATRIX.md F03.
     // A pricing-kind requirement is always the price document, whatever its wording.
-    const rule = kind === 'pricing' ? (DOCUMENT_RULES.find((d) => d.key === 'pricing') as ProposalDocumentRule) : ruleFor(statement);
+    const rule = kind === 'pricing'
+      ? (DOCUMENT_RULES.find((d) => d.key === 'pricing') as ProposalDocumentRule)
+      : isScope
+        ? (DOCUMENT_RULES.find((d) => d.key === 'technical') as ProposalDocumentRule)
+        : ruleFor(statement);
     // F01 (admin-leak): a submission-instruction obligation — how/when/where/format to submit the RESPONSE
     // ("one (1) electronic (PDF) copy submitted by email", "submitted no later than 5:00 p.m.", page limits,
     // sealed envelopes, file naming) — is not a technical answer. When it matches no specific submittal document

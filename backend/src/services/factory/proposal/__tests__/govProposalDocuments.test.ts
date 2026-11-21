@@ -1,6 +1,7 @@
 /**
  * deriveProposalDocuments turns the flat established requirements into the NAMED documents a bid must submit, each
- * carrying the requirements it must cover. A `scope` requirement is build work and is excluded; a pricing-kind
+ * carrying the requirements it must cover. A `scope` requirement is the buyer's functional/technical ask and is
+ * routed to the Technical Proposal narrative (R2, F03) while still feeding the solution_build track; a pricing-kind
  * requirement is always the (admin-only) price document; requirements cluster and dedup under one document.
  */
 import { deriveProposalDocuments } from '../govProposalDocuments';
@@ -8,23 +9,22 @@ import { deriveProposalDocuments } from '../govProposalDocuments';
 const req = (id: string, statement: string, kind?: string): any => ({ canonical_req_id: id, statement, kind });
 
 describe('deriveProposalDocuments', () => {
-  it('routes submittal requirements to their named documents and excludes build (scope) requirements', () => {
+  it('routes submittal requirements to their named documents and sends scope (functional) requirements to the Technical Proposal', () => {
     const docs = deriveProposalDocuments([
       req('R1', 'Submit a cover letter signed by an authorized representative.'),
       req('R2', 'The proposal must include a technical approach describing the methodology.'),
       req('R3', 'Provide past performance for three similar contracts.'),
       req('R4', 'Complete the pricing schedule in Attachment B.'),
-      req('R5', 'The vendor shall provide an online case management system with GIS integration.'), // scope ⇒ build
+      req('R5', 'The vendor shall provide an online case management system with GIS integration.'), // scope ⇒ technical narrative (R2)
       req('R6', 'Submit audited financial statements for the last three years.'),
       req('R7', 'Submit a HUB subcontracting plan per State requirements.'),
     ]);
     const byKey = Object.fromEntries(docs.map((d) => [d.key, d]));
     expect(Object.keys(byKey).sort()).toEqual(['cover_letter', 'financial', 'past_performance', 'pricing', 'socioeconomic', 'technical'].sort());
-    expect(byKey.technical.requirements.map((r) => r.canonicalReqId)).toEqual(['R2']); // the narrative default
+    // R2 (narrative default) AND R5 (functional scope) now both get a written technical response.
+    expect(byKey.technical.requirements.map((r) => r.canonicalReqId).sort()).toEqual(['R2', 'R5']);
     expect(byKey.past_performance.requirements.map((r) => r.canonicalReqId)).toEqual(['R3']);
     expect(byKey.socioeconomic.requirements.map((r) => r.canonicalReqId)).toEqual(['R7']); // HUB, not Past Performance
-    // the scope requirement became NO document (it's build work)
-    expect(docs.some((d) => d.requirements.some((r) => r.canonicalReqId === 'R5'))).toBe(false);
   });
 
   it('files a pricing-kind requirement under the admin-only price document, whatever its wording', () => {
@@ -88,5 +88,35 @@ describe('deriveProposalDocuments — submission-instruction requirements never 
     ]);
     const byKey = Object.fromEntries(docs.map((d) => [d.key, d]));
     expect(byKey.technical.requirements.map((r) => r.canonicalReqId)).toEqual(['T2']);
+  });
+});
+
+/**
+ * F03 regression (HERRIMAN_ROOT_CAUSE_MATRIX.md): the buyer's functional/technical requirements (scope) must be
+ * answered IN WRITING in the Technical Proposal, not silently dropped as build-only work. These are the real
+ * Herriman functional requirements that extraction captured and derivation was discarding.
+ */
+describe('deriveProposalDocuments — scope (functional) requirements become written Technical Proposal responses (F03)', () => {
+  it('routes the real functional requirements (GIS, Bluestakes, citizen portal, API integration) to the Technical Proposal', () => {
+    const docs = deriveProposalDocuments([
+      req('REQ-023', 'System must support bidirectional GIS integration to select assets and autofill multiple fields into a work order.'),
+      req('REQ-039', 'Provide the ability to update, complete, and respond to Bluestakes data within the platform.'),
+      req('REQ-037', 'A public-facing reporting interface allowing citizens to submit requests or view public work order activities.'),
+      req('REQ-038', 'The proposed solution must natively interface or provide verified API connections to the required systems.'),
+    ]);
+    const byKey = Object.fromEntries(docs.map((d) => [d.key, d]));
+    const tech = byKey.technical;
+    expect(tech).toBeDefined();
+    expect(tech.requirements.map((r) => r.canonicalReqId).sort()).toEqual(['REQ-023', 'REQ-037', 'REQ-038', 'REQ-039']);
+    // Each got a section the drafter will answer (one section per covered requirement).
+    expect(tech.sections.length).toBe(4);
+  });
+
+  it('a pure build/config scope requirement still reaches the Technical Proposal (it is also on the solution_build track)', () => {
+    const docs = deriveProposalDocuments([
+      req('S1', 'System must actively read from and write to the primary GIS database.'),
+    ]);
+    const byKey = Object.fromEntries(docs.map((d) => [d.key, d]));
+    expect(byKey.technical.requirements.map((r) => r.canonicalReqId)).toEqual(['S1']);
   });
 });
