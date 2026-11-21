@@ -118,6 +118,7 @@ import { ensureGovProposalSourcesSchema } from './db/ensureGovProposalSourcesSch
 import { ensureGovProposalPackageSchema } from './db/ensureGovProposalPackageSchema';
 import { ensureGovSubmissionSchema } from './db/ensureGovSubmissionSchema';
 import { ensureGovBidValueSchema } from './db/ensureGovBidValueSchema';
+import { ensureEnterpriseDealValueSchema } from './db/ensureEnterpriseDealValueSchema';
 import { ensureServiceOfferingSchema } from './db/ensureServiceOfferingSchema';
 import { ensureCaseStudyServiceLinkSchema } from './db/ensureCaseStudyServiceLinkSchema';
 import { ensureCaseStudyExternalImportSchema } from './db/ensureCaseStudyExternalImportSchema';
@@ -3073,6 +3074,14 @@ async function start(): Promise<void> {
   // ensureGovSubmissionSchema above, and a foreign key to a missing table is a boot error
   // rather than a no-op.
   await ensureGovBidValueSchema();
+  // R23 Phase 2 - what an enterprise deal is worth (enterprise_deal_values). A single
+  // additive NEW table, same shape and same reasoning as gov_bid_values above: one live
+  // human-confirmed value per intake, corrections supersede rather than overwrite, and a
+  // partial unique index keeps exactly one live row so the headline can be a plain SUM.
+  // All seven candidate names were checked against production before this one was taken.
+  // MUST run after enterprise_intakes exists: its REFERENCES names that parent, and a
+  // foreign key to a missing table is a boot error rather than a no-op.
+  await ensureEnterpriseDealValueSchema();
   // Colaberry's own service catalog (service_offerings). A single additive NEW table so the gov desk can store the
   // services the company offers and later match opportunities against them. No existing table is altered; it FKs to
   // nothing (tenant-scoped by tenant_id).

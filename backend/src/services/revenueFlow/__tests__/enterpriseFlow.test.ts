@@ -2,6 +2,14 @@ const m = { query: jest.fn() };
 jest.mock('../../../config/database', () => ({
   sequelize: { query: (...a: unknown[]) => m.query(...a) },
 }));
+const mockLiveValues = jest.fn();
+jest.mock('../enterpriseDealValueService', () => ({
+  getLiveDealValues: (...a: unknown[]) => mockLiveValues(...a),
+  annualizedCents: (v: { dealValueCents: number; periodMonths: number | null }) =>
+    (v.periodMonths && v.periodMonths > 0
+      ? Math.round((v.dealValueCents / v.periodMonths) * 12)
+      : null),
+}));
 
 import { buildEnterpriseFlow } from '../enterpriseFlow';
 import { CLASSIFICATIONS, classificationFor } from '../revenueClassifications';
@@ -67,8 +75,30 @@ const stage = (flow: Flow, key: string) => {
   return found;
 };
 
+/** One live, human-confirmed deal value, as the service returns it. */
+function dealValue(over: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: 'v1',
+    enterpriseIntakeId: 'i-signed',
+    dealValueCents: 4500000,
+    currency: 'USD',
+    periodMonths: 12,
+    valueBasis: 'SOW dated 2026-12-02, three phases at $15,000 each, countersigned by their CTO',
+    basisSource: 'statement_of_work',
+    confirmedBy: 'ali@colaberry.com',
+    confirmedAt: '2026-11-10T10:00:00Z',
+    supersededAt: null,
+    supersededById: null,
+    notes: null,
+    ...over,
+  };
+}
+
 beforeEach(() => {
   m.query.mockReset();
+  mockLiveValues.mockReset();
+  // Default: nothing priced. Each test that cares opts in.
+  mockLiveValues.mockResolvedValue([]);
 });
 
 describe('enterprise site stream: empty is not the same as absent', () => {
@@ -100,42 +130,141 @@ describe('enterprise site stream: empty is not the same as absent', () => {
   });
 });
 
-describe('enterprise site stream: no figure can ever be printed', () => {
-  it('every stage value and every event value is null, even for a signed deal', async () => {
-    withRows([
-      intake({
-        id: 'i-signed', service: 'build', status: 'signed',
-        interviewed_at: '2026-11-03T10:00:00Z',
-        proposal_sent_at: '2026-11-05T10:00:00Z',
-        signed_at: '2026-11-08T10:00:00Z',
-      }),
-    ]);
+describe('enterprise site stream: an UNVALUED signed deal still prints no figure', () => {
+  const SIGNED = () => intake({
+    id: 'i-signed', service: 'build', status: 'signed',
+    interviewed_at: '2026-11-03T10:00:00Z',
+    proposal_sent_at: '2026-11-05T10:00:00Z',
+    signed_at: '2026-11-08T10:00:00Z',
+  });
+
+  it('reports the win with no number, never as zero', async () => {
+    withRows([SIGNED()]);
     const flow = await buildEnterpriseFlow(WINDOW_START);
 
     expect(stage(flow, 'signed').count).toBe(1);
-    for (const s of flow.stream.funnel) {
-      expect(s.value.cents).toBeNull();
-    }
-    for (const e of flow.events) {
-      expect(e.valueCents).toBeNull();
-    }
-    // The headline names the gap rather than printing 0.
+    expect(stage(flow, 'signed').value.cents).toBeNull();
     expect(flow.stream.headline.cents).toBeNull();
-    expect(flow.stream.headline.display).toMatch(/value not recorded/i);
-    expect(flow.stream.caveat).toMatch(/absent from every figure on this page rather than counted as zero/i);
+    expect(flow.stream.headline.display).toBe('1 signed, none valued');
+    expect(flow.stream.headline.provenance).toMatch(/would claim the work is worth nothing/i);
+
+    // The signed EVENT still appears - a reader must see the win - carrying null, not 0.
+    const signedEvent = flow.events.find((e) => e.classification === 'enterprise_signed');
+    expect(signedEvent?.valueCents).toBeNull();
+    expect(signedEvent?.label).toMatch(/value not recorded/i);
+    // And no valuation event, because there is no valuation.
+    expect(flow.events.some((e) => e.classification === 'enterprise_priced')).toBe(false);
   });
 
-  it('the registry agrees: no enterprise classification claims to carry a value', async () => {
-    const enterprise = CLASSIFICATIONS.filter((c) => c.stream === 'enterprise_site');
-    expect(enterprise.length).toBeGreaterThan(0);
-    for (const c of enterprise) {
-      expect(c.carriesValue).toBe(false);
+  it('stages that are not money still carry no figure even when a deal IS valued', async () => {
+    withRows([SIGNED()]);
+    mockLiveValues.mockResolvedValue([dealValue()]);
+    const flow = await buildEnterpriseFlow(WINDOW_START);
+
+    for (const key of ['inquired', 'call_requested', 'interviewed', 'proposal_sent',
+      'plan_build', 'plan_guide', 'plan_train', 'plan_unattributed']) {
+      expect(stage(flow, key).value.cents).toBeNull();
     }
-    // And the classifications the stream actually emits all exist, so an event cannot
-    // reference a key the legend has no entry for.
+    // Only the signed stage moved.
+    expect(stage(flow, 'signed').value.cents).toBe(4500000);
+  });
+});
+
+describe('enterprise site stream: a VALUED signed deal prints a real figure', () => {
+  const SIGNED = (id: string, over: Partial<Record<string, unknown>> = {}) => intake({
+    id, service: 'build', status: 'signed', signed_at: '2026-11-08T10:00:00Z', ...over,
+  });
+
+  it('sums only priced deals, and reports the unpriced ones beside the total', async () => {
+    withRows([SIGNED('i-signed'), SIGNED('i-unvalued', { company: 'Second Co' })]);
+    mockLiveValues.mockResolvedValue([dealValue()]);
+    const flow = await buildEnterpriseFlow(WINDOW_START);
+
+    expect(stage(flow, 'signed').count).toBe(2);
+    // $45,000 - the one priced deal. The unvalued one is NOT added as zero.
+    expect(flow.stream.headline.cents).toBe(4500000);
+    expect(flow.stream.headline.provenance).toMatch(/1 signed deal\(s\) carry no value/i);
+    expect(flow.stream.caveat).toMatch(/absent from the total rather than counted as zero/i);
+    expect(flow.stream.caveat).toMatch(/closes by somebody pricing the deal/i);
+  });
+
+  it('says so explicitly when every signed deal is valued', async () => {
+    withRows([SIGNED('i-signed')]);
+    mockLiveValues.mockResolvedValue([dealValue()]);
+    const flow = await buildEnterpriseFlow(WINDOW_START);
+    expect(flow.stream.headline.provenance).toMatch(/Every signed deal is valued/i);
+  });
+
+  it('emits a dated valuation event naming the person and the basis', async () => {
+    withRows([SIGNED('i-signed')]);
+    mockLiveValues.mockResolvedValue([dealValue()]);
+    const flow = await buildEnterpriseFlow(WINDOW_START);
+
+    const priced = flow.events.find((e) => e.classification === 'enterprise_priced');
+    expect(priced).toBeTruthy();
+    expect(priced?.at).toBe('2026-11-10');
+    expect(priced?.valueCents).toBe(4500000);
+    expect(priced?.label).toContain('ali@colaberry.com');
+    expect(priced?.label).toContain('statement of work');
+    // The signed event now carries the figure too.
+    const signedEvent = flow.events.find((e) => e.classification === 'enterprise_signed');
+    expect(signedEvent?.valueCents).toBe(4500000);
+    expect(signedEvent?.label).toContain('$45,000');
+  });
+
+  it('a value on a deal that is NOT signed never reaches the headline', async () => {
+    // Pipeline is not revenue. A value may legitimately be recorded while a deal is still in
+    // proposal, and it must not land in a total that sits beside booked membership revenue.
+    withRows([intake({ id: 'i-proposal', proposal_sent_at: '2026-11-05T10:00:00Z' })]);
+    mockLiveValues.mockResolvedValue([dealValue({ enterpriseIntakeId: 'i-proposal' })]);
+    const flow = await buildEnterpriseFlow(WINDOW_START);
+
+    expect(stage(flow, 'signed').count).toBe(0);
+    expect(flow.stream.headline.cents).toBeNull();
+    expect(flow.stream.headline.display).toBe('No signed deal yet');
+  });
+
+  it('withholds the annualized view when a term was not recorded, and says why', async () => {
+    withRows([SIGNED('i-signed')]);
+    mockLiveValues.mockResolvedValue([dealValue({ periodMonths: null })]);
+    const flow = await buildEnterpriseFlow(WINDOW_START);
+
+    expect(flow.stream.headline.cents).toBe(4500000);
+    expect(flow.stream.caveat).toMatch(/no recorded term/i);
+    expect(flow.stream.caveat).toMatch(/Assuming twelve months would flatter a short engagement/i);
+  });
+
+  it('survives the value table being unreadable, rather than taking the board down', async () => {
+    withRows([SIGNED('i-signed')]);
+    mockLiveValues.mockRejectedValue(new Error('relation does not exist'));
+    const flow = await buildEnterpriseFlow(WINDOW_START);
+
+    // Degrades to the unvalued answer. One optional table must not 500 a ten-stream board.
+    expect(flow.stream.headline.cents).toBeNull();
+    expect(flow.stream.headline.display).toBe('1 signed, none valued');
+  });
+});
+
+describe('enterprise site stream: the registry declares value-carrying honestly', () => {
+  it('exactly the three money classifications carry a value, and no others', async () => {
+    const enterprise = CLASSIFICATIONS.filter((c) => c.stream === 'enterprise_site');
+    expect(enterprise.length).toBe(7);
+
+    const carry = enterprise.filter((c) => c.carriesValue).map((c) => c.key).sort();
+    expect(carry).toEqual(['enterprise_priced', 'enterprise_repriced', 'enterprise_signed']);
+
+    // An inquiry, an interview, a sent proposal and a loss are not money, and no table will
+    // make them so. These stay false permanently rather than as a staging state.
+    for (const key of ['enterprise_inquiry', 'enterprise_interviewed',
+      'enterprise_proposal_sent', 'enterprise_lost']) {
+      expect(classificationFor(key).carriesValue).toBe(false);
+    }
+  });
+
+  it('every classification the stream emits exists in the registry', async () => {
     for (const key of [
-      'enterprise_inquiry', 'enterprise_interviewed',
-      'enterprise_proposal_sent', 'enterprise_signed', 'enterprise_lost',
+      'enterprise_inquiry', 'enterprise_interviewed', 'enterprise_proposal_sent',
+      'enterprise_signed', 'enterprise_lost', 'enterprise_priced', 'enterprise_repriced',
     ]) {
       expect(classificationFor(key).stream).toBe('enterprise_site');
     }
