@@ -103,13 +103,34 @@ it('500 with a generic message on a DB error, logged with its error class', asyn
   expect(logged).toMatchObject({ event: 'campus_my_progress_failed', error_class: 'SequelizeConnectionError' });
 });
 
-it('privacy is a contract: a background carrying phone, location or full_name fails (500, not sent)', async () => {
-  for (const extra of [{ phone: '555' }, { location: 'Dallas' }, { full_name: 'Jordan' }]) {
-    mockGet = async () => ({ ...PAYLOAD, background: { ...PAYLOAD.background, ...extra } });
-    const res = await get(buildApp());
-    expect(res.status).toBe(500);
-    expect(JSON.stringify(res.body)).not.toMatch(/555|Dallas|Jordan/);
-  }
+/**
+ * One case per forbidden field, rather than three inside a single test.
+ *
+ * `buildApp()` re-requires the whole campusRoutes module tree through `jest.isolateModules`, and
+ * that is the expensive part of every test in this file. Every OTHER test here pays it once and
+ * passes; this one paid it three times against the same default 5s budget and timed out on a
+ * loaded runner (21 Nov 2026, CI run 44905858909: 444s wall, a worker force-exited). The
+ * assertions were never the problem - the test never reached a failing expect.
+ *
+ * Splitting gives each field its own budget, which is the shape already proven to pass here, and
+ * makes a real failure name WHICH field leaked instead of only which loop. Raising the timeout
+ * instead would have hidden a cost that grows every time this route gains a dependency.
+ *
+ * Each case still checks for ALL THREE values, not just its own: a handler that echoed a field it
+ * was never given would be a worse bug than the one this test is for, and the combined regex
+ * costs nothing.
+ */
+const FORBIDDEN: Array<[string, Record<string, string>]> = [
+  ['phone', { phone: '555' }],
+  ['location', { location: 'Dallas' }],
+  ['full_name', { full_name: 'Jordan' }],
+];
+
+it.each(FORBIDDEN)('privacy is a contract: a background carrying %s fails (500, not sent)', async (_field, extra) => {
+  mockGet = async () => ({ ...PAYLOAD, background: { ...PAYLOAD.background, ...extra } });
+  const res = await get(buildApp());
+  expect(res.status).toBe(500);
+  expect(JSON.stringify(res.body)).not.toMatch(/555|Dallas|Jordan/);
 
   /*
    * Let the handler's trailing `console.error` land BEFORE this suite tears down.
@@ -117,7 +138,7 @@ it('privacy is a contract: a background carrying phone, location or full_name fa
    * `await get(...)` resolves when the response is sent, and the contract-violation log happens
    * after that. This is the last test in the file, so under load the log arrived after teardown
    * and jest failed the suite with "Cannot log after tests are done" rather than on any
-   * assertion: the three expects above all passed. It failed two of three CI runs on an
+   * assertion: the expects above all passed. It failed two of three CI runs on an
    * unrelated branch whose only contribution was making the worker pool busier, and passed on a
    * re-run with no change, which is what a timing-dependent leak looks like.
    */
