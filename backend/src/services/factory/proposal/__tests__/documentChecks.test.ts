@@ -2,7 +2,7 @@
  * documentChecks — the deterministic checks + the pure pass rule. Table-driven. Includes the hazard-3.2 guard: a
  * build-track (scope) requirement is EXCLUDED from the coverage denominator, so it is never counted as "uncovered".
  */
-import { checkCoverage, checkLocationCoverage, checkFormat, checkFact, passes, runDocumentChecks, isSubstantiveAnswer, isBoilerplateAnswer, isSubmissionInstructionRequirement, type DocumentCheckInput } from '../documentChecks';
+import { checkCoverage, checkLocationCoverage, checkFormat, checkFact, passes, runDocumentChecks, isSubstantiveAnswer, isBoilerplateAnswer, isSubmissionInstructionRequirement, isNonTechnicalAdministrativeRequirement, type DocumentCheckInput } from '../documentChecks';
 import type { CheckScores } from '../proposalReviewTypes';
 
 const scoreAll = (n: number): CheckScores => ({ coverage: n, format: n, fact: n, evaluator: n, proof: n, clarity: n });
@@ -38,6 +38,23 @@ describe('isSubmissionInstructionRequirement', () => {
   });
   it('a requirement that mentions submission BUT also names a technical capability is NOT submission-only', () => {
     expect(isSubmissionInstructionRequirement('Responses shall be submitted via the Bonfire portal and the solution must support offline field data capture.')).toBe(false);
+  });
+});
+
+describe('isNonTechnicalAdministrativeRequirement (R3)', () => {
+  it('flags the City evaluation process, procurement/contractual mechanics, and packaging/format rules', () => {
+    // These appeared as technical answers in the R2 export and must not (plan T02/T03).
+    expect(isNonTechnicalAdministrativeRequirement('All Proposals received will be reviewed by a Review Panel.')).toBe(true);
+    expect(isNonTechnicalAdministrativeRequirement('The average of all reviews will be taken as the final score.')).toBe(true);
+    expect(isNonTechnicalAdministrativeRequirement('No late response, modification, or amendment will be accepted.')).toBe(true);
+    expect(isNonTechnicalAdministrativeRequirement('No responses via facsimile or telegraphic will be accepted.')).toBe(true);
+    expect(isNonTechnicalAdministrativeRequirement('The successful Proposer will be required to enter into a written agreement with the City.')).toBe(true);
+    expect(isNonTechnicalAdministrativeRequirement('An introductory letter should be addressed to the City contact.')).toBe(true);
+  });
+  it('does NOT flag a genuine proposer-facing narrative ask or a functional requirement', () => {
+    expect(isNonTechnicalAdministrativeRequirement("Describe, in sufficient detail, the Proposer's understanding of the proposed project and the services provided.")).toBe(false);
+    expect(isNonTechnicalAdministrativeRequirement('The system must provide a configurable review workflow where a supervisor approves a work order before dispatch.')).toBe(false);
+    expect(isNonTechnicalAdministrativeRequirement('System must support bidirectional GIS integration to autofill work order fields.')).toBe(false);
   });
 });
 

@@ -120,3 +120,40 @@ describe('deriveProposalDocuments — scope (functional) requirements become wri
     expect(byKey.technical.requirements.map((r) => r.canonicalReqId)).toEqual(['S1']);
   });
 });
+
+/**
+ * R3 regression (plan T02/T03): the City's own evaluation process, procurement/contractual mechanics, and
+ * proposal packaging/format rules must NOT consume technical-response space (R2 export: REQ-013/014/015 review-panel
+ * scoring were drafted as technical answers). A genuine proposer-facing narrative ask stays. Exact Herriman text.
+ */
+describe('deriveProposalDocuments — non-technical administrative clauses never reach the Technical Proposal (R3)', () => {
+  it('keeps review-panel scoring, procurement, and no-late submission rules OUT of Technical', () => {
+    const docs = deriveProposalDocuments([
+      req('REQ-013', 'All Proposals received will be reviewed by a Review Panel.'),
+      req('REQ-014', 'The average of all reviews will be taken as the final score.'),
+      req('REQ-005', 'No late response, modification, or amendment will be accepted.'),
+      req('REQ-020', 'The successful Proposer will be required to enter into a written agreement with the City to provide the Services.'),
+      req('REQ-008', 'An introductory letter expressing an interest in providing the Services should be included.'),
+    ]);
+    // None of these became a technical (or any derived) section.
+    expect(docs.find((d) => d.key === 'technical')).toBeUndefined();
+    expect(docs).toEqual([]);
+  });
+
+  it('still keeps a genuine proposer-facing narrative ask ("Describe the Proposer\'s understanding") in Technical', () => {
+    const docs = deriveProposalDocuments([
+      req('REQ-010', "Describe, in sufficient detail, the Proposer's understanding of the proposed project and the services that will be provided."),
+    ]);
+    const byKey = Object.fromEntries(docs.map((d) => [d.key, d]));
+    expect(byKey.technical.requirements.map((r) => r.canonicalReqId)).toEqual(['REQ-010']);
+  });
+
+  it('does not reclassify a functional scope requirement even if it mentions a review or agreement', () => {
+    const docs = deriveProposalDocuments([
+      req('SC1', 'The system must provide a configurable review workflow where a supervisor approves a work order before dispatch.'),
+    ]);
+    const byKey = Object.fromEntries(docs.map((d) => [d.key, d]));
+    // scope (names system/work order/workflow) => Technical, never dropped by the admin classifier.
+    expect(byKey.technical.requirements.map((r) => r.canonicalReqId)).toEqual(['SC1']);
+  });
+});

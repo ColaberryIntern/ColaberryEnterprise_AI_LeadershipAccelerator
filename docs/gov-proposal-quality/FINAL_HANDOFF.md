@@ -1,31 +1,47 @@
-# Final Handoff — Gov Proposal Studio Quality Upgrade
+# Final Handoff — Gov Proposal Studio, Herriman R1/R2/R3
 
-## PR
-- **#4264** — https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/4264
-- Branch: `workstream/gov-proposal-quality-92` off `main` (which already carries the C1 loop-convergence fix, PR #4254, merged).
+**Final status: `BLOCKED_NEEDS_HUMAN`** for the >=92 / submission-ready objective, and `QUALITY_NOT_MET` on the internal score pending the next content lever. **No pass is claimed.** The autonomous engineering that genuinely improves the proposal has been done and verified; the remaining gap is human-owned inputs (see `HUMAN_INPUTS_REQUIRED.md`) plus one more drafting-layer lever (below).
 
-## Commits
-1. `70d240202` — R2/R3: substantive coverage + honest AI checks (proof UNVERIFIED, no 8k truncation).
-2. `<phase2>` — R1/R6: hard-gate engine, package fails closed, version-bound Gold, Rubric v1.0.
-3. `<docs>` — delivery packet + offline HTML report.
+## What shipped (reviewable PRs, merged where noted)
 
-## CI
-Verified against the real gates: backend `tsc --noEmit`, backend `jest` (jest.ci.config), frontend `tsc` + build, test-file typecheck, security/route-auth + secret scans. Status recorded on the PR checks. _(This section is finalized from the actual PR check rollup, not asserted.)_
+| PR | What | State |
+|---|---|---|
+| #4284 (R1) | Stop submission-instructions (REQ-003/004) leaking into the Technical Proposal | merged + deployed |
+| #4289 (R2) | Route the 27 functional (scope) requirements INTO the Technical Proposal (the substance lever) | merged + deployed |
+| R3 (this PR) | `isNonTechnicalAdministrativeRequirement` — keep the City's evaluation process (review panel/scoring), procurement/contractual mechanics, residual submission rules, and packaging/format OUT of the Technical Proposal | reviewable; not merged/deployed |
 
-## How an independent reviewer reproduces the score
-1. Open `quality-review.html` (also delivered to the operator's Downloads) — it states the Rubric v1.0 per-dimension scores, the hard-gate blockers with owners, and the coverage footprint, all from the run record.
-2. The input is the Herriman WOMS RFP (Bonfire opportunity 257848) and the generated proposal documents for project `80b35be2-a0e9-4068-945b-328e9438bbc7`.
-3. The score is `SUM(weight × dimension_score / 100)`; unknown dimensions contribute 0; a provisional badge means a hard gate is open.
+**Code paths changed:** `backend/src/services/factory/proposal/documentChecks.ts` (classifiers), `govProposalDocuments.ts` (`deriveProposalDocuments` routing), tests in `__tests__/documentChecks.test.ts` and `__tests__/govProposalDocuments.test.ts`. Docs in `docs/gov-proposal-quality/`.
 
-## Demonstration (the regression tests ARE the demonstration)
-Each defect behind the 22/100 has a committed test that fails on the old behavior and passes on the new:
-`documentChecks.test.ts` (T04 + substance/location split), `documentChecksAI.test.ts` (T05, T06), `buildProposalPackage.test.ts` (T09, T13), `proposalPackageCore.test.ts` (T18), `proposalHardGates.test.ts` (T01/T02/T03/T17), `qualityRubricV1.test.ts` (weights/unknown/provisional).
+## Before / after evidence (real exported bytes)
 
-## Deploy
-After merge (Ali's click): `scripts/deploy-prod.sh` registry mode (backend; nginx only if a served route changed) via PowerShell on `ssh root@95.216.199.47`. Backend-only logic change — no nginx rebuild expected. Then the Herriman re-run writes the updated package + `quality-review.html` scorecard to Downloads.
+- **R2 export** (`Colaberry_Herriman_WOMS_Proposal_R2_substantive_2026-11-21.zip`): technical PDF carried 49 sections; **26 of 49 were administrative** (review panel, no-late, procurement). Technical coverage scored 0; internal weighted score 44.8 provisional; independent baseline 27.
+- **R1 proof:** the technical PDF no longer opens with "REQ-003: submit one PDF by email" (0 occurrences).
+- **R2 proof:** the technical document now names GIS, Bluestakes, Madison AI, LAMA, SpryPoint, SCADA (17,199 chars) — it answers the real functional requirements.
+- **R3 proof (classifier, pre-regeneration):** on the stored Herriman requirements, 15 administrative clauses (REQ-005/006/007/008/009/013/014/015/017/018/019/020/021/041/049) are now kept out of the Technical Proposal, while REQ-010 ("Describe the Proposer's understanding") and every scope requirement stay. Regeneration through the deployed R3 engine will reflect this.
 
-## Remaining human/organizational inputs (honest BLOCKED list)
-Authorized pricing, signed Exhibit B / required forms, the solicitation's required number of qualified government references, and the final Gold Go. These are the hard-gate blockers; the engine will never fabricate them.
+## Honest status against the plan's acceptance (§4)
 
-## Remaining engineering follow-ups (named, not hidden)
-See `QUALITY_ACCEPTANCE_MATRIX.md`: full RFP manifest extraction (R1), proposal-level agency-rubric synthesis (R3), buyer-problem→proof chain generation (R4), commercial-workbook reconciliation (R5), ZIP byte re-audit on the submission path (T10), and the Studio UX surfaces (R7).
+| Dimension | Weight | Gating | Reachable autonomously? |
+|---|---|---|---|
+| Mandatory compliance | 20 (>=90) | signed Exhibit B, pricing, verified references, amendment ack | **No — human** |
+| Technical responsiveness | 20 (>=90) | substance now present (R2/R3); per-requirement coverage crediting is the next lever | Partially |
+| Implementation & delivery | 15 (>=90) | named owners, dated schedule, UAT/cutover commitments | **No — human (owners/dates)** |
+| Evidence & past performance | 15 (>=85) | qualifying government references | **No — human** |
+| Pricing & commercial | 10 (>=90) | authorized pricing | **No — human** |
+| Buyer differentiation | 10 | content-driven | Partially |
+| Risk, security & support | 5 | approved security/SLA | Partially (claims must stay approved) |
+| Presentation & clarity | 5 | R1/R3 remove filler | Yes |
+
+**>=92 with all four >=90 gates is mathematically unreachable without the human inputs.** This is not a weakened rubric — the weights and thresholds are unchanged; the blocked dimensions are honestly reported, not excluded from the denominator.
+
+## Remaining engineering lever (next, no human input needed)
+
+**Per-requirement substantive-coverage crediting.** The whole-document drafter produces substantive content in one `content_html` blob; `checkCoverage` credits a requirement only when its *section* carries a substantive answer, so technical coverage reads 0 even though the prose is real. The fix is structured, per-requirement drafting (plan §5.2 answer-contract) so the engine can trace each requirement to its answer. This moves the technical-responsiveness score honestly; it does not change the human-gated ceiling.
+
+## Precise user actions
+
+1. Merge the R3 PR (merge is the operator's click). On merge, the deploy authorized for this workstream runs and the proposal is regenerated into a DRAFT in Downloads.
+2. To move past ~65/100 toward a submit-ready >=92, provide the consolidated human inputs in `HUMAN_INPUTS_REQUIRED.md`.
+3. Decide whether to proceed with the per-requirement coverage-crediting lever (next autonomous PR).
+
+Nothing here is submission-ready. Export is a preview, never a submission; no automatic send to the City.
