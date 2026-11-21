@@ -23,9 +23,11 @@ const OPEN = { enabled: true, tz: 'America/Chicago', blocks: ['Mon-morning'], fo
 const MON_9 = '2026-11-16T15:00:00.000Z'; // Mon 16 Nov, 9:00 CST
 
 /** Answer each SQL by what it is, so the order of calls does not matter. */
-function db({ held = [] as unknown[], dupe = false } = {}) {
+function db({ held = [] as unknown[], dupe = false, placementBooked = [] as unknown[], placementTable = true } = {}) {
   q.mockImplementation(async (sql: string) => {
     if (/pg_advisory_xact_lock/.test(sql)) return [[]];
+    if (/to_regclass\('placement_interviews'\)/.test(sql)) return [[{ ok: placementTable }]];
+    if (/FROM placement_interviews/.test(sql)) return /state = 'booked'/.test(sql) ? [placementBooked] : [[]];
     if (/SELECT id, status FROM hire_interviews/.test(sql)) return [dupe ? [{ id: 'x', status: 'requested' }] : []];
     if (/SELECT starts_at, minutes/.test(sql)) return [held];
     if (/INSERT INTO hire_interviews/.test(sql)) return [[{ id: 'new-id' }]];
@@ -74,6 +76,32 @@ describe('talentSlots - GET /talent/:slug/slots', () => {
   it('never starts the window in the past', async () => {
     const out: any = await talentSlots('ann-lee', { from: '2020-01-01' }, NOW);
     expect(out.body.slots.every((s: any) => s.start > NOW.toISOString())).toBe(true);
+  });
+});
+
+describe('T17: a BOOKED Career Prep placement interview holds the time on the Hire profile too', () => {
+  const placementMon9 = [{ starts_at: MON_9, minutes: 30 }];
+  it('the Hire booking at Mon 9:00 over a booked placement interview is unavailable (409), nothing written', async () => {
+    db({ placementBooked: placementMon9 });
+    expect(await requestInterview(body(), NOW)).toEqual({ status: 'unavailable', http: 409 });
+    expect(inserts()).toHaveLength(0);
+    const placementQ = q.mock.calls.find(([sql]) => /FROM placement_interviews/.test(sql));
+    expect(placementQ?.[0]).toMatch(/state = 'booked'/);
+    expect(placementQ?.[1].transaction).toEqual({ id: 'tx' }); // read inside the booking transaction, under the same advisory lock
+  });
+  it('the slot is not listed on the profile (slots and the card), and the next free time is', async () => {
+    db({ placementBooked: placementMon9 });
+    const out: any = await talentSlots('ann-lee', { from: '2026-11-16' }, NOW);
+    expect(out.body.slots.map((s: any) => s.start)).not.toContain(MON_9);
+    expect(out.body.slots[0].start).toBe('2026-11-16T15:30:00.000Z');
+    expect((await bookingSummary(E1, NOW)).nextSlots[0]).toBe('2026-11-16T15:30:00.000Z');
+  });
+  it('a placement interview with no length yet holds 30 minutes; a database without the placement table reads as none', async () => {
+    db({ placementBooked: [{ starts_at: '2026-11-16T15:30:00.000Z', minutes: 30 }] });
+    const out: any = await talentSlots('ann-lee', { from: '2026-11-16' }, NOW);
+    expect(out.body.slots.map((s: any) => s.start).slice(0, 2)).toEqual([MON_9, '2026-11-16T16:00:00.000Z']); // 9:30-10:00 held
+    db({ placementBooked: [{ starts_at: MON_9, minutes: 30 }], placementTable: false });
+    expect((await requestInterview(body(), NOW)).status).toBe('created');
   });
 });
 

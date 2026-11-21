@@ -114,10 +114,14 @@ export const PLACEMENT_STATEMENTS: readonly string[] = [
      room_provider_id VARCHAR(128),
      room_url TEXT,
      recording_consent VARCHAR(20),
+     interviewer_emails TEXT[] NOT NULL DEFAULT '{}',
+     booker_tz VARCHAR(64),
      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
    )`,
   'CREATE INDEX IF NOT EXISTS idx_placement_interviews_enrollment ON placement_interviews (enrollment_id, created_at DESC)',
+  // One live booking link per hash (a token lookup finds at most one interview).
+  'CREATE UNIQUE INDEX IF NOT EXISTS uq_placement_interviews_token ON placement_interviews (booking_token_hash) WHERE booking_token_hash IS NOT NULL',
   // The booking-link sweep's scan (bookingLinkSweep.ts): only interviews still owed a reply.
   "CREATE INDEX IF NOT EXISTS idx_placement_interviews_owed_link ON placement_interviews (created_at) WHERE state = 'new' AND booking_link_sent_at IS NULL",
   `CREATE TABLE IF NOT EXISTS placement_events (

@@ -3,6 +3,7 @@ jest.mock('../../db/ensurePlacementSchema', () => ({ ensurePlacementSchema: (...
 // The real routers import the app config; the wiring under test only needs something mountable.
 jest.mock('../../routes/careerPrepInboxRoutes', () => { const { Router: R } = jest.requireActual('express'); return { __esModule: true, default: R() }; });
 jest.mock('../../routes/integrationsInboxRoutes', () => { const { Router: R } = jest.requireActual('express'); return { __esModule: true, default: R() }; });
+jest.mock('../../routes/publicBookingRoutes', () => { const { Router: R } = jest.requireActual('express'); return { bookingRouters: { view: R(), confirm: R() } }; });
 const mockStartInboxTests = jest.fn();
 jest.mock('../../services/placement/inboxTestJob', () => ({ startInboxTestCron: mockStartInboxTests }));
 const mockStartBackfill = jest.fn();
@@ -48,12 +49,13 @@ describe('placementBoot', () => {
   afterEach(() => { INTEGRATION_ROUTERS.splice(0, Infinity, ...saved.i); PUBLIC_ROUTERS.splice(0, Infinity, ...saved.p); SCHEDULERS.splice(0, Infinity, ...saved.s); jest.restoreAllMocks(); });
 
   it('registers the CP6.1 inbox routes as a public (participant-gated) router', () => {
-    expect(saved.p.length).toBe(1);
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    expect(saved.p).toEqual([require('../../routes/careerPrepInboxRoutes').default, require('../../routes/publicBookingRoutes').bookingRouters.view]); // T17: the booking page's data
   });
 
   it('T12: registers the signed inbox events router as an INTEGRATION router (mounted before the JSON parser)', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    expect(saved.i).toEqual([require('../../routes/integrationsInboxRoutes').default]);
+    expect(saved.i).toEqual([require('../../routes/integrationsInboxRoutes').default, require('../../routes/publicBookingRoutes').bookingRouters.confirm]); // T17: the confirm parses its own 10kb body first
   });
 
   it('T11: registers the daily forwarding test + broken alerts as a scheduler', () => {

@@ -2,6 +2,7 @@ import type { Express, Router } from 'express';
 import { ensurePlacementSchema } from '../db/ensurePlacementSchema';
 import careerPrepInboxRoutes from '../routes/careerPrepInboxRoutes';
 import integrationsInboxRoutes from '../routes/integrationsInboxRoutes';
+import { bookingRouters } from '../routes/publicBookingRoutes';
 import { startInboxTestCron } from '../services/placement/inboxTestJob';
 import { startInboxBackfill } from '../services/placement/inboxBackfill';
 import { startInboxReplay } from '../services/placement/inboxEvents';
@@ -12,8 +13,9 @@ import { startBookingLinkSweep } from '../services/placement/bookingLinkSweep';
  * server.ts (4,000+ lines) is touched by exactly three calls and never again (plan.md "File ceilings").
  *
  *   mountPlacementIntegrations(app)  BEFORE server.ts's global express.json(): routes that verify an HMAC over the
- *                                    exact request bytes (the inbox integration, CP6.2) need the raw body. server.ts
- *                                    calls it beside the other signature-checked webhooks.
+ *                                    exact request bytes (the inbox integration, CP6.2) need the raw body, and a route
+ *                                    with a tighter body cap than the global 5mb (the booking confirm, 10kb) must parse
+ *                                    first. server.ts calls it beside the other signature-checked webhooks.
  *   mountPlacementPublic(app)        with the other public and participant routes, before adminRoutes and the broad
  *                                    auth guard (each route carries its own guard).
  *   startPlacement()                 at boot, after the Career Prep schema: the placement tables, then every scheduler.
@@ -23,9 +25,11 @@ import { startBookingLinkSweep } from '../services/placement/bookingLinkSweep';
  */
 export const INTEGRATION_ROUTERS: Router[] = [
   integrationsInboxRoutes, // CP6.2: signed inbox-manager events (own express.raw; 503 until INBOX_INTEGRATION_SECRET is set)
+  bookingRouters.confirm, // CP8.2: the booking confirm, with its OWN 10kb JSON parser (so before the global 5mb one); 5/15 min per IP
 ];
 export const PUBLIC_ROUTERS: Router[] = [
   careerPrepInboxRoutes, // CP6.1: the student's job-search inbox (participant + Career Prep gated per route)
+  bookingRouters.view, // CP8.2: the public booking page's data (the token is the key; no login; 60/min per IP)
 ];
 export const SCHEDULERS: Array<{ name: string; start: () => void }> = [
   { name: 'inbox-tests', start: startInboxTestCron }, // CP6.1c: daily forwarding test + broken alerts (switch-gated per pass)
