@@ -29,6 +29,7 @@ import Project from '../../models/Project';
 import StudentTask from '../../models/StudentTask';
 import { getPublishedPlan } from '../sbp/planStore';
 import { planStorySpecs, commandCenterSpecForProject } from '../sbp/verification/storyPoints';
+import { connectedDemoMaterializedFor } from '../sbp/connectedDemoFlag';
 import { CANONICAL_PROGRAM_ID } from '../timeline/curriculumScope';
 import { isCurriculumRequired } from '../timeline/typeRegistry';
 import { CURRICULUM_WEEKS, MilestoneState, PROJECT_MILESTONE_TARGET } from './milestoneLadder';
@@ -127,7 +128,13 @@ export async function getProjectCompletions(enrollmentId: string): Promise<Proje
   for (const project of projects) {
     const stored = await getPublishedPlan(project.id);
     if (!stored) continue;
-    const specs = planStorySpecs(stored.plan, await commandCenterSpecForProject(project.id));
+    // Resolved from the board, like the Command Center id beside it: a milestone count that
+    // omitted a story the student is being graded on would under-report their completion.
+    const specs = planStorySpecs(
+      stored.plan,
+      await commandCenterSpecForProject(project.id),
+      await connectedDemoMaterializedFor(project.id),
+    );
     const ids = specs.map((s) => s.id);
     if (ids.length === 0) continue;
     const verified = await StudentTask.count({

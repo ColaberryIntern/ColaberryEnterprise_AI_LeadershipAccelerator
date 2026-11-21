@@ -255,6 +255,15 @@ export const env = {
   // Deliberately NOT a boolean — the first audience for this is one account
   // being tested while a class is running on the same deployment.
   sbpAgentScoping: (process.env.SBP_AGENT_SCOPING ?? 'off').trim(),
+  // Who gets the Connected Demo story (STORY-900) on their build: a simulated,
+  // trust-instrumented walkthrough of the system they are building, generated from their own
+  // plan and data model. 'off' (default), 'all', or a comma-separated list of enrollment ids.
+  // Same three-way shape as SBP_AGENT_SCOPING above, for the same reason.
+  //
+  // OFF MEANS OFF FOR NEW BUILDS ONLY. Once a build has the row, it keeps it: see
+  // services/sbp/connectedDemoFlag.ts for why a read path that consulted this variable instead
+  // of the board would orphan a story the student had already been asked to build.
+  sbpConnectedDemo: (process.env.SBP_CONNECTED_DEMO ?? 'off').trim(),
   // Review-and-approve gate. When a build publishes for an enrollment in scope,
   // the project is held in `pending_approval`: the student reviews the whole
   // build and must Approve before the workspace unlocks. 'off' (default), 'all',

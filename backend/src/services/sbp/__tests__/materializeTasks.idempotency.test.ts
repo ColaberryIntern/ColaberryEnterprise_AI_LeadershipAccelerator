@@ -328,6 +328,85 @@ describe('STORY-900 on the board', () => {
  * did not quietly reopen work. Both are asserted here, separately, because they are different
  * guarantees that happened to share one line.
  */
+/**
+ * The attributes a verifier proved could be gutted with this suite green.
+ *
+ * Nine mutations were run against the T8 diff beyond the ones the task's own spec covered, and
+ * eight survived. Six of them are below. They are asserted now rather than "later" because T10
+ * is the change that turns the flag on: an unpinned attribute is harmless while no board has the
+ * row, and becomes a student's problem the day one does.
+ *
+ * `due_baseline_on` is the sharpest of them. `services/internship/nudgeBrief/deadline.ts` reads
+ * `due_baseline_on` and NEVER `due_on`, so a null baseline is not a cosmetic gap - it is a task
+ * that silently cannot appear in a deadline brief. The invariant the row is created under is
+ * `due_baseline_on === due_on` at first publish, and `due_on >= due_baseline_on` forever after.
+ */
+describe('STORY-900 row attributes, each pinned to the thing that reads it', () => {
+  const publishDemo = () =>
+    materializePlanAsTasks(PROJECT, ENROLLMENT, plan, { schedule, now: NOW, connectedDemo: true });
+
+  it('writes due_baseline_on equal to due_on at creation, because the nudge brief reads only the baseline', async () => {
+    await publishDemo();
+    const row = taskTable.find((r) => r.story_id === CONNECTED_DEMO_STORY_ID)!;
+    expect(row.due_baseline_on).not.toBeNull();
+    expect(new Date(row.due_baseline_on).getTime()).toBe(new Date(row.due_on).getTime());
+  });
+
+  it('never rewrites the baseline on a republish, even when the due date moves', async () => {
+    // The other direction, and the one that makes the baseline worth having: a plan that quietly
+    // re-dated its own original deadlines would hide exactly the lesson a slipping build teaches.
+    await publishDemo();
+    const first = taskTable.find((r) => r.story_id === CONNECTED_DEMO_STORY_ID)!;
+    const baseline = new Date(first.due_baseline_on).getTime();
+    await first.update({ due_on: new Date('2027-01-04T00:00:00.000Z') });
+    await publishDemo();
+    const after = taskTable.find((r) => r.story_id === CONNECTED_DEMO_STORY_ID)!;
+    expect(new Date(after.due_baseline_on).getTime()).toBe(baseline);
+  });
+
+  it('groups under the same release as the Command Center, not a release that does not exist', async () => {
+    await publishDemo();
+    const cc = taskTable.find((r) => r.story_id === COMMAND_CENTER_STORY_ID)!;
+    const demo = taskTable.find((r) => r.story_id === CONNECTED_DEMO_STORY_ID)!;
+    expect(demo.release_key).toBe(cc.release_key);
+    // And it is a release the PLAN actually declares, so the row cannot be orphaned off the board.
+    expect(plan.releases.map((r: { key: string }) => r.key)).toContain(demo.release_key);
+  });
+
+  it('sits immediately after the Command Center in position, so the board reads in build order', async () => {
+    await publishDemo();
+    const cc = taskTable.find((r) => r.story_id === COMMAND_CENTER_STORY_ID)!;
+    const demo = taskTable.find((r) => r.story_id === CONNECTED_DEMO_STORY_ID)!;
+    expect(demo.position).toBe(cc.position + 1);
+    /*
+     * No other row IN THE SAME LIST may share that slot: dropping the position counter would
+     * collide the demo with the first plan story and make the order arbitrary.
+     *
+     * Scoped to the list because `position` is per-list, not global - the first assertion of this
+     * was global and found two rows legitimately sharing position 0 in different releases. The
+     * code was right and the test was wrong, which is worth saying rather than quietly narrowing.
+     */
+    const sameList = taskTable.all.filter((r) => r.task_list_id === demo.task_list_id);
+    expect(sameList.filter((r) => r.position === demo.position)).toHaveLength(1);
+    expect(sameList.length).toBeGreaterThan(2);
+  });
+
+  it('counts itself in the result, so the published count matches the rows written', async () => {
+    const result = await publishDemo();
+    expect(result.tasks).toBe(taskTable.all.length);
+  });
+
+  it('carries a narrative and a description, because the board shows both', async () => {
+    await publishDemo();
+    const row = taskTable.find((r) => r.story_id === CONNECTED_DEMO_STORY_ID)!;
+    expect(typeof row.narrative).toBe('string');
+    expect(row.narrative.length).toBeGreaterThan(40);
+    expect(typeof row.description).toBe('string');
+    expect(row.description.length).toBeGreaterThan(5);
+    expect(row.title.length).toBeGreaterThan(5);
+  });
+});
+
 describe('STORY-900 keep-complete, the part that actually protects the row', () => {
   const publishDemo = () =>
     materializePlanAsTasks(PROJECT, ENROLLMENT, plan, { schedule, now: NOW, connectedDemo: true });
