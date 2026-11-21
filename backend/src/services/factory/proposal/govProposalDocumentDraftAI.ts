@@ -14,6 +14,7 @@ import crypto from 'crypto';
 import { getInstrumentedOpenAI } from '../../openaiInstrumented';
 import { DEFAULT_MODEL } from '../../components/costEstimationService';
 import { groundingToPromptText, type Grounding } from './proposalGrounding';
+import { isSubmissionInstructionRequirement } from './documentChecks';
 
 interface CacheEntry<T> { value: T; at: number; }
 const TTL_MS = 60 * 60 * 1000;
@@ -77,7 +78,9 @@ export async function generateProposalDocumentDraftAI(input: DocumentDraftInput)
   if (!process.env.OPENAI_API_KEY) return { html: '', cached: false, generatedAt: now(), error: 'AI drafting is unavailable (no API key configured).' };
   if (reqs.length === 0) return { html: '', cached: false, generatedAt: now(), error: 'This document has no requirements to draft from yet.' };
 
-  const reqBlock = reqs.slice(0, 40).map((r) => `- [${r.canonicalReqId}] ${clampStr(r.statement, 500)}`).join('\n');
+  // Tag each requirement so the model applies the right rule: write real methodology for [TECHNICAL] requirements,
+  // and only a one-line compliance note for [SUBMISSION-INSTRUCTION] ones (never a technical approach for logistics).
+  const reqBlock = reqs.slice(0, 40).map((r) => `- [${r.canonicalReqId}] [${isSubmissionInstructionRequirement(r.statement) ? 'SUBMISSION-INSTRUCTION' : 'TECHNICAL'}] ${clampStr(r.statement, 500)}`).join('\n');
   const groundingText = input.grounding ? groundingToPromptText(input.grounding) : '';
   const key = 'docdraftai:' + hash({ k: input.docKey, t: input.title, r: reqBlock, b: input.buyer ?? null, a: input.agency ?? null, g: groundingText });
   const hit = cacheGet<DocumentDraftResult>(key);
@@ -85,10 +88,29 @@ export async function generateProposalDocumentDraftAI(input: DocumentDraftInput)
 
   const system =
     'You draft a complete, professional government-proposal document for a small firm. Write the full document that ' +
-    'satisfies ALL of the listed requirements, organized with clear headings. CRITICAL: use ONLY general, verifiable ' +
-    'statements; do NOT invent any specific fact - no client names, project names, metrics, dates, dollar figures, ' +
-    'certifications, or personnel. Whenever a strong document WOULD need such a specific fact, insert a visible ' +
-    'placeholder exactly like [PLACEHOLDER: what the firm must provide] rather than inventing it. ' +
+    'satisfies ALL of the listed requirements, organized with clear headings. ' +
+    // SUBSTANCE OVER RESTATEMENT. This is the difference between a winning technical response and a hollow one.
+    'SUBSTANCE RULE: for every TECHNICAL or FUNCTIONAL requirement, write a real, specific RESPONSE, not a restatement ' +
+    'of the requirement. Each answer must give: the proposed approach; the concrete workflow or architecture (the ' +
+    'actual steps, roles and data flow); how data moves and how any named system is integrated (mapping, ' +
+    'authentication, synchronization direction and conflict/error handling); the applicable security/access control; ' +
+    'the implementation step that delivers it; and a verifiable ACCEPTANCE TEST that proves it works. When a ' +
+    'requirement NAMES a specific system, standard, or integration target, address it BY NAME with the proposed ' +
+    'integration approach — proposing HOW you would integrate a named system is a method, not a fabricated fact, so do ' +
+    'it rather than speaking generically. NEVER answer a technical requirement with bare compliance language ("we ' +
+    'comply", "we understand", "the system shall ...") or a Benefit/Proof/Compliance restatement template — that earns ' +
+    'zero. ' +
+    // Submission instructions are NOT technical strategy. This is the exact failure an independent review caught.
+    'SUBMISSION-INSTRUCTION RULE: a requirement that only governs HOW, WHEN, WHERE or in WHAT FORMAT the proposal is ' +
+    'submitted (email vs portal, number of copies, file type, page/font limits, deadlines, labeling) is an ' +
+    'administrative compliance item, NOT a technical delivery strategy. Do NOT write a technical approach, workflow or ' +
+    'acceptance test for it, and never present a submission instruction as if it were part of the solution. Note it in ' +
+    'one short compliance sentence (it belongs to the compliance matrix) and spend your words on the real technical ' +
+    'requirements. ' +
+    'CRITICAL (no fabrication): use ONLY general, verifiable statements and the approaches you propose; do NOT invent any ' +
+    'specific fact - no client names, project names, metrics, dates, dollar figures, certifications, or personnel. ' +
+    'Whenever a strong document WOULD need such a specific fact, insert a visible placeholder exactly like ' +
+    '[PLACEHOLDER: what the firm must provide] rather than inventing it. ' +
     'EXCEPTION for grouped records: for a PAST-PERFORMANCE or REFERENCES entry do NOT write a separate [PLACEHOLDER] ' +
     'per field; write ONE grouped marker [RECORD: reference] for each reference the section needs (exactly one if the ' +
     'solicitation does not state a number). For a KEY-PERSON entry write [RECORD: personnel]. A [RECORD] marker is ' +
