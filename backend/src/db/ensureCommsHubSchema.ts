@@ -268,6 +268,8 @@ export const COMMS_HUB_SCHEMA_STATEMENTS: readonly string[] = [
      CHECK (failure_state IN (${list(COMMS_HUB_ALERT_STATES)}))`,
   `CREATE UNIQUE INDEX IF NOT EXISTS uq_comms_hub_alerts_once ON comms_hub_alerts (state_event_id, recipient)`,
   `CREATE INDEX IF NOT EXISTS idx_comms_hub_alerts_due ON comms_hub_alerts (status, next_attempt_at)`,
+  // The alert queue scans recent failure state changes every minute.
+  `CREATE INDEX IF NOT EXISTS idx_comms_hub_activity_action ON comms_hub_activity (action, created_at)`,
 
   // Write-through link: the calendar rows this hub event owns. Nullable, so every existing row is untouched.
   `ALTER TABLE community_events ADD COLUMN IF NOT EXISTS hub_event_id UUID`,

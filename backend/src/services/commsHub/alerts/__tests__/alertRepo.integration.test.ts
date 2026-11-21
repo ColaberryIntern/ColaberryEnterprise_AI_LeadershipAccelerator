@@ -63,6 +63,8 @@ describeIfDb('CH7.5 failure alerts on a scratch Postgres', () => {
     await failedMessage('message.partially_failed');
     await failedMessage('message.sent');
     await failedMessage('message.failed', new Date(NOW.getTime() - 49 * 3600_000));
+    const stopped = await failedMessage();
+    await sequelize.query(`UPDATE comms_hub_messages SET status = 'cancelled' WHERE id = $1`, { bind: [stopped.m] });
     const recipients = await repo.recipients();
     expect(await repo.queue(recipients, new Date(NOW.getTime() - 48 * 3600_000), NOW)).toBe(6);
     expect(await repo.queue(recipients, new Date(NOW.getTime() - 48 * 3600_000), NOW)).toBe(0);

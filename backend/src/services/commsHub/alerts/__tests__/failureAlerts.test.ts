@@ -4,9 +4,13 @@
  * failed; no mail transport means failed, never "sent"; organizer text cannot inject HTML into the
  * alert email. The in-memory store keeps the Postgres rules (unique key, claim token, lease).
  */
-jest.mock('../../../../config/env', () => ({ env: { frontendUrl: 'https://enterprise.colaberry.ai/' } }));
+jest.mock('../../../../config/env', () => ({ env: { frontendUrl: 'https://enterprise.colaberry.ai/', mandrillApiKey: '' } }));
+const mockEmit = jest.fn(async () => ({}));
+const mockMail = jest.fn(async () => undefined);
+jest.mock('../../../alertService', () => ({ emitAlert: (...a: unknown[]) => mockEmit(...(a as [])) }));
+jest.mock('../../../emailService', () => ({ sendAlertEmail: (...a: unknown[]) => mockMail(...(a as [])) }));
 
-import { alertContent, mailSafe, runFailureAlerts, type AlertDeps } from '../failureAlerts';
+import { alertContent, defaultAlertSenders, mailSafe, runFailureAlerts, type AlertDeps } from '../failureAlerts';
 import { ALERT_LEASE_MS, ALERT_WINDOW_MS, DASHBOARD, MAX_ALERT_ATTEMPTS, type AlertContent, type AlertOutcome, type AlertRepo, type ClaimedAlert, type FailureState } from '../types';
 
 interface StateEvent { id: string; message_id: string; state: FailureState; at: Date; sent: number; not_sent: number }
@@ -181,3 +185,20 @@ describe('what an alert says', () => {
     expect(mailSafe('Demo <img src=x onerror=alert(1)> & "Q&A"')).toBe('Demo img src=x onerror=alert(1) and QandA');
   });
 });
+
+describe('the existing alert path', () => {
+  const content = (title: string): AlertContent => ({ title, description: '1 of 2 recipients received it. <b>x</b>', severity: 3, state: 'partially_failed', message_id: 'm1', state_event_id: 'abcdef12-3456-4789-8abc-def012345678' });
+  it('the dashboard alert is one per state change (its reference is in the title, so emitAlert cannot fold two together) and mail-safe for subscriber emails', async () => {
+    await defaultAlertSenders.dashboard(content('Communications Hub: <script>x</script> & Q only partly sent'));
+    expect(mockEmit).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'warning', severity: 3, entityType: 'comms_hub_message', entityId: 'm1', impactArea: 'communications',
+      title: 'Communications Hub: scriptx/script and Q only partly sent (ref abcdef12)', description: '1 of 2 recipients received it. bx/b',
+    }));
+  });
+  it('the email goes through sendAlertEmail with organizer text made mail-safe; no transport configured is not ready', async () => {
+    await defaultAlertSenders.email('ops@colaberry.com', content('Communications Hub: A & B did not send'));
+    expect(mockMail).toHaveBeenCalledWith('ops@colaberry.com', expect.objectContaining({ title: 'Communications Hub: A and B did not send', type: 'warning' }));
+    expect(defaultAlertSenders.emailReady()).toBe(false);
+  });
+});
+

@@ -28,7 +28,8 @@ export const alertRepo: AlertRepo = {
         CROSS JOIN unnest(ARRAY[:recipients]::text[]) AS r(recipient)
         WHERE a.entity_type = 'message' AND a.action IN ('message.failed', 'message.partially_failed')
           AND a.entity_id IS NOT NULL AND a.created_at >= :since
-          AND EXISTS (SELECT 1 FROM comms_hub_messages m WHERE m.id = a.entity_id)
+          -- A message that has since ended cancelled (its event was cancelled) is not alerted.
+          AND EXISTS (SELECT 1 FROM comms_hub_messages m WHERE m.id = a.entity_id AND m.status <> 'cancelled')
        ON CONFLICT (state_event_id, recipient) DO NOTHING
        RETURNING id`,
       { replacements: { recipients: all, since, now } },

@@ -30,6 +30,7 @@ it('queue: failure actions only, inside the window, the dashboard plus each reci
   const { sql, replacements } = queries[0];
   expect(sql).toMatch(/action IN \('message\.failed', 'message\.partially_failed'\)/);
   expect(sql).toMatch(/created_at >= :since/);
+  expect(sql).toMatch(/m\.status <> 'cancelled'/);
   expect(sql).toMatch(/ON CONFLICT \(state_event_id, recipient\) DO NOTHING/);
   expect(sql).toMatch(/ARRAY\[:recipients\]::text\[\]/);
   expect(replacements.recipients).toEqual(['dashboard', 'ops@colaberry.com']);

@@ -14,8 +14,11 @@ import {
  * Failure path: each send has a 30 s timeout; a failed send is tried again after 1 minute, then 5
  * minutes, then marked failed with its error class (and logged). An email with no mail transport
  * configured is failed at once, never reported as sent. A crash mid-send leaves the row `sending`;
- * after the lease it is tried again (the one case that can repeat an email: the provider accepted
- * it but the result was never recorded). Alerts never touch the messages themselves.
+ * after the lease it is tried again. Two cases can repeat an email (at-least-once, not exactly-once,
+ * because SMTP has no idempotency key): the provider accepted it but the result was never recorded
+ * (a crash), or a send passed the 30 s timeout and still completed late (it is retried a minute
+ * later). Alerts never touch the messages themselves, and a message that ended cancelled (for
+ * example, stopped because its event was cancelled) is not alerted.
  */
 export interface AlertDeps {
   repo: AlertRepo;
@@ -89,8 +92,11 @@ export async function runFailureAlerts(deps: AlertDeps, now: Date = new Date()):
 export const defaultAlertSenders: AlertSenders = {
   async dashboard(c) {
     const { emitAlert } = await import('../../alertService');
+    // emitAlert folds a new alert into an open one with the same title, and fans out to alert
+    // subscriptions whose email puts the title into HTML unescaped. So the title carries the state
+    // change's reference (one dashboard alert per state change) and is mail-safe like the email path.
     await emitAlert({
-      type: 'warning', severity: c.severity, title: c.title, description: c.description, sourceType: 'system',
+      type: 'warning', severity: c.severity, title: mailSafe(`${c.title} (ref ${c.state_event_id.slice(0, 8)})`), description: mailSafe(c.description), sourceType: 'system',
       impactArea: 'communications', entityType: 'comms_hub_message', entityId: c.message_id, urgency: 'high',
       metadata: { state_event_id: c.state_event_id, failure_state: c.state },
     });
