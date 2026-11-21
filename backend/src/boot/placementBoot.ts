@@ -1,6 +1,7 @@
 import type { Express, Router } from 'express';
 import { ensurePlacementSchema } from '../db/ensurePlacementSchema';
 import careerPrepInboxRoutes from '../routes/careerPrepInboxRoutes';
+import integrationsInboxRoutes from '../routes/integrationsInboxRoutes';
 import { startInboxTestCron } from '../services/placement/inboxTestJob';
 
 /**
@@ -17,7 +18,9 @@ import { startInboxTestCron } from '../services/placement/inboxTestJob';
  * Each later task adds its router to one of the lists below and its scheduler to SCHEDULERS; the order of a list is
  * the mount order.
  */
-export const INTEGRATION_ROUTERS: Router[] = [];
+export const INTEGRATION_ROUTERS: Router[] = [
+  integrationsInboxRoutes, // CP6.2: signed inbox-manager events (own express.raw; 503 until INBOX_INTEGRATION_SECRET is set)
+];
 export const PUBLIC_ROUTERS: Router[] = [
   careerPrepInboxRoutes, // CP6.1: the student's job-search inbox (participant + Career Prep gated per route)
 ];

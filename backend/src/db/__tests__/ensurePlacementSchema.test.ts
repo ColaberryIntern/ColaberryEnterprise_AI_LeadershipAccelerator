@@ -18,6 +18,12 @@ describe('ensurePlacementSchema (statements)', () => {
     expect(PLACEMENT_STATEMENTS).toContain('CREATE UNIQUE INDEX IF NOT EXISTS uq_job_search_inboxes_mailbox ON job_search_inboxes (mailbox)');
     expect(PLACEMENT_STATEMENTS.find((s) => s.includes('inbox_received ('))).toMatch(/message_id VARCHAR\(255\) NOT NULL UNIQUE/);
   });
+  it('CP6.2: inbox events are stored once per (message_id, type), with the four F3 types only', () => {
+    const events = PLACEMENT_STATEMENTS.find((s) => s.includes('CREATE TABLE IF NOT EXISTS inbox_events')) as string;
+    expect(events).toMatch(/CONSTRAINT uq_inbox_events_message_type UNIQUE \(message_id, type\)/);
+    expect(events).toMatch(/CHECK \(type IN \('email\.classified', 'interview\.detected', 'interview\.updated', 'forwarding\.confirmation'\)\)/);
+    expect(events).toMatch(/processed_at TIMESTAMPTZ,/);
+  });
   it('has a rollback that drops every table it creates, dependents first, never run at boot', () => {
     const made = tables(PLACEMENT_STATEMENTS, /CREATE TABLE IF NOT EXISTS (\w+)/);
     const dropped = tables(PLACEMENT_SCHEMA_ROLLBACK, /DROP TABLE IF EXISTS (\w+)/);

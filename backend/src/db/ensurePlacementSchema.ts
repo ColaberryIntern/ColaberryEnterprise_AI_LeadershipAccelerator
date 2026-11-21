@@ -18,6 +18,9 @@ import { sequelize } from '../config/database';
  *                        (services/placement/inboxHealth.ts), so it can never go stale.
  *   inbox_received       (CP6.1) "Everything it received": one row per message, UNIQUE on the RFC 5322 Message-ID,
  *                        so a replayed event or a re-run test adds nothing.
+ *   inbox_events         (CP6.2, kit F3) every signed event the inbox manager pushed, UNIQUE on (message_id, type), so
+ *                        a replay is stored once. processed_at is set after it was dispatched; a stored event that was
+ *                        never processed (a dispatch failed) is dispatched again when the sender retries.
  */
 export const PLACEMENT_STATEMENTS: readonly string[] = [
   `CREATE TABLE IF NOT EXISTS job_search_inboxes (
@@ -53,10 +56,22 @@ export const PLACEMENT_STATEMENTS: readonly string[] = [
      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
    )`,
   'CREATE INDEX IF NOT EXISTS idx_inbox_received_enrollment ON inbox_received (enrollment_id, received_at DESC)',
+  `CREATE TABLE IF NOT EXISTS inbox_events (
+     id BIGSERIAL PRIMARY KEY,
+     event_id VARCHAR(128) NOT NULL,
+     message_id VARCHAR(255) NOT NULL,
+     type VARCHAR(40) NOT NULL CHECK (type IN ('email.classified', 'interview.detected', 'interview.updated', 'forwarding.confirmation')),
+     payload JSONB NOT NULL,
+     received_at TIMESTAMPTZ NOT NULL,
+     processed_at TIMESTAMPTZ,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     CONSTRAINT uq_inbox_events_message_type UNIQUE (message_id, type)
+   )`,
 ];
 
 /** Run by hand to roll the placement tables back. Never run at boot. Dependents first. */
 export const PLACEMENT_SCHEMA_ROLLBACK: readonly string[] = [
+  'DROP TABLE IF EXISTS inbox_events',
   'DROP TABLE IF EXISTS inbox_received',
   'DROP TABLE IF EXISTS job_search_inboxes',
 ];
