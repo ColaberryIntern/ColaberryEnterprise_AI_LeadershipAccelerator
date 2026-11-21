@@ -108,7 +108,9 @@ describe('an agent that touches a guardrail cannot act alone', () => {
 
     const out = await scopeAgents(PLAN(), deps(client));
 
-    expect(out.plan.agents![0].approval_gates).toEqual([]);
+    // The only gate is the plan's own REQ-002, which arrives with STORY-002
+    // (homed on this agent because the roster missed it). The invented one never does.
+    expect(out.plan.agents![0].approval_gates.map((g) => g.slice(0, 7))).toEqual(['REQ-002']);
   });
 });
 
@@ -188,13 +190,17 @@ describe('assignment', () => {
     expect(out.plan.stories.map((s) => s.owner_agent)).toEqual(['Agreement Reader', 'Approval Router']);
   });
 
-  it('leaves a story the roster missed with the owner it already had', async () => {
-    // Better a stale owner than a story that belongs to nobody.
+  it('homes a story the roster missed on a roster agent, with its guardrail', async () => {
+    // A stale owner ("Development Team", ShiftFill v5's "AI Agent") is not an
+    // agent, and the missed story's SAFE requirement would be enforced by nobody.
     const client = clientReturning({ agents: [agent({ owns: ['STORY-001'] })] });
 
     const out = await scopeAgents(PLAN(), deps(client));
 
-    expect(out.plan.stories[1].owner_agent).toBe('Development Team');
+    expect(out.plan.stories[1].owner_agent).toBe('Agreement Reader');
+    expect(out.plan.agents![0].owns).toEqual(['STORY-001', 'STORY-002']);
+    expect(out.plan.agents![0].approval_gates.map((g) => g.slice(0, 7))).toEqual(['REQ-002']);
+    expect(out.plan.agents![0].autonomy_level).toBe('acts_with_approval');
     expect(out.scoped).toBe(true);
   });
 

@@ -36,6 +36,7 @@ import {
 } from './planDocument';
 import { handoffsFor, artifactsFor } from './planDocumentInsights';
 import { separateHardRules } from './planPeople';
+import { rosterWithEveryStoryOwned } from './storyOwners';
 import { bullet, fmt, good, type TabContext } from './commandCenterTabContext';
 import { agentsTab } from './commandCenterAgentsTab';
 
@@ -380,8 +381,9 @@ function dataModelTab(c: TabContext): string[] {
   return lines;
 }
 
-export function commandCenterTabSections(plan: BuildPlan, schedule?: Schedule | null): string[] {
-  // The same re-sort plan.json gets, so the brief and the data never disagree.
+export function commandCenterTabSections(source: BuildPlan, schedule?: Schedule | null): string[] {
+  // The same repair and re-sort plan.json gets, so the brief and the data never disagree.
+  const plan = rosterWithEveryStoryOwned(source);
   const agents = separateHardRules(plan.agents ?? [], rolesOf(plan.stories));
   const c: TabContext = {
     plan,
