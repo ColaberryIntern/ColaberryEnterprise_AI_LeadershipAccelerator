@@ -131,11 +131,93 @@ it('re-credits the buffered seconds when the send is rejected, instead of destro
 
   await act(async () => { await Promise.resolve(); });  // let the rejection handler run
 
-  // Only a little more playback, far under the flush threshold on its own. It flushes anyway
-  // because the re-credited seconds are back in the buffer, and the beat carries them.
-  play(21, 24);
+  // Keep playing until the post-failure back-off has certainly elapsed (one tick a second, and
+  // the first wait is at most BASE_RETRY_MS + jitter). This used to be three ticks, because a
+  // rejected beat was retried on the VERY NEXT sample -- which is precisely the storm the
+  // back-off now prevents, so the timing here changed with it. What is being asserted has not:
+  // the seconds from the rejected beat are still carried, not destroyed.
+  play(21, 35);
   expect(beats).toHaveLength(2);
   expect(beats[1].delta_s).toBeGreaterThanOrEqual(lost);
+});
+
+/**
+ * The retry storm (P1 on the same to-do, measured in production 20 Nov 2026 by Swati Raman as
+ * "a save every ~0.3 s, mostly 429").
+ *
+ * Re-crediting a rejected beat restores the buffer to at least FLUSH_AFTER_S -- which is the very
+ * condition that triggers a flush -- and the next YouTube sample arrives about 0.3s later. So the
+ * protection against LOSING watch time was also a loop that resent on every sample until the
+ * limiter's window cleared. One transient failure became roughly three requests a second.
+ *
+ * This matters more than it looks: three of VideoEmbed's four callers currently swallow the
+ * promise and so never re-credit at all. Giving them the protection without this back-off would
+ * hand the storm to every watch surface, the drawer included.
+ */
+describe('a failed beat is not retried immediately', () => {
+  /** A rejection shaped like the limiter's: a 429 carrying the seconds left in the window. */
+  const rateLimited = () => Promise.reject({ response: { headers: { 'ratelimit-reset': '10' } } });
+
+  /** Rejects the first send, resolves afterwards, recording every attempt in `beats`. */
+  const failFirst = (reject: () => Promise<never>) => {
+    let failed = false;
+    return (b: WatchBeatPayload) => {
+      beats.push(b);
+      if (!failed) { failed = true; return reject(); }
+      return Promise.resolve();
+    };
+  };
+
+  it('holds the next send back instead of resending on the very next sample', async () => {
+    render(failFirst(() => Promise.reject(new Error('Network Error'))));
+    play(0, 20);
+    expect(beats).toHaveLength(1);
+    await act(async () => { await Promise.resolve(); });
+
+    // Two more seconds of playback. The buffer is over the flush threshold the whole time,
+    // because the rejected seconds were put back -- so before the back-off every one of these
+    // samples sent another request.
+    play(21, 22);
+    expect(beats).toHaveLength(1);
+  });
+
+  it('resumes once the wait is over, so a failure delays reporting rather than ending it', async () => {
+    render(failFirst(() => Promise.reject(new Error('Network Error'))));
+    play(0, 20);
+    await act(async () => { await Promise.resolve(); });
+
+    play(21, 35);                       // comfortably past the first wait
+    expect(beats.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('waits as long as the server asked, when the server said', async () => {
+    render(failFirst(rateLimited));
+    play(0, 20);
+    expect(beats).toHaveLength(1);
+    await act(async () => { await Promise.resolve(); });
+
+    // RateLimit-Reset said 10 seconds. Five seconds in, the client must still be holding.
+    play(21, 25);
+    expect(beats).toHaveLength(1);
+
+    // Past the window, it reports again.
+    play(26, 45);
+    expect(beats.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('lets an exit beat through the wait, because there is no later attempt to protect', async () => {
+    render(failFirst(rateLimited));
+    play(0, 20);
+    await act(async () => { await Promise.resolve(); });
+
+    play(21, 22);
+    expect(beats).toHaveLength(1);      // still inside the 10s the server asked for
+
+    // The tab is closing. Holding this beat back would destroy the watch time it carries, which
+    // is the opposite of what the back-off is for.
+    act(() => { window.dispatchEvent(new Event('pagehide')); });
+    expect(beats).toHaveLength(2);
+  });
 });
 
 /**
