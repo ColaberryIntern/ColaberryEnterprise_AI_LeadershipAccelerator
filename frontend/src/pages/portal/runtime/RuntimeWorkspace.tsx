@@ -128,8 +128,12 @@ const RuntimeWorkspace: React.FC = () => {
   // Watch gate: the verdict is fetched the moment the card opens (so "Mark complete"
   // starts dimmed), then play heartbeats refresh it until the server says it's met.
   const [watch, setWatch] = useWatchVerdict(card && isVideo && !completed ? card.id : null, () => runtimeApi.watchVerdict(cardId));
-  const onWatchBeat: ((beat: WatchBeatPayload) => void) | undefined = card && !completed
-    ? (beat) => { runtimeApi.watch(card.id, beat).then(setWatch).catch(() => { /* best-effort */ }); }
+  // The return type is deliberately a PROMISE, not void. VideoEmbed re-credits the buffered
+  // seconds when a beat rejects, and it can only do that for a caller that hands the promise
+  // back. Annotating this `=> void` was what hid the bug here: the swallow looked correct
+  // because the type said nothing was expected. (21 Nov 2026)
+  const onWatchBeat: ((beat: WatchBeatPayload) => Promise<unknown>) | undefined = card && !completed
+    ? (beat) => runtimeApi.watch(card.id, beat).then(setWatch)
     : undefined;
   // Dwell gate (passive-content bands): the same continuous-read timer the drawer runs.
   const dwellGated = !!card && !completed && isDwellGatedCard(card);
