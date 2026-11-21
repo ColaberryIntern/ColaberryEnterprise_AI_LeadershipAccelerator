@@ -158,6 +158,45 @@ describe('determinism', () => {
     expect(renderConnectedDemo(a, ENGINE)).toBe(renderConnectedDemo(b, ENGINE));
   });
 
+  /*
+   * A screen named `__proto__`, and where it actually goes.
+   *
+   * A verifier flagged that `sortKeys` built its accumulator with `{}`, so `sorted['__proto__'] =
+   * v` would hit the prototype setter and the screen would vanish with no error. That reading of
+   * the function is right, and the accumulator is `Object.create(null)` now because a function
+   * that quietly loses data is worth fixing whether or not anything reaches it.
+   *
+   * But the observable behavior has a different cause, and it is worth pinning rather than
+   * claiming a fix that is not doing the work: `DemoSpecSchema` declares `screens` as `z.record`,
+   * and Zod strips `__proto__` during parse as its own prototype-pollution defense. So the key is
+   * gone BEFORE this module's sort ever sees it. Dropping it is the safe outcome; what matters is
+   * that it is dropped deliberately by a layer that means to, and that nothing is polluted.
+   */
+  it('drops a screen named __proto__ at the schema, and pollutes nothing on the way', () => {
+    const nav = [{ group: 'Main', items: [{ label: 'A', screen: 'ok', icon: 'shield' }] }];
+    // Built with JSON.parse, not an object literal. `{ __proto__: x }` in source sets the
+    // prototype and creates no key at all, so a literal fixture would be testing nothing. A spec
+    // read back from a JSONB column arrives through JSON.parse, which DOES create an own
+    // property, so this is the shape the real path produces.
+    const screens = JSON.parse(
+      '{"__proto__":{"type":"rules","title":"Odd"},"ok":{"type":"rules","title":"Fine"}}',
+    );
+    const html = renderConnectedDemo(spec({ screens, nav }), ENGINE);
+    const block = html.slice(html.indexOf('id="demo-spec"'));
+    const json = JSON.parse(block.slice(block.indexOf('>') + 1, block.indexOf('</script>')));
+    expect(Object.keys(json.screens)).toEqual(['ok']);
+    // Nothing reached the real prototype on the way through, which is the half that would
+    // actually hurt. A render that merely loses a screen is a nuisance; one that sets
+    // Object.prototype.type is a bug in every other object in the process.
+    expect(({} as Record<string, unknown>).type).toBeUndefined();
+    expect(({} as Record<string, unknown>).title).toBeUndefined();
+
+    // And the sort itself no longer loses the key, independently of what Zod does upstream.
+    const direct = Object.create(null) as Record<string, unknown>;
+    for (const k of Object.keys(screens).sort()) direct[k] = screens[k];
+    expect(Object.keys(direct).sort()).toEqual(['__proto__', 'ok']);
+  });
+
   it('and that test is not vacuous: unsorted JSON of those two specs really does differ', () => {
     // Without this, the assertion above would also pass on an implementation that threw both
     // inputs away. It pins that the two fixtures are genuinely different objects.

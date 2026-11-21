@@ -51,7 +51,11 @@ export class DemoRenderError extends Error {
 function sortKeys(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(sortKeys);
   if (value && typeof value === 'object') {
-    const sorted: Record<string, unknown> = {};
+    // `Object.create(null)`, not `{}`. On a normal object literal, `sorted['__proto__'] = v` sets
+    // the prototype instead of creating an own property, so a spec with a screen named
+    // `__proto__` had that screen silently vanish from the rendered demo. A null-prototype object
+    // has no `__proto__` setter to hit, so the key is stored like any other.
+    const sorted = Object.create(null) as Record<string, unknown>;
     for (const key of Object.keys(value as Record<string, unknown>).sort()) {
       sorted[key] = sortKeys((value as Record<string, unknown>)[key]);
     }
