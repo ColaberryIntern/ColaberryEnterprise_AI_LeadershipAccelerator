@@ -28,9 +28,12 @@ describe('the registry is internally consistent', () => {
    *
    * It went stale once already: `hire_fde` was added on 2026-11-13 while this test still
    * named three streams, so the total below silently stopped equalling the registry length.
+   * It then did its job on 2026-11-21, failing the moment R23's `enterprise_site` arrived
+   * with five classifications and no entry here.
    */
   const ALL_STREAMS = [
     'membership', 'gov_pipeline', 'hypotheses', 'hire_fde', 'subscription_conversion',
+    'enterprise_site',
   ] as const;
 
   it('covers every stream', () => {

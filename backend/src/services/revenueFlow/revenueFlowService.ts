@@ -47,6 +47,7 @@ import {
   assertClassificationKeysAreUnique,
   classificationFor,
 } from './revenueClassifications';
+import { buildEnterpriseFlow } from './enterpriseFlow';
 import { buildGovFlow } from './govBidFlow';
 import { buildIdeaFlows } from './ideaFlow';
 import { buildMembershipFlow } from './membershipFlow';
@@ -112,13 +113,17 @@ export async function getRevenueFlowBoard(
   const windowStart = new Date(now.getTime() - windowDays * 24 * 60 * 60 * 1000);
   const caveats: string[] = [];
 
-  const [membership, gov, ideas] = await Promise.all([
+  const [membership, gov, enterprise, ideas] = await Promise.all([
     buildMembershipFlow(windowStart).catch((e: Error) => {
       caveats.push(`The membership stream could not be built: ${e.message}`);
       return null;
     }),
     buildGovFlow(windowStart).catch((e: Error) => {
       caveats.push(`The government pipeline could not be built: ${e.message}`);
+      return null;
+    }),
+    buildEnterpriseFlow(windowStart).catch((e: Error) => {
+      caveats.push(`The enterprise site stream could not be built: ${e.message}`);
       return null;
     }),
     buildIdeaFlows(windowStart, now).catch((e: Error) => {
@@ -128,15 +133,22 @@ export async function getRevenueFlowBoard(
   ]);
 
   // Order is the page's reading order and is fixed: what earns today, then what might, then
-  // what has not been set up. A reader scanning top to bottom meets revenue before bets,
-  // which is the opposite of how a board that sorted by size would read.
+  // what is built but has no demand yet, then what has not been set up at all. A reader
+  // scanning top to bottom meets revenue before bets, which is the opposite of how a board
+  // that sorted by size would read.
+  //
+  // The enterprise site sits third deliberately. It is not a bet - the offer is public and
+  // the intake is live - so grouping it with the declared-but-unbuilt sources would say
+  // something false about it. It has simply produced nothing yet, which is a different and
+  // more actionable fact than "not set up".
   const streams = [
-    membership?.stream, gov?.stream, ...(ideas?.streams ?? []),
+    membership?.stream, gov?.stream, enterprise?.stream, ...(ideas?.streams ?? []),
   ].filter(Boolean) as RevenueFlowBoard['streams'];
   for (const s of streams) if (s.caveat) caveats.push(s.caveat);
 
   const rawEvents = [
-    ...(membership?.events ?? []), ...(gov?.events ?? []), ...(ideas?.events ?? []),
+    ...(membership?.events ?? []), ...(gov?.events ?? []),
+    ...(enterprise?.events ?? []), ...(ideas?.events ?? []),
   ];
   const { events: honest, caveats: honestyCaveats } = enforceValueHonesty(rawEvents);
   caveats.push(...honestyCaveats);

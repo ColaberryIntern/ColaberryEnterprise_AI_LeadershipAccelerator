@@ -69,7 +69,8 @@ export type FlowDirection = 'in' | 'out' | 'none';
  * as campaign yield. It therefore counts audiences and definitions only.
  */
 export type FlowStreamKey =
-  | 'membership' | 'gov_pipeline' | 'hypotheses' | 'hire_fde' | 'subscription_conversion';
+  | 'membership' | 'gov_pipeline' | 'hypotheses' | 'hire_fde' | 'subscription_conversion'
+  | 'enterprise_site';
 
 export interface ClassificationDefinition {
   key: string;
@@ -427,8 +428,86 @@ const SUBSCRIPTION_CONVERSION: readonly ClassificationDefinition[] = [
   },
 ];
 
+/**
+ * Enterprise site classifications (R23).
+ *
+ * The five dated states a prospect from enterprise.colaberry.ai can reach, as the W28 intake
+ * records them. Every one sets `carriesValue: false`, and that is not a placeholder: on
+ * 2026-11-21 `enterprise_intakes` had no value, price or amount column anywhere on it, so a
+ * signed deal genuinely carries no figure and none can be derived. A human-confirmed deal
+ * value is R23 Phase 2, on the `gov_bid_values` pattern; until it exists, `false` here is
+ * what stops this stream printing a number nobody measured.
+ *
+ * `enterprise_signed` is the one that will change when that table lands, and it is the only
+ * one that should: an inquiry, an interview and a sent proposal are not money even once a
+ * deal value exists.
+ */
+const ENTERPRISE: readonly ClassificationDefinition[] = [
+  {
+    key: 'enterprise_inquiry',
+    label: 'Enterprise inquiry',
+    stream: 'enterprise_site',
+    tone: 'info',
+    glyph: '◇',
+    direction: 'none',
+    carriesValue: false,
+    means:
+      'Somebody filled in the form on enterprise.colaberry.ai. An inquiry is interest, not '
+      + 'revenue, and nothing on the intake row holds a value.',
+  },
+  {
+    key: 'enterprise_interviewed',
+    label: 'Intake interview done',
+    stream: 'enterprise_site',
+    tone: 'info',
+    glyph: '◈',
+    direction: 'none',
+    carriesValue: false,
+    means:
+      'The AI intake interview completed, by typed chat or by call, and produced a write-up. '
+      + 'The first state in which we know what the prospect actually needs.',
+  },
+  {
+    key: 'enterprise_proposal_sent',
+    label: 'Proposal sent',
+    stream: 'enterprise_site',
+    tone: 'warn',
+    glyph: '➣',
+    direction: 'none',
+    carriesValue: false,
+    means:
+      'A proposal was sent, not merely drafted. The intake stores a draft the AI wrote and a '
+      + 'separate sent timestamp that only a real send sets, and this is the latter.',
+  },
+  {
+    key: 'enterprise_signed',
+    label: 'Enterprise client signed',
+    stream: 'enterprise_site',
+    tone: 'good',
+    glyph: '★',
+    direction: 'in',
+    carriesValue: false,
+    means:
+      'The intake reached signed and the prospect became an Enterprise Client. It carries no '
+      + 'figure because no column holds one yet, so a signed deal reports as a win with no '
+      + 'number rather than as a guess.',
+  },
+  {
+    key: 'enterprise_lost',
+    label: 'Did not proceed',
+    stream: 'enterprise_site',
+    tone: 'muted',
+    glyph: '✕',
+    direction: 'none',
+    carriesValue: false,
+    means:
+      'The intake was closed as lost, with a recorded reason. Counted apart from the funnel '
+      + 'because it is an exit from it, not a stage of it.',
+  },
+];
+
 export const CLASSIFICATIONS: readonly ClassificationDefinition[] = [
-  ...MEMBERSHIP, ...GOV, ...HYPOTHESES, ...HIRE_FDE, ...SUBSCRIPTION_CONVERSION,
+  ...MEMBERSHIP, ...GOV, ...HYPOTHESES, ...HIRE_FDE, ...SUBSCRIPTION_CONVERSION, ...ENTERPRISE,
 ];
 
 export type ClassificationKey = string;
@@ -510,6 +589,12 @@ export function assertValueCarryingIsDeclaredHonestly(): void {
     // onto a board whose headline is money. `conversion_setup` additionally stops the same
     // dollar being counted as both a converted member and a campaign result.
     'hypothesis_evidence', 'hypothesis_deadline', 'fde_setup', 'conversion_setup',
+    // The enterprise site. enterprise_intakes held no value, price or amount column on
+    // 2026-11-21, so not even a signed deal has a figure to report. These five come off this
+    // list one at a time when R23 Phase 2 gives a signed deal a human-confirmed value, and
+    // `enterprise_signed` is the only one that should ever move.
+    'enterprise_inquiry', 'enterprise_interviewed', 'enterprise_proposal_sent',
+    'enterprise_signed', 'enterprise_lost',
   ];
   for (const key of mustNotCarry) {
     const def = classificationFor(key);
