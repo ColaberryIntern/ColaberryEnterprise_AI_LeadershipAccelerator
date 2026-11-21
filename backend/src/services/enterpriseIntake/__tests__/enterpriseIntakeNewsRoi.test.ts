@@ -67,6 +67,17 @@ describe('keepFetched', () => {
     expect(keepFetched([{ headline: 'ACME opens Dallas hub!', why_it_matters: 'x' }, { headline: 'Acme wins award', why_it_matters: 'y' }], fetched))
       .toEqual([{ headline: 'Acme opens Dallas hub', why_it_matters: 'x', date: '2026-10-01', url: 'u1' }]);
   });
+  it('live fix: accepts a copy without Google\'s " - Source" suffix, or slightly trimmed; still drops rewrites', () => {
+    const feed = [{ headline: 'Carriers use AI to read load tenders faster - FreightWaves', date: '2026-09-12', url: 'u2' }];
+    expect(keepFetched([{ headline: 'Carriers use AI to read load tenders faster', why_it_matters: 'x' }], feed)).toHaveLength(1);
+    expect(keepFetched([{ headline: 'Carriers use AI to read load tenders', why_it_matters: 'x' }], feed)).toHaveLength(1);
+    expect(keepFetched([{ headline: 'Carriers use AI', why_it_matters: 'x' }], feed)).toHaveLength(0);
+    expect(keepFetched([{ headline: 'AI helps carriers read tenders', why_it_matters: 'x' }], feed)).toHaveLength(0);
+    // The feed's own headline is what is kept, and one feed item is used once.
+    const kept = keepFetched([{ headline: 'Carriers use AI to read load tenders faster', why_it_matters: 'a' }, { headline: 'Carriers use AI to read load tenders faster', why_it_matters: 'b' }], feed);
+    expect(kept).toEqual([{ headline: 'Carriers use AI to read load tenders faster - FreightWaves', why_it_matters: 'a', date: '2026-09-12', url: 'u2' }]);
+  });
+
   it('prompt list says none found when empty', () => {
     expect(headlinesForPrompt('COMPANY NEWS', [])).toBe('COMPANY NEWS:\nnone found');
   });

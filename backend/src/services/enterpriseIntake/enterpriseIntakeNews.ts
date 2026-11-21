@@ -80,16 +80,33 @@ export async function companyAndIndustryNews(
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
+/** Google News titles end in " - <Source>"; the model often drops it when it copies a headline. */
+export const withoutSource = (headline: string): string => headline.replace(/\s+[-|]\s+[^-|]{1,60}$/, '').trim();
+
+/** The same headline, allowing the dropped source and a little trimming at the end (not a rewrite). */
+function sameHeadline(picked: string, fetched: string): boolean {
+  const p = norm(picked);
+  const full = norm(fetched);
+  const bare = norm(withoutSource(fetched));
+  if (!p) return false;
+  if (p === full || p === bare) return true;
+  // A shortened copy: the model's text is the start of ours and keeps most of it.
+  return p.length >= 20 && bare.startsWith(p) && p.length >= bare.length * 0.8;
+}
+
 /**
- * Keep only the model's items whose headline is one we fetched, and take the date and link from
- * the feed, never from the model.
+ * Keep only the model's items whose headline is one we fetched, and take the headline, date and
+ * link from the feed, never from the model. Live check 2026-11-21: exact matching dropped every
+ * headline, because the model left off Google's " - Source" suffix.
  */
 export function keepFetched<T extends { headline: string }>(picked: T[], fetched: NewsItem[]): Array<T & { date: string | null; url: string | null }> {
-  const byHeadline = new Map(fetched.map((f) => [norm(f.headline), f]));
   const out: Array<T & { date: string | null; url: string | null }> = [];
+  const used = new Set<NewsItem>();
   for (const p of picked) {
-    const f = byHeadline.get(norm(p.headline));
-    if (f) out.push({ ...p, headline: f.headline, date: f.date, url: f.url });
+    const f = fetched.find((x) => !used.has(x) && sameHeadline(p.headline, x.headline));
+    if (!f) continue;
+    used.add(f);
+    out.push({ ...p, headline: f.headline, date: f.date, url: f.url });
   }
   return out;
 }

@@ -107,13 +107,44 @@ export function ctMidnight(y: number, m: number, d: number): Date {
 }
 
 /** The first instant of the next weekday (Central) after `anchor`. */
+/** The nth weekday (0 Sun..6 Sat) of a month, or the last one when n is -1. Day of month. */
+function nthWeekday(y: number, m: number, weekday: number, n: number): number {
+  if (n > 0) {
+    const first = new Date(Date.UTC(y, m - 1, 1)).getUTCDay();
+    return 1 + ((weekday - first + 7) % 7) + (n - 1) * 7;
+  }
+  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const last = new Date(Date.UTC(y, m - 1, lastDay)).getUTCDay();
+  return lastDay - ((last - weekday + 7) % 7);
+}
+
+/**
+ * US holidays Colaberry does not take meetings on. Live check 2026-11-21: Thanksgiving and the
+ * day after were offered as bookable. (Fixed dates are not shifted when they fall on a weekend:
+ * weekends are never offered anyway.)
+ */
+export function isHoliday(y: number, m: number, d: number): boolean {
+  const md = `${m}-${d}`;
+  if (['1-1', '7-4', '12-24', '12-25', '12-31'].includes(md)) return true;
+  if (m === 5 && d === nthWeekday(y, 5, 1, -1)) return true; // Memorial Day
+  if (m === 9 && d === nthWeekday(y, 9, 1, 1)) return true; // Labor Day
+  const thanksgiving = nthWeekday(y, 11, 4, 4);
+  return m === 11 && (d === thanksgiving || d === thanksgiving + 1);
+}
+
+/** True for a Central calendar date we meet on: a weekday that is not a holiday. */
+export function isBusinessDay(y: number, m: number, d: number): boolean {
+  const wd = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  return wd !== 0 && wd !== 6 && !isHoliday(y, m, d);
+}
+
 export function earliestMeetingStart(anchor: Date): Date {
   const p = ctParts(anchor);
   // Walk calendar days in UTC arithmetic on the Central date, which has no DST problem.
   const day = new Date(Date.UTC(p.y, p.m - 1, p.d));
   do {
     day.setUTCDate(day.getUTCDate() + 1);
-  } while (day.getUTCDay() === 0 || day.getUTCDay() === 6);
+  } while (!isBusinessDay(day.getUTCFullYear(), day.getUTCMonth() + 1, day.getUTCDate()));
   return ctMidnight(day.getUTCFullYear(), day.getUTCMonth() + 1, day.getUTCDate());
 }
 
@@ -130,7 +161,7 @@ export function meetingAnchor(i: Pick<EnterpriseIntake, 'interviewed_at' | 'inte
 /** A start the calendar would offer: a weekday, on the half hour, 9:00 to 16:30 Central. */
 export function isBookableShape(start: Date): boolean {
   const p = ctParts(start);
-  return p.weekday >= 1 && p.weekday <= 5 && (p.minute === 0 || p.minute === 30) && p.hour >= 9 && p.hour <= 16
+  return isBusinessDay(p.y, p.m, p.d) && (p.minute === 0 || p.minute === 30) && p.hour >= 9 && p.hour <= 16
     && start.getUTCSeconds() === 0 && start.getUTCMilliseconds() === 0;
 }
 
@@ -144,6 +175,10 @@ export interface OfferedSlots {
 
 export function filterSlots(avail: AvailabilityResponse, earliest: Date): AvailabilityResponse['dates'] {
   return avail.dates
+    .filter((d) => {
+      const [y, m, day] = d.date.split('-').map(Number);
+      return isBusinessDay(y, m, day);
+    })
     .map((d) => ({ date: d.date, slots: d.slots.filter((s) => new Date(s.start).getTime() >= earliest.getTime()) }))
     .filter((d) => d.slots.length > 0);
 }
