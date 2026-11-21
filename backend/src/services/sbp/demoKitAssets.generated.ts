@@ -212,7 +212,12 @@ dl.facts dd { margin: 0; min-width: 0; }
 </style>
 </head>
 <body>
-<div id="app"><p class="err">Loading the demo…</p></div>
+<!-- The pre-JavaScript state. It carries the banner because this page is served from a public
+     link: a viewer with JavaScript off, or one who reads the page before it boots, would
+     otherwise see a bare "Loading" with nothing saying what they are looking at is a simulation.
+     The wording is bound to the engine's SIMULATED constant by a test, so the two copies cannot
+     drift apart. -->
+<div id="app"><div class="demo-strip"><span><strong>DEMO</strong> · Simulated, not live. Nothing here was produced by the real system.</span><span class="right"></span></div><p class="err">Loading the demo…</p></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <!-- The spec. Left empty here: the engine then fetches demo-spec.json from beside this file.
@@ -695,7 +700,10 @@ dl.facts dd { margin: 0; min-width: 0; }
     }
     if (!body) { active = first; body = RENDER[SPEC.screens[first].type](SPEC.screens[first], first); }
     var a = SPEC.app;
-    document.title = a.name + ' demo';
+    // "(simulated)" and not just "demo": the tab title is the one piece of this page that
+    // survives into a screenshot, a screen share or a bookmark, where the banner does not.
+    // demoRender.ts sets the same words server-side for the moment before this runs.
+    document.title = a.name + ' demo (simulated)';
     document.getElementById('app').innerHTML =
       strip(true) +
       '<div class="shell"><nav class="rail" aria-label="Main"><a class="brand" href="#' + esc(first) + '"><span class="mark">' + esc(a.name.charAt(0)) + '</span>' + esc(a.name) + '</a>' + nav(active) +
