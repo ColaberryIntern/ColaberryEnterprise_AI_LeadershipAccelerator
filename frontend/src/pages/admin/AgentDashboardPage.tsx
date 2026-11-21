@@ -375,31 +375,47 @@ export default function AgentDashboardPage() {
             ))}
           </div>
 
-          {/*
-            AF12.2. Full width and BELOW the three, because it is a different question: those are
-            about the agent in the strip, this one is about all ten.
-
-            Rendered on `canProgram === true` and not on `!== false`, which is the opposite of the
-            per-card rule a few lines up, deliberately. A card that guesses wrong is already on the
-            page and says so; a GROUP that guesses wrong hands a builder two live links the API
-            will refuse, which is precisely what `adminNav.ts` warns about. Guessing wrong the
-            other way costs an owner one refresh.
-          */}
-          {ownerGroups.length > 0 && canProgram === true && ownerGroups.map((g) => (
-            <div className="mt-4" key={g.key} data-testid={`agent-dashboard-group-${g.key}`}>
-              <div className="text-uppercase small fw-bold text-primary mb-1">{g.title}</div>
-              <div className="small text-muted mb-2">{g.definition}</div>
-              <div className="row g-3">
-                {g.cards.map((c) => (
-                  <div className="col-lg-4" key={c.key}>
-                    <HubCardView card={c} blocked={false} />
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
         </>
       )}
+
+      {/*
+        AF12.2. Full width and BELOW the three, because it is a different question: those are
+        about the agent in the strip, this one is about all ten.
+
+        OUTSIDE the `domains.length > 0` block, and that placement is the entire point.
+
+        AF12.15b, 21 Nov 2026, reported by Ali with a screenshot of his own empty page. This
+        shipped INSIDE that block, so a viewer with no agent assigned to them got the "No agent
+        is assigned to you yet" card AND NOTHING ELSE. All Domains and Builder Path had just
+        lost their sidebar rows in the same change, so for that viewer they became unreachable
+        from the UI altogether: the rail no longer carried them and the only page that did
+        refused to draw them. A nav consolidation that can hide a page is the failure the
+        restatement work existed to prevent, and it was caught on the route and missed on the
+        page.
+
+        The group is NOT about the viewer's own agent. It is the ten domains read two ways, so
+        an empty personal list is no reason to withhold it. The only thing that may gate it is
+        the `program` section, below.
+
+        Rendered on `canProgram === true` and not on `!== false`, which is the opposite of the
+        per-card rule above, deliberately. A card that guesses wrong is already on the page and
+        says so; a GROUP that guesses wrong hands a builder two live links the API will refuse,
+        which is precisely what `adminNav.ts` warns about. Guessing wrong the other way costs an
+        owner one refresh.
+      */}
+      {!loading && !error && ownerGroups.length > 0 && canProgram === true && ownerGroups.map((g) => (
+        <div className="mt-4" key={g.key} data-testid={`agent-dashboard-group-${g.key}`}>
+          <div className="text-uppercase small fw-bold text-primary mb-1">{g.title}</div>
+          <div className="small text-muted mb-2">{g.definition}</div>
+          <div className="row g-3">
+            {g.cards.map((c) => (
+              <div className="col-lg-4" key={c.key}>
+                <HubCardView card={c} blocked={false} />
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
 
       {/*
         The reporter, on its own route-independent mount. `brandLabel` carries the agent rather

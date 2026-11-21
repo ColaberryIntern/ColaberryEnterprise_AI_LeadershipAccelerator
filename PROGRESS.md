@@ -18439,3 +18439,10 @@ Steps 1-4 are safe without 5: the form accepts, the lead is captured and attribu
     - Backend: `npx jest src/services/enterpriseIntake src/services/ops src/services/inboxCase src/scripts/__tests__/syncLifecycleLadder` gives 856 passed (5 skipped); admin and client routes 30/30; digest action 5/5.
     - Frontend: MyPilotV2 5/5 and AdminEnterpriseClientsPage 6/6 (11/11 together); tsc clean.
   - Notes: The digest-action tightening also closes an older hole: any token signed with the app secret (participant, alumni) could reclassify inbox email. The only minter, `askUserDigestService`, always sets `email_ids`, so real digest links still work.
+
+- [x] **AF12.15b: the Agents hub drew nothing for a viewer with no agent, orphaning All Domains and Builder Path**
+  - Date: 2026-11-21
+  - Session: CC-20261119-bpb
+  - What changed: the owner-only "Across everyone" group moved OUT of the page's `domains.length > 0` branch in `AgentDashboardPage.tsx`. It now renders on `canProgram === true` whether or not the viewer has an agent of their own, because it is not about their agent: it is the ten domains read two ways.
+  - Verification: `agentsOneRow.test.tsx` gains a fourth describe for a viewer with zero domains - the owner still gets the group and both hrefs, a builder still does not, and the empty state and its reason are still shown. CI: Frontend unit tests, Frontend typecheck, Test-file typecheck, Frontend build.
+  - Notes: a regression from AF12.2, shipped 20 Nov from this same tab. That change removed the All Domains and Builder Path rows from the sidebar and made this hub their only entry point; the hub then refused to draw them for any viewer whose email matches no domain as manager or builder. Ali hit it on 21 Nov and sent a screenshot of his own empty page. Every owner case in the existing suite mocked one domain, which is why none of them caught it. The route guard was restated correctly and the PAGE was missed: a page is only as reachable as its emptiest state.
