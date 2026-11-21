@@ -18,7 +18,7 @@ export function TellPeople(): React.ReactElement {
     <form className="ch-tell mb-3" onSubmit={go}>
       <label className="form-label fw-bold" htmlFor="ch-tell">What do you want to tell people?</label>
       <div className="d-flex gap-2">
-        <input id="ch-tell" className="form-control" value={text} maxLength={300} placeholder="The Demo Tuesday time moved to 7 PM" onChange={(e) => setText(e.target.value)} />
+        <input id="ch-tell" className="form-control" value={text} maxLength={300} placeholder="For example: tonight's session now starts at 7 PM" onChange={(e) => setText(e.target.value)} />
         <button type="submit" className="btn ch-btn-berry comms-hub-action" disabled={!text.trim()}>Start a message</button>
       </div>
     </form>
