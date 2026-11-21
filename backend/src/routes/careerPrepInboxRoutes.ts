@@ -4,6 +4,7 @@ import { requireParticipant } from '../middlewares/participantAuth';
 import { requireCareerPrep } from './careerPrepRoutes';
 import { logFailure, sendValidated } from './campusRoutes';
 import { getInbox, listReceived, saveInboxAddress } from '../services/placement/inboxService';
+import { sendTest } from '../services/placement/inboxTestJob';
 
 /**
  * Career Prep v27, CP6.1 (kit F2): the student's job-search inbox, behind the same two gates as every Career Prep route
@@ -13,6 +14,7 @@ import { getInbox, listReceived, saveInboxAddress } from '../services/placement/
  *   GET /api/portal/career-prep/inbox            the address, its health and the four setup steps
  *   PUT /api/portal/career-prep/inbox            { address }: Gmail only; 409 if another learner already uses that inbox
  *   GET /api/portal/career-prep/inbox/received   "Everything it received", newest first
+ *   POST /api/portal/career-prep/inbox/test      {}: send a forwarding test now (409 while the tests switch is off)
  */
 const iso = z.string().datetime().nullable();
 const InboxViewSchema = z.object({
@@ -70,8 +72,31 @@ export async function getReceivedRoute(req: Request, res: Response): Promise<voi
   }
 }
 
+const TestBody = z.object({}).strict();
+export const TestResponse = z.object({ test: z.object({ status: z.enum(['sent', 'already_today']) }).strict(), inbox: InboxViewSchema }).strict();
+const TEST_REFUSAL: Record<string, [number, string]> = {
+  switched_off: [409, 'Inbox tests are switched off'],
+  no_inbox: [409, 'Add your job-search address first.'],
+  failed: [502, 'Could not send the test. Try again in a moment.'],
+};
+
+/** CP6.1c step 4: send a test now. Gated server-side by career_prep_inbox_tests_enabled (inboxTestJob.sendTest). */
+export async function postTestRoute(req: Request, res: Response): Promise<void> {
+  if (!TestBody.safeParse(req.body ?? {}).success) { res.status(400).json({ error: 'Send an empty body.' }); return; }
+  try {
+    const r = await sendTest(req.participant!.sub);
+    const refusal = TEST_REFUSAL[r.status];
+    if (refusal) { res.status(refusal[0]).json({ error: refusal[1] }); return; }
+    sendValidated(res, TestResponse, { test: { status: r.status as 'sent' | 'already_today' }, inbox: await getInbox(req.participant!.sub) }, 'career_prep_inbox_test');
+  } catch (err) {
+    logFailure('career_prep_inbox_test_failed', err);
+    res.status(500).json({ error: 'Could not send the test. Try again in a moment.' });
+  }
+}
+
 const router = Router();
 router.get('/api/portal/career-prep/inbox', requireParticipant, requireCareerPrep, getInboxRoute);
 router.put('/api/portal/career-prep/inbox', requireParticipant, requireCareerPrep, putInboxRoute);
 router.get('/api/portal/career-prep/inbox/received', requireParticipant, requireCareerPrep, getReceivedRoute);
+router.post('/api/portal/career-prep/inbox/test', requireParticipant, requireCareerPrep, postTestRoute);
 export default router;

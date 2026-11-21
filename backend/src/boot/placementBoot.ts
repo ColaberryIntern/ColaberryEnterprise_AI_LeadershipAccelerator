@@ -1,6 +1,7 @@
 import type { Express, Router } from 'express';
 import { ensurePlacementSchema } from '../db/ensurePlacementSchema';
 import careerPrepInboxRoutes from '../routes/careerPrepInboxRoutes';
+import { startInboxTestCron } from '../services/placement/inboxTestJob';
 
 /**
  * Career Prep v27, Releases 2 and 3: everything the getting-hired pipeline mounts and starts, in ONE place, so
@@ -20,7 +21,9 @@ export const INTEGRATION_ROUTERS: Router[] = [];
 export const PUBLIC_ROUTERS: Router[] = [
   careerPrepInboxRoutes, // CP6.1: the student's job-search inbox (participant + Career Prep gated per route)
 ];
-export const SCHEDULERS: Array<{ name: string; start: () => void }> = [];
+export const SCHEDULERS: Array<{ name: string; start: () => void }> = [
+  { name: 'inbox-tests', start: startInboxTestCron }, // CP6.1c: daily forwarding test + broken alerts (switch-gated per pass)
+];
 
 export function mountPlacementIntegrations(app: Express): void {
   for (const r of INTEGRATION_ROUTERS) app.use(r);

@@ -9,6 +9,9 @@ jest.mock('../../services/placement/inboxService', () => ({
   getInbox: (...a: unknown[]) => mockGet(...a), saveInboxAddress: (...a: unknown[]) => mockSave(...a), listReceived: (...a: unknown[]) => mockList(...a),
 }));
 
+const mockSendTest = jest.fn();
+jest.mock('../../services/placement/inboxTestJob', () => ({ sendTest: (...a: unknown[]) => mockSendTest(...a) }));
+
 import express from 'express';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
@@ -81,5 +84,47 @@ describe('the job-search inbox routes', () => {
     const res = await request(app()).put(URL).set('Authorization', ro).send({ address: 'a@gmail.com' });
     expect(res.status).toBeGreaterThanOrEqual(400);
     expect(mockSave).not.toHaveBeenCalled();
+    expect((await request(app()).post(`${URL}/test`).set('Authorization', ro).send({})).status).toBeGreaterThanOrEqual(400);
+    expect(mockSendTest).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /inbox/test (T11: the forwarding test, gated by career_prep_inbox_tests_enabled)', () => {
+  const T = `${URL}/test`;
+  beforeEach(() => mockSendTest.mockReset());
+  it('401 without a token, 404 with Career Prep off; nothing is sent', async () => {
+    expect((await request(app()).post(T).send({})).status).toBe(401);
+    mockEnabled.mockResolvedValue(false);
+    expect((await request(app()).post(T).set('Authorization', token()).send({})).status).toBe(404);
+    expect(mockSendTest).not.toHaveBeenCalled();
+  });
+  it('400 on any body field (the enrollment comes only from the token)', async () => {
+    expect((await request(app()).post(T).set('Authorization', token()).send({ enrollmentId: 'enr-someone-else' })).status).toBe(400);
+    expect(mockSendTest).not.toHaveBeenCalled();
+  });
+  it('switch off: 409 "Inbox tests are switched off" and no inbox read', async () => {
+    mockSendTest.mockResolvedValue({ status: 'switched_off' });
+    const res = await request(app()).post(T).set('Authorization', token('enr-ali')).send({});
+    expect([res.status, res.body]).toEqual([409, { error: 'Inbox tests are switched off' }]);
+    expect(mockSendTest).toHaveBeenCalledWith('enr-ali');
+    expect(mockGet).not.toHaveBeenCalled();
+  });
+  it('sent: 200 with the inbox as the server now sees it; a second click the same day says already_today', async () => {
+    mockSendTest.mockResolvedValueOnce({ status: 'sent', sentAt: '2026-11-21T18:00:00.000Z' }).mockResolvedValueOnce({ status: 'already_today' });
+    const first = await request(app()).post(T).set('Authorization', token('enr-ali')).send({});
+    expect([first.status, first.body.test]).toEqual([200, { status: 'sent' }]);
+    expect(mockGet).toHaveBeenCalledWith('enr-ali');
+    const again = await request(app()).post(T).set('Authorization', token('enr-ali')).send({});
+    expect([again.status, again.body.test]).toEqual([200, { status: 'already_today' }]);
+  });
+  it('no address yet is 409; a failed send is 502; a crash is 500, each in plain words', async () => {
+    mockSendTest.mockResolvedValueOnce({ status: 'no_inbox' });
+    expect((await request(app()).post(T).set('Authorization', token()).send({})).body).toEqual({ error: 'Add your job-search address first.' });
+    mockSendTest.mockResolvedValueOnce({ status: 'failed', errorClass: 'SendBlocked' });
+    const failed = await request(app()).post(T).set('Authorization', token()).send({});
+    expect([failed.status, failed.body.error]).toEqual([502, 'Could not send the test. Try again in a moment.']);
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    mockSendTest.mockRejectedValueOnce(new Error('db down'));
+    expect((await request(app()).post(T).set('Authorization', token()).send({})).status).toBe(500);
   });
 });

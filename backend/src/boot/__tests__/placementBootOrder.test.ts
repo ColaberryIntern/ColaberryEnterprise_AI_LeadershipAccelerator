@@ -2,6 +2,8 @@ const mockEnsure = jest.fn();
 jest.mock('../../db/ensurePlacementSchema', () => ({ ensurePlacementSchema: (...a: unknown[]) => mockEnsure(...a) }));
 // The real routers import the app config; the wiring under test only needs something mountable.
 jest.mock('../../routes/careerPrepInboxRoutes', () => { const { Router: R } = jest.requireActual('express'); return { __esModule: true, default: R() }; });
+const mockStartInboxTests = jest.fn();
+jest.mock('../../services/placement/inboxTestJob', () => ({ startInboxTestCron: mockStartInboxTests }));
 
 import fs from 'fs';
 import path from 'path';
@@ -40,6 +42,11 @@ describe('placementBoot', () => {
 
   it('registers the CP6.1 inbox routes as a public (participant-gated) router', () => {
     expect(saved.p.length).toBe(1);
+  });
+
+  it('T11: registers the daily forwarding test + broken alerts as a scheduler', () => {
+    expect(saved.s.map((s) => s.name)).toEqual(['inbox-tests']);
+    expect(saved.s[0].start).toBe(mockStartInboxTests);
   });
 
   it('mounts every registered router, in order', () => {

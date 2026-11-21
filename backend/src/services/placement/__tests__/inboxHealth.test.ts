@@ -48,6 +48,12 @@ describe('inboxHealth', () => {
     expect(inboxHealth({ ...base, lastReceivedAt: ago(5 * 86_400_000), lastTestAt: ago(BROKEN_AFTER_MS + 1000), lastTestMs: null }, NOW)).toBe('broken');
     expect(inboxHealth({ ...base, lastTestAt: ago(BROKEN_AFTER_MS * 6), lastTestMs: 30_000 }, NOW)).toBe('healthy');
   });
+  it('T11: during a broken spell a fresh test still on its way stays broken; the spell ends only when a test arrives', () => {
+    const spell = { ...base, brokenSince: ago(86_400_000) };
+    expect(inboxHealth({ ...spell, lastTestAt: ago(60_000), lastTestMs: null }, NOW)).toBe('broken');
+    expect(inboxHealth({ ...spell, lastTestAt: ago(60_000), lastTestMs: 42_000 }, NOW)).toBe('healthy');
+    expect(inboxHealth({ ...base, brokenSince: null, lastTestAt: ago(60_000), lastTestMs: null }, NOW)).toBe('healthy');
+  });
   it('verified but never tested and nothing received yet is Not tested', () => {
     expect(inboxHealth({ ...base, lastTestAt: null, lastTestMs: null, lastReceivedAt: null }, NOW)).toBe('untested');
   });

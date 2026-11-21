@@ -12,6 +12,8 @@ import { sequelize } from '../config/database';
  *                        (UNIQUE per learner) and its canonical Gmail mailbox (dots and +tag removed, UNIQUE across
  *                        learners, so two learners can never claim one inbox), when forwarding was
  *                        verified, the last mail and the last daily test (sent at, token, how long it took to arrive).
+ *                        broken_since / broken_alerted_at / broken_alert_attempts (CP6.1c): the current "forwarding
+ *                        broken" spell (the missed test that began it), and its one email alert (at most 3 tries).
  *                        Health (Healthy / Quiet / Forwarding broken / Not tested) is computed, never stored
  *                        (services/placement/inboxHealth.ts), so it can never go stale.
  *   inbox_received       (CP6.1) "Everything it received": one row per message, UNIQUE on the RFC 5322 Message-ID,
@@ -31,6 +33,9 @@ export const PLACEMENT_STATEMENTS: readonly string[] = [
      last_test_at TIMESTAMPTZ,
      last_test_token VARCHAR(64),
      last_test_ms INTEGER CHECK (last_test_ms IS NULL OR last_test_ms >= 0),
+     broken_since TIMESTAMPTZ,
+     broken_alerted_at TIMESTAMPTZ,
+     broken_alert_attempts SMALLINT NOT NULL DEFAULT 0 CHECK (broken_alert_attempts >= 0),
      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
    )`,

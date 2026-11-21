@@ -44,12 +44,17 @@ export interface InboxFacts {
   lastTestAt: Date | null;
   /** How long the latest test took to arrive; null while it has not arrived. */
   lastTestMs: number | null;
+  /**
+   * CP6.1c: when the current "forwarding broken" spell began (the missed test), or null. A spell ends only when a test
+   * arrives, so a fresh test still on its way does not flip a broken inbox back to healthy for ten minutes.
+   */
+  brokenSince?: Date | null;
 }
 
 export function inboxHealth(f: InboxFacts, now: Date): InboxHealth {
   if (!f.address || !f.verifiedAt) return 'setup';
   const t = now.getTime();
-  if (f.lastTestAt && f.lastTestMs === null && t - f.lastTestAt.getTime() > BROKEN_AFTER_MS) return 'broken';
+  if (f.lastTestAt && f.lastTestMs === null && (f.brokenSince || t - f.lastTestAt.getTime() > BROKEN_AFTER_MS)) return 'broken';
   if (f.lastReceivedAt && t - f.lastReceivedAt.getTime() > QUIET_AFTER_MS) return 'quiet';
   if (!f.lastTestAt && !f.lastReceivedAt) return 'untested';
   return 'healthy';

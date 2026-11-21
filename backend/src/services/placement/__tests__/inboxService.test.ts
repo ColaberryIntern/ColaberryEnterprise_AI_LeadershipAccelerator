@@ -23,6 +23,12 @@ describe('getInbox', () => {
     expect(await getInbox('enr-1', NOW)).toEqual({ address: null, health: 'setup', healthLabel: 'Not set up yet', verifiedAt: null, forwardingConfirmedAt: null,
       lastReceivedAt: null, lastTestAt: null, lastTestMs: null, receivedThisMonth: 0, steps: { create: false, added: false, forwarding: false, tested: false } });
   });
+  it('T11: a stored broken spell keeps the inbox broken while the next test is still on its way', async () => {
+    mockQuery.mockResolvedValueOnce([[row({ verified_at: '2026-11-10T00:00:00Z', last_received_at: '2026-11-21T10:00:00Z', last_test_at: '2026-11-21T17:59:00Z', broken_since: '2026-11-20T15:00:00Z' })], 1]);
+    const v = await getInbox('enr-1', NOW);
+    expect(String(mockQuery.mock.calls[0][0])).toMatch(/i\.broken_since/);
+    expect([v.health, v.healthLabel]).toEqual(['broken', 'Forwarding broken']);
+  });
   it('counts this month in Central time', async () => {
     mockQuery.mockResolvedValueOnce([[], 0]);
     await getInbox('enr-1', NOW);
@@ -52,7 +58,7 @@ describe('saveInboxAddress', () => {
     const sql = String(mockQuery.mock.calls[1][0]);
     expect(sql).toMatch(/ON CONFLICT \(enrollment_id\) DO UPDATE/);
     // Verification and the last test are cleared ONLY when the mailbox changes (proved on Postgres in inboxService.integration).
-    for (const col of ['verified_at', 'forwarding_confirmed_at', 'last_test_at', 'last_test_ms']) {
+    for (const col of ['verified_at', 'forwarding_confirmed_at', 'last_test_at', 'last_test_ms', 'broken_since', 'broken_alerted_at']) {
       expect(sql).toMatch(new RegExp(`${col} = CASE WHEN job_search_inboxes\\.mailbox IS DISTINCT FROM EXCLUDED\\.mailbox THEN NULL ELSE job_search_inboxes\\.${col} END`));
     }
     expect(sql).toMatch(/WHERE job_search_inboxes\.mailbox IS DISTINCT FROM EXCLUDED\.mailbox OR job_search_inboxes\.address IS DISTINCT FROM EXCLUDED\.address/);

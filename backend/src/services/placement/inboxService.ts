@@ -29,19 +29,19 @@ export interface InboxView {
 }
 export interface ReceivedRow { messageId: string; receivedAt: string; fromName: string | null; subject: string | null; category: string | null; confidence: number | null; outcome: string | null }
 
-type Row = { address: string; verified_at: Date | null; forwarding_confirmed_at: Date | null; last_received_at: Date | null; last_test_at: Date | null; last_test_ms: number | null; this_month: number };
+type Row = { address: string; verified_at: Date | null; forwarding_confirmed_at: Date | null; last_received_at: Date | null; last_test_at: Date | null; last_test_ms: number | null; broken_since?: Date | null; this_month: number };
 const iso = (d: Date | null) => (d ? new Date(d).toISOString() : null);
 
 export async function getInbox(enrollmentId: string, now = new Date()): Promise<InboxView> {
   const [rows] = await sequelize.query(
-    `SELECT i.address, i.verified_at, i.forwarding_confirmed_at, i.last_received_at, i.last_test_at, i.last_test_ms,
+    `SELECT i.address, i.verified_at, i.forwarding_confirmed_at, i.last_received_at, i.last_test_at, i.last_test_ms, i.broken_since,
             (SELECT COUNT(*)::int FROM inbox_received r WHERE r.enrollment_id = i.enrollment_id
                AND date_trunc('month', r.received_at AT TIME ZONE 'America/Chicago') = date_trunc('month', CAST(:now AS timestamptz) AT TIME ZONE 'America/Chicago')) AS this_month
        FROM job_search_inboxes i WHERE i.enrollment_id = :e`,
     { replacements: { e: enrollmentId, now: now.toISOString() } });
   const r = (rows as Row[])[0];
   const facts = r
-    ? { address: r.address, verifiedAt: r.verified_at && new Date(r.verified_at), lastReceivedAt: r.last_received_at && new Date(r.last_received_at), lastTestAt: r.last_test_at && new Date(r.last_test_at), lastTestMs: r.last_test_ms === null ? null : Number(r.last_test_ms) }
+    ? { address: r.address, verifiedAt: r.verified_at && new Date(r.verified_at), lastReceivedAt: r.last_received_at && new Date(r.last_received_at), lastTestAt: r.last_test_at && new Date(r.last_test_at), lastTestMs: r.last_test_ms === null ? null : Number(r.last_test_ms), brokenSince: r.broken_since ? new Date(r.broken_since) : null }
     : { address: null, verifiedAt: null, lastReceivedAt: null, lastTestAt: null, lastTestMs: null };
   const health = inboxHealth(facts, now);
   return {
@@ -74,6 +74,9 @@ export async function saveInboxAddress(enrollmentId: string, raw: string, now = 
          last_test_at = CASE WHEN job_search_inboxes.mailbox IS DISTINCT FROM EXCLUDED.mailbox THEN NULL ELSE job_search_inboxes.last_test_at END,
          last_test_token = CASE WHEN job_search_inboxes.mailbox IS DISTINCT FROM EXCLUDED.mailbox THEN NULL ELSE job_search_inboxes.last_test_token END,
          last_test_ms = CASE WHEN job_search_inboxes.mailbox IS DISTINCT FROM EXCLUDED.mailbox THEN NULL ELSE job_search_inboxes.last_test_ms END,
+         broken_since = CASE WHEN job_search_inboxes.mailbox IS DISTINCT FROM EXCLUDED.mailbox THEN NULL ELSE job_search_inboxes.broken_since END,
+         broken_alerted_at = CASE WHEN job_search_inboxes.mailbox IS DISTINCT FROM EXCLUDED.mailbox THEN NULL ELSE job_search_inboxes.broken_alerted_at END,
+         broken_alert_attempts = CASE WHEN job_search_inboxes.mailbox IS DISTINCT FROM EXCLUDED.mailbox THEN 0 ELSE job_search_inboxes.broken_alert_attempts END,
          updated_at = NOW()
        WHERE job_search_inboxes.mailbox IS DISTINCT FROM EXCLUDED.mailbox OR job_search_inboxes.address IS DISTINCT FROM EXCLUDED.address
        RETURNING id`,
