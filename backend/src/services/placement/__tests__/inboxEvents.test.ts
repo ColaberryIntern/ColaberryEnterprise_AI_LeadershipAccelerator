@@ -63,7 +63,7 @@ describe('acceptInboxEvent', () => {
   });
   it('a dispatch failure leaves the event unprocessed and throws; the sender\'s retry dispatches it again', async () => {
     mockArrival.mockRejectedValueOnce(Object.assign(new Error('db down'), { name: 'SequelizeConnectionError' }));
-    await expect(acceptInboxEvent(ev())).rejects.toThrow('db down');
+    await expect(acceptInboxEvent(ev())).rejects.toMatchObject({ name: 'InboxDispatchError', message: 'db down' }); // stored, not processed
     expect([...db.events.values()][0].processed_at).toBeNull();
     expect(await acceptInboxEvent(ev())).toEqual({ duplicate: false });
     expect(mockArrival).toHaveBeenCalledTimes(2);

@@ -1,12 +1,15 @@
 import express, { Router, type NextFunction, type Request, type Response } from 'express';
+import { z } from 'zod';
 import { InboxEventSchema } from '../services/placement/inboxEventSchema';
 import { acceptInboxEvent } from '../services/placement/inboxEvents';
+import { lookupRoster } from '../services/placement/inboxRoster';
 import { verifyInboxSignature } from '../services/placement/inboxSignature';
 
 /**
  * Career Prep v27, CP6.2 (kit F3): the inbox manager pushes classified mail and interview events here.
  *
  *   POST /api/integrations/inbox/events   headers X-Timestamp + X-Signature (inboxSignature.ts), body = one event
+ *   GET  /api/integrations/inbox/roster   ?address=..., signed over the raw query (see getRoster below)
  *
  * ORDER OF REFUSALS: INBOX_INTEGRATION_SECRET unset -> 503 {error:"integration not configured"} (nothing is read);
  * no raw body -> 400; signature missing, stale (over 5 minutes) or wrong -> 401; not JSON or not the F3 shape -> 400;
@@ -62,6 +65,32 @@ export async function postInboxEvent(req: Request, res: Response): Promise<void>
   }
 }
 
+/**
+ * GET /api/integrations/inbox/roster?address=<job-search address>   (CP6.2, kit F3; inboxRoster.ts)
+ * Signed like the events route, over "<X-Timestamp>.<the raw query string exactly as sent>". 200 with exactly
+ * {participant_id, display_name, recruiter, notify_ok} and a 15-minute private cache; unknown -> 404 (not cached).
+ */
+export const ROSTER_PATH = '/api/integrations/inbox/roster';
+export const RosterResponse = z.object({ participant_id: z.string(), display_name: z.string(), recruiter: z.string().nullable(), notify_ok: z.boolean() }).strict();
+const RosterQuery = z.object({ address: z.string().trim().min(3).max(254) }).strict();
+
+export async function getRoster(req: Request, res: Response): Promise<void> {
+  const rawQuery = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?') + 1) : '';
+  const check = verifyInboxSignature({ secret: process.env.INBOX_INTEGRATION_SECRET as string, timestamp: req.get('x-timestamp'), signature: req.get('x-signature'), body: rawQuery, now: new Date() });
+  if (!check.ok) { log('inbox_roster_signature_refused', { reason: check.reason }, 'AuthError'); res.status(401).json({ error: 'Bad signature.' }); return; }
+  const q = RosterQuery.safeParse(req.query);
+  if (!q.success) { res.status(400).json({ error: 'Send exactly one address.' }); return; }
+  try {
+    const entry = await lookupRoster(q.data.address);
+    if (!entry) { res.set('Cache-Control', 'no-store').status(404).json({ error: 'Not on the roster.' }); return; }
+    res.set('Cache-Control', 'private, max-age=900').status(200).json(RosterResponse.parse(entry));
+  } catch (err) {
+    log('inbox_roster_failed', {}, (err as Error)?.name && (err as Error).name !== 'Error' ? (err as Error).name : 'UpstreamUnavailable');
+    res.set('Cache-Control', 'no-store').status(503).json({ error: 'Roster unavailable. Retry.' });
+  }
+}
+
 const router = Router();
 router.post(EVENTS_PATH, requireSecret, rawBody, postInboxEvent);
+router.get(ROSTER_PATH, requireSecret, getRoster);
 export default router;

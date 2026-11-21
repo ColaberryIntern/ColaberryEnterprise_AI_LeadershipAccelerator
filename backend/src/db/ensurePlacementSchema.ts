@@ -21,6 +21,9 @@ import { sequelize } from '../config/database';
  *   inbox_events         (CP6.2, kit F3) every signed event the inbox manager pushed, UNIQUE on (message_id, type), so
  *                        a replay is stored once. processed_at is set after it was dispatched; a stored event that was
  *                        never processed (a dispatch failed) is dispatched again when the sender retries.
+ *   inbox_backfill_state (CP6.2) ONE row: the next backfill pass's `since`, on the upstream's clock, moved only by a COMPLETED pass.
+ *                        Kept apart from inbox_events because pushes write there too (a resumed push must never move
+ *                        the backfill past events missed during an outage).
  */
 export const PLACEMENT_STATEMENTS: readonly string[] = [
   `CREATE TABLE IF NOT EXISTS job_search_inboxes (
@@ -67,10 +70,16 @@ export const PLACEMENT_STATEMENTS: readonly string[] = [
      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
      CONSTRAINT uq_inbox_events_message_type UNIQUE (message_id, type)
    )`,
+  `CREATE TABLE IF NOT EXISTS inbox_backfill_state (
+     id SMALLINT PRIMARY KEY CHECK (id = 1),
+     next_since TIMESTAMPTZ NOT NULL,
+     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
 ];
 
 /** Run by hand to roll the placement tables back. Never run at boot. Dependents first. */
 export const PLACEMENT_SCHEMA_ROLLBACK: readonly string[] = [
+  'DROP TABLE IF EXISTS inbox_backfill_state',
   'DROP TABLE IF EXISTS inbox_events',
   'DROP TABLE IF EXISTS inbox_received',
   'DROP TABLE IF EXISTS job_search_inboxes',

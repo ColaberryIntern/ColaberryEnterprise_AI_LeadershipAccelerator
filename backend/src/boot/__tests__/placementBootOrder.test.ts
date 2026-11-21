@@ -5,6 +5,8 @@ jest.mock('../../routes/careerPrepInboxRoutes', () => { const { Router: R } = je
 jest.mock('../../routes/integrationsInboxRoutes', () => { const { Router: R } = jest.requireActual('express'); return { __esModule: true, default: R() }; });
 const mockStartInboxTests = jest.fn();
 jest.mock('../../services/placement/inboxTestJob', () => ({ startInboxTestCron: mockStartInboxTests }));
+const mockStartBackfill = jest.fn();
+jest.mock('../../services/placement/inboxBackfill', () => ({ startInboxBackfill: mockStartBackfill }));
 
 import fs from 'fs';
 import path from 'path';
@@ -51,8 +53,9 @@ describe('placementBoot', () => {
   });
 
   it('T11: registers the daily forwarding test + broken alerts as a scheduler', () => {
-    expect(saved.s.map((s) => s.name)).toEqual(['inbox-tests']);
+    expect(saved.s.map((s) => s.name)).toEqual(['inbox-tests', 'inbox-backfill']);
     expect(saved.s[0].start).toBe(mockStartInboxTests);
+    expect(saved.s[1].start).toBe(mockStartBackfill); // T13: it registers nothing while unconfigured (inboxBackfill.test.ts)
   });
 
   it('mounts every registered router, in order', () => {

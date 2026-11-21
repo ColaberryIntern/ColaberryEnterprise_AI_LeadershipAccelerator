@@ -19,6 +19,8 @@ import { ingestInterviewEvent } from './interviewIngest';
  *              dispatch target is idempotent (recordArrival keys on the Message-ID), so a second dispatch is safe.
  */
 export type AcceptResult = { duplicate: boolean };
+/** error.name when the event row was stored but its dispatch failed (the backfill counts it as stored). */
+export const DISPATCH_ERROR = 'InboxDispatchError';
 
 function log(level: 'info' | 'warn', event: string, context: Record<string, unknown>, errorClass?: string): void {
   const line = JSON.stringify({ timestamp: new Date().toISOString(), level, service: 'backend', event,
@@ -72,7 +74,11 @@ export async function acceptInboxEvent(ev: InboxEvent): Promise<AcceptResult> {
     if (!prior || prior.processed_at) { log('info', 'inbox_event_duplicate', { event_id: ev.event_id, type: ev.type }); return { duplicate: true }; }
     id = prior.id; // stored before, but its dispatch failed: dispatch it again
   }
-  const { processed } = await dispatchInboxEvent(ev);
+  let processed: boolean;
+  try { ({ processed } = await dispatchInboxEvent(ev)); } catch (err) {
+    // The row IS stored (processed_at NULL); only its dispatch failed. Callers can tell the two apart by the name.
+    throw Object.assign(new Error((err as Error)?.message ?? String(err)), { name: DISPATCH_ERROR, cause: err });
+  }
   if (processed) await sequelize.query('UPDATE inbox_events SET processed_at = NOW() WHERE id = :id', { replacements: { id } });
   log('info', 'inbox_event_accepted', { event_id: ev.event_id, type: ev.type, processed });
   return { duplicate: false };

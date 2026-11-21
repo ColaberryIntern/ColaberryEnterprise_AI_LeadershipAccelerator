@@ -24,6 +24,9 @@ describe('ensurePlacementSchema (statements)', () => {
     expect(events).toMatch(/CHECK \(type IN \('email\.classified', 'interview\.detected', 'interview\.updated', 'forwarding\.confirmation'\)\)/);
     expect(events).toMatch(/processed_at TIMESTAMPTZ,/);
   });
+  it('CP6.2: the backfill cursor is ONE row, apart from inbox_events', () => {
+    expect(PLACEMENT_STATEMENTS.find((s) => s.includes('CREATE TABLE IF NOT EXISTS inbox_backfill_state'))).toMatch(/id SMALLINT PRIMARY KEY CHECK \(id = 1\)/);
+  });
   it('has a rollback that drops every table it creates, dependents first, never run at boot', () => {
     const made = tables(PLACEMENT_STATEMENTS, /CREATE TABLE IF NOT EXISTS (\w+)/);
     const dropped = tables(PLACEMENT_SCHEMA_ROLLBACK, /DROP TABLE IF EXISTS (\w+)/);
