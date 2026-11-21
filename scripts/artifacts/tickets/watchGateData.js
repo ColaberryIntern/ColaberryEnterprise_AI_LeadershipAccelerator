@@ -46,7 +46,7 @@ const LADDER = [
     detail: 'Only TimelineCard returns its promise. The drawer, the workspace and ambient media '
       + 'catch and return undefined, so the re-credit is dead code and a failed save still loses time.',
     state: 'LIVE',
-    note: 'PR #4287, merged 06fe191a, deployed; build proved, behaviour not browser-tested',
+    note: 'PR #4287, merged 06fe191a, deployed; build proved, behavior not browser-tested',
   },
   {
     n: 5,
@@ -141,7 +141,7 @@ const NOT_ESTABLISHED = [
   'That the back-off and the caller fix WORK in production, only that they are there. #4276 was '
     + 'proved live by name, because it reads two HTTP headers and a string literal survives '
     + 'minification; #4287 adds no literal, so what was proved for it is that the build shipped - '
-    + 'the deployed commit contains it and the served bundle changed. Behaviour on a real failing '
+    + 'the deployed commit contains it and the served bundle changed. Behavior on a real failing '
     + 'save is a browser test nobody has run.',
   'That 75% means the same thing on every surface. Until item 5 is decided, the drawer, the tile '
     + 'and the workspace can each answer differently.',
