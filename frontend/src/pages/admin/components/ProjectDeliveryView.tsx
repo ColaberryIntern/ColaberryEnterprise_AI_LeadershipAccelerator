@@ -197,7 +197,25 @@ export default function ProjectDeliveryView({ cohortId, internsOnly, audienceFil
   const [rows, setRows] = useState<ProjectRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState<string | null>(null);
+  /**
+   * AF12.16 — `/admin/accelerator?project=<student_project_id>` opens straight on that project.
+   *
+   * All Domains links a domain to the build behind it, and a link that lands on a list of 30
+   * rows and leaves the operator to find the one they just clicked is not a drill-down. Read
+   * from `window.location.search` rather than `useSearchParams` on purpose: this component is
+   * rendered in tests without a Router, and a hook that needs router context would fail them
+   * for a reason that has nothing to do with what they assert.
+   *
+   * An id that matches nothing simply stays closed. The rows are fetched after this runs, so
+   * the value is a request to open that row IF it arrives, never a promise that it exists.
+   */
+  const [expanded, setExpanded] = useState<string | null>(() => {
+    try {
+      return new URLSearchParams(window.location.search).get('project');
+    } catch {
+      return null;
+    }
+  });
   const [gantt, setGantt] = useState<Record<string, Gantt>>({});
   const [ganttLoading, setGanttLoading] = useState<string | null>(null);
   const [onlyOverdue, setOnlyOverdue] = useState(false);

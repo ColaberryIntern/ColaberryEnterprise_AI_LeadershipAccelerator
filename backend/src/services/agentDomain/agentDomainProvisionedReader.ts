@@ -48,6 +48,11 @@
 import { QueryTypes, type Sequelize } from 'sequelize';
 import { AGENT_DOMAIN_ORG_ID } from './agentDomainRegistry';
 import { reachFor, resolveManagerReach } from './managerReachResolver';
+// AF12.16. The same four helpers `mgmtBridgeService` uses to answer "what does this person's
+// admin session open", so the All Domains screen cannot drift from the bridge that mints it.
+import {
+  isMgmtRole, effectiveSections, normalizeExtraSections, MGMT_ROLE_DEFS,
+} from '../access/mgmtRoles';
 
 export interface ProvisionedDomainRow {
   readonly domain_key: string;
@@ -60,7 +65,20 @@ export interface ProvisionedDomainRow {
   readonly manager_email: string | null;
   readonly manager_can_reach: boolean | null;
   readonly manager_blocker: string | null;
+  /**
+   * The builder's NAME, and only a name. The registry is explicit that this is deliberately not
+   * a foreign key to an enrollment, so nothing downstream may treat it as an assignment or
+   * follow it to a person automatically. It is surfaced so an operator can read who is building
+   * a domain and go and find them, which is what the All Domains screen could not show before.
+   */
+  readonly intended_builder: string | null;
   readonly intended_builder_state: string | null;
+  /** AF12.16, display only: the builder's management grant, resolved by name with an ambiguity guard. */
+  readonly intended_builder_mgmt_role?: string | null;
+  readonly intended_builder_mgmt_label?: string | null;
+  readonly intended_builder_sections?: string[];
+  /** True when the name matched more than one community member, so nothing was resolved. */
+  readonly intended_builder_name_is_ambiguous?: boolean;
   readonly agent_id: string | null;
   /**
    * AF10.6: the name the intern gave this agent, or null if they have not named it. Null is the
@@ -113,6 +131,7 @@ const BASE_SQL = `
          om.email                                  AS manager_email,
          adp.manager_can_reach,
          adp.manager_blocker,
+         adp.intended_builder,
          adp.intended_builder_state,
          adp.agent_id::text                        AS agent_id,
          aa.config->>'display_name'                AS agent_display_name,
@@ -212,9 +231,90 @@ async function withComputedReach(
 ): Promise<ProvisionedDomainRow[]> {
   if (!rows.length) return rows;
   const reach = await resolveManagerReach(sequelize);
-  return rows.map((r) => {
+  const withReach = rows.map((r) => {
     const v = reachFor(reach, String(r.domain_key));
     return { ...r, manager_can_reach: v.canReach, manager_blocker: v.blocker };
+  });
+  return withBuilderMgmt(sequelize, withReach);
+}
+
+/**
+ * AF12.16 — overlay the BUILDER'S management grant, for display only.
+ *
+ * ## Why this is here at all
+ *
+ * Ali, 21 Nov 2026, after signing in as Quincy and several other interns: *"none of them have an
+ * entry to a door to the mgmt screen."* They all do. Every one of the seven carries
+ * `role = 'staff'` and a real `mgmt_role`, and `getMgmtStatus` returns `is_mgmt: true` for each.
+ * What hid the door was the read-only view-as rule, which withholds employee tools on purpose, so
+ * impersonating them was the one method guaranteed not to show it.
+ *
+ * The answer is to stop needing impersonation: put the grant on the admin screen, where an owner
+ * can read every builder's management layer without becoming them.
+ *
+ * ## Resolved by NAME, with the same guard the builder's own reader uses
+ *
+ * `intended_builder` is a plain name the registry deliberately keeps un-keyed. So this resolves
+ * the same way `loadProvisionedDomainsForBuilder` does, and refuses the same way: a name matching
+ * more than one `community_members` row resolves to NOTHING and is flagged ambiguous, because
+ * picking one is how a screen ends up reporting somebody else's access as this builder's.
+ *
+ * This reads a grant. It does not create, imply or store one, so nothing here turns the registry's
+ * name into the assignment it refuses to be.
+ */
+async function withBuilderMgmt(
+  sequelize: Sequelize,
+  rows: ProvisionedDomainRow[],
+): Promise<ProvisionedDomainRow[]> {
+  const names = [...new Set(
+    rows.map((r) => String(r.intended_builder ?? '').trim().toLowerCase()).filter(Boolean),
+  )];
+  if (!names.length) return rows;
+
+  // Numbered binds and IN rather than `= ANY($1::text[])`: an array bound through Sequelize to
+  // ANY has crashed this repo before, and the list here is at most ten names.
+  const placeholders = names.map((_, i) => `$${i + 1}`).join(', ');
+  const members = await sequelize.query<{
+    display_name: string; role: string | null;
+    mgmt_role: string | null; mgmt_extra_sections: unknown;
+  }>(
+    `SELECT cm.display_name, cm.role, cm.mgmt_role, cm.mgmt_extra_sections
+       FROM community_members cm
+      WHERE lower(btrim(cm.display_name)) IN (${placeholders})`,
+    { bind: names, type: QueryTypes.SELECT },
+  );
+
+  const byName = new Map<string, typeof members>();
+  for (const m of members) {
+    const k = String(m.display_name ?? '').trim().toLowerCase();
+    byName.set(k, [...(byName.get(k) ?? []), m]);
+  }
+
+  return rows.map((r) => {
+    const key = String(r.intended_builder ?? '').trim().toLowerCase();
+    const hits = key ? byName.get(key) ?? [] : [];
+    // One row, or nothing. An ambiguous name is not a licence to pick one.
+    if (hits.length !== 1) {
+      return {
+        ...r,
+        intended_builder_mgmt_role: null,
+        intended_builder_mgmt_label: null,
+        intended_builder_sections: [],
+        intended_builder_name_is_ambiguous: hits.length > 1,
+      };
+    }
+    const m = hits[0];
+    const isStaff = m.role === 'staff';
+    const role = isStaff && isMgmtRole(m.mgmt_role) ? (m.mgmt_role as string) : null;
+    return {
+      ...r,
+      intended_builder_mgmt_role: role,
+      intended_builder_mgmt_label: role ? MGMT_ROLE_DEFS[role as never].label : null,
+      intended_builder_sections: role
+        ? effectiveSections(role as never, normalizeExtraSections(role as never, m.mgmt_extra_sections as never))
+        : [],
+      intended_builder_name_is_ambiguous: false,
+    };
   });
 }
 
