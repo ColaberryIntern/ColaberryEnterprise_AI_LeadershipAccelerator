@@ -7,6 +7,7 @@ import { sendOnce, type ProviderResult } from '../email/idempotentSend';
 import { getSetting } from '../settingsService';
 import { careerPrepEnabled, careerPrepEnrollmentIds } from '../careerPrep/careerPrepFlag';
 import { BROKEN_AFTER_MS } from './inboxHealth';
+import { isSwitchOn, SWITCHES } from './darkSwitches';
 
 /**
  * Career Prep v27, CP6.1c (kit F2): the daily forwarding test and the "forwarding broken" alert.
@@ -29,7 +30,7 @@ import { BROKEN_AFTER_MS } from './inboxHealth';
  *   - in the app the alert is the inbox sheet's role="alert" line, shown for as long as health is broken.
  *   - a spell ends only when a test arrives (inboxArrival.ts clears it), so a later spell alerts again.
  */
-export const TESTS_SWITCH = 'career_prep_inbox_tests_enabled';
+export const TESTS_SWITCH = SWITCHES.inboxTests;
 export const MAX_ALERT_ATTEMPTS = 3;
 export const ALERT_SUBJECT = 'Your job-search inbox stopped forwarding';
 export const testSubject = (token: string) => `Forwarding test for your job-search inbox [test:${token}]`;
@@ -47,12 +48,8 @@ function log(level: 'info' | 'warn' | 'error', event: string, context: Record<st
   if (level === 'error') console.error(line); else if (level === 'warn') console.warn(line); else console.log(line);
 }
 
-export async function testsEnabled(read: Read = getSetting): Promise<boolean> {
-  try { const v = await read(TESTS_SWITCH); return v === true || v === 'true'; } catch (err) {
-    log('warn', 'inbox_tests_switch_unreadable', {}, (err as Error)?.name || 'UpstreamUnavailable');
-    return false;
-  }
-}
+/** The platform's one switch rule (darkSwitches.ts): exactly true is on; absent, other or unreadable is off. */
+export const testsEnabled = (read: Read = getSetting): Promise<boolean> => isSwitchOn(TESTS_SWITCH, read);
 
 const DAY = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit' });
 /** The Central calendar day (YYYY-MM-DD) an instant falls on. */

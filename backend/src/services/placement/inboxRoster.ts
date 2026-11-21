@@ -1,7 +1,7 @@
 import { sequelize } from '../../config/database';
-import { getSetting } from '../settingsService';
 import { careerPrepEnabled } from '../careerPrep/careerPrepFlag';
 import { normalizeJobSearchAddress } from './inboxHealth';
+import { isSwitchOn, SWITCHES, type Read } from './darkSwitches';
 
 /**
  * Career Prep v27, CP6.2 (kit F3): "the platform owns the roster". The inbox manager asks which learner a job-search
@@ -19,7 +19,7 @@ import { normalizeJobSearchAddress } from './inboxHealth';
  * Only learners Career Prep is on for are on the roster (dark: Ali's enrollment only); anyone else is "not found".
  */
 export interface RosterEntry { participant_id: string; display_name: string; recruiter: string | null; notify_ok: boolean }
-export const EMPLOYER_MAIL_SWITCH = 'career_prep_employer_mail_enabled';
+export const EMPLOYER_MAIL_SWITCH = SWITCHES.employerMail;
 
 /** PURE: "Ann Lee" -> "Ann L."; one name stays as it is; nothing -> "Learner". */
 export function displayName(fullName: string | null | undefined): string {
@@ -29,21 +29,8 @@ export function displayName(fullName: string | null | undefined): string {
   return `${parts[0].slice(0, 60)} ${parts[parts.length - 1][0].toUpperCase()}.`;
 }
 
-type Read = (k: string) => Promise<unknown>;
 export interface RosterDeps { read?: Read; enabled?: (e: string) => Promise<boolean> }
 
-/**
- * The platform's own rule for every dark switch: absent, false or UNREADABLE = OFF (inboxTestJob.testsEnabled,
- * careerPrepFlag). The send paths read the switch the same way, so an unreadable switch means the platform is not
- * sending, and the inbox manager may (notify_ok true): the learner is never left with nobody notifying them.
- */
-async function employerMailOn(read: Read): Promise<boolean> {
-  try { const v = await read(EMPLOYER_MAIL_SWITCH); return v === true || v === 'true'; } catch (err) {
-    console.warn(JSON.stringify({ timestamp: new Date().toISOString(), level: 'warn', service: 'backend', event: 'inbox_roster_switch_unreadable',
-      outcome: 'failure', error_class: (err as Error)?.name && (err as Error).name !== 'Error' ? (err as Error).name : 'UpstreamUnavailable', context: { switch: EMPLOYER_MAIL_SWITCH } }));
-    return false;
-  }
-}
 
 export async function lookupRoster(address: string, deps: RosterDeps = {}): Promise<RosterEntry | null> {
   const addr = normalizeJobSearchAddress(address);
@@ -53,5 +40,5 @@ export async function lookupRoster(address: string, deps: RosterDeps = {}): Prom
     { replacements: { m: addr.mailbox } });
   const r = (rows as Array<{ enrollment_id: string; full_name: string | null }>)[0];
   if (!r || !(await (deps.enabled ?? careerPrepEnabled)(String(r.enrollment_id)))) return null;
-  return { participant_id: String(r.enrollment_id), display_name: displayName(r.full_name), recruiter: null, notify_ok: !(await employerMailOn(deps.read ?? getSetting)) };
+  return { participant_id: String(r.enrollment_id), display_name: displayName(r.full_name), recruiter: null, notify_ok: !(await isSwitchOn(EMPLOYER_MAIL_SWITCH, deps.read)) }; // darkSwitches: unreadable = off, the send paths' rule
 }

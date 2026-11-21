@@ -26,7 +26,7 @@ describe('lookupRoster', () => {
     const unreadable = Object.assign(new Error('db'), { name: 'SequelizeConnectionError' });
     expect((await lookupRoster('annlee@gmail.com', { read: async () => { throw unreadable; }, enabled: async () => true }))?.notify_ok).toBe(true);
     const line = JSON.parse(String(warn.mock.calls[0][0]));
-    expect(line).toMatchObject({ level: 'warn', event: 'inbox_roster_switch_unreadable', error_class: 'SequelizeConnectionError', outcome: 'failure' });
+    expect(line).toMatchObject({ level: 'warn', event: 'placement_switch_unreadable', error_class: 'SequelizeConnectionError', outcome: 'failure' });
     warn.mockRestore();
   });
   it('not on the roster: unknown address, a non-Gmail address (no query), or Career Prep off for that learner', async () => {

@@ -6,6 +6,9 @@
  */
 export {};
 
+// The booking-link reply (T16) has its own tests; here it is a no-op so the counts are ingestion's alone.
+jest.mock('../bookingReply', () => ({ sendBookingLink: async () => ({ status: 'held' }) }));
+
 const HAS_DB = Boolean(process.env.DATABASE_URL);
 const describeIfDb = HAS_DB ? describe : describe.skip;
 if (!HAS_DB) {

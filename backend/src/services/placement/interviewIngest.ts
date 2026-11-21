@@ -2,6 +2,7 @@ import type { Transaction } from 'sequelize';
 import { sequelize } from '../../config/database';
 import type { InboxEvent } from './inboxEventSchema';
 import { normalizeJobSearchAddress } from './inboxHealth';
+import { recordBookingEvent, sendBookingLink } from './bookingReply';
 import { canMove, confidenceBand, interviewTypeOf, isInterviewState, type InterviewState } from './interviewStates';
 
 /**
@@ -22,7 +23,8 @@ import { canMove, confidenceBand, interviewTypeOf, isInterviewState, type Interv
  * INSERT ... ON CONFLICT DO NOTHING); an update is keyed `interview.updated:<Message-ID>` on placement_events (partial
  * UNIQUE) and runs under a row lock on the interview, so two dispatches of one event make one interview and one event
  * row. Every state change writes exactly one placement_events row in the same transaction; a refused move writes nothing.
- * The booking-link reply for `new` is CP8.1b (bookingReply.ts, T16).
+ * The booking-link reply for `new` (a new interview, or a booked one rescheduled) is sent AFTER the commit by
+ * bookingReply.ts (CP8.1b, dark behind career_prep_employer_mail_enabled).
  */
 export type IngestResult =
   | { status: 'ingested'; interviewId: string; state: InterviewState }
@@ -86,17 +88,19 @@ async function detected(ev: InboxEvent, enrollmentId: string): Promise<IngestRes
   const band = confidenceBand(ev.confidence);
   if (band === 'human_only') return reviewItem('low_confidence', ev, enrollmentId);
   const state: InterviewState = band === 'auto' && !ev.needs_review ? 'new' : 'review';
-  return sequelize.transaction(async (t) => {
+  const r: IngestResult = await sequelize.transaction(async (t) => {
     const [made] = await sequelize.query(
-      `INSERT INTO placement_interviews (enrollment_id, source_event_id, company, position, type, sub_type, contact_name, contact_email, confidence, state)
-       VALUES (:e, :src, :company, :position, :type, :sub, :cname, :cemail, :conf, :state) ON CONFLICT (source_event_id) DO NOTHING RETURNING id`,
+      `INSERT INTO placement_interviews (enrollment_id, source_event_id, company, position, type, sub_type, contact_name, contact_email, confidence, state, booking_link_round)
+       VALUES (:e, :src, :company, :position, :type, :sub, :cname, :cemail, :conf, :state, :round) ON CONFLICT (source_event_id) DO NOTHING RETURNING id`,
       { replacements: { e: enrollmentId, src: sourceId(ev), company: clip(ev.company, 200), position: clip(ev.position, 200), type: interviewTypeOf(ev.sub_type),
-        sub: clip(ev.sub_type, 60), cname: clip(ev.contact?.name, 160), cemail: clip(ev.contact?.email, 254), conf: ev.confidence ?? null, state }, transaction: t });
+        sub: clip(ev.sub_type, 60), cname: clip(ev.contact?.name, 160), cemail: clip(ev.contact?.email, 254), conf: ev.confidence ?? null, state, round: state === 'new' ? 'first' : null }, transaction: t });
     const id = (made as Array<{ id: string }>)[0]?.id;
     if (!id) return { status: 'duplicate' } as const;
     await writeEvent(t, String(id), 'detected', null, state, ev);
     return { status: 'ingested', interviewId: String(id), state } as const;
   });
+  if (r.status === 'ingested' && r.state === 'new') await offerBookingLink(r.interviewId, 'first');
+  return r;
 }
 
 /** PURE: where an update moves an interview; null = recorded without a state change. */
@@ -110,6 +114,7 @@ export function updateTarget(subType: string | null | undefined, from: Interview
 type Unmatched = { review: 'unmatched_update' | 'ambiguous_update'; ids: string[] };
 
 async function updated(ev: InboxEvent, enrollmentId: string): Promise<IngestResult> {
+  let reoffer = false; // a booked interview rescheduled back to new: the booking link goes out again after commit
   const result = await sequelize.transaction(async (t): Promise<IngestResult | Unmatched> => {
     // Every OPEN interview of this learner, locked in id order (two concurrent updates lock in the same order, so they
     // serialize instead of deadlocking); the company / position match is matchInterview's, not the SQL's.
@@ -129,10 +134,33 @@ async function updated(ev: InboxEvent, enrollmentId: string): Promise<IngestResu
     if (to !== from && !canMove(from, to)) { log('warn', 'placement_interview_move_refused', { interview_id: row.id, from, to }, 'ValidationError'); return { status: 'rejected', reason: 'illegal_transition' }; }
     if (!(await writeEvent(t, String(row.id), to === from ? 'updated' : to === 'cancelled' ? 'cancelled' : 'rescheduled', from, to, ev))) return { status: 'duplicate' };
     if (to !== from) await sequelize.query('UPDATE placement_interviews SET state = :to, updated_at = NOW() WHERE id = :id', { replacements: { to, id: row.id }, transaction: t });
+    reoffer = from === 'booked' && to === 'new';
+    // The reply owed is stored with the move, in this transaction: a crash before the send still leaves it to the sweep.
+    if (reoffer) await sequelize.query(`UPDATE placement_interviews SET booking_link_round = :round, booking_link_sent_at = NULL, booking_link_attempts = 0,
+      booking_link_last_attempt_at = NULL WHERE id = :id`, { replacements: { round: ev.message_id, id: row.id }, transaction: t });
     return { status: 'ingested', interviewId: String(row.id), state: to };
   });
   if ('review' in result) return reviewItem(result.review, ev, enrollmentId, result.ids.length ? { candidate_interview_ids: result.ids } : {});
+  if (reoffer && result.status === 'ingested') await offerBookingLink(result.interviewId, ev.message_id);
   return result;
+}
+
+/**
+ * After the commit, never inside it: the first try of the booking-link reply (bookingReply.ts, dark behind the employer
+ * mail switch). Its failure never undoes the interview. The reply owed is already stored on the interview (round,
+ * not sent), so the retry is bookingLinkSweep.ts (switch-gated, capped, ending in review), not this caller. A throw here
+ * is recorded at once as one keyed booking_link_failed row.
+ */
+async function offerBookingLink(interviewId: string, round: string): Promise<void> {
+  try {
+    const r = await sendBookingLink(interviewId, { round });
+    log('info', 'placement_booking_link', { interview_id: interviewId, round, status: r.status });
+  } catch (err) {
+    const errorClass = (err as Error)?.name && (err as Error).name !== 'Error' ? (err as Error).name : 'UpstreamUnavailable';
+    log('warn', 'placement_booking_link_failed', { interview_id: interviewId, round }, errorClass);
+    await recordBookingEvent(interviewId, 'failed', round, { first_error_class: errorClass, thrown: true })
+      .catch((e: unknown) => log('warn', 'placement_booking_link_failed_unrecorded', { interview_id: interviewId }, (e as Error)?.name || 'DatabaseError'));
+  }
 }
 
 export async function ingestInterviewEvent(ev: InboxEvent): Promise<IngestResult> {

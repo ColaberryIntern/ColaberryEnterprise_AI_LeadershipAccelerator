@@ -34,6 +34,9 @@ describe('ensurePlacementSchema (statements)', () => {
     expect(PLACEMENT_STATEMENTS).toContain('CREATE UNIQUE INDEX IF NOT EXISTS uq_placement_events_source ON placement_events (source_event_id) WHERE source_event_id IS NOT NULL');
     expect(PLACEMENT_STATEMENTS.find((s) => s.includes('placement_review_items ('))).toMatch(/UNIQUE \(kind, source_event_id\)/);
   });
+  it('CP8.1b: a partial index serves the booking-link sweep (only interviews still owed a reply)', () => {
+    expect(PLACEMENT_STATEMENTS).toContain("CREATE INDEX IF NOT EXISTS idx_placement_interviews_owed_link ON placement_interviews (created_at) WHERE state = 'new' AND booking_link_sent_at IS NULL");
+  });
   it('has a rollback that drops every table it creates, dependents first, never run at boot', () => {
     const made = tables(PLACEMENT_STATEMENTS, /CREATE TABLE IF NOT EXISTS (\w+)/);
     const dropped = tables(PLACEMENT_SCHEMA_ROLLBACK, /DROP TABLE IF EXISTS (\w+)/);

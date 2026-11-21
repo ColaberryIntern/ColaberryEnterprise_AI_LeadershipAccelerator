@@ -3,7 +3,7 @@
  * stand-in answering each statement as Postgres would: UNIQUE keys are checked atomically, and a transaction holds its
  * row lock (one at a time) and rolls back on a throw. The same rules run on Postgres in interviewIngest.integration.
  */
-type Interview = { id: string; enrollment_id: string; source_event_id: string; company: string | null; position: string | null; state: string; type: string | null; created_at: number };
+type Interview = { id: string; enrollment_id: string; source_event_id: string; company: string | null; position: string | null; state: string; type: string | null; created_at: number; booking_link_round?: string | null };
 type Ev = { subject_id: string; event: string; from_state: string | null; to_state: string; source_event_id: string | null };
 const db = { inboxes: new Map<string, string>(), interviews: [] as Interview[], events: [] as Ev[], items: [] as Array<{ kind: string; source_event_id: string; enrollment_id: string | null; summary?: Record<string, unknown> }>, tick: 0, failOn: '' };
 type R = Record<string, string | number | boolean | null | undefined>;
@@ -18,7 +18,7 @@ function answer(sql: string, r: R): [unknown[], number] {
   if (sql.includes('INSERT INTO placement_interviews')) {
     if (db.interviews.some((i) => i.source_event_id === r.src)) return [[], 0];
     const id = `iv-${db.interviews.length + 1}`;
-    db.interviews.push({ id, enrollment_id: String(r.e), source_event_id: String(r.src), company: (r.company as string) ?? null, position: (r.position as string) ?? null, state: String(r.state), type: (r.type as string) ?? null, created_at: (db.tick += 1) });
+    db.interviews.push({ id, enrollment_id: String(r.e), source_event_id: String(r.src), company: (r.company as string) ?? null, position: (r.position as string) ?? null, state: String(r.state), booking_link_round: (r.round as string) ?? null, type: (r.type as string) ?? null, created_at: (db.tick += 1) });
     return [[{ id }], 1];
   }
   if (sql.includes('INSERT INTO placement_events')) {
@@ -33,6 +33,7 @@ function answer(sql: string, r: R): [unknown[], number] {
     return [open.sort((a, b) => a.id.localeCompare(b.id)).map((i) => ({ id: i.id, state: i.state, company: i.company, position: i.position })), 0];
   }
   if (sql.includes('SELECT 1 FROM placement_events')) return [db.events.filter((e) => e.source_event_id === r.src).map(() => ({ '?column?': 1 })), 0];
+  if (sql.includes('SET booking_link_round = :round')) { (db.interviews.find((x) => x.id === r.id) as Interview).booking_link_round = String(r.round); return [[], 1]; }
   if (sql.includes('UPDATE placement_interviews SET state')) { const i = db.interviews.find((x) => x.id === r.id) as Interview; i.state = String(r.to); return [[], 1]; }
   throw new Error(`unexpected SQL: ${sql.slice(0, 70)}`);
 }
@@ -48,6 +49,10 @@ const mockTransaction = (fn: (t: unknown) => Promise<unknown>) => {
 };
 jest.mock('../../../config/database', () => ({ sequelize: { query: (s: string, o: { replacements?: R }) => mockQuery(s, o), transaction: (f: (t: unknown) => Promise<unknown>) => mockTransaction(f) } }));
 
+const mockSendLink = jest.fn();
+const mockRecordBooking = jest.fn();
+jest.mock('../bookingReply', () => ({ sendBookingLink: (...a: unknown[]) => mockSendLink(...a), recordBookingEvent: (...a: unknown[]) => mockRecordBooking(...a) }));
+
 import { ingestInterviewEvent, matchInterview, updateTarget } from '../interviewIngest';
 import { InboxEventSchema, type InboxEvent } from '../inboxEventSchema';
 
@@ -59,6 +64,7 @@ const upd = (subType: string, over: Record<string, unknown> = {}) => ev({ type: 
 beforeEach(() => {
   db.inboxes = new Map([['annleecareers@gmail.com', 'enr-ann']]); db.interviews = []; db.events = []; db.items = []; db.tick = 0; db.failOn = '';
   mockQuery.mockClear();
+  mockSendLink.mockReset().mockResolvedValue({ status: 'held' }); mockRecordBooking.mockReset().mockResolvedValue(undefined);
   for (const k of ['log', 'warn'] as const) jest.spyOn(console, k).mockImplementation(() => undefined);
 });
 afterEach(() => jest.restoreAllMocks());
@@ -179,6 +185,40 @@ describe('interview.updated', () => {
   it('an update for no open interview: an unmatched_update review item', async () => {
     expect(await ingestInterviewEvent(upd('Interview Cancelled', { company: 'Globex' }))).toEqual({ status: 'review', kind: 'unmatched_update' });
     expect(db.items[0].kind).toBe('unmatched_update');
+  });
+});
+
+describe('T16: the booking-link reply after the commit', () => {
+  it('a new interview (0.95) offers the link once, round "first"; a review one (0.94) and a duplicate do not', async () => {
+    await ingestInterviewEvent(ev());
+    expect(mockSendLink.mock.calls).toEqual([['iv-1', { round: 'first' }]]);
+    await ingestInterviewEvent(ev());
+    await ingestInterviewEvent(ev({ message_id: '<m2@x>', confidence: 0.94 }));
+    expect(mockSendLink).toHaveBeenCalledTimes(1);
+  });
+  it('a booked interview rescheduled back to new offers it again, its round the update\'s Message-ID; a cancel does not', async () => {
+    await ingestInterviewEvent(ev());
+    db.interviews[0].state = 'booked';
+    mockSendLink.mockClear();
+    await ingestInterviewEvent(upd('Interview Rescheduled'));
+    expect(mockSendLink.mock.calls).toEqual([['iv-1', { round: '<u-Interview Rescheduled@acme.example>' }]]);
+    db.interviews[0].state = 'booked';
+    await ingestInterviewEvent(upd('Interview Cancelled'));
+    expect(mockSendLink).toHaveBeenCalledTimes(1);
+  });
+  it('a throwing reply never undoes the interview, and is recorded at once as one keyed booking_link_failed row', async () => {
+    mockSendLink.mockRejectedValueOnce(Object.assign(new Error('db'), { name: 'SequelizeConnectionError' }));
+    expect(await ingestInterviewEvent(ev())).toEqual({ status: 'ingested', interviewId: 'iv-1', state: 'new' });
+    expect(db.interviews).toHaveLength(1);
+    expect(mockRecordBooking.mock.calls).toEqual([['iv-1', 'failed', 'first', { first_error_class: 'SequelizeConnectionError', thrown: true }]]);
+  });
+  it('the reply owed is stored IN the ingest transaction (so a crash before the send leaves it to the sweep): new owes "first", review owes none', async () => {
+    await ingestInterviewEvent(ev());
+    await ingestInterviewEvent(ev({ message_id: '<m2@x>', confidence: 0.9, position: 'Data Engineer' }));
+    expect(db.interviews.map((i) => i.booking_link_round)).toEqual(['first', null]);
+    db.interviews[0].state = 'booked';
+    await ingestInterviewEvent(upd('Interview Rescheduled'));
+    expect(db.interviews[0].booking_link_round).toBe('<u-Interview Rescheduled@acme.example>');
   });
 });
 

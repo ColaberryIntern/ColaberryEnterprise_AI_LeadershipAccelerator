@@ -28,6 +28,9 @@ import { sequelize } from '../config/database';
  *   placement_interviews (CP8.1, kit F4) one row per interview the inbox found for a learner; source_event_id UNIQUE
  *                        ("interview.detected:<Message-ID>"), so a replayed or concurrent event makes ONE interview.
  *                        state CHECK new/awaiting/review/booked/done/cancelled; moves only by interviewStates.ts.
+ *                        booking_link_round / _sent_at / _attempts / _last_attempt_at (CP8.1b): the booking-link reply
+ *                        owed for this interview, written in the SAME transaction that puts it in `new`, so a crash
+ *                        before the send still leaves the sweep (bookingLinkSweep.ts) something to finish.
  *   placement_events     (CP8.1, the v22 event shape) one row per state change, written in the same transaction as the
  *                        change; source_event_id UNIQUE when set, so one inbox event changes an interview at most once.
  *   placement_review_items (CP8.1, F9 queue) what a human must look at: a low-confidence (< 0.70) interview email that
@@ -100,6 +103,10 @@ export const PLACEMENT_STATEMENTS: readonly string[] = [
      confidence NUMERIC(4,3) CHECK (confidence IS NULL OR (confidence >= 0 AND confidence <= 1)),
      state VARCHAR(20) NOT NULL CHECK (state IN ('new','awaiting','review','booked','done','cancelled')),
      booking_token_hash VARCHAR(128),
+     booking_link_round VARCHAR(300),
+     booking_link_sent_at TIMESTAMPTZ,
+     booking_link_attempts SMALLINT NOT NULL DEFAULT 0 CHECK (booking_link_attempts >= 0),
+     booking_link_last_attempt_at TIMESTAMPTZ,
      token_expires_at TIMESTAMPTZ,
      token_used_at TIMESTAMPTZ,
      starts_at TIMESTAMPTZ,
@@ -111,6 +118,8 @@ export const PLACEMENT_STATEMENTS: readonly string[] = [
      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
    )`,
   'CREATE INDEX IF NOT EXISTS idx_placement_interviews_enrollment ON placement_interviews (enrollment_id, created_at DESC)',
+  // The booking-link sweep's scan (bookingLinkSweep.ts): only interviews still owed a reply.
+  "CREATE INDEX IF NOT EXISTS idx_placement_interviews_owed_link ON placement_interviews (created_at) WHERE state = 'new' AND booking_link_sent_at IS NULL",
   `CREATE TABLE IF NOT EXISTS placement_events (
      id BIGSERIAL PRIMARY KEY,
      subject_type VARCHAR(40) NOT NULL,

@@ -9,6 +9,8 @@ const mockStartBackfill = jest.fn();
 jest.mock('../../services/placement/inboxBackfill', () => ({ startInboxBackfill: mockStartBackfill }));
 const mockStartReplay = jest.fn();
 jest.mock('../../services/placement/inboxEvents', () => ({ startInboxReplay: mockStartReplay }));
+const mockStartSweep = jest.fn();
+jest.mock('../../services/placement/bookingLinkSweep', () => ({ startBookingLinkSweep: mockStartSweep }));
 
 import fs from 'fs';
 import path from 'path';
@@ -55,7 +57,8 @@ describe('placementBoot', () => {
   });
 
   it('T11: registers the daily forwarding test + broken alerts as a scheduler', () => {
-    expect(saved.s.map((s) => s.name)).toEqual(['inbox-tests', 'inbox-backfill', 'inbox-replay']);
+    expect(saved.s.map((s) => s.name)).toEqual(['inbox-tests', 'inbox-backfill', 'inbox-replay', 'booking-link-sweep']);
+    expect(saved.s[3].start).toBe(mockStartSweep); // T16: retries owed booking-link replies
     expect(saved.s[2].start).toBe(mockStartReplay); // T15: one boot pass over unprocessed stored events
     expect(saved.s[0].start).toBe(mockStartInboxTests);
     expect(saved.s[1].start).toBe(mockStartBackfill); // T13: it registers nothing while unconfigured (inboxBackfill.test.ts)
