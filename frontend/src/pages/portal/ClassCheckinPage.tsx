@@ -369,7 +369,7 @@ const ClassCheckinPage: React.FC = () => {
               textDecoration: 'none', boxShadow: '0 10px 26px rgba(45,140,255,.35)',
             }}
           >
-            ▶ Join the class on Zoom
+            Join the class on Zoom
           </a>
         )}
 
