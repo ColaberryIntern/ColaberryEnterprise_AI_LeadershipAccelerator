@@ -134,6 +134,15 @@ export function agentsTab(c: TabContext): string[] {
     + 'be waiting on and who releases it (empty on real data, and saying so). Then the cards, '
     + 'each opening a detail page with its stories and their verification state.',
   ));
+  // ShiftFill v5b (2026-11-21): a wide label column ("Waits for a person because of")
+  // squeezed the values, so words broke mid-word ("Ranke / d") and the autonomy
+  // badge ran past the card edge. Readability is part of the card, not polish.
+  lines.push(good(
+    'agent cards whose text reads cleanly: each label sits above its value, or the value '
+    + 'column gets at least half the card width; no word ever breaks mid-word (wrap between '
+    + 'words only); badges and pills stay inside the card and wrap onto their own line when '
+    + 'space runs out. Check this at the narrowest width the page supports, not only at full width.',
+  ));
   lines.push('');
   return lines;
 }

@@ -68,6 +68,12 @@ describe('the Story 000 agents tab', () => {
     expect(text).toMatch(/no label overlaps another label, an arrow or a node/);
   });
 
+  it('asks for agent cards whose words never break and whose badges stay inside', () => {
+    expect(text).toMatch(/each label sits above its value, or the value column gets at least half the card width/);
+    expect(text).toMatch(/no word ever breaks mid-word/);
+    expect(text).toMatch(/badges and pills stay inside the card/);
+  });
+
   it('says nothing about crowding when there are no hand-offs', () => {
     expect(agentsTab).toBeInstanceOf(Function);
     const lone = { ...plan, agents: [agent('Offer Sender', [], ['x'])] };
