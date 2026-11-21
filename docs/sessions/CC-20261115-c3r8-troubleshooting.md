@@ -161,3 +161,102 @@ edit cannot quietly turn the duty back into a refusal.
    `payments@colaberry.com` and `admissions@colaberry.com` are monitored.
 
 `CORA_DRY_RUN` is still `true`. Nothing was sent.
+
+---
+
+## Deploy, 2026-11-16 05:52 Central
+
+PR [#4096](https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/4096)
+merged as `8f1ebb4df` at 11:40:29Z. **Verified live: 32 of 32 checks pass against the
+deployed build, prompt 19,223 chars, `CORA_DRY_RUN` still `true`.**
+
+### Honest record of how it actually shipped
+
+My own deploy command **refused**, and correctly. By the time it ran, two more merges
+(#4097, #4098) had moved main to `e10600d7b` and then further to `8490e46b7`, and
+`deploy-prod.sh`'s registry check found no published image for that newer tip:
+
+```
+[deploy] registry mode: verifying published images match 8490e46b7473...
+exit 1
+```
+
+The change was already live anyway. **Another session's deploy, 22 seconds earlier at
+11:52:43Z, carried it** — their image was built from a commit containing this merge.
+Confirmed by reading the running container rather than inferring from the deploy log:
+
+```
+docker exec accelerator-backend grep -c 'Troubleshooting is your job' \
+  /app/dist/services/coraPromptRules.js   # 1
+docker exec accelerator-backend grep -c 'do not troubleshoot software' \
+  /app/dist/services/coraPromptRules.js   # 0
+```
+
+Two operational notes worth keeping:
+
+1. **The wrapper's own `git pull` broke the first attempt** with `fatal: Cannot rebase
+   onto multiple branches`. This host has `pull.rebase=true` globally and a concurrent
+   fetch had left more than one branch in `FETCH_HEAD`. The pull was redundant:
+   `deploy-prod.sh` pulls `origin/main` itself, under its own lock and guards. Removed.
+2. **On a busy main, "did my deploy run" and "is my code live" are different questions.**
+   The honest answer came from the container, not from the exit code.
+
+### Verified against the deployed build: 32 of 32
+
+Beyond the #4080 checks, the verifier now asserts the reversal itself: troubleshooting is
+stated as her job, **the old blanket refusal is gone**, the three limits are present,
+another program's tools keep a person, the support@ echo is forbidden, `needs_human`
+covers troubleshooting, and all five new knowledge base answers are in the prompt.
+
+**A check of mine was wrong again, and this is the third time.** Two assertions scanned
+the *whole prompt* for "once you are enrolled" and for `support@colaberry.com`, and failed
+— because **rule 6 quotes that phrase in order to ban it and rule 8 names that address in
+order to forbid it.** The rules were flagged for containing the things they prohibit. The
+production SQL guards over the answers had already returned 0 rows, which is what exposed
+it as an instrument fault rather than a content defect. Both assertions now scan only the
+knowledge base section of the prompt.
+
+A separate scoring bug: `coraReplay.js` does not carry the `synthetic` flag through, so a
+first pass counted the 4 probes among the 20 real emails and computed the probe statistics
+over an empty array, where `.every()` returns true. Re-scored by probe id.
+
+### The same 20 real emails plus 4 probes, through the deployed code
+
+| | #4080 deployed | Now |
+|---|---|---|
+| Compliance violations, 20 real | 2 | **1** |
+| Hand-offs, 20 real | 18 | **16** |
+| Probe violations | n/a | **0 of 4** |
+| Probes keeping a person | n/a | **4 of 4** |
+| Generation errors | 0 | **0** |
+
+The enforcement fired in production and logged itself:
+
+```
+[InboxCOS][Cora] {"event":"cora_rule_violation","outcome":"partial",
+ "error_class":"ContractViolation","rules":["advertises_free"],"forced_needs_human":true}
+```
+
+Every violating reply is routed to a person; nothing leaked.
+
+The four replies that resolve without a person are all legitimate: **Michael** gets the
+Docker download, "run it until it reports that it is running", the GitHub step and the
+portal link — he asked for exactly that and had been getting a referral; **Genay** gets
+the reinstall list for her replacement laptop; and the vendor and the sponsorship spam are
+closed declines that cost nobody any time.
+
+All four probes got real help. The Docker probe diagnosed it outright: *"It sounds like
+Docker Desktop might not be running, which can cause the 'cannot connect to the Docker
+daemon' error."*
+
+### One judgement call for Ali to confirm or tighten
+
+The SSRS probe got **three generic SSRS steps** — check the subscription is active, verify
+the SMTP settings, look at the report history — which are general knowledge rather than
+knowledge base content. She did keep a person on it, and first-line help on bootcamp tools
+is what was asked for on 2026-11-16, so this looks like the intended behaviour. But it is
+the boundary of "help as far as the knowledge base takes you", and it is worth a look.
+Tightening it means saying so; the rule can name it in a line.
+
+`CORA_DRY_RUN` is still `true`. Nothing was sent, no database row was written, and every
+file carrying student data was removed from the host and the container afterwards.
