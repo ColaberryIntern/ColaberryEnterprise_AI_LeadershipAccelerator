@@ -176,7 +176,15 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
         const req = ambientMedia
           ? runtimeApi.mediaWatch(ambientMedia.kind, ambientMedia.id, beat, exiting)
           : runtimeApi.watch(card.id, beat, exiting);
-        req.then(setWatch).catch(() => { /* best-effort heartbeat */ });
+        // RETURN the promise rather than swallowing it. VideoEmbed re-credits the buffered
+        // seconds when this rejects, and it cannot do that for a caller that catches and returns
+        // void. Until 21 Nov 2026 this one did exactly that, so THE DRAWER -- the surface students
+        // actually watch on -- still destroyed watch time on a failed save, while the rule was
+        // spelled out and followed one component away in TimelineCard.tsx. Nothing fails loudly
+        // when this is wrong: the learner simply does not get credit for seconds they watched.
+        // Safe to leave uncaught: the only consumer is VideoEmbed, which attaches a rejection
+        // handler to every thenable it is handed.
+        return req.then(setWatch);
       }
     : undefined;
   const completeSafely = onComplete
