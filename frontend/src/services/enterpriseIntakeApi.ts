@@ -35,6 +35,36 @@ export interface IntakeStatus {
   company: string;
   peopleCount: number | null;
   hoursPerWeek: number | null;
+  /** v2: the plan they made, so a reload or an emailed link resumes at the right step. */
+  interviewMode?: 'now' | 'later' | null;
+  interviewScheduledFor?: string | null;
+  interviewVia?: 'chat' | 'call' | null;
+  meeting?: Meeting | null;
+  /** The first instant a meeting can start (the business day after the AI interview). */
+  earliestMeeting?: string;
+  files?: SharedFile[];
+}
+
+export interface Meeting {
+  start: string;
+  end: string;
+  link: string | null;
+}
+
+export interface SharedFile {
+  name: string;
+  size: number;
+}
+
+export interface Slot {
+  start: string;
+  end: string;
+}
+
+export interface OfferedSlots {
+  earliest: string;
+  timezone: string;
+  dates: Array<{ date: string; slots: Slot[] }>;
 }
 
 const path = (token: string): string => `/api/enterprise/intake/${encodeURIComponent(token)}`;
@@ -61,6 +91,36 @@ export async function getIntakeStatus(token: string): Promise<IntakeStatus> {
   return (await api.get(path(token))).data;
 }
 
+// --- v2: plan the AI interview, book the meeting with Ali, share research ---
+
+/** The message the server gave for a refusal, or a plain fallback. */
+export function errorText(err: unknown, fallback: string): string {
+  const data = (err as { response?: { data?: { error?: unknown } } })?.response?.data;
+  return typeof data?.error === 'string' && data.error.length < 300 ? data.error : fallback;
+}
+
+export async function getMeetingSlots(token: string): Promise<OfferedSlots> {
+  return (await api.get(`${path(token)}/slots`)).data;
+}
+
+export async function setInterviewPlan(
+  token: string,
+  plan: { mode: 'now' | 'later'; at?: string; via?: 'chat' | 'call' },
+): Promise<{ mode: 'now' | 'later'; at: string | null; via: 'chat' | 'call' }> {
+  return (await api.post(`${path(token)}/interview-plan`, plan)).data;
+}
+
+export async function bookMeeting(token: string, start: string): Promise<{ status: 'booked' | 'already_booked'; meeting: Meeting }> {
+  return (await api.post(`${path(token)}/meeting`, { start })).data;
+}
+
+export async function uploadResearchFile(token: string, file: File): Promise<{ files: SharedFile[] }> {
+  const body = new FormData();
+  body.append('file', file);
+  // The shared client defaults to JSON; multipart must be said explicitly (axios adds the boundary).
+  return (await api.post(`${path(token)}/files`, body, { headers: { 'Content-Type': 'multipart/form-data' } })).data;
+}
+
 // --- W32: the client's own view of their pilot (/my-pilot) ---
 
 export interface ClientStep {
@@ -76,6 +136,8 @@ export interface ClientStatus {
   options: string[];
   next: string;
   closed: 'signed' | 'lost' | null;
+  /** v2: the meeting with Ali they booked, if any. */
+  meeting?: { start: string; link: string | null } | null;
 }
 
 /**

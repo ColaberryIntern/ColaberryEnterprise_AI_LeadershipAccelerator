@@ -118,6 +118,7 @@ import { ensureGovProposalSourcesSchema } from './db/ensureGovProposalSourcesSch
 import { ensureGovProposalPackageSchema } from './db/ensureGovProposalPackageSchema';
 import { ensureGovSubmissionSchema } from './db/ensureGovSubmissionSchema';
 import { ensureGovBidValueSchema } from './db/ensureGovBidValueSchema';
+import { ensureEnterpriseDealValueSchema } from './db/ensureEnterpriseDealValueSchema';
 import { ensureServiceOfferingSchema } from './db/ensureServiceOfferingSchema';
 import { ensureCaseStudyServiceLinkSchema } from './db/ensureCaseStudyServiceLinkSchema';
 import { ensureCaseStudyExternalImportSchema } from './db/ensureCaseStudyExternalImportSchema';
@@ -3077,6 +3078,14 @@ async function start(): Promise<void> {
   // ensureGovSubmissionSchema above, and a foreign key to a missing table is a boot error
   // rather than a no-op.
   await ensureGovBidValueSchema();
+  // R23 Phase 2 - what an enterprise deal is worth (enterprise_deal_values). A single
+  // additive NEW table, same shape and same reasoning as gov_bid_values above: one live
+  // human-confirmed value per intake, corrections supersede rather than overwrite, and a
+  // partial unique index keeps exactly one live row so the headline can be a plain SUM.
+  // All seven candidate names were checked against production before this one was taken.
+  // MUST run after enterprise_intakes exists: its REFERENCES names that parent, and a
+  // foreign key to a missing table is a boot error rather than a no-op.
+  await ensureEnterpriseDealValueSchema();
   // Colaberry's own service catalog (service_offerings). A single additive NEW table so the gov desk can store the
   // services the company offers and later match opportunities against them. No existing table is altered; it FKs to
   // nothing (tenant-scoped by tenant_id).
@@ -3975,25 +3984,13 @@ async function start(): Promise<void> {
       .catch((err) => console.warn('[FlotationCalls] sweep failed:', err?.message));
   });
 
-  // W29: Enterprise client lists in Basecamp. The form and the interview write to the list
-  // straight away; this retries whatever Basecamp missed. A no-op until
-  // BASECAMP_ENTERPRISE_INTAKE_PROJECT_ID is set.
+  // Enterprise intake catch-up (W29-W31, v2): Basecamp lists, client files, research, comms,
+  // interview reminders, meeting posts and Ali's briefs. One module owns the order and gives each
+  // step its own catch (services/enterpriseIntake/enterpriseIntakeSweep.ts).
   cron.schedule('*/5 * * * *', () => {
-    import('./services/enterpriseIntake/enterpriseIntakeBasecamp')
-      .then(({ syncEnterpriseIntakesToBasecamp }) => syncEnterpriseIntakesToBasecamp())
-      .then((out) => { if (out.opened || out.posted || out.failed) console.log(`[EnterpriseIntake] Basecamp sweep: ${out.opened} opened, ${out.posted} posted, ${out.failed} failed`); })
-      .catch((err) => console.warn('[EnterpriseIntake] Basecamp sweep failed:', err?.message))
-      // W30: research and pilot options for interviews still waiting, then their Basecamp post.
-      // Its own catch: a Basecamp failure above must not skip the homework.
-      .then(() => import('./services/enterpriseIntake/enterpriseIntakeResearch'))
-      .then(({ syncEnterpriseResearch }) => syncEnterpriseResearch())
-      .then((out) => { if (out.researched || out.posted || out.failed) console.log(`[EnterpriseIntake] research sweep: ${out.researched} researched, ${out.posted} posted, ${out.failed} failed`); })
-      .catch((err) => console.warn('[EnterpriseIntake] research sweep failed:', err?.message))
-      // W31: every email and call with an open client lands on their list; the list shows the stage.
-      .then(() => import('./services/enterpriseIntake/enterpriseIntakeSync'))
-      .then(({ syncEnterpriseComms }) => syncEnterpriseComms())
-      .then((out) => { if (out.touches || out.failed) console.log(`[EnterpriseIntake] comms sweep: ${out.touches} touches over ${out.clients} clients, ${out.failed} failed`); })
-      .catch((err) => console.warn('[EnterpriseIntake] comms sweep failed:', err?.message));
+    import('./services/enterpriseIntake/enterpriseIntakeSweep')
+      .then(({ runEnterpriseIntakeSweep }) => runEnterpriseIntakeSweep())
+      .catch((err) => console.warn('[EnterpriseIntake] sweep failed:', err?.message));
   });
 
   // Start follow-up email scheduler if enabled

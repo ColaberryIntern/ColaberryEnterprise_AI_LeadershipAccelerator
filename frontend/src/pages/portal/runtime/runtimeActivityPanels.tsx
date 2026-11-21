@@ -24,7 +24,11 @@ type Watch = { watched_pct: number; required_pct: number | null; met: boolean } 
 
 /** The player for video bands, with the watch-gate line while not yet completed. */
 export function RuntimeVideo({ card, completed, watch, onWatchBeat }: {
-  card: Card; completed: boolean; watch: Watch; onWatchBeat: ((beat: WatchBeatPayload) => void) | undefined;
+  card: Card; completed: boolean; watch: Watch;
+  // `void | Promise<unknown>`, matching VideoEmbed's own prop. A `=> void` here would silently
+  // discard the promise RuntimeWorkspace now returns, and with it the re-credit of any watch
+  // time whose save failed.
+  onWatchBeat: ((beat: WatchBeatPayload) => void | Promise<unknown>) | undefined;
 }): React.ReactElement {
   return (
     <>

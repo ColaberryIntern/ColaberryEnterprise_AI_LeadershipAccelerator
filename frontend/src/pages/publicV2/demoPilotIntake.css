@@ -139,3 +139,308 @@
     max-width: 100%;
   }
 }
+
+/* ---------- v2 (2026-11-21): purpose, path, plan, meeting, upload ----------
+   Only tokens this file already used are used here: an undefined token renders as unset. */
+
+.cbv2-shell .cbv2-dpi__h {
+  margin: 0;
+  font-size: clamp(20px, 2.4vw, 26px);
+  line-height: 1.2;
+  color: var(--text-strong);
+}
+
+.cbv2-shell .cbv2-dpi__lead {
+  margin: 0;
+  color: var(--text-body);
+}
+
+.cbv2-shell .cbv2-dpi__card {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border-radius: var(--radius-sm);
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+}
+
+.cbv2-shell .cbv2-dpi__card--quiet {
+  background: var(--surface-sunken);
+}
+
+/* What the interview is for: the comparison. */
+.cbv2-shell .cbv2-dpi__purpose {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border-radius: var(--radius-sm);
+  background: var(--surface-brand-subtle);
+  border: 1px solid var(--border-brand);
+}
+
+.cbv2-shell .cbv2-dpi__compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+
+.cbv2-shell .cbv2-dpi__side {
+  display: grid;
+  gap: var(--space-2);
+  align-content: start;
+  padding: var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+}
+
+.cbv2-shell .cbv2-dpi__side--ai {
+  border-color: var(--border-brand);
+}
+
+.cbv2-shell .cbv2-dpi__side-k,
+.cbv2-shell .cbv2-dpi__side-s {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-body-sm);
+}
+
+.cbv2-shell .cbv2-dpi__side-k {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.cbv2-shell .cbv2-dpi__side-v {
+  margin: 0;
+  font-size: clamp(24px, 3vw, 34px);
+  line-height: 1.1;
+  font-weight: 800;
+  color: var(--text-strong);
+}
+
+.cbv2-shell .cbv2-dpi__side--ai .cbv2-dpi__side-v {
+  color: var(--brand-accent);
+}
+
+.cbv2-shell .cbv2-dpi__bar {
+  height: 10px;
+  border-radius: 5px;
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+
+.cbv2-shell .cbv2-dpi__bar span {
+  display: block;
+  height: 100%;
+  background: var(--text-muted);
+}
+
+.cbv2-shell .cbv2-dpi__bar--ai span {
+  background: var(--brand-accent);
+}
+
+.cbv2-shell .cbv2-dpi__people {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-body-sm);
+  color: var(--text-body);
+}
+
+.cbv2-shell .cbv2-dpi__people button {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border-default);
+  background: var(--surface-card);
+  color: var(--text-strong);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cbv2-shell .cbv2-dpi__people output {
+  min-width: 2ch;
+  text-align: center;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.cbv2-shell .cbv2-dpi__saving {
+  margin: 0;
+  color: var(--text-body);
+}
+
+.cbv2-shell .cbv2-dpi__saving b {
+  color: var(--brand-accent);
+}
+
+/* The four steps. */
+.cbv2-shell .cbv2-dpi__path {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-3);
+}
+
+.cbv2-shell .cbv2-dpi__step {
+  display: grid;
+  gap: var(--space-2);
+  align-content: start;
+  padding: var(--space-4);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--surface-card);
+}
+
+.cbv2-shell .cbv2-dpi__step > b {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--surface-sunken);
+  color: var(--text-strong);
+  font-size: var(--fs-body-sm);
+}
+
+.cbv2-shell .cbv2-dpi__step--current {
+  border-color: var(--border-brand);
+  background: var(--surface-brand-subtle);
+}
+
+.cbv2-shell .cbv2-dpi__step--current > b,
+.cbv2-shell .cbv2-dpi__step--done > b {
+  background: var(--brand-accent);
+  color: var(--text-on-accent);
+}
+
+.cbv2-shell .cbv2-dpi__step p {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+}
+
+.cbv2-shell .cbv2-dpi__step strong {
+  color: var(--text-strong);
+}
+
+.cbv2-shell .cbv2-dpi__step span,
+.cbv2-shell .cbv2-dpi__step em {
+  font-size: var(--fs-body-sm);
+  color: var(--text-muted);
+}
+
+.cbv2-shell .cbv2-dpi__step em {
+  font-style: normal;
+  font-weight: 700;
+  color: var(--brand-accent);
+}
+
+/* Now or later. */
+.cbv2-shell .cbv2-dpi__choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+
+.cbv2-shell .cbv2-dpi__choice {
+  display: grid;
+  gap: var(--space-1);
+  text-align: left;
+  padding: var(--space-4);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--surface-card);
+  color: var(--text-body);
+  font: inherit;
+  cursor: pointer;
+}
+
+.cbv2-shell .cbv2-dpi__choice strong {
+  font-size: 18px;
+  color: var(--text-strong);
+}
+
+.cbv2-shell .cbv2-dpi__choice[aria-pressed='true'],
+.cbv2-shell .cbv2-dpi__choice:hover {
+  border-color: var(--border-brand);
+  background: var(--surface-brand-subtle);
+}
+
+.cbv2-shell .cbv2-dpi__later,
+.cbv2-shell .cbv2-dpi__via {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.cbv2-shell .cbv2-dpi__later input[type='datetime-local'] {
+  font: inherit;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--surface-card);
+  color: var(--text-strong);
+}
+
+/* The meeting picker. */
+.cbv2-shell .cbv2-dpi__days,
+.cbv2-shell .cbv2-dpi__times {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.cbv2-shell .cbv2-dpi__days button,
+.cbv2-shell .cbv2-dpi__times button {
+  font: inherit;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--surface-card);
+  color: var(--text-strong);
+  cursor: pointer;
+}
+
+.cbv2-shell .cbv2-dpi__days button[aria-selected='true'],
+.cbv2-shell .cbv2-dpi__times button[aria-checked='true'] {
+  background: var(--brand-accent);
+  border-color: var(--brand-accent);
+  color: var(--text-on-accent);
+}
+
+/* Files and the summary. */
+.cbv2-shell .cbv2-dpi__files,
+.cbv2-shell .cbv2-dpi__summary {
+  margin: 0;
+  padding-left: var(--space-4);
+  display: grid;
+  gap: var(--space-1);
+  color: var(--text-body);
+}
+
+.cbv2-shell .cbv2-dpi__files span {
+  color: var(--text-muted);
+  font-size: var(--fs-body-sm);
+}
+
+@media (max-width: 760px) {
+  .cbv2-shell .cbv2-dpi__path {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .cbv2-shell .cbv2-dpi__compare,
+  .cbv2-shell .cbv2-dpi__choices,
+  .cbv2-shell .cbv2-dpi__path {
+    grid-template-columns: 1fr;
+  }
+}

@@ -315,9 +315,13 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
   // in the drawer, gated server-side at 75%, exactly like a video card.
   const ambient = ambientMediaOf(card);
   const mediaTracked = !!ambient && pts > 0 && !!onComplete && !done;
+  // Returns the promise, like sendWatchBeat above and for the same reason. This one feeds BOTH
+  // VideoEmbed (ambient testimonial) and useMediaBeats (podcast audio), so the hook had to learn
+  // to handle a returned promise in the same change -- otherwise a rejection here would surface
+  // as an unhandled rejection on the podcast path instead of putting the seconds back.
   const mediaBeat = (beat: WatchBeatPayload, meta?: WatchBeatMeta) => {
-    if (!ambient) return;
-    runtimeApi.mediaWatch(ambient.kind, ambient.id, beat, !!meta?.exiting).then((r) => setWatch(r)).catch(() => { /* best-effort */ });
+    if (!ambient) return undefined;
+    return runtimeApi.mediaWatch(ambient.kind, ambient.id, beat, !!meta?.exiting).then((r) => setWatch(r));
   };
   const audioBeats = useMediaBeats(mediaTracked && ambient?.kind === 'podcast' ? mediaBeat : undefined, 'audio');
   // Hydrate the % on mount so a half-listened episode shows its progress before

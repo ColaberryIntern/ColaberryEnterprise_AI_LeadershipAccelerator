@@ -6,8 +6,9 @@
  * rows for one owner made the rail the navigation and the overview a page nobody needed, so now
  * the overview IS the navigation, and **the pages are not deleted**.
  *
- * Three things could go wrong in a way nobody would notice until it bit somebody, so each gets an
- * assertion rather than a comment:
+ * Four things could go wrong in a way nobody would notice until it bit somebody, so each gets an
+ * assertion rather than a comment. The fourth was added after it bit somebody: see AF12.15b at
+ * the foot of this file. A page is only as reachable as its emptiest state.
  *
  *   1. THE RESTATEMENT. Dropping a nav entry without restating the path in
  *      `UNLISTED_PATH_SECTIONS` makes `sectionForPath` return null. `ProtectedRoute` computes
@@ -240,5 +241,54 @@ describe('what the owner sees', () => {
   it('the page and the sidebar row agree on their own name', async () => {
     await mountAs('owner');
     expect(container.querySelector('h1')?.textContent).toBe('Agents');
+  });
+});
+
+// ──────────────────── 4. the regression this suite missed ────────────────────
+
+/**
+ * AF12.15b. The case that shipped broken on 20 Nov and that Ali hit on 21 Nov, with a
+ * screenshot of his own empty page.
+ *
+ * The owner group was nested inside the page's `domains.length > 0` branch, so a viewer whose
+ * email matches no domain as manager or builder saw the "No agent is assigned to you yet" card
+ * AND NOTHING ELSE. All Domains and Builder Path had lost their sidebar rows in the very same
+ * change, so for that viewer the two pages were reachable from nowhere at all: not from the
+ * rail, which no longer listed them, and not from the hub, which refused to draw them.
+ *
+ * Every owner case above mocks `fetchMyDomains` to return one domain, which is why none of them
+ * caught it. An empty personal list is the state this group exists to survive: it is not about
+ * the viewer's agent, it is the ten domains read two ways.
+ */
+describe('a viewer with NO agent assigned to them', () => {
+  beforeEach(() => {
+    fetchMine.mockResolvedValue({
+      domains: [],
+      note: 'This email matches no domain as either accountable manager or intended builder.',
+    });
+  });
+
+  it('THE CONTROL: the empty state and its reason are still shown', async () => {
+    await mountAs('owner');
+    const empty = container.querySelector('[data-testid="agent-dashboard-empty"]');
+    expect(empty).toBeTruthy();
+    expect(empty?.textContent).toContain('matches no domain');
+    // The per-agent furniture is correctly absent: there is no agent to describe.
+    expect(container.querySelector('[data-testid="agent-dashboard-kpis"]')).toBeNull();
+    expect(container.querySelector('[data-testid="agent-dashboard-groups"]')).toBeNull();
+  });
+
+  it('an owner STILL gets the across-everyone group, so neither page is orphaned', async () => {
+    await mountAs('owner');
+    expect(ownerGroup()).toBeTruthy();
+    expect(card('all-domains')?.getAttribute('href')).toBe('/admin/all-domains');
+    expect(card('builder-path')?.getAttribute('href')).toBe('/admin/builder-path');
+  });
+
+  it('a builder still does not, so the fix did not widen access on the way past', async () => {
+    await mountAs('builder');
+    expect(container.querySelector('[data-testid="agent-dashboard-empty"]')).toBeTruthy();
+    expect(ownerGroup()).toBeNull();
+    expect(card('all-domains')).toBeNull();
   });
 });

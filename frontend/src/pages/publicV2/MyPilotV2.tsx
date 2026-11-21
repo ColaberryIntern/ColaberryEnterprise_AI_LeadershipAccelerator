@@ -102,6 +102,13 @@ function Status({ token }: { token: string }): React.ReactElement {
       <p className="cbv2-mp__next">
         <strong>Next:</strong> {status.next}
       </p>
+      {status.meeting?.link && new Date(status.meeting.start).getTime() > Date.now() - 60 * 60 * 1000 ? (
+        <p>
+          <a className="cbv2-btn cbv2-btn--primary" href={status.meeting.link} target="_blank" rel="noopener noreferrer" data-testid="my-pilot-meet">
+            Join the meeting with Ali
+          </a>
+        </p>
+      ) : null}
     </div>
   );
 }

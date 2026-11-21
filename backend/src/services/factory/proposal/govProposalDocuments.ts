@@ -15,6 +15,7 @@
  * already drops pricing.
  */
 import { classifyRequirementCategory } from './govRequirementItems';
+import { isSubmissionInstructionRequirement } from './documentChecks';
 import type { ResponseFigure } from './responseSlots';
 import type { ProposalBlueprint } from './proposalBlueprintTypes';
 
@@ -134,10 +135,28 @@ export function deriveProposalDocuments(
     const canonicalReqId = String(r.canonical_req_id ?? r.canonicalReqId ?? r.id ?? '').trim();
     if (!statement || !canonicalReqId) continue;
     const kind = String(r.kind ?? '').trim().toLowerCase();
-    // A scope requirement is build work (solution_build), never a submittal document.
-    if (kind !== 'pricing' && classifyRequirementCategory(statement) === 'scope') continue;
+    const isScope = kind !== 'pricing' && classifyRequirementCategory(statement) === 'scope';
+    // F03 (R2): a scope requirement is the buyer's functional/technical ask (GIS integration, Bluestakes,
+    // offline work, data migration, the citizen portal...). It still feeds the solution_build track for the
+    // pilot (govBuildPlan.ts, unchanged), but a GOVERNMENT technical proposal must ALSO answer each functional
+    // requirement IN WRITING, so it belongs in the Technical Proposal narrative and is no longer dropped. This
+    // is the substance of the response; without it the technical document had nothing real to say. See
+    // HERRIMAN_ROOT_CAUSE_MATRIX.md F03.
     // A pricing-kind requirement is always the price document, whatever its wording.
-    const rule = kind === 'pricing' ? (DOCUMENT_RULES.find((d) => d.key === 'pricing') as ProposalDocumentRule) : ruleFor(statement);
+    const rule = kind === 'pricing'
+      ? (DOCUMENT_RULES.find((d) => d.key === 'pricing') as ProposalDocumentRule)
+      : isScope
+        ? (DOCUMENT_RULES.find((d) => d.key === 'technical') as ProposalDocumentRule)
+        : ruleFor(statement);
+    // F01 (admin-leak): a submission-instruction obligation — how/when/where/format to submit the RESPONSE
+    // ("one (1) electronic (PDF) copy submitted by email", "submitted no later than 5:00 p.m.", page limits,
+    // sealed envelopes, file naming) — is not a technical answer. When it matches no specific submittal document
+    // and would fall through the /.*/ catch-all into the Technical Proposal, drop it from document derivation:
+    // the generated Compliance Matrix is built from the full extracted requirement set, so the obligation is
+    // still enumerated there and needs no drafted narrative section. The classifier excludes anything naming a
+    // technical capability (GIS, work order, integration, offline, SCADA...), so a genuine "the proposal must
+    // include a technical approach" requirement is NOT swept up. See HERRIMAN_ROOT_CAUSE_MATRIX.md F01.
+    if (rule.key === 'technical' && isSubmissionInstructionRequirement(statement)) continue;
     let doc = byKey.get(rule.key);
     if (!doc) { doc = { key: rule.key, title: rule.title, order: rule.order, gate: rule.gate, adminOnly: rule.adminOnly, requirements: [], sections: [], docType: 'derived', pageLimit: null, fileName: null, blueprintVersion: null }; byKey.set(rule.key, doc); }
     if (!doc.requirements.some((x) => x.canonicalReqId === canonicalReqId)) {

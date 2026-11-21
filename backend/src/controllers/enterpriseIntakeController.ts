@@ -11,6 +11,7 @@ import {
   voiceConfigured,
   callable,
 } from '../services/enterpriseIntake/enterpriseIntakeService';
+import { earliestMeetingStart, meetingAnchor, meetingOf } from '../services/enterpriseIntake/enterpriseIntakeSchedule';
 
 /**
  * The Enterprise intake's public doors (W28). The token in each path is the intake's own
@@ -114,12 +115,20 @@ export async function handleEnterpriseIntakeStatus(req: Request, res: Response):
 
     res.status(200).json({
       status: intake.status,
-      interviewed: intake.status === 'interviewed',
+      // v2: from interviewed_at, not status: a client later signed or lost was still interviewed.
+      interviewed: Boolean(intake.interviewed_at) || intake.status === 'interviewed',
       call,
       callAvailable: voiceConfigured() && callable(intake),
       company: intake.company,
       peopleCount: intake.people_count,
       hoursPerWeek: intake.hours_per_week === null ? null : Number(intake.hours_per_week),
+      // v2: what they have planned, so a reload or an emailed link resumes at the right step.
+      interviewMode: intake.interview_mode || null,
+      interviewScheduledFor: intake.interview_scheduled_for ? new Date(intake.interview_scheduled_for).toISOString() : null,
+      interviewVia: intake.interview_via_pref || null,
+      meeting: meetingOf(intake),
+      earliestMeeting: earliestMeetingStart(meetingAnchor(intake)).toISOString(),
+      files: (intake.client_files || []).map((f) => ({ name: f.name, size: f.size })),
     });
   } catch (err: any) {
     console.error('[EnterpriseIntake] status error:', err?.message);

@@ -89,8 +89,45 @@ export interface EnterpriseIntakeAttributes {
   lost_at?: Date | null;
   lost_reason?: string | null;
   bc_project_id?: string | null;
+  /**
+   * v2 (2026-11-21): the client plans the rest in the same visit. The AI interview now or
+   * later, the human meeting on Ali's calendar (at least 1 business day after the interview),
+   * their own research files, and Ali's brief once the homework is done.
+   */
+  interview_mode?: 'now' | 'later' | null;
+  interview_via_pref?: 'chat' | 'call' | null;
+  interview_scheduled_for?: Date | null;
+  interview_reminder_sent_at?: Date | null;
+  interview_reminder_attempts?: number;
+  meeting_start?: Date | null;
+  meeting_end?: Date | null;
+  meeting_event_id?: string | null;
+  meeting_link?: string | null;
+  /** Claim held while a booking is in flight, so a double click books once. */
+  meeting_booking_at?: Date | null;
+  bc_meeting_posted_at?: Date | null;
+  bc_meeting_attempts?: number;
+  /** [{id,name,size,mime,ext,chars,uploaded_at,bc_posted,bc_attempts}] */
+  client_files?: ClientFile[] | null;
+  /** Text extracted from their files, capped, for the interview and the research. */
+  client_research?: string | null;
+  ali_brief_claimed_at?: Date | null;
+  ali_brief_sent_at?: Date | null;
+  ali_brief_attempts?: number;
   createdAt?: Date;
   updatedAt?: Date;
+}
+
+export interface ClientFile {
+  id: string;
+  name: string;
+  size: number;
+  mime: string;
+  ext: string;
+  chars: number;
+  uploaded_at: string;
+  bc_posted: boolean;
+  bc_attempts: number;
 }
 
 class EnterpriseIntake extends Model<EnterpriseIntakeAttributes> implements EnterpriseIntakeAttributes {
@@ -144,6 +181,23 @@ class EnterpriseIntake extends Model<EnterpriseIntakeAttributes> implements Ente
   declare lost_at: Date | null;
   declare lost_reason: string | null;
   declare bc_project_id: string | null;
+  declare interview_mode: 'now' | 'later' | null;
+  declare interview_via_pref: 'chat' | 'call' | null;
+  declare interview_scheduled_for: Date | null;
+  declare interview_reminder_sent_at: Date | null;
+  declare interview_reminder_attempts: number;
+  declare meeting_start: Date | null;
+  declare meeting_end: Date | null;
+  declare meeting_event_id: string | null;
+  declare meeting_link: string | null;
+  declare meeting_booking_at: Date | null;
+  declare bc_meeting_posted_at: Date | null;
+  declare bc_meeting_attempts: number;
+  declare client_files: ClientFile[] | null;
+  declare client_research: string | null;
+  declare ali_brief_claimed_at: Date | null;
+  declare ali_brief_sent_at: Date | null;
+  declare ali_brief_attempts: number;
   declare createdAt: Date;
   declare updatedAt: Date;
 }
@@ -200,6 +254,23 @@ EnterpriseIntake.init(
     lost_at: { type: DataTypes.DATE, allowNull: true },
     lost_reason: { type: DataTypes.STRING(500), allowNull: true },
     bc_project_id: { type: DataTypes.STRING(32), allowNull: true },
+    interview_mode: { type: DataTypes.STRING(10), allowNull: true },
+    interview_via_pref: { type: DataTypes.STRING(10), allowNull: true },
+    interview_scheduled_for: { type: DataTypes.DATE, allowNull: true },
+    interview_reminder_sent_at: { type: DataTypes.DATE, allowNull: true },
+    interview_reminder_attempts: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    meeting_start: { type: DataTypes.DATE, allowNull: true },
+    meeting_end: { type: DataTypes.DATE, allowNull: true },
+    meeting_event_id: { type: DataTypes.STRING(255), allowNull: true },
+    meeting_link: { type: DataTypes.STRING(500), allowNull: true },
+    meeting_booking_at: { type: DataTypes.DATE, allowNull: true },
+    bc_meeting_posted_at: { type: DataTypes.DATE, allowNull: true },
+    bc_meeting_attempts: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    client_files: { type: DataTypes.JSONB, allowNull: true },
+    client_research: { type: DataTypes.TEXT, allowNull: true },
+    ali_brief_claimed_at: { type: DataTypes.DATE, allowNull: true },
+    ali_brief_sent_at: { type: DataTypes.DATE, allowNull: true },
+    ali_brief_attempts: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
   },
   {
     sequelize,
