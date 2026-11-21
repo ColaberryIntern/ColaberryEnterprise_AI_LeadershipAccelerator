@@ -59,7 +59,10 @@ beforeEach(() => {
   jest.spyOn(Date, 'now').mockImplementation(() => nowMs);
   container = document.createElement('div');
   document.body.appendChild(container);
-  act(() => { root = createRoot(container); root.render(<Harness onBeat={(b) => beats.push(b)} />); });
+  // Braces matter: `(b) => beats.push(b)` returns a NUMBER, which a `=> void` callback type
+  // accepts under TypeScript's void-returning rule but the widened `void | Promise<unknown>`
+  // union rightly does not. VideoEmbed's own tests already use the block form.
+  act(() => { root = createRoot(container); root.render(<Harness onBeat={(b) => { beats.push(b); }} />); });
 });
 afterEach(() => { act(() => root.unmount()); container.remove(); jest.restoreAllMocks(); });
 
