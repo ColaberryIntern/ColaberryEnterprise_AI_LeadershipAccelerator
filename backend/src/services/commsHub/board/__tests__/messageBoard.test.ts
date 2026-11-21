@@ -6,7 +6,8 @@
  */
 type Any = Record<string, any>;
 let msgs: Any[] = [];
-let lastWhere: Any = {};
+// Sequelize where objects are keyed by Op symbols.
+let lastWhere: Record<string | symbol, any> = {};
 let lastOrder: unknown;
 let deliveries: Any[] = [];
 let destinations: Any[] = [];
