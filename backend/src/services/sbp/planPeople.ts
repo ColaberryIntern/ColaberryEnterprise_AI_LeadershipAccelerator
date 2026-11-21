@@ -54,6 +54,54 @@ export function guardrailGate(statement: string, roles: readonly string[]): { ki
   return { kind: 'approval', approver: role ?? named };
 }
 
+const NAMED = /^\s*As\s+([A-Z][a-z]+(?:\s[A-Z][a-z]+)?),/;
+const TITLED = /^\s*As\s+(an?|the)\s+([^,]{2,40}),/i;
+const SYSTEM_ROLE = /^(?:system|platform|agent|ai)$/i;
+
+/**
+ * One person, one name: when the stories serve a named person and one of them
+ * swaps in a job title the student never used, the title becomes the person.
+ *
+ * ShiftFill v4 (2026-11-20): seventeen stories said "As Dana" and STORY-017
+ * said "As a scheduler, … alert the scheduler". Nobody in the student's words
+ * is a scheduler, so the Command Center listed a third user who does not exist
+ * and an escalation path to nobody. The story prompt already asks for this;
+ * the model did not do it in one release of five, so it is enforced here.
+ *
+ * Deliberately narrow:
+ *  - only when the stories name exactly ONE person (two named people means a
+ *    title could belong to either, and guessing would be inventing);
+ *  - only for a title that appears NOWHERE in `sourceText` (the student's brief
+ *    and the requirements). "As a hygienist" survives because hygienists are in
+ *    the student's words; a title the student used is a real role;
+ *  - "As a system" / "As the platform" is not a user and also becomes the
+ *    person, since the system cannot want anything.
+ * PURE. Stories it does not change come back as the same objects.
+ */
+export function adoptNamedPerson(stories: readonly PlanStory[], sourceText: string): PlanStory[] {
+  const names = new Set(stories.map((s) => s.narrative.match(NAMED)?.[1]).filter((x): x is string => Boolean(x)));
+  if (names.size !== 1) return [...stories];
+  const person = [...names][0];
+  const source = sourceText.toLowerCase();
+  return stories.map((s) => {
+    const m = s.narrative.match(TITLED);
+    if (!m) return s;
+    const title = m[2].trim();
+    const singular = title.toLowerCase().replace(/s$/, '');
+    if (!SYSTEM_ROLE.test(title) && new RegExp(`\\b${escapeRegex(singular)}`).test(source)) return s;
+    const anyTitle = new RegExp(`\\b(?:an?|the)\\s+${escapeRegex(title)}\\b`, 'gi');
+    const swap = (t: string) => t.replace(anyTitle, person);
+    return {
+      ...s,
+      narrative: s.narrative.replace(TITLED, `As ${person},`),
+      title: swap(s.title),
+      acceptance: s.acceptance.map(swap),
+      failure_paths: (s.failure_paths ?? []).map(swap),
+      task_guidance: swap(s.task_guidance ?? ''),
+    };
+  });
+}
+
 /**
  * Move hard rules out of an agent's `approval_gates` into `hard_rules`.
  *

@@ -67,7 +67,21 @@ export interface ScheduleInput {
   releases: Array<{ key: string; name: string; week_start: number; week_end: number }>;
   /** Story ids per release key, in plan order. */
   storiesByRelease: Map<string, string[]>;
+  /**
+   * Date the post-class roadmap AFTER demo day instead of inside the build
+   * window. The student path turns this on; the gov path, which rescales every
+   * task to a contract deadline afterwards, leaves it off and is unchanged.
+   *
+   * Without it the verdict and the dates contradict each other. ShiftFill v4
+   * (2026-11-20): "you will reach R1, the releases after it are your roadmap",
+   * next to due dates that packed R2-R4 into weeks 4-7 of the same window, at
+   * 2.6 stories a week against the 1-2 the verdict is built on.
+   */
+  roadmapAfterDemo?: boolean;
 }
+
+/** After class, a roadmap story lands once a week: the conservative pace, unhurried. */
+const ROADMAP_DAYS_PER_STORY = 7;
 
 export interface ScheduledTask {
   storyId: string;
@@ -243,13 +257,25 @@ export function buildSchedule(input: ScheduleInput): Schedule {
 
   // Dates. The window is divided by the plan's own week proportions so a
   // release the model thought was long gets more calendar.
-  const planLastWeek = Math.max(...ordered.map((r) => r.week_end), 1);
+  // With `roadmapAfterDemo`, only the releases up to the demo share the window,
+  // so the window is divided by THEIR weeks and the roadmap is dated after demo day.
+  const roadmap = new Set(input.roadmapAfterDemo ? roadmapReleaseKeys : []);
+  const inWindow = ordered.filter((r) => !roadmap.has(r.key));
+  const planLastWeek = Math.max(...inWindow.map((r) => r.week_end), 1);
   const buildSpanDays = Math.max(1, (buildEnd.getTime() - buildStart.getTime()) / DAY);
 
   const tasks: ScheduledTask[] = [];
+  let afterDemo = 0;
   for (const rel of ordered) {
     const ids = input.storiesByRelease.get(rel.key) ?? [];
     if (!ids.length) continue;
+    if (roadmap.has(rel.key)) {
+      for (const storyId of ids) {
+        afterDemo += 1;
+        tasks.push({ storyId, releaseKey: rel.key, dueOn: addDays(demoDay, afterDemo * ROADMAP_DAYS_PER_STORY) });
+      }
+      continue;
+    }
     const relStartDay = ((rel.week_start - 1) / planLastWeek) * buildSpanDays;
     const relEndDay = (rel.week_end / planLastWeek) * buildSpanDays;
     const slice = Math.max(1, relEndDay - relStartDay);
@@ -270,7 +296,8 @@ export function buildSchedule(input: ScheduleInput): Schedule {
     });
   }
 
-  const verdict = verdictFor(totalTasks, capacity, buildWeeks, demoReleaseKey, ordered, fit);
+  const verdict = verdictFor(totalTasks, capacity, buildWeeks, demoReleaseKey, ordered, fit)
+    + (roadmap.size ? ' Roadmap stories are dated after demo day, one a week.' : '');
   return {
     buildStart, buildEnd, demoDay, buildWeeks, capacity, totalTasks,
     demoReleaseKey, roadmapReleaseKeys,

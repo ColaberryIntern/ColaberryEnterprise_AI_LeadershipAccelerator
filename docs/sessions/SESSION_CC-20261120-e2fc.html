@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Friday, November 20, 2026 at 6:32 PM</div>
-    <div><span class="sid">CC-20261120-e2fc</span><span class="count">1 change</span></div>
+    <div class="meta">Generated Friday, November 20, 2026 at 8:49 PM</div>
+    <div><span class="sid">CC-20261120-e2fc</span><span class="count">3 changes</span></div>
   </header>
   <main>
     
@@ -70,6 +70,34 @@
         <div class="card-body">
           <div class="row"><span class="k">What changed</span><span class="v">SAFE &quot;never X&quot; rules move from agent `approval_gates` to a new optional</span></div>
           <div class="row"><span class="k">Verification</span><span class="v ver">`jest src/services/sbp` 127 suites, 2033 passed, including the new</span></div>
+          
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>#4270 deployed and ShiftFill v4 run</h2>
+          <span class="badge">2026-11-20</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">deployed 122ea457b (registry mode, marker `separateHardRules` in `planPeople.js`). Ran ShiftFill v4 end to end on prod (project 34032fbd). A cold agent built its Command Center from Story 000, delivered as `ShiftFill-Command-Center-v4.html`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">home 200. v3&#39;s stored plan, rendered on prod, now keeps REQ-008/009/017 as hard rules and REQ-007/018 as gates, and the Gap Detector -&gt; Gap Notifier hand-off appears. v4 has 11 hand-offs (v3 had 1), 0 repeat intake questions, and a standalone render with 9 tabs and 0 console errors.</span></div>
+          
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>Plan/schedule coherence: targets stay with their demo, one name per person, roadmap dated after demo</h2>
+          <span class="badge">2026-11-20</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`pullGuardsForward` moves SAFE only, no longer NFRs (v4 pulled the 30-minute target into r0 on &quot;call-out&quot; while r4&#39;s demo promised it). New `planPeople.adoptNamedPerson` replaces a job title the student never used, or &quot;As a system&quot;, with the one named person across the story; it runs after assembly against the brief and requirements. `buildSchedule` gains `roadmapAfterDemo` (on for the student path only), which dates roadmap stories after demo day at one a week and spreads only the committed releases across the window. `plan.json` releases gain `is_roadmap` and take their week numbers from their dates (end week rounds up, so build_end closes the last week). Command Center brief and data contract updated.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`planScheduleCoherence.test.ts` 11/11. `jest src/services/sbp src/services/factory` passes 306 suites / 4179 tests, with the gov path unchanged. Backend tsc clean apart from the locally missing packages.</span></div>
           
           
         </div>

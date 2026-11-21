@@ -251,7 +251,9 @@ function projectManagementTab(c: TabContext): string[] {
   lines.push('### 6. Project management');
   lines.push(
     'Source: `plan.releases[]` for the bars — each carries `starts_on`, `ends_on`, '
-    + '`story_ids` and `is_demo_target`. `plan.schedule` has `build_start`, `build_end`, '
+    + '`story_ids`, `is_demo_target` and `is_roadmap` (after the demo: post-class work, dated '
+    + 'after `demo_day`; draw it past the demo line, lighter, never squeezed inside the build '
+    + 'window). `plan.schedule` has `build_start`, `build_end`, '
     + '`demo_day` and `demo_release_key`. Per story, `plan.stories[].due_on` is the current '
     + 'date and `due_baseline_on` is the date it was FIRST given: show both, because the gap '
     + 'between them is slippage and a chart that quietly moves the target hides it. Status '
