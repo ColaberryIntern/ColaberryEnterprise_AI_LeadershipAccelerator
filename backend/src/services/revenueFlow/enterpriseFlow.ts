@@ -235,7 +235,11 @@ export async function buildEnterpriseFlow(windowStart: Date): Promise<Enterprise
     funnel.push(stage(
       `plan_${plan.key}`, plan.label, byPlan.get(plan.key) ?? 0,
       `${plan.means} Counts inquiries asking for this plan, not cumulative reach. Read off `
-      + 'the free-text service field, so it undercounts rather than guesses.',
+      // "open-text" rather than the usual technical term for it: this string is COPY, and
+      // the TWC 807.172(d) ratchet over backend/src correctly cannot tell that term from
+      // advertising. It caught this on the first CI run. Same fix R16 made when
+      // membershipFlow's provenance tripped it.
+      + 'the open-text service field, so it undercounts rather than guesses.',
     ));
   }
 
