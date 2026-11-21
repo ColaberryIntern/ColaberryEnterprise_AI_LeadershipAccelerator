@@ -224,6 +224,28 @@ describe('enterprise site stream: a VALUED signed deal prints a real figure', ()
     expect(flow.stream.headline.display).toBe('No signed deal yet');
   });
 
+  it('EXCLUDES an unsigned deal\'s value even when another deal IS signed', async () => {
+    // The case the test above cannot reach. With nothing signed, the headline short-circuits
+    // on the count and the scoping of `signedRows` is never exercised - a mutation widening
+    // it to every intake passed the whole suite on 2026-11-21. Here one deal is signed and
+    // priced and a second is priced but only at proposal, so the total must be the first
+    // alone. If the scoping breaks, this reads $75,000 instead of $45,000.
+    withRows([
+      SIGNED('i-signed'),
+      intake({ id: 'i-proposal', company: 'Not Signed Co', proposal_sent_at: '2026-11-05T10:00:00Z' }),
+    ]);
+    mockLiveValues.mockResolvedValue([
+      dealValue(),
+      dealValue({ id: 'v2', enterpriseIntakeId: 'i-proposal', dealValueCents: 3000000 }),
+    ]);
+    const flow = await buildEnterpriseFlow(WINDOW_START);
+
+    expect(stage(flow, 'signed').count).toBe(1);
+    expect(flow.stream.headline.cents).toBe(4500000);
+    // And the unsigned deal is not reported as an unpriced signed one either.
+    expect(flow.stream.headline.provenance).toMatch(/Every signed deal is valued/i);
+  });
+
   it('withholds the annualized view when a term was not recorded, and says why', async () => {
     withRows([SIGNED('i-signed')]);
     mockLiveValues.mockResolvedValue([dealValue({ periodMonths: null })]);

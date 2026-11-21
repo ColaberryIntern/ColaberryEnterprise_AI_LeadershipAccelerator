@@ -232,12 +232,22 @@ export async function buildEnterpriseFlow(windowStart: Date): Promise<Enterprise
   // Cumulative reach: a signed prospect is also an interviewed one. Counting each stage
   // exclusively would make the funnel sum to the total and read like a pie chart, which
   // hides the thing a funnel is for - how far the whole cohort got.
+  // `signedRows` is the SINGLE definition of "signed" in this module, and the funnel's count
+  // comes FROM it rather than from a second copy of the same predicate.
+  //
+  // That is not tidiness. Mutation testing on 2026-11-21 widened a duplicated `signedRows` to
+  // include every intake and no test failed, because the headline was gated on a
+  // separately-derived count that still read the right number. Two derivations of one fact
+  // can drift, and what hid behind them was a value from an UNSIGNED deal landing in a
+  // revenue total. One derivation cannot drift from itself.
+  const signedRows = rows.filter((r) => r.signed_at || r.status === 'signed');
+
   const reached = {
     inquired: rows.length,
     callRequested: rows.filter((r) => r.call_requested_at || r.status === 'call_requested').length,
     interviewed: rows.filter((r) => r.interviewed_at || r.status === 'interviewed').length,
     proposalSent: rows.filter((r) => r.proposal_sent_at).length,
-    signed: rows.filter((r) => r.signed_at || r.status === 'signed').length,
+    signed: signedRows.length,
   };
   const lost = rows.filter((r) => r.lost_at || r.status === 'lost').length;
 
@@ -246,7 +256,6 @@ export async function buildEnterpriseFlow(windowStart: Date): Promise<Enterprise
   // deal still in proposal, and that is legitimate forecasting - but the headline on a board
   // whose other number is booked membership revenue must not quietly include it. Pipeline
   // and revenue stay apart, which is the rule the government stream's headline follows too.
-  const signedRows = rows.filter((r) => r.signed_at || r.status === 'signed');
   const signedPriced = signedRows
     .map((r) => valueByIntake.get(r.id))
     .filter((v): v is DealValue => Boolean(v));
