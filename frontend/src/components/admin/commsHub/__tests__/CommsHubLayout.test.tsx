@@ -48,6 +48,11 @@ beforeEach(() => {
   (commsHubApi.listHubEvents as jest.Mock).mockResolvedValue([]);
   // CH6.5: Compose loads the recipient options.
   (commsHubApi.getDestinationOptions as jest.Mock).mockResolvedValue([]);
+  // CH7.4: Today and Schedule & history load their lists, the safety controls and the activity log.
+  (commsHubApi.getBoard as jest.Mock).mockResolvedValue([]);
+  (commsHubApi.getHubSettings as jest.Mock).mockResolvedValue({ sending_paused: false, quiet_hours: null, alert_recipients: [], test_cohort: null, updated_at: null });
+  (commsHubApi.listHubCohorts as jest.Mock).mockResolvedValue([]);
+  (commsHubApi.getActivity as jest.Mock).mockResolvedValue([]);
 });
 afterEach(() => { act(() => { root.unmount(); }); container.remove(); jest.clearAllMocks(); });
 
@@ -68,18 +73,55 @@ describe('CH1.3 Communications Hub shell', () => {
     expect(commsHubApi.getCommsHubSummary).toHaveBeenCalledTimes(1);
   });
 
-  it('the header carries Pause all sending, New event and New message; pause is disabled and says why', async () => {
+  it('the header carries Pause all sending, New event and New message', async () => {
     await renderAt('/admin/comms-hub');
     const pause = button('Pause all sending');
-    expect(pause.disabled).toBe(true);
-    const note = container.querySelector(`#${pause.getAttribute('aria-describedby')}`);
-    expect(note?.textContent).toMatch(/nothing to pause/);
+    expect([pause.disabled, pause.getAttribute('aria-pressed')]).toEqual([false, 'false']);
     expect(button('New event')).toBeDefined();
     expect(button('New message')).toBeDefined();
   });
 
+  it.each(['/admin/comms-hub', '/admin/comms-hub/events', '/admin/comms-hub/compose', '/admin/comms-hub/schedule'])(
+    'CH7.4 Pause works from %s: it calls the server, and the tab then says sending is paused', async (path) => {
+      (commsHubApi.setSendingPaused as jest.Mock).mockResolvedValue({ sending_paused: true });
+      await renderAt(path);
+      expect(container.querySelector('[data-testid="ch-paused"]')).toBeNull();
+      await act(async () => { button('Pause all sending').dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+      await settle();
+      expect(commsHubApi.setSendingPaused).toHaveBeenCalledWith(true);
+      expect(container.querySelector('[data-testid="ch-paused"]')?.textContent).toContain('Sending is paused.');
+      const resume = button('Resume sending');
+      expect(resume.getAttribute('aria-pressed')).toBe('true');
+    });
+
+  it.each(['/admin/comms-hub', '/admin/comms-hub/events', '/admin/comms-hub/compose', '/admin/comms-hub/schedule'])(
+    'CH7.4 a hub that is already paused says so on %s, with an icon and words; Resume calls the server', async (path) => {
+      (commsHubApi.getCommsHubSummary as jest.Mock).mockResolvedValue({ ...EMPTY, sending_paused: true });
+      (commsHubApi.setSendingPaused as jest.Mock).mockResolvedValue({ sending_paused: false });
+      await renderAt(path);
+      const banner = container.querySelector('[data-testid="ch-paused"]');
+      expect(banner?.textContent).toMatch(/Sending is paused\. Nothing goes out on any channel until you resume/);
+      expect(banner?.querySelector('i[aria-hidden="true"]')).not.toBeNull();
+      await act(async () => { button('Resume sending').dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+      await settle();
+      expect(commsHubApi.setSendingPaused).toHaveBeenCalledWith(false);
+      expect(container.querySelector('[data-testid="ch-paused"]')).toBeNull();
+    });
+
+  it('CH7.4 a pause the server refused says so and the hub is not shown as paused', async () => {
+    (commsHubApi.setSendingPaused as jest.Mock).mockRejectedValue(new Error('down'));
+    (commsHubApi.apiErrorMessage as jest.Mock).mockImplementation((_e: unknown, f: string) => f);
+    await renderAt('/admin/comms-hub');
+    await act(async () => { button('Pause all sending').dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    await settle();
+    expect(Array.from(container.querySelectorAll('[role="alert"]')).map((a) => a.textContent).join(' ')).toContain('Sending was not paused. Try again.');
+    expect(container.querySelector('[data-testid="ch-paused"]')).toBeNull();
+  });
+
   it('Today shows the summary counts from the server, and the approval card agrees with its tile', async () => {
     (commsHubApi.getCommsHubSummary as jest.Mock).mockResolvedValue({ ...EMPTY, awaiting_approval: 2, upcoming_events: 4, events_missing_thumbnail: 1 });
+    const row = (id: string) => ({ id, status: 'needs_approval', kind: 'reminder', title: `Message ${id}`, event: null, send_at: null, updated_at: '2026-11-20T16:00:00.000Z', destinations: [], preview: null, include: { thumbnail: false, join_link: false, registration_link: false }, approved_by: null, deliveries: { total: 0, sent: 0, failed: 0, pending: 0, cancelled: 0 }, failure: null });
+    (commsHubApi.getBoard as jest.Mock).mockImplementation(async (scope: string) => (scope === 'approval' ? [row('a'), row('b')] : []));
     await renderAt('/admin/comms-hub');
     const tile = (label: string): string => {
       const card = Array.from(container.querySelectorAll('div')).find((d) => d.textContent?.startsWith(label) || (d.firstElementChild?.textContent ?? '') === label);
@@ -88,7 +130,7 @@ describe('CH1.3 Communications Hub shell', () => {
     expect(tile('Waiting for your approval')).toContain('2');
     expect(tile('Upcoming events')).toContain('4');
     expect(text()).toContain('1 still need a thumbnail');
-    expect(text()).toContain('2 waiting for your approval');
+    expect(text()).toContain('2 waiting');
     expect(text()).not.toContain('Nothing is waiting for your approval');
   });
 
@@ -108,7 +150,7 @@ describe('CH1.3 Communications Hub shell', () => {
     await renderAt(path);
     expect(container.querySelector('[role="alert"]')?.textContent).toContain('did not load');
     expect(text()).not.toContain(emptyCopy);
-    expect(container.querySelector('[role="status"]')?.textContent).toContain('unavailable until the summary loads');
+    expect(Array.from(container.querySelectorAll('[role="status"]')).map((x) => x.textContent).join(' ')).toContain('unavailable until the summary loads');
   });
 
   it('before the summary arrives, tabs say Loading rather than empty', async () => {
@@ -140,10 +182,10 @@ describe('CH1.3 Communications Hub shell', () => {
 
   it('accessibility: focus order is header controls, then the four tabs in order; every control carries the 44px class', async () => {
     await renderAt('/admin/comms-hub');
-    const focusables = Array.from(container.querySelectorAll<HTMLElement>('button:not([disabled]), a[href]'));
+    const focusables = Array.from(container.querySelectorAll<HTMLElement>('button:not([disabled]), a[href]')).slice(0, 7);
     const order: string[] = [];
     for (const el of focusables) { el.focus(); order.push((document.activeElement?.textContent ?? '').trim()); }
-    expect(order).toEqual(['New event', 'New message', 'Today', 'Events', 'Compose', 'Schedule & history']);
+    expect(order).toEqual(['Pause all sending', 'New event', 'New message', 'Today', 'Events', 'Compose', 'Schedule & history']);
     for (const el of focusables) expect(el.className).toMatch(/comms-hub-(action|tab)/);
   });
 });

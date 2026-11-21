@@ -1,8 +1,13 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
-import { StatCard, SectionCard, EmptyState } from '../shell';
+import { apiErrorMessage, listHubEvents, type HubEvent } from '../../../services/commsHubApi';
+import { StatCard } from '../shell';
 import SummaryPending from './SummaryPending';
 import type { CommsHubOutletContext } from './CommsHubLayout';
+import { useBoard } from './board/useBoard';
+import { whenOf } from './board/boardDisplay';
+import ApprovalQueue from './today/ApprovalQueue';
+import { ChannelStatus, GoingOutNext, UpcomingEvents } from './today/TodaySide';
 
 /** "What do you want to tell people?" (design 01): opens Compose with the words carried over (CH6.5). */
 export function TellPeople(): React.ReactElement {
@@ -20,20 +25,35 @@ export function TellPeople(): React.ReactElement {
   );
 }
 
-/** Today (design 01): the ask box, the four tiles, then the approval queue. Counts come from the hub summary. */
+/**
+ * Today (design 01, CH7.4): the ask box, the four tiles, the approval queue, then Going out next,
+ * Upcoming events and Channels. Counts come from the hub summary; the lists load on their own, so a
+ * list that fails shows its own retry without hiding the rest of the page.
+ */
 export default function TodayTab(): React.ReactElement {
-  const { summary, loadError } = useOutletContext<CommsHubOutletContext>();
+  const { summary, loadError, reload } = useOutletContext<CommsHubOutletContext>();
+  const approval = useBoard('approval', { limit: 20 });
+  const next = useBoard('schedule', { status: ['approved', 'scheduled', 'sending'], limit: 4 });
+  const [events, setEvents] = useState<HubEvent[] | null>(null);
+  const [eventsError, setEventsError] = useState<string | null>(null);
+  const loadEvents = useCallback(() => {
+    setEventsError(null);
+    listHubEvents('upcoming').then((e) => setEvents(e.slice(0, 3))).catch((err) => setEventsError(apiErrorMessage(err, 'The events did not load.')));
+  }, []);
+  useEffect(() => { loadEvents(); }, [loadEvents]);
+
   if (!summary) return <SummaryPending loadError={loadError} />;
-  const waiting = summary.awaiting_approval;
+  const firstOut = next.rows?.[0];
+  const changed = (): void => { approval.reload(); next.reload(); reload(); };
   return (
     <div>
       <TellPeople />
       <div className="row g-3 mb-3">
         <div className="col-12 col-sm-6 col-xl-3">
-          <StatCard label="Waiting for your approval" value={waiting} icon="checkbox-circle-line" hint="Nothing sends until you approve" />
+          <StatCard label="Waiting for your approval" value={summary.awaiting_approval} icon="checkbox-circle-line" hint="Nothing sends until you approve" />
         </div>
         <div className="col-12 col-sm-6 col-xl-3">
-          <StatCard label="Scheduled, next 7 days" value={summary.scheduled_next_7_days} icon="time-line" tone="info" />
+          <StatCard label="Scheduled, next 7 days" value={summary.scheduled_next_7_days} icon="time-line" tone="info" hint={firstOut ? `Next: ${whenOf(firstOut.send_at)}` : undefined} />
         </div>
         <div className="col-12 col-sm-6 col-xl-3">
           <StatCard
@@ -45,17 +65,19 @@ export default function TodayTab(): React.ReactElement {
           />
         </div>
         <div className="col-12 col-sm-6 col-xl-3">
-          <StatCard label="Needs attention" value={summary.needs_attention} icon="error-warning-line" tone="warning" />
+          <StatCard label="Needs attention" value={summary.needs_attention} icon="error-warning-line" tone="warning" hint={summary.needs_attention > 0 ? 'Did not fully go out: see Schedule & history' : undefined} />
         </div>
       </div>
-      <SectionCard title="Needs your approval" icon="checkbox-circle-line">
-        <EmptyState
-          icon="inbox-line"
-          title={waiting > 0 ? `${waiting} waiting for your approval` : 'Nothing is waiting for your approval'}
-          description="Drafts for your events and messages appear here. Nothing goes out until you approve it."
-          tone="quiet"
-        />
-      </SectionCard>
+      <div className="row g-3">
+        <div className="col-12 col-xl-7">
+          <ApprovalQueue list={approval} onChanged={changed} />
+        </div>
+        <div className="col-12 col-xl-5 d-flex flex-column gap-3">
+          <GoingOutNext list={next} />
+          <UpcomingEvents events={events} error={eventsError} onRetry={loadEvents} />
+          <ChannelStatus />
+        </div>
+      </div>
     </div>
   );
 }

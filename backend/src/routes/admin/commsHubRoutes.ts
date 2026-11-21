@@ -10,6 +10,7 @@ import thumbnailRoutes from './commsHubThumbnailRoutes';
 import liveRoutes from './commsHubLiveRoutes';
 import planRoutes from './commsHubPlanRoutes';
 import messageRoutes from './commsHubMessageRoutes';
+import boardRoutes from './commsHubBoardRoutes';
 
 /**
  * Communications Hub admin API (CH1.3 onward). Every route sits under /api/admin/comms-hub, which
@@ -41,5 +42,7 @@ router.use(liveRoutes);
 router.use(planRoutes);
 // CH6.5 Compose: messages, drafts, recipients, approval.
 router.use(messageRoutes);
+// CH7.4 Today and Schedule & history: the board, safety controls and activity log.
+router.use(boardRoutes);
 
 export default router;

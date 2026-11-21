@@ -281,3 +281,44 @@ export function apiProblems(err: unknown): string[] {
   const p = (err as { response?: { data?: { problems?: unknown } } })?.response?.data?.problems;
   return Array.isArray(p) ? p.filter((x): x is string => typeof x === 'string') : [];
 }
+
+/* Today and Schedule & history (CH7.4: backend/src/routes/admin/commsHubBoardRoutes.ts). */
+export type BoardScope = 'approval' | 'schedule' | 'history';
+export interface BoardRow {
+  id: string; status: HubMessageStatus; kind: MessageKind; title: string;
+  event: { id: string; title: string; thumbnail_id: string | null } | null;
+  send_at: string | null; updated_at: string;
+  destinations: Array<{ channel: Channel; label: string | null }>;
+  preview: string | null;
+  include: { thumbnail: boolean; join_link: boolean; registration_link: boolean };
+  approved_by: string | null;
+  deliveries: { total: number; sent: number; failed: number; pending: number; cancelled: number };
+  failure: { reason: string; missed: string[]; attempts: number } | null;
+}
+export interface BoardFilter { status?: HubMessageStatus[]; channel?: Channel | null; event_id?: string | null; limit?: number }
+export async function getBoard(scope: BoardScope, f: BoardFilter = {}): Promise<BoardRow[]> {
+  const params: Record<string, string | number> = { scope };
+  if (f.status?.length) params.status = f.status.join(',');
+  if (f.channel) params.channel = f.channel;
+  if (f.event_id) params.event_id = f.event_id;
+  if (f.limit) params.limit = f.limit;
+  const { data } = await api.get<{ rows: BoardRow[] }>('/api/admin/comms-hub/board', { params });
+  return data.rows;
+}
+export interface HubSettings {
+  sending_paused: boolean; quiet_hours: { start: string; end: string } | null; alert_recipients: string[];
+  test_cohort: { id: string; name: string } | null; updated_at: string | null;
+}
+export async function getHubSettings(): Promise<HubSettings> { return (await api.get<HubSettings>('/api/admin/comms-hub/settings')).data; }
+export async function saveHubSettings(patch: { quiet_hours?: HubSettings['quiet_hours']; alert_recipients?: string[]; test_cohort_id?: string | null }): Promise<HubSettings> {
+  return (await api.put<HubSettings>('/api/admin/comms-hub/settings', patch)).data;
+}
+export async function setSendingPaused(paused: boolean): Promise<HubSettings> {
+  return (await api.post<HubSettings>('/api/admin/comms-hub/settings/pause', { paused })).data;
+}
+export interface ActivityRow { id: string; at: string; who: string; did: string; about: string | null; entity_type: string; entity_id: string | null }
+export async function getActivity(limit = 20): Promise<ActivityRow[]> {
+  return (await api.get<{ activity: ActivityRow[] }>('/api/admin/comms-hub/activity', { params: { limit } })).data.activity;
+}
+/** Try the recipients that missed a partly sent or failed message again (CH7.2 route). */
+export async function retryHubMessage(id: string): Promise<MessageView> { return one(api.post(`${messages}/${id}/retry`)); }
