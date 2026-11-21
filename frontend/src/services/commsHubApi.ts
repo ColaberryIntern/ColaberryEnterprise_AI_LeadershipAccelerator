@@ -313,7 +313,8 @@ export type MessageKind = 'announcement' | 'reminder' | 'starting_soon' | 'recor
 export type Tone = 'friendly' | 'professional' | 'urgent';
 export type Channel = 'community_post' | 'in_app';
 export interface DraftView { id: string; channel: Channel; version: number; title: string | null; body: string; author: string; instruction: string | null; created_at: string }
-export interface DestinationView { id?: string; channel: Channel; target_type: 'cohort_feed' | 'in_app_audience'; target_id: string; label: string | null; has_delivery?: boolean; reason?: string }
+/** CH9.6 'event_registrants': target_id is the hub event id of a managed Eventbrite event (in-app only). */
+export interface DestinationView { id?: string; channel: Channel; target_type: 'cohort_feed' | 'in_app_audience' | 'event_registrants'; target_id: string; label: string | null; has_delivery?: boolean; reason?: string }
 export interface MessageView {
   id: string; status: HubMessageStatus; kind: MessageKind; tone: Tone | null; notes: string | null; subject: string | null;
   include: { thumbnail?: boolean; join_link?: boolean; registration_link?: boolean }; send_at: string | null; created_by: string | null;
@@ -337,9 +338,17 @@ export async function setMessageDestinations(id: string, destinations: Destinati
 export async function setMessageSendTime(id: string, sendAt: string | null): Promise<MessageView> { return one(api.put(`${messages}/${id}/send-time`, { send_at: sendAt })); }
 export async function messageAction(id: string, action: 'submit' | 'approve' | 'undo' | 'cancel'): Promise<MessageView> { return one(api.post(`${messages}/${id}/${action}`)); }
 export async function rejectHubMessage(id: string, note: string | null): Promise<MessageView> { return one(api.post(`${messages}/${id}/reject`, { note })); }
-export async function getDestinationOptions(): Promise<DestinationView[]> {
-  const { data } = await api.get<{ destinations: DestinationView[] }>(`${messages}/destination-options`);
+/** CH9.6: with the message's event, a managed Eventbrite event's registrants are offered too. */
+export async function getDestinationOptions(eventId: string | null = null): Promise<DestinationView[]> {
+  const { data } = await api.get<{ destinations: DestinationView[] }>(`${messages}/destination-options`, eventId ? { params: { event_id: eventId } } : undefined);
   return data.destinations;
+}
+
+/** CH9.6: how many of an event's registrants have platform accounts (counts only, never people). */
+export interface RegistrantReach { registrants: number; reachable: number; eventbrite: 'ok' | 'unavailable' | 'not_configured' }
+export async function getRegistrantReach(hubEventId: string): Promise<RegistrantReach> {
+  const { data } = await api.get<RegistrantReach>(`/api/admin/comms-hub/events/${encodeURIComponent(hubEventId)}/registrant-reach`);
+  return data;
 }
 /** The validator's problems from a refused submit/approve, or []. */
 export function apiProblems(err: unknown): string[] {

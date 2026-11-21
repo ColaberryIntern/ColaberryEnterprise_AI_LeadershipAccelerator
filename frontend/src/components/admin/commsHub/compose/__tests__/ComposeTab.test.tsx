@@ -12,6 +12,7 @@ jest.mock('../../../../../services/commsHubApi', () => ({
   ...jest.requireActual('../../../../../services/commsHubApi'),
   listHubEvents: jest.fn(), getDestinationOptions: jest.fn(), createMessage: jest.fn(), getMessage: jest.fn(), regenerateMessage: jest.fn(),
   editMessageDraft: jest.fn(), setMessageDestinations: jest.fn(), setMessageSendTime: jest.fn(), messageAction: jest.fn(), rejectHubMessage: jest.fn(),
+  getRegistrantReach: jest.fn(),
 }));
 
 /** CH6.5 Compose rendered: the three steps, previews, versions, recipients, Central time, approve / reject / undo, voiding shown, a11y. */
@@ -375,5 +376,24 @@ describe('CH6.5 approve and save act on what is on screen', () => {
     const feed = container.querySelector('[aria-label="How it looks in the community feed"]')!;
     expect(feed.querySelector('a.cm-link')!.getAttribute('href')).toBe('https://example.com/join');
     expect(feed.querySelector('.ch-prev-event')!.textContent).toContain('Tuesday, December 1 · 6:00 PM CST');
+  });
+});
+
+describe('CH9.6 a message about an Eventbrite event managed in the hub can go to its registrants', () => {
+  const REG = { channel: 'in_app', target_type: 'event_registrants', target_id: 'e1', label: 'Registrants of Demo Tuesday (in-app)' };
+  it('the options follow the message event, the registrants are offered with how many it reaches, and choosing them saves them', async () => {
+    m(api.getMessage).mockResolvedValue(msg({ status: 'needs_approval' }));
+    m(api.getDestinationOptions).mockResolvedValue([...OPTIONS, REG]);
+    m(api.getRegistrantReach).mockResolvedValue({ registrants: 40, reachable: 12, eventbrite: 'ok' });
+    await render('/admin/comms-hub/compose?message=m1');
+    expect(api.getDestinationOptions).toHaveBeenLastCalledWith('e1');
+    expect(api.getRegistrantReach).toHaveBeenCalledWith('e1');
+    expect(container.querySelector('[data-testid="ch-registrant-reach"]')!.textContent).toBe('12 of 40 registrants have a platform account and will get it in the app. The others are not reached in-app.');
+    const box = container.querySelector('input[id="ch-to-in_app|event_registrants|e1"]') as HTMLInputElement;
+    expect(box.labels![0].textContent).toBe('In-app notification: Registrants of Demo Tuesday (in-app)');
+    await click(box);
+    m(api.setMessageDestinations).mockResolvedValue(msg({ status: 'needs_approval', destinations: [OPTIONS[0] as never, REG as never] }));
+    await click(btn('Save recipients'));
+    expect(m(api.setMessageDestinations).mock.calls[0][1].map((d: { target_type: string }) => d.target_type)).toEqual(['cohort_feed', 'event_registrants']);
   });
 });

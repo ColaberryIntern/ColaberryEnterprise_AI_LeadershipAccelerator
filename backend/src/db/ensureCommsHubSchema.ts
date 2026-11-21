@@ -40,7 +40,8 @@ export const COMMS_HUB_CHANNELS = ['community_post', 'in_app'] as const;
 export const COMMS_HUB_MESSAGE_STATUSES = ['draft', 'needs_approval', 'approved', 'scheduled', 'sending', 'sent', 'partially_failed', 'failed', 'cancelled'] as const;
 export const COMMS_HUB_MESSAGE_KINDS = ['announcement', 'reminder', 'starting_soon', 'recording_thanks', 'time_change', 'cancellation', 'update', 'other'] as const;
 export const COMMS_HUB_PLAN_KINDS = ['announcement', 'reminder', 'starting_soon', 'recording_thanks'] as const;
-export const COMMS_HUB_DESTINATION_TYPES = ['cohort_feed', 'in_app_audience'] as const;
+// CH9.6 event_registrants: in-app to the people registered for one Eventbrite event the hub manages.
+export const COMMS_HUB_DESTINATION_TYPES = ['cohort_feed', 'in_app_audience', 'event_registrants'] as const;
 export const COMMS_HUB_DELIVERY_STATUSES = ['pending', 'sending', 'sent', 'failed', 'cancelled', 'skipped'] as const;
 export const COMMS_HUB_ALERT_STATUSES = ['pending', 'sending', 'sent', 'failed'] as const;
 export const COMMS_HUB_ALERT_STATES = ['failed', 'partially_failed'] as const;
@@ -212,6 +213,16 @@ export const COMMS_HUB_SCHEMA_STATEMENTS: readonly string[] = [
      CHECK (channel IN (${list(COMMS_HUB_CHANNELS)}))`,
   `ALTER TABLE comms_hub_destinations ADD CONSTRAINT comms_hub_destinations_type_check
      CHECK (target_type IN (${list(COMMS_HUB_DESTINATION_TYPES)}))`,
+  // CH9.6: production already has this CHECK from phase 1 without 'event_registrants', and the ADD above
+  // is a no-op once it exists. Widen it only when its definition lacks the new type, in one statement,
+  // so a normal boot changes nothing and the table is never left without the check.
+  `DO $$ BEGIN
+     IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'comms_hub_destinations_type_check'
+                AND pg_get_constraintdef(oid) NOT LIKE '%event_registrants%') THEN
+       ALTER TABLE comms_hub_destinations DROP CONSTRAINT comms_hub_destinations_type_check,
+         ADD CONSTRAINT comms_hub_destinations_type_check CHECK (target_type IN (${list(COMMS_HUB_DESTINATION_TYPES)}));
+     END IF;
+   END $$`,
   `CREATE UNIQUE INDEX IF NOT EXISTS uq_comms_hub_destinations_target ON comms_hub_destinations (message_id, channel, target_type, target_id)`,
 
   `CREATE TABLE IF NOT EXISTS comms_hub_approvals (

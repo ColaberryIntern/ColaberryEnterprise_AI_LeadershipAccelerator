@@ -2,6 +2,9 @@ jest.mock('jsonwebtoken', () => ({ verify: jest.fn() }));
 jest.mock('../../../config/env', () => require('../../../__tests__/testSupport/configMocks').envModuleMock({ jwtSecret: 'test-secret' }));
 jest.mock('../commsHubEventRoutes', () => ({ actorOf: (req: { admin?: { sub?: string; email?: string } }) => ({ id: req.admin?.sub ?? null, label: req.admin?.email ?? null }) }));
 jest.mock('../../../services/commsHub/eventbrite/registrants', () => ({ listRegistrants: jest.fn(), findPublicEvent: jest.fn() }));
+// CH9.6 the reach count behind "N of M registrants have platform accounts".
+const mockReach = jest.fn();
+jest.mock('../../../services/commsHub/eventbrite/registrantAudience', () => ({ registrantReach: (...a: unknown[]) => mockReach(...a) }));
 const mockAdopt = jest.fn();
 // The three refusals are the route's contract; their real messages live in adoption.ts and are checked there.
 jest.mock('../../../services/commsHub/eventbrite/adoption', () => {
@@ -77,3 +80,29 @@ it('anything else is a 500 with its class, and it is logged', async () => {
   expect([res.status, res.body.error_class]).toEqual([500, 'AdoptFailed']);
   expect(errSpy).toHaveBeenCalled();
 });
+
+describe('CH9.6 GET /events/:id/registrant-reach (counts only)', () => {
+  const R = '/api/admin/comms-hub/events/11111111-1111-4111-8111-111111111111/registrant-reach';
+  it('answers the counts, not cached; never a person', async () => {
+    mockReach.mockResolvedValue({ registrants: 40, reachable: 12, eventbrite: 'ok' });
+    const res = await request(app).get(R).set(as(JACKIE));
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ registrants: 40, reachable: 12, eventbrite: 'ok' });
+    expect(res.headers['cache-control']).toBe('no-store');
+  });
+  it('401 with no token, 403 without the hub, 400 on a non-uuid id', async () => {
+    expect((await request(app).get(R)).status).toBe(401);
+    expect((await request(app).get(R).set(as({ role: 'admin', mgmt_role: 'marketing' }))).status).toBe(403);
+    expect((await request(app).get('/api/admin/comms-hub/events/abc/registrant-reach').set(as(JACKIE))).status).toBe(400);
+    expect(mockReach).not.toHaveBeenCalled();
+  });
+  it('a hub-made event is a 404; anything else a 500 with its class', async () => {
+    const { ConnectorPermanentError } = jest.requireActual('../../../services/commsHub/connectors/types');
+    mockReach.mockRejectedValueOnce(new ConnectorPermanentError('That event is not an Eventbrite event managed in the hub.', 'not_managed'));
+    expect((await request(app).get(R).set(as(JACKIE))).status).toBe(404);
+    mockReach.mockRejectedValueOnce(new Error('pool exhausted'));
+    const res = await request(app).get(R).set(as(JACKIE));
+    expect([res.status, res.body.error_class]).toEqual([500, 'ReachFailed']);
+  });
+});
+
