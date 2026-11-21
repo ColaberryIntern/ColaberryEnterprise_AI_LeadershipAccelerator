@@ -80,7 +80,7 @@ describe('listEventbriteEvents', () => {
     const list = await listEventbriteEvents('upcoming');
     expect(list.status).toBe('ok');
     expect(list.events).toEqual([{
-      ccpp_event_id: '1234567890', title: 'AI Open House',
+      ccpp_event_id: '1234567890', title: 'AI Open House', description: 'd',
       starts_at: '2026-12-04T00:30:00.000Z', // 6:30 PM CST
       ends_at: null, registration_url: 'https://www.eventbrite.com/e/x-1234567890', image_url: 'https://img/x.png',
       registered: 14, eventbrite_status: 'live',

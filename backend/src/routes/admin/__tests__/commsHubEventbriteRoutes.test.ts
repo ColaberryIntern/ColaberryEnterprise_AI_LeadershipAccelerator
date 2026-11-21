@@ -28,7 +28,7 @@ async function call(o: { query?: Record<string, string>; who?: Record<string, un
   for (const s of layer.route.stack) { let go = false; await s.handle(req, res, () => { go = true; }); if (!go) break; }
   return res;
 }
-const EVENT = { ccpp_event_id: '1234567890', title: 'AI Open House', starts_at: '2026-12-04T00:30:00.000Z', ends_at: null, registration_url: 'https://www.eventbrite.com/e/x-1234567890', image_url: null, registered: 14, eventbrite_status: 'live' };
+const EVENT = { ccpp_event_id: '1234567890', title: 'AI Open House', starts_at: '2026-12-04T00:30:00.000Z', ends_at: null, registration_url: 'https://www.eventbrite.com/e/x-1234567890', image_url: null, registered: 14, description: null, eventbrite_status: 'live' };
 beforeEach(() => jest.clearAllMocks());
 
 it('refuses no token (401) and a role without the hub (403), and never reads Eventbrite', async () => {

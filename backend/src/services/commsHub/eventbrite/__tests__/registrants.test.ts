@@ -14,7 +14,7 @@ import type { EventbriteEventView } from '../eventbriteEvents';
  * CH9.3 registrants: one row per person across Eventbrite and our site, CCPP's wrapped emails
  * cleaned, only public events, a partial list said to be partial, and no person ever logged.
  */
-const EVENT: EventbriteEventView = { ccpp_event_id: '777', title: 'AI Open House', starts_at: '2026-12-04T00:30:00.000Z', ends_at: null, registration_url: null, image_url: null, registered: 3, eventbrite_status: 'live' };
+const EVENT: EventbriteEventView = { ccpp_event_id: '777', title: 'AI Open House', starts_at: '2026-12-04T00:30:00.000Z', ends_at: null, registration_url: null, image_url: null, registered: 3, description: null, eventbrite_status: 'live' };
 // CCPP Central wall-clock read as UTC: 10:00 "Z" is 10:00 AM Central = 16:00Z in November.
 const att = (email: string | null, name: string | null, at: string | null, phone: string | null = null) => ({ EventId: '777', AttendeeName: name, Email: email, PhoneNumber: phone, OrderId: 1, CreatedDate: at ? new Date(at) : null });
 const source = (rows: ReturnType<typeof att>[] | Error): EventbriteSource => ({

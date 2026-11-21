@@ -124,7 +124,7 @@ describe('CH9.3 registrants from an Eventbrite card', () => {
   it('View registrants on an Eventbrite card opens that event\'s registrants; Close shuts it', async () => {
     (api.listHubEvents as jest.Mock).mockResolvedValue([]);
     (api.listEventbriteEvents as jest.Mock).mockResolvedValue({ status: 'ok', window: 'upcoming', fetched_at: 'x', events: [
-      { ccpp_event_id: '777', title: 'AI Open House', starts_at: '2026-12-04T00:30:00.000Z', ends_at: null, registration_url: null, image_url: null, registered: 1, eventbrite_status: 'live', adopted_event_id: null },
+      { ccpp_event_id: '777', title: 'AI Open House', starts_at: '2026-12-04T00:30:00.000Z', ends_at: null, registration_url: null, image_url: null, registered: 1, description: null, eventbrite_status: 'live', adopted_event_id: null },
     ] });
     (api.getRegistrants as jest.Mock).mockResolvedValue({ event: { ccpp_event_id: '777', title: 'AI Open House', starts_at: '' }, eventbrite: 'ok', count: 1,
       rows: [{ name: 'Ada', email: 'ada@x.test', registered_at: null, sources: ['eventbrite'], has_account: false }] });

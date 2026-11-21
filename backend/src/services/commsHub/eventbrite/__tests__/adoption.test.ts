@@ -40,7 +40,7 @@ import type { EventbriteEventView } from '../eventbriteEvents';
 const NOW = new Date('2026-11-21T22:00:00.000Z');
 const ACTOR = { id: 'u-jackie', label: 'jackie@colaberry.com' };
 const EB = (o: Partial<EventbriteEventView> = {}): EventbriteEventView => ({
-  ccpp_event_id: '777', title: 'AI Open House', starts_at: '2026-12-04T00:30:00.000Z', ends_at: '2026-12-04T02:00:00.000Z',
+  ccpp_event_id: '777', title: 'AI Open House', description: 'See what builders shipped this month.', starts_at: '2026-12-04T00:30:00.000Z', ends_at: '2026-12-04T02:00:00.000Z',
   registration_url: 'https://www.eventbrite.com/e/ai-open-house-777777', image_url: 'https://img.test/a.png', registered: 3, eventbrite_status: 'live', ...o,
 });
 /** A hub row as Sequelize would hand it over: fields, get(), update(). */
@@ -92,6 +92,9 @@ describe('adoptEventbriteEvent', () => {
     expect(sql).toMatch(/'\{"calendar":false,"events_page":true,"campus_rail":false\}'::jsonb/);
     expect(opts.replacements).toMatchObject({ ccppEventId: '777', title: 'AI Open House', eventType: 'open_house', registrationUrl: EB().registration_url, sourceImageUrl: EB().image_url, actorId: 'u-jackie' });
     expect(opts.replacements.startsAt).toEqual(new Date(EB().starts_at));
+    // The Eventbrite description is copied once as the starting point (the hub may edit it after).
+    expect(sql).toMatch(/:registrationUrl, :description,/);
+    expect(opts.replacements.description).toBe('See what builders shipped this month.');
     expect(mockCalendar).toHaveBeenCalledTimes(1);
     expect(mockActivity).toHaveBeenCalledWith(ACTOR, 'event.adopted', 'event', 'hub-1', { ccpp_event_id: '777', title: 'AI Open House' }, mockTx);
   });

@@ -70,7 +70,7 @@ export async function adoptEventbriteEvent(
       `INSERT INTO comms_hub_events
          (id, title, event_type, audience, starts_at, ends_at, registration_url, description, placement, status,
           ccpp_event_id, source_image_url, created_by, updated_by, created_at, updated_at)
-       VALUES (gen_random_uuid(), :title, :eventType, '{"kind":"all_members"}'::jsonb, :startsAt, :endsAt, :registrationUrl, NULL,
+       VALUES (gen_random_uuid(), :title, :eventType, '{"kind":"all_members"}'::jsonb, :startsAt, :endsAt, :registrationUrl, :description,
           '{"calendar":false,"events_page":true,"campus_rail":false}'::jsonb, 'scheduled',
           :ccppEventId, :sourceImageUrl, :actorId, :actorId, now(), now())
        ON CONFLICT (ccpp_event_id) WHERE ccpp_event_id IS NOT NULL DO NOTHING
@@ -79,6 +79,9 @@ export async function adoptEventbriteEvent(
         replacements: {
           title: f.title, eventType: /open house/i.test(f.title) ? 'open_house' : 'session',
           startsAt: f.starts_at, endsAt: f.ends_at, registrationUrl: f.registration_url,
+          // Copied once, as a starting point: after that the description is the hub's to edit (the sync
+          // never touches it), because it is what members read on the card the hub now shows.
+          description: found.description ? found.description.slice(0, 5000) : null,
           ccppEventId, sourceImageUrl: f.source_image_url, actorId: actor.id,
         },
         type: QueryTypes.SELECT, transaction: t,

@@ -103,6 +103,23 @@ describe('CH5.2 the state follows the provider through backstage, live, ended', 
     expect(activity.map((a) => a.action)).toEqual(['live.prepared', 'live.went_live', 'live.ended']);
   });
 
+  it('CH9.5 an Eventbrite event managed in the hub prepares, goes live and ends exactly like a hub-made one', async () => {
+    // The row adoptEventbriteEvent writes: linked to Eventbrite, all members, the Events page only.
+    events.set('e1', newEvent({
+      ccpp_event_id: '1992498063344', audience: { kind: 'all_members' }, registration_url: 'https://www.eventbrite.com/e/ai-open-house-1992498063344',
+      placement: { calendar: false, events_page: true, campus_rail: false }, source_image_url: 'https://img.evbuc.com/a.jpg',
+    }));
+    let view = await prepareLive('e1', null, JACKIE, NOW);
+    expect(mockEnsure.mock.calls[0][0]).toMatchObject({ id: 'e1', ccpp_event_id: '1992498063344', audience: { kind: 'all_members' } });
+    expect(view.occurrence).toMatchObject({ id: 'o1', editorial_state: 'backstage' });
+    occ.get('o1')!.provider_health = 'ready';
+    view = await runLiveCommand('e1', 'go_live', view.occurrence!.version, JACKIE, NOW);
+    expect([view.occurrence!.editorial_state, events.get('e1')!.status]).toEqual(['live', 'live']);
+    await runLiveCommand('e1', 'end', view.occurrence!.version, JACKIE, NOW);
+    expect(events.get('e1')!.status).toBe('ended');
+    expect(activity.map((a) => a.action)).toEqual(['live.prepared', 'live.went_live', 'live.ended']);
+  });
+
   it('a series with dates left goes back to scheduled when one airing ends', async () => {
     events.set('e1', newEvent({ repeat_rule: { freq: 'weekly', until: '2027-01-31' } }));
     occ.set('o1', newOcc('o1', { editorial_state: 'live', provider_health: 'ready', content_started_at: NOW, version: 4 }));

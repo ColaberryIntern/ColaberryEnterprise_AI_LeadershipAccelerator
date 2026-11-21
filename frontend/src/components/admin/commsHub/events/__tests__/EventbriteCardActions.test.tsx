@@ -14,7 +14,7 @@ let root: Root;
 const settle = async (): Promise<void> => { for (let i = 0; i < 4; i += 1) await act(async () => { await Promise.resolve(); }); };
 const future = new Date(Date.now() + 5 * 86_400_000).toISOString();
 const EV = (o: Partial<EventbriteEvent> = {}): EventbriteEvent => ({
-  ccpp_event_id: '777', title: 'AI Open House', starts_at: future, ends_at: null, registration_url: null, image_url: null, registered: 2, eventbrite_status: 'live', adopted_event_id: null, ...o,
+  ccpp_event_id: '777', title: 'AI Open House', starts_at: future, ends_at: null, registration_url: null, image_url: null, registered: 2, description: null, eventbrite_status: 'live', adopted_event_id: null, ...o,
 });
 const onOpen = jest.fn(); const onRegistrants = jest.fn();
 async function render(ev: EventbriteEvent): Promise<void> {

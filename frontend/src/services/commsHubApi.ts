@@ -86,6 +86,8 @@ export type EventbriteWindow = 'upcoming' | 'past';
 export interface EventbriteEvent {
   ccpp_event_id: string;
   title: string;
+  /** CH9.5: copied into the hub event when it is managed there. */
+  description: string | null;
   starts_at: string;
   ends_at: string | null;
   registration_url: string | null;

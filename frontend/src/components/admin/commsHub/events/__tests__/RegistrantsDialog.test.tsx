@@ -19,7 +19,7 @@ jest.mock('../../../../../services/commsHubApi', () => ({
 let container: HTMLDivElement;
 let root: Root;
 const settle = async (): Promise<void> => { for (let i = 0; i < 4; i += 1) await act(async () => { await Promise.resolve(); }); };
-const EV: EventbriteEvent = { ccpp_event_id: '777', title: 'AI Open House', starts_at: '2026-12-04T00:30:00.000Z', ends_at: null, registration_url: null, image_url: null, registered: 2, eventbrite_status: 'live', adopted_event_id: null };
+const EV: EventbriteEvent = { ccpp_event_id: '777', title: 'AI Open House', starts_at: '2026-12-04T00:30:00.000Z', ends_at: null, registration_url: null, image_url: null, registered: 2, description: null, eventbrite_status: 'live', adopted_event_id: null };
 const LIST: RegistrantList = {
   event: { ccpp_event_id: '777', title: 'AI Open House', starts_at: '2026-12-04T00:30:00.000Z' }, eventbrite: 'ok', count: 2,
   rows: [

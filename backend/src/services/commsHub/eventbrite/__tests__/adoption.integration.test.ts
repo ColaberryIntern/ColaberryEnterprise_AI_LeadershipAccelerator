@@ -30,7 +30,7 @@ describeIfDb('CH9.5 managing an Eventbrite event, on a scratch Postgres', () => 
   const NOW = new Date('2026-11-21T22:00:00Z').getTime();
   const EB = (id: string): EventbriteEventView => ({
     ccpp_event_id: id, title: 'AI Open House', starts_at: '2026-12-04T00:30:00.000Z', ends_at: '2026-12-04T02:00:00.000Z',
-    registration_url: `https://www.eventbrite.com/e/ai-open-house-${id}`, image_url: 'https://img.test/a.png', registered: 3, eventbrite_status: 'live',
+    registration_url: `https://www.eventbrite.com/e/ai-open-house-${id}`, image_url: 'https://img.test/a.png', registered: 3, description: null, eventbrite_status: 'live',
   });
   const q = async <T extends object>(sql: string, bind: unknown[] = []): Promise<T[]> => sequelize.query<T>(sql, { bind, type: QueryTypes.SELECT });
 

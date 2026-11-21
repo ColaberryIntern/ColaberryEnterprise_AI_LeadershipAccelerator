@@ -17,6 +17,8 @@ export type EventbriteListStatus = 'ok' | 'unavailable' | 'not_configured';
 export interface EventbriteEventView {
   ccpp_event_id: string;
   title: string;
+  /** CH9.5: Eventbrite's description, copied into the hub event when it is managed there. */
+  description: string | null;
   starts_at: string;
   ends_at: string | null;
   registration_url: string | null;
@@ -52,6 +54,7 @@ export async function listEventbriteEvents(window: EventbriteWindow, deps: { sou
     const events: EventbriteEventView[] = withOwn.map((v, i) => ({
       ccpp_event_id: v.id,
       title: v.title,
+      description: v.description ?? null,
       starts_at: new Date(v.starts_at).toISOString(),
       ends_at: v.ends_at ? new Date(v.ends_at).toISOString() : null,
       registration_url: v.registration_url,

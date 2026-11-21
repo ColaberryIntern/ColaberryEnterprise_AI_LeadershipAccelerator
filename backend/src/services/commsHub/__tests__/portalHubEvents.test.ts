@@ -128,6 +128,20 @@ describe('CH9.5 an Eventbrite event managed in the hub keeps the member\'s regis
     expect(toCards(managed(), NOW, IN_30)[0].image_url).toBe('https://img.evbuc.com/open-house.jpg');
   });
 
+  it('Eventbrite moved the date and the hub has not synced yet: the member is STILL registered (matched by Eventbrite id, not date)', () => {
+    const moved = new Date('2026-12-09T00:00:00Z'); // a week later on Eventbrite; the hub card still says Dec 1
+    const merged = mergeCards([card({ id: '1992498063344', registration_url: url, starts_at: moved, is_registered: true, signup_count: 14 })], toCards(managed(), NOW, IN_30));
+    expect(merged).toHaveLength(1);
+    expect(merged[0]).toMatchObject({ source: 'hub', is_registered: true, signup_count: 14, ccpp_event_id: '1992498063344' });
+  });
+
+  it('a managed card is matched by id even if its registration link differs from the Eventbrite card', () => {
+    const merged = mergeCards([card({ id: '1992498063344', registration_url: 'https://www.eventbrite.com/e/renamed-1992498063344?aff=x', starts_at: at, is_registered: true })],
+      toCards(managed({ registration_url: null }), NOW, IN_30));
+    expect(merged).toHaveLength(1);
+    expect(merged[0]).toMatchObject({ source: 'hub', is_registered: true });
+  });
+
   it('a recurring hub series sharing the link inherits registration only on the matching date', () => {
     const series = toCards(managed({ ccpp_event_id: null, source_image_url: null, repeat_rule: { freq: 'weekly', until: '2026-12-31' } }), NOW, IN_30);
     const merged = mergeCards([card({ id: 'x', registration_url: url, starts_at: at, is_registered: true, signup_count: 5 })], series);

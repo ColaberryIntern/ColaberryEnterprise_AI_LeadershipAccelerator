@@ -19,6 +19,7 @@ const ListQuery = z.object({ window: z.enum(['upcoming', 'past']).default('upcom
 export const EventbriteEventSchema = z.object({
   ccpp_event_id: z.string().regex(/^\d{1,20}$/),
   title: z.string(),
+  description: z.string().nullable(),
   starts_at: z.string(),
   ends_at: z.string().nullable(),
   registration_url: z.string().nullable(),
