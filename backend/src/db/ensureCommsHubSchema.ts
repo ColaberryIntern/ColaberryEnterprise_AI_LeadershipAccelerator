@@ -65,11 +65,22 @@ export const COMMS_HUB_SCHEMA_STATEMENTS: readonly string[] = [
      thumbnail_id UUID,
      broadcast_occurrence_id UUID,
      promotion_plan JSONB NOT NULL DEFAULT '[]'::jsonb,
+     ccpp_event_id VARCHAR(32),
+     source_image_url TEXT,
+     ccpp_missing_since TIMESTAMPTZ,
      created_by VARCHAR(64),
      updated_by VARCHAR(64),
      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
    )`,
+  // CH9.5 an Eventbrite event managed in the hub. Additive and nullable, so the phase 1 table (already
+  // in production) gains them with every existing row untouched; the CREATE above covers a new database.
+  `ALTER TABLE comms_hub_events ADD COLUMN IF NOT EXISTS ccpp_event_id VARCHAR(32)`,
+  `ALTER TABLE comms_hub_events ADD COLUMN IF NOT EXISTS source_image_url TEXT`,
+  `ALTER TABLE comms_hub_events ADD COLUMN IF NOT EXISTS ccpp_missing_since TIMESTAMPTZ`,
+  // One hub event per Eventbrite event. Partial, so the many hub-made events (null) never collide; an
+  // upsert must name the same predicate in its conflict target (adoptEventbriteEvent does).
+  `CREATE UNIQUE INDEX IF NOT EXISTS uq_comms_hub_events_ccpp ON comms_hub_events (ccpp_event_id) WHERE ccpp_event_id IS NOT NULL`,
   `ALTER TABLE comms_hub_events ADD CONSTRAINT comms_hub_events_status_check
      CHECK (status IN (${list(COMMS_HUB_EVENT_STATUSES)}))`,
   `ALTER TABLE comms_hub_events ADD CONSTRAINT comms_hub_events_type_check
@@ -307,8 +318,14 @@ export async function ensureCommsHubSchema(): Promise<{ ok: boolean; missing: st
       `SELECT 1 AS present FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'community_events' AND column_name = 'hub_event_id'`,
       { type: QueryTypes.SELECT },
     );
+    // CH9.5: the Eventbrite link column, without which managing an Eventbrite event cannot work.
+    const ccppCol = await sequelize.query(
+      `SELECT 1 AS present FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'comms_hub_events' AND column_name = 'ccpp_event_id'`,
+      { type: QueryTypes.SELECT },
+    );
     missing = REQUIRED_TABLES.filter((t) => !present.has(t));
     if (cols.length === 0) missing.push('community_events.hub_event_id');
+    if (ccppCol.length === 0) missing.push('comms_hub_events.ccpp_event_id');
     if (missing.length > 0) {
       console.error(JSON.stringify({
         timestamp: new Date().toISOString(), level: 'error', service: 'backend', event: 'SchemaInvariantViolation',

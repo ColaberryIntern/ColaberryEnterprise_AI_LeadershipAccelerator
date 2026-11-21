@@ -57,7 +57,8 @@ export function toCards(e: CommsHubEvent, fromMs: number, toMs: number, occurren
       timezone: CENTRAL_TZ,
       registration_url: e.registration_url,
       meeting_link: e.join_url,
-      image_url: e.thumbnail_id ? publicThumbnailPath(e.id, e.thumbnail_id) : null,
+      // CH9.5: an event managed from Eventbrite keeps Eventbrite's picture until a hub thumbnail is chosen.
+      image_url: e.thumbnail_id ? publicThumbnailPath(e.id, e.thumbnail_id) : (e.source_image_url ?? null),
       signup_count: null,
       is_registered: false,
       source: 'hub' as const,
@@ -85,14 +86,36 @@ export function registrationKey(url: string | null): string | null {
   }
 }
 
-/** CCPP cards plus hub cards, the hub winning a shared registration page, sorted by start. */
+/**
+ * CCPP cards plus hub cards, the hub winning a shared registration page, sorted by start.
+ *
+ * CH9.5: the CCPP card a hub card replaces was already annotated for THIS viewer (is_registered) and
+ * carries the signup count. Dropping it used to drop both, so a member who had registered was shown
+ * Register again. The hub card for the same registration page AND the same Central date now inherits
+ * them. Matching the date too keeps one Eventbrite event's registration from spreading across every
+ * date of a recurring hub series that happens to share the link.
+ */
 export function mergeCards(ccpp: PortalEventCard[], hub: PortalEventCard[]): PortalEventCard[] {
   const hubKeys = new Set(hub.map((h) => registrationKey(h.registration_url)).filter((k): k is string => k !== null));
-  const kept = ccpp.filter((c) => {
+  const replaced = new Map<string, PortalEventCard>();
+  const kept: PortalEventCard[] = [];
+  for (const c of ccpp) {
     const k = registrationKey(c.registration_url);
-    return k === null || !hubKeys.has(k);
-  }).map((c) => ({ ...c, source: 'ccpp' as const }));
-  return [...kept, ...hub].sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime());
+    if (k === null || !hubKeys.has(k)) { kept.push({ ...c, source: 'ccpp' as const }); continue; }
+    replaced.set(`${k}|${centralDateKey(new Date(c.starts_at).getTime())}`, c);
+  }
+  const hubCards = hub.map((h) => {
+    const k = registrationKey(h.registration_url);
+    const from = k ? replaced.get(`${k}|${centralDateKey(new Date(h.starts_at).getTime())}`) : undefined;
+    if (!from) return h;
+    return {
+      ...h,
+      is_registered: h.is_registered || from.is_registered,
+      signup_count: h.signup_count ?? from.signup_count,
+      image_url: h.image_url ?? from.image_url,
+    };
+  });
+  return [...kept, ...hubCards].sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime());
 }
 
 export async function getPortalHubEvents(cohortId: string | null, days: number, now: Date = new Date()): Promise<PortalEventCard[]> {

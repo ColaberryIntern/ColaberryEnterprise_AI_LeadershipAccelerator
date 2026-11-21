@@ -6,6 +6,12 @@ jest.mock('../../campusRoutes', () => ({
 jest.mock('../../../config/env', () => require('../../../__tests__/testSupport/configMocks').envModuleMock({ jwtSecret: 'test-secret' }));
 const mockList = jest.fn();
 jest.mock('../../../services/commsHub/eventbrite/eventbriteEvents', () => ({ listEventbriteEvents: (...a: unknown[]) => mockList(...a) }));
+const mockAdopted = jest.fn(async () => new Map<string, string>());
+const mockSyncDue = jest.fn(async () => null);
+jest.mock('../../../services/commsHub/eventbrite/adoption', () => ({ adoptedIds: (...a: unknown[]) => mockAdopted(...(a as [])), syncAdoptedEventsIfDue: () => mockSyncDue() }));
+jest.mock('../../../services/commsHub/eventbrite/registrants', () => ({ listRegistrants: jest.fn(), RegistrantsNotFound: class extends Error {} }));
+jest.mock('../../../services/commsHub/activityLog', () => ({ logActivity: jest.fn() }));
+jest.mock('../commsHubEventRoutes', () => ({ actorOf: () => ({ id: null, label: null }) }));
 
 import jwt from 'jsonwebtoken';
 import router from '../commsHubEventbriteRoutes';
@@ -30,12 +36,21 @@ it('refuses no token (401) and a role without the hub (403), and never reads Eve
   expect((await call({ who: { role: 'admin', mgmt_role: 'support' } })).statusCode).toBe(403);
   expect(mockList).not.toHaveBeenCalled();
 });
-it('defaults to upcoming and answers the declared shape', async () => {
-  mockList.mockResolvedValue({ status: 'ok', window: 'upcoming', events: [EVENT], fetched_at: '2026-11-21T22:00:00.000Z' });
+it('defaults to upcoming and answers the declared shape, each event saying whether the hub manages it (CH9.5)', async () => {
+  mockList.mockResolvedValue({ status: 'ok', window: 'upcoming', events: [EVENT, { ...EVENT, ccpp_event_id: '42' }], fetched_at: '2026-11-21T22:00:00.000Z' });
+  mockAdopted.mockResolvedValueOnce(new Map([['42', '11111111-1111-4111-8111-111111111111']]));
   const res = await call();
   expect(res.statusCode).toBe(200);
   expect(mockList).toHaveBeenCalledWith('upcoming');
-  expect(res.body.events[0]).toEqual(EVENT);
+  expect(res.body.events[0]).toEqual({ ...EVENT, adopted_event_id: null });
+  expect(res.body.events[1].adopted_event_id).toBe('11111111-1111-4111-8111-111111111111');
+  // A page load also nudges the 15-minute sync of managed events.
+  expect(mockSyncDue).toHaveBeenCalledTimes(1);
+});
+it('an unavailable list does not trigger the sync (it cannot tell removed from down)', async () => {
+  mockList.mockResolvedValue({ status: 'unavailable', window: 'upcoming', events: [], fetched_at: 'x' });
+  await call();
+  expect(mockSyncDue).not.toHaveBeenCalled();
 });
 it('passes past through', async () => {
   mockList.mockResolvedValue({ status: 'unavailable', window: 'past', events: [], fetched_at: '2026-11-21T22:00:00.000Z' });

@@ -9,8 +9,14 @@ import { TYPE_LABEL } from './eventDisplay';
  */
 type Change = (patch: Partial<EventFormState>) => void;
 export interface DescribeControls { busy: boolean; error: string | null; canUndo: boolean; run: () => void; undo: () => void }
-interface Props { form: EventFormState; errors: FormErrors; cohorts: HubCohort[]; onChange: Change; describe: DescribeControls }
-interface Section { form: EventFormState; errors: FormErrors; onChange: Change }
+interface Props { form: EventFormState; errors: FormErrors; cohorts: HubCohort[]; onChange: Change; describe: DescribeControls; fromEventbrite?: boolean }
+/** CH9.5: on an event managed from Eventbrite, the title, date, times, repeat and registration link are Eventbrite's. */
+interface Section { form: EventFormState; errors: FormErrors; onChange: Change; fromEventbrite?: boolean }
+
+const FROM_EVENTBRITE = 'From Eventbrite. Edit it there; the change shows here within 15 minutes.';
+function EventbriteNote({ show, id }: { show?: boolean; id: string }): React.ReactElement | null {
+  return show ? <div id={id} className="form-text">{FROM_EVENTBRITE}</div> : null;
+}
 
 function err(errors: FormErrors, key: keyof FormErrors): { 'aria-invalid'?: boolean; 'aria-describedby'?: string } {
   return errors[key] ? { 'aria-invalid': true, 'aria-describedby': `ch-err-${String(key)}` } : {};
@@ -21,12 +27,14 @@ function Err({ errors, k }: { errors: FormErrors; k: keyof FormErrors }): React.
 
 const TYPES: HubEventType[] = ['session', 'open_house', 'office_hours', 'workshop', 'other'];
 
-function Basics({ form, errors, onChange, cohorts }: Section & { cohorts: HubCohort[] }): React.ReactElement {
+function Basics({ form, errors, onChange, cohorts, fromEventbrite }: Section & { cohorts: HubCohort[] }): React.ReactElement {
   return (
     <>
       <div className="col-12 col-md-8">
         <label className="form-label" htmlFor="ch-title">Title</label>
-        <input id="ch-title" className="form-control" value={form.title} maxLength={255} onChange={(e) => onChange({ title: e.target.value })} {...err(errors, 'title')} />
+        <input id="ch-title" className="form-control" value={form.title} maxLength={255} onChange={(e) => onChange({ title: e.target.value })}
+          readOnly={fromEventbrite} aria-describedby={fromEventbrite ? 'ch-eb-title' : undefined} {...err(errors, 'title')} />
+        <EventbriteNote show={fromEventbrite} id="ch-eb-title" />
         <Err errors={errors} k="title" />
       </div>
       <div className="col-12 col-md-4">
@@ -60,11 +68,12 @@ function Basics({ form, errors, onChange, cohorts }: Section & { cohorts: HubCoh
   );
 }
 
-function When({ form, errors, onChange }: Section): React.ReactElement {
+function When({ form, errors, onChange, fromEventbrite }: Section): React.ReactElement {
   const field = (id: string, label: string, key: 'date' | 'start_time' | 'end_time' | 'repeat_until', type: 'date' | 'time', cls: string): React.ReactElement => (
     <div className={cls}>
       <label className="form-label" htmlFor={id}>{label}</label>
-      <input id={id} type={type} className="form-control" value={form[key]} onChange={(e) => onChange({ [key]: e.target.value })} {...err(errors, key)} />
+      <input id={id} type={type} className="form-control" value={form[key]} onChange={(e) => onChange({ [key]: e.target.value })}
+        readOnly={fromEventbrite} aria-describedby={fromEventbrite ? 'ch-eb-when' : undefined} {...err(errors, key)} />
       <Err errors={errors} k={key} />
     </div>
   );
@@ -73,9 +82,11 @@ function When({ form, errors, onChange }: Section): React.ReactElement {
       {field('ch-date', 'Date', 'date', 'date', 'col-12 col-sm-4')}
       {field('ch-start', 'Start (Central)', 'start_time', 'time', 'col-6 col-sm-4')}
       {field('ch-end', 'End (Central, optional)', 'end_time', 'time', 'col-6 col-sm-4')}
+      {fromEventbrite && <div className="col-12 mt-0"><EventbriteNote show id="ch-eb-when" /></div>}
       <div className="col-12 col-sm-6">
         <label className="form-label" htmlFor="ch-repeat">Repeats</label>
-        <select id="ch-repeat" className="form-select" value={form.repeat} onChange={(e) => onChange({ repeat: e.target.value as EventFormState['repeat'] })}>
+        <select id="ch-repeat" className="form-select" value={form.repeat} disabled={fromEventbrite} aria-describedby={fromEventbrite ? 'ch-eb-when' : undefined}
+          onChange={(e) => onChange({ repeat: e.target.value as EventFormState['repeat'] })}>
           <option value="none">Does not repeat</option>
           <option value="weekly">Every week</option>
           <option value="biweekly">Every 2 weeks</option>
@@ -87,15 +98,21 @@ function When({ form, errors, onChange }: Section): React.ReactElement {
   );
 }
 
-function LinksAndHosts({ form, errors, onChange }: Section): React.ReactElement {
+function LinksAndHosts({ form, errors, onChange, fromEventbrite }: Section): React.ReactElement {
   const setHost = (i: number, patch: { name?: string; role?: string }): void => onChange({ hosts: form.hosts.map((h, j) => (j === i ? { ...h, ...patch } : h)) });
-  const link = (id: string, label: string, key: 'join_url' | 'registration_url'): React.ReactElement => (
-    <div className="col-12 col-md-6">
-      <label className="form-label" htmlFor={id}>{label}</label>
-      <input id={id} type="url" className="form-control" value={form[key]} onChange={(e) => onChange({ [key]: e.target.value })} {...err(errors, key)} />
-      <Err errors={errors} k={key} />
-    </div>
-  );
+  const link = (id: string, label: string, key: 'join_url' | 'registration_url'): React.ReactElement => {
+    // CH9.5: the registration link is Eventbrite's on a managed event; the join link stays the hub's.
+    const owned = fromEventbrite && key === 'registration_url';
+    return (
+      <div className="col-12 col-md-6">
+        <label className="form-label" htmlFor={id}>{label}</label>
+        <input id={id} type="url" className="form-control" value={form[key]} onChange={(e) => onChange({ [key]: e.target.value })}
+          readOnly={owned} aria-describedby={owned ? `${id}-eb` : undefined} {...err(errors, key)} />
+        <EventbriteNote show={owned} id={`${id}-eb`} />
+        <Err errors={errors} k={key} />
+      </div>
+    );
+  };
   return (
     <>
       {link('ch-join', 'Join link (Zoom)', 'join_url')}
@@ -152,12 +169,12 @@ function AboutAndPlacement({ form, onChange, describe }: Omit<Section, 'errors'>
   );
 }
 
-export default function EventFormFields({ form, errors, cohorts, onChange, describe }: Props): React.ReactElement {
+export default function EventFormFields({ form, errors, cohorts, onChange, describe, fromEventbrite }: Props): React.ReactElement {
   return (
     <div className="row g-3">
-      <Basics form={form} errors={errors} onChange={onChange} cohorts={cohorts} />
-      <When form={form} errors={errors} onChange={onChange} />
-      <LinksAndHosts form={form} errors={errors} onChange={onChange} />
+      <Basics form={form} errors={errors} onChange={onChange} cohorts={cohorts} fromEventbrite={fromEventbrite} />
+      <When form={form} errors={errors} onChange={onChange} fromEventbrite={fromEventbrite} />
+      <LinksAndHosts form={form} errors={errors} onChange={onChange} fromEventbrite={fromEventbrite} />
       <AboutAndPlacement form={form} onChange={onChange} describe={describe} />
     </div>
   );

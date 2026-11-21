@@ -74,9 +74,21 @@ export default function EventEditor({ eventId, onClose, onSaved }: Props): React
         </div>
       )}
       {locked && <div className="alert alert-secondary">This event is {ed.event?.status}. Duplicate it to run it again.</div>}
+      {/* CH9.5 an Eventbrite event managed here: Eventbrite stays the record for its title, times and link. */}
+      {ed.event?.ccpp_event_id && (
+        <div className="alert alert-info py-2" role="status" data-testid="ch-from-eventbrite">
+          <i className="ri-ticket-2-line me-1" aria-hidden="true" />Managed from Eventbrite. Its title, date, times and registration link come from Eventbrite;
+          everything else here (thumbnail, hosts, join link, promotion plan, going live) is the hub&apos;s.
+        </div>
+      )}
+      {ed.event?.ccpp_missing_since && (
+        <div className="alert alert-warning py-2" role="alert" data-testid="ch-missing-from-eventbrite">
+          This event is no longer on Eventbrite&apos;s public list. If it was cancelled there, cancel it here too; nothing was removed automatically.
+        </div>
+      )}
       <fieldset disabled={locked || ed.busy !== null}>
         <legend className="visually-hidden">{title}</legend>
-        <EventFormFields form={ed.form} errors={ed.errors} cohorts={ed.cohorts} onChange={ed.change} describe={ed.describe} />
+        <EventFormFields form={ed.form} errors={ed.errors} cohorts={ed.cohorts} onChange={ed.change} describe={ed.describe} fromEventbrite={!!ed.event?.ccpp_event_id} />
       </fieldset>
       <div className="d-flex flex-wrap gap-2 mt-4">
         {!locked && <button type="button" className="btn btn-primary comms-hub-action" onClick={() => ed.save('scheduled')} disabled={ed.busy !== null}>{ed.busy === 'save' ? 'Saving...' : 'Save event'}</button>}

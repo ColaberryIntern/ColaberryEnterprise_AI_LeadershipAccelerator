@@ -6,6 +6,7 @@ import EventsList from './events/EventsList';
 import EventEditor from './events/EventEditor';
 import EventbriteEvents from './events/EventbriteEvents';
 import RegistrantsDialog from './events/RegistrantsDialog';
+import EventbriteCardActions from './events/EventbriteCardActions';
 import type { EventbriteEvent } from '../../../services/commsHubApi';
 import './commsHub.css';
 
@@ -90,11 +91,7 @@ export default function EventsTab(): React.ReactElement {
     </SectionCard>
     {/* CH9.2 the events members already see on /portal/events, read-only from Eventbrite. */}
     <div className="mt-3">
-      <EventbriteEvents cardActions={(ev) => (
-        <button type="button" className="btn btn-outline-primary comms-hub-action" onClick={() => setRegistrantsOf(ev)}>
-          View registrants<span className="visually-hidden"> for {ev.title}</span>
-        </button>
-      )} />
+      <EventbriteEvents cardActions={(ev) => <EventbriteCardActions ev={ev} onOpen={open} onRegistrants={setRegistrantsOf} />} />
     </div>
     {registrantsOf && <RegistrantsDialog ev={registrantsOf} onClose={closeRegistrants} />}
     </>

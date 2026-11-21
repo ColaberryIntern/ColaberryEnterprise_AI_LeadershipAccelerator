@@ -15,7 +15,7 @@ let root: Root;
 const settle = async (): Promise<void> => { for (let i = 0; i < 4; i += 1) await act(async () => { await Promise.resolve(); }); };
 const EV: EventbriteEvent = {
   ccpp_event_id: '1234567890', title: 'AI Open House', starts_at: '2026-12-04T00:30:00.000Z', ends_at: null,
-  registration_url: 'https://www.eventbrite.com/e/ai-open-house-1234567890', image_url: 'https://img.test/x.png', registered: 14, eventbrite_status: 'live',
+  registration_url: 'https://www.eventbrite.com/e/ai-open-house-1234567890', image_url: 'https://img.test/x.png', registered: 14, eventbrite_status: 'live', adopted_event_id: null,
 };
 const list = (o: Partial<api.EventbriteList> = {}): api.EventbriteList => ({ status: 'ok', window: 'upcoming', events: [EV], fetched_at: '2026-11-21T22:00:00.000Z', ...o });
 async function render(): Promise<void> {

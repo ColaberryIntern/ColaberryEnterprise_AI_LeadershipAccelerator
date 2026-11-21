@@ -2,6 +2,7 @@ jest.mock('jsonwebtoken', () => ({ verify: jest.fn() }));
 jest.mock('../../../config/env', () => require('../../../__tests__/testSupport/configMocks').envModuleMock({ jwtSecret: 'test-secret' }));
 jest.mock('../commsHubEventRoutes', () => ({ actorOf: (req: { admin?: { sub?: string; email?: string } }) => ({ id: req.admin?.sub ?? null, label: req.admin?.email ?? null }) }));
 jest.mock('../../../services/commsHub/eventbrite/eventbriteEvents', () => ({ listEventbriteEvents: jest.fn() }));
+jest.mock('../../../services/commsHub/eventbrite/adoption', () => ({ adoptedIds: jest.fn(async () => new Map()), syncAdoptedEventsIfDue: jest.fn(async () => null) }));
 const mockList = jest.fn();
 jest.mock('../../../services/commsHub/eventbrite/registrants', () => {
   class RegistrantsNotFound extends Error { constructor() { super('That event is not on the public Eventbrite list.'); } }

@@ -102,3 +102,37 @@ describe('CH2.3 dedupe against CCPP by registration page', () => {
     expect(merged.map((c) => c.id)).toContain('a');
   });
 });
+
+describe('CH9.5 an Eventbrite event managed in the hub keeps the member\'s registration', () => {
+  // The Eventbrite event and its managed hub copy: same registration page, same Central date (6:00 PM CST Dec 1).
+  const url = 'https://www.eventbrite.com/e/ai-open-house-1992498063344';
+  const at = new Date('2026-12-02T00:00:00Z');
+  const managed = (o: Partial<Record<string, unknown>> = {}) => ev({
+    registration_url: url, starts_at: at, ends_at: new Date('2026-12-02T01:30:00Z'), ccpp_event_id: '1992498063344',
+    source_image_url: 'https://img.evbuc.com/open-house.jpg', placement: { calendar: false, events_page: true, campus_rail: false }, ...o,
+  });
+
+  it('a registered member: exactly one card, the hub one, still "registered", with the Eventbrite count and picture', () => {
+    const merged = mergeCards([card({ id: '1992498063344', registration_url: url, starts_at: at, is_registered: true, signup_count: 14 })], toCards(managed(), NOW, IN_30));
+    expect(merged).toHaveLength(1);
+    expect(merged[0]).toMatchObject({ source: 'hub', is_registered: true, signup_count: 14, image_url: 'https://img.evbuc.com/open-house.jpg' });
+  });
+
+  it('an unregistered member still sees it as not registered, so Register stays', () => {
+    const merged = mergeCards([card({ id: '1992498063344', registration_url: url, starts_at: at, is_registered: false, signup_count: 14 })], toCards(managed(), NOW, IN_30));
+    expect(merged[0]).toMatchObject({ source: 'hub', is_registered: false, signup_count: 14 });
+  });
+
+  it('a chosen hub thumbnail wins over the Eventbrite picture; without one the Eventbrite picture shows', () => {
+    expect(toCards(managed({ thumbnail_id: 't9' }), NOW, IN_30)[0].image_url).toBe(`/api/comms-hub/thumbnails/${ev().id}/16x9.png?v=t9`);
+    expect(toCards(managed(), NOW, IN_30)[0].image_url).toBe('https://img.evbuc.com/open-house.jpg');
+  });
+
+  it('a recurring hub series sharing the link inherits registration only on the matching date', () => {
+    const series = toCards(managed({ ccpp_event_id: null, source_image_url: null, repeat_rule: { freq: 'weekly', until: '2026-12-31' } }), NOW, IN_30);
+    const merged = mergeCards([card({ id: 'x', registration_url: url, starts_at: at, is_registered: true, signup_count: 5 })], series);
+    expect(merged.filter((c) => c.is_registered)).toHaveLength(1);
+    expect(merged.find((c) => c.is_registered)!.starts_at).toEqual(at);
+    expect(merged.every((c) => c.source === 'hub')).toBe(true);
+  });
+});

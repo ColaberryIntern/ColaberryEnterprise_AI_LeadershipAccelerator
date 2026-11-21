@@ -49,6 +49,10 @@ export interface HubEvent {
   placement: HubPlacement;
   thumbnail_id: string | null;
   broadcast_occurrence_id: string | null;
+  /** CH9.5: set when this hub event manages an Eventbrite event; its title, times and link come from Eventbrite. */
+  ccpp_event_id: string | null;
+  /** CH9.5: when it was found missing from Eventbrite's public list, or null. */
+  ccpp_missing_since: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -89,6 +93,15 @@ export interface EventbriteEvent {
   /** People registered (Eventbrite plus our site), or null when unknown. */
   registered: number | null;
   eventbrite_status: string;
+  /** CH9.5: the hub event managing this Eventbrite event, or null. */
+  adopted_event_id: string | null;
+}
+
+/** CH9.5 "Manage in the hub": creates (201) or finds (200) the hub event for this Eventbrite event. */
+export async function adoptEventbriteEvent(ccppEventId: string): Promise<HubEvent> {
+  if (!/^\d{1,20}$/.test(ccppEventId)) throw new Error('Not an Eventbrite event id.');
+  const { data } = await api.post<{ event: HubEvent }>(`/api/admin/comms-hub/eventbrite-events/${ccppEventId}/adopt`);
+  return data.event;
 }
 /** 'unavailable' and 'not_configured' are never shown as "no events". */
 export interface EventbriteList { status: 'ok' | 'unavailable' | 'not_configured'; window: EventbriteWindow; events: EventbriteEvent[]; fetched_at: string }

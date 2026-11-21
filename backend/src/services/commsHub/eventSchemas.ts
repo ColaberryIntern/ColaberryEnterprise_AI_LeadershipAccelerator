@@ -27,6 +27,10 @@ export const EventView = z.object({
   placement: z.object({ calendar: z.boolean(), events_page: z.boolean(), campus_rail: z.boolean() }),
   thumbnail_id: z.string().uuid().nullable(),
   broadcast_occurrence_id: z.string().uuid().nullable(),
+  /** CH9.5: set when this hub event manages an Eventbrite event; its title, times and link then come from Eventbrite. */
+  ccpp_event_id: z.string().nullable(),
+  /** CH9.5: when the managed event was last found missing from Eventbrite's public list, or null. */
+  ccpp_missing_since: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
 }).strict();

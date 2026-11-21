@@ -5,6 +5,7 @@ import { listEventbriteEvents } from '../../services/commsHub/eventbrite/eventbr
 import { listRegistrants, RegistrantsNotFound, type RegistrantList } from '../../services/commsHub/eventbrite/registrants';
 import { registrantsCsv, registrantsFilename } from '../../services/commsHub/eventbrite/registrantsCsv';
 import { logActivity } from '../../services/commsHub/activityLog';
+import { adoptedIds, syncAdoptedEventsIfDue } from '../../services/commsHub/eventbrite/adoption';
 import { logFailure, sendValidated } from '../campusRoutes';
 import { actorOf } from './commsHubEventRoutes';
 
@@ -24,6 +25,8 @@ export const EventbriteEventSchema = z.object({
   image_url: z.string().nullable(),
   registered: z.number().int().nonnegative().nullable(),
   eventbrite_status: z.string(),
+  /** CH9.5: the hub event managing this Eventbrite event, or null. */
+  adopted_event_id: z.string().uuid().nullable(),
 }).strict();
 
 export const EventbriteListSchema = z.object({
@@ -40,7 +43,16 @@ router.get('/api/admin/comms-hub/eventbrite-events', gate, async (req: Request, 
   const q = ListQuery.safeParse(req.query);
   if (!q.success) { res.status(400).json({ error: 'window must be upcoming or past.', error_class: 'ValidationError' }); return; }
   try {
-    sendValidated(res, EventbriteListSchema, await listEventbriteEvents(q.data.window), 'comms_hub_eventbrite_list');
+    const list = await listEventbriteEvents(q.data.window);
+    const adopted = await adoptedIds(list.events.map((e) => e.ccpp_event_id));
+    // CH9.5: a page load also brings managed events up to date (at most every 15 minutes, shared with
+    // the worker). In the background: the list must not wait on it, and a failure is logged, not shown.
+    if (list.status === 'ok') {
+      void syncAdoptedEventsIfDue().catch((err) => logFailure('comms_hub_eventbrite_sync_from_list_failed', err));
+    }
+    sendValidated(res, EventbriteListSchema, {
+      ...list, events: list.events.map((e) => ({ ...e, adopted_event_id: adopted.get(e.ccpp_event_id) ?? null })),
+    }, 'comms_hub_eventbrite_list');
   } catch (err) {
     logFailure('comms_hub_eventbrite_list_route_failed', err);
     res.status(500).json({ error: 'Could not load the Eventbrite events.' });
