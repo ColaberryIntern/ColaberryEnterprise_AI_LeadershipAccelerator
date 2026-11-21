@@ -39,6 +39,13 @@ it('Eventbrite unreadable: a retryable error, and nobody is looked up (never a p
   expect(mockQuery).not.toHaveBeenCalled();
 });
 
+it('Eventbrite not connected on this server: a PERMANENT refusal (retrying cannot fix it), nobody looked up', async () => {
+  mockList.mockResolvedValue({ event: {}, eventbrite: 'not_configured', rows: [] });
+  await expect(registrantEnrollmentIds('hub-1')).rejects.toMatchObject({ reason: 'not_configured' });
+  await expect(registrantEnrollmentIds('hub-1')).rejects.toBeInstanceOf(ConnectorPermanentError);
+  expect(mockQuery).not.toHaveBeenCalled();
+});
+
 it('a hub-made event, or a missing one, is a permanent refusal', async () => {
   mockFindByPk.mockResolvedValueOnce({ id: 'hub-2', ccpp_event_id: null });
   await expect(registrantEnrollmentIds('hub-2')).rejects.toMatchObject({ reason: 'not_managed' });

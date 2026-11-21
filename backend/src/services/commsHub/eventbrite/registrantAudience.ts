@@ -41,6 +41,8 @@ async function reachableEnrollmentIds(emails: string[]): Promise<string[]> {
 export async function registrantEnrollmentIds(hubEventId: string): Promise<string[]> {
   const e = await managedEvent(hubEventId);
   const list = await listRegistrants(String(e.ccpp_event_id));
+  // Not connected on this server is permanent (retrying cannot fix it); unreadable right now is retried.
+  if (list.eventbrite === 'not_configured') throw new ConnectorPermanentError('Eventbrite is not connected on this server, so registrants cannot be reached.', 'not_configured');
   if (list.eventbrite !== 'ok') throw new RegistrantsUnavailableError();
   return reachableEnrollmentIds(list.rows.map((r) => r.email));
 }
