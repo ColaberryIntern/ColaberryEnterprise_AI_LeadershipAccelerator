@@ -88,7 +88,11 @@ function mintShareToken(): string {
  * can never match and the check silently protects nothing. What must not leak is "Acme Health".
  */
 function stringsWithin(value: unknown, depth = 0): string[] {
-  if (depth > 8) return []; // a cycle or a pathological blob must not hang the write path
+  // The cap exists so a cycle or a pathological blob cannot hang the write path, but a verifier
+  // showed 8 was low enough to be a real hole: a restricted value nested 10 deep in
+  // `project_variables` sailed through. 32 is far past anything a hand-authored JSONB column
+  // holds while still bounding the walk.
+  if (depth > 32) return [];
   if (typeof value === 'string') return [value];
   if (typeof value === 'number' || typeof value === 'boolean') return [String(value)];
   if (Array.isArray(value)) return value.flatMap((v) => stringsWithin(v, depth + 1));

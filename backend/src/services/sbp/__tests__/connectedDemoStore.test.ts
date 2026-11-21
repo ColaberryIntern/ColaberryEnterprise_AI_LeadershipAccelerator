@@ -67,19 +67,49 @@ function input(over: Loose = {}): Loose {
   };
 }
 
-/** Every column of `projects`, read out of the model source. */
+/**
+ * Every column of `projects`, from BOTH places columns are declared.
+ *
+ * The first version of this read only `Project.init(...)`, and a verifier showed that was too
+ * narrow in the exact way this feature already got bitten: `external_owner`, `external_url`,
+ * `evidence_provenance` and `external_verified` are added to the table by
+ * `db/ensurePresentationStudioSchema.ts` and never declared on the model, so the sweep never
+ * seeded them. That is T3's own defect wearing a different hat - a column can exist in the
+ * database and be invisible to anything reading the model.
+ *
+ * So the list is the union of the model's attributes and every `ALTER TABLE projects ADD COLUMN`
+ * across `db/`, plus the two timestamps Sequelize manages without declaring. A column added by
+ * either route is now seeded whether or not anyone remembers this test exists.
+ */
 function projectColumns(): string[] {
-  const src = fs.readFileSync(
-    path.resolve(__dirname, '../../../models/Project.ts'),
-    'utf8',
-  );
-  const init = src.slice(src.indexOf('Project.init('));
-  const names = [...init.matchAll(/^ {4}([a-z_]+): \{/gm)].map((m) => m[1]);
-  // The guard that stops a broken parse from passing vacuously: if the regex ever stops
-  // matching, this fails loudly rather than seeding an empty sentinel set and finding nothing.
+  const modelSrc = fs.readFileSync(path.resolve(__dirname, '../../../models/Project.ts'), 'utf8');
+  const init = modelSrc.slice(modelSrc.indexOf('Project.init('));
+  // `hooks` is the options object, not a column. Named here so the exclusion is deliberate
+  // rather than a silent filter that could quietly swallow a real column later.
+  const NOT_COLUMNS = new Set(['hooks', 'indexes', 'scopes', 'defaultScope', 'validate']);
+  const fromModel = [...init.matchAll(/^ {4}([a-z_]+): \{/gm)]
+    .map((m) => m[1])
+    .filter((n) => !NOT_COLUMNS.has(n));
+
+  const dbDir = path.resolve(__dirname, '../../../db');
+  const fromDdl = fs
+    .readdirSync(dbDir)
+    .filter((f) => f.startsWith('ensure') && f.endsWith('.ts'))
+    .flatMap((f) => [
+      ...fs
+        .readFileSync(path.join(dbDir, f), 'utf8')
+        .matchAll(/ALTER\s+TABLE\s+projects\s+ADD\s+COLUMN\s+IF\s+NOT\s+EXISTS\s+([a-z_]+)/gi),
+    ].map((m) => m[1]));
+
+  const names = [...new Set([...fromModel, ...fromDdl, 'created_at', 'updated_at'])].sort();
+
+  // Guards against a parse that silently stops matching and seeds nothing. Each names a column
+  // that reaches the list by a DIFFERENT route, so a break in either source is visible.
   expect(names.length).toBeGreaterThan(20);
-  expect(names).toContain('organization_name');
-  expect(names).toContain('demo_spec');
+  expect(names).toContain('organization_name'); // model
+  expect(names).toContain('demo_spec'); // model and DDL
+  expect(names).toContain('external_owner'); // DDL only: the case that was being missed
+  expect(fromDdl.length).toBeGreaterThan(0);
   return names;
 }
 
@@ -167,6 +197,27 @@ describe('it does not publish, and cannot be edited into publishing by accident'
 });
 
 describe('idempotency', () => {
+  /*
+   * "Updates ONE row" is a claim about the WHERE clause, and until now nothing tested it.
+   *
+   * A verifier mutated `WHERE id = :projectId` to `WHERE id IS NOT NULL` on both statements and
+   * the whole suite stayed green. That mutation rewrites `demo_spec` on EVERY project in the
+   * table, and content-checks the new spec against an arbitrary project's restricted values. It
+   * is the single worst thing this module could do, and it was the one thing not asserted: the
+   * existing tests counted CALLS, which is not the same as counting ROWS.
+   */
+  it('keys BOTH statements on the project id, which is what makes it one row', async () => {
+    mockDb(cleanRow());
+    await generateConnectedDemo(input() as never);
+
+    for (const call of [selectCalls()[0], updateCalls()[0]]) {
+      const sql = sqlOf(call);
+      expect(sql).toContain('WHERE id = :projectId');
+      // And the id actually bound is the one that was asked for, not some other row's.
+      expect((call[1] as { replacements: { projectId: string } }).replacements.projectId).toBe(PROJECT_ID);
+    }
+  });
+
   it('running twice issues exactly one UPDATE per run and no INSERT', async () => {
     mockDb(cleanRow());
     await generateConnectedDemo(input() as never);
@@ -236,6 +287,20 @@ describe('it refuses, and writes NOTHING when it does', () => {
       error_class: 'ConnectedDemoContentRefused',
     });
     expect(updateCalls()).toHaveLength(0);
+  });
+
+  it('refuses when the UPDATE itself matched nothing, rather than reporting success', async () => {
+    // The row can vanish between the read and the write: another session archives or deletes the
+    // project in that window. Returning a result with an empty token would tell the caller a demo
+    // exists at a link that goes nowhere, which is worse than an error they can see.
+    sequelize.query.mockImplementation((sql: string) => {
+      if (/^\s*SELECT/i.test(sql)) return Promise.resolve([cleanRow()]);
+      if (/^\s*UPDATE/i.test(sql)) return Promise.resolve([]); // matched no rows
+      return Promise.resolve([]);
+    });
+    await expect(generateConnectedDemo(input() as never)).rejects.toMatchObject({
+      error_class: 'ConnectedDemoProjectMissing',
+    });
   });
 
   it('refuses when the project does not exist, before doing any generation work', async () => {
@@ -317,6 +382,24 @@ describe('WRITE-BOUNDARY SENTINEL: no column of projects can reach demo_spec', (
     expect(persisted).toContain('CANARY-ZX9');
   });
 
+  it('the spec that actually got persisted passes contentPolicy, asserted positively', async () => {
+    // Every other test here proves the REFUSAL direction. This one proves the accept direction
+    // on the bytes that reached the database, so a path that bypasses the generator cannot write
+    // a spec nobody ever vetted. One-way coverage is this repo's recurring bug.
+    /* eslint-disable @typescript-eslint/no-var-requires */
+    const { isDemoSpecContentClean } = require('../demoSpec/contentPolicy') as typeof import('../demoSpec/contentPolicy');
+    const row = cleanRow();
+    row.organization_name = 'Some Unrelated Organization';
+    mockDb(row);
+    await generateConnectedDemo(input() as never);
+    const persisted = JSON.parse(
+      (updateCalls()[0][1] as { replacements: { spec: string } }).replacements.spec,
+    );
+    const restricted: Record<string, string[]> = {};
+    for (const f of RESTRICTED_PROJECT_FIELDS) restricted[f] = row[f] ? [String(row[f])] : [];
+    expect(isDemoSpecContentClean(persisted, restricted)).toBe(true);
+  });
+
   it('reads ONLY restricted columns, so widening the read is a visible change', async () => {
     mockDb(cleanRow());
     await generateConnectedDemo(input() as never);
@@ -327,6 +410,31 @@ describe('WRITE-BOUNDARY SENTINEL: no column of projects can reach demo_spec', (
       .map((s) => s.trim())
       .filter(Boolean);
     expect(named.sort()).toEqual([...RESTRICTED_PROJECT_FIELDS].sort());
+  });
+
+  it('finds a restricted value nested deep inside a JSONB column', async () => {
+    // A verifier demonstrated a leak at 10 levels when the cap was 8. Build the nest
+    // programmatically so this tests the cap rather than a hand-counted literal.
+    let nested: unknown = 'Dispatch console';
+    for (let i = 0; i < 20; i += 1) nested = { level: nested };
+    const row = cleanRow();
+    row.project_variables = nested;
+    mockDb(row);
+    await expect(generateConnectedDemo(input() as never)).rejects.toMatchObject({
+      error_class: 'ConnectedDemoContentRefused',
+    });
+    expect(updateCalls()).toHaveLength(0);
+  });
+
+  it('still terminates on a value nested past the cap rather than hanging', async () => {
+    let nested: unknown = 'Dispatch console';
+    for (let i = 0; i < 200; i += 1) nested = { level: nested };
+    const row = cleanRow();
+    row.project_variables = nested;
+    mockDb(row);
+    // Past the cap it is no longer found, which is the documented trade. What must NOT happen is
+    // a hang or a stack overflow on the write path.
+    await expect(generateConnectedDemo(input() as never)).resolves.toBeDefined();
   });
 
   it('stringifies JSONB restricted columns, so a value nested in one is still searchable', async () => {
