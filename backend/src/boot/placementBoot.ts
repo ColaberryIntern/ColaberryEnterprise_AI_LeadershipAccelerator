@@ -1,0 +1,38 @@
+import type { Express, Router } from 'express';
+import { ensurePlacementSchema } from '../db/ensurePlacementSchema';
+
+/**
+ * Career Prep v27, Releases 2 and 3: everything the getting-hired pipeline mounts and starts, in ONE place, so
+ * server.ts (4,000+ lines) is touched by exactly three calls and never again (plan.md "File ceilings").
+ *
+ *   mountPlacementIntegrations(app)  BEFORE server.ts's global express.json(): routes that verify an HMAC over the
+ *                                    exact request bytes (the inbox integration, CP6.2) need the raw body. server.ts
+ *                                    calls it beside the other signature-checked webhooks.
+ *   mountPlacementPublic(app)        with the other public and participant routes, before adminRoutes and the broad
+ *                                    auth guard (each route carries its own guard).
+ *   startPlacement()                 at boot, after the Career Prep schema: the placement tables, then every scheduler.
+ *
+ * Each later task adds its router to one of the lists below and its scheduler to SCHEDULERS; the order of a list is
+ * the mount order.
+ */
+export const INTEGRATION_ROUTERS: Router[] = [];
+export const PUBLIC_ROUTERS: Router[] = [];
+export const SCHEDULERS: Array<{ name: string; start: () => void }> = [];
+
+export function mountPlacementIntegrations(app: Express): void {
+  for (const r of INTEGRATION_ROUTERS) app.use(r);
+}
+
+export function mountPlacementPublic(app: Express): void {
+  for (const r of PUBLIC_ROUTERS) app.use(r);
+}
+
+export async function startPlacement(): Promise<void> {
+  await ensurePlacementSchema();
+  for (const s of SCHEDULERS) {
+    try { s.start(); } catch (err) {
+      console.warn(JSON.stringify({ timestamp: new Date().toISOString(), level: 'warn', service: 'backend', event: 'placement_scheduler_start_failed',
+        outcome: 'failure', error_class: (err as Error)?.name ?? 'Error', context: { scheduler: s.name } }));
+    }
+  }
+}

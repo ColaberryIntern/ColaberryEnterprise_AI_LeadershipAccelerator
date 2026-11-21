@@ -193,6 +193,7 @@ import { ensureRefactoredDeliverySchema } from './db/ensureRefactoredDeliverySch
 import { ensureCareerPublicationSchema } from './db/ensureCareerPublicationSchema';
 import { ensureHireInterviewSchema } from './db/ensureHireInterviewSchema';
 import { ensureCareerPrepSchema } from './db/ensureCareerPrepSchema';
+import { mountPlacementIntegrations, mountPlacementPublic, startPlacement } from './boot/placementBoot';
 import { ensureProgramRenameFdae } from './db/ensureProgramRenameFdae';
 import { startCareerPrep } from './services/careerPrep/boot';
 import { startHireVideoCoach } from './services/hire/hireVideoCoach';
@@ -258,6 +259,7 @@ app.use(webhookRoutes);
 // Public one-click unsubscribe — mounted before the JSON parser; the POST
 // (RFC 8058 one-click) handles its own urlencoded body parsing.
 app.use(unsubscribeRoutes);
+mountPlacementIntegrations(app); // Career Prep R2/R3: HMAC-signed integration routes need the raw body (boot/placementBoot.ts)
 
 // Preview proxy — mounted BEFORE the JSON parser so request bodies pass through
 // raw to upstream preview stacks.
@@ -372,6 +374,7 @@ app.use(publicCareerPortfolioRoutes);
 app.use(internVideoStreamRoutes);
 app.use(publicHireTalentRoutes); // hire.refactored.ai directory + intro (public, unauthenticated)
 app.use(publicHireVideoRoutes); // hire.refactored.ai intro video playback (published, or a signed studio preview)
+mountPlacementPublic(app); // Career Prep R2/R3 public + participant routes, each with its own guard (boot/placementBoot.ts)
 app.use(publicCaseStudyRoutes);
 // The public service catalog behind /government. Public and unauthenticated,
 // so it MUST stay above adminRoutes or every anonymous visitor gets a 401.
@@ -2778,6 +2781,7 @@ async function start(): Promise<void> {
   await ensureHireInterviewSchema();
   // Career Prep v27 (CP1.2): seven new tables + the 9-skill seed. Additive, idempotent.
   await ensureCareerPrepSchema();
+  await startPlacement(); // Career Prep R2/R3: placement tables (additive, idempotent), then its schedulers
   // Program rename (2026-11-17): "AI Systems Architect Accelerator" -> "Forward Deployed AI Engineer
   // Accelerator" in forward-facing rows only, backed up first. No-op once converged; never throws.
   await ensureProgramRenameFdae();
