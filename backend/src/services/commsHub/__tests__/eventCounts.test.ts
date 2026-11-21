@@ -59,6 +59,9 @@ describe('eventCounts', () => {
     mockList.mockResolvedValue({ eventbrite: 'unavailable', rows: [{}] });
     mockQuery.mockResolvedValue([]);
     expect((await eventCounts('hub-1')).registered).toEqual({ value: null, reason: 'Eventbrite could not be read just now.' });
+    // Not connected on the server is a different, permanent fact, and says so.
+    mockList.mockResolvedValue({ eventbrite: 'not_configured', rows: [] });
+    expect((await eventCounts('hub-1')).registered).toEqual({ value: null, reason: 'Eventbrite is not connected on this server.' });
   });
   it('a hub-made event: registration is not tracked here, said why', async () => {
     mockFindByPk.mockResolvedValue({ id: 'hub-2', ccpp_event_id: null, registration_url: 'https://forms.test/x' });

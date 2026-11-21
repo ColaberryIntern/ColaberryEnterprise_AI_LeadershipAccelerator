@@ -54,7 +54,9 @@ async function registered(e: CommsHubEvent): Promise<Count> {
   }
   try {
     const list = await listRegistrants(String(e.ccpp_event_id));
-    return list.eventbrite === 'ok' ? known(list.rows.length) : unknown('Eventbrite could not be read just now.');
+    if (list.eventbrite === 'ok') return known(list.rows.length);
+    // Not connected is permanent on this server; unreadable is "right now". Each says which.
+    return unknown(list.eventbrite === 'not_configured' ? 'Eventbrite is not connected on this server.' : 'Eventbrite could not be read just now.');
   } catch (err) {
     console.error(JSON.stringify({ timestamp: new Date().toISOString(), level: 'warn', service: 'comms_hub', event: 'comms_hub_counts_registered_failed', outcome: 'partial', error_class: (err as Error)?.name ?? 'UnknownError', context: { hub_event_id: e.id } }));
     return unknown('The registrations could not be counted just now.');
