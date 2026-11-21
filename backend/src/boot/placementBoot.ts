@@ -25,11 +25,11 @@ import { startBookingLinkSweep } from '../services/placement/bookingLinkSweep';
  */
 export const INTEGRATION_ROUTERS: Router[] = [
   integrationsInboxRoutes, // CP6.2: signed inbox-manager events (own express.raw; 503 until INBOX_INTEGRATION_SECRET is set)
-  bookingRouters.confirm, // CP8.2: the booking confirm, with its OWN 10kb JSON parser (so before the global 5mb one); 5/15 min per IP
+  bookingRouters.confirm, // CP8.2: the booking confirm, with its OWN 10kb JSON parser (so before the global 5mb one); 5/15 min per link
 ];
 export const PUBLIC_ROUTERS: Router[] = [
   careerPrepInboxRoutes, // CP6.1: the student's job-search inbox (participant + Career Prep gated per route)
-  bookingRouters.view, // CP8.2: the public booking page's data (the token is the key; no login; 60/min per IP)
+  bookingRouters.view, // CP8.2: the public booking page's data (the token is the key; no login; 60/min per link)
 ];
 export const SCHEDULERS: Array<{ name: string; start: () => void }> = [
   { name: 'inbox-tests', start: startInboxTestCron }, // CP6.1c: daily forwarding test + broken alerts (switch-gated per pass)
