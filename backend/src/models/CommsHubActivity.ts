@@ -7,7 +7,8 @@ import { sequelize } from '../config/database';
  * actor_id is null for the delivery worker. Columns match ensureCommsHubSchema.ts exactly.
  */
 // 'report': a "Report a problem" submission (CH9.1); entity_id is null, the report row is not a hub entity.
-export type CommsHubEntityType = 'event' | 'thumbnail' | 'message' | 'delivery' | 'settings' | 'broadcast' | 'report';
+// 'eventbrite_event': a CCPP event (CH9.3); its id is not a UUID, so entity_id is null and the id is in detail.
+export type CommsHubEntityType = 'event' | 'thumbnail' | 'message' | 'delivery' | 'settings' | 'broadcast' | 'report' | 'eventbrite_event';
 
 export interface CommsHubActivityAttributes {
   id?: string;

@@ -25,9 +25,38 @@ export const LIST_LIMIT = 100;
 
 export interface EventbriteEventRow extends CcppEventRow { Status: string }
 
+/** One raw CCPP attendee row (CH9.3). Values may carry CCPP's stray quotes and commas; callers clean them. */
+export interface EventbriteAttendeeRow {
+  EventId: string;
+  AttendeeName: string | null;
+  Email: string | null;
+  PhoneNumber: string | null;
+  OrderId: string | number | null;
+  CreatedDate: Date | null;
+}
+
 export interface EventbriteSource {
   readonly kind: 'ccpp' | 'fixture';
   listEvents(window: EventbriteWindow): Promise<EventbriteEventRow[]>;
+  /** Every attendee row for one event, as stored (duplicated per order). Read-only. */
+  listAttendees(ccppEventId: string): Promise<EventbriteAttendeeRow[]>;
+}
+
+export const ATTENDEES_QUERY = 'SELECT EventId, AttendeeName, Email, PhoneNumber, OrderId, CreatedDate FROM EventBrite_EventAttendees WHERE EventId = @eid';
+
+async function withPool<T>(run: (pool: sql.ConnectionPool) => Promise<T>): Promise<T> {
+  let pool: sql.ConnectionPool;
+  try {
+    pool = await connectCcpp();
+  } catch (err) {
+    if (/not configured/i.test(String((err as Error)?.message))) throw new NotConfiguredError();
+    throw err;
+  }
+  try {
+    return await run(pool);
+  } finally {
+    await pool.close();
+  }
 }
 
 export class NotConfiguredError extends Error {
@@ -53,28 +82,29 @@ export function eventsQuery(window: EventbriteWindow): string {
 
 export const ccppSource: EventbriteSource = {
   kind: 'ccpp',
-  async listEvents(window) {
-    let pool: sql.ConnectionPool;
-    try {
-      pool = await connectCcpp();
-    } catch (err) {
-      if (/not configured/i.test(String((err as Error)?.message))) throw new NotConfiguredError();
-      throw err;
-    }
-    try {
+  listEvents(window) {
+    return withPool(async (pool) => {
       const res = await pool.request()
         .input('days', sql.Int, window === 'upcoming' ? UPCOMING_DAYS : PAST_DAYS)
         .input('lim', sql.Int, LIST_LIMIT)
         .input('group', sql.NVarChar, PUBLIC_EVENT_GROUP)
         .query<EventbriteEventRow>(eventsQuery(window));
       return res.recordset;
-    } finally {
-      await pool.close();
-    }
+    });
+  },
+  listAttendees(ccppEventId) {
+    return withPool(async (pool) => {
+      // Bound as a parameter, never interpolated; the route also refuses anything but digits.
+      const res = await pool.request().input('eid', sql.VarChar, ccppEventId).query<EventbriteAttendeeRow>(ATTENDEES_QUERY);
+      return res.recordset;
+    });
   },
 };
 
-interface FixtureFile { events?: Array<Omit<EventbriteEventRow, 'StartDate' | 'EndDate'> & { StartDate: string; EndDate?: string | null; window?: EventbriteWindow }> }
+interface FixtureFile {
+  events?: Array<Omit<EventbriteEventRow, 'StartDate' | 'EndDate'> & { StartDate: string; EndDate?: string | null; window?: EventbriteWindow }>;
+  attendees?: Array<Omit<EventbriteAttendeeRow, 'CreatedDate'> & { CreatedDate?: string | null }>;
+}
 
 /** Synthetic rows for the local e2e only. StartDate/EndDate are CCPP-style Central wall-clock strings. */
 export function fixtureSource(path: string): EventbriteSource {
@@ -85,6 +115,12 @@ export function fixtureSource(path: string): EventbriteSource {
       return (file.events ?? [])
         .filter((e) => (e.window ?? 'upcoming') === window)
         .map(({ window: _w, ...e }) => ({ ...e, StartDate: new Date(e.StartDate), EndDate: e.EndDate ? new Date(e.EndDate) : null }));
+    },
+    async listAttendees(ccppEventId) {
+      const file = JSON.parse(fs.readFileSync(path, 'utf8')) as FixtureFile;
+      return (file.attendees ?? [])
+        .filter((a) => String(a.EventId) === ccppEventId)
+        .map((a) => ({ ...a, CreatedDate: a.CreatedDate ? new Date(a.CreatedDate) : null }));
     },
   };
 }

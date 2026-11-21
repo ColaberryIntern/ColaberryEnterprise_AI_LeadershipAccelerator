@@ -5,6 +5,8 @@ import { listHubEvents, apiErrorMessage, type HubEvent, type HubEventScope } fro
 import EventsList from './events/EventsList';
 import EventEditor from './events/EventEditor';
 import EventbriteEvents from './events/EventbriteEvents';
+import RegistrantsDialog from './events/RegistrantsDialog';
+import type { EventbriteEvent } from '../../../services/commsHubApi';
 import './commsHub.css';
 
 /**
@@ -26,6 +28,9 @@ export default function EventsTab(): React.ReactElement {
   const creating = params.get('new') === '1';
   const [scope, setScope] = useState<HubEventScope>('upcoming');
   const [load, setLoad] = useState<Load>({ state: 'loading' });
+  // CH9.3 the Eventbrite event whose registrants are open, if any.
+  const [registrantsOf, setRegistrantsOf] = useState<EventbriteEvent | null>(null);
+  const closeRegistrants = useCallback(() => setRegistrantsOf(null), []);
 
   const reload = useCallback(() => {
     setLoad({ state: 'loading' });
@@ -84,7 +89,14 @@ export default function EventsTab(): React.ReactElement {
       {load.state === 'ready' && load.events.length > 0 && <EventsList scope={scope} events={load.events} onOpen={open} />}
     </SectionCard>
     {/* CH9.2 the events members already see on /portal/events, read-only from Eventbrite. */}
-    <div className="mt-3"><EventbriteEvents /></div>
+    <div className="mt-3">
+      <EventbriteEvents cardActions={(ev) => (
+        <button type="button" className="btn btn-outline-primary comms-hub-action" onClick={() => setRegistrantsOf(ev)}>
+          View registrants<span className="visually-hidden"> for {ev.title}</span>
+        </button>
+      )} />
+    </div>
+    {registrantsOf && <RegistrantsDialog ev={registrantsOf} onClose={closeRegistrants} />}
     </>
   );
 }

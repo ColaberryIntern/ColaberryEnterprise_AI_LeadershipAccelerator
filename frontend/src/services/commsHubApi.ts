@@ -98,6 +98,35 @@ export async function listEventbriteEvents(window: EventbriteWindow = 'upcoming'
   return data;
 }
 
+/* Registrants (CH9.3). People's names and emails: no query string ever (a "Report a problem"
+   capture of a failed request keeps query strings), search happens on the loaded rows, and nothing
+   here logs a registrant to the console. */
+export interface Registrant { name: string; email: string; registered_at: string | null; sources: Array<'eventbrite' | 'site'>; has_account: boolean }
+export interface RegistrantList {
+  event: { ccpp_event_id: string; title: string; starts_at: string };
+  eventbrite: 'ok' | 'unavailable' | 'not_configured';
+  count: number;
+  rows: Registrant[];
+}
+
+export function registrantsPath(ccppEventId: string, csv = false): string {
+  if (!/^\d{1,20}$/.test(ccppEventId)) throw new Error('Not an Eventbrite event id.');
+  return `/api/admin/comms-hub/eventbrite-events/${ccppEventId}/registrants${csv ? '.csv' : ''}`;
+}
+
+export async function getRegistrants(ccppEventId: string): Promise<RegistrantList> {
+  const { data } = await api.get<RegistrantList>(registrantsPath(ccppEventId));
+  return data;
+}
+
+/** The CSV as a file, plus the filename the server chose. */
+export async function downloadRegistrantsCsv(ccppEventId: string): Promise<{ blob: Blob; filename: string }> {
+  const res = await api.get<Blob>(registrantsPath(ccppEventId, true), { responseType: 'blob' });
+  const disposition = String((res.headers as Record<string, unknown>)?.['content-disposition'] ?? '');
+  const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? `registrants-${ccppEventId}.csv`;
+  return { blob: res.data, filename };
+}
+
 export async function createHubEvent(input: HubEventInput): Promise<HubEvent> {
   const { data } = await api.post<{ event: HubEvent }>('/api/admin/comms-hub/events', input);
   return data.event;

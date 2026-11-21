@@ -245,3 +245,8 @@
 .comms-hub [data-testid="report-problem-open"] { min-height: 44px; padding-left: 1rem; padding-right: 1rem; }
 /* CH9.2 the Eventbrite event picture on its card. */
 .ch-eb-image { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 8px; margin-bottom: 0.5rem; }
+/* CH9.3 the registrants dialog: full width on a phone, scrolls inside itself. */
+.ch-dialog-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); z-index: 1055; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+.ch-dialog { background: var(--bs-body-bg, #fff); border-radius: 12px; box-shadow: 0 12px 40px rgba(15, 23, 42, 0.25); padding: 1.25rem; width: min(56rem, 100%); max-height: calc(100vh - 2rem); overflow-y: auto; }
+.ch-registrants-search { max-width: 18rem; }
+.ch-registrants-table td, .ch-registrants-table th { font-size: 0.875rem; }

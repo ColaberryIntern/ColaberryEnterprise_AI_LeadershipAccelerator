@@ -14,7 +14,7 @@ jest.mock('../../../../../services/commsHubApi', () => ({
   // CH4.4 the editor now holds the thumbnail studio; its own test covers it.
   listThumbnails: jest.fn(), listEventPhotos: jest.fn(), getLivePanel: jest.fn(), getPromotionPlan: jest.fn(),
   // CH9.2 the "From Eventbrite" section under the list; its own test covers it.
-  listEventbriteEvents: jest.fn(),
+  listEventbriteEvents: jest.fn(), getRegistrants: jest.fn(),
 }));
 
 /** CH3.1 + CH3.2 rendered: the list in training-site shape, the editor, save/duplicate/cancel, Write with AI, a11y. */
@@ -117,6 +117,26 @@ describe('CH3.1 the list', () => {
     await renderAt('/admin/comms-hub/events');
     expect(await axeViolations()).toEqual([]);
     for (const b of Array.from(container.querySelectorAll('button'))) expect(b.className).toMatch(/comms-hub-action/);
+  });
+});
+
+describe('CH9.3 registrants from an Eventbrite card', () => {
+  it('View registrants on an Eventbrite card opens that event\'s registrants; Close shuts it', async () => {
+    (api.listHubEvents as jest.Mock).mockResolvedValue([]);
+    (api.listEventbriteEvents as jest.Mock).mockResolvedValue({ status: 'ok', window: 'upcoming', fetched_at: 'x', events: [
+      { ccpp_event_id: '777', title: 'AI Open House', starts_at: '2026-12-04T00:30:00.000Z', ends_at: null, registration_url: null, image_url: null, registered: 1, eventbrite_status: 'live' },
+    ] });
+    (api.getRegistrants as jest.Mock).mockResolvedValue({ event: { ccpp_event_id: '777', title: 'AI Open House', starts_at: '' }, eventbrite: 'ok', count: 1,
+      rows: [{ name: 'Ada', email: 'ada@x.test', registered_at: null, sources: ['eventbrite'], has_account: false }] });
+    await renderAt('/admin/comms-hub/events');
+    const view = Array.from(container.querySelectorAll('button')).find((b) => (b.textContent ?? '').startsWith('View registrants'))!;
+    expect(view.textContent).toBe('View registrants for AI Open House');
+    await act(async () => { view.click(); });
+    await settle();
+    expect(api.getRegistrants).toHaveBeenCalledWith('777');
+    expect(container.querySelector('[role="dialog"]')?.textContent).toContain('ada@x.test');
+    await act(async () => { btn('Close').click(); });
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
   });
 });
 
