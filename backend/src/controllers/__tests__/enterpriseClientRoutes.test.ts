@@ -122,7 +122,7 @@ describe('a client token is not an admin token', () => {
 
   it('a bad id on a POST action is a 404 before any lookup', async () => {
     const admin = jwt.sign({ id: 'a', email: 'admin@example.test', role: 'admin' }, env.jwtSecret, { expiresIn: '5m' });
-    const res = await request(app()).post('/api/admin/enterprise-clients/not-a-uuid/signed').set('Authorization', `Bearer ${admin}`).send({});
+    const res = await request(app()).post('/api/admin/enterprise-clients/not-a-uuid/lost').set('Authorization', `Bearer ${admin}`).send({});
     expect(res.status).toBe(404);
   });
 });

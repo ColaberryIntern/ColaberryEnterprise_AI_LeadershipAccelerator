@@ -49,3 +49,14 @@ it('still accepts a real digest token', async () => {
   expect(mockFindOne).toHaveBeenCalled();
   expect(r.status).toHaveBeenCalledWith(404);
 });
+
+it.each([
+  ['an admin token', () => jwt.sign({ id: 'a', email: 'x@y.test', role: 'admin' }, env.jwtSecret, { expiresIn: '1h' })],
+  ['a participant token', () => jwt.sign({ sub: 'p-1', email: 's@y.test', role: 'participant' }, env.jwtSecret, { expiresIn: '1h' })],
+  ['a digest token for a DIFFERENT email', () => jwt.sign({ batch_id: 'b-1', email_ids: ['e-2'] }, env.jwtSecret, { expiresIn: '1h' })],
+])('refuses %s: only a digest token, for an email it names, may act', async (_why, mint) => {
+  const r = res();
+  await handleDigestAction({ query: { token: mint(), emailId: 'e-1', action: 'hold' } } as any, r);
+  expect(r.status).toHaveBeenCalledWith(401);
+  expect(mockFindOne).not.toHaveBeenCalled();
+});

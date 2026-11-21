@@ -138,6 +138,23 @@ describe('timeouts', () => {
     expect(global.fetch).toHaveBeenCalledTimes(6); // initial + 5 retries, same budget as a 429
   });
 
+  it('never retries a POST after a timeout: Basecamp may already have created it', async () => {
+    (global as any).fetch = jest.fn().mockRejectedValueOnce(abortErr()).mockResolvedValueOnce(okResp({ id: 9 }));
+    const p = bcPost('/buckets/1/todolists/2/todos.json', { content: 'x' });
+    await expect(p).rejects.toBeInstanceOf(BcTimeoutError);
+    await expect(p).rejects.toMatchObject({ attempts: 1 });
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('still retries a POST that Basecamp refused with 429 (nothing was created)', async () => {
+    (global as any).fetch = jest
+      .fn()
+      .mockResolvedValueOnce({ ok: false, status: 429, headers: { get: () => '0' }, json: async () => ({}), text: async () => '' })
+      .mockResolvedValueOnce(okResp({ id: 9 }));
+    expect(await bcPost('/b.json', {})).toEqual({ id: 9 });
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
+
   it('does not treat a non-abort rejection as a timeout', async () => {
     (global as any).fetch = jest.fn().mockRejectedValue(new Error('ECONNRESET'));
     await expect(bcGet('/x.json')).rejects.toThrow('ECONNRESET');

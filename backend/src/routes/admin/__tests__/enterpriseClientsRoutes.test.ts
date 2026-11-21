@@ -49,6 +49,7 @@ const ID = '11111111-2222-4333-8444-555555555555';
 const BASE = '/api/admin/enterprise-clients';
 
 const admin = () => `Bearer ${jwt.sign({ id: 'a', email: 'admin@example.test', role: 'admin' }, env.jwtSecret, { expiresIn: '5m' })}`;
+const ali = () => `Bearer ${jwt.sign({ id: 'ali', email: 'ali@colaberry.com', role: 'admin' }, env.jwtSecret, { expiresIn: '5m' })}`;
 
 function app(): Express {
   const a = express();
@@ -123,14 +124,14 @@ describe('actions', () => {
   });
 
   it('a missing subject is a 400 and sends nothing', async () => {
-    const res = await request(app()).post(`${BASE}/${ID}/proposal/send`).set('Authorization', admin()).send({ body: 'x' });
+    const res = await request(app()).post(`${BASE}/${ID}/proposal/send`).set('Authorization', ali()).send({ body: 'x' });
     expect(res.status).toBe(400);
     expect(mockSendProposal).not.toHaveBeenCalled();
   });
 
   it('a refusal reaches the page with its status and reason', async () => {
     mockSendProposal.mockRejectedValue(new ActionRefused('Not sent: the investment has not been added yet.', 422));
-    const res = await request(app()).post(`${BASE}/${ID}/proposal/send`).set('Authorization', admin()).send({ subject: 'P', body: 'B' });
+    const res = await request(app()).post(`${BASE}/${ID}/proposal/send`).set('Authorization', ali()).send({ subject: 'P', body: 'B' });
     expect(res.status).toBe(422);
     expect(res.body.error).toContain('investment');
   });
@@ -139,5 +140,40 @@ describe('actions', () => {
     mockLost.mockResolvedValue(undefined);
     await request(app()).post(`${BASE}/${ID}/lost`).set('Authorization', admin()).send({ reason: 'Went with another vendor' });
     expect(mockLost).toHaveBeenCalledWith(ID, 'Went with another vendor');
+  });
+});
+
+describe('Ali only (Ali, 2026-11-20: "proposals Ali only")', () => {
+  const owner = () => `Bearer ${jwt.sign({ id: 'o', email: 'owner@example.test', role: 'super_admin' }, env.jwtSecret, { expiresIn: '5m' })}`;
+
+  it('the proposal send and mark-signed routes carry requireAli; nothing else does', () => {
+    const stack = (routes as any).stack.filter((l: any) => l.route);
+    const guarded = stack
+      .filter((l: any) => l.route.stack.some((s: any) => s.name === 'requireAli'))
+      .map((l: any) => l.route.path)
+      .sort();
+    expect(guarded).toEqual([`${BASE}/:id/proposal/send`, `${BASE}/:id/signed`]);
+  });
+
+  it.each([
+    ['proposal/send', { subject: 'P', body: 'B' }],
+    ['signed', {}],
+  ])('another admin is refused %s with a 403 and nothing happens', async (path, body) => {
+    const res = await request(app()).post(`${BASE}/${ID}/${path}`).set('Authorization', admin()).send(body);
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('Only Ali can send a proposal or mark a client signed.');
+    expect(mockSendProposal).not.toHaveBeenCalled();
+    expect(mockSigned).not.toHaveBeenCalled();
+  });
+
+  it('Ali (by email) and the owner role may mark signed', async () => {
+    mockSigned.mockResolvedValue({ projectId: '1', projectUrl: 'u' });
+    expect((await request(app()).post(`${BASE}/${ID}/signed`).set('Authorization', ali()).send({})).status).toBe(200);
+    expect((await request(app()).post(`${BASE}/${ID}/signed`).set('Authorization', owner()).send({})).status).toBe(200);
+  });
+
+  it('other admins keep every other step (draft the proposal, options email, lost)', async () => {
+    mockDraft.mockResolvedValue({ subject: 's', body: 'b' });
+    expect((await request(app()).post(`${BASE}/${ID}/proposal/draft`).set('Authorization', admin()).send({})).status).toBe(200);
   });
 });
