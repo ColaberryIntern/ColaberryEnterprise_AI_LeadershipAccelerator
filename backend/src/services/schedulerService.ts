@@ -2153,6 +2153,10 @@ export function startScheduler(): void {
     instrumentCronJob('OpenHouseSessionSync', async () => {
       const { syncOpenHouseCountdown } = await import('./openHouseSessionSync');
       await syncOpenHouseCountdown();
+      // OH1u: after an Open House ends, book Maya's attended / missed follow-up (one per person
+      // per event). Books nothing while the follow-up campaign is not active. Never throws.
+      const { bookRecentOpenHouseFollowups } = await import('./openHouseFollowup');
+      await bookRecentOpenHouseFollowups();
     }).catch((err) => {
       console.error('[Scheduler] Open House session sync error:', err);
     });
