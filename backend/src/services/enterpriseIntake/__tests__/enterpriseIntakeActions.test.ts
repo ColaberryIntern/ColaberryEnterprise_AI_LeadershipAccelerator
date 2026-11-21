@@ -97,6 +97,13 @@ describe('the options email', () => {
     expect(mockStage).toHaveBeenCalled();
   });
 
+  it('v2: refuses an options email that carries an ROI figure (percent or hours), even after editing', async () => {
+    mockFindByPk.mockResolvedValue(row());
+    await expect(sendOptionsEmail('i-1', 'Your pilot options', 'Option 1 could take back 30-50% of your time.')).rejects.toMatchObject({ status: 422 });
+    await expect(sendOptionsEmail('i-1', 'Your pilot options', 'About 520 hours a year back.')).rejects.toThrow(/percent or an hour figure/);
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
   it('claims the send atomically first: a second click, even with an edited subject, sends nothing', async () => {
     mockFindByPk.mockResolvedValue(row());
     mockStaticUpdate.mockResolvedValueOnce([1]).mockResolvedValueOnce([0]);

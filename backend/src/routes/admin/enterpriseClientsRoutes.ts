@@ -105,6 +105,14 @@ router.get(`${BASE}/:id`, requireAdmin, async (req: Request, res: Response, next
         lostReason: i.lost_reason,
         projectUrl: i.bc_project_id ? `https://3.basecamp.com/3945211/projects/${i.bc_project_id}` : null,
         pricePlaceholder: PRICE_PLACEHOLDER,
+        // v2: what the client planned in their visit, and whether Ali's brief went out.
+        plan: {
+          interviewMode: i.interview_mode || null,
+          interviewScheduledFor: i.interview_scheduled_for,
+          meeting: i.meeting_start ? { start: i.meeting_start, end: i.meeting_end, link: i.meeting_link } : null,
+          files: (i.client_files || []).map((f) => ({ name: f.name, size: f.size, chars: f.chars, uploadedAt: f.uploaded_at })),
+          aliBriefSentAt: i.ali_brief_sent_at,
+        },
       },
     });
   } catch (err) {

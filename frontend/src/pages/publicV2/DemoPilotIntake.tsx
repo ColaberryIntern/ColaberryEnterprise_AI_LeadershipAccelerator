@@ -1,33 +1,55 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import {
-  getIntakeStatus,
-  interviewTurn,
-  requestCall,
-  IntakeStatus,
-  InterviewTurn,
-} from '../../services/enterpriseIntakeApi';
+import { IntakeStatus, Meeting, SharedFile, getIntakeStatus } from '../../services/enterpriseIntakeApi';
 import { formatHours, hoursPerYear } from './demoPilotModel';
+import IntakePurpose from './intake/IntakePurpose';
+import IntakePath, { PathState } from './intake/IntakePath';
+import InterviewPlan from './intake/InterviewPlan';
+import MeetingPicker from './intake/MeetingPicker';
+import ResearchUpload from './intake/ResearchUpload';
+import InterviewRunner from './intake/InterviewRunner';
+import { whenLabel } from './intake/intakeModel';
 import './demoPilotIntake.css';
 
 /**
- * DemoPilotIntake - what /demo-pilot shows once the form is in (W28).
+ * DemoPilotIntake - what /demo-pilot shows once the form is in.
  *
- * Ali, 2026-11-20: "upon completing that they can have the AI call them. Also tell them how
- * much time is going to save them." So this is the intake's second step, right after the
- * form (Q1 A): their own time figure, then a 10-minute AI interview, by phone or typed. Both
- * run the same interview AI Flotation runs; whichever they pick, the write-up lands on their
- * intake, and our first meeting starts from it.
+ * W28 (Ali, 2026-11-20): their own time figure, then a 10-minute AI interview.
+ * v2 (Ali, 2026-11-21): "It's not clear what the interview is for - make it clear", show the
+ * AI interview against a 20-30 minute call with everyone, let them upload research they already
+ * have, show our research and ROI-ranked options as a step, let them do the AI interview now or
+ * later, and have them book the human meeting in the same visit, always after the AI interview.
  *
- * The figure is THEIRS (Q2 A): hours a week from the form, times 52. The only claim about
- * us is the one the process itself makes true: the interview replaces the discovery meeting.
+ * Stages: plan (purpose, path, now/later) -> meeting (book with Ali) -> interview (now) -> done.
+ * `resumeStage` picks up where they left off on a reload or from an emailed link.
  */
+export type Stage = 'loading' | 'missing' | 'plan' | 'meeting' | 'interview' | 'done';
 
-type Phase = 'loading' | 'missing' | 'choose' | 'calling' | 'chat' | 'done';
+/** Where a returning visitor belongs. A "later" interview whose time has come opens the interview. */
+export function resumeStage(s: IntakeStatus, now = new Date()): Stage {
+  if (s.interviewed) return s.meeting ? 'done' : 'meeting';
+  if (s.call === 'in_progress' || s.call === 'writing_up') return 'interview';
+  if (!s.interviewMode) return 'plan';
+  if (!s.meeting) return 'meeting';
+  if (s.interviewMode === 'now') return 'interview';
+  const at = s.interviewScheduledFor ? new Date(s.interviewScheduledFor).getTime() : 0;
+  return at && now.getTime() >= at - 15 * 60_000 ? 'interview' : 'done';
+}
 
-const POLL_MS = 5000;
-/** Stop polling a call after this long; the page offers typing instead. */
-const POLL_LIMIT_MS = 20 * 60 * 1000;
+export function pathState(s: IntakeStatus, stage: Stage, files: SharedFile[]): PathState {
+  return {
+    interview: s.interviewed ? 'done' : stage === 'plan' || stage === 'interview' ? 'current' : 'next',
+    theirResearch: files.length ? 'done' : 'next',
+    ourResearch: 'next',
+    meeting: stage === 'meeting' ? 'current' : 'next',
+    notes: {
+      interview: !s.interviewed && s.interviewMode === 'later' && s.interviewScheduledFor ? `Scheduled: ${whenLabel(s.interviewScheduledFor)}` : undefined,
+      theirResearch: files.length ? `${files.length} file${files.length === 1 ? '' : 's'} shared` : undefined,
+      ourResearch: s.interviewed ? 'Under way now' : 'Starts as soon as your AI interview is in',
+      meeting: s.meeting ? `Booked: ${whenLabel(s.meeting.start)}` : undefined,
+    },
+  };
+}
 
 export interface DemoPilotIntakeProps {
   token: string;
@@ -36,236 +58,102 @@ export interface DemoPilotIntakeProps {
 }
 
 export function DemoPilotIntake({ token, phone }: DemoPilotIntakeProps): React.ReactElement {
-  const [phase, setPhase] = useState<Phase>('loading');
+  const [stage, setStage] = useState<Stage>('loading');
   const [status, setStatus] = useState<IntakeStatus | null>(null);
-  const [turns, setTurns] = useState<InterviewTurn[]>([]);
-  const [draft, setDraft] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState('');
-  const callStarted = useRef(0);
+  const [files, setFiles] = useState<SharedFile[]>([]);
 
-  useEffect(() => {
-    let live = true;
-    getIntakeStatus(token)
-      .then((s) => {
-        if (!live) return;
-        setStatus(s);
-        setPhase(s.interviewed ? 'done' : s.call === 'in_progress' || s.call === 'writing_up' ? 'calling' : 'choose');
-      })
-      .catch(() => live && setPhase('missing'));
-    return () => {
-      live = false;
-    };
+  const refresh = useCallback(async (next?: Stage): Promise<void> => {
+    try {
+      const s = await getIntakeStatus(token);
+      setStatus(s);
+      setFiles(s.files || []);
+      setStage(next || resumeStage(s));
+    } catch {
+      setStage('missing');
+    }
   }, [token]);
 
-  const send = useCallback(
-    async (next: InterviewTurn[]): Promise<void> => {
-      setBusy(true);
-      setNote('');
-      try {
-        const r = await interviewTurn(token, next);
-        setTurns([...next, { role: 'assistant', text: r.message }]);
-        if (r.done) setPhase('done');
-      } catch {
-        setNote('That did not go through. Please try again.');
-      } finally {
-        setBusy(false);
-      }
-    },
-    [token],
-  );
-
-  const startTyping = (): void => {
-    setPhase('chat');
-    if (turns.length === 0) void send([]);
-  };
-
-  const startCall = async (): Promise<void> => {
-    setBusy(true);
-    setNote('');
-    try {
-      const r = await requestCall(token);
-      if (r.status === 'calling' || r.status === 'already_calling') {
-        callStarted.current = Date.now();
-        setPhase('calling');
-      } else {
-        setNote('We cannot call right now. Typing takes the same 10 minutes.');
-      }
-    } catch {
-      setNote('We cannot call right now. Typing takes the same 10 minutes.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
   useEffect(() => {
-    if (phase !== 'calling') return undefined;
-    if (!callStarted.current) callStarted.current = Date.now();
-    const t = window.setInterval(() => {
-      if (Date.now() - callStarted.current > POLL_LIMIT_MS) {
-        window.clearInterval(t);
-        setNote('We have not heard back from the call. You can type it instead.');
-        return;
-      }
-      getIntakeStatus(token)
-        .then((s) => {
-          setStatus(s);
-          if (s.interviewed) setPhase('done');
-          else if (s.call === 'ended') setNote('The call ended before we could talk. You can type it instead.');
-        })
-        .catch(() => undefined);
-    }, POLL_MS);
-    return () => window.clearInterval(t);
-  }, [phase, token]);
+    void refresh();
+  }, [refresh]);
 
-  const submitTurn = (e: React.FormEvent): void => {
-    e.preventDefault();
-    const text = draft.trim();
-    if (!text || busy) return;
-    setDraft('');
-    void send([...turns, { role: 'user', text }]);
-  };
+  const interviewDone = useCallback(() => {
+    void refresh();
+  }, [refresh]);
 
-  if (phase === 'loading') {
-    return <p className="cbv2-dpi__wait">Loading your interview…</p>;
-  }
-  if (phase === 'missing') {
+  if (stage === 'loading') return <p className="cbv2-dpi__wait">Loading your next steps…</p>;
+  if (stage === 'missing' || !status) {
     return (
       <p className="cbv2-dpi__wait">
-        We could not find that interview. Email <a href="mailto:info@colaberry.com">info@colaberry.com</a> and we
-        will pick it up.
+        We could not find that request. Email <a href="mailto:info@colaberry.com">info@colaberry.com</a> and we will pick it up.
       </p>
     );
   }
 
-  const perYear = hoursPerYear(status?.hoursPerWeek ?? null);
+  const perYear = hoursPerYear(status.hoursPerWeek ?? null);
+  const onBooked = (m: Meeting): void => {
+    setStatus({ ...status, meeting: m });
+    void refresh(status.interviewMode === 'now' && !status.interviewed ? 'interview' : 'done');
+  };
 
   return (
     <div className="cbv2-dpi" data-testid="demo-pilot-intake">
-      {phase !== 'done' ? (
-        <div className="cbv2-dpi__save" data-testid="intake-savings">
+      {stage === 'plan' ? (
+        <>
           {perYear !== null ? (
-            <p className="cbv2-dpi__fig">
+            <p className="cbv2-dpi__fig" data-testid="intake-savings">
               <span>You told us this process takes</span>
               <b>{formatHours(perYear)} hours a year</b>
               <span>
-                {status?.peopleCount ? `${status.peopleCount} ${status.peopleCount === 1 ? 'person' : 'people'}, ` : ''}
-                {status?.hoursPerWeek} hours a week. That is the time a pilot goes after.
+                {status.peopleCount ? `${status.peopleCount} ${status.peopleCount === 1 ? 'person' : 'people'}, ` : ''}
+                {status.hoursPerWeek} hours a week. That is the time a pilot goes after.
               </span>
             </p>
           ) : null}
-          <p className="cbv2-dpi__skip">
-            <b>10 minutes now replaces our discovery meeting.</b> Our first meeting starts with your pilot options,
-            not our questions.
-          </p>
-        </div>
+          <IntakePurpose />
+        </>
       ) : null}
 
-      {phase === 'choose' ? (
-        <div className="cbv2-dpi__choose">
-          {status?.callAvailable ? (
-            <button type="button" className="cbv2-btn cbv2-btn--primary" onClick={startCall} disabled={busy}>
-              Call me now
+      <IntakePath state={pathState(status, stage, files)} />
+
+      {stage === 'plan' ? <InterviewPlan token={token} callAvailable={status.callAvailable} onPlanned={() => void refresh('meeting')} /> : null}
+
+      {stage === 'meeting' ? (
+        <MeetingPicker token={token} anchorKey={`${status.interviewMode}-${status.interviewScheduledFor || ''}-${status.interviewed}`} onBooked={onBooked} />
+      ) : null}
+
+      {stage === 'interview' ? <InterviewRunner token={token} status={status} phone={phone} onDone={interviewDone} /> : null}
+
+      {stage === 'done' ? (
+        <section className="cbv2-dpi__card cbv2-dpi__done" aria-labelledby="dpi-done-title" data-testid="intake-done">
+          <h2 id="dpi-done-title" className="cbv2-dpi__h">{status.interviewed ? 'Thank you. You are all set.' : 'You are all set.'}</h2>
+          <ul className="cbv2-dpi__summary">
+            <li data-testid="done-interview">
+              <strong>AI interview:</strong>{' '}
+              {status.interviewed
+                ? 'done. We are researching your company and drafting your options now.'
+                : status.interviewScheduledFor
+                  ? `${whenLabel(status.interviewScheduledFor)}. We will email you the link then.`
+                  : 'not done yet.'}
+            </li>
+            {status.meeting ? (
+              <li data-testid="done-meeting">
+                <strong>Meeting with Ali:</strong> {whenLabel(status.meeting.start)}, 30 minutes on Google Meet. The invite is in your inbox.
+              </li>
+            ) : null}
+          </ul>
+          {!status.interviewed ? (
+            <button type="button" className="cbv2-btn cbv2-btn--line" onClick={() => setStage('interview')}>
+              Do my AI interview now instead
             </button>
           ) : null}
-          <button
-            type="button"
-            className={`cbv2-btn ${status?.callAvailable ? 'cbv2-btn--line' : 'cbv2-btn--primary'}`}
-            onClick={startTyping}
-            disabled={busy}
-          >
-            {status?.callAvailable ? 'Type it instead' : 'Start the interview'}
-          </button>
-          <p className="cbv2-dpi__hint">
-            {status?.callAvailable
-              ? 'The call comes from our AI. It will say so, and it only asks what your form left out.'
-              : 'Our AI asks one question at a time, and only what your form left out.'}
-          </p>
-        </div>
-      ) : null}
-
-      {phase === 'calling' ? (
-        <div className="cbv2-dpi__calling" role="status">
-          <p>
-            <b>Calling you now{phone ? ` at ${phone}` : ''}.</b> Pick up: it is the AI from Colaberry.
-          </p>
-          <p className="cbv2-dpi__hint">
-            {status?.call === 'writing_up' ? 'The call is done. Writing it up now.' : 'This page updates when the call ends.'}
-          </p>
-          <button type="button" className="cbv2-btn cbv2-btn--line" onClick={startTyping}>
-            Type it instead
-          </button>
-        </div>
-      ) : null}
-
-      {phase === 'chat' ? (
-        <div className="cbv2-dpi__chat">
-          <ol className="cbv2-dpi__log" aria-live="polite" data-testid="intake-chat-log">
-            {turns.map((t, i) => (
-              <li key={i} className={`cbv2-dpi__turn cbv2-dpi__turn--${t.role}`}>
-                <span className="cbv2-sr-only">{t.role === 'assistant' ? 'Colaberry AI:' : 'You:'}</span>
-                {t.text}
-              </li>
-            ))}
-            {busy ? <li className="cbv2-dpi__turn cbv2-dpi__turn--assistant cbv2-dpi__typing">…</li> : null}
-          </ol>
-          <form className="cbv2-dpi__reply" onSubmit={submitTurn}>
-            <label htmlFor="dpi-reply" className="cbv2-sr-only">
-              Your answer
-            </label>
-            <textarea
-              id="dpi-reply"
-              rows={3}
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              disabled={busy}
-            />
-            <button type="submit" className="cbv2-btn cbv2-btn--primary" disabled={busy || !draft.trim()}>
-              Send
-            </button>
-          </form>
-        </div>
-      ) : null}
-
-      {note ? (
-        <p className="cbv2-field5__err" role="alert">
-          {note}
-        </p>
-      ) : null}
-
-      {phase === 'done' ? (
-        <div className="cbv2-dpi__done" data-testid="intake-done">
-          <p className="cbv2-dpi__skip">
-            <b>Thank you. We have what we need.</b>
-          </p>
-          <ol className="cbv2-next5">
-            <li>
-              <b aria-hidden="true">1</b>
-              <p>
-                <strong>We research {status?.company || 'your company'}</strong>
-                <span>Your site, your systems and the process you described.</span>
-              </p>
-            </li>
-            <li>
-              <b aria-hidden="true">2</b>
-              <p>
-                <strong>We draft options for your pilot</strong>
-                <span>From what you told us, before anyone meets.</span>
-              </p>
-            </li>
-            <li>
-              <b aria-hidden="true">3</b>
-              <p>
-                <strong>Someone from Colaberry emails you</strong>
-                <span>To set up a first meeting that starts with your options.</span>
-              </p>
-            </li>
-          </ol>
           <p className="cbv2-dpi__wait" data-testid="intake-my-pilot">
             See where your pilot stands any time at <Link to="/my-pilot">My pilot</Link>.
           </p>
-        </div>
+        </section>
       ) : null}
+
+      {stage !== 'interview' ? <ResearchUpload token={token} files={files} onChange={setFiles} /> : null}
     </div>
   );
 }

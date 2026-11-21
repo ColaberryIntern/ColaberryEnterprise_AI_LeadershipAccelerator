@@ -3980,25 +3980,13 @@ async function start(): Promise<void> {
       .catch((err) => console.warn('[FlotationCalls] sweep failed:', err?.message));
   });
 
-  // W29: Enterprise client lists in Basecamp. The form and the interview write to the list
-  // straight away; this retries whatever Basecamp missed. A no-op until
-  // BASECAMP_ENTERPRISE_INTAKE_PROJECT_ID is set.
+  // Enterprise intake catch-up (W29-W31, v2): Basecamp lists, client files, research, comms,
+  // interview reminders, meeting posts and Ali's briefs. One module owns the order and gives each
+  // step its own catch (services/enterpriseIntake/enterpriseIntakeSweep.ts).
   cron.schedule('*/5 * * * *', () => {
-    import('./services/enterpriseIntake/enterpriseIntakeBasecamp')
-      .then(({ syncEnterpriseIntakesToBasecamp }) => syncEnterpriseIntakesToBasecamp())
-      .then((out) => { if (out.opened || out.posted || out.failed) console.log(`[EnterpriseIntake] Basecamp sweep: ${out.opened} opened, ${out.posted} posted, ${out.failed} failed`); })
-      .catch((err) => console.warn('[EnterpriseIntake] Basecamp sweep failed:', err?.message))
-      // W30: research and pilot options for interviews still waiting, then their Basecamp post.
-      // Its own catch: a Basecamp failure above must not skip the homework.
-      .then(() => import('./services/enterpriseIntake/enterpriseIntakeResearch'))
-      .then(({ syncEnterpriseResearch }) => syncEnterpriseResearch())
-      .then((out) => { if (out.researched || out.posted || out.failed) console.log(`[EnterpriseIntake] research sweep: ${out.researched} researched, ${out.posted} posted, ${out.failed} failed`); })
-      .catch((err) => console.warn('[EnterpriseIntake] research sweep failed:', err?.message))
-      // W31: every email and call with an open client lands on their list; the list shows the stage.
-      .then(() => import('./services/enterpriseIntake/enterpriseIntakeSync'))
-      .then(({ syncEnterpriseComms }) => syncEnterpriseComms())
-      .then((out) => { if (out.touches || out.failed) console.log(`[EnterpriseIntake] comms sweep: ${out.touches} touches over ${out.clients} clients, ${out.failed} failed`); })
-      .catch((err) => console.warn('[EnterpriseIntake] comms sweep failed:', err?.message));
+    import('./services/enterpriseIntake/enterpriseIntakeSweep')
+      .then(({ runEnterpriseIntakeSweep }) => runEnterpriseIntakeSweep())
+      .catch((err) => console.warn('[EnterpriseIntake] sweep failed:', err?.message));
   });
 
   // Start follow-up email scheduler if enabled

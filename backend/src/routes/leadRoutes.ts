@@ -24,6 +24,7 @@ import {
   handleGetSponsorDashboard,
 } from '../controllers/challengeController';
 import { handleClientStatus, handleRequestClientLink } from '../controllers/enterpriseClientController';
+import { handleBookMeeting, handleInterviewPlan, handleMeetingSlots, handleUploadClientFile } from '../controllers/enterpriseIntakeScheduleController';
 
 const leadRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -56,6 +57,20 @@ const previewRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Preview rate limit exceeded' },
+});
+
+/**
+ * v2 intake planning (interview plan, meeting, file uploads). One client legitimately makes
+ * up to ~8 of these in a visit (plan, a re-pick, the booking, five files), which the form's
+ * 5-per-15-minutes limit would cut off mid-flow. Abuse stays bounded per intake anyway: one
+ * booking and five files at most.
+ */
+const intakePlanRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests. Please try again in a few minutes.' },
 });
 
 const interviewRateLimiter = rateLimit({
@@ -110,6 +125,14 @@ router.post('/api/enterprise/intake', leadRateLimiter, handleCreateEnterpriseInt
 router.get('/api/enterprise/intake/:token', interviewRateLimiter, handleEnterpriseIntakeStatus);
 router.post('/api/enterprise/intake/:token/interview', interviewRateLimiter, handleEnterpriseInterviewTurn);
 router.post('/api/enterprise/intake/:token/call', leadRateLimiter, handleEnterpriseIntakeCall);
+// v2 (2026-11-21): the client plans the AI interview (now or later) and books the meeting with
+// Ali in the same visit. Slots is a calendar read, so it shares the interview limiter; the
+// writes have their own (intakePlanRateLimiter).
+router.get('/api/enterprise/intake/:token/slots', interviewRateLimiter, handleMeetingSlots);
+router.post('/api/enterprise/intake/:token/interview-plan', intakePlanRateLimiter, handleInterviewPlan);
+router.post('/api/enterprise/intake/:token/meeting', intakePlanRateLimiter, handleBookMeeting);
+// Their own research, one file per request (nginx raises only this exact path to 26m).
+router.post('/api/enterprise/intake/:token/files', intakePlanRateLimiter, handleUploadClientFile);
 // W32: the client's own view of their pilot, by emailed sign-in link.
 router.post('/api/enterprise/client/request-link', clientLinkRateLimiter, handleRequestClientLink);
 router.get('/api/enterprise/client/status', interviewRateLimiter, handleClientStatus);

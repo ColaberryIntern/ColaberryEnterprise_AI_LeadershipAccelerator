@@ -30,6 +30,7 @@ import { requestInstantCallback } from '../callbackRequestService';
 import { env } from '../../config/env';
 import { ENTERPRISE_INTAKE_SOURCE } from './enterpriseIntakeSource';
 import { openClientListSoon, postInterviewSoon } from './enterpriseIntakeBasecamp';
+import { clientResearchBlock } from './enterpriseIntakeFiles';
 
 export const FORM_TYPE = 'demo_pilot_request';
 
@@ -209,7 +210,12 @@ export async function runEnterpriseInterviewTurn(
   rawTurns: unknown,
 ): Promise<EnterpriseTurnResult> {
   const spoken = boundTurns(rawTurns);
-  const turns = [{ role: 'user' as const, text: writtenBrief(intake) }, ...spoken];
+  // v2: research they uploaded rides along with the form (fenced as data, capped), so the
+  // interview skips what their documents already answer.
+  const docs = clientResearchBlock(intake, 3000);
+  const turns = [{ role: 'user' as const, text: docs ? `${writtenBrief(intake)}
+
+${docs}` : writtenBrief(intake) }, ...spoken];
   const result = await runIntakeTurn({
     turns,
     facts: factsOf(intake),
