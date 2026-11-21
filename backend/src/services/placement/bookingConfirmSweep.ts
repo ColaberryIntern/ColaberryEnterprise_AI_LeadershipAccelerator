@@ -8,10 +8,12 @@ import { finishBooking, MAX_CONFIRM_ATTEMPTS, type FinishOpts } from './bookingC
  * minutes, at most BATCH interviews per pass.
  *
  * OWED = state `booked`, the booked time still ahead, confirm_done_at NULL, fewer than MAX_CONFIRM_ATTEMPTS runs.
- * DUE  = never run and booked more than 2 minutes ago (the route's own run has had its turn), or the last run more than
+ * DUE  (on the DATABASE clock, the same clock that stamps updated_at and the lease; `now` only decides which bookings
+ *        are still ahead) = never run and booked more than 2 minutes ago (the route's own run has had its turn), or the last run more than
  *        5 minutes ago (after 1) / 30 minutes ago (after 2).
  * Each item is finishBooking (idempotent: the meeting and every message are keyed), so a re-run only completes what is
- * missing. Not switch-gated as a whole: the employer part checks its own switch inside, and the learner part its allow-list.
+ * missing (and finishBooking's lease, on the database clock, keeps a run in another process off the same item). Not
+ * switch-gated as a whole: the employer part checks its own switch inside, and the learner part its allow-list.
  */
 export const BATCH = 20;
 export const FIRST_RUN_GRACE_MS = 2 * 60_000;
@@ -22,16 +24,25 @@ function log(level: 'info' | 'warn', event: string, context: Record<string, unkn
   if (level === 'warn') console.warn(line); else console.log(line);
 }
 
-export async function sweepBookingConfirms(now = new Date(), opts: FinishOpts = {}): Promise<{ tried: number; done: number; gaveUp: number }> {
+/** In this process, one pass at a time: a tick that starts while the previous pass still runs returns at once. */
+let passRunning = false;
+
+export async function sweepBookingConfirms(now = new Date(), opts: FinishOpts = {}): Promise<{ tried: number; done: number; gaveUp: number; overlapped?: true }> {
+  if (passRunning) { log('info', 'booking_confirm_sweep_overlap_skipped', {}); return { tried: 0, done: 0, gaveUp: 0, overlapped: true }; }
+  passRunning = true;
+  try { return await sweepPass(now, opts); } finally { passRunning = false; }
+}
+
+async function sweepPass(now: Date, opts: FinishOpts): Promise<{ tried: number; done: number; gaveUp: number }> {
   const out = { tried: 0, done: 0, gaveUp: 0 };
   const [rows] = await sequelize.query(
     `SELECT i.id FROM placement_interviews i
       WHERE i.state = 'booked' AND i.confirm_done_at IS NULL AND i.starts_at > :now AND i.confirm_attempts < ${MAX_CONFIRM_ATTEMPTS}
-        AND ((i.confirm_attempts = 0 AND i.updated_at < :grace)
-          OR (i.confirm_attempts = 1 AND i.confirm_last_attempt_at < :after1)
-          OR (i.confirm_attempts >= 2 AND i.confirm_last_attempt_at < :after2))
+        AND ((i.confirm_attempts = 0 AND i.updated_at < NOW() - INTERVAL '${FIRST_RUN_GRACE_MS / 1000} seconds')
+          OR (i.confirm_attempts = 1 AND i.confirm_last_attempt_at < NOW() - INTERVAL '300 seconds')
+          OR (i.confirm_attempts >= 2 AND i.confirm_last_attempt_at < NOW() - INTERVAL '1800 seconds'))
       ORDER BY i.starts_at LIMIT ${BATCH}`,
-    { replacements: { now, grace: new Date(now.getTime() - FIRST_RUN_GRACE_MS), after1: new Date(now.getTime() - 5 * 60_000), after2: new Date(now.getTime() - 30 * 60_000) } });
+    { replacements: { now } });
   for (const r of rows as Array<{ id: string }>) {
     out.tried += 1;
     try {

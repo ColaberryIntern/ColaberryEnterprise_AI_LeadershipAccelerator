@@ -94,8 +94,12 @@ describeIfDb('after-booking work against Postgres', () => {
     if (r.status !== 'booked') throw new Error(`not booked: ${r.status}`);
     mockCreate.mockRejectedValueOnce(Object.assign(new Error('zoom 503'), { name: 'UpstreamUnavailable' })).mockResolvedValue({ providerEventId: 'zm-2', joinUrl: 'https://zoom.example/j/SECRET' });
     expect((await fin.finishBooking(r.interviewId, { now: NOW, read: ON, learnerAllowed: allowed })).status).toBe('incomplete');
-    const later = new Date(NOW.getTime() + 10 * 60_000); // past the 5-minute backoff after one run
-    const res = await sweep.sweepBookingConfirms(later, { read: ON, learnerAllowed: allowed });
+    // the lease and the backoff run on the DATABASE clock: straight away it is still leased and not due
+    expect((await fin.finishBooking(r.interviewId, { now: NOW, read: ON, learnerAllowed: allowed })).status).toBe('busy');
+    expect((await sweep.sweepBookingConfirms(NOW, { read: ON, learnerAllowed: allowed })).tried).toBe(0);
+    // ten minutes later (moved on the database's own clock): past the lease and the 5-minute backoff
+    await sequelize.query(`UPDATE placement_interviews SET confirm_last_attempt_at = confirm_last_attempt_at - INTERVAL '10 minutes' WHERE id = '${r.interviewId}'`);
+    const res = await sweep.sweepBookingConfirms(NOW, { read: ON, learnerAllowed: allowed });
     expect(res).toEqual({ tried: 1, done: 1, gaveUp: 0 });
     expect((await one(`SELECT room_provider_id FROM placement_interviews WHERE id = '${r.interviewId}'`)).room_provider_id).toBe('zm-2');
   });

@@ -11,8 +11,9 @@ type Iv = { id: string; enrollment_id: string; state: string; company: string | 
   starts_at: Date | null; minutes: number | null; interviewer_emails: string[]; booker_tz: string | null; room_provider_id: string | null; room_url: string | null;
   confirm_attempts: number; confirm_last_attempt_at: Date | null; confirm_done_at: Date | null; updated_at: Date;
   full_name: string | null; personal_email: string | null; job_address: string | null };
-type R = { id?: string; now?: Date; lease?: Date; start?: Date; pid?: string; url?: string; event?: string; payload?: string; src?: string; grace?: Date; after1?: Date; after2?: Date };
-const db = { iv: [] as Iv[], events: [] as Array<{ event: string; src: string; payload: string }>, sql: [] as string[] };
+type R = { id?: string; now?: Date; lease?: Date; start?: Date; pid?: string; url?: string; event?: string; payload?: string; src?: string; };
+// clock: the DATABASE clock (what NOW() answers); tests move it with at(), which also returns the caller's matching now.
+const db = { iv: [] as Iv[], events: [] as Array<{ event: string; src: string; payload: string }>, sql: [] as string[], clock: new Date(0) };
 const byId = (id: unknown) => db.iv.find((x) => x.id === id) as Iv;
 const same = (a: Date | null, b: Date | undefined) => !!a && !!b && a.getTime() === b.getTime();
 function answer(sql: string, r: R): [unknown[], number] {
@@ -24,10 +25,12 @@ function answer(sql: string, r: R): [unknown[], number] {
   if (sql.includes('SET confirm_attempts = confirm_attempts + 1')) {
     const i = byId(r.id);
     if (!/state = 'booked' AND starts_at = :start AND confirm_done_at IS NULL/.test(sql) || i.state !== 'booked' || !same(i.starts_at, r.start) || i.confirm_done_at) return [[], 0];
-    // the lease, applied only when the statement asks for it
-    const leased = /AND \(confirm_last_attempt_at IS NULL OR confirm_last_attempt_at < :lease\)/.test(sql);
-    if (leased && i.confirm_last_attempt_at && i.confirm_last_attempt_at.getTime() >= (r.lease as Date).getTime()) return [[], 0];
-    Object.assign(i, { confirm_attempts: i.confirm_attempts + 1, confirm_last_attempt_at: r.now });
+    // the lease, applied only as the statement words it: on the database clock (NOW()), or on a caller-supplied :lease
+    const dbLease = /AND \(confirm_last_attempt_at IS NULL OR confirm_last_attempt_at < NOW\(\) - INTERVAL '120 seconds'\)/.test(sql);
+    const cutoff = dbLease ? db.clock.getTime() - 120_000 : /< :lease\)/.test(sql) ? (r.lease as Date).getTime() : Infinity;
+    if (i.confirm_last_attempt_at && i.confirm_last_attempt_at.getTime() >= cutoff) return [[], 0];
+    const stamp = /confirm_last_attempt_at = NOW\(\)/.test(sql) ? db.clock : r.now;
+    Object.assign(i, { confirm_attempts: i.confirm_attempts + 1, confirm_last_attempt_at: stamp });
     return [[{ confirm_attempts: i.confirm_attempts }], 1];
   }
   if (sql.includes('SET room_provider_id = :pid')) {
@@ -49,10 +52,12 @@ function answer(sql: string, r: R): [unknown[], number] {
   }
   if (sql.includes('SELECT i.id FROM placement_interviews i')) {
     const t = (d: Date | null) => (d ? d.getTime() : Infinity);
+    // each backoff on the DATABASE clock, and only when the statement words it so
+    const ago = (secs: number) => (sql.includes(`NOW() - INTERVAL '${secs} seconds'`) ? db.clock.getTime() - secs * 1000 : -Infinity);
     const owed = db.iv.filter((i) => i.state === 'booked' && !i.confirm_done_at && (i.starts_at as Date).getTime() > (r.now as Date).getTime() && i.confirm_attempts < 3
-      && ((i.confirm_attempts === 0 && i.updated_at.getTime() < (r.grace as Date).getTime())
-        || (i.confirm_attempts === 1 && t(i.confirm_last_attempt_at) < (r.after1 as Date).getTime())
-        || (i.confirm_attempts >= 2 && t(i.confirm_last_attempt_at) < (r.after2 as Date).getTime())));
+      && ((i.confirm_attempts === 0 && i.updated_at.getTime() < ago(120))
+        || (i.confirm_attempts === 1 && t(i.confirm_last_attempt_at) < ago(300))
+        || (i.confirm_attempts >= 2 && t(i.confirm_last_attempt_at) < ago(1800))));
     return [owed.map((i) => ({ id: i.id })), 0];
   }
   throw new Error(`unexpected SQL: ${sql.slice(0, 70)}`);
@@ -87,6 +92,7 @@ import { EMPLOYER_SUBJECT, LEARNER_SUBJECT, RECORDING_LINE } from '../bookingCon
 
 const NOW = new Date('2026-11-20T18:00:00Z');
 const START = new Date('2026-11-23T15:00:00Z'); // Mon 9:00 AM CST
+const at = (ms: number): Date => { db.clock = new Date(NOW.getTime() + ms); return db.clock; };
 const ON = async () => true;
 const OFF = async () => null;
 const allowed = async () => true;
@@ -99,7 +105,7 @@ const sent = () => mockMail.mock.calls.map((c) => c[0] as Sent);
 const meetings = new Map<string, { providerEventId: string; joinUrl: string }>();
 
 beforeEach(() => {
-  db.iv = [iv()]; db.events = []; db.sql = []; mockLedger.clear(); meetings.clear();
+  db.iv = [iv()]; db.events = []; db.sql = []; db.clock = NOW; mockLedger.clear(); meetings.clear();
   mockMail.mockReset().mockImplementation(async () => ({ messageId: `m-${mockMail.mock.calls.length}` }));
   mockCreate.mockReset().mockImplementation(async (i: { requestId: string }) => {
     if (!meetings.has(i.requestId)) meetings.set(i.requestId, { providerEventId: `zm-${meetings.size + 1}`, joinUrl: SENTINEL_PROVIDER_URL });
@@ -148,8 +154,8 @@ describe('finishBooking: room and invites after the commit', () => {
     expect(both.map((r) => r.status).sort()).toEqual(['busy', 'done']); // the second found the first one's lease
     await finishBooking('iv-1', { now: NOW, read: ON, learnerAllowed: allowed });
     db.iv[0].confirm_done_at = null; // even a forced re-run, after the lease lapsed, sends nothing new
-    expect((await finishBooking('iv-1', { now: new Date(NOW.getTime() + 60_000), read: ON, learnerAllowed: allowed })).status).toBe('busy'); // lease still live
-    await finishBooking('iv-1', { now: new Date(NOW.getTime() + 3 * 60_000), read: ON, learnerAllowed: allowed });
+    expect((await finishBooking('iv-1', { now: at(60_000), read: ON, learnerAllowed: allowed })).status).toBe('busy'); // lease still live
+    await finishBooking('iv-1', { now: at(3 * 60_000), read: ON, learnerAllowed: allowed });
     expect(meetings.size).toBe(1);
     expect(sent().map((m) => m.to).sort()).toEqual(['ann.personal@mail.example', 'kim@acme.example', 'pat@acme.example']);
   });
@@ -188,8 +194,8 @@ describe('failure paths and the recovery sweep', () => {
     mockCreate.mockRejectedValueOnce(Object.assign(new Error('zoom 503'), { name: 'UpstreamUnavailable' }));
     expect(await finishBooking('iv-1', { now: NOW, read: ON, learnerAllowed: allowed })).toMatchObject({ status: 'incomplete', room: 'failed', learner: 'sent', employer: 'sent', gaveUp: false });
     expect(db.events.map((e) => e.event)).toEqual(['booking_confirm_failed']);
-    expect((await sweepBookingConfirms(new Date(NOW.getTime() + 4 * 60_000), { read: ON, learnerAllowed: allowed })).tried).toBe(0); // backoff: 5 min after 1 try
-    expect(await sweepBookingConfirms(new Date(NOW.getTime() + 6 * 60_000), { read: ON, learnerAllowed: allowed })).toEqual({ tried: 1, done: 1, gaveUp: 0 });
+    expect((await sweepBookingConfirms(at(4 * 60_000), { read: ON, learnerAllowed: allowed })).tried).toBe(0); // backoff: 5 min after 1 try
+    expect(await sweepBookingConfirms(at(6 * 60_000), { read: ON, learnerAllowed: allowed })).toEqual({ tried: 1, done: 1, gaveUp: 0 });
     expect([db.iv[0].room_provider_id, sent().length]).toEqual(['zm-1', 3]);
   });
   it('a provider that hangs is cut off at 25 seconds (no unbounded wait)', async () => {
@@ -202,21 +208,33 @@ describe('failure paths and the recovery sweep', () => {
   it('a mail that keeps failing: retried at 5 and 30 minutes, then given up ONCE, and never swept again', async () => {
     mockMail.mockImplementation(async (m: Sent) => (m.to === 'kim@acme.example' ? { messageId: undefined } : { messageId: 'ok' }));
     await finishBooking('iv-1', { now: NOW, read: ON, learnerAllowed: allowed });
-    await sweepBookingConfirms(new Date(NOW.getTime() + 6 * 60_000), { read: ON, learnerAllowed: allowed });
-    expect((await sweepBookingConfirms(new Date(NOW.getTime() + 20 * 60_000), { read: ON, learnerAllowed: allowed })).tried).toBe(0);
-    expect(await sweepBookingConfirms(new Date(NOW.getTime() + 40 * 60_000), { read: ON, learnerAllowed: allowed })).toEqual({ tried: 1, done: 0, gaveUp: 1 });
-    expect((await sweepBookingConfirms(new Date(NOW.getTime() + 90 * 60_000), { read: ON, learnerAllowed: allowed })).tried).toBe(0);
+    await sweepBookingConfirms(at(6 * 60_000), { read: ON, learnerAllowed: allowed });
+    expect((await sweepBookingConfirms(at(20 * 60_000), { read: ON, learnerAllowed: allowed })).tried).toBe(0);
+    expect(await sweepBookingConfirms(at(40 * 60_000), { read: ON, learnerAllowed: allowed })).toEqual({ tried: 1, done: 0, gaveUp: 1 });
+    expect((await sweepBookingConfirms(at(90 * 60_000), { read: ON, learnerAllowed: allowed })).tried).toBe(0);
     expect(db.iv[0].confirm_attempts).toBe(MAX_CONFIRM_ATTEMPTS);
     expect(db.events.filter((e) => e.event === 'booking_confirm_gave_up')).toHaveLength(1);
     expect(sent().filter((m) => m.to === 'pat@acme.example')).toHaveLength(1); // the ones that went are never repeated
   });
   it('a crash between the commit and the work: the sweep finishes it after the 2-minute grace; past bookings are left alone', async () => {
-    expect((await sweepBookingConfirms(new Date(NOW.getTime() + 60_000), { read: ON, learnerAllowed: allowed })).tried).toBe(0);
-    expect(await sweepBookingConfirms(new Date(NOW.getTime() + 3 * 60_000), { read: ON, learnerAllowed: allowed })).toEqual({ tried: 1, done: 1, gaveUp: 0 });
+    expect((await sweepBookingConfirms(at(60_000), { read: ON, learnerAllowed: allowed })).tried).toBe(0);
+    expect(await sweepBookingConfirms(at(3 * 60_000), { read: ON, learnerAllowed: allowed })).toEqual({ tried: 1, done: 1, gaveUp: 0 });
     db.iv = [iv({ id: 'iv-old', starts_at: new Date(NOW.getTime() - 60_000) })];
-    expect((await sweepBookingConfirms(NOW, { read: ON })).tried).toBe(0);
+    expect((await sweepBookingConfirms(at(0), { read: ON })).tried).toBe(0);
     const scan = db.sql.find((s) => s.includes('SELECT i.id FROM placement_interviews i')) as string;
-    for (const clause of ["i.state = 'booked'", 'i.confirm_done_at IS NULL', 'i.starts_at > :now', `i.confirm_attempts < ${MAX_CONFIRM_ATTEMPTS}`, 'LIMIT 20']) expect(scan).toContain(clause);
+    for (const clause of ["i.state = 'booked'", 'i.confirm_done_at IS NULL', 'i.starts_at > :now', `i.confirm_attempts < ${MAX_CONFIRM_ATTEMPTS}`, 'LIMIT 20',
+      "i.updated_at < NOW() - INTERVAL '120 seconds'", "i.confirm_last_attempt_at < NOW() - INTERVAL '300 seconds'", "i.confirm_last_attempt_at < NOW() - INTERVAL '1800 seconds'"]) expect(scan).toContain(clause);
+  });
+  it('overlapping sweep ticks: a tick that starts while a pass runs returns at once; the flag is released even after a crash', async () => {
+    const [first, second] = await Promise.all([sweepBookingConfirms(at(3 * 60_000), { read: ON, learnerAllowed: allowed }), sweepBookingConfirms(at(3 * 60_000), { read: ON, learnerAllowed: allowed })]);
+    expect([first, second]).toEqual([{ tried: 1, done: 1, gaveUp: 0 }, { tried: 0, done: 0, gaveUp: 0, overlapped: true }]);
+    expect(meetings.size).toBe(1);
+    db.iv = [iv({ id: 'iv-x' })];
+    const scan = db.sql.length;
+    db.sql.push = () => { throw Object.assign(new Error('db gone'), { name: 'SequelizeConnectionError' }); }; // the next statement throws
+    await expect(sweepBookingConfirms(at(3 * 60_000), { read: ON, learnerAllowed: allowed })).rejects.toThrow('db gone');
+    db.sql = db.sql.slice(0, scan);
+    expect(await sweepBookingConfirms(at(3 * 60_000), { read: ON, learnerAllowed: allowed })).toEqual({ tried: 1, done: 1, gaveUp: 0 });
   });
   it('finishInBackground never throws into the route; a crash is logged with its class', async () => {
     const err = jest.spyOn(console, 'error');

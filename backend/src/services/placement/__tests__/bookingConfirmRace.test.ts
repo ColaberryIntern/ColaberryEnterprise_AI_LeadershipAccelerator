@@ -9,15 +9,18 @@ type Iv = { id: string; enrollment_id: string; state: string; company: string; p
   interviewer_emails: string[]; booker_tz: string; room_provider_id: string | null; room_url: string | null; confirm_attempts: number;
   confirm_last_attempt_at: Date | null; confirm_done_at: Date | null; updated_at: Date; full_name: string; personal_email: string; job_address: string };
 type R = Record<string, unknown>;
-const db = { iv: [] as Iv[], events: new Set<string>(), ledger: new Map<string, { state: string; meeting_id: string | null; join_url: string | null; host_email: string }>() };
+// clock = the DATABASE clock (what NOW() answers); a test moves it to model a slow pass.
+const db = { iv: [] as Iv[], events: new Set<string>(), clock: new Date(0), ledger: new Map<string, { state: string; meeting_id: string | null; join_url: string | null; host_email: string }>() };
 const t = (d: unknown) => (d as Date).getTime();
 function placement(sql: string, r: R): [unknown[], number] | null {
   const i = db.iv.find((x) => x.id === r.id);
   if (sql.includes('LEFT JOIN job_search_inboxes j')) return [i ? [{ ...i, room_url: undefined }] : [], 0];
   if (sql.includes('SET confirm_attempts = confirm_attempts + 1')) {
     if (!i || i.state !== 'booked' || i.confirm_done_at || t(i.starts_at) !== t(r.start)) return [[], 0];
-    if (/confirm_last_attempt_at < :lease/.test(sql) && i.confirm_last_attempt_at && t(i.confirm_last_attempt_at) >= t(r.lease)) return [[], 0];
-    Object.assign(i, { confirm_attempts: i.confirm_attempts + 1, confirm_last_attempt_at: r.now });
+    // the lease exactly as the statement words it: on the database clock, or on a caller-supplied :lease
+    const cutoff = /confirm_last_attempt_at < NOW\(\) - INTERVAL '120 seconds'/.test(sql) ? t(db.clock) - 120_000 : /confirm_last_attempt_at < :lease/.test(sql) ? t(r.lease) : Infinity;
+    if (i.confirm_last_attempt_at && t(i.confirm_last_attempt_at) >= cutoff) return [[], 0];
+    Object.assign(i, { confirm_attempts: i.confirm_attempts + 1, confirm_last_attempt_at: /confirm_last_attempt_at = NOW\(\)/.test(sql) ? db.clock : r.now });
     return [[{ confirm_attempts: i.confirm_attempts }], 1];
   }
   if (sql.includes('SET room_provider_id = :pid')) {
@@ -27,7 +30,8 @@ function placement(sql: string, r: R): [unknown[], number] | null {
   if (sql.includes('SET confirm_done_at = :now')) { if (i && !i.confirm_done_at) i.confirm_done_at = r.now as Date; return [[], 1]; }
   if (sql.includes('INSERT INTO placement_events')) { db.events.add(String(r.src)); return [[], 1]; }
   if (sql.includes('SELECT i.id FROM placement_interviews i')) {
-    return [db.iv.filter((x) => x.state === 'booked' && !x.confirm_done_at && x.confirm_attempts === 0 && t(x.updated_at) < t(r.grace)).map((x) => ({ id: x.id })), 0];
+    return [db.iv.filter((x) => x.state === 'booked' && !x.confirm_done_at && x.confirm_attempts === 0
+      && /updated_at < NOW\(\) - INTERVAL '120 seconds'/.test(sql) && t(x.updated_at) < t(db.clock) - 120_000).map((x) => ({ id: x.id })), 0];
   }
   return null;
 }
@@ -47,12 +51,15 @@ jest.mock('../../../config/database', () => ({ sequelize: { query: async (s: str
 jest.mock('../../../config/env', () => ({ env: { zoomHostEmail: 'host@refactored.example', emailFrom: 'team@refactored.example', frontendUrl: 'https://enterprise.colaberry.ai', jwtSecret: 'test-secret' } }));
 const mockPosts: Array<{ agenda: string; settings: Record<string, unknown> }> = [];
 const mockListed: Array<{ id: number; agenda: string; join_url: string }> = [];
+/** A test's hook into each POST as it starts (the agenda names the request), e.g. to move the clock or start a racer. */
+let mockOnPost: (agenda: string) => void = () => undefined;
 jest.mock('../../zoom/zoomApiClient', () => ({
   assertZoomConfigured: () => undefined,
   getZoomAccessToken: async () => 'tok',
   zoomApiRequest: async (method: string, _p: string, body: { agenda: string; settings: Record<string, unknown> }) => {
     if (method === 'GET') return { meetings: [...mockListed] };
     mockPosts.push(body);
+    mockOnPost(body.agenda);
     const id = 999 + mockPosts.length;
     await new Promise((res) => setTimeout(res, 150)); // Zoom is slow; the meeting is listed only once the POST answered
     mockListed.push({ id, agenda: body.agenda, join_url: `https://zoom.example/j/${id}` });
@@ -86,6 +93,7 @@ beforeEach(() => {
     starts_at: new Date('2026-11-23T15:00:00Z'), minutes: 30, interviewer_emails: ['kim@acme.example'], booker_tz: 'America/Chicago', room_provider_id: null,
     room_url: null, confirm_attempts: 0, confirm_last_attempt_at: null, confirm_done_at: null, updated_at: NOW, full_name: 'Ann Lee',
     personal_email: 'ann.personal@mail.example', job_address: 'ann.jobs@mail.example' }];
+  db.clock = LATER; mockOnPost = () => undefined;
   db.events.clear(); db.ledger.clear(); mockPosts.length = 0; mockListed.length = 0; mockSent.clear(); mockMail.mockClear();
   jest.spyOn(console, 'log').mockImplementation(() => undefined);
   jest.spyOn(console, 'warn').mockImplementation(() => undefined);
@@ -104,4 +112,21 @@ it('the original run, a replayed confirm and the sweep at once: ONE Zoom POST, o
   // and a later run (lease lapsed, booking done) creates nothing more
   await finishBooking('iv-1', { now: new Date(LATER.getTime() + 10 * 60_000) });
   expect(mockPosts).toHaveLength(1);
+});
+
+it('a SLOW sweep pass (its first item takes longer than the lease): a racer on a later item, mid-POST, still makes ONE meeting for it', async () => {
+  db.iv.push({ ...db.iv[0], id: 'iv-2', contact_email: 'lee@beta.example', interviewer_emails: [] });
+  let racer: Promise<unknown> | null = null;
+  mockOnPost = (agenda) => {
+    // iv-1's create takes 3 minutes on the database clock: the sweep's single `now` is stale for iv-2 by then
+    if (agenda.includes('[req:placement-interview-iv-1-')) db.clock = new Date(db.clock.getTime() + 3 * 60_000);
+    // while the sweep's own run on iv-2 is mid-POST, a replayed confirm (no `now`) starts a run on iv-2
+    if (agenda.includes('[req:placement-interview-iv-2-') && !racer) racer = finishBooking('iv-2');
+  };
+  await sweepBookingConfirms(LATER);
+  await racer;
+  expect(racer).not.toBeNull();
+  expect(mockPosts.filter((p) => p.agenda.includes('[req:placement-interview-iv-2-'))).toHaveLength(1);
+  expect(mockPosts.filter((p) => p.agenda.includes('[req:placement-interview-iv-1-'))).toHaveLength(1);
+  expect(db.iv.map((i) => i.room_provider_id)).toEqual(['1000', '1001']);
 });
