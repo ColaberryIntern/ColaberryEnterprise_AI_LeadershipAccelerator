@@ -1,18 +1,26 @@
 /**
- * CP6.2 (kit F3): one verified inbox event is stored once and dispatched. The database is a small stand-in for the
- * three statements acceptInboxEvent sends; recordArrival and the interview stub are spies.
+ * CP6.2 (kit F3): one verified inbox event is stored once and dispatched; replayUnprocessedEvents (T15) finishes rows
+ * left unprocessed. The database is a small stand-in for the statements both send (insert, read back, mark processed or
+ * failed, read the unprocessed rows); recordArrival and ingestInterviewEvent are spies.
  */
-const db = { events: new Map<string, { id: number; processed_at: Date | null }>(), inboxes: [] as Array<{ mailbox: string; confirmed: boolean; code?: string | null; link?: string | null }> };
-type Opts = { replacements: Record<string, any> };
-const mockQuery = jest.fn(async (sql: string, o: Opts) => {
-  const r = o.replacements;
+type Stored = { id: number; processed_at: Date | null; payload: string; received_at: string; failed_at?: Date | null; error_class?: string | null };
+const db = { events: new Map<string, Stored>(), inboxes: [] as Array<{ mailbox: string; confirmed: boolean; code?: string | null; link?: string | null }> };
+type Opts = { replacements?: { mid?: string; type?: string; payload?: string; at?: Date; id?: number; m?: string; c?: string | null; l?: string | null; n?: number } };
+const mockQuery = jest.fn(async (sql: string, o: Opts = {}) => {
+  const r = o.replacements ?? {};
   if (sql.includes('INSERT INTO inbox_events')) {
     const k = `${r.mid}|${r.type}`;
     if (db.events.has(k)) return [[], 0];
-    db.events.set(k, { id: db.events.size + 1, processed_at: null });
+    db.events.set(k, { id: db.events.size + 1, processed_at: null, payload: String(r.payload), received_at: new Date(r.at as Date).toISOString() });
     return [[{ id: db.events.size }], 1];
   }
+  if (sql.includes('SELECT id, payload FROM inbox_events WHERE processed_at IS NULL')) {
+    const skipFailed = /failed_at IS NULL/.test(sql); // honored only when the statement really says so
+    const open = [...db.events.values()].filter((e) => !e.processed_at && (!skipFailed || !e.failed_at)).sort((a, b) => a.received_at.localeCompare(b.received_at) || a.id - b.id);
+    return [open.slice(0, r.n).map((e) => ({ id: e.id, payload: e.payload })), 0];
+  }
   if (sql.includes('SELECT id, processed_at FROM inbox_events')) { const e = db.events.get(`${r.mid}|${r.type}`); return [e ? [{ ...e }] : [], 0]; }
+  if (sql.includes('UPDATE inbox_events SET failed_at')) { for (const e of db.events.values()) if (e.id === r.id && !e.processed_at) Object.assign(e, { failed_at: new Date(), error_class: 'ContractViolation' }); return [[], 1]; }
   if (sql.includes('UPDATE inbox_events SET processed_at')) { for (const e of db.events.values()) if (e.id === r.id) e.processed_at = new Date(); return [[], 1]; }
   if (sql.includes('SET forwarding_code')) {
     const i = db.inboxes.find((x) => x.mailbox === r.m && !x.confirmed);
@@ -28,7 +36,7 @@ jest.mock('../inboxArrival', () => ({ recordArrival: (...a: unknown[]) => mockAr
 const mockIngest = jest.fn();
 jest.mock('../interviewIngest', () => ({ ingestInterviewEvent: (...a: unknown[]) => mockIngest(...a) }));
 
-import { acceptInboxEvent, safeConfirmationLink } from '../inboxEvents';
+import { acceptInboxEvent, replayUnprocessedEvents, safeConfirmationLink } from '../inboxEvents';
 import { InboxEventSchema, type InboxEvent } from '../inboxEventSchema';
 
 const ev = (over: Partial<InboxEvent> = {}): InboxEvent => InboxEventSchema.parse({ event_id: 'evt-1', message_id: '<m1@x>', type: 'email.classified',
@@ -101,6 +109,41 @@ describe('acceptInboxEvent', () => {
     db.inboxes = [{ mailbox: 'annleecareers@gmail.com', confirmed: true, code: 'old', link: null }];
     await acceptInboxEvent(ev({ type: 'forwarding.confirmation', message_id: '<m9@x>', confirmation_code: '999999999' }));
     expect(db.inboxes[0].code).toBe('old');
+  });
+});
+
+describe('replayUnprocessedEvents (T15: finishes rows left processed_at NULL)', () => {
+  it('carried (T12/T13): interview events stored while deferred, and a failed dispatch, are finished once and marked', async () => {
+    await acceptInboxEvent(ev({ type: 'interview.detected' })); // deferred by the (mocked) old stub
+    mockArrival.mockRejectedValueOnce(Object.assign(new Error('db down'), { name: 'SequelizeConnectionError' }));
+    await expect(acceptInboxEvent(ev({ message_id: '<m2@x>', received_at: '2026-11-21T17:00:00Z' }))).rejects.toMatchObject({ name: 'InboxDispatchError' });
+    mockIngest.mockResolvedValue({ status: 'ingested', interviewId: 'iv-1', state: 'new' });
+    expect(await replayUnprocessedEvents()).toEqual({ scanned: 2, processed: 2, failed: 0, invalid: 0 });
+    expect([...db.events.values()].every((e) => e.processed_at)).toBe(true);
+    expect(mockArrival.mock.calls.map((c) => (c[0] as { messageId: string }).messageId)).toContain('<m2@x>');
+    expect(await replayUnprocessedEvents()).toEqual({ scanned: 0, processed: 0, failed: 0, invalid: 0 }); // idempotent: nothing left
+  });
+  it('one failing row does not stop the rest, and stays unprocessed for the next run; a deferred one stays too', async () => {
+    await acceptInboxEvent(ev({ type: 'interview.detected', message_id: '<a@x>', received_at: '2026-11-21T10:00:00Z' }));
+    await acceptInboxEvent(ev({ type: 'interview.detected', message_id: '<b@x>', received_at: '2026-11-21T11:00:00Z' }));
+    mockIngest.mockRejectedValueOnce(new TypeError('boom')).mockResolvedValueOnce({ status: 'deferred' });
+    expect(await replayUnprocessedEvents()).toEqual({ scanned: 2, processed: 0, failed: 1, invalid: 0 });
+    expect([...db.events.values()].filter((e) => !e.processed_at)).toHaveLength(2);
+  });
+  it('a stored payload that never parses is marked terminal (failed_at + ContractViolation) and skipped by every later pass', async () => {
+    db.events.set('<bad>|email.classified', { id: 99, processed_at: null, payload: '{not json', received_at: '2026-11-21T09:00:00Z' });
+    db.events.set('<bad2>|email.classified', { id: 98, processed_at: null, payload: JSON.stringify({ type: 'email.deleted' }), received_at: '2026-11-21T09:30:00Z' });
+    expect(await replayUnprocessedEvents()).toMatchObject({ scanned: 2, invalid: 2, processed: 0 });
+    expect(db.events.get('<bad>|email.classified')).toMatchObject({ processed_at: null, error_class: 'ContractViolation' });
+    expect(db.events.get('<bad>|email.classified')?.failed_at).toBeInstanceOf(Date);
+    expect(await replayUnprocessedEvents()).toEqual({ scanned: 0, processed: 0, failed: 0, invalid: 0 }); // no longer clogs a pass
+  });
+  it('a dispatch that FAILS is not terminal: it is retried by the next pass', async () => {
+    mockArrival.mockRejectedValueOnce(new TypeError('boom'));
+    await expect(acceptInboxEvent(ev())).rejects.toMatchObject({ name: 'InboxDispatchError' });
+    mockArrival.mockRejectedValueOnce(new TypeError('boom again'));
+    expect(await replayUnprocessedEvents()).toMatchObject({ scanned: 1, failed: 1 });
+    expect(await replayUnprocessedEvents()).toMatchObject({ scanned: 1, processed: 1 });
   });
 });
 

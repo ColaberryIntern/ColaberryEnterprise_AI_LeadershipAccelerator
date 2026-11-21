@@ -4,6 +4,7 @@ import careerPrepInboxRoutes from '../routes/careerPrepInboxRoutes';
 import integrationsInboxRoutes from '../routes/integrationsInboxRoutes';
 import { startInboxTestCron } from '../services/placement/inboxTestJob';
 import { startInboxBackfill } from '../services/placement/inboxBackfill';
+import { startInboxReplay } from '../services/placement/inboxEvents';
 
 /**
  * Career Prep v27, Releases 2 and 3: everything the getting-hired pipeline mounts and starts, in ONE place, so
@@ -28,6 +29,7 @@ export const PUBLIC_ROUTERS: Router[] = [
 export const SCHEDULERS: Array<{ name: string; start: () => void }> = [
   { name: 'inbox-tests', start: startInboxTestCron }, // CP6.1c: daily forwarding test + broken alerts (switch-gated per pass)
   { name: 'inbox-backfill', start: startInboxBackfill }, // CP6.2: hourly; registers nothing while INBOX_MANAGER_API_BASE is unset
+  { name: 'inbox-replay', start: startInboxReplay }, // CP8.1: one boot pass over stored events left unprocessed (idempotent)
 ];
 
 export function mountPlacementIntegrations(app: Express): void {

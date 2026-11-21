@@ -27,6 +27,13 @@ describe('ensurePlacementSchema (statements)', () => {
   it('CP6.2: the backfill cursor is ONE row, apart from inbox_events', () => {
     expect(PLACEMENT_STATEMENTS.find((s) => s.includes('CREATE TABLE IF NOT EXISTS inbox_backfill_state'))).toMatch(/id SMALLINT PRIMARY KEY CHECK \(id = 1\)/);
   });
+  it('CP8.1: one interview per source event, six states only; one event row per inbox event; one review item per kind and event', () => {
+    const iv = PLACEMENT_STATEMENTS.find((s) => s.includes('CREATE TABLE IF NOT EXISTS placement_interviews')) as string;
+    expect(iv).toMatch(/source_event_id VARCHAR\(300\) NOT NULL UNIQUE/);
+    expect(iv).toMatch(/state IN \('new','awaiting','review','booked','done','cancelled'\)/);
+    expect(PLACEMENT_STATEMENTS).toContain('CREATE UNIQUE INDEX IF NOT EXISTS uq_placement_events_source ON placement_events (source_event_id) WHERE source_event_id IS NOT NULL');
+    expect(PLACEMENT_STATEMENTS.find((s) => s.includes('placement_review_items ('))).toMatch(/UNIQUE \(kind, source_event_id\)/);
+  });
   it('has a rollback that drops every table it creates, dependents first, never run at boot', () => {
     const made = tables(PLACEMENT_STATEMENTS, /CREATE TABLE IF NOT EXISTS (\w+)/);
     const dropped = tables(PLACEMENT_SCHEMA_ROLLBACK, /DROP TABLE IF EXISTS (\w+)/);

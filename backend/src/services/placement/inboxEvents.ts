@@ -1,5 +1,5 @@
 import { sequelize } from '../../config/database';
-import type { InboxEvent } from './inboxEventSchema';
+import { InboxEventSchema, type InboxEvent } from './inboxEventSchema';
 import { normalizeJobSearchAddress } from './inboxHealth';
 import { recordArrival } from './inboxArrival';
 import { ingestInterviewEvent } from './interviewIngest';
@@ -12,9 +12,10 @@ import { ingestInterviewEvent } from './interviewIngest';
  *              forwarding.confirmation -> the code and link are kept on the learner's inbox for staff to confirm
  *                                         with one click (CP11.1, never auto-clicked). It is NOT an arrival: Google's
  *                                         confirmation proves the address was added, not that forwarding works.
- *              interview.*             -> ingestInterviewEvent (a stub until T15)
- *   processed  processed_at is set only after the dispatch succeeded AND was not deferred (the interview stub defers,
- *              so stored interview events wait with processed_at NULL for T15). A replay of a processed event is a duplicate
+ *              interview.*             -> ingestInterviewEvent (interviewIngest.ts, T15)
+ *   processed  processed_at is set only after the dispatch succeeded AND was not deferred. Rows left NULL (a failed
+ *              dispatch, or interview events stored while T12's stub deferred them) are finished by
+ *              replayUnprocessedEvents, run once at boot (placementBoot SCHEDULERS). A replay of a processed event is a duplicate
  *              (200, nothing happens); a replay of a stored event whose dispatch FAILED is dispatched again. Every
  *              dispatch target is idempotent (recordArrival keys on the Message-ID), so a second dispatch is safe.
  */
@@ -56,7 +57,6 @@ export async function dispatchInboxEvent(ev: InboxEvent): Promise<{ processed: b
   } else if (ev.type === 'forwarding.confirmation') {
     await storeForwardingConfirmation(ev);
   } else {
-    // Until T15's ingestion lands, interview events stay processed_at NULL, so T15 picks up exactly those rows.
     return { processed: (await ingestInterviewEvent(ev)).status !== 'deferred' };
   }
   return { processed: true };
@@ -82,4 +82,43 @@ export async function acceptInboxEvent(ev: InboxEvent): Promise<AcceptResult> {
   if (processed) await sequelize.query('UPDATE inbox_events SET processed_at = NOW() WHERE id = :id', { replacements: { id } });
   log('info', 'inbox_event_accepted', { event_id: ev.event_id, type: ev.type, processed });
   return { duplicate: false };
+}
+
+const parsePayload = (p: unknown): unknown => { if (typeof p !== 'string') return p; try { return JSON.parse(p); } catch { return null; } };
+
+export type ReplayResult ={ scanned: number; processed: number; failed: number; invalid: number };
+
+/**
+ * Finish every stored event left unprocessed (processed_at IS NULL), oldest first, at most `limit` per run. Safe to
+ * run any number of times: every dispatch is idempotent, and only a successful, non-deferred one marks the row. A row
+ * whose payload no longer parses is marked failed_at + error_class 'ContractViolation' (terminal, left for a person, and
+ * skipped by every later pass); a dispatch that fails is left to retry; one failing row never stops the rest.
+ */
+export async function replayUnprocessedEvents(limit = 500): Promise<ReplayResult> {
+  const [rows] = await sequelize.query(
+    'SELECT id, payload FROM inbox_events WHERE processed_at IS NULL AND failed_at IS NULL ORDER BY received_at, id LIMIT :n', { replacements: { n: Math.max(1, Math.min(limit, 5000)) } });
+  const out: ReplayResult = { scanned: (rows as unknown[]).length, processed: 0, failed: 0, invalid: 0 };
+  for (const r of rows as Array<{ id: string; payload: unknown }>) {
+    const ev = InboxEventSchema.safeParse(parsePayload(r.payload));
+    if (!ev.success) {
+      // Terminal: a payload that does not parse never will, so it is marked and never clogs a later pass.
+      await sequelize.query("UPDATE inbox_events SET failed_at = NOW(), error_class = 'ContractViolation' WHERE id = :id AND processed_at IS NULL", { replacements: { id: r.id } });
+      out.invalid += 1; log('warn', 'inbox_replay_invalid_payload', { row_id: r.id }, 'ContractViolation'); continue;
+    }
+    try {
+      if (!(await dispatchInboxEvent(ev.data)).processed) continue;
+      await sequelize.query('UPDATE inbox_events SET processed_at = NOW() WHERE id = :id AND processed_at IS NULL', { replacements: { id: r.id } });
+      out.processed += 1;
+    } catch (err) {
+      out.failed += 1;
+      log('warn', 'inbox_replay_failed', { row_id: r.id, type: ev.data.type }, (err as Error)?.name && (err as Error).name !== 'Error' ? (err as Error).name : 'UpstreamUnavailable');
+    }
+  }
+  if (out.scanned) log('info', 'inbox_replay_done', { ...out });
+  return out;
+}
+
+/** Boot: one replay pass in the background (placementBoot SCHEDULERS); a failure is logged, boot never waits. */
+export function startInboxReplay(): void {
+  replayUnprocessedEvents().catch((err) => log('warn', 'inbox_replay_pass_failed', {}, (err as Error)?.name || 'DatabaseError'));
 }

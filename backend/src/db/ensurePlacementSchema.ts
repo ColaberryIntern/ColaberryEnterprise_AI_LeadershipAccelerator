@@ -20,10 +20,20 @@ import { sequelize } from '../config/database';
  *                        so a replayed event or a re-run test adds nothing.
  *   inbox_events         (CP6.2, kit F3) every signed event the inbox manager pushed, UNIQUE on (message_id, type), so
  *                        a replay is stored once. processed_at is set after it was dispatched; a stored event that was
- *                        never processed (a dispatch failed) is dispatched again when the sender retries.
+ *                        never processed (a dispatch failed) is dispatched again when the sender retries. A stored
+ *                        row whose payload can never be dispatched gets failed_at + error_class (terminal, for a person).
  *   inbox_backfill_state (CP6.2) ONE row: the next backfill pass's `since`, on the upstream's clock, moved only by a COMPLETED pass.
  *                        Kept apart from inbox_events because pushes write there too (a resumed push must never move
  *                        the backfill past events missed during an outage).
+ *   placement_interviews (CP8.1, kit F4) one row per interview the inbox found for a learner; source_event_id UNIQUE
+ *                        ("interview.detected:<Message-ID>"), so a replayed or concurrent event makes ONE interview.
+ *                        state CHECK new/awaiting/review/booked/done/cancelled; moves only by interviewStates.ts.
+ *   placement_events     (CP8.1, the v22 event shape) one row per state change, written in the same transaction as the
+ *                        change; source_event_id UNIQUE when set, so one inbox event changes an interview at most once.
+ *   placement_review_items (CP8.1, F9 queue) what a human must look at: a low-confidence (< 0.70) interview email that
+ *                        made no interview, an email for no known learner, an update matching no interview, or an
+ *                        update matching more than one (ambiguous: nothing is changed until a person picks). UNIQUE
+ *                        (kind, source_event_id).
  */
 export const PLACEMENT_STATEMENTS: readonly string[] = [
   `CREATE TABLE IF NOT EXISTS job_search_inboxes (
@@ -67,6 +77,8 @@ export const PLACEMENT_STATEMENTS: readonly string[] = [
      payload JSONB NOT NULL,
      received_at TIMESTAMPTZ NOT NULL,
      processed_at TIMESTAMPTZ,
+     failed_at TIMESTAMPTZ,
+     error_class VARCHAR(60),
      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
      CONSTRAINT uq_inbox_events_message_type UNIQUE (message_id, type)
    )`,
@@ -75,10 +87,64 @@ export const PLACEMENT_STATEMENTS: readonly string[] = [
      next_since TIMESTAMPTZ NOT NULL,
      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
    )`,
+  `CREATE TABLE IF NOT EXISTS placement_interviews (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     enrollment_id UUID NOT NULL REFERENCES enrollments(id) ON DELETE CASCADE,
+     source_event_id VARCHAR(300) NOT NULL UNIQUE,
+     company VARCHAR(200),
+     position VARCHAR(200),
+     type VARCHAR(20) CHECK (type IS NULL OR type IN ('recruiter','hiring_manager','technical','behavioral')),
+     sub_type VARCHAR(60),
+     contact_name VARCHAR(160),
+     contact_email VARCHAR(254),
+     confidence NUMERIC(4,3) CHECK (confidence IS NULL OR (confidence >= 0 AND confidence <= 1)),
+     state VARCHAR(20) NOT NULL CHECK (state IN ('new','awaiting','review','booked','done','cancelled')),
+     booking_token_hash VARCHAR(128),
+     token_expires_at TIMESTAMPTZ,
+     token_used_at TIMESTAMPTZ,
+     starts_at TIMESTAMPTZ,
+     minutes SMALLINT CHECK (minutes IS NULL OR (minutes > 0 AND minutes <= 480)),
+     room_provider_id VARCHAR(128),
+     room_url TEXT,
+     recording_consent VARCHAR(20),
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
+  'CREATE INDEX IF NOT EXISTS idx_placement_interviews_enrollment ON placement_interviews (enrollment_id, created_at DESC)',
+  `CREATE TABLE IF NOT EXISTS placement_events (
+     id BIGSERIAL PRIMARY KEY,
+     subject_type VARCHAR(40) NOT NULL,
+     subject_id VARCHAR(64) NOT NULL,
+     event VARCHAR(60) NOT NULL,
+     from_state VARCHAR(20),
+     to_state VARCHAR(20),
+     actor VARCHAR(80) NOT NULL,
+     payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+     source_event_id VARCHAR(300),
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
+  'CREATE UNIQUE INDEX IF NOT EXISTS uq_placement_events_source ON placement_events (source_event_id) WHERE source_event_id IS NOT NULL',
+  'CREATE INDEX IF NOT EXISTS idx_placement_events_subject ON placement_events (subject_type, subject_id, created_at)',
+  `CREATE TABLE IF NOT EXISTS placement_review_items (
+     id BIGSERIAL PRIMARY KEY,
+     kind VARCHAR(40) NOT NULL CHECK (kind IN ('low_confidence','unmatched_learner','unmatched_update','ambiguous_update')),
+     source_event_id VARCHAR(300) NOT NULL,
+     enrollment_id UUID REFERENCES enrollments(id) ON DELETE CASCADE,
+     interview_id UUID REFERENCES placement_interviews(id) ON DELETE CASCADE,
+     summary JSONB NOT NULL DEFAULT '{}'::jsonb,
+     status VARCHAR(20) NOT NULL DEFAULT 'open' CHECK (status IN ('open','resolved')),
+     resolved_by VARCHAR(80),
+     resolved_at TIMESTAMPTZ,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     CONSTRAINT uq_placement_review_items_source UNIQUE (kind, source_event_id)
+   )`,
 ];
 
 /** Run by hand to roll the placement tables back. Never run at boot. Dependents first. */
 export const PLACEMENT_SCHEMA_ROLLBACK: readonly string[] = [
+  'DROP TABLE IF EXISTS placement_review_items',
+  'DROP TABLE IF EXISTS placement_events',
+  'DROP TABLE IF EXISTS placement_interviews',
   'DROP TABLE IF EXISTS inbox_backfill_state',
   'DROP TABLE IF EXISTS inbox_events',
   'DROP TABLE IF EXISTS inbox_received',
