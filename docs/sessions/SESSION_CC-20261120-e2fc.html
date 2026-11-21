@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Saturday, November 21, 2026 at 7:11 AM</div>
-    <div><span class="sid">CC-20261120-e2fc</span><span class="count">6 changes</span></div>
+    <div class="meta">Generated Saturday, November 21, 2026 at 3:16 PM</div>
+    <div><span class="sid">CC-20261120-e2fc</span><span class="count">7 changes</span></div>
   </header>
   <main>
     
@@ -140,6 +140,20 @@
         <div class="card-body">
           <div class="row"><span class="k">What changed</span><span class="v">deployed fd07e9d8a (registry mode, marker `homeOrphanStories` in `storyOwners.js`). No code change in this entry. BC L12.8 closed with a verification comment.</span></div>
           <div class="row"><span class="k">Verification</span><span class="v ver">home 200. v5&#39;s bundle, re-rendered on prod, has STORY-003 owned by Gap Creator, which carries REQ-010 as a hard rule. No story has an owner outside the roster, and &quot;AI Agent&quot; appears 0 times in the Story 000 brief. The other five agents are unchanged.</span></div>
+          
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">07</span>
+          <h2>Command Center workflow diagram: one arrow per agent pair, labels never overlap</h2>
+          <span class="badge">2026-11-21</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">the Story 000 agents tab (`commandCenterAgentsTab.ts`) lists hand-offs grouped by agent pair through the new `workflowArrows`, so v5&#39;s two Offer Sender -&gt; Summary Generator entries become one arrow with both labels. `fanOuts` names agents feeding 3+ as &quot;crowded spots&quot;. The diagram brief now requires one arrow per pair and labels that never overlap a label, arrow or node: receivers spread apart, labels near the receiving end, or a numbered key, checked at the narrowest width. `plan.json` and `derived.handoffs` are unchanged. Runbook row updated. BC L12.9 (https://app.basecamp.com/3945211/buckets/7463955/todos/10535183299).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`workflowDiagram.test.ts` 7/7 on v5&#39;s hand-offs verbatim. sbp + factory + runbook coverage: 308 suites / 4,204 tests pass. Backend tsc clean.</span></div>
           
           
         </div>
