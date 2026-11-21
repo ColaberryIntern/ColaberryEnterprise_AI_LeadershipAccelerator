@@ -250,5 +250,11 @@
 .ch-dialog { background: var(--bs-body-bg, #fff); border-radius: 12px; box-shadow: 0 12px 40px rgba(15, 23, 42, 0.25); padding: 1.25rem; width: min(56rem, 100%); max-height: calc(100vh - 2rem); overflow-y: auto; }
 .ch-registrants-search { max-width: 18rem; }
 .ch-registrants-table td, .ch-registrants-table th { font-size: 0.875rem; }
+/* CH9.7 the event's counts: three tiles, stacked on a phone. */
+.ch-count-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 0.75rem; }
+.ch-count-tile { border: 1px solid var(--neutral-200, #e5e7eb); border-radius: 8px; padding: 0.75rem; }
+.ch-count-label { font-size: 0.8rem; color: var(--neutral-600, #4b5563); }
+.ch-count-value { font-size: 1.5rem; font-weight: 700; }
+.ch-count-reason { font-size: 0.85rem; color: var(--neutral-700, #374151); }
 /* CH9.5 an Eventbrite card that the hub manages. */
 .ch-managed-chip { display: inline-flex; align-items: center; font-size: 0.8rem; font-weight: 600; color: var(--green-700, #15803d); }

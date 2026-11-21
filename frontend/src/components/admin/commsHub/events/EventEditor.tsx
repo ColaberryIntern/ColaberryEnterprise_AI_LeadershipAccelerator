@@ -8,6 +8,7 @@ import { cancelSummary } from './eventDisplay';
 import ThumbnailStudio from './studio/ThumbnailStudio';
 import LivePanel from './live/LivePanel';
 import PromotionPlan from './plan/PromotionPlan';
+import EventCounts from './EventCounts';
 import { Link } from 'react-router-dom';
 
 /**
@@ -112,6 +113,8 @@ export default function EventEditor({ eventId, onClose, onSaved }: Props): React
       <div className="ch-editor-left">
         {details}
         <LivePanel key={`live-${ed.event.id}`} event={ed.event} locked={ed.event.status === 'cancelled'} onStatusChange={() => void ed.refresh()} />
+        {/* CH9.7 registered, watched live, watched the replay. */}
+        <EventCounts key={`counts-${ed.event.id}`} eventId={ed.event.id} />
       </div>
       <ThumbnailStudio key={ed.event.id} event={ed.event} locked={locked} />
       {/* Design 02: the promotion plan spans the full width under the details and the studio. */}

@@ -344,6 +344,14 @@ export async function getDestinationOptions(eventId: string | null = null): Prom
   return data.destinations;
 }
 
+/** CH9.7: registered / watched live / watched the replay; each a number, or null with the reason it is not known. */
+export interface HubCount { value: number | null; reason: string | null }
+export interface HubEventCounts { registered: HubCount; watched_live: HubCount; watched_replay: HubCount }
+export async function getEventCounts(hubEventId: string): Promise<HubEventCounts> {
+  const { data } = await api.get<HubEventCounts>(`/api/admin/comms-hub/events/${encodeURIComponent(hubEventId)}/counts`);
+  return data;
+}
+
 /** CH9.6: how many of an event's registrants have platform accounts (counts only, never people). */
 export interface RegistrantReach { registrants: number; reachable: number; eventbrite: 'ok' | 'unavailable' | 'not_configured' }
 export async function getRegistrantReach(hubEventId: string): Promise<RegistrantReach> {

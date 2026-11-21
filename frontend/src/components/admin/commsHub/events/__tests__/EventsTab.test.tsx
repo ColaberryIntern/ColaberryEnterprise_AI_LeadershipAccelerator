@@ -15,6 +15,8 @@ jest.mock('../../../../../services/commsHubApi', () => ({
   listThumbnails: jest.fn(), listEventPhotos: jest.fn(), getLivePanel: jest.fn(), getPromotionPlan: jest.fn(),
   // CH9.2 the "From Eventbrite" section under the list; its own test covers it.
   listEventbriteEvents: jest.fn(), getRegistrants: jest.fn(),
+  // CH9.7 the counts under the live panel; their own test covers them.
+  getEventCounts: jest.fn(),
 }));
 
 /** CH3.1 + CH3.2 rendered: the list in training-site shape, the editor, save/duplicate/cancel, Write with AI, a11y. */
@@ -46,6 +48,7 @@ beforeEach(() => {
   (api.getPromotionPlan as jest.Mock).mockResolvedValue({ event_id: 'x', rows: [] });
   (api.getLivePanel as jest.Mock).mockResolvedValue({ input_configured: true, occurrence: null, commands: [], input_held_by: null });
   (api.listEventbriteEvents as jest.Mock).mockResolvedValue({ status: 'ok', window: 'upcoming', events: [], fetched_at: '2026-11-21T22:00:00.000Z' });
+  (api.getEventCounts as jest.Mock).mockResolvedValue({ registered: { value: null, reason: 'This event has no registration.' }, watched_live: { value: null, reason: 'Not streamed yet.' }, watched_replay: { value: null, reason: 'Not streamed yet.' } });
 });
 beforeEach(() => { (api.listHubCohorts as jest.Mock).mockResolvedValue([{ id: '77777777-7777-4777-8777-777777777777', name: 'November 2026', status: 'open', start_date: '2026-11-03' }]); });
 afterEach(() => { act(() => { root.unmount(); }); container.remove(); jest.clearAllMocks(); });
