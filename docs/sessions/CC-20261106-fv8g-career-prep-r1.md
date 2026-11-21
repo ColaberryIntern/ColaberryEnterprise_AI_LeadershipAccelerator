@@ -731,3 +731,25 @@ tests/systemV2/career-prep/.
     and pins the list to this one statement. The public card ships with the nginx image (the hire site is built in
     nginx/Dockerfile). Locally, 13 unrelated backend suites (Reese inventories, timeline, mgmtRbac, ...) fail the
     same 28 tests on clean main as on this branch; enrichVisitorGeo (maxmind) remains the only local tsc error.
+
+- [x] CP6.3 Release 2 checkpoint: the job-search inbox and its integration, on branch workstream/career-prep-r2r3
+  - Date: 2026-11-21
+  - Session: CC-20261106-fv8g
+  - What changed (loop run 20261121-career-prep-r2r3, T09 to T13, branch head cd80eaea4, not pushed, not merged): the
+    placement schema and boot file (T09, ecad5bc05); the #inbox sheet and its routes (T10, bc05aa40c); the daily
+    forwarding test and once-per-spell broken alert, switch career_prep_inbox_tests_enabled absent = off (T11,
+    319488fe6); the signed POST /api/integrations/inbox/events (T12, db817905a); the roster lookup and the backfill
+    client (T13, cd80eaea4). Everything outward-facing is dark: no inbox test mail, and both integration routes answer
+    503 while INBOX_INTEGRATION_SECRET is unset.
+  - Verification (on cd80eaea4): backend tsc 0 and frontend tsc 0; backend `npx jest -c jest.ci.config.ts --ci`
+    3083 suites passed, 3 failed, 58 skipped (50062 tests passed, 3 failed); frontend jest (whole suite) 820 suites
+    passed, 6 failed (10743 tests passed, 2 failed): 4 of the 6 are /testEnv/ helper files with no test, which the CI
+    command excludes (--testPathIgnorePatterns "/testEnv/"), the other 2 are listed below; CI=true build compiled successfully; secret-scan OK; lint-route-auth
+    OK; test typecheck baseline matched exactly; hire site node --test 140/140; Career Prep browser suite 43/43 across
+    3 suites (Edge, built app).
+  - Notes: all 5 failing suites are local CRLF-checkout artifacts in files this branch does not touch (git diff
+    against the base fd07e9d8a is empty for each): mountLearnerPortalRoutes, generateReeseToolInventory and
+    generateReeseBehaviourInventory (backend), publicNextOpenHouseJs and governmentHeaderParity (frontend). Each
+    compares text split on LF. Proof: with mountLearnerPortalRoutes.ts converted to LF the suite passes 7/7 (the file
+    was then restored). CI checks out LF. Postgres integration suites (ensurePlacementSchema, inboxService,
+    inboxTestJob, inboxEvents) run in CI's integration tier; no local Postgres.
