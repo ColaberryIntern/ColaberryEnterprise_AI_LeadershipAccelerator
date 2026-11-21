@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Saturday, November 21, 2026 at 6:05 AM</div>
-    <div><span class="sid">CC-20261120-e2fc</span><span class="count">4 changes</span></div>
+    <div class="meta">Generated Saturday, November 21, 2026 at 6:20 AM</div>
+    <div><span class="sid">CC-20261120-e2fc</span><span class="count">5 changes</span></div>
   </header>
   <main>
     
@@ -112,6 +112,20 @@
         <div class="card-body">
           <div class="row"><span class="k">What changed</span><span class="v">deployed 684595164 (registry mode, marker `adoptNamedPerson` in `planPeople.js`). Ran ShiftFill v5 end to end on prod (project 392b73bd). A cold agent built its Command Center from Story 000, delivered as `ShiftFill-Command-Center-v5.html`.</span></div>
           <div class="row"><span class="k">Verification</span><span class="v ver">home 200. v5 has 13 stories, all &quot;As Dana&quot; (v4 had one &quot;a scheduler&quot; and one &quot;a system&quot;). The 30-minute target REQ-013 sits in r3, whose demo shows fill times; it was not pulled into r0. Guardrails: REQ-008 and REQ-020 are approvals by Dana, and REQ-009, REQ-010 and REQ-018 are hard rules. v5 fits its 7 weeks, so it has no roadmap. v4&#39;s bundle, re-rendered with the deployed code, dates r2-r4 after demo day (weeks 10-17). The standalone v5 render has 9 tabs and 0 console errors, and its workflow diagram fits its frame.</span></div>
+          
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">05</span>
+          <h2>Every story is owned by an agent on the roster, and its guardrail goes with it</h2>
+          <span class="badge">2026-11-21</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new pure `storyOwners.ts`. `homeOrphanStories` gives a story the scoped roster missed to the best-fitting agent: 3 points per requirement it shares with the agent&#39;s stories, 1 per shared content word, 1 for the same release, ties to roster order. `attachGuardrails` then attaches that story&#39;s SAFE requirements (approval gate + autonomy cap, or hard rule). It only adds, and only lowers autonomy. `scopeAgents` homes orphans before rule 1, replacing &quot;keep the stale owner&quot;. `planDocument` and `commandCenterTabSections` apply `rosterWithEveryStoryOwned` at render, so existing plans (v5&#39;s STORY-003 -&gt; Gap Creator, which now enforces REQ-010) are fixed on their next sync. Runbook row added. BC L12.8 (https://app.basecamp.com/3945211/buckets/7463955/todos/10534806659).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`storyOwners.test.ts` 10/10 on the v5 roster verbatim. `jest src/services/sbp src/services/factory` + runbook coverage: 307 suites / 4,192 tests pass. Backend tsc clean; `checkTestTypecheck` shows only the 3 known missing-package files.</span></div>
           
           
         </div>

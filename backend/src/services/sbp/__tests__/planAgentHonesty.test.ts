@@ -59,9 +59,13 @@ const scoped = (over: Record<string, unknown>) => ({
   inputs: [], outputs: [], autonomy_level: 'acts_autonomously', escalation_rules: [], skills: [], owns: [], ...over,
 });
 
+// Owns whatever a test does not hand its agent, so no story is homed onto the agent under test.
+const REST = agent({ id: 'AGENT-009', name: 'Rest Of Roster', owns: ['STORY-001', 'STORY-002', 'STORY-003'] });
+const rest = (owns: string[]) => scoped({ id: 'AGENT-009', name: 'Rest Of Roster', owns });
+
 describe('a hard rule is not an approval gate', () => {
   it('records a never-rule as a hard rule and leaves the agent free to act', async () => {
-    const out = await scopeAgents(PLAN(), { client: roster([scoped({ owns: ['STORY-001'] })]) });
+    const out = await scopeAgents(PLAN(), { client: roster([scoped({ owns: ['STORY-001'] }), rest(['STORY-002', 'STORY-003'])]) });
     const a = out.plan.agents![0];
     expect(a.approval_gates).toEqual([]);
     expect(a.hard_rules).toEqual([`REQ-017 — ${NO_APP}`]);
@@ -70,7 +74,7 @@ describe('a hard rule is not an approval gate', () => {
 
   it('still makes an agent wait when a person can let the guardrail through', async () => {
     const out = await scopeAgents(PLAN(), {
-      client: roster([scoped({ name: 'Hygienist Ranker', owns: ['STORY-002', 'STORY-003'] })]),
+      client: roster([scoped({ name: 'Hygienist Ranker', owns: ['STORY-002', 'STORY-003'] }), rest(['STORY-001'])]),
     });
     const a = out.plan.agents![0];
     expect(a.approval_gates).toEqual([`REQ-007 — ${OVERTIME}`]);
@@ -105,7 +109,7 @@ describe('a hard rule is not an approval gate', () => {
   });
 
   it('plan.json carries the re-sorted roster for an existing project', () => {
-    const plan = { ...PLAN(), agents: [agent({ approval_gates: [`REQ-017 — ${NO_APP}`] })] };
+    const plan = { ...PLAN(), agents: [agent({ approval_gates: [`REQ-017 — ${NO_APP}`] }), REST] };
     const doc = buildPlanDocument(plan);
     expect(doc.agents[0].approval_gates).toEqual([]);
     expect(doc.agents[0].hard_rules).toEqual([`REQ-017 — ${NO_APP}`]);
@@ -193,12 +197,12 @@ describe('the Command Center brief tells the truth about agents and constraints'
   const tabs = (plan: BuildPlan) => commandCenterTabSections(plan).join('\n');
 
   it('says an agent that waits with no named gate is an open question', () => {
-    const text = tabs({ ...PLAN(), agents: [agent({ name: 'Gap Notifier', autonomy_level: 'acts_with_approval' })] });
+    const text = tabs({ ...PLAN(), agents: [agent({ name: 'Gap Notifier', autonomy_level: 'acts_with_approval' }), REST] });
     expect(text).toMatch(/Waits for a person, but the plan names no approval point for it/);
   });
 
   it('lists a hard rule as enforced, not as something waiting for approval', () => {
-    const text = tabs({ ...PLAN(), agents: [agent({ name: 'Shift Offer Sender', approval_gates: [`REQ-017 — ${NO_APP}`] })] });
+    const text = tabs({ ...PLAN(), agents: [agent({ name: 'Shift Offer Sender', approval_gates: [`REQ-017 — ${NO_APP}`] }), REST] });
     expect(text).toContain(`Rules it enforces itself (nobody can override them): REQ-017 — ${NO_APP}`);
     expect(text).not.toContain(`Waits for a person because of: REQ-017`);
   });

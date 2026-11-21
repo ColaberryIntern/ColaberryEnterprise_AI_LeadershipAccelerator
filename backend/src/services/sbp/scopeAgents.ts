@@ -26,9 +26,12 @@
  *      in `hard_rules`, enforced by the agent, and it does not make it wait.
  *      ShiftFill v3 (2026-11-20) showed "hygienists never need an app" as the
  *      approval gate of the agent that sends texts, with nobody to approve it.
- *   2. Every story keeps an owner. If scoping returns a roster that does not
- *      cover a story, that story keeps the owner it had rather than being
- *      silently unassigned.
+ *   2. Every story is owned by an agent on the roster. If scoping returns a
+ *      roster that does not cover a story, that story is homed on the agent it
+ *      fits best (`storyOwners.homeOrphanStories`) BEFORE rule 1, so the new
+ *      owner also enforces its guardrails. ShiftFill v5 (2026-11-21) kept a
+ *      missed story's pre-scoping owner, "AI Agent", and its privacy rule ended
+ *      up enforced by nobody.
  *
  * FAILURE BEHAVIOUR. This runs after the plan is already gate-clean and
  * publishable. If the call fails, times out, or returns something unusable,
@@ -36,8 +39,8 @@
  * student never loses a working build because the agent roster could not be
  * scoped.
  */
-import { BuildPlan, PlanAgent, PlanRequirement } from './planContract';
-import { guardrailGate, rolesFrom } from './planPeople';
+import { BuildPlan, PlanAgent } from './planContract';
+import { attachGuardrails, homeOrphanStories } from './storyOwners';
 
 const MODEL_DEFAULT = 'gpt-4o';
 
@@ -157,22 +160,6 @@ function userPrompt(plan: BuildPlan): string {
   return L.join('\n');
 }
 
-/** Requirement ids typed SAFE — the promises that force a human into the loop. */
-function safeIds(plan: BuildPlan): Set<string> {
-  return new Set(plan.requirements.filter((r) => r.kind === 'SAFE').map((r) => r.id));
-}
-
-/** The SAFE requirements an agent's own stories touch, approvals and hard rules alike. */
-function safesFor(agent: PlanAgent, plan: BuildPlan, safes: Set<string>): PlanRequirement[] {
-  const owned = new Set(agent.owns);
-  const ids = new Set<string>();
-  for (const s of plan.stories) {
-    if (!owned.has(s.id)) continue;
-    for (const f of s.fulfills) if (safes.has(f)) ids.add(f);
-  }
-  return plan.requirements.filter((r) => ids.has(r.id));
-}
-
 const isAutonomy = (v: unknown): v is Autonomy => AUTONOMY.includes(v as Autonomy);
 
 /** Shape-check what came back. Anything malformed means "keep the plan as it was". */
@@ -264,44 +251,27 @@ export async function scopeAgents(plan: BuildPlan, deps: ScopeAgentsDeps): Promi
     return { plan, scoped: false, gated: [], reason: 'placeholder_name' };
   }
 
+  // RULE 2 first — every story is owned by an agent ON THE ROSTER. A story the
+  // roster missed is homed on the agent it fits best, never left with its
+  // pre-scoping owner ("AI Agent" in ShiftFill v5), which is not an agent.
+  // Before rule 1, so the new owner also takes on that story's guardrails.
+  const homedRoster = homeOrphanStories(plan.stories, agents);
+  if (homedRoster.homed.size) {
+    log('sbp_agents_stories_homed', deps.correlationId, { homed: Object.fromEntries(homedRoster.homed) });
+  }
+
   // RULE 1 — an agent that touches a guardrail cannot act alone. Enforced here
   // rather than asked for, because a model that gets this wrong produces a
   // system that quietly breaks the one promise the student cared about.
-  const safes = safeIds(plan);
-  const roles = rolesFrom(plan.stories);
-  const isApproval = (r: PlanRequirement) => guardrailGate(r.statement, roles).kind === 'approval';
-  const label = (r: PlanRequirement) => `${r.id} — ${r.statement}`;
-  const gated: string[] = [];
-  for (const a of agents) {
-    const touched = safesFor(a, plan, safes);
-    const rules = touched.filter((r) => !isApproval(r));
-    if (rules.length) a.hard_rules = rules.map(label);
-    const gates = touched.filter(isApproval);
-    if (!gates.length) continue;
-    a.approval_gates = gates.map(label);
-    if (a.autonomy_level === 'acts_autonomously') {
-      a.autonomy_level = 'acts_with_approval';
-      gated.push(a.name);
-    }
-  }
-
-  // RULE 2 — every story keeps an owner. A story the roster missed keeps the
-  // owner it already had rather than becoming unassigned.
-  const ownerByStory = new Map<string, string>();
-  for (const a of agents) for (const id of a.owns) ownerByStory.set(id, a.name);
-  const stories = plan.stories.map((s) => {
-    const owner = ownerByStory.get(s.id);
-    return owner ? { ...s, owner_agent: owner } : s;
-  });
-  const unowned = plan.stories.filter((s) => !ownerByStory.has(s.id)).map((s) => s.id);
-  if (unowned.length) log('sbp_agents_stories_unowned', deps.correlationId, { unowned });
+  const stories = homedRoster.stories;
+  const { agents: guarded, gated } = attachGuardrails(homedRoster.agents, { requirements: plan.requirements, stories });
 
   log('sbp_agents_scoped', deps.correlationId, {
-    agents: agents.length, gated: gated.length, unowned: unowned.length,
+    agents: guarded.length, gated: gated.length, homed: homedRoster.homed.size,
     duration_ms: Date.now() - started,
   });
 
-  return { plan: { ...plan, agents, stories }, scoped: true, gated };
+  return { plan: { ...plan, agents: guarded, stories }, scoped: true, gated };
 }
 
 function log(event: string, correlationId: string | undefined, ctx: Record<string, unknown>): void {
