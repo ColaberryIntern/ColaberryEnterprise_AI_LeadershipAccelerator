@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Daily Client Projects Report — AI Pathway / ShipCES / LandJet.
+// Daily Client Projects Report — AI Pathway / ShipCES.
+// (LandJet was removed 2026-11-19 when the project was retired.)
 // One email per project. Same shape as Gov Contracts v2: sequence-sorted task
 // list, NEXT HUMAN STEP callout with click-through, due-date pills, tier pills,
 // "What you can do from here" block. Adds an LLM-generated project-goal
@@ -34,7 +35,6 @@ const CC = Array.from(new Set([...BASE_CC, ...CC_ADD]));
 const PROJECTS = [
   { id: 46697389, name: 'AI Pathway',   shortName: 'AI Pathway' },
   { id: 47126345, name: 'ShipCES',      shortName: 'ShipCES' },
-  { id: 46699826, name: 'LandJet',      shortName: 'LandJet' },
 ];
 
 async function bcGet(p) {
