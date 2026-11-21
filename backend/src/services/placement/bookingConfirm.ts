@@ -42,7 +42,7 @@ export const ROOM_TIMEOUT_MS = 25_000;
  * room cap plus the sends; a run that died holding it is picked up by the sweep once it lapses (its backoff is longer).
  */
 export const LEASE_MS = 2 * 60_000;
-type Part = 'sent' | 'skipped' | 'held' | 'failed';
+export type Part = 'sent' | 'skipped' | 'held' | 'failed';
 export interface FinishResult { status: 'done' | 'incomplete' | 'busy' | 'not_booked' | 'not_found'; room?: 'ok' | 'failed'; learner?: Part; employer?: Part; gaveUp?: boolean }
 export interface FinishOpts { now?: Date; read?: Read; learnerAllowed?: (enrollmentId: string) => Promise<boolean> }
 
@@ -50,7 +50,7 @@ type Row = { id: string; enrollment_id: string; state: string; company: string |
   starts_at: Date | string | null; minutes: number | null; interviewer_emails: string[] | null; booker_tz: string | null; room_provider_id: string | null;
   confirm_done_at: Date | null; full_name: string | null; personal_email: string | null; job_address: string | null };
 
-const EMAIL = /^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+$/;
+export const EMAIL = /^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+$/;
 const errClass = (e: unknown) => ((e as Error)?.name && (e as Error).name !== 'Error' ? (e as Error).name : 'UpstreamUnavailable');
 function log(level: 'info' | 'warn' | 'error', event: string, context: Record<string, unknown>, errorClass?: string): void {
   const line = JSON.stringify({ timestamp: new Date().toISOString(), level, service: 'backend', event,
@@ -94,13 +94,13 @@ async function ensureRoom(r: Row, start: Date, minutes: number): Promise<boolean
   }
 }
 
-/** One message, one recipient, through the send ledger, with the .ics. */
-async function sendOne(to: string, mail: ConfirmMail, eventId: string, ics: string, replyTo: string | null): Promise<Part> {
+/** One message, one recipient, through the send ledger, with the .ics when given (reminders: bookingScheduler.ts). */
+export async function sendOne(to: string, mail: ConfirmMail, eventId: string, ics: string | null, replyTo: string | null, tag = 'career-prep-booking-confirmed'): Promise<Part> {
   const res = await sendOnce({ recipient: to, subject: mail.subject, businessEventId: eventId }, async () => {
     const routed = await resolveEmailRecipient(to, mail.subject);
     const info = await guardedSendMail({ from: `"${FROM_NAME}" <${env.emailFrom}>`, to: routed.to, subject: routed.subject, text: mail.text,
-      ...(replyTo ? { replyTo } : {}), icalEvent: { method: 'PUBLISH', filename: 'interview.ics', content: ics },
-      headers: { 'X-MC-Tags': 'career-prep-booking-confirmed', 'X-MC-Metadata': JSON.stringify({ business_event_id: eventId }) } });
+      ...(replyTo ? { replyTo } : {}), ...(ics ? { icalEvent: { method: 'PUBLISH', filename: 'interview.ics', content: ics } } : {}),
+      headers: { 'X-MC-Tags': tag, 'X-MC-Metadata': JSON.stringify({ business_event_id: eventId }) } });
     return info?.messageId ? { ok: true, messageId: String(info.messageId) } : { ok: false, errorClass: 'SendBlocked', error: 'blocked by kill switch or dev guard' };
   }).catch((err: unknown) => ({ outcome: 'failed' as const, errorClass: errClass(err) }));
   if (res.outcome === 'sent' || (res.outcome === 'skipped' && res.reason === 'already_sent')) return 'sent';

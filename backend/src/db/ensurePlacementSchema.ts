@@ -37,7 +37,8 @@ import { sequelize } from '../config/database';
  *                        change; source_event_id UNIQUE when set, so one inbox event changes an interview at most once.
  *   placement_review_items (CP8.1, F9 queue) what a human must look at: a low-confidence (< 0.70) interview email that
  *                        made no interview, an email for no known learner, an update matching no interview, or an
- *                        update matching more than one (ambiguous: nothing is changed until a person picks). UNIQUE
+ *                        update matching more than one (ambiguous: nothing is changed until a person picks), or a
+ *                        booking link sent 24 hours ago and still not booked (not_booked, CP8.2c). UNIQUE
  *                        (kind, source_event_id).
  */
 export const PLACEMENT_STATEMENTS: readonly string[] = [
@@ -147,7 +148,7 @@ export const PLACEMENT_STATEMENTS: readonly string[] = [
   'CREATE INDEX IF NOT EXISTS idx_placement_events_subject ON placement_events (subject_type, subject_id, created_at)',
   `CREATE TABLE IF NOT EXISTS placement_review_items (
      id BIGSERIAL PRIMARY KEY,
-     kind VARCHAR(40) NOT NULL CHECK (kind IN ('low_confidence','unmatched_learner','unmatched_update','ambiguous_update')),
+     kind VARCHAR(40) NOT NULL CHECK (kind IN ('low_confidence','unmatched_learner','unmatched_update','ambiguous_update','not_booked')),
      source_event_id VARCHAR(300) NOT NULL,
      enrollment_id UUID REFERENCES enrollments(id) ON DELETE CASCADE,
      interview_id UUID REFERENCES placement_interviews(id) ON DELETE CASCADE,

@@ -8,6 +8,7 @@ import { startInboxBackfill } from '../services/placement/inboxBackfill';
 import { startInboxReplay } from '../services/placement/inboxEvents';
 import { startBookingLinkSweep } from '../services/placement/bookingLinkSweep';
 import { startBookingConfirmSweep } from '../services/placement/bookingConfirmSweep';
+import { startBookingScheduler } from '../services/placement/bookingScheduler';
 
 /**
  * Career Prep v27, Releases 2 and 3: everything the getting-hired pipeline mounts and starts, in ONE place, so
@@ -38,6 +39,7 @@ export const SCHEDULERS: Array<{ name: string; start: () => void }> = [
   { name: 'inbox-replay', start: startInboxReplay }, // CP8.1: one boot pass over stored events left unprocessed (idempotent)
   { name: 'booking-link-sweep', start: startBookingLinkSweep }, // CP8.1b: retries owed booking-link replies (switch-gated, capped)
   { name: 'booking-confirm-sweep', start: startBookingConfirmSweep }, // CP8.2b: finishes a booking's room + invites (capped)
+  { name: 'booking-scheduler', start: startBookingScheduler }, // CP8.2c: 24 h and 1 h reminders, the 24 h unbooked nudge (capped)
 ];
 
 export function mountPlacementIntegrations(app: Express): void {

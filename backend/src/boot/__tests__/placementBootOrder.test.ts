@@ -14,6 +14,8 @@ const mockStartSweep = jest.fn();
 jest.mock('../../services/placement/bookingLinkSweep', () => ({ startBookingLinkSweep: mockStartSweep }));
 const mockStartConfirmSweep = jest.fn();
 jest.mock('../../services/placement/bookingConfirmSweep', () => ({ startBookingConfirmSweep: mockStartConfirmSweep }));
+const mockStartScheduler = jest.fn();
+jest.mock('../../services/placement/bookingScheduler', () => ({ startBookingScheduler: mockStartScheduler }));
 
 import fs from 'fs';
 import path from 'path';
@@ -61,9 +63,10 @@ describe('placementBoot', () => {
   });
 
   it('T11: registers the daily forwarding test + broken alerts as a scheduler', () => {
-    expect(saved.s.map((s) => s.name)).toEqual(['inbox-tests', 'inbox-backfill', 'inbox-replay', 'booking-link-sweep', 'booking-confirm-sweep']);
+    expect(saved.s.map((s) => s.name)).toEqual(['inbox-tests', 'inbox-backfill', 'inbox-replay', 'booking-link-sweep', 'booking-confirm-sweep', 'booking-scheduler']);
     expect(saved.s[3].start).toBe(mockStartSweep); // T16: retries owed booking-link replies
     expect(saved.s[4].start).toBe(mockStartConfirmSweep); // T18: finishes a booking's room and invites
+    expect(saved.s[5].start).toBe(mockStartScheduler); // T19: reminders and the unbooked nudge
     expect(saved.s[2].start).toBe(mockStartReplay); // T15: one boot pass over unprocessed stored events
     expect(saved.s[0].start).toBe(mockStartInboxTests);
     expect(saved.s[1].start).toBe(mockStartBackfill); // T13: it registers nothing while unconfigured (inboxBackfill.test.ts)
