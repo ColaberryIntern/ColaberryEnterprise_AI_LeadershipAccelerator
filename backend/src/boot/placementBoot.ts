@@ -7,6 +7,7 @@ import { startInboxTestCron } from '../services/placement/inboxTestJob';
 import { startInboxBackfill } from '../services/placement/inboxBackfill';
 import { startInboxReplay } from '../services/placement/inboxEvents';
 import { startBookingLinkSweep } from '../services/placement/bookingLinkSweep';
+import { startBookingConfirmSweep } from '../services/placement/bookingConfirmSweep';
 
 /**
  * Career Prep v27, Releases 2 and 3: everything the getting-hired pipeline mounts and starts, in ONE place, so
@@ -36,6 +37,7 @@ export const SCHEDULERS: Array<{ name: string; start: () => void }> = [
   { name: 'inbox-backfill', start: startInboxBackfill }, // CP6.2: hourly; registers nothing while INBOX_MANAGER_API_BASE is unset
   { name: 'inbox-replay', start: startInboxReplay }, // CP8.1: one boot pass over stored events left unprocessed (idempotent)
   { name: 'booking-link-sweep', start: startBookingLinkSweep }, // CP8.1b: retries owed booking-link replies (switch-gated, capped)
+  { name: 'booking-confirm-sweep', start: startBookingConfirmSweep }, // CP8.2b: finishes a booking's room + invites (capped)
 ];
 
 export function mountPlacementIntegrations(app: Express): void {

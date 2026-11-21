@@ -1,6 +1,8 @@
 const mockView = jest.fn();
 const mockConfirm = jest.fn();
 jest.mock('../../services/placement/bookingService', () => ({ bookingView: (...a: unknown[]) => mockView(...a), confirmBooking: (...a: unknown[]) => mockConfirm(...a) }));
+const mockFinish = jest.fn();
+jest.mock('../../services/placement/bookingConfirm', () => ({ finishInBackground: (...a: unknown[]) => mockFinish(...a) }));
 
 import express from 'express';
 import request from 'supertest';
@@ -13,7 +15,7 @@ const TOKEN = 'A'.repeat(43);
 const URL = `/api/public/booking/${TOKEN}`;
 const VIEW = { candidate: 'Ann', company: 'Acme', position: 'Data Analyst', minutes: 30, recordingNotice: 'recorded only if everyone agrees', timezone: 'America/Chicago', reason: null,
   slots: [{ startsAt: '2026-11-23T15:00:00.000Z', central: 'Mon, Nov 23, 9:00 AM CST', local: null }] };
-const BOOKED = { status: 'booked', startsAt: '2026-11-23T15:00:00.000Z', minutes: 30, roomPage: 'https://hire.refactored.ai/room/?i=iv-1&e=1&t=x', replay: false };
+const BOOKED = { status: 'booked', interviewId: 'iv-1', startsAt: '2026-11-23T15:00:00.000Z', minutes: 30, roomPage: 'https://hire.refactored.ai/room/?i=iv-1&e=1&t=x', replay: false };
 /** Mounted as server.ts mounts them: the confirm (own 10kb parser) BEFORE the global 5mb JSON parser, the view after. */
 function app(opts: import('../publicBookingRoutes').BookingRouterOptions = {}): express.Express {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -30,6 +32,7 @@ const plausible = (prefix: string, i: number): string => `${prefix}${String(i).p
 beforeEach(() => {
   mockView.mockReset().mockResolvedValue({ status: 'ok', view: VIEW });
   mockConfirm.mockReset().mockResolvedValue(BOOKED);
+  mockFinish.mockReset();
   jest.spyOn(console, 'error').mockImplementation(() => undefined);
 });
 afterEach(() => jest.restoreAllMocks());
@@ -81,6 +84,23 @@ describe('POST /api/public/booking/:token/confirm', () => {
       expect((await request(app()).post(`${URL}/confirm`).send(b)).status).toBe(400);
     }
     expect(mockConfirm).not.toHaveBeenCalled();
+  });
+  it('a booked confirm (and its replay) starts the after-booking work for that interview, AFTER the service returned; the id never reaches the response', async () => {
+    let finishedBeforeAnswer = true;
+    mockConfirm.mockImplementationOnce(async () => { finishedBeforeAnswer = mockFinish.mock.calls.length > 0; return BOOKED; });
+    const res = await request(app()).post(`${URL}/confirm`).send(body);
+    expect([res.status, finishedBeforeAnswer, mockFinish.mock.calls]).toEqual([200, false, [['iv-1']]]);
+    expect(JSON.stringify(res.body)).not.toContain('iv-1"');
+    mockConfirm.mockResolvedValueOnce({ ...BOOKED, replay: true });
+    await request(app()).post(`${URL}/confirm`).send(body);
+    expect(mockFinish).toHaveBeenCalledTimes(2);
+  });
+  it('no after-booking work when nothing was booked (404, 410, 409, 400, 500)', async () => {
+    mockConfirm.mockResolvedValueOnce({ status: 'not_found' }).mockResolvedValueOnce({ status: 'gone', reason: 'used' })
+      .mockResolvedValueOnce({ status: 'taken' }).mockRejectedValueOnce(new Error('x'));
+    for (let i = 0; i < 4; i++) await request(app()).post(`${URL}/confirm`).send(body);
+    await request(app()).post(`${URL}/confirm`).send({ tz: 'America/Chicago' });
+    expect(mockFinish).not.toHaveBeenCalled();
   });
   it('404 unknown, 410 used/expired/closed, 409 taken or arranging, 500 on a crash', async () => {
     mockConfirm.mockResolvedValueOnce({ status: 'not_found' }).mockResolvedValueOnce({ status: 'gone', reason: 'closed' })

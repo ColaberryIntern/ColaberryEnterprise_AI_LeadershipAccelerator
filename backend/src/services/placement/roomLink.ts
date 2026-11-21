@@ -21,6 +21,14 @@ export function roomPageUrl(interviewId: string, endsAt: Date, secret?: string):
   return `${hireBase()}/room/?i=${encodeURIComponent(interviewId)}&e=${e}&t=${sign(interviewId, e, secret)}`;
 }
 
+/**
+ * The CANDIDATE's consent-room page in the portal (the learner signs in; the page checks the interview is theirs, T23):
+ * `<frontend>/portal/career/interview/<id>`. Like the employer link, never the provider's link.
+ */
+export function candidateRoomUrl(interviewId: string, base: string = env.frontendUrl): string {
+  return `${String(base).replace(/\/$/, '')}/portal/career/interview/${encodeURIComponent(interviewId)}`;
+}
+
 export function verifyRoomLink(input: { i: string; e: string; t: string; now: Date; secret?: string }): boolean {
   if (!input.i || !/^\d{1,15}$/.test(input.e) || !/^[A-Za-z0-9_-]{43}$/.test(input.t)) return false;
   const endMs = Number(input.e);

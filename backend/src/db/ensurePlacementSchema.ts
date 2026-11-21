@@ -31,6 +31,8 @@ import { sequelize } from '../config/database';
  *                        booking_link_round / _sent_at / _attempts / _last_attempt_at (CP8.1b): the booking-link reply
  *                        owed for this interview, written in the SAME transaction that puts it in `new`, so a crash
  *                        before the send still leaves the sweep (bookingLinkSweep.ts) something to finish.
+ *                        confirm_attempts / _last_attempt_at / _done_at (CP8.2b): the after-booking work (room, invites)
+ *                        for the booked time; bookingConfirmSweep.ts finishes a booking whose work did not complete.
  *   placement_events     (CP8.1, the v22 event shape) one row per state change, written in the same transaction as the
  *                        change; source_event_id UNIQUE when set, so one inbox event changes an interview at most once.
  *   placement_review_items (CP8.1, F9 queue) what a human must look at: a low-confidence (< 0.70) interview email that
@@ -116,6 +118,9 @@ export const PLACEMENT_STATEMENTS: readonly string[] = [
      recording_consent VARCHAR(20),
      interviewer_emails TEXT[] NOT NULL DEFAULT '{}',
      booker_tz VARCHAR(64),
+     confirm_attempts SMALLINT NOT NULL DEFAULT 0 CHECK (confirm_attempts >= 0),
+     confirm_last_attempt_at TIMESTAMPTZ,
+     confirm_done_at TIMESTAMPTZ,
      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
    )`,
@@ -124,6 +129,8 @@ export const PLACEMENT_STATEMENTS: readonly string[] = [
   'CREATE UNIQUE INDEX IF NOT EXISTS uq_placement_interviews_token ON placement_interviews (booking_token_hash) WHERE booking_token_hash IS NOT NULL',
   // The booking-link sweep's scan (bookingLinkSweep.ts): only interviews still owed a reply.
   "CREATE INDEX IF NOT EXISTS idx_placement_interviews_owed_link ON placement_interviews (created_at) WHERE state = 'new' AND booking_link_sent_at IS NULL",
+  // The confirm sweep's scan (bookingConfirmSweep.ts): booked interviews whose after-booking work is not done.
+  "CREATE INDEX IF NOT EXISTS idx_placement_interviews_confirm_owed ON placement_interviews (starts_at) WHERE state = 'booked' AND confirm_done_at IS NULL",
   `CREATE TABLE IF NOT EXISTS placement_events (
      id BIGSERIAL PRIMARY KEY,
      subject_type VARCHAR(40) NOT NULL,

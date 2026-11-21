@@ -168,6 +168,8 @@ export interface CreateZoomMeetingInput {
    * is exactly the litter the 2026-11-02 re-mint left behind.
    */
   requireEnterableWithoutHost?: boolean;
+  /** Absent = 'cloud' (every class and community-room caller). Career Prep placement rooms pass 'none' (consent first). */
+  autoRecording?: 'cloud' | 'none';
 }
 
 // Creates a meeting under ZOOM_HOST_EMAIL with cloud auto-recording, so
@@ -186,7 +188,7 @@ export async function createMeeting(input: CreateZoomMeetingInput): Promise<Zoom
   // Default, never override: an absent host must behave exactly as before.
   const host = input.hostEmail || env.zoomHostEmail;
   const requestedSettings = {
-    auto_recording: 'cloud',
+    auto_recording: input.autoRecording ?? 'cloud',
     join_before_host: true,
     waiting_room: false,
   };
@@ -332,6 +334,7 @@ export interface UpdateZoomMeetingInput {
   startDateTime?: string;
   durationMinutes?: number;
   timezone?: string;
+  autoRecording?: 'cloud' | 'none';
 }
 
 // Reschedule/rename an existing meeting. Not currently called by anything in
@@ -347,6 +350,7 @@ export async function updateMeeting(meetingId: string, patch: UpdateZoomMeetingI
   if (patch.startDateTime !== undefined) body.start_time = patch.startDateTime;
   if (patch.durationMinutes !== undefined) body.duration = patch.durationMinutes;
   if (patch.timezone !== undefined) body.timezone = patch.timezone;
+  if (patch.autoRecording !== undefined) body.settings = { auto_recording: patch.autoRecording };
   await zoomApiRequest('PATCH', `/meetings/${encodeURIComponent(meetingId)}`, body);
 }
 

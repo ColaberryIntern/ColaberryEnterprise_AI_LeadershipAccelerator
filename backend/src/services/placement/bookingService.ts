@@ -7,6 +7,7 @@ import { hashBookingToken, isPlausibleToken, tokenStatus } from './bookingToken'
 import { candidateFirstName } from './bookingReplyEmail';
 import { canMove, isInterviewState, type InterviewState } from './interviewStates';
 import { roomPageUrl } from './roomLink';
+import { label } from './timeLabel';
 
 /**
  * Career Prep v27, CP8.2 (kit F4 step 3): the public booking page's data and its one write, for the holder of a booking
@@ -22,7 +23,7 @@ import { roomPageUrl } from './roomLink';
  *            own booking uses (`hire_interviews:<enrollment>`; row lock FIRST, never the other way, so no deadlock),
  *            recomputes that day's open times and books only if the time is still open: two bookers racing for one time,
  *            one wins. The token is marked used in the same transaction. The same confirm again (a double click) answers
- *            the same booking. Invites and emails are CP8.2b (T18), after the commit.
+ *            the same booking. Invites and emails are CP8.2b (bookingConfirm.ts), run by the route AFTER the commit.
  * Times are UTC instants; labels are Central, plus the booker's own zone when they send one.
  */
 export const BUFFER_MINUTES = 15;
@@ -38,19 +39,13 @@ export interface BookingView { candidate: string; company: string | null; positi
 export type Gone = 'used' | 'expired' | 'closed';
 export type ViewResult = { status: 'ok'; view: BookingView } | { status: 'not_found' } | { status: 'gone'; reason: Gone };
 export type ConfirmResult =
-  | { status: 'booked'; startsAt: string; minutes: number; roomPage: string; replay: boolean }
+  | { status: 'booked'; interviewId: string; startsAt: string; minutes: number; roomPage: string; replay: boolean }
   | { status: 'not_found' } | { status: 'gone'; reason: Gone } | { status: 'taken' } | { status: 'arranging' };
 
 const SELECT = `SELECT i.id, i.enrollment_id, i.state, i.company, i.position, i.minutes, i.token_expires_at, i.token_used_at, i.starts_at, e.full_name
   FROM placement_interviews i JOIN enrollments e ON e.id = i.enrollment_id WHERE i.booking_token_hash = :h`;
 
-/** Intl puts a narrow or plain no-break space before AM/PM in some ICU versions; labels use a plain space. */
-const ODD_SPACE = new RegExp(`[${String.fromCharCode(0x202f, 0x00a0)}]`, 'g');
-
-export function label(t: Date, tz: string): string {
-  return new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
-    .format(t).replace(ODD_SPACE, ' ');
-}
+export { label };
 
 function log(event: string, context: Record<string, unknown>): void {
   console.log(JSON.stringify({ timestamp: new Date().toISOString(), level: 'info', service: 'backend', event, outcome: 'success', context }));
@@ -112,7 +107,7 @@ export async function confirmBooking(token: string, input: ConfirmInput, now: Da
     const r = (rows as Row[])[0];
     if (!r) return { status: 'not_found' };
     const minutes = Number(r.minutes ?? DEFAULT_MINUTES);
-    const booked = (at: Date, replay: boolean): ConfirmResult => ({ status: 'booked', startsAt: at.toISOString(), minutes, roomPage: roomPageUrl(r.id, new Date(at.getTime() + minutes * 60_000)), replay });
+    const booked = (at: Date, replay: boolean): ConfirmResult => ({ status: 'booked', interviewId: r.id, startsAt: at.toISOString(), minutes, roomPage: roomPageUrl(r.id, new Date(at.getTime() + minutes * 60_000)), replay });
     if (r.token_used_at && r.state === 'booked' && r.starts_at && new Date(r.starts_at).getTime() === slot.getTime()) return booked(slot, true);
     const st = tokenStatus(r, now);
     if (st !== 'ok') return { status: 'gone', reason: st };
@@ -128,7 +123,7 @@ export async function confirmBooking(token: string, input: ConfirmInput, now: Da
     const emails = [...new Set(input.interviewers.map((e) => e.trim().toLowerCase()))];
     await sequelize.query(
       `UPDATE placement_interviews SET state = 'booked', starts_at = :at, minutes = :m, token_used_at = :now, interviewer_emails = ${emails.length ? 'ARRAY[:emails]::text[]' : "'{}'::text[]"},
-         booker_tz = :tz, updated_at = NOW() WHERE id = :id`,
+         booker_tz = :tz, confirm_done_at = NULL, confirm_attempts = 0, confirm_last_attempt_at = NULL, updated_at = NOW() WHERE id = :id`,
       { replacements: { at: slot, m: minutes, now, emails, tz: input.tz, id: r.id }, transaction: t });
     await sequelize.query(
       `INSERT INTO placement_events (subject_type, subject_id, event, from_state, to_state, actor, payload, source_event_id)

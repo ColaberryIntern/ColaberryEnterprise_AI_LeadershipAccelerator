@@ -3,6 +3,7 @@ import { env } from '../../config/env';
 import * as zoomService from '../zoomService';
 import { instantToWallClock } from '../centralDate';
 import { createMeetingIdempotent } from './zoomMeetingIdempotency';
+import type { ZoomStoredSettings } from '../zoom/zoomMeetingSettings';
 
 // Meeting provider adapter (spec §11) — a stable interface behind which the
 // actual video provider can be swapped without touching room/booking logic.
@@ -27,11 +28,18 @@ export interface CreateMeetingInput {
    * Google Meet has no equivalent and ignores it rather than pretending.
    */
   hostEmail?: string;
+  /**
+   * Absent = the provider's default (Zoom: 'cloud'), so every existing caller is unchanged. Career Prep placement rooms
+   * pass 'none': recording starts only after everyone consents. Only the Zoom adapter honours it.
+   */
+  autoRecording?: 'cloud' | 'none';
 }
 
 export interface MeetingResult {
   providerEventId: string;
   joinUrl: string | null;
+  /** What the provider stored, on a fresh create only; null or absent = "cannot tell" (replayed or reconciled). */
+  storedSettings?: ZoomStoredSettings | null;
 }
 
 export interface MeetingAttendance {
@@ -220,8 +228,10 @@ export class ZoomMeetAdapter implements MeetingProvider {
       // Passed through so the ledger records which host this request used, which is
       // what a later reconcile has to ask.
       hostEmail: input.hostEmail,
+      ...(input.autoRecording ? { autoRecording: input.autoRecording } : {}),
     });
-    return { providerEventId: result.meetingId, joinUrl: result.joinUrl };
+    return { providerEventId: result.meetingId, joinUrl: result.joinUrl,
+      ...(result.storedSettings !== undefined ? { storedSettings: result.storedSettings } : {}) };
   }
 
   async updateMeeting(providerEventId: string, patch: Partial<CreateMeetingInput>): Promise<void> {

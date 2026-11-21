@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { isTimeZone } from '../services/hire/hireSlots';
 import { bookingView, confirmBooking, type Gone } from '../services/placement/bookingService';
 import { hashBookingToken, isPlausibleToken } from '../services/placement/bookingToken';
+import { finishInBackground } from '../services/placement/bookingConfirm';
 
 /**
  * Career Prep v27, CP8.2 (kit F4 step 3): the public booking API behind hire.refactored.ai/book/?t=<token>. No login: the
@@ -15,6 +16,7 @@ import { hashBookingToken, isPlausibleToken } from '../services/placement/bookin
  * Answers: unknown token 404 (one uniform message, so nothing can be probed); used, expired or no longer open 410 with a
  * plain reason; a time just taken, or the learner not taking bookings, 409; bad input 400. Never cached. The confirm
  * returns the consent-room PAGE link only, never the meeting provider's link (that comes from the room routes, T22).
+ * A booked confirm then starts the after-booking work (bookingConfirm.ts: room, invites) once the transaction committed.
  */
 const Params = z.object({ token: z.string().refine(isPlausibleToken) }).strict();
 const ViewQuery = z.object({ tz: z.string().max(64).refine(isTimeZone, 'tz').optional() }).strict();
@@ -121,6 +123,8 @@ export function postConfirm(misses: MissCap): RequestHandler {
       if (r.status === 'taken') { res.status(409).json({ error: 'That time was just taken. Pick another.', reason: 'taken' }); return; }
       if (r.status === 'arranging') { res.status(409).json({ error: 'Times are being arranged with the candidate. We will be in touch.', reason: 'arranging' }); return; }
       res.status(200).json({ booked: { startsAt: r.startsAt, minutes: r.minutes, roomPage: r.roomPage }, replay: r.replay });
+      // AFTER the commit (confirmBooking's transaction is done): room and invites, idempotent, so a replay re-runs safely.
+      finishInBackground(r.interviewId);
     } catch (err) {
       log('public_booking_confirm_failed', err);
       res.status(500).json({ error: 'Could not book that time. Try again in a moment.' });

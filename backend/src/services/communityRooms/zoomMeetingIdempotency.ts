@@ -1,4 +1,5 @@
 import * as zoomService from '../zoomService';
+import type { ZoomStoredSettings } from '../zoom/zoomMeetingSettings';
 
 /**
  * The ORM is loaded LAZILY, inside each helper, never at module top.
@@ -39,11 +40,15 @@ export interface IdempotentCreateInput {
   startDateTime: string;
   durationMinutes: number;
   timezone?: string;
+  /** Forwarded to zoomService.createMeeting; absent = its default ('cloud'), so existing callers are unchanged. */
+  autoRecording?: 'cloud' | 'none';
 }
 
 export interface IdempotentCreateResult {
   meetingId: string;
   joinUrl: string | null;
+  /** What Zoom stored, on 'created' only; absent on 'replayed' and 'reconciled' (no create response to read). */
+  storedSettings?: ZoomStoredSettings | null;
   /** How the caller got here — surfaced so the outbox can log what actually happened. */
   outcome: 'created' | 'replayed' | 'reconciled';
 }
@@ -182,9 +187,11 @@ export async function createMeetingIdempotent(input: IdempotentCreateInput): Pro
       durationMinutes: input.durationMinutes,
       timezone: input.timezone,
       hostEmail: input.hostEmail,
+      ...(input.autoRecording ? { autoRecording: input.autoRecording } : {}),
     });
     await markCreated(requestId, result.meetingId, result.joinUrl);
-    return { meetingId: result.meetingId, joinUrl: result.joinUrl, outcome: 'created' };
+    return { meetingId: result.meetingId, joinUrl: result.joinUrl, outcome: 'created',
+      ...(result.storedSettings !== undefined ? { storedSettings: result.storedSettings } : {}) };
   } catch (err: any) {
     // The row stays 'pending' on purpose. We do not know whether Zoom created it, and
     // marking 'failed' here would license the next retry to create a duplicate.
