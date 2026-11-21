@@ -59,7 +59,8 @@ describe('deriveProposalDocuments', () => {
  * F01 regression (HERRIMAN_ROOT_CAUSE_MATRIX.md): a submission-instruction obligation must never become a
  * Technical Proposal section. These are the EXACT passages that opened the Nov 21 Herriman 02-technical.pdf
  * ("This section responds to requirement REQ-003. Submission Requirement: One (1) electronic (PDF) copy ...
- * submitted by email"). Before the fix they fell through the /.*/ catch-all into the technical narrative.
+ * submitted by email"). Before the fix they fell through the Technical Proposal catch-all rule into the
+ * narrative, because that rule matches any statement.
  */
 describe('deriveProposalDocuments — submission-instruction requirements never leak into the Technical Proposal (F01)', () => {
   it('drops a submit-by-email / deadline obligation from derivation — it is covered by the generated Compliance Matrix, never drafted as Technical', () => {
