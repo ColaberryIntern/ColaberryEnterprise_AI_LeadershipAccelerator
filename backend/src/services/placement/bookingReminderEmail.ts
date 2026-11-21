@@ -11,19 +11,27 @@ import { label } from './timeLabel';
  * business event id carries the interview, the kind and the booked time (the round, for the nudge). No en or em dash.
  */
 export type ReminderKind = '24h' | '1h';
-export const LEARNER_REMINDER_SUBJECT: Record<ReminderKind, string> = { '24h': 'Your interview is tomorrow', '1h': 'Your interview starts in 1 hour' };
-export const EMPLOYER_REMINDER_SUBJECT: Record<ReminderKind, string> = { '24h': 'Reminder: interview tomorrow', '1h': 'Reminder: interview in 1 hour' };
+// FIXED and neutral for the 24 h kind: a subject is part of the send-once key, so it must not change with the clock.
+export const LEARNER_REMINDER_SUBJECT: Record<ReminderKind, string> = { '24h': 'Your interview is coming up', '1h': 'Your interview starts in 1 hour' };
+export const EMPLOYER_REMINDER_SUBJECT: Record<ReminderKind, string> = { '24h': 'Reminder: upcoming interview', '1h': 'Reminder: interview in 1 hour' };
 export const NUDGE_SUBJECT = 'Booking your interview: a quick reminder';
 
-const lead = (k: ReminderKind) => (k === '24h' ? 'tomorrow' : 'in about an hour');
+const centralDay = (d: Date): string => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+/** True only when the interview's Central date is the day after `now`'s Central date. */
+export function isTomorrowCentral(startsAt: Date, now: Date): boolean {
+  const [y, m, d] = centralDay(now).split('-').map(Number);
+  return centralDay(startsAt) === new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+}
+/** "tomorrow" only when it really is tomorrow in Central; otherwise neutral. */
+const lead = (k: ReminderKind, startsAt: Date, now: Date) => (k === '1h' ? 'in about an hour' : isTomorrowCentral(startsAt, now) ? 'tomorrow' : 'coming up');
 const role = (f: ConfirmFacts): string =>
   [f.position?.trim() ? `the ${f.position.trim()} role` : 'the role', f.company?.trim() ? `at ${f.company.trim()}` : ''].filter(Boolean).join(' ');
 
-export function learnerReminderEmail(kind: ReminderKind, f: ConfirmFacts, roomPage: string): ConfirmMail {
+export function learnerReminderEmail(kind: ReminderKind, f: ConfirmFacts, roomPage: string, now: Date = new Date()): ConfirmMail {
   const text = [
     f.candidateName?.trim() ? `Hi ${candidateFirstName(f.candidateName)},` : 'Hi,',
     '',
-    `Your interview for ${role(f)} is ${lead(kind)}.`,
+    `Your interview for ${role(f)} is ${lead(kind, f.startsAt, now)}.`,
     '',
     `When: ${label(f.startsAt, 'America/Chicago')}, ${f.minutes} minutes`,
     '',
@@ -38,12 +46,12 @@ export function learnerReminderEmail(kind: ReminderKind, f: ConfirmFacts, roomPa
   return { subject: LEARNER_REMINDER_SUBJECT[kind], text };
 }
 
-export function employerReminderEmail(kind: ReminderKind, f: ConfirmFacts, roomPage: string): ConfirmMail {
+export function employerReminderEmail(kind: ReminderKind, f: ConfirmFacts, roomPage: string, now: Date = new Date()): ConfirmMail {
   const who = candidateFirstName(f.candidateName);
   const text = [
     'Hello,',
     '',
-    `A reminder: your interview with ${who} for ${role(f)} is ${lead(kind)}.`,
+    `A reminder: your interview with ${who} for ${role(f)} is ${lead(kind, f.startsAt, now)}.`,
     '',
     `When: ${whenLine(f)}`,
     '',

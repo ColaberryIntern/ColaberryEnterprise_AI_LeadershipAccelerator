@@ -7,7 +7,7 @@ import { SENTINEL_PROVIDER_URL, expectNoRoomUrl } from './helpers/noRoomUrl';
 
 type Iv = { id: string; enrollment_id: string; state: string; company: string | null; position: string | null; contact_email: string | null; starts_at: Date | null;
   minutes: number | null; interviewer_emails: string[]; booker_tz: string | null; confirm_done_at: Date | null; room_url: string | null;
-  booking_link_round: string | null; booking_link_sent_at: Date | null; full_name: string | null; personal_email: string | null; job_address: string | null };
+  booking_link_round: string | null; booking_link_sent_at: Date | null; token_expires_at: Date | null; full_name: string | null; personal_email: string | null; job_address: string | null };
 type R = { id?: string; ids?: string[]; now?: Date; horizon?: Date; cutoff?: Date; name?: string; src?: string; payload?: string; e?: string; sum?: string };
 const db = { iv: [] as Iv[], events: new Map<string, { name: string; payload: Record<string, unknown> }>(), items: new Map<string, Record<string, unknown>>(), sql: [] as string[] };
 const t = (d: Date | null | undefined) => (d ? d.getTime() : NaN);
@@ -23,6 +23,7 @@ function answer(sql: string, r: R): [unknown[], number] {
   }
   if (sql.includes("WHERE i.state IN ('new', 'awaiting')")) {
     return [db.iv.filter((i) => ['new', 'awaiting'].includes(i.state) && i.booking_link_round && i.booking_link_sent_at && t(i.booking_link_sent_at) < t(r.cutoff)
+      && (!/AND i\.token_expires_at > :now/.test(sql) || t(i.token_expires_at) > t(r.now))
       && !(/NOT EXISTS/.test(sql) && db.events.has(`booking_nudge_done:${i.id}:${i.booking_link_round}`))), 0];
   }
   if (sql.includes('INSERT INTO placement_events') && sql.includes('DO UPDATE SET payload')) {
@@ -65,7 +66,7 @@ jest.mock('../../careerPrep/careerPrepFlag', () => ({ careerPrepEnabled: async (
 jest.mock('../../settingsService', () => ({ getSetting: async () => null }));
 
 import { dueReminders, MAX_TRIES, runBookingScheduler } from '../bookingScheduler';
-import { EMPLOYER_REMINDER_SUBJECT, LEARNER_REMINDER_SUBJECT, NUDGE_SUBJECT, learnerReminderEmail, employerReminderEmail, nudgeEmail } from '../bookingReminderEmail';
+import { EMPLOYER_REMINDER_SUBJECT, LEARNER_REMINDER_SUBJECT, NUDGE_SUBJECT, isTomorrowCentral, learnerReminderEmail, employerReminderEmail, nudgeEmail } from '../bookingReminderEmail';
 
 const START = new Date('2026-11-24T15:00:00Z'); // Tue 9:00 AM CST
 const H = 3_600_000;
@@ -75,7 +76,7 @@ const allowed = async () => true;
 const opts = { read: ON, learnerAllowed: allowed };
 const iv = (over: Partial<Iv> = {}): Iv => ({ id: 'iv-1', enrollment_id: 'enr-ann', state: 'booked', company: 'Acme', position: 'Data Analyst', contact_email: 'pat@acme.example',
   starts_at: START, minutes: 30, interviewer_emails: ['kim@acme.example'], booker_tz: 'America/New_York', confirm_done_at: at(-3 * 24 * H), room_url: SENTINEL_PROVIDER_URL,
-  booking_link_round: 'first', booking_link_sent_at: at(-4 * 24 * H), full_name: 'Ann Lee', personal_email: 'ann.personal@mail.example', job_address: 'ann.jobs@mail.example', ...over });
+  booking_link_round: 'first', booking_link_sent_at: at(-4 * 24 * H), token_expires_at: at(10 * 24 * H), full_name: 'Ann Lee', personal_email: 'ann.personal@mail.example', job_address: 'ann.jobs@mail.example', ...over });
 type Sent = { to: string; subject: string; text: string; replyTo?: string; icalEvent?: unknown };
 const sent = () => mockMail.mock.calls.map((c) => c[0] as Sent);
 
@@ -165,6 +166,11 @@ describe('the 24 h nudge', () => {
     expect(sent().map((m) => [m.to, m.subject, m.replyTo])).toEqual([['pat@acme.example', NUDGE_SUBJECT, 'ann.jobs@mail.example']]);
     expectNoRoomUrl({ text: sent()[0].text });
   });
+  it('an EXPIRED booking link is not nudged and makes no review item (its own expiry already says so)', async () => {
+    db.iv = [link({ token_expires_at: at(-60_000) })];
+    await runBookingScheduler(START, opts);
+    expect([db.items.size, mockMail.mock.calls.length]).toEqual([0, 0]);
+  });
   it('switch OFF: the review item still appears, the nudge is held; under 24 h, or booked: nothing', async () => {
     db.iv = [link()];
     await runBookingScheduler(START, { read: async () => null });
@@ -185,6 +191,23 @@ describe('the pass', () => {
     await expect(runBookingScheduler(at(-22 * H), opts)).rejects.toThrow('db gone');
     db.sql.push = push;
     expect((await runBookingScheduler(at(-22 * H), opts)).overlapped).toBeUndefined();
+  });
+  it('"tomorrow" only when it really is tomorrow in Central; otherwise neutral; subjects never change with the clock', () => {
+    const f = (startsAt: Date) => ({ candidateName: 'Ann', company: 'Acme', position: null, startsAt, minutes: 30, bookerTz: null });
+    // Tue 9:00 AM CST, reminded Mon 10:00 AM CST: tomorrow
+    expect(isTomorrowCentral(START, at(-23 * H))).toBe(true);
+    expect(learnerReminderEmail('24h', f(START), 'x', at(-23 * H)).text).toContain('is tomorrow.');
+    // Tue 11:00 PM CST, reminded Tue 12:30 AM CST (22.5 h before, the same Central day): not tomorrow
+    const late = new Date('2026-11-25T05:00:00Z');
+    const sameDay = new Date('2026-11-24T06:30:00Z');
+    expect(isTomorrowCentral(late, sameDay)).toBe(false);
+    for (const m of [learnerReminderEmail('24h', f(late), 'x', sameDay), employerReminderEmail('24h', f(late), 'x', sameDay)]) {
+      expect(m.text).toContain('is coming up.');
+      expect(m.text).not.toMatch(/tomorrow/);
+    }
+    // late at night UTC is still the same Central evening: Mon 11:30 PM CST -> Tue interview is tomorrow
+    expect(isTomorrowCentral(START, new Date('2026-11-24T05:30:00Z'))).toBe(true);
+    expect(learnerReminderEmail('24h', f(START), 'x', at(-23 * H)).subject).toBe(learnerReminderEmail('24h', f(late), 'x', sameDay).subject);
   });
   it('copy: no en or em dash and never the word "free"', () => {
     const DASH_OR_FREE = new RegExp(`[${String.fromCharCode(0x2013, 0x2014)}]|\\bfree\\b`, 'i');

@@ -15,7 +15,7 @@ import type { ConfirmFacts } from './bookingConfirmEmail';
  *              learner (Career Prep allow-list) and to the employer and each interviewer (career_prep_employer_mail_enabled;
  *              off: one keyed held row). A reminder is skipped when the confirmation itself went out after its mark (the
  *              confirmation is the fresher message). Times are UTC instants, so a clock change moves nothing.
- *   nudge      a booking link sent more than 24 hours ago, interview still new or awaiting: ONE review item "Not booked in
+ *   nudge      a booking link sent more than 24 hours ago and not yet expired, interview still new or awaiting: ONE review item "Not booked in
  *              24 h" (placement_review_items kind not_booked) and one nudge to the employer (switch-gated, else held).
  * ONCE: each send goes through sendOnce keyed (recipient, fixed subject, `placement_interview:<id>:<kind>:<start>`; the nudge
  * keys on the booking-link round), and a keyed `<kind>_done` event row ends the item, so a rescheduled interview gets fresh
@@ -86,12 +86,12 @@ export async function remindOne(r: Row, kind: ReminderKind, opts: FinishOpts = {
   const key = `placement_interview:${r.id}:reminder_${kind}:${start}`;
   const parts: Part[] = [];
   if (await (opts.learnerAllowed ?? ((e: string) => careerPrepEnabled(e)))(r.enrollment_id) && r.personal_email && EMAIL.test(r.personal_email)) {
-    parts.push(await sendOne(r.personal_email, learnerReminderEmail(kind, f, candidateRoomUrl(r.id)), key, null, null, 'career-prep-interview-reminder'));
+    parts.push(await sendOne(r.personal_email, learnerReminderEmail(kind, f, candidateRoomUrl(r.id), opts.now), key, null, null, 'career-prep-interview-reminder'));
   }
   if (!(await isSwitchOn(SWITCHES.employerMail, opts.read))) await event(r.id, 'reminder_held', `reminder_held:${tag}`, { reason: 'held: employer email is switched off' });
   else {
     const page = roomPageUrl(r.id, new Date(f.startsAt.getTime() + f.minutes * 60_000));
-    for (const to of employerList(r)) parts.push(await sendOne(to, employerReminderEmail(kind, f, page), key, null, r.job_address, 'career-prep-interview-reminder'));
+    for (const to of employerList(r)) parts.push(await sendOne(to, employerReminderEmail(kind, f, page, opts.now), key, null, r.job_address, 'career-prep-interview-reminder'));
   }
   if (parts.includes('failed')) return false;
   await event(r.id, 'reminder_done', `reminder_done:${tag}`, { sent: parts.length });
@@ -132,6 +132,7 @@ const BOOKED = `SELECT i.id, i.enrollment_id, i.company, i.position, i.contact_e
 const UNBOOKED = `SELECT i.id, i.enrollment_id, i.company, i.position, i.contact_email, i.booking_link_round, i.booking_link_sent_at, e.full_name, j.address AS job_address
   FROM placement_interviews i JOIN enrollments e ON e.id = i.enrollment_id LEFT JOIN job_search_inboxes j ON j.enrollment_id = i.enrollment_id
   WHERE i.state IN ('new', 'awaiting') AND i.booking_link_round IS NOT NULL AND i.booking_link_sent_at IS NOT NULL AND i.booking_link_sent_at < :cutoff
+    AND i.token_expires_at > :now
     AND NOT EXISTS (SELECT 1 FROM placement_events x WHERE x.source_event_id = 'booking_nudge_done:' || i.id || ':' || i.booking_link_round)
   ORDER BY i.booking_link_sent_at LIMIT ${BATCH}`;
 
@@ -150,10 +151,10 @@ async function schedulerPass(now: Date, opts: FinishOpts): Promise<{ reminded: n
   for (const r of booked as Row[]) {
     for (const kind of dueReminders(new Date(r.starts_at), new Date(r.confirm_done_at), now)) {
       if (done.has(`reminder_done:${kind}:${r.id}:${new Date(r.starts_at).toISOString()}`)) continue;
-      try { if (await remindOne(r, kind, opts)) out.reminded += 1; } catch (err) { log('warn', 'placement_reminder_failed', { interview_id: r.id, kind }, (err as Error)?.name || 'DatabaseError'); }
+      try { if (await remindOne(r, kind, { ...opts, now })) out.reminded += 1; } catch (err) { log('warn', 'placement_reminder_failed', { interview_id: r.id, kind }, (err as Error)?.name || 'DatabaseError'); }
     }
   }
-  const [unbooked] = await sequelize.query(UNBOOKED, { replacements: { cutoff: new Date(now.getTime() - NUDGE_AFTER_MS) } });
+  const [unbooked] = await sequelize.query(UNBOOKED, { replacements: { now, cutoff: new Date(now.getTime() - NUDGE_AFTER_MS) } });
   for (const u of unbooked as Unbooked[]) {
     try { if (await nudgeOne(u, opts)) out.nudged += 1; } catch (err) { log('warn', 'placement_booking_nudge_failed', { interview_id: u.id }, (err as Error)?.name || 'DatabaseError'); }
   }

@@ -53,8 +53,11 @@ describeIfDb('reminders and the nudge against Postgres', () => {
     await schema.ensurePlacementSchema();
     await sequelize.query(`INSERT INTO placement_interviews (enrollment_id, source_event_id, company, contact_email, state, starts_at, minutes, confirm_done_at)
       VALUES ('${E1}', 'sched:booked', 'Acme', 'pat@acme.example', 'booked', '${START.toISOString()}', 30, '2026-11-20T12:00:00Z')`);
-    await sequelize.query(`INSERT INTO placement_interviews (enrollment_id, source_event_id, company, contact_email, state, booking_link_round, booking_link_sent_at)
-      VALUES ('${E1}', 'sched:unbooked', 'Beta', 'lee@beta.example', 'awaiting', 'first', '2026-11-22T12:00:00Z')`);
+    await sequelize.query(`INSERT INTO placement_interviews (enrollment_id, source_event_id, company, contact_email, state, booking_link_round, booking_link_sent_at, token_expires_at)
+      VALUES ('${E1}', 'sched:unbooked', 'Beta', 'lee@beta.example', 'awaiting', 'first', '2026-11-22T12:00:00Z', '2026-12-06T12:00:00Z')`);
+    // an expired link: never nudged, no review item
+    await sequelize.query(`INSERT INTO placement_interviews (enrollment_id, source_event_id, company, contact_email, state, booking_link_round, booking_link_sent_at, token_expires_at)
+      VALUES ('${E1}', 'sched:expired', 'Delta', 'kai@delta.example', 'awaiting', 'first', '2026-11-01T12:00:00Z', '2026-11-15T12:00:00Z')`);
   });
   afterAll(async () => {
     for (const sql of schema.PLACEMENT_SCHEMA_ROLLBACK) await sequelize.query(sql);
