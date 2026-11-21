@@ -50,11 +50,12 @@ export default function ScheduleTab(): React.ReactElement {
   const [filter, setFilter] = useState<Filter>({ status: '', channel: '', event: '' });
   const [events, setEvents] = useState<HubEvent[]>([]);
   const [changes, setChanges] = useState(0);
+  const [eventsMissing, setEventsMissing] = useState(false);
   const query = { status: filter.status ? [filter.status] : undefined, channel: filter.channel || null, event_id: filter.event || null };
   const schedule = useBoard('schedule', query);
   const history = useBoard('history', query);
-  // The event filter's choices; if they do not load the filter still offers "Any event".
-  useEffect(() => { listHubEvents('all').then(setEvents).catch(() => setEvents([])); }, []);
+  // The event filter's choices. If they do not load, the filter still offers "Any event" and says why.
+  useEffect(() => { listHubEvents('all').then(setEvents).catch(() => { setEvents([]); setEventsMissing(true); }); }, []);
 
   if (!summary) return <SummaryPending loadError={loadError} />;
   const changed = (): void => { schedule.reload(); history.reload(); reload(); setChanges((n) => n + 1); };
@@ -62,6 +63,7 @@ export default function ScheduleTab(): React.ReactElement {
   return (
     <div>
       <Filters value={filter} events={events} onChange={setFilter} />
+      {eventsMissing && <p className="small text-muted mt-n2 mb-3" role="status">The event list did not load, so the event filter only offers Any event.</p>}
       <div className="row g-3">
         <div className="col-12 col-xl-8 d-flex flex-column gap-3">
           <NextSevenDays list={schedule} onChanged={changed} />

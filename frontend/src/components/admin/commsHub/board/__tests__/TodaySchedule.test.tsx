@@ -142,6 +142,13 @@ describe('Today', () => {
     expect(container.textContent).toContain('Next: ');
   });
 
+  it('a thumbnail the public route will not serve shows "Preview unavailable", never a broken image', async () => {
+    await renderAt('/admin/comms-hub');
+    await act(async () => { container.querySelector('img.ch-up-thumb')!.dispatchEvent(new Event('error')); });
+    expect(container.querySelector('img.ch-up-thumb')).toBeNull();
+    expect(container.querySelector('.ch-up')?.textContent).toContain('Preview unavailable');
+  });
+
   it('an approval queue that did not load shows its own retry and never says nothing is waiting', async () => {
     (api.getBoard as jest.Mock).mockImplementation(async (scope: string) => { if (scope === 'approval') throw new Error('down'); return board[scope]; });
     await renderAt('/admin/comms-hub');
@@ -176,6 +183,12 @@ describe('Schedule & history', () => {
     await click(byText('button', 'Retry 1 recipient'));
     expect(api.retryHubMessage).toHaveBeenCalledWith('h1');
     expect(alerts()).toContain('The retry did not start. Try again.');
+  });
+
+  it('an event list that did not load leaves Any event and says so', async () => {
+    (api.listHubEvents as jest.Mock).mockRejectedValue(new Error('down'));
+    await renderAt('/admin/comms-hub/schedule');
+    expect(container.textContent).toContain('The event list did not load, so the event filter only offers Any event.');
   });
 
   it('the filters narrow both lists; WhatsApp is not offered as a channel', async () => {

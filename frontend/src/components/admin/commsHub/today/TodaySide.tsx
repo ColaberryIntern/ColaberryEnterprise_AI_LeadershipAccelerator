@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { HubEvent } from '../../../../services/commsHubApi';
 import { SectionCard, EmptyState } from '../../shell';
@@ -36,6 +36,18 @@ export function GoingOutNext({ list }: { list: BoardList }): React.ReactElement 
 
 const thumbSrc = (ev: HubEvent): string => `/api/comms-hub/thumbnails/${ev.id}/16x9.png?v=${ev.thumbnail_id}`;
 
+/**
+ * The event's chosen thumbnail. It comes from the public route, which only serves events placed on
+ * the Events page and scheduled, live or ended; for any other event (or a failed load) the slot says
+ * "Preview unavailable" instead of showing a broken image.
+ */
+function Thumb({ ev }: { ev: HubEvent }): React.ReactElement {
+  const [broken, setBroken] = useState(false);
+  if (!ev.thumbnail_id) return <span className="ch-up-thumb ch-up-none">No thumbnail</span>;
+  if (broken) return <span className="ch-up-thumb ch-up-none">Preview unavailable</span>;
+  return <img className="ch-up-thumb" src={thumbSrc(ev)} alt={`${ev.title} thumbnail`} width={96} height={54} loading="lazy" onError={() => setBroken(true)} />;
+}
+
 export function UpcomingEvents({ events, error, onRetry }: { events: HubEvent[] | null; error: string | null; onRetry: () => void }): React.ReactElement {
   return (
     <SectionCard title="Upcoming events" icon="calendar-event-line" actions={<Link className="small comms-hub-action d-inline-flex align-items-center" to="/admin/comms-hub/events">All events</Link>}>
@@ -51,9 +63,7 @@ export function UpcomingEvents({ events, error, onRetry }: { events: HubEvent[] 
         <ul className="list-unstyled mb-0 ch-up">
           {events.map((ev) => (
             <li key={ev.id} className="ch-up-row">
-              {ev.thumbnail_id
-                ? <img className="ch-up-thumb" src={thumbSrc(ev)} alt={`${ev.title} thumbnail`} width={96} height={54} loading="lazy" />
-                : <span className="ch-up-thumb ch-up-none">No thumbnail</span>}
+              <Thumb ev={ev} />
               <span className="ch-up-text">
                 <span className="ch-up-title">{ev.title}</span>
                 <span className="ch-up-when">{whenLabel(ev)}</span>

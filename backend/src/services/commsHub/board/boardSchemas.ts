@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { COMMS_HUB_MESSAGE_KINDS } from '../../../db/ensureCommsHubSchema';
 
 /** CH7.4 response contracts for the board, settings and activity routes (checked at the route boundary). */
 const HHMM = /^([01]\d|2[0-3]):([0-5]\d)$/;
@@ -33,7 +34,7 @@ export const BoardQuery = z.object({
 }).strict();
 
 export const BoardRow = z.object({
-  id: z.string(), status: Status, kind: z.string(), title: z.string(),
+  id: z.string(), status: Status, kind: z.enum(COMMS_HUB_MESSAGE_KINDS as unknown as [string, ...string[]]), title: z.string(),
   event: z.object({ id: z.string(), title: z.string(), thumbnail_id: z.string().nullable() }).nullable(),
   send_at: Iso.nullable(), updated_at: Iso,
   destinations: z.array(z.object({ channel: z.enum(['community_post', 'in_app']), label: z.string().nullable() })),
