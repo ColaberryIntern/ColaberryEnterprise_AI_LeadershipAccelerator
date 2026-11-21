@@ -27,11 +27,13 @@ const fs = require('fs');
 
 const ACCOUNT = '3945211';
 const API = `https://3.basecampapi.com/${ACCOUNT}`;
-const UA = 'Colaberry Accelerator (ali@colaberry.com)';
+// Generic client name: no personal address in requests to an outside service (privacy rule).
+const UA = 'Colaberry AI Ops';
 const BUCKET = Number(process.env.BUCKET || 7463955);
 const LIST = Number(process.env.LIST || 10406233777);
 const PARENT_VAULT = Number(process.env.PARENT_VAULT || 10406233371);
 const DRY = process.env.DRY === '1';
+const ALI_PERSON_ID = 17454835;
 
 let TOKEN = null;
 async function tok() {
@@ -161,10 +163,15 @@ async function resolveTicket(spec, list = listAll) {
   return hits[0].id;
 }
 
+/** Identity by Basecamp person id (Ali = 17454835), not by email address. Refuses anything else, including no profile. */
+function assertActingAsAli(me) {
+  if (!me || me.id !== ALI_PERSON_ID) throw new Error('not acting as Ali');
+}
+
 async function main() {
   const spec = JSON.parse(fs.readFileSync(process.env.SPEC, 'utf8'));
   const me = await api('GET', '/my/profile.json');
-  if (!/ali@colaberry\.com/i.test(me.email_address || '')) throw new Error('not acting as Ali');
+  assertActingAsAli(me);
   spec.ticketId = await resolveTicket(spec);
 
   const folders = await listAll(`/buckets/${BUCKET}/vaults/${PARENT_VAULT}/vaults.json`);
@@ -255,4 +262,4 @@ async function main() {
 // Run only as a script; `require` (the tests) gets the resolvers without touching Basecamp.
 if (require.main === module) main().catch((e) => { console.error('FAILED: ' + e.message); process.exit(1); });
 
-module.exports = { listTicketTodos, resolveTicket };
+module.exports = { listTicketTodos, resolveTicket, assertActingAsAli, ALI_PERSON_ID };
