@@ -80,6 +80,19 @@ function emit(log: ((line: string) => void) | undefined, level: string, event: s
  * report and should be recorded as one.
  */
 export async function recordBugReport(input: BugReportInput, deps: StoreDeps = {}): Promise<string | null> {
+  return (await recordBugReportDetailed(input, deps)).id;
+}
+
+/** What `recordBugReportDetailed` reports: the row, and whether this call was a suppressed duplicate. */
+export interface RecordResult { id: string | null; duplicate: boolean }
+
+/**
+ * `recordBugReport`, also saying whether the insert was refused as a duplicate inside the five
+ * minute window. Comms Hub CH9.1: a caller that knows it was a duplicate can skip sending the
+ * email a second time (CLAUDE.md send dedup), which the bare id cannot tell it. The bare function
+ * is unchanged for the Marketing and agent callers.
+ */
+export async function recordBugReportDetailed(input: BugReportInput, deps: StoreDeps = {}): Promise<RecordResult> {
   const query = deps.query ?? defaultQuery;
   const ensure = deps.ensure ?? ensureBugReportSchema;
   try {
@@ -128,7 +141,7 @@ export async function recordBugReport(input: BugReportInput, deps: StoreDeps = {
     );
 
     const id = readId(inserted);
-    if (id) return id;
+    if (id) return { id, duplicate: false };
 
     // Nothing inserted: a duplicate inside the window. Return the row it collided with, so the
     // caller still records the delivery outcome somewhere rather than losing it.
@@ -142,7 +155,7 @@ export async function recordBugReport(input: BugReportInput, deps: StoreDeps = {
     const existingId = readId(existing);
     emit(deps.log, 'info', 'bug_report_duplicate_suppressed', 'success',
       { route: input.routePath, matched_existing: Boolean(existingId) });
-    return existingId;
+    return { id: existingId, duplicate: true };
   } catch (err) {
     // Loud, and then out of the way: the send must still be attempted.
     emit(deps.log, 'error', 'bug_report_persist_failed', 'failure', {
@@ -150,7 +163,8 @@ export async function recordBugReport(input: BugReportInput, deps: StoreDeps = {
       error_class: 'BugReportPersistFailed',
       message: String((err as Error)?.message ?? err).slice(0, 300),
     });
-    return null;
+    // Not known to be a duplicate: the caller still sends, because a database problem must not stop reporting.
+    return { id: null, duplicate: false };
   }
 }
 

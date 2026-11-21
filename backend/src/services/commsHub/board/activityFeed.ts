@@ -22,6 +22,7 @@ const VERB: Record<string, string> = {
   'message.approval_voided': 'sent back for approval', 'message.sending': 'started sending', 'message.retry': 'retried',
   'message.sent': 'sent', 'message.partially_failed': 'partly sent', 'message.failed': 'could not send',
   'sending.paused': 'paused all sending', 'sending.resumed': 'resumed sending', 'settings.changed': 'changed the safety controls',
+  'bug.reported': 'reported a problem',
 };
 
 export interface ActivityRow { id: string; at: string; who: string; did: string; about: string | null; entity_type: string; entity_id: string | null }

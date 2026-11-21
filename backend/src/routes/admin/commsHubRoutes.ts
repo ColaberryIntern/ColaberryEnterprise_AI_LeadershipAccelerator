@@ -11,6 +11,7 @@ import liveRoutes from './commsHubLiveRoutes';
 import planRoutes from './commsHubPlanRoutes';
 import messageRoutes from './commsHubMessageRoutes';
 import boardRoutes from './commsHubBoardRoutes';
+import bugReportRoutes from './commsHubBugReportRoutes';
 
 /**
  * Communications Hub admin API (CH1.3 onward). Every route sits under /api/admin/comms-hub, which
@@ -44,5 +45,7 @@ router.use(planRoutes);
 router.use(messageRoutes);
 // CH7.4 Today and Schedule & history: the board, safety controls and activity log.
 router.use(boardRoutes);
+// CH9.1 Report a problem, on every hub tab.
+router.use(bugReportRoutes);
 
 export default router;

@@ -239,3 +239,7 @@
 .ch-activity-row { display: block; }
 /* Form controls on the hub tabs meet the 44 px target too (the filters, quiet hours, test cohort). */
 .comms-hub .form-select, .comms-hub .form-control:not(textarea) { min-height: 44px; }
+/* CH9.1 Report a problem: the shared button is btn-sm; on the hub it meets the 44 px target, and the
+   page keeps room at the bottom so the fixed button never sits over the last row of a tab. */
+.comms-hub { padding-bottom: 4.5rem; }
+.comms-hub [data-testid="report-problem-open"] { min-height: 44px; padding-left: 1rem; padding-right: 1rem; }
