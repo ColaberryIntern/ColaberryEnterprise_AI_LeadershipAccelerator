@@ -10,8 +10,10 @@ import { PageSheet } from '../PageSheet';
 import { BookedAndAdded, joinOpen, SheetBody } from '../SheetBodies';
 import { JumpBar } from '../JumpBar';
 import { fetchHireInterviews, type HireInterview } from '../../../services/hireStudioApi';
+import { fetchPlacementInterviewsApi } from '../interviewsApi';
 
 jest.mock('../../../services/hireStudioApi', () => ({ fetchHireInterviews: jest.fn() }));
+jest.mock('../interviewsApi', () => ({ fetchPlacementInterviewsApi: jest.fn() }));
 const hire = fetchHireInterviews as jest.Mock;
 
 let host: HTMLDivElement | null = null;
@@ -131,12 +133,26 @@ describe('Your interviews sheet (CP4.6)', () => {
   it('says so when nothing is booked, and when the list cannot load', async () => {
     const h = mount(<MemoryRouter><BookedAndAdded prep={[]} /></MemoryRouter>);
     await flush();
-    expect(h.textContent).toContain('No employer has booked an interview with you yet.');
+    expect(h.textContent).toContain('Nothing booked through your Hire profile yet.');
     act(() => { root!.unmount(); }); root = null; host?.remove();
     hire.mockRejectedValue(new Error('offline'));
     const h2 = mount(<MemoryRouter><BookedAndAdded prep={[]} /></MemoryRouter>);
     await flush();
     expect(h2.querySelector('[role="alert"]')?.textContent).toContain('Could not load your booked interviews');
+  });
+});
+
+describe('the whole #interviews page (CP8.3 + CP4.6)', () => {
+  it('with an interview booked through the inbox and nothing through the Hire profile, nothing on the page says no employer booked', async () => {
+    hire.mockResolvedValue([]);
+    (fetchPlacementInterviewsApi as jest.Mock).mockResolvedValue({ kpis: { upcoming: 1, waiting: 0, recruiter: 0, held: 0 }, interviews: [{ id: 'pi-1', company: 'Northwind', role: 'ML Engineer',
+      state: 'booked', stateLabel: 'Booked', startsAt: '2026-11-23T15:00:00.000Z', minutes: 30, readAs: null, confidence: null, roomPage: '/portal/career/interview/pi-1',
+      joinOpensAt: '2026-11-23T14:50:00.000Z', joinClosesAt: '2026-11-23T15:30:00.000Z', prepId: null, history: [] }] });
+    const h = mount(<MemoryRouter><SheetBody sheet="interviews" prep={[]} /></MemoryRouter>);
+    await flush();
+    expect(h.querySelector('[data-testid="cp-ivs-row-pi-1"]')?.textContent).toContain('Booked');
+    expect(h.textContent).not.toMatch(/No employer has booked/i);
+    expect(h.textContent).toContain('Nothing booked through your Hire profile yet.');
   });
 });
 

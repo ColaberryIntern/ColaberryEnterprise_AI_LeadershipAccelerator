@@ -4,7 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import type { PlacementInterview, PlacementInterviews } from '../../interviewsApi';
 import { AVAILABILITY_LINK, InterviewsSheet, joinIsOpen, readAsText } from '../InterviewsSheet';
-import { interviewIcs } from '../../logic/interviewIcs';
+import { foldLine, interviewIcs } from '../../logic/interviewIcs';
 
 /** CP8.3 (kit F4): the #interviews sheet shows only what the server says; a failed load is an alert, never an empty list. */
 const mockFetch = jest.fn();
@@ -108,5 +108,20 @@ describe('interviewIcs (CP8.3)', () => {
     expect(ics).toContain('URL:https://enterprise.colaberry.ai/portal/career/interview/iv-1');
     expect(ics).toContain('UID:placement-iv-1@refactored.ai');
     expect(ics.split('\r\n')[0]).toBe('BEGIN:VCALENDAR');
+  });
+  it('folds every line to at most 75 octets (continuations start with a space, no character split) and unfolds to the original', () => {
+    const E = String.fromCharCode(0xe9); // a 2-octet character, so a fold must never split it
+    const company = `Acme ${'Long Name '.repeat(12)}Caf${E} ${E}tudes`;
+    const ics = interviewIcs({ ...booked, company }, 'https://enterprise.colaberry.ai', 0) as string;
+    const lines = ics.split('\r\n').filter((l) => l !== '');
+    const bytes = (l: string) => [...l].reduce((n, ch) => { const c = ch.codePointAt(0) as number; return n + (c < 0x80 ? 1 : c < 0x800 ? 2 : c < 0x10000 ? 3 : 4); }, 0);
+    expect(Math.max(...lines.map(bytes))).toBeLessThanOrEqual(75);
+    expect(lines.filter((l) => l.startsWith(' ')).length).toBeGreaterThanOrEqual(2);
+    expect(ics.endsWith('END:VCALENDAR\r\n')).toBe(true);
+    const unfolded = ics.replace(/\r\n /g, '');
+    expect(unfolded).toContain(`SUMMARY:Interview: ${company.replace(/,/g, '\\,')}\\, Data Analyst`);
+    expect(unfolded).toContain('URL:https://enterprise.colaberry.ai/portal/career/interview/iv-1');
+    expect(foldLine('x'.repeat(75))).toBe('x'.repeat(75));
+    expect(foldLine('x'.repeat(76))).toBe(`${'x'.repeat(75)}\r\n x`);
   });
 });

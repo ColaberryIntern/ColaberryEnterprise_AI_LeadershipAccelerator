@@ -56,12 +56,18 @@ import { env } from '../../config/env';
 // The app's config is loaded with the imports above, so sign with the secret it actually verifies with.
 const SECRET = env.jwtSecret;
 const token = (sub = 'enr-ann') => `Bearer ${jwt.sign({ sub, cohort_id: 'coh-1', role: 'participant' }, SECRET)}`;
+// The route module pulls in the app's models; loading it is slow under a loaded machine, so it is loaded ONCE, before
+// any test, with its own generous timeout (never inside a test's 5-second budget), and every test reuses one app.
+let shared: express.Express | null = null;
+beforeAll(async () => {
+  const router = (await import('../careerPrepPlacementInterviewsRoutes')).default;
+  shared = express();
+  shared.use(express.json());
+  shared.use(router);
+}, 60_000);
 function app(): express.Express {
-  const a = express();
-  a.use(express.json());
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  a.use(require('../careerPrepPlacementInterviewsRoutes').default);
-  return a;
+  if (!shared) throw new Error('the router did not load');
+  return shared;
 }
 const URL = '/api/portal/career-prep/interviews/placement';
 const H = 3_600_000;

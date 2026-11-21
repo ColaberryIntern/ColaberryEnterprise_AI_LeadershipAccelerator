@@ -24,7 +24,7 @@ export function joinOpen(i: HireInterview, now: number): boolean {
 }
 
 function Booked({ list, now }: { list: HireInterview[]; now: number }): React.ReactElement {
-  if (!list.length) return <p className="cp-muted">No employer has booked an interview with you yet.</p>;
+  if (!list.length) return <p className="cp-muted">Nothing booked through your Hire profile yet.</p>;
   return (
     <ul className="cp-list" data-testid="cp-booked">{list.map((i) => (
       <li key={i.id}><b>{i.employer.company}</b> · {i.employer.role} · {interviewWhen(i.startsAt)} Central · {i.minutes} min · <span className="cp-pill">{STATUS[i.status]}</span>
