@@ -66,3 +66,58 @@ describe('ensureConnectedDemoSchema is called at boot', () => {
     expect(SERVER.split('app.use(demoRoutes);').length - 1).toBe(1);
   });
 });
+
+/**
+ * The producer is reachable from production code, not only from a test.
+ *
+ * T6's verification flagged that `generateConnectedDemo` had ZERO production importers: fully
+ * built, fully tested, and callable by nothing. A module in that state passes every test it has
+ * and does nothing at all, which is the "no task writes a row" finding in a different costume.
+ *
+ * Source-level because the property is about the import GRAPH, and importing the graph to check
+ * it would start the application.
+ */
+describe('generateConnectedDemo has a production call site', () => {
+  const SRC = path.resolve(__dirname, '../..');
+
+  /** Every non-test .ts under src that imports the producer. */
+  function importers(): string[] {
+    const found: string[] = [];
+    const walk = (dir: string): void => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (entry.name === '__tests__' || entry.name === 'node_modules') continue;
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) { walk(full); continue; }
+        if (!entry.name.endsWith('.ts') || entry.name.endsWith('.d.ts')) continue;
+        if (full.endsWith(`connectedDemoStore.ts`)) continue; // the module itself
+        const text = fs.readFileSync(full, 'utf8');
+        if (/from\s+'[^']*connectedDemoStore'/.test(text)) found.push(path.relative(SRC, full));
+      }
+    };
+    walk(SRC);
+    return found.sort();
+  }
+
+  it('is imported by at least one non-test module', () => {
+    const found = importers();
+    expect(found.length).toBeGreaterThan(0);
+  });
+
+  it('is imported by the publish service specifically', () => {
+    expect(importers()).toContain(path.join('services', 'connectedDemoShareService.ts'));
+  });
+
+  it('and that service is reachable from a route', () => {
+    const routes = fs.readFileSync(path.resolve(SRC, 'routes/projectRoutes.ts'), 'utf8');
+    expect(routes).toContain('connectedDemoShareService');
+    expect(routes).toContain("router.post('/api/portal/project/demo/share'");
+  });
+
+  it('the sweep is not vacuous: it finds no importer for a name that has none', () => {
+    // Guards the walk itself. If the traversal silently stopped matching, the assertions above
+    // would pass by finding nothing and reporting nothing.
+    const text = fs.readFileSync(path.resolve(SRC, 'services/connectedDemoShareService.ts'), 'utf8');
+    expect(text).toMatch(/from\s+'[^']*connectedDemoStore'/);
+    expect(/from\s+'[^']*noSuchModuleAnywhere'/.test(text)).toBe(false);
+  });
+});

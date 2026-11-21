@@ -460,6 +460,55 @@ router.get('/api/portal/project/portfolio', requireParticipant, async (req: Requ
 });
 
 /**
+ * GET /api/portal/project/demo/share?project_id=...
+ * Read one project's Connected Demo sharing state.
+ *
+ * The project id is an explicit PARAMETER, not derived from the session, and the handler
+ * authorizes it. The portfolio pair below derives it, and that is a defect this route
+ * deliberately does not inherit: an enrollment can own several projects
+ * (`models/Project.ts:164-166`), so deriving picks whichever row Postgres returns first.
+ */
+router.get('/api/portal/project/demo/share', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const projectId = String(req.query.project_id || '');
+    if (!projectId) { res.status(400).json({ error: 'project_id is required' }); return; }
+    const { getConnectedDemoShare } = await import('../services/connectedDemoShareService');
+    res.json(await getConnectedDemoShare(req.participant!.sub, projectId));
+  } catch (err: any) {
+    const status = err?.error_class === 'NotFoundError' ? 404
+      : err?.error_class === 'ForbiddenError' ? 403 : 500;
+    console.error('[ProjectRoutes] GET /project/demo/share error:', err.message);
+    res.status(status).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/portal/project/demo/share
+ * Publish or revoke one project's public Connected Demo link.
+ *
+ * Idempotent. Enabling a project that has no spec yet generates one first from the posted
+ * `data_model`, so the row is never published with nothing to serve.
+ */
+router.post('/api/portal/project/demo/share', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { SetConnectedDemoShareSchema, setConnectedDemoShare } = await import('../services/connectedDemoShareService');
+    const parsed = SetConnectedDemoShareSchema.safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+    res.json(await setConnectedDemoShare(req.participant!.sub, parsed.data));
+  } catch (err: any) {
+    const status = err?.error_class === 'NotFoundError' ? 404
+      : err?.error_class === 'ForbiddenError' ? 403
+        : err?.error_class === 'DataModelRequired' ? 400
+          // A refusal from the producer is the caller's fault, not ours: an invalid data model
+          // or a spec carrying restricted project data. 422 rather than 500 so the client can
+          // tell "you sent something I will not publish" from "I broke".
+          : String(err?.error_class || '').startsWith('ConnectedDemo') ? 422 : 500;
+    console.error('[ProjectRoutes] POST /project/demo/share error:', err?.error_class, err.message);
+    res.status(status).json({ error: err.message, error_class: err?.error_class });
+  }
+});
+
+/**
  * GET /api/portal/project/portfolio/share
  * Read the current sharing state (token + enabled) for the participant's project.
  */
