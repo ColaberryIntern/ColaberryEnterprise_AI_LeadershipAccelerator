@@ -23,6 +23,7 @@ jest.mock('../../services/connectedDemoShareService', () => {
   return {
     __esModule: true,
     SetConnectedDemoShareSchema: actual.SetConnectedDemoShareSchema,
+    GetConnectedDemoShareSchema: actual.GetConnectedDemoShareSchema,
     ConnectedDemoShareError: actual.ConnectedDemoShareError,
     getConnectedDemoShare: (...a: unknown[]) => getShare(...a),
     setConnectedDemoShare: (...a: unknown[]) => setShare(...a),
@@ -157,6 +158,47 @@ describe('each refusal becomes a status a client can act on', () => {
     const res = await request(app()).get(URL).set('Authorization', token());
     expect(res.status).toBe(400);
     expect(getShare).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The READ side validates as strictly as the write side.
+   *
+   * It used to be `String(req.query.project_id || '')` plus a presence check. `projects.id` is a
+   * Postgres `UUID`, so `?project_id=abc` reached `findByPk` and came back as a 500 carrying the
+   * driver's message, where the POST answered 400 for the same input. A repeated parameter was
+   * worse: `String(['a','b'])` becomes the string `'a,b'` with no complaint from anything.
+   */
+  it('400s a GET whose project_id is not a uuid, before the service is called', async () => {
+    for (const q of [
+      'project_id=abc',
+      'project_id=',
+      `project_id=${PROJECT}x`,
+      // Repeated, which Express parses as an array. Silent coercion was the bug.
+      `project_id=${PROJECT}&project_id=${PROJECT}`,
+      // Object-shaped, the other thing Express's query parser can hand over.
+      'project_id[a]=1',
+    ]) {
+      getShare.mockReset();
+      const res = await request(app()).get(`${URL}?${q}`).set('Authorization', token());
+      expect(res.status).toBe(400);
+      expect(getShare).not.toHaveBeenCalled();
+    }
+  });
+
+  /**
+   * The caller is the SESSION, never the request, on the path that discloses a share token.
+   *
+   * The POST has this assertion; the GET did not, and a verifier's mutation that read the caller
+   * from `req.query.enrollment_id` survived the whole suite. One parameter away from a route that
+   * hands anybody any project's public link.
+   */
+  it('ignores an enrollment_id in the query and uses the token subject', async () => {
+    getShare.mockResolvedValue(OK);
+    await request(app())
+      .get(`${URL}?project_id=${PROJECT}&enrollment_id=enr-somebody-else`)
+      .set('Authorization', token());
+    expect(getShare).toHaveBeenCalledWith(ENROLLMENT, PROJECT);
+    expect(getShare.mock.calls[0][0]).not.toBe('enr-somebody-else');
   });
 });
 

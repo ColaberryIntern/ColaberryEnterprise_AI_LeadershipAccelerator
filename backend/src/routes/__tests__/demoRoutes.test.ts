@@ -101,9 +101,30 @@ describe('a served demo', () => {
     expect(res.headers['content-type']).toContain('text/html');
   });
 
-  it('answers the short /demo/:token path too, for the day nginx routes it', async () => {
+  /**
+   * The short path is NOT registered, and this asserts the absence on purpose.
+   *
+   * It used to assert the opposite - that `/demo/:token` answered 200 "for the day nginx routes
+   * it". That shipped a public prefix with no `location` block, which is precisely the shape of
+   * the `/m/` incident: a correct handler the edge never reaches. `nginxFilenameRouteLocations`
+   * caught it, and the fix was to not register the prefix until the `nginx/` change is approved.
+   *
+   * Asserting the absence rather than deleting the test is what makes the decision survive. If
+   * somebody re-adds the route without classifying the prefix, this fails and names the reason,
+   * instead of the suite going quiet about a choice that was made deliberately.
+   */
+  it('does NOT answer the short /demo/:token path, because nginx does not route it yet', async () => {
     findOne.mockResolvedValue(rowOf({ demo_spec: SPEC }));
-    expect((await request(app).get(`/demo/${TOKEN}`)).status).toBe(200);
+    expect((await request(app).get(`/demo/${TOKEN}`)).status).toBe(404);
+    // And the 404 is Express's own, not ours: the handler was never reached at all.
+    expect(findOne).not.toHaveBeenCalled();
+  });
+
+  it('and the canonical link never names the short path', () => {
+    // The other half. Removing the route would be pointless if the link we publish pointed at it.
+    expect(publicDemoUrl(TOKEN)).toBe(`/api/public/demo/${TOKEN}`);
+    expect(publicDemoUrl(TOKEN, 'https://portal.colaberry.com'))
+      .toBe(`https://portal.colaberry.com/api/public/demo/${TOKEN}`);
   });
 
   it('queries on all four conditions, not just the token', async () => {

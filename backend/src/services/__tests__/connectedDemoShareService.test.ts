@@ -51,7 +51,23 @@ const STRANGER = 'enr-stranger-11';
 const PROJECT_A = '11111111-1111-4111-8111-111111111111';
 const PROJECT_B = '22222222-2222-4222-9222-222222222222';
 
-/** A fake project row with the two methods the service uses. */
+/**
+ * A fake project row, with a BACKING STORE separate from the instance.
+ *
+ * The separation is the point, and an independent verifier proved it was missing. The real
+ * `generateConnectedDemo` persists through raw `sequelize.query` (`connectedDemoStore.ts:195`,
+ * where `demo_share_token = COALESCE(demo_share_token, :newToken)` stops a republish rotating a
+ * token somebody has shared). A raw write never touches the Sequelize instance, so the service's
+ * `reload()` is what puts the new spec and token into its response.
+ *
+ * The first version of this fake had `reload` return the row unchanged and had the generate mock
+ * assign `row.demo_spec` directly. Both are what the instance would look like AFTER a reload, so
+ * deleting the reload from the service changed nothing and every test stayed green - while a real
+ * first publish would have answered `has_spec: false, url: null` to a student whose demo was live.
+ *
+ * Here `__db` is the row in Postgres, `update()` writes through to both (as Sequelize does), and
+ * `reload()` is the only thing that copies `__db` back. A missing reload now fails.
+ */
 function fakeProject(over: Loose = {}) {
   const row: Loose = {
     id: PROJECT_A,
@@ -62,9 +78,26 @@ function fakeProject(over: Loose = {}) {
     demo_spec: null,
     ...over,
   };
-  row.update = jest.fn(async (patch: Loose) => { Object.assign(row, patch); return row; });
-  row.reload = jest.fn(async () => row);
+  const db: Loose = {
+    demo_share_enabled: row.demo_share_enabled,
+    demo_share_token: row.demo_share_token,
+    demo_spec: row.demo_spec,
+  };
+  row.__db = db;
+  row.update = jest.fn(async (patch: Loose) => {
+    Object.assign(db, patch);
+    Object.assign(row, patch);
+    return row;
+  });
+  row.reload = jest.fn(async () => { Object.assign(row, db); return row; });
   return row;
+}
+
+/** What the real producer does: writes to the DATABASE, out of the instance's sight. */
+function producerPersists(project: Loose, spec: unknown = SPEC, token = 'tok-minted') {
+  const db = project.__db as Loose;
+  db.demo_spec = spec;
+  db.demo_share_token = db.demo_share_token ?? token;
 }
 
 const SPEC = { schema_version: 2, events: [{ event_id: 'e1' }, { event_id: 'e2' }] };
@@ -167,7 +200,7 @@ describe('publishing generates first, and that ordering is the invariant', () =>
     const project = fakeProject({ demo_spec: null });
     findByPk.mockResolvedValue(project);
     generateConnectedDemo.mockImplementation(async () => {
-      project.demo_spec = SPEC; // what the real producer persists
+      producerPersists(project);
       return { shareToken: 'tok-a', shareEnabled: false, spec: SPEC, eventCount: 2 };
     });
 
@@ -181,6 +214,31 @@ describe('publishing generates first, and that ordering is the invariant', () =>
     expect(arg.planVersion).toBe('3');
   });
 
+  it('reports the GENERATED spec and token, which only a reload can see', async () => {
+    /*
+     * The response to a FIRST publish. The spec and the token are written by raw SQL inside the
+     * producer, so the only way this answer is right is if the service re-reads the row. Asserted
+     * on the returned state rather than on `reload` having been called, because the student cares
+     * about the answer and not about which method produced it.
+     */
+    const project = fakeProject({ demo_spec: null, demo_share_token: null });
+    findByPk.mockResolvedValue(project);
+    generateConnectedDemo.mockImplementation(async () => {
+      producerPersists(project, SPEC, 'tok-minted-by-producer');
+      return { shareToken: 'tok-minted-by-producer', shareEnabled: false, spec: SPEC, eventCount: 2 };
+    });
+
+    const state = await setConnectedDemoShare(
+      OWNER, { project_id: PROJECT_A, enabled: true, data_model: DATA_MODEL },
+    );
+
+    expect(state.has_spec).toBe(true);
+    expect(state.event_count).toBe(2);
+    expect(state.enabled).toBe(true);
+    // The link a student is about to share. Null here was the silent failure.
+    expect(state.url).toBe('/api/public/demo/tok-minted-by-producer');
+  });
+
   it('generates BEFORE it enables, so the row is never published with nothing to serve', async () => {
     const order: string[] = [];
     const project = fakeProject({ demo_spec: null });
@@ -192,7 +250,7 @@ describe('publishing generates first, and that ordering is the invariant', () =>
     findByPk.mockResolvedValue(project);
     generateConnectedDemo.mockImplementation(async () => {
       order.push('generate');
-      project.demo_spec = SPEC;
+      producerPersists(project);
       return { shareToken: 'tok-a', shareEnabled: false, spec: SPEC, eventCount: 2 };
     });
 
@@ -275,7 +333,7 @@ describe('idempotency', () => {
     const project = fakeProject({ demo_spec: null });
     findByPk.mockResolvedValue(project);
     generateConnectedDemo.mockImplementation(async () => {
-      project.demo_spec = SPEC;
+      producerPersists(project);
       return { shareToken: 'tok-a', shareEnabled: false, spec: SPEC, eventCount: 2 };
     });
 

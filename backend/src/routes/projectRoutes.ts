@@ -470,10 +470,13 @@ router.get('/api/portal/project/portfolio', requireParticipant, async (req: Requ
  */
 router.get('/api/portal/project/demo/share', requireParticipant, async (req: Request, res: Response) => {
   try {
-    const projectId = String(req.query.project_id || '');
-    if (!projectId) { res.status(400).json({ error: 'project_id is required' }); return; }
-    const { getConnectedDemoShare } = await import('../services/connectedDemoShareService');
-    res.json(await getConnectedDemoShare(req.participant!.sub, projectId));
+    const { getConnectedDemoShare, GetConnectedDemoShareSchema } = await import('../services/connectedDemoShareService');
+    const parsed = GetConnectedDemoShareSchema.safeParse(req.query);
+    if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+    // The caller is the SESSION, never the request. `req.query.enrollment_id` is ignored here by
+    // construction, which is the property the test beside this asserts: this route discloses a
+    // share token, so whose token it is may not be something a caller gets to name.
+    res.json(await getConnectedDemoShare(req.participant!.sub, parsed.data.project_id));
   } catch (err: any) {
     const status = err?.error_class === 'NotFoundError' ? 404
       : err?.error_class === 'ForbiddenError' ? 403 : 500;

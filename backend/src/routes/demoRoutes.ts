@@ -4,15 +4,15 @@ import { Op } from 'sequelize';
 /**
  * The public Connected Demo link. Unauthenticated: anyone holding the token can open it.
  *
- * ## Two paths, on purpose
+ * ## One path, and why not the prettier one
  *
  * `/api/public/demo/:token` works today: nginx already proxies `/api/` to this service, so the
- * link is live the moment this merges. `/demo/:token` is the address this should eventually have,
+ * link is live the moment this merges. `/demo/:token` is the address this should eventually have
  * and it needs a new nginx `location` block, which is an ESCALATE-tier change in this run's
- * contract and is therefore NOT part of this commit. The handler answers both, so the day that
- * block is approved the shorter link starts working with no code change and no second deploy.
- * Until then `publicDemoUrl()` emits the `/api/public/` form, because a Command Center link to a
- * path nginx does not route is a dead link, which this repo has shipped before.
+ * contract. It is therefore NOT registered here at all - see the note above the one `router.get`
+ * at the bottom of this file for why registering it "harmlessly" is the shape of a production
+ * incident this repo has already had. `publicDemoUrl()` emits the `/api/public/` form, so no link
+ * anybody publishes depends on a decision that has not been made.
  *
  * ## One 404, four ways to get it
  *
@@ -150,9 +150,25 @@ async function serveDemo(req: Request, res: Response): Promise<void> {
 }
 
 router.get('/api/public/demo/:token', serveDemo);
-// Live only once an nginx location for /demo/ exists. Harmless until then: nginx serves the
-// frontend for this path and never reaches here.
-router.get('/demo/:token', serveDemo);
+
+/*
+ * `/demo/:token` IS DELIBERATELY NOT REGISTERED, and the reason is a standing rule of this repo
+ * rather than an oversight.
+ *
+ * It was registered here, with a comment calling it "harmless until an nginx location exists".
+ * That was wrong on both counts. `__tests__/nginxFilenameRouteLocations.test.ts` discovers every
+ * public non-`/api` prefix a router registers and FAILS until somebody classifies it in writing,
+ * because `/m/` shipped as an unguarded prefix once and 404'd every signed image in production
+ * for a day. Registering a prefix with no `location` block is the exact shape of that incident:
+ * the handler is correct, the edge never reaches it, and nothing in the build says so.
+ *
+ * Adding the `location` block is an `nginx/` change, which this run's contract puts at
+ * ESCALATE tier. So the route is not registered at all, the escalation stays a written proposal
+ * (`.loop-architect/runs/.../escalation-nginx-demo-path.md`), and `publicDemoUrl()` emits the
+ * `/api/public/` form that nginx already routes. When the block is approved, this becomes one
+ * `router.get` plus one entry in that test's EXTENSIONLESS map, and every link already published
+ * keeps working because they were never written in the short form.
+ */
 
 export default router;
 export { NOT_FOUND_HTML };
