@@ -122,7 +122,8 @@ export const COMMS_HUB_SCHEMA_STATEMENTS: readonly string[] = [
      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
    )`,
   `ALTER TABLE comms_hub_settings ADD CONSTRAINT comms_hub_settings_singleton CHECK (id = 1)`,
-  `INSERT INTO comms_hub_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING`,
+  // updated_at given explicitly: a table created by a model sync has no database default for it.
+  `INSERT INTO comms_hub_settings (id, updated_at) VALUES (1, now()) ON CONFLICT (id) DO NOTHING`,
 
   `CREATE TABLE IF NOT EXISTS comms_hub_activity (
      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
