@@ -67,8 +67,9 @@ describe('deriveProposalDocuments — submission-instruction requirements never 
       req('REQ-003', 'One (1) electronic (PDF) copy of Responses are required to be submitted by email to Herriman City/Steven Brown.', 'administrative'),
       req('REQ-004', 'Proposals must be submitted no later than 5:00 p.m. MDT on November 30, 2026.', 'administrative'),
     ]);
+    const byKey = Object.fromEntries(docs.map((d) => [d.key, d]));
     // The exact passages that OPENED the failing technical PDF are no longer drafted as a technical section (or any).
-    expect(docs.find((d) => d.key === 'technical')).toBeUndefined();
+    expect(byKey.technical).toBeUndefined();
     expect(docs).toEqual([]);
   });
 
@@ -76,13 +77,15 @@ describe('deriveProposalDocuments — submission-instruction requirements never 
     const docs = deriveProposalDocuments([
       req('T1', 'The proposal must include a technical approach describing the methodology and architecture.'),
     ]);
-    expect(docs.find((d) => d.key === 'technical')?.requirements.map((r) => r.canonicalReqId)).toEqual(['T1']);
+    const byKey = Object.fromEntries(docs.map((d) => [d.key, d]));
+    expect(byKey.technical.requirements.map((r) => r.canonicalReqId)).toEqual(['T1']);
   });
 
   it('does NOT drop a requirement that names a technical capability, even when it says "submit"', () => {
     const docs = deriveProposalDocuments([
       req('T2', 'Submit a description of the GIS integration and offline work-order sync.'),
     ]);
-    expect(docs.find((d) => d.key === 'technical')?.requirements.map((r) => r.canonicalReqId)).toEqual(['T2']);
+    const byKey = Object.fromEntries(docs.map((d) => [d.key, d]));
+    expect(byKey.technical.requirements.map((r) => r.canonicalReqId)).toEqual(['T2']);
   });
 });
