@@ -1,0 +1,145 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<title>glazeoff.ai module rules: AIA billing</title><style>
+  :root {
+    --cherry: #FB2832; --cherry-deep: #C20E1E; --cherry-bg: #FFF0F1;
+    --leaf: #77BB4A; --ink: #2d3748; --muted: #718096; --border: #e2e8f0; --bg-alt: #f7fafc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fff;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-size: 10.5pt; line-height: 1.5;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  h1 { font-size: 19pt; line-height: 1.15; margin: 0 0 4px; color: var(--cherry); font-weight: 700; }
+  h2 {
+    font-size: 12.5pt; margin: 20px 0 8px; color: var(--cherry-deep); font-weight: 700;
+    border-bottom: 2px solid var(--cherry-bg); padding-bottom: 4px;
+  }
+  h3 { font-size: 10.5pt; margin: 14px 0 5px; font-weight: 700; color: var(--ink); }
+  p { margin: 0 0 8px; }
+  code { font-family: Consolas, monospace; font-size: 9pt; background: var(--bg-alt);
+         padding: 1px 4px; border-radius: 3px; }
+  .meta { font-size: 8.5pt; color: var(--muted); }
+  .rule { height: 3px; background: var(--cherry); margin: 10px 0 14px; border-radius: 2px; }
+
+  /* The takeaway box. Ali reads this and nothing else if the day is bad. */
+  .takeaway {
+    background: var(--cherry-bg); border-left: 5px solid var(--cherry);
+    padding: 12px 14px; margin: 0 0 16px; border-radius: 0 5px 5px 0;
+  }
+  .takeaway .label {
+    font-size: 8pt; font-weight: 700; letter-spacing: .09em; text-transform: uppercase;
+    color: var(--cherry-deep); margin-bottom: 4px;
+  }
+  .takeaway .headline { font-size: 12pt; font-weight: 700; line-height: 1.35; }
+
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 9pt; }
+  th {
+    text-align: left; background: var(--bg-alt); color: var(--ink); font-weight: 700;
+    padding: 6px 8px; border-bottom: 2px solid var(--border); font-size: 8.5pt;
+    text-transform: uppercase; letter-spacing: .04em;
+  }
+  td { padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:nth-child(even) td { background: #fcfcfd; }
+
+  .chip {
+    display: inline-block; padding: 1px 7px; border-radius: 9px; font-size: 7.8pt;
+    font-weight: 700; color: #fff; white-space: nowrap;
+  }
+  .cards { display: flex; gap: 10px; margin: 10px 0 14px; }
+  .card {
+    flex: 1; border: 1px solid var(--border); border-radius: 6px; padding: 9px 11px;
+    background: #fff;
+  }
+  .card .n { font-size: 20pt; font-weight: 700; line-height: 1; color: var(--cherry); }
+  .card .k { font-size: 7.8pt; color: var(--muted); text-transform: uppercase;
+             letter-spacing: .05em; margin-top: 3px; }
+  .note {
+    border: 1px solid var(--border); border-left: 4px solid var(--muted);
+    background: var(--bg-alt); padding: 9px 11px; margin: 10px 0; font-size: 9pt;
+    border-radius: 0 5px 5px 0;
+  }
+  .note.warn { border-left-color: #b3261e; background: #fdf3f2; }
+  .note.good { border-left-color: #2f7d32; background: #f3f9f3; }
+  figure { margin: 10px 0 14px; page-break-inside: avoid; }
+  figcaption { font-size: 8pt; color: var(--muted); margin-top: 5px; }
+  .mermaid { text-align: center; }
+  .pagebreak { page-break-before: always; }
+  
+    table td, table th { font-size: 8pt; padding: 3px 5px; line-height:1.35; }
+    table { margin: 4px 0 8px; }
+    h2 { margin-top: 12px; }
+    .takeaway .headline { font-size: 11pt; }</style></head><body>
+  <h1>glazeoff.ai module rules: AIA progress billing</h1>
+  <div class="meta">For Ali, to agree with Sai · 21 Nov 2026 · Sources: Sai's platform tracker (16 Nov), the Client Deployment Blueprint meeting (17 Nov), Sai's email (21 Nov), Basecamp list 10443345153</div>
+  <div class="rule"></div>
+  <div class="takeaway"><div class="label">Takeaway</div>
+    <div class="headline">Mostly the same page. Sai's platform already sets the hard rules: GCP, FastAPI + React, client_id with row-level security, AIX Auth and a shared file layout. Our plan bends to them in 6 places. 3 need a word with Sai first. The biggest: in his tracker, the "billing module" assigned to you is usage invoicing, not AIA billing.</div></div>
+  <h2>Sai's plan vs ours</h2>
+  <table><thead><tr><th style="width:15%">Topic</th><th style="width:31%">Sai's platform plan</th><th style="width:22%">Our plan</th><th style="width:12%">Verdict</th><th>What changes</th></tr></thead><tbody>
+  <tr><td><b>Cloud</b></td><td>GCP; separate Cloud Run deployments per client, shared core (blueprint).</td><td>GCP project <code>glazeoff-billing</code>, created by Sai today.</td><td><span class="chip" style="background:#2f7d32">SAME PAGE</span></td><td>Nothing.</td></tr><tr><td><b>What "billing module" means</b></td><td>T3.10: per-client <b>usage</b> as invoice line items (GlazeOff billing its clients for cloud and AI use). Assigned to Ali.</td><td>AIA <b>progress</b> billing: Middlesex PMs fill G702/G703 requisitions.</td><td><span class="chip" style="background:#6d28d9">SETTLE WITH SAI</span></td><td>Two different modules with the same word. Name them apart (page 3).</td></tr><tr><td><b>Sign-in</b></td><td>AIX Auth: passwordless email link, /check endpoint, <code>require()</code> on every route. <b>Not started</b> (T1.3, T1.4, T1.6).</td><td>S6: our own logins so a PM sees only his jobs.</td><td><span class="chip" style="background:#6d28d9">SETTLE WITH SAI</span></td><td>Drop our own login. Build to the AIX Auth token now; agree a pilot fallback if it isn't live by 1 Dec.</td></tr><tr><td><b>Data</b></td><td>Postgres, <code>client_id</code> on every row, row-level security (T2.2). Blueprint also mentions per-client databases.</td><td>S2: tenants, jobs, schedule of values, requisitions, lines.</td><td><span class="chip" style="background:#3d5a99">WE ADJUST</span></td><td>Add row-level security. Ask which: one database with RLS, or one per client.</td></tr><tr><td><b>Stack</b></td><td>Python / FastAPI back end, React front end (blueprint; "not fully finalized").</td><td>Not chosen. The demo is one HTML file.</td><td><span class="chip" style="background:#3d5a99">WE ADJUST</span></td><td>Build in FastAPI + React.</td></tr><tr><td><b>Documents</b></td><td>Phase 2 document space: Uppy uploads, signed download links, path client/project/document/vN.</td><td>No upload in December (S3). Exports G702/G703 (S5).</td><td><span class="chip" style="background:#2f7d32">SAME PAGE</span></td><td>Exports become platform documents once Phase 2 exists.</td></tr><tr><td><b>Approvals</b></td><td>Roles in the database, sequential approvals with notifications (blueprint).</td><td>Four seats from the demo: PM, Brian Dempster, Nick Arena, Jamie.</td><td><span class="chip" style="background:#3d5a99">WE ADJUST</span></td><td>The chain is per-client data, not code.</td></tr><tr><td><b>Client differences</b></td><td>Configurable features, no custom UI per client (blueprint).</td><td>Built around Middlesex.</td><td><span class="chip" style="background:#3d5a99">WE ADJUST</span></td><td>Middlesex's choices live in a settings table.</td></tr><tr><td><b>Cost tracking</b></td><td><code>client=&lt;name&gt;</code> label on every resource; usage logged per client (T3.6, T3.8).</td><td>Not planned.</td><td><span class="chip" style="background:#3d5a99">WE ADJUST</span></td><td>Label everything; emit usage events.</td></tr><tr><td><b>Backups</b></td><td>Restore drill in Phase 4 (T4.4); owner not yet named.</td><td>A timed restore before the pilot (S0 done-condition).</td><td><span class="chip" style="background:#2f7d32">SAME PAGE</span></td><td>We do it earlier for our database.</td></tr><tr><td><b>Isolation tests</b></td><td>Two test clients never see each other, tested in CI (T1.9).</td><td>Not planned.</td><td><span class="chip" style="background:#3d5a99">WE ADJUST</span></td><td>Add the two-client test to our CI.</td></tr><tr><td><b>Timing</b></td><td>Middlesex moves onto the platform after Phases 1-2 (T3.11).</td><td>AIA pilot Tue 8 Dec.</td><td><span class="chip" style="background:#6d28d9">SETTLE WITH SAI</span></td><td>Our pilot runs ahead of the platform. Agree what it borrows and what it stubs.</td></tr>
+  </tbody></table>
+
+  <div class="pagebreak"></div>
+  <h2>Where the module plugs in</h2>
+  <figure style="width:86%;margin:6px auto 8px"><svg viewBox="0 0 760 330" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, sans-serif">
+  <rect x="5" y="5" width="750" height="320" rx="12" fill="none" stroke="#94a3b8" stroke-dasharray="5 5"/>
+  <text x="20" y="27" font-size="12" font-weight="700" fill="#64748b">GLAZEOFF.AI ON GCP</text>
+  <rect x="20" y="38" width="720" height="92" rx="10" fill="#0f766e"/>
+  <text x="380" y="60" text-anchor="middle" font-size="14" font-weight="700" fill="#fff">PLATFORM CORE (Sai and Harsh)</text>
+  <rect x="32" y="72" width="132" height="48" rx="7" fill="#115e59"/>
+      <text x="98" y="92" text-anchor="middle" font-size="11.5" font-weight="700" fill="#fff">AIX Auth</text>
+      <text x="98" y="109" text-anchor="middle" font-size="9.5" fill="#ccfbf1">sign-in, /check, require()</text><rect x="174" y="72" width="132" height="48" rx="7" fill="#115e59"/>
+      <text x="240" y="92" text-anchor="middle" font-size="11.5" font-weight="700" fill="#fff">Clients + projects</text>
+      <text x="240" y="109" text-anchor="middle" font-size="9.5" fill="#ccfbf1">client_id, RLS</text><rect x="316" y="72" width="132" height="48" rx="7" fill="#115e59"/>
+      <text x="382" y="92" text-anchor="middle" font-size="11.5" font-weight="700" fill="#fff">Document space</text>
+      <text x="382" y="109" text-anchor="middle" font-size="9.5" fill="#ccfbf1">client/project/doc/vN</text><rect x="458" y="72" width="132" height="48" rx="7" fill="#115e59"/>
+      <text x="524" y="92" text-anchor="middle" font-size="11.5" font-weight="700" fill="#fff">Cost + usage</text>
+      <text x="524" y="109" text-anchor="middle" font-size="9.5" fill="#ccfbf1">labels, usage log</text><rect x="600" y="72" width="132" height="48" rx="7" fill="#115e59"/>
+      <text x="666" y="92" text-anchor="middle" font-size="11.5" font-weight="700" fill="#fff">LLM gateway</text>
+      <text x="666" y="109" text-anchor="middle" font-size="9.5" fill="#ccfbf1">de-identified</text>
+  <text x="380" y="152" text-anchor="middle" font-size="11" fill="#475569">Every module plugs into the core through the same five contracts ↓</text>
+  <rect x="20" y="165" width="232" height="66" rx="9" fill="#e2e8f0" />
+      <text x="136" y="192" text-anchor="middle" font-size="13" font-weight="700" fill="#334155">Takeoff + ShopDraw</text>
+      <text x="136" y="212" text-anchor="middle" font-size="10" fill="#334155">Karun's GlazeOff app, via the job contract</text><rect x="263" y="165" width="232" height="66" rx="9" fill="#c7d2fe" stroke="#1e3a8a" stroke-width="2.5"/>
+      <text x="379" y="192" text-anchor="middle" font-size="13" font-weight="700" fill="#1e3a8a">AIA progress billing</text>
+      <text x="379" y="212" text-anchor="middle" font-size="10" fill="#1e3a8a">OURS · aia-billing · pilot 8 Dec</text><rect x="506" y="165" width="232" height="66" rx="9" fill="#fde68a" />
+      <text x="622" y="192" text-anchor="middle" font-size="13" font-weight="700" fill="#78350f">Usage billing (T3.10)</text>
+      <text x="622" y="212" text-anchor="middle" font-size="10" fill="#78350f">invoices clients for platform use · later</text>
+  <rect x="20" y="250" width="137" height="60" rx="8" fill="#fff" stroke="#0f766e" stroke-width="1.5"/>
+      <text x="88" y="275" text-anchor="middle" font-size="12" font-weight="700" fill="#0f766e">1 Identity</text>
+      <text x="88" y="293" text-anchor="middle" font-size="9.5" fill="#334155">require() on every route</text><rect x="165" y="250" width="137" height="60" rx="8" fill="#fff" stroke="#0f766e" stroke-width="1.5"/>
+      <text x="233" y="275" text-anchor="middle" font-size="12" font-weight="700" fill="#0f766e">2 Tenancy</text>
+      <text x="233" y="293" text-anchor="middle" font-size="9.5" fill="#334155">client_id + RLS</text><rect x="310" y="250" width="137" height="60" rx="8" fill="#fff" stroke="#0f766e" stroke-width="1.5"/>
+      <text x="378" y="275" text-anchor="middle" font-size="12" font-weight="700" fill="#0f766e">3 Documents</text>
+      <text x="378" y="293" text-anchor="middle" font-size="9.5" fill="#334155">platform file path</text><rect x="455" y="250" width="137" height="60" rx="8" fill="#fff" stroke="#0f766e" stroke-width="1.5"/>
+      <text x="523" y="275" text-anchor="middle" font-size="12" font-weight="700" fill="#0f766e">4 Cost</text>
+      <text x="523" y="293" text-anchor="middle" font-size="9.5" fill="#334155">labels + usage events</text><rect x="600" y="250" width="137" height="60" rx="8" fill="#fff" stroke="#0f766e" stroke-width="1.5"/>
+      <text x="668" y="275" text-anchor="middle" font-size="12" font-weight="700" fill="#0f766e">5 Config</text>
+      <text x="668" y="293" text-anchor="middle" font-size="9.5" fill="#334155">settings rows, not code</text>
+</svg><figcaption>The core is Sai's tracker, Phases 1 to 5. The three modules sit side by side. The five contracts are what keep a module "in form": any module that honors them can be switched on per client.</figcaption></figure>
+  <h2>Names</h2>
+  <table><thead><tr><th style="width:17%">Thing</th><th style="width:36%">Rule</th><th>Example</th><th style="width:70px">Source</th></tr></thead><tbody>
+  <tr><td><b>Module key</b></td><td>One key everywhere. Never the bare word "billing".</td><td><code>aia_billing</code> in code, database and permissions; <code>aia-billing</code> in URLs, services, labels</td><td><span class="chip" style="background:#b26a00">PROPOSED</span></td></tr><tr><td><b>The other module</b></td><td>T3.10 usage invoicing gets its own key.</td><td><code>usage_billing</code> / <code>usage-billing</code></td><td><span class="chip" style="background:#b26a00">PROPOSED</span></td></tr><tr><td><b>GCP project</b></td><td>Project IDs cannot be renamed after creation.</td><td>Sai is creating <code>glazeoff-billing</code>. If it is not created yet, <code>glazeoff-aia-billing</code>; if it is, keep it and rely on labels.</td><td><span class="chip" style="background:#b26a00">PROPOSED</span></td></tr><tr><td><b>Cloud resources</b></td><td><code>&lt;module&gt;-&lt;role&gt;-&lt;env&gt;</code></td><td><code>aia-billing-api-prod</code>, <code>aia-billing-web-prod</code>, <code>aia-billing-pg-prod</code></td><td><span class="chip" style="background:#b26a00">PROPOSED</span></td></tr><tr><td><b>Labels</b></td><td>Every resource carries client, module and env.</td><td><code>client=middlesex-glass</code> <code>module=aia-billing</code> <code>env=prod</code></td><td><span class="chip" style="background:#0f766e">SAI</span></td></tr><tr><td><b>Client</b></td><td>A uuid from AIX Auth plus a lowercase slug.</td><td><code>client_id</code> (uuid), <code>middlesex-glass</code></td><td><span class="chip" style="background:#0f766e">SAI</span></td></tr><tr><td><b>Database schema</b></td><td>Each module owns one Postgres schema. Platform tables stay in core; a module reads core ids and never writes core tables.</td><td><code>aia_billing.pay_applications</code></td><td><span class="chip" style="background:#b26a00">PROPOSED</span></td></tr><tr><td><b>Tables</b></td><td>snake_case, plural nouns, AIA vocabulary. The word "job" is reserved for GlazeOff's job contract.</td><td><code>contracts</code>, not <code>jobs</code></td><td><span class="chip" style="background:#b26a00">PROPOSED</span></td></tr><tr><td><b>API</b></td><td><code>/api/&lt;module&gt;/v1/&lt;plural-resource&gt;</code>, JSON in snake_case.</td><td><code>/api/aia-billing/v1/pay-applications</code></td><td><span class="chip" style="background:#b26a00">PROPOSED</span></td></tr><tr><td><b>Permissions</b></td><td><code>&lt;module&gt;:&lt;resource&gt;:&lt;action&gt;</code>, levels none / read / write / admin by user type.</td><td><code>aia_billing:pay_applications:approve</code></td><td><span class="chip" style="background:#0f766e">SAI</span></td></tr><tr><td><b>Events</b></td><td><code>&lt;module&gt;.&lt;resource&gt;.&lt;past-tense verb&gt;</code></td><td><code>aia_billing.pay_application.submitted</code></td><td><span class="chip" style="background:#b26a00">PROPOSED</span></td></tr><tr><td><b>Files</b></td><td>The platform path: client / project / document / version / file.</td><td><code>middlesex-glass/&lt;project&gt;/&lt;document&gt;/v2/G702.pdf</code></td><td><span class="chip" style="background:#0f766e">SAI</span></td></tr><tr><td><b>Migrations</b></td><td>Alembic, forward-only, one change per file.</td><td><code>0003_add_retainage_to_contracts</code></td><td><span class="chip" style="background:#b26a00">PROPOSED</span></td></tr>
+  </tbody></table>
+
+  <div class="pagebreak"></div>
+  <h2>Tables in the <code>aia_billing</code> schema (proposed)</h2>
+  <table><thead><tr><th style="width:26%">Table</th><th>Holds</th></tr></thead><tbody>
+  <tr><td><code>contracts</code></td><td>One per subcontract (the "job" Jamie bills). Links to the platform project id.</td></tr><tr><td><code>sov_lines</code></td><td>The schedule of values: one row per line item, with the scheduled value.</td></tr><tr><td><code>change_orders</code></td><td>Approved changes that add lines or change values.</td></tr><tr><td><code>pay_applications</code></td><td>One per contract per billing period: the G702 header. Shown on screen as "Requisition".</td></tr><tr><td><code>pay_application_lines</code></td><td>The G703 rows: % complete, this period, stored materials.</td></tr><tr><td><code>approval_steps</code></td><td>Per-client chain configuration: the seats and their order.</td></tr><tr><td><code>approvals</code></td><td>Each approve or return action, by whom and when.</td></tr><tr><td><code>exports</code></td><td>Every generated .xlsx and PDF, pointing to the stored file.</td></tr><tr><td><code>client_settings</code></td><td>Retainage %, the SOV format and other per-client choices.</td></tr><tr><td><code>audit_events</code></td><td>Append-only record of every change.</td></tr>
+  </tbody></table>
+  <div class="note">The platform owns clients, users, roles and projects. These tables refer to them by id and never copy them.</div>
+  <h2>Column rules</h2>
+  <table><tbody><tr><td><code>id</code> uuid primary key; <code>client_id</code> uuid NOT NULL on <b>every</b> table, enforced by row-level security</td><td style="width:70px"><span class="chip" style="background:#0f766e">SAI</span></td></tr><tr><td>The client comes from the signed-in token, never from the browser or the request body</td><td style="width:70px"><span class="chip" style="background:#0f766e">SAI</span></td></tr><tr><td>Money is <code>numeric(14,2)</code>, never a float. Percentages are <code>numeric(5,2)</code>, from 0 to 100</td><td style="width:70px"><span class="chip" style="background:#b26a00">PROPOSED</span></td></tr><tr><td>Timestamps end in <code>_at</code> (timestamptz, UTC); dates end in <code>_on</code>; foreign keys are <code>&lt;singular&gt;_id</code>; booleans start with <code>is_</code> or <code>has_</code></td><td style="width:70px"><span class="chip" style="background:#b26a00">PROPOSED</span></td></tr><tr><td>Every table has <code>created_at</code>, <code>updated_at</code> and <code>created_by</code> (the user id from the token)</td><td style="width:70px"><span class="chip" style="background:#b26a00">PROPOSED</span></td></tr><tr><td>A submitted value is never overwritten. A revision inserts a new row with <code>revision_no</code> and <code>supersedes_id</code>, so the original stays on record</td><td style="width:70px"><span class="chip" style="background:#b26a00">PROPOSED</span></td></tr><tr><td>Status is text with a CHECK list: draft, submitted, approved, returned, finalized, exported</td><td style="width:70px"><span class="chip" style="background:#b26a00">PROPOSED</span></td></tr></tbody></table>
+
+  <div class="pagebreak"></div>
+  <h2>A module is "in form" when</h2>
+  <table><tbody><tr><td>Every route calls <code>require()</code> with a permission key, and refuses access when the check fails</td><td style="width:70px"><span class="chip" style="background:#0f766e">SAI</span></td></tr><tr><td>A two-client isolation test passes in CI: client B never sees client A's rows, files or exports, including on error paths</td><td style="width:70px"><span class="chip" style="background:#0f766e">SAI</span></td></tr><tr><td>There is no <code>if client == "middlesex"</code> anywhere in the code; every difference is a <code>client_settings</code> row</td><td style="width:70px"><span class="chip" style="background:#b26a00">PROPOSED</span></td></tr><tr><td>Every cloud resource carries client, module and env labels</td><td style="width:70px"><span class="chip" style="background:#0f766e">SAI</span></td></tr><tr><td>Usage events go out for the per-client usage report (T3.8)</td><td style="width:70px"><span class="chip" style="background:#0f766e">SAI</span></td></tr><tr><td>Any AI call goes through the platform LLM gateway, with de-identification (T5.2, T5.3); there is none in December</td><td style="width:70px"><span class="chip" style="background:#0f766e">SAI</span></td></tr><tr><td>Secrets live in Secret Manager, never in the repo</td><td style="width:70px"><span class="chip" style="background:#b26a00">PROPOSED</span></td></tr><tr><td>The schema is reviewed by the database owners (Karun, Harsh and Venkatesh, per the tracker) before migrations run</td><td style="width:70px"><span class="chip" style="background:#b26a00">PROPOSED</span></td></tr><tr><td>A restore has been run once and timed before real data goes in</td><td style="width:70px"><span class="chip" style="background:#b26a00">PROPOSED</span></td></tr></tbody></table>
+  <h2>Settle these with Sai before code starts</h2>
+  <table><thead><tr><th style="width:22%">Question</th><th style="width:32%">Why it's open</th><th>Recommendation</th></tr></thead><tbody>
+  <tr><td><b>"Billing module" means two things</b></td><td>T3.10 is usage invoicing; Ram's 19 Nov ask was AIA progress billing for Middlesex.</td><td>Two modules, two keys: <code>aia-billing</code> now, and <code>usage-billing</code> (T3.10) after T3.8 and T3.9 land.</td></tr><tr><td><b>Sign-in before 8 Dec</b></td><td>AIX Auth is not started, and the pilot is in 17 days.</td><td>Build to the AIX Auth token shape and <code>require()</code> from day one. If AIX Auth is not live by Tue 1 Dec, the pilot uses a temporary issuer with the same token shape, deleted when AIX Auth ships.</td></tr><tr><td><b>One database or one per client</b></td><td>The tracker says client_id plus row-level security; the blueprint mentions per-client databases.</td><td>One module database with row-level security for the pilot. Revisit when the long-term deployment model is decided.</td></tr><tr><td><b>Where the code lives</b></td><td>The platform repos are colaberry/GlazeOff and GlazeOff-Client; ShopDraw is in karunswaroop/GlazeOff-Shopdraw.</td><td>Its own repo, <code>colaberry/GlazeOff-AIA-Billing</code>, in FastAPI + React, with Sai's review on the first PR.</td></tr>
+  </tbody></table>
+  <div class="note good"><b>What doesn't change:</b> the demo's screens, the four-seat approval order, the G702/G703 math, the 8 Dec two-PM pilot, and the restore test before real data goes in.</div>
+  <div class="note"><b>Sai's open asks of Karun (21 Nov email):</b> link <code>glazeoff-billing</code> to the billing account, and add Ali to karunswaroop/GlazeOff-Shopdraw. Sai adds Ali to colaberry/GlazeOff and GlazeOff-Client if he has admin there.</div>
+  <p class="meta">SAI = already in Sai's tracker or blueprint. PROPOSED = ours; nothing tagged PROPOSED is agreed until Sai says so.</p></body></html>
