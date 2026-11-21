@@ -19,15 +19,44 @@ export interface OpenHouseHoldDeps {
   countLive: (leadId: number) => Promise<number>;
 }
 
-const LIVE_SQL = `SELECT COUNT(*)::int AS n FROM scheduled_emails
+/**
+ * OH1w (Ali, 2026-11-21): "Explorer Growth only reaches out to people that aren't in campaigns."
+ * The hold now also covers membership of ANY running campaign: an enrolled/active
+ * campaign_leads row in a campaign that is active and not archived (the same definition as
+ * campaignMembership.RUNNING_MEMBERSHIP_SQL). Explorer Growth itself writes no campaign_leads
+ * rows, so it never holds itself. Members leave when they finish (the hourly exit sweep).
+ */
+/** Same key as campaignMembership.MEMBERSHIP_RULES_SETTING (pinned equal by a test). */
+export const MEMBERSHIP_RULES_SETTING = 'campaign_membership_rules_enabled';
+
+export const COUNTDOWN_SQL =`SELECT COUNT(*)::int AS n FROM scheduled_emails
   WHERE lead_id = :leadId AND (metadata->>'event_countdown') = 'true'
     AND (status IN ('pending', 'processing')
          OR (status = 'sent' AND sent_at > NOW() - INTERVAL '48 hours'))`;
 
+export const LIVE_SQL = `SELECT
+  (SELECT COUNT(*) FROM scheduled_emails
+    WHERE lead_id = :leadId AND (metadata->>'event_countdown') = 'true'
+      AND (status IN ('pending', 'processing')
+           OR (status = 'sent' AND sent_at > NOW() - INTERVAL '48 hours')))
+  + (SELECT COUNT(*) FROM campaign_leads cl JOIN campaigns c ON c.id = cl.campaign_id
+      WHERE cl.lead_id = :leadId AND cl.status IN ('enrolled', 'active')
+        AND c.status = 'active' AND c.archived_at IS NULL)
+  AS n`;
+
 function defaultDeps(): OpenHouseHoldDeps {
   return {
     countLive: async (leadId) => {
-      const rows = await sequelize.query<{ n: number }>(LIVE_SQL, { type: QueryTypes.SELECT, replacements: { leadId } });
+      // Campaign membership counts only once the OH1w rules are switched on (after the cleanup).
+      // Read straight from system_settings: the Governor may not import the campaign engine
+      // (noSendPaths.test.ts), and campaignMembership reaches it.
+      const [flag] = await sequelize.query<{ v: string | null }>(
+        `SELECT value::text AS v FROM system_settings WHERE key = :k LIMIT 1`,
+        { type: QueryTypes.SELECT, replacements: { k: MEMBERSHIP_RULES_SETTING } },
+      );
+      const rulesOn = flag?.v === 'true' || flag?.v === '"true"';
+      const sql = rulesOn ? LIVE_SQL : COUNTDOWN_SQL;
+      const rows = await sequelize.query<{ n: number }>(sql, { type: QueryTypes.SELECT, replacements: { leadId } });
       return Number(rows[0]?.n ?? 0);
     },
   };

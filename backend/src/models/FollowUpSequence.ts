@@ -28,6 +28,12 @@ export interface SequenceStep {
   ai_instructions?: string;
   ai_tone?: string;
   ai_context_notes?: string;
+  /**
+   * OH1w: who this step is for, in an event follow-up (openHouseFollowup.ts). A sequence with
+   * any tagged step is booked per person when the event ends: each person gets only the steps
+   * tagged for them (attended or missed; untagged = everyone). It is never chained or enrolled.
+   */
+  audience?: 'attended' | 'missed';
 }
 
 interface FollowUpSequenceAttributes {
