@@ -130,6 +130,18 @@ export const STREAM_PAINT: Record<string, { fg: string; name: string }> = {
   hypotheses: { fg: 'var(--text-muted)', name: 'Revenue bets' },
   hire_fde: { fg: 'var(--text-muted)', name: 'FDE hiring' },
   subscription_conversion: { fg: 'var(--text-muted)', name: 'Yearly conversion' },
+  // R23, 2026-11-21. Muted because it has not EARNED, which is the axis this map splits on —
+  // not because it is unbuilt. It is the one stream here that is fully set up: the offer is
+  // public on enterprise.colaberry.ai, the W28 intake is live, and `enterprise_intakes` held
+  // 0 rows when it was measured. The funnel says that part, and says it precisely, with
+  // `measured_zero` rather than the bets' `unmeasurable`.
+  //
+  // So two signals carry two different facts: the paint says "this has earned nothing yet",
+  // the status says "this is wired and the answer is genuinely zero". Handing it a hue today
+  // would claim the first of those is false, and taking the next free slot would land on
+  // `--chart-3`, which R23's sibling ticket R17 measured as ΔE 1.8 from `--chart-4` for a
+  // protanope. It takes the next VALIDATED categorical slot on the day it books revenue.
+  enterprise_site: { fg: 'var(--text-muted)', name: 'Enterprise site' },
 };
 
 export function streamPaint(key: string): { fg: string; name: string } {
