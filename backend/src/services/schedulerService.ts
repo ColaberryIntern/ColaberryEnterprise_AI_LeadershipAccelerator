@@ -407,6 +407,13 @@ async function generateAIContent(action: InstanceType<typeof ScheduledEmail>): P
         mainSite: 'https://enterprise.colaberry.ai',
       };
     }
+    // OH1w: an Open House follow-up has no booking link to offer; its only links are the ones
+    // listed for this person (their Today page, or the sign-up page and the recording).
+    const eventFollowup = !!action.metadata?.event_followup;
+    if (eventFollowup && compositeContext?.allowedUrls) {
+      const primary = String(action.metadata?.primary_link || 'https://enterprise.colaberry.ai');
+      compositeContext.allowedUrls = { booking: primary, landingPage: primary, mainSite: 'https://enterprise.colaberry.ai' };
+    }
 
     const result = await generateMessage({
       channel: channel as 'email' | 'sms' | 'voice',
@@ -447,6 +454,25 @@ async function generateAIContent(action: InstanceType<typeof ScheduledEmail>): P
         console.warn(`[Scheduler] Countdown AI draft rejected for action ${action.id}: ${problems.join('; ')}. Sending the fallback.`);
         return false;
       }
+    }
+
+    // OH1w: an Open House follow-up's AI draft passes the same screen as the countdown (no price,
+    // offer, discount or no-cost word; no placeholder; only this person's listed links). A draft
+    // that fails is NOT sent: the row keeps the approved fixed copy, and the reason is recorded.
+    if (eventFollowup && channel === 'email') {
+      const { screenMayaCopy } = await import('./openHouseCountdown');
+      const screened = screenMayaCopy({
+        subject: result.subject || action.subject || '', body: result.body || '',
+        allowedLinks: Array.isArray(action.metadata?.allowed_links) ? action.metadata.allowed_links : [], soften: true,
+      });
+      if (screened.problems.length > 0) {
+        await action.update({ metadata: { ...(action.metadata || {}), ai_rejected: screened.problems, ai_model: result.model } } as any);
+        await action.reload();
+        console.warn(`[Scheduler] Follow-up AI draft rejected for action ${action.id}: ${screened.problems.join('; ')}. Sending the approved copy.`);
+        return false;
+      }
+      result.subject = screened.subject;
+      result.body = screened.body;
     }
 
     // Update the action with AI-generated content
@@ -2159,6 +2185,18 @@ export function startScheduler(): void {
       await bookRecentOpenHouseFollowups();
     }).catch((err) => {
       console.error('[Scheduler] Open House session sync error:', err);
+    });
+  });
+
+  // OH1w: campaign membership exits. Anyone with nothing left to send in a running campaign is
+  // finished, then moved or removed per the campaign's "when someone finishes" setting
+  // (campaignMembership.ts). Sends nothing itself; a move is a normal, fully gated enrollment.
+  cron.schedule('40 * * * *', () => {
+    instrumentCronJob('CampaignExitSweep', async () => {
+      const { sweepFinishedMembers } = await import('./campaignMembership');
+      await sweepFinishedMembers();
+    }).catch((err) => {
+      console.error('[Scheduler] Campaign exit sweep error:', err);
     });
   });
 

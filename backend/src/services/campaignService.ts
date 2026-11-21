@@ -3,6 +3,7 @@ import { sequelize } from '../config/database';
 import { Campaign, CampaignLead, Lead, FollowUpSequence, ScheduledEmail, AdminUser, InteractionOutcome, Activity, CampaignDeployment } from '../models';
 import StrategyCall from '../models/StrategyCall';
 import { enrollLeadInSequence } from './sequenceService';
+import { admitToCampaign } from './campaignMembership';
 import {
   cancelScheduledMessagesWhere,
   pauseScheduledMessagesWhere,
@@ -427,7 +428,12 @@ export async function completeCampaign(id: string) {
   return campaign;
 }
 
-export async function enrollLeadsInCampaign(campaignId: string, leadIds: number[]) {
+/**
+ * OH1w: one campaign at a time. A lead already in another RUNNING campaign is refused
+ * ('in_other_campaign') unless `supersede` is set (a move), which ends that membership first.
+ * Rules live in campaignMembership.ts.
+ */
+export async function enrollLeadsInCampaign(campaignId: string, leadIds: number[], opts: { supersede?: boolean } = {}) {
   const campaign = await Campaign.findByPk(campaignId);
   if (!campaign) throw new Error('Campaign not found');
   if (!campaign.sequence_id) throw new Error('Campaign has no sequence assigned');
@@ -460,6 +466,16 @@ export async function enrollLeadsInCampaign(campaignId: string, leadIds: number[
       });
       if (existing) {
         results.push({ leadId, status: 'already_enrolled' });
+        continue;
+      }
+
+      // A campaign marked takes_precedence (the Open House countdown, payment and class
+      // readiness) moves the person out of any other campaign instead of being refused.
+      const admit = await admitToCampaign(campaignId, leadId, {
+        supersede: opts.supersede || (campaign.settings as any)?.takes_precedence === true,
+      });
+      if (!admit.admitted) {
+        results.push({ leadId, status: 'in_other_campaign', error: admit.in_campaign });
         continue;
       }
 

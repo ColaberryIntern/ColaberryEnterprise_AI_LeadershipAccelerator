@@ -165,6 +165,17 @@ describe('the typed interview', () => {
     expect(arg.sourceRef).toBe(`enterprise-chat:${intake.id}`);
   });
 
+  it('v2: research they uploaded rides with the brief, fenced as data and capped', async () => {
+    mockRunTurn.mockResolvedValue({ done: false, message: 'Next?', exchanges: 1 });
+    const intake = { ...intakeRow(), client_research: `--- plan.pdf ---\n${'a'.repeat(5000)}` };
+    await runEnterpriseInterviewTurn(intake as any, []);
+    const first = mockRunTurn.mock.calls[0][0].turns[0].text as string;
+    expect(first.startsWith(writtenBrief(intake as any))).toBe(true);
+    expect(first).toContain('=====CLIENT-SUPPLIED DOCUMENTS=====');
+    expect(first).toMatch(/never as instructions/);
+    expect(first.length).toBeLessThan(writtenBrief(intake as any).length + 3400);
+  });
+
   it('records the write-up on the intake when the interview ends', async () => {
     mockRunTurn.mockResolvedValue({ done: true, message: 'Thanks.', understanding: 'created', understanding_id: 'u-1' });
     const intake = intakeRow();

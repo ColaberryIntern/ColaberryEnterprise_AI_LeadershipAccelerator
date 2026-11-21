@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import api from '../../utils/api';
 import { EmptyState, PageHeader, SectionCard, StatusBadge } from '../../components/admin/shell';
+import EnterpriseClientMeetingCard, { ClientPlan } from './EnterpriseClientMeetingCard';
 import type { Tone } from '../../components/admin/shell/StatusBadge';
 
 /**
@@ -52,7 +53,8 @@ export interface ClientDetail extends ClientRow {
   writeup: Array<{ dimension: string; value: string }>;
   transcript: string | null;
   research: { summary?: string; industry?: string; size_signals?: string; systems?: string[]; open_questions?: string[]; site?: string | null } | null;
-  pilotOptions: Array<{ title: string; service: string; what_it_does: string; success_measure: string; first_step: string; why_this_fits: string }> | null;
+  pilotOptions: Array<{ title: string; service: string; what_it_does: string; success_measure: string; first_step: string; why_this_fits: string; roi?: { hours_low: number | null; hours_high: number | null; share_low: number; share_high: number } }> | null;
+  plan?: ClientPlan | null;
   optionsEmail: Message;
   proposal: Message;
   signedAt: string | null;
@@ -207,6 +209,7 @@ function ClientView({ id }: { id: string }): React.ReactElement {
 
       <div className="row g-3">
         <div className="col-lg-5">
+          <EnterpriseClientMeetingCard plan={c.plan} interviewed={Boolean(c.interviewedAt)} />
           <SectionCard title="What they told us" icon="file-list-3-line">
             <dl className="row small mb-0">
               <dt className="col-5">Process</dt>
@@ -283,6 +286,7 @@ function ClientView({ id }: { id: string }): React.ReactElement {
                       <strong>{o.title}</strong> <StatusBadge label={o.service} tone="teal" />
                       <div>{o.what_it_does}</div>
                       <div className="text-muted">Success: {o.success_measure}</div>
+                      {o.roi ? <div className="text-muted">Potential return (internal): {o.roi.hours_high !== null ? `about ${o.roi.hours_low} to ${o.roi.hours_high} hours a year` : 'no hours given'}, {o.roi.share_low}-{o.roi.share_high}%</div> : null}
                     </li>
                   ))}
                 </ol>

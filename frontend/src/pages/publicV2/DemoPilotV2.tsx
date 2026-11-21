@@ -120,14 +120,15 @@ export function DemoPilotV2(): React.ReactElement {
   if (token) {
     return (
       <>
-        <SeoV2 title="Your 10-minute interview" description="The next step of your demo pilot request." />
+        <SeoV2 title="Plan your demo pilot" description="Your AI interview, our research and your meeting with Ali, planned in one visit." />
         <section className="cbv2-prhero5 cbv2-dp5" aria-labelledby="cbv2-dp-done">
           <div className="cbv2-wrap">
-            <p className="cbv2-k5">Thank you. One more step</p>
-            <h1 id="cbv2-dp-done">Next, a 10-minute interview.</h1>
+            <p className="cbv2-k5">Thank you. Two minutes to plan the rest</p>
+            <h1 id="cbv2-dp-done">Plan your AI interview and your meeting with Ali.</h1>
             <p className="cbv2-lede">
-              Our AI asks about the process you named, so we can research your company and come to
-              our first meeting with options for your pilot.
+              A 10-minute AI interview tells us how your process works. We research your company,
+              your industry and where AI fits, then meet you with pilot options ranked by what each
+              could return.
             </p>
             <DemoPilotIntake token={token} phone={form.phone.trim() || undefined} />
           </div>

@@ -62,6 +62,15 @@ describe('what they see', () => {
     expect(all).not.toMatch(/INTERNAL|what_it_does|internal detail/);
   });
 
+  it('v2: a booked meeting is a step, the next thing to do, and never shows ROI', () => {
+    const s = clientStatus({ ...ROW, meeting_start: new Date('2099-11-23T15:00:00Z'), meeting_link: 'https://meet.google.com/x',
+      pilot_options: [{ title: 'Order intake agent', roi: { share_low: 30, share_high: 50, hours_low: 312, hours_high: 520 } }] } as any);
+    expect(s.steps[3]).toMatchObject({ label: expect.stringContaining('Your meeting with Ali, '), done: false });
+    expect(s.next).toMatch(/^Meet Ali on .* Central\. The invite with the Google Meet link is in your inbox\.$/);
+    expect(s.meeting).toEqual({ start: new Date('2099-11-23T15:00:00Z'), link: 'https://meet.google.com/x' });
+    expect(JSON.stringify(s)).not.toMatch(/share_|hours_|roi/);
+  });
+
   it('shows the option names only once Ali has sent them', () => {
     expect(clientStatus(ROW).options).toEqual([]);
     expect(clientStatus({ ...ROW, options_email_sent_at: new Date() }).options).toEqual(['Order intake agent']);

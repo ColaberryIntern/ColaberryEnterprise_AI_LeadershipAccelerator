@@ -99,7 +99,7 @@ describe('bcPost', () => {
 // Before this, no fetch in this client carried a signal, so a Basecamp stall
 // hung the caller forever; and there was no paginator, so every TypeScript
 // read of a collection was silently first-page-only.
-import { bcGetAll, bcPut, BcTimeoutError, BC_DEFAULT_MAX_PAGES } from '../basecampClient';
+import { bcGetAll, bcPut, bcUploadAttachment, BcTimeoutError, BC_DEFAULT_MAX_PAGES } from '../basecampClient';
 import { parseNextLink, bcTimeoutMs, BC_DEFAULT_TIMEOUT_MS } from '../bcRetry';
 
 const abortErr = () => Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' });
@@ -143,6 +143,21 @@ describe('timeouts', () => {
     const p = bcPost('/buckets/1/todolists/2/todos.json', { content: 'x' });
     await expect(p).rejects.toBeInstanceOf(BcTimeoutError);
     await expect(p).rejects.toMatchObject({ attempts: 1 });
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('bcUploadAttachment sends the raw bytes and returns the sgid', async () => {
+    (global as any).fetch = jest.fn().mockResolvedValueOnce(okResp({ attachable_sgid: 'sg-1' }));
+    expect(await bcUploadAttachment('plan.pdf', Buffer.from('%PDF-1'), 'application/pdf')).toBe('sg-1');
+    const [url, init] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(url).toMatch(/\/attachments\.json\?name=plan\.pdf$/);
+    expect(init.method).toBe('POST');
+    expect(init.headers['Content-Type']).toBe('application/pdf');
+  });
+
+  it('bcUploadAttachment is never retried after a timeout', async () => {
+    (global as any).fetch = jest.fn().mockRejectedValueOnce(abortErr()).mockResolvedValueOnce(okResp({ attachable_sgid: 'sg-1' }));
+    await expect(bcUploadAttachment('a.pdf', Buffer.from('x'), 'application/pdf')).rejects.toBeInstanceOf(BcTimeoutError);
     expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 

@@ -28,18 +28,18 @@ export const START_TIMINGS = ['This month', 'This quarter', 'Next quarter', 'Jus
 export const WHAT_HAPPENS: readonly { n: string; title: string; body: string }[] = [
   {
     n: '1',
-    title: 'Talk to our AI for 10 minutes',
-    body: 'Right after you send this, by phone or by typing. It only asks what the form leaves out.',
+    title: 'A 10-minute AI interview, now or later',
+    body: 'One person with the answers, instead of a 20 to 30 minute call with everyone. Add any research you already have.',
   },
   {
     n: '2',
     title: 'We do the homework',
-    body: 'We research your company and draft options for your pilot before we meet.',
+    body: 'Your company, your industry, its trends and news, and where AI fits. Pilot options ranked by potential return.',
   },
   {
     n: '3',
-    title: 'Our first meeting starts with your options',
-    body: 'Not with our questions. Then you see the demo pilot and decide.',
+    title: 'Meet with Ali, booked in the same visit',
+    body: 'Thirty minutes that start with your options, not our questions. Then you see the demo pilot and decide.',
   },
 ];
 

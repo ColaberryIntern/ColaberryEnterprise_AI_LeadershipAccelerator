@@ -30,10 +30,17 @@ jest.mock('../enterpriseIntakeBasecamp', () => ({
   intakeBasecampEnabled: () => Boolean(mockEnv.enterpriseIntakeBcProjectId),
   tickStep: (...a: any[]) => mockTick(...a),
 }));
+const mockNews = jest.fn();
+const mockBriefSoon = jest.fn();
+jest.mock('../enterpriseIntakeAliBrief', () => ({ aliBriefSoon: (id: string) => mockBriefSoon(id) }));
+jest.mock('../enterpriseIntakeNews', () => ({
+  ...jest.requireActual('../enterpriseIntakeNews'),
+  companyAndIndustryNews: (...a: any[]) => mockNews(...a),
+}));
 jest.mock('../enterpriseIntakeService', () => ({ writtenBrief: () => 'Company: Acme Logistics\nProcess to start with:\nRe-keying orders' }));
 
 /* eslint-disable import/first */
-import { MAX_RESEARCH_ATTEMPTS, postResearchToList, researchHtml, researchIntake, ruleBreaks, siteFor } from '../enterpriseIntakeResearch';
+import { MAX_RESEARCH_ATTEMPTS, cleanNews, postResearchToList, researchHtml, researchIntake, researchSoon, ruleBreaks, siteFor } from '../enterpriseIntakeResearch';
 /* eslint-enable import/first */
 
 const GOOD = {
@@ -62,6 +69,7 @@ beforeEach(() => {
   mockRecordFind.mockResolvedValue({ items: [{ dimension: 'systems', value: 'McLeod TMS.' }] });
   mockFetchPage.mockResolvedValue({ url: 'https://acme.test/', title: 'Acme', description: 'Freight', text: 'We move freight.' });
   mockChat.mockResolvedValue({ parsed: GOOD });
+  mockNews.mockResolvedValue({ company: [], industry: [], industryQuery: 'freight artificial intelligence' });
   mockTick.mockResolvedValue(true);
   jest.spyOn(console, 'log').mockImplementation(() => {});
   jest.spyOn(console, 'error').mockImplementation(() => {});
@@ -90,11 +98,67 @@ describe('the homework', () => {
     expect(intake.update).toHaveBeenLastCalledWith(
       expect.objectContaining({
         research: expect.objectContaining({ summary: GOOD.research.summary, site: 'https://acme.test/' }),
-        pilot_options: GOOD.options,
+        pilot_options: GOOD.options.map((o) => expect.objectContaining({ ...o, roi: expect.any(Object) })),
         options_email_subject: GOOD.email.subject,
         researched_at: expect.any(Date),
       }),
     );
+  });
+
+  it('v2: gives the model the fetched headlines and keeps only those it copied exactly, with the feed date', async () => {
+    mockNews.mockResolvedValue({
+      company: [{ headline: 'Acme Logistics opens Dallas hub', date: '2026-10-01', url: 'https://news.example/1' }],
+      industry: [{ headline: 'AI cuts freight paperwork', date: '2026-09-15', url: 'https://news.example/2' }],
+      industryQuery: 'freight artificial intelligence',
+    });
+    mockChat.mockResolvedValue({ parsed: { ...GOOD, research: { ...GOOD.research,
+      news: [{ headline: 'acme logistics opens dallas hub', why_it_matters: 'More volume to re-key.' }, { headline: 'Acme wins $50M contract', why_it_matters: 'Invented.' }],
+      ai_trends: [{ headline: 'AI cuts freight paperwork', why_it_matters: 'Peers — automate this.' }] } } });
+    const intake = row();
+    mockFindByPk.mockResolvedValue(intake);
+    expect(await researchIntake('i-1')).toBe('researched');
+    const prompt = mockChat.mock.calls[0][2];
+    expect(prompt).toContain('- Acme Logistics opens Dallas hub (2026-10-01)');
+    expect(prompt).toContain('INDUSTRY AI NEWS (searched: freight artificial intelligence)');
+    const saved = intake.update.mock.calls.at(-1)[0].research;
+    expect(saved.news).toEqual([{ headline: 'Acme Logistics opens Dallas hub', why_it_matters: 'More volume to re-key.', date: '2026-10-01', url: 'https://news.example/1' }]);
+    expect(saved.ai_trends[0].why_it_matters).toBe('Peers - automate this.');
+  });
+
+  it('v2: ranks the options by potential return from their own hours', async () => {
+    mockChat.mockResolvedValue({ parsed: { ...GOOD, options: [
+      { ...GOOD.options[1], share_low: 5, share_high: 10 },
+      { ...GOOD.options[0], share_low: 30, share_high: 50 },
+    ] } });
+    const intake = row({ hours_per_week: 20 });
+    mockFindByPk.mockResolvedValue(intake);
+    await researchIntake('i-1');
+    const opts = intake.update.mock.calls.at(-1)[0].pilot_options;
+    expect(opts.map((o: any) => o.title)).toEqual(['Order intake agent', 'Dispatcher AI coaching']);
+    expect(opts[0].roi).toEqual({ share_low: 30, share_high: 50, hours_low: 312, hours_high: 520 });
+  });
+
+  it("v2: finished research tries Ali's brief (it sends only if a meeting is booked)", async () => {
+    mockFindByPk.mockResolvedValue(row());
+    researchSoon('i-1');
+    for (let n = 0; n < 10 && !mockBriefSoon.mock.calls.length; n++) await new Promise((r) => setTimeout(r, 5));
+    expect(mockBriefSoon).toHaveBeenCalledWith('i-1');
+  });
+
+  it('v2: a news outage does not stop the research', async () => {
+    mockNews.mockResolvedValue({ company: [], industry: [], industryQuery: 'x' });
+    const intake = row();
+    mockFindByPk.mockResolvedValue(intake);
+    expect(await researchIntake('i-1')).toBe('researched');
+    expect(mockChat.mock.calls[0][2]).toContain('COMPANY NEWS (last 6 months):\nnone found');
+  });
+
+  it('v2: the draft email confirms a booked meeting instead of asking for one', async () => {
+    const intake = row({ meeting_start: new Date('2026-11-23T15:00:00Z') });
+    mockFindByPk.mockResolvedValue(intake);
+    await researchIntake('i-1');
+    expect(mockChat.mock.calls[0][2]).toContain('MEETING: Monday, November 23 at 9:00 AM Central');
+    expect(mockChat.mock.calls[0][1]).toMatch(/If MEETING shows a booked time/);
   });
 
   it('still works with no website, and says so to the model', async () => {
@@ -135,6 +199,34 @@ describe('the homework', () => {
     mockFindByPk.mockResolvedValue(row());
     mockChat.mockRejectedValue(new Error('429'));
     expect(await researchIntake('i-1')).toBe('failed');
+  });
+
+  it('v2: an ROI figure in the client email is a rule break, and that draft is not saved', async () => {
+    const leaky = { ...GOOD, email: { ...GOOD.email, body: 'Option 1 could take back 30-50% of your 1,040 hours a year.' } };
+    expect(ruleBreaks(leaky as any)).toEqual(['an ROI figure (percent or hours) in the email']);
+    expect(ruleBreaks({ ...GOOD, email: { ...GOOD.email, body: 'About 520 hours back.' } } as any)).toEqual(['an ROI figure (percent or hours) in the email']);
+    mockChat.mockResolvedValue({ parsed: leaky });
+    const intake = row();
+    mockFindByPk.mockResolvedValue(intake);
+    expect(await researchIntake('i-1')).toBe('rejected');
+    expect(intake.update).toHaveBeenCalledTimes(1); // only the attempt counter
+  });
+
+  it('v2: shares are clamped to whole percents 0-80 instead of rejecting the research', async () => {
+    mockChat.mockResolvedValue({ parsed: { ...GOOD, options: [{ ...GOOD.options[0], share_low: '12.6', share_high: 95 }, { ...GOOD.options[1], share_low: -5 }] } });
+    const intake = row({ hours_per_week: 10 });
+    mockFindByPk.mockResolvedValue(intake);
+    expect(await researchIntake('i-1')).toBe('researched');
+    const [a, b] = intake.update.mock.calls.at(-1)[0].pilot_options;
+    expect([a.share_low, a.share_high, a.roi.share_high]).toEqual([13, 80, 80]);
+    expect(b.share_low).toBe(0);
+  });
+
+  it('v2: news may quote money and dashes; the banned word drops that item only', () => {
+    const withNews = { ...GOOD, research: { ...GOOD.research, news: [{ headline: 'Acme raises $5M — report', why_it_matters: 'x' }], ai_trends: [] } };
+    expect(ruleBreaks(withNews as any)).toEqual([]);
+    expect(cleanNews([{ headline: 'Free shipping for all', why_it_matters: 'x' }, { headline: 'Acme – hub', why_it_matters: 'y' }]))
+      .toEqual([{ headline: 'Acme - hub', why_it_matters: 'y' }]);
   });
 
   it('flags every banned thing it finds', () => {

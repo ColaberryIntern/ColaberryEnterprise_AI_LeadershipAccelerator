@@ -486,11 +486,39 @@ const ENTERPRISE: readonly ClassificationDefinition[] = [
     tone: 'good',
     glyph: '★',
     direction: 'in',
-    carriesValue: false,
+    // Flipped to true by R23 Phase 2, when enterprise_deal_values gave a signed deal
+    // somewhere to keep a figure. It carries the value where a named human recorded one and
+    // NULL where nobody has, so an unvalued win still appears as a win with no number.
+    carriesValue: true,
     means:
-      'The intake reached signed and the prospect became an Enterprise Client. It carries no '
-      + 'figure because no column holds one yet, so a signed deal reports as a win with no '
-      + 'number rather than as a guess.',
+      'The intake reached signed and the prospect became an Enterprise Client. Carries the '
+      + 'human-confirmed deal value where one exists, and no number where nobody has priced '
+      + 'it. An unvalued win is never reported as zero.',
+  },
+  {
+    key: 'enterprise_priced',
+    label: 'Deal value confirmed',
+    stream: 'enterprise_site',
+    tone: 'good',
+    glyph: '◉',
+    direction: 'none',
+    carriesValue: true,
+    means:
+      'A named person recorded what this deal is worth, with a basis another person could '
+      + 'check. The valuation is its own dated event because the figure is a commitment, not '
+      + 'a derivation.',
+  },
+  {
+    key: 'enterprise_repriced',
+    label: 'Deal value revised',
+    stream: 'enterprise_site',
+    tone: 'warn',
+    glyph: '⟳',
+    direction: 'none',
+    carriesValue: true,
+    means:
+      'The value was superseded by a new one. Corrections insert and supersede rather than '
+      + 'overwrite, so the first number and the final one are both still readable.',
   },
   {
     key: 'enterprise_lost',
@@ -589,12 +617,13 @@ export function assertValueCarryingIsDeclaredHonestly(): void {
     // onto a board whose headline is money. `conversion_setup` additionally stops the same
     // dollar being counted as both a converted member and a campaign result.
     'hypothesis_evidence', 'hypothesis_deadline', 'fde_setup', 'conversion_setup',
-    // The enterprise site. enterprise_intakes held no value, price or amount column on
-    // 2026-11-21, so not even a signed deal has a figure to report. These five come off this
-    // list one at a time when R23 Phase 2 gives a signed deal a human-confirmed value, and
-    // `enterprise_signed` is the only one that should ever move.
+    // The enterprise site. R23 Phase 2 gave a signed deal somewhere to keep a figure
+    // (`enterprise_deal_values`), so `enterprise_signed` came off this list - and ONLY it,
+    // alongside the two valuation events. An inquiry, an interview and a sent proposal are
+    // not money and no table will make them so, which is why they stay here permanently
+    // rather than as a staging state.
     'enterprise_inquiry', 'enterprise_interviewed', 'enterprise_proposal_sent',
-    'enterprise_signed', 'enterprise_lost',
+    'enterprise_lost',
   ];
   for (const key of mustNotCarry) {
     const def = classificationFor(key);

@@ -17,6 +17,7 @@
  */
 import jwt from 'jsonwebtoken';
 import EnterpriseIntake from '../../models/EnterpriseIntake';
+import { meetingWhen } from './enterpriseIntakeTime';
 import { env } from '../../config/env';
 import { sendEnterpriseClientLink } from '../emailService';
 
@@ -66,6 +67,8 @@ export interface ClientStatus {
   options: string[];
   next: string;
   closed: 'signed' | 'lost' | null;
+  /** v2: the meeting with Ali they booked, if any. */
+  meeting: { start: Date; link: string | null } | null;
 }
 
 /** Their progress, in their words. Built only from fields that are safe for them to see. */
@@ -77,11 +80,16 @@ export function clientStatus(i: EnterpriseIntake): ClientStatus {
     { label: 'You asked for a demo pilot', done: true, at: i.createdAt || null },
     { label: 'Your AI interview', done: Boolean(i.interviewed_at), at: i.interviewed_at },
     { label: 'We researched your company and drafted pilot options', done: Boolean(i.researched_at), at: i.researched_at },
+    ...(i.meeting_start
+      ? [{ label: `Your meeting with Ali, ${meetingWhen(new Date(i.meeting_start))}`, done: new Date(i.meeting_start).getTime() < Date.now(), at: i.meeting_start }]
+      : []),
     { label: 'Your pilot options were sent to you', done: Boolean(i.options_email_sent_at), at: i.options_email_sent_at },
     { label: 'Your proposal was sent to you', done: Boolean(i.proposal_sent_at), at: i.proposal_sent_at },
     { label: 'Your pilot project is open', done: Boolean(i.signed_at), at: i.signed_at },
   ];
-  let next = 'Someone from Colaberry will email you to set up a first meeting.';
+  let next = i.meeting_start
+    ? `Meet Ali on ${meetingWhen(new Date(i.meeting_start))}. The invite with the Google Meet link is in your inbox.`
+    : 'Someone from Colaberry will email you to set up a first meeting.';
   if (!i.interviewed_at) next = 'Finish your 10-minute AI interview, so we can prepare your options.';
   else if (i.signed_at) next = 'Your pilot is underway. Your Colaberry team will keep you posted.';
   else if (i.proposal_sent_at) next = 'Reply to the proposal email with any questions, or to get started.';
@@ -93,6 +101,7 @@ export function clientStatus(i: EnterpriseIntake): ClientStatus {
     options,
     next: i.lost_at ? 'This request is closed. Email info@colaberry.com any time to pick it back up.' : next,
     closed: i.signed_at ? 'signed' : i.lost_at ? 'lost' : null,
+    meeting: i.meeting_start ? { start: i.meeting_start, link: i.meeting_link || null } : null,
   };
 }
 

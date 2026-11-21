@@ -124,10 +124,13 @@ describe('DemoPilotV2 — the page', () => {
 
   it('says what happens after you send it', () => {
     const text = textOf(html());
-    // W28: the AI interview comes first, and the first meeting starts with options.
-    expect(text).toContain('Talk to our AI for 10 minutes');
+    // W28 + v2: the AI interview (now or later) comes first, then our research and ROI-ranked
+    // options, then the meeting with Ali, booked in the same visit.
+    expect(text).toContain('A 10-minute AI interview, now or later');
+    expect(text).toContain('instead of a 20 to 30 minute call with everyone');
     expect(text).toContain('We do the homework');
-    expect(text).toContain('Our first meeting starts with your options');
+    expect(text).toContain('Pilot options ranked by potential return');
+    expect(text).toContain('Meet with Ali, booked in the same visit');
   });
 
   it('offers an email route for anyone who will not fill in a form', () => {
