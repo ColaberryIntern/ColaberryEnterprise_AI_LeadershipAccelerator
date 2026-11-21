@@ -25,7 +25,29 @@ export interface AgentDomainRow {
   manager_email: string | null;
   manager_can_reach: boolean | null;
   manager_blocker: string | null;
+  /**
+   * The intern building this domain, as a NAME and nothing more.
+   *
+   * `agentDomainRegistry` is explicit that this is deliberately not a foreign key to an
+   * enrollment, "because a `string` cannot be mistaken for an assignment by any code path", and a
+   * test asserts no such field can be added. So nothing here may follow it to a person
+   * automatically. It is surfaced because All Domains showed the accountable MANAGER and never
+   * named the person actually building the thing.
+   */
+  intended_builder: string | null;
   intended_builder_state: string | null;
+  /**
+   * AF12.16 — the builder's MANAGEMENT grant, so an owner can read an intern's admin layer
+   * without signing in as them. Read-only, resolved from their name with an ambiguity guard.
+   *
+   * This exists because view-as withholds employee tools by design, which made impersonation the
+   * one way that could never answer "what can this intern reach". Optional on the type because an
+   * older server does not send them.
+   */
+  intended_builder_mgmt_role?: string | null;
+  intended_builder_mgmt_label?: string | null;
+  intended_builder_sections?: string[];
+  intended_builder_name_is_ambiguous?: boolean;
   agent_id: string | null;
   /**
    * AF10.6: the name the intern gave this agent. Null until they name it, which is the normal

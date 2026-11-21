@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { PageHeader, SectionCard } from '../../components/admin/shell';
+// The same chip the project delivery rows use, so a link on this screen looks and behaves like a
+// link on the Accelerator screen: new tab, nothing rendered when there is no destination.
+import LinkChip from './components/projectDelivery/LinkChip';
 import {
   fetchProvisionedDomains, errorMessage,
   type AgentDomainRow, type AgentDomainSummary,
@@ -140,6 +143,7 @@ export default function AdminAllDomainsPage() {
                       <th scope="col">Domain</th>
                       <th scope="col">Stage</th>
                       <th scope="col">Accountable manager</th>
+                      <th scope="col">Intern building it</th>
                       <th scope="col" className="text-end">Releases</th>
                       <th scope="col" className="text-end">Stories</th>
                       <th scope="col" className="text-end">Verified</th>
@@ -160,11 +164,117 @@ export default function AdminAllDomainsPage() {
   );
 }
 
+/**
+ * AF12.16 — the three places a domain row leads, each in its own tab.
+ *
+ * Ali, 21 Nov 2026: *"I need to see each domain mapped to the project it is associated with, so I
+ * can drill down just like in projects and intern project section. Also I need a link to see it
+ * from the interns perspective. I also need a link to their Agents admin screen. Open up in
+ * another tab."*
+ *
+ * Two of the three were already in the payload and simply never rendered: `student_project_id`
+ * and `agent_id`. The third is the one that could not be a link, and the reason is written into
+ * the registry: the builder is a NAME, held deliberately without a foreign key to an enrollment.
+ * So the intern chip goes to the roster pre-searched for that name and a human picks the row,
+ * rather than this screen guessing which person a name means. A wrong guess there would open
+ * somebody else's portal, which is the failure AF2.6 was an entire ticket about.
+ */
+function RowLinks({ d }: { d: AgentDomainRow }) {
+  return (
+    <span className="ms-1 text-nowrap">
+      <LinkChip
+        href={`/admin/accelerator?project=${encodeURIComponent(d.student_project_id)}`}
+        icon="ri-folder-open-line"
+        label="the build project"
+        accent
+      />
+      <LinkChip
+        href={d.agent_id ? `/admin/agents/${encodeURIComponent(d.agent_id)}` : null}
+        icon="ri-robot-2-line"
+        label="the agent's admin screen"
+      />
+      <LinkChip
+        href={d.intended_builder
+          ? `/admin/students?search=${encodeURIComponent(d.intended_builder)}`
+          : null}
+        icon="ri-user-search-line"
+        label={`the roster, searched for ${d.intended_builder ?? 'the builder'}`}
+      />
+    </span>
+  );
+}
+
+/** The planning state of the build, which is not the same question as who the builder is. */
+function BuilderState({ state }: { state: string | null }) {
+  if (state === 'verified_active') return null;
+  const label = state === 'onboarding_pending' ? 'onboarding' : (state ?? 'unknown');
+  return (
+    <span
+      className="badge ms-2"
+      style={{ background: 'var(--color-warning-bg)', color: 'var(--color-warning)' }}
+    >
+      {label}
+    </span>
+  );
+}
+
+/**
+ * AF12.16 — the builder's management layer, read from their own grant.
+ *
+ * Ali signed in as Quincy and several other interns on 21 Nov and reported that none of them had
+ * a door to the management screen. All seven have one. What hid it was the read-only view-as
+ * rule, which withholds employee tools on purpose, so impersonating a builder is the single
+ * method guaranteed not to show their admin access.
+ *
+ * So the access is reported HERE instead, where it can be read without becoming anybody: the
+ * management role they hold and the exact sections their admin session is scoped to, which are
+ * the same values `mgmtBridgeService` mints the token from.
+ */
+function BuilderMgmt({ d }: { d: AgentDomainRow }) {
+  if (!d.intended_builder) return null;
+  if (d.intended_builder_name_is_ambiguous) {
+    return (
+      <div className="text-muted small mt-1">
+        More than one member carries this name, so their access was not resolved rather than
+        guessed.
+      </div>
+    );
+  }
+  if (!d.intended_builder_mgmt_role) {
+    return (
+      <div className="small mt-1" style={{ color: 'var(--color-secondary)' }}>
+        No management role, so no admin door.
+      </div>
+    );
+  }
+  const sections = d.intended_builder_sections ?? [];
+  return (
+    <div className="small mt-1">
+      <span className="text-muted">Opens the admin portal as </span>
+      <span className="fw-semibold">{d.intended_builder_mgmt_label}</span>
+      {sections.length > 0 && (
+        <div className="mt-1">
+          {sections.map((s) => (
+            <span
+              key={s}
+              className="badge me-1 mb-1"
+              style={{ background: 'var(--cherry-bg)', color: 'var(--cherry-deep)', fontWeight: 600 }}
+            >
+              {s}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DomainRow({ d }: { d: AgentDomainRow }) {
   return (
     <tr>
       <th scope="row" className="fw-semibold">
         {d.domain_key}
+        <RowLinks d={d} />
         {d.manager_blocker && (
           <div className="fw-normal text-muted small">{d.manager_blocker}</div>
         )}
@@ -183,6 +293,24 @@ function DomainRow({ d }: { d: AgentDomainRow }) {
           </span>
         )}
       </td>
+      {/* The manager above is staff and accountable for the domain. This is the person actually
+          building it, which this screen could not tell you until now. */}
+      <td className="small">
+        {d.intended_builder
+          ? (
+            <a
+              href={`/admin/students?search=${encodeURIComponent(d.intended_builder)}`}
+              target="_blank"
+              rel="noreferrer"
+              title={`Find ${d.intended_builder} on the roster, where you can view the portal as them`}
+            >
+              {d.intended_builder}
+            </a>
+          )
+          : <span className="text-danger">nobody assigned</span>}
+        <BuilderState state={d.intended_builder_state} />
+        <BuilderMgmt d={d} />
+      </td>
       <td className="text-end">{d.releases}</td>
       <td className="text-end">{d.stories}</td>
       {/* A zero here is the accurate state of the programme, not a rendering gap, so it is
@@ -191,7 +319,16 @@ function DomainRow({ d }: { d: AgentDomainRow }) {
       <Count value={d.build_authorizations} />
       <td className="small">
         {d.agent_id
-          ? <code>{d.agent_id}</code>
+          ? (
+            <a
+              href={`/admin/agents/${encodeURIComponent(d.agent_id)}`}
+              target="_blank"
+              rel="noreferrer"
+              title={`Open ${d.agent_display_name || 'this agent'} in the agent admin screen`}
+            >
+              {d.agent_display_name || <code>{d.agent_id}</code>}
+            </a>
+          )
           : <span className="text-muted">none built yet</span>}
       </td>
     </tr>
