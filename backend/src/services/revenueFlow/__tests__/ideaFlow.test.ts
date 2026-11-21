@@ -151,11 +151,16 @@ describe('the setup funnels count what we actually know', () => {
   };
 
   /**
-   * A stated price is an agreement, not a measurement. Ali set the FDE fee at 1% of first
-   * year salary on 2026-11-16, which answers what `defined` asks for and answers nothing
-   * `wired` asks for: there is still no table holding a placement, a salary, or an earned
-   * fee. Pinned as a test because "we decided the price" is the most natural moment for
-   * someone to mark the whole source as ready.
+   * A stated price is an agreement, not a measurement. The FDE fee is 10% of first year
+   * salary, which answers what `defined` asks for and answers nothing `wired` asks for:
+   * there is still no table holding a placement, a salary, or an earned fee. Pinned as a
+   * test because "we decided the price" is the most natural moment for someone to mark the
+   * whole source as ready.
+   *
+   * THE FIGURE IS ASSERTED IN BOTH DIRECTIONS, and that is deliberate. This file asserted
+   * `/1%/` from 16 to 21 November, while the price was wrong by a factor of ten. A test that
+   * only checks the new number passes just as happily if someone puts the old one back, so
+   * the superseded figure is named here as something the stage must NOT say.
    */
   it('counts the FDE fee basis as defined, and still not wired', async () => {
     const fde = await streamByKey('hire_fde');
@@ -164,7 +169,10 @@ describe('the setup funnels count what we actually know', () => {
     expect(stage(fde, 'wired').count).toBe(0);
     expect(stage(fde, 'earning').count).toBe(0);
     // The basis is stated in words where a reader meets the stage, not rendered as money.
-    expect(stage(fde, 'defined').definition).toMatch(/1%/);
+    expect(stage(fde, 'defined').definition).toMatch(/10% of the first year salary/);
+    // And the superseded figure is gone from the stage a reader actually meets. `/\b1%/`
+    // rather than `/1%/` so it cannot be satisfied by the "10%" it is guarding.
+    expect(stage(fde, 'defined').definition).not.toMatch(/\b1%/);
   });
 
   /**
