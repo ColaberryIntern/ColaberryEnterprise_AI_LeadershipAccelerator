@@ -77,6 +77,27 @@ export async function listHubEvents(scope: HubEventScope = 'upcoming'): Promise<
   return data.events;
 }
 
+/* Eventbrite events (CH9.2), read-only from the CCPP mirror: backend commsHubEventbriteRoutes.ts. */
+export type EventbriteWindow = 'upcoming' | 'past';
+export interface EventbriteEvent {
+  ccpp_event_id: string;
+  title: string;
+  starts_at: string;
+  ends_at: string | null;
+  registration_url: string | null;
+  image_url: string | null;
+  /** People registered (Eventbrite plus our site), or null when unknown. */
+  registered: number | null;
+  eventbrite_status: string;
+}
+/** 'unavailable' and 'not_configured' are never shown as "no events". */
+export interface EventbriteList { status: 'ok' | 'unavailable' | 'not_configured'; window: EventbriteWindow; events: EventbriteEvent[]; fetched_at: string }
+
+export async function listEventbriteEvents(window: EventbriteWindow = 'upcoming'): Promise<EventbriteList> {
+  const { data } = await api.get<EventbriteList>('/api/admin/comms-hub/eventbrite-events', { params: { window } });
+  return data;
+}
+
 export async function createHubEvent(input: HubEventInput): Promise<HubEvent> {
   const { data } = await api.post<{ event: HubEvent }>('/api/admin/comms-hub/events', input);
   return data.event;

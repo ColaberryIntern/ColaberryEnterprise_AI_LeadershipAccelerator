@@ -13,6 +13,8 @@ jest.mock('../../../../../services/commsHubApi', () => ({
   duplicateHubEvent: jest.fn(), cancelHubEvent: jest.fn(), describeHubEvent: jest.fn(),
   // CH4.4 the editor now holds the thumbnail studio; its own test covers it.
   listThumbnails: jest.fn(), listEventPhotos: jest.fn(), getLivePanel: jest.fn(), getPromotionPlan: jest.fn(),
+  // CH9.2 the "From Eventbrite" section under the list; its own test covers it.
+  listEventbriteEvents: jest.fn(),
 }));
 
 /** CH3.1 + CH3.2 rendered: the list in training-site shape, the editor, save/duplicate/cancel, Write with AI, a11y. */
@@ -43,6 +45,7 @@ beforeEach(() => {
   (api.listEventPhotos as jest.Mock).mockResolvedValue([]);
   (api.getPromotionPlan as jest.Mock).mockResolvedValue({ event_id: 'x', rows: [] });
   (api.getLivePanel as jest.Mock).mockResolvedValue({ input_configured: true, occurrence: null, commands: [], input_held_by: null });
+  (api.listEventbriteEvents as jest.Mock).mockResolvedValue({ status: 'ok', window: 'upcoming', events: [], fetched_at: '2026-11-21T22:00:00.000Z' });
 });
 beforeEach(() => { (api.listHubCohorts as jest.Mock).mockResolvedValue([{ id: '77777777-7777-4777-8777-777777777777', name: 'November 2026', status: 'open', start_date: '2026-11-03' }]); });
 afterEach(() => { act(() => { root.unmount(); }); container.remove(); jest.clearAllMocks(); });
@@ -87,7 +90,8 @@ describe('CH3.1 the list', () => {
     await renderAt('/admin/comms-hub/events');
     const order: string[] = [];
     for (const el of Array.from(container.querySelectorAll<HTMLElement>('button:not([disabled]), a[href]'))) { el.focus(); order.push((document.activeElement?.textContent ?? '').trim()); }
-    expect(order).toEqual(['Upcoming', 'Past', 'Cancelled', 'Open event', 'Open Event 2', 'Open Event 3']);
+    // CH9.2: the "From Eventbrite" section follows the hub's own list, with its two window buttons.
+    expect(order).toEqual(['Upcoming', 'Past', 'Cancelled', 'Open event', 'Open Event 2', 'Open Event 3', 'Upcoming', 'Past 90 days']);
   });
 
   it('one event: featured only; none: the empty state offers New event; scope buttons say which is on', async () => {

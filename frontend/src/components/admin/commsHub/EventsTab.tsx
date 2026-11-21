@@ -4,6 +4,7 @@ import { SectionCard, EmptyState } from '../shell';
 import { listHubEvents, apiErrorMessage, type HubEvent, type HubEventScope } from '../../../services/commsHubApi';
 import EventsList from './events/EventsList';
 import EventEditor from './events/EventEditor';
+import EventbriteEvents from './events/EventbriteEvents';
 import './commsHub.css';
 
 /**
@@ -43,6 +44,7 @@ export default function EventsTab(): React.ReactElement {
   }
 
   return (
+    <>
     <SectionCard
       title="Events"
       icon="calendar-event-line"
@@ -81,5 +83,8 @@ export default function EventsTab(): React.ReactElement {
       )}
       {load.state === 'ready' && load.events.length > 0 && <EventsList scope={scope} events={load.events} onOpen={open} />}
     </SectionCard>
+    {/* CH9.2 the events members already see on /portal/events, read-only from Eventbrite. */}
+    <div className="mt-3"><EventbriteEvents /></div>
+    </>
   );
 }

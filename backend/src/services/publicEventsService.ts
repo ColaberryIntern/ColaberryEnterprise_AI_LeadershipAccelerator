@@ -60,7 +60,8 @@ const FETCH_WINDOW_DAYS = 180;
 const FETCH_LIMIT = 100;
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 min
 
-interface CcppEventRow {
+/** Exported for the Communications Hub's Eventbrite list (CH9.2), which reads the same rows. */
+export interface CcppEventRow {
   EventId: string;
   Name: string;
   Description: string | null;
@@ -75,7 +76,31 @@ interface CcppEventRow {
 
 let cache: { at: number; events: OpenHouseView[] } | null = null;
 
-async function connectCcpp(): Promise<sql.ConnectionPool> {
+/**
+ * The "public event" test, as a WHERE fragment on alias `e`: the Registration group (bound as
+ * `@group`, which the caller must supply) OR the deprecated name allowlist (static literals, no input).
+ * Shared with the Communications Hub's Eventbrite list (CH9.2) so the admin list and /portal/events
+ * can never disagree about which events are public.
+ */
+export function publicEventFilterSql(): string {
+  const allowlist = PUBLIC_EVENT_LIKE.map((p) => `e.Name LIKE '${p}'`).join(' OR ');
+  // EXISTS, not a JOIN: an event may carry several active group rows, and a join would emit one
+  // duplicate event per row (and burn the TOP (@lim) budget on them).
+  return `(
+            EXISTS (
+              SELECT 1
+              FROM EventBrite_EventAccess a
+              INNER JOIN EventBrite_EventGroups g ON g.ID = a.EventGroupId
+              WHERE a.EventId = e.EventId
+                AND a.IsActive = 1
+                AND g.GroupName = @group
+            )
+            OR ${allowlist}
+          )`;
+}
+
+/** Exported for the Communications Hub (CH9.2/CH9.3), which reads CCPP read-only with the same settings. */
+export async function connectCcpp(): Promise<sql.ConnectionPool> {
   if (!env.mssqlHost || !env.mssqlUser) {
     throw new Error('MSSQL connection not configured (MSSQL_HOST / MSSQL_USER missing)');
   }
@@ -146,11 +171,9 @@ export function withinDays(events: OpenHouseView[], nowMs: number, days: number)
 async function fetchFromCcpp(): Promise<OpenHouseView[]> {
   const pool = await connectCcpp();
   try {
-    // OR of static LIKE literals (no user input) — the deprecated name fallback.
-    const allowlist = PUBLIC_EVENT_LIKE.map((p) => `e.Name LIKE '${p}'`).join(' OR ');
-    // EXISTS, not a JOIN: an event may carry several active group rows, and a
-    // join would emit one duplicate event per row (and burn the TOP (@lim) budget
-    // on them). The group name is bound as a parameter, not interpolated.
+    // The public-event test (Registration group OR the deprecated name allowlist) lives in
+    // publicEventFilterSql so the hub's Eventbrite list uses the identical rule. The group name
+    // is bound as a parameter, not interpolated.
     const res = await pool
       .request()
       .input('days', sql.Int, FETCH_WINDOW_DAYS)
@@ -169,17 +192,7 @@ async function fetchFromCcpp(): Promise<OpenHouseView[]> {
         WHERE e.Status = 'live'
           AND e.StartDate > ${CCPP_NOW_CENTRAL}
           AND e.StartDate <= DATEADD(day, @days, ${CCPP_NOW_CENTRAL})
-          AND (
-            EXISTS (
-              SELECT 1
-              FROM EventBrite_EventAccess a
-              INNER JOIN EventBrite_EventGroups g ON g.ID = a.EventGroupId
-              WHERE a.EventId = e.EventId
-                AND a.IsActive = 1
-                AND g.GroupName = @group
-            )
-            OR ${allowlist}
-          )
+          AND ${publicEventFilterSql()}
         ORDER BY e.StartDate ASC
       `);
     return res.recordset.map(ccppRowToView);

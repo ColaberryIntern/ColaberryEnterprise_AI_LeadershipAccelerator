@@ -243,3 +243,5 @@
    page keeps room at the bottom so the fixed button never sits over the last row of a tab. */
 .comms-hub { padding-bottom: 4.5rem; }
 .comms-hub [data-testid="report-problem-open"] { min-height: 44px; padding-left: 1rem; padding-right: 1rem; }
+/* CH9.2 the Eventbrite event picture on its card. */
+.ch-eb-image { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 8px; margin-bottom: 0.5rem; }

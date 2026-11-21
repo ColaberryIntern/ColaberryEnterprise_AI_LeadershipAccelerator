@@ -12,6 +12,7 @@ import planRoutes from './commsHubPlanRoutes';
 import messageRoutes from './commsHubMessageRoutes';
 import boardRoutes from './commsHubBoardRoutes';
 import bugReportRoutes from './commsHubBugReportRoutes';
+import eventbriteRoutes from './commsHubEventbriteRoutes';
 
 /**
  * Communications Hub admin API (CH1.3 onward). Every route sits under /api/admin/comms-hub, which
@@ -47,5 +48,7 @@ router.use(messageRoutes);
 router.use(boardRoutes);
 // CH9.1 Report a problem, on every hub tab.
 router.use(bugReportRoutes);
+// CH9.2 the Eventbrite events, read-only from the CCPP mirror.
+router.use(eventbriteRoutes);
 
 export default router;

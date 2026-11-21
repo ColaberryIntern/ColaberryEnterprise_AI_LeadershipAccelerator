@@ -46,6 +46,8 @@ beforeEach(() => {
   (commsHubApi.getCommsHubSummary as jest.Mock).mockResolvedValue(EMPTY);
   // CH3.1: the Events tab loads its own list; an empty hub has no events.
   (commsHubApi.listHubEvents as jest.Mock).mockResolvedValue([]);
+  // CH9.2: the Events tab also lists the Eventbrite events.
+  (commsHubApi.listEventbriteEvents as jest.Mock).mockResolvedValue({ status: 'ok', window: 'upcoming', events: [], fetched_at: '2026-11-21T22:00:00.000Z' });
   // CH6.5: Compose loads the recipient options.
   (commsHubApi.getDestinationOptions as jest.Mock).mockResolvedValue([]);
   // CH7.4: Today and Schedule & history load their lists, the safety controls and the activity log.
