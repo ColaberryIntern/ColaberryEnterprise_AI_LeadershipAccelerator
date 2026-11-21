@@ -3,6 +3,7 @@ import { VideoSource, providerLabel, withAutoplay, isAudioUrl } from '../../util
 import { ytHandshake } from '../../utils/youtubeChannel';
 import { getPodcastMuted, setPodcastMuted } from '../../utils/podcastMutePreference';
 import { creditForTick } from './watchCredit';
+import { retryDelayMs } from './watchRetry';
 
 /**
  * VideoEmbed — plays a lesson video in-app from any supported link (YouTube,
@@ -94,10 +95,26 @@ const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded, badge, au
   // The provider label of the last tick, so an exit beat is labeled like the beats before it.
   const lastProviderRef = useRef<string>('file');
 
+  // Back-off after a failed send. Re-crediting a rejected beat (below) restores the buffer to at
+  // least FLUSH_AFTER_S, which is the very condition that triggers a flush -- and the next playhead
+  // sample lands about 0.3s later. Without a wait, one failure turns into roughly three requests a
+  // second until the limiter's window clears, which is what Swati Raman measured in production on
+  // 20 Nov 2026. `retryAt` is the earliest clock time the next send may go out; `failures` counts
+  // consecutive failures so the wait grows while the server stays unhappy. See watchRetry.ts.
+  const retryAtRef = useRef<number>(0);
+  const failuresRef = useRef<number>(0);
+
   const flushRef = useRef<(provider: string, exiting?: boolean) => void>(() => {});
   flushRef.current = (provider: string, exiting = false) => {
     const b = bufRef.current;
     if (!beatRef.current || b.delta <= 0) return;
+    // Still inside the back-off from an earlier failure: keep buffering rather than sending. The
+    // seconds are not lost -- they stay in the buffer and go out as one larger beat once the wait
+    // is over, which the server's per-beat ceiling is sized to accept. An EXIT beat ignores the
+    // wait: the page is going away, so there is no later attempt to protect and a dropped beat
+    // here is watch time destroyed. Checked BEFORE the buffer is cleared, or the wait would eat
+    // exactly the seconds it exists to preserve.
+    if (!exiting && retryAtRef.current > 0 && Date.now() < retryAtRef.current) return;
     // The buffer is cleared BEFORE the send, so a slow network cannot double-count these seconds
     // into the next beat. The cost is that a FAILED send used to destroy them permanently -- the
     // caller swallowed the rejection and nobody put the time back. If the callback hands back a
@@ -116,11 +133,24 @@ const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded, badge, au
 
     // A caller that returns nothing behaves exactly as before.
     if (sent && typeof (sent as Promise<unknown>).then === 'function') {
-      (sent as Promise<unknown>).then(undefined, () => {
-        // Re-credit, bounded: a server that is down for an hour must not grow an unbounded
-        // buffer that is then posted as one implausible beat.
-        bufRef.current.delta = Math.min(bufRef.current.delta + b.delta, MAX_REBUFFERED_S);
-      });
+      (sent as Promise<unknown>).then(
+        () => {
+          // The server is taking beats again, so stop waiting and forget the failure history.
+          // Clearing this on success is what keeps one bad minute from slowing the rest of a
+          // lesson: the wait only grows while failures are CONSECUTIVE.
+          failuresRef.current = 0;
+          retryAtRef.current = 0;
+        },
+        (err: unknown) => {
+          // Re-credit, bounded: a server that is down for an hour must not grow an unbounded
+          // buffer that is then posted as one implausible beat.
+          bufRef.current.delta = Math.min(bufRef.current.delta + b.delta, MAX_REBUFFERED_S);
+          failuresRef.current += 1;
+          // A 429 from the participant limiter carries RateLimit-Reset, so this usually waits
+          // exactly as long as the server asked rather than guessing.
+          retryAtRef.current = Date.now() + retryDelayMs(err, failuresRef.current);
+        },
+      );
     }
   };
 
