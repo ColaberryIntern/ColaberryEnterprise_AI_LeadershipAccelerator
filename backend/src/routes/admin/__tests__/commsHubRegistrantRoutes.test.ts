@@ -46,10 +46,19 @@ describe('who can reach the registrants (names, emails, phones)', () => {
       expect(res.status).toBe(roleCanAccessSection(role, 'comms_hub') ? 200 : 403);
       if (res.status === 200) reached.push(role);
     }
-    // The real list, pasted into the CH9.3 ticket: today the hub is held by these roles.
-    expect(reached.sort()).toEqual(MGMT_ROLES.filter((r) => roleCanAccessSection(r, 'comms_hub')).sort());
+    // Stated, not derived: widening registrant access (names, emails, phones) to another role must fail
+    // this test, not pass it silently. Owner, admin and community_organizer hold the hub by role.
+    expect(reached.sort()).toEqual(['admin', 'community_organizer', 'owner']);
+    expect(MGMT_ROLES.filter((r) => roleCanAccessSection(r, 'comms_hub')).sort()).toEqual(['admin', 'community_organizer', 'owner']);
+    // Beyond the roles: a legacy admin with no mgmt_role (every section), and anyone granted the hub as
+    // an extra section (Taiwo: lead_intake + comms_hub). Without the grant, lead_intake is refused.
     expect((await request(app).get(`${BASE}/777/registrants`).set(as({ role: 'admin' }))).status).toBe(200);
-    expect((await request(app).get(`${BASE}/777/registrants`).set(as({ role: 'admin', mgmt_role: 'lead_intake', mgmt_extra_sections: ['comms_hub'] }))).status).toBe(200);
+    expect((await request(app).get(`${BASE}/777/registrants`).set(as({ role: 'admin', mgmt_role: 'lead_intake', mgmt_extra_sections: ['agents', 'comms_hub'] }))).status).toBe(200);
+    expect((await request(app).get(`${BASE}/777/registrants`).set(as({ role: 'admin', mgmt_role: 'lead_intake', mgmt_extra_sections: ['agents'] }))).status).toBe(403);
+    for (const refused of ['marketing', 'revenue', 'support', 'mentor', 'executive']) {
+      // eslint-disable-next-line no-await-in-loop
+      expect((await request(app).get(`${BASE}/777/registrants.csv`).set(as({ role: 'admin', mgmt_role: refused }))).status).toBe(403);
+    }
   });
   it('no token is 401 on both routes and nothing is read', async () => {
     expect((await request(app).get(`${BASE}/777/registrants`)).status).toBe(401);
