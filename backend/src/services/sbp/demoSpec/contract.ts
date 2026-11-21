@@ -110,6 +110,25 @@ export const DemoSpecSchema = z.object({
     persona: z.object({ name: z.string(), role: z.string() }),
   }),
   events: z.array(DemoEventSchema),
+  /**
+   * Where this demo came from: the plan version and sha it was generated against.
+   *
+   * Optional because a hand-written spec need not carry it, but the generator always does. A
+   * trust demo that cannot say which plan produced it is asking to be taken on faith, which is
+   * the posture this whole standard exists to replace. The engine renders it in the strip.
+   *
+   * `source` was already on `ALLOWED_SPEC_KEYS` in `contentPolicy.ts`; without it here, Zod's
+   * default stripping silently dropped it at parse time, so the strip rendered "plan v undefined".
+   */
+  source: z
+    .object({
+      project: z.string().optional(),
+      plan_version: z.string().optional(),
+      plan_sha256: z.string().optional(),
+      seed: z.string().optional(),
+      generated_at: z.string().optional(),
+    })
+    .optional(),
   /** Screens, entities, nav and the rest stay as v1 described them. */
   screens: z.record(z.string(), z.unknown()).optional(),
   entities: z.record(z.string(), z.unknown()).optional(),

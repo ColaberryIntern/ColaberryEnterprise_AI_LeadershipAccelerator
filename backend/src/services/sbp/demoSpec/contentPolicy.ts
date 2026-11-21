@@ -75,6 +75,16 @@ export const ALLOWED_SPEC_KEYS = [
   'source',
 ] as const;
 
+/**
+ * A project's restricted values, by column name.
+ *
+ * A column may carry several values. The JSONB columns (`data_sources`, `project_variables`,
+ * `portfolio_cache`) hold structured data, and what must not leak is each string INSIDE them,
+ * not the blob as a whole: a blob is never a substring of a spec value, so passing one as a
+ * single needle is a check that cannot fire.
+ */
+export type RestrictedValues = Partial<Record<string, string | string[] | null | undefined>>;
+
 export interface ContentProblem {
   path: string;
   message: string;
@@ -111,7 +121,7 @@ function walkStrings(
  */
 export function checkDemoSpecContent(
   candidate: unknown,
-  restrictedValues: Partial<Record<string, string | null | undefined>> = {},
+  restrictedValues: RestrictedValues = {},
 ): ContentProblem[] {
   const problems: ContentProblem[] = [];
 
@@ -130,9 +140,20 @@ export function checkDemoSpecContent(
   }
 
   // 2. No restricted project value may appear anywhere, at any depth.
+  /*
+   * A column may contribute SEVERAL needles, and the JSONB columns are why.
+   *
+   * `data_sources`, `project_variables` and `portfolio_cache` are JSONB. Passing one of them as a
+   * single stringified blob produced a needle like `{"vendor":"Acme Health"}`, which is longer
+   * than any value a spec would hold, so `includes` could never match it: the check looked
+   * thorough and caught nothing. The caller now passes the individual strings found inside such a
+   * column, and each becomes its own needle.
+   */
   const needles = Object.entries(restrictedValues)
     .filter(([name]) => (RESTRICTED_PROJECT_FIELDS as readonly string[]).includes(name))
-    .map(([name, value]) => ({ name, value: String(value ?? '').trim() }))
+    .flatMap(([name, value]) =>
+      (Array.isArray(value) ? value : [value]).map((v) => ({ name, value: String(v ?? '').trim() })),
+    )
     .filter((n) => n.value.length >= 4);
 
   if (needles.length) {
@@ -155,7 +176,7 @@ export function checkDemoSpecContent(
 /** True only when the spec's content is publishable under this policy. */
 export function isDemoSpecContentClean(
   candidate: unknown,
-  restrictedValues: Partial<Record<string, string | null | undefined>> = {},
+  restrictedValues: RestrictedValues = {},
 ): boolean {
   return checkDemoSpecContent(candidate, restrictedValues).length === 0;
 }
