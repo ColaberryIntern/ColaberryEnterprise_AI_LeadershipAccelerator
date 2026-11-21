@@ -17,10 +17,13 @@ jest.mock('../openHouseCountdown', () => ({
   ...jest.requireActual('../openHouseCountdown'),
   grantEventReminderPermission: (...a: unknown[]) => grant(...a),
 }));
+const admit = jest.fn(async () => ({ admitted: true, moved_from: [] }));
+jest.mock('../campaignMembership', () => ({ admitToCampaign: (...a: unknown[]) => (admit as any)(...a) }));
 
 import { followupCopy, screenFollowupCopy, firstNameOf, OPEN_HOUSE_SIGNUP_URL } from '../openHouseFollowupCopy';
 import {
   bookOpenHouseFollowups, bookRecentOpenHouseFollowups, followupSendAt, sessionEnd, FOLLOWUP_PEOPLE_SQL,
+  stepsForTrack, followupAiNotes,
 } from '../openHouseFollowup';
 import { PORTAL_TODAY_URL } from '../openHouseCountdown';
 
@@ -30,7 +33,10 @@ const CAMPAIGN = { id: 'camp-f', status: 'active', sequence_id: 'seq-f', setting
 const SESSION = { id: 'sess-1', title: 'Open House', session_date: '2026-12-03', start_time: '18:30', end_time: '19:30', status: 'completed', open_house_event_id: 'ev-1' };
 const AFTER = new Date('2026-12-04T03:00:00Z'); // 9 PM CST Dec 3, well past the end
 
-beforeEach(() => { jest.clearAllMocks(); });
+beforeEach(() => {
+  jest.clearAllMocks();
+  findOrCreate.mockResolvedValue([{ status: 'active', update: jest.fn() }, true]);
+});
 
 describe('follow-up copy', () => {
   const all = [
@@ -110,9 +116,10 @@ describe('FOLLOWUP_PEOPLE_SQL', () => {
 });
 
 /** Route the service's SQL to canned rows. */
-function db(opts: { campaign?: any; session?: any; people?: any[]; next?: any; nextRegs?: any[] } = {}) {
+function db(opts: { campaign?: any; session?: any; people?: any[]; next?: any; nextRegs?: any[]; steps?: any[] } = {}) {
   query.mockImplementation(async (sql: string) => {
     if (/FROM campaigns/.test(sql)) return opts.campaign === undefined ? [CAMPAIGN] : opts.campaign ? [opts.campaign] : [];
+    if (/FROM follow_up_sequences/.test(sql)) return [{ steps: opts.steps ?? [] }];
     if (/FROM live_sessions WHERE id = :sid/.test(sql)) return opts.session === undefined ? [SESSION] : opts.session ? [opts.session] : [];
     if (/session_date > CAST/.test(sql)) return opts.next ? [opts.next] : [];
     if (/FROM open_house_registrations WHERE event_id/.test(sql)) return opts.nextRegs ?? [];
@@ -184,11 +191,84 @@ describe('bookOpenHouseFollowups', () => {
     expect(r).toMatchObject({ booked: 1, errors: 1 });
   });
 
+  it("OH1w: with Ali's tagged steps, each person gets ONLY their track's step, AI-written with their links", async () => {
+    const steps = [
+      { audience: 'attended', subject: 'Thank you', delay_days: 0, channel: 'email', body_template: '', ai_instructions: 'Thank them.', step_goal: 'today page', ai_tone: 'warm' },
+      { audience: 'missed', subject: 'Catch up', delay_days: 2, channel: 'email', body_template: '', ai_instructions: 'Catch them up.' },
+    ];
+    db({ steps, people: [{ email: 'a@x.io', track: 'attended', lead_id: 1, name: 'A' }, { email: 'b@x.io', track: 'missed', lead_id: 2, name: 'B' }] });
+    const r = await bookOpenHouseFollowups('sess-1', { now: AFTER, log: quiet });
+    expect(r.booked).toBe(2);
+    const rows = createEmail.mock.calls.map((c) => c[0]);
+    expect(rows).toHaveLength(2); // never both emails to one person
+    expect(rows[0]).toMatchObject({ lead_id: 1, step_index: 0, subject: 'Thank you', ai_instructions: 'Thank them.' });
+    expect(rows[0].metadata).toMatchObject({ followup_track: 'attended', allowed_links: [PORTAL_TODAY_URL], primary_link: PORTAL_TODAY_URL, step_goal: 'today page' });
+    expect(rows[1]).toMatchObject({ lead_id: 2, step_index: 1, subject: 'Catch up', ai_instructions: 'Catch them up.' });
+    expect(rows[1].metadata.allowed_links).toEqual([OPEN_HOUSE_SIGNUP_URL]);
+    expect(rows[1].metadata.ai_context_notes).toMatch(/NO recording link/);
+    expect(rows[1].scheduled_for.getTime() - rows[0].scheduled_for.getTime()).toBe(2 * 86_400_000);
+    // the approved fixed copy is the body until an AI draft passes the screen
+    expect(rows[1].body).toContain(OPEN_HOUSE_SIGNUP_URL);
+  });
+
+  it('OH1w: booking moves the person into the follow-up (one campaign at a time)', async () => {
+    db({ people: [{ email: 'a@x.io', track: 'attended', lead_id: 1, name: 'A' }] });
+    await bookOpenHouseFollowups('sess-1', { now: AFTER, log: quiet });
+    expect(admit).toHaveBeenCalledWith('camp-f', 1, { supersede: true });
+  });
+
+  it('OH1w: re-activates a member who had finished the follow-up before (a second Open House)', async () => {
+    const update = jest.fn();
+    findOrCreate.mockResolvedValue([{ status: 'completed', update }, false]);
+    db({ people: [{ email: 'a@x.io', track: 'attended', lead_id: 1, name: 'A' }] });
+    await bookOpenHouseFollowups('sess-1', { now: AFTER, log: quiet });
+    expect(update).toHaveBeenCalledWith({ status: 'active', completed_at: null }, expect.anything());
+  });
+
+  it('OH1w: books only the one person when called for a lead (the countdown exit move)', async () => {
+    db({ people: [{ email: 'a@x.io', track: 'attended', lead_id: 1, name: 'A' }, { email: 'b@x.io', track: 'missed', lead_id: 2, name: 'B' }] });
+    const r = await bookOpenHouseFollowups('sess-1', { now: AFTER, log: quiet, leadId: 2 });
+    expect(r).toMatchObject({ booked: 1, attended: 0, missed: 1 });
+    expect(createEmail.mock.calls[0][0].lead_id).toBe(2);
+  });
+
   it('a re-run books nothing new (the SQL already excludes booked people)', async () => {
     db({ people: [] });
     const r = await bookOpenHouseFollowups('sess-1', { now: AFTER, log: quiet });
     expect(r).toMatchObject({ outcome: 'booked', booked: 0 });
     expect(createEmail).not.toHaveBeenCalled();
+  });
+});
+
+describe('OH1w: stepsForTrack and followupAiNotes', () => {
+  const tagged = [
+    { audience: 'attended', subject: 'a', delay_days: 0, channel: 'email', body_template: '' },
+    { audience: 'missed', subject: 'm', delay_days: 2, channel: 'email', body_template: '' },
+    { subject: 'everyone', delay_days: 5, channel: 'email', body_template: '' },
+  ] as any[];
+  it('tagged: each track gets its own steps plus untagged ones', () => {
+    expect(stepsForTrack(tagged, 'attended').map((x) => x.index)).toEqual([0, 2]);
+    expect(stepsForTrack(tagged, 'missed').map((x) => x.index)).toEqual([1, 2]);
+  });
+  it('untagged (the OH1u original): one fixed email at step 0', () => {
+    expect(stepsForTrack([{ subject: 'x', delay_days: 0 }] as any, 'missed')).toEqual([{ index: 0, step: null }]);
+    expect(stepsForTrack(null, 'attended')).toEqual([{ index: 0, step: null }]);
+  });
+  const base = { eventDate: 'Thursday, December 3', todayUrl: PORTAL_TODAY_URL, signupUrl: OPEN_HOUSE_SIGNUP_URL, replayUrl: null as string | null };
+  it('attended: only the Today page', () => {
+    const n = followupAiNotes({ ...base, track: 'attended', next: null });
+    expect(n.allowed).toEqual([PORTAL_TODAY_URL]);
+    expect(n.notes).toMatch(/CHECKED IN/);
+  });
+  it('missed: never "we missed you", recording only when set, sign-up only when not registered', () => {
+    const plain = followupAiNotes({ ...base, track: 'missed', next: { when_label: 'Dec 17', registered: false } });
+    expect(plain.notes).toMatch(/never say they were absent/);
+    expect(plain.notes).toMatch(/NO recording link/);
+    expect(plain.allowed).toEqual([OPEN_HOUSE_SIGNUP_URL]);
+    const withReplay = followupAiNotes({ ...base, track: 'missed', replayUrl: 'https://x.io/r', next: { when_label: 'Dec 17', registered: true } });
+    expect(withReplay.allowed).toEqual(['https://x.io/r']);
+    expect(withReplay.notes).toMatch(/already registered/);
+    expect(withReplay.notes).toMatch(/Never write a placeholder/);
   });
 });
 
