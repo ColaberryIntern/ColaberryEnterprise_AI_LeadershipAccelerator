@@ -1,5 +1,6 @@
 import type { Express, Router } from 'express';
 import { ensurePlacementSchema } from '../db/ensurePlacementSchema';
+import careerPrepInboxRoutes from '../routes/careerPrepInboxRoutes';
 
 /**
  * Career Prep v27, Releases 2 and 3: everything the getting-hired pipeline mounts and starts, in ONE place, so
@@ -16,7 +17,9 @@ import { ensurePlacementSchema } from '../db/ensurePlacementSchema';
  * the mount order.
  */
 export const INTEGRATION_ROUTERS: Router[] = [];
-export const PUBLIC_ROUTERS: Router[] = [];
+export const PUBLIC_ROUTERS: Router[] = [
+  careerPrepInboxRoutes, // CP6.1: the student's job-search inbox (participant + Career Prep gated per route)
+];
 export const SCHEDULERS: Array<{ name: string; start: () => void }> = [];
 
 export function mountPlacementIntegrations(app: Express): void {

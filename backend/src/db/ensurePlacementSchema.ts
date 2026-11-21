@@ -9,7 +9,8 @@ import { sequelize } from '../config/database';
  * Nothing existing is altered. Run by hand to roll back: PLACEMENT_SCHEMA_ROLLBACK (never at boot).
  *
  *   job_search_inboxes   (CP6.1, kit F2) one row per learner: the Gmail address they made for their job search
- *                        (UNIQUE per learner, UNIQUE across learners, case-insensitive), when forwarding was
+ *                        (UNIQUE per learner) and its canonical Gmail mailbox (dots and +tag removed, UNIQUE across
+ *                        learners, so two learners can never claim one inbox), when forwarding was
  *                        verified, the last mail and the last daily test (sent at, token, how long it took to arrive).
  *                        Health (Healthy / Quiet / Forwarding broken / Not tested) is computed, never stored
  *                        (services/placement/inboxHealth.ts), so it can never go stale.
@@ -21,6 +22,7 @@ export const PLACEMENT_STATEMENTS: readonly string[] = [
      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
      enrollment_id UUID NOT NULL UNIQUE REFERENCES enrollments(id) ON DELETE CASCADE,
      address VARCHAR(254) NOT NULL,
+     mailbox VARCHAR(254) NOT NULL,
      verified_at TIMESTAMPTZ,
      last_received_at TIMESTAMPTZ,
      forwarding_confirmed_at TIMESTAMPTZ,
@@ -32,7 +34,7 @@ export const PLACEMENT_STATEMENTS: readonly string[] = [
      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
    )`,
-  'CREATE UNIQUE INDEX IF NOT EXISTS uq_job_search_inboxes_address ON job_search_inboxes (LOWER(address))',
+  'CREATE UNIQUE INDEX IF NOT EXISTS uq_job_search_inboxes_mailbox ON job_search_inboxes (mailbox)',
   `CREATE TABLE IF NOT EXISTS inbox_received (
      id BIGSERIAL PRIMARY KEY,
      enrollment_id UUID NOT NULL REFERENCES enrollments(id) ON DELETE CASCADE,

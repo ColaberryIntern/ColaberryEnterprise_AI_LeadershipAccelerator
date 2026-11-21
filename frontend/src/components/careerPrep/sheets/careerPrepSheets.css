@@ -1,0 +1,28 @@
+/* Career Prep v27, Releases 2 and 3: the getting-hired sheets inside the room (#inbox first). Scoped to .cp-room and built
+   only from the room's tokens (careerPrepRoom.css), so the room's light palette holds and nothing leaks to other pages. */
+.cp-room .cp-pill.bad{background:var(--cp-badsoft);color:var(--cp-bad)}
+.cp-room .cp-inbox{display:flex;flex-direction:column;gap:12px}
+.cp-room .cp-inbox h3{margin-top:6px;font-size:1rem}
+.cp-room .cp-inbox-card{padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--bg-elevated)}
+.cp-room .cp-inbox-addr{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 6px}
+.cp-room .cp-inbox-addr code{font:600 1rem var(--cp-mono);word-break:break-all}
+.cp-room .cp-inbox-callout{margin:8px 0 0;padding:8px 10px;border-left:4px solid var(--accent);background:var(--cp-sunk);border-radius:6px}
+.cp-room .cp-inbox-steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.cp-room .cp-inbox-steps li{display:grid;grid-template-columns:28px 1fr;gap:10px;align-items:start}
+.cp-room .cp-inbox-steps p{margin:2px 0 0}
+.cp-room .cp-inbox-mark{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;border:2px solid var(--line);font:600 .85rem var(--cp-mono);color:var(--fg-muted)}
+.cp-room .cp-inbox-steps li.is-done .cp-inbox-mark{border-color:var(--cp-ok);background:var(--cp-oksoft);color:var(--cp-ok)}
+.cp-room .cp-inbox-steps code{font-family:var(--cp-mono);word-break:break-all}
+/* Room tokens, not the global code color (a Bootstrap pink that does not belong to the room's palette). */
+.cp-room .cp-inbox code{color:var(--fg);background:var(--cp-sunk);border-radius:4px;padding:0 4px}
+.cp-room .cp-inbox-form{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.cp-room .cp-inbox-form input{flex:1 1 220px;min-width:0;min-height:44px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg-elevated);color:var(--fg);font:inherit}
+.cp-room .cp-inbox-table{width:100%;border-collapse:collapse;font-size:.9rem}
+.cp-room .cp-inbox-table th,.cp-room .cp-inbox-table td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+@media (max-width:600px){
+  .cp-room .cp-inbox-table thead{display:none}
+  .cp-room .cp-inbox-table tr{display:block;padding:6px 0;border-bottom:1px solid var(--line)}
+  .cp-room .cp-inbox-table td{display:block;border:0;padding:2px 0}
+  /* With the header hidden on a phone, each field carries its own label. */
+  .cp-room .cp-inbox-table td::before{content:attr(data-label) ": ";font-weight:600;color:var(--fg-muted)}
+}

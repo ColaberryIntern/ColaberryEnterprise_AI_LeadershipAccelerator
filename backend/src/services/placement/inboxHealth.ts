@@ -4,7 +4,9 @@
  * daylight-saving change in Central time can never stretch or shrink a window.
  *
  * ADDRESS: Gmail only (the forwarding steps are Gmail's), trimmed and lowercased; `googlemail.com` is the same mailbox
- * as `gmail.com`, so it is stored as `gmail.com`.
+ * as `gmail.com`, so it is stored as `gmail.com`. MAILBOX: Gmail ignores dots and anything after a + in the local part,
+ * so a.b.c+jobs@gmail.com and abc@gmail.com reach ONE inbox. The canonical mailbox (dots and +tag removed) is the
+ * uniqueness key, so two learners can never claim the same inbox; the typed address is kept for display.
  *
  * HEALTH, first match wins:
  *   setup      no address yet, or forwarding not verified yet
@@ -16,7 +18,7 @@
 export const QUIET_AFTER_MS = 3 * 24 * 60 * 60 * 1000;
 export const BROKEN_AFTER_MS = 10 * 60 * 1000;
 
-export type AddressCheck = { ok: true; address: string } | { ok: false; reason: 'empty' | 'not_gmail' | 'invalid' };
+export type AddressCheck = { ok: true; address: string; mailbox: string } | { ok: false; reason: 'empty' | 'not_gmail' | 'invalid' };
 
 const LOCAL = /^[a-z0-9](?:[a-z0-9.+_-]{0,62}[a-z0-9])?$/;
 
@@ -29,7 +31,9 @@ export function normalizeJobSearchAddress(raw: string): AddressCheck {
   const domain = v.slice(at + 1);
   if (domain !== 'gmail.com' && domain !== 'googlemail.com') return { ok: false, reason: 'not_gmail' };
   if (!LOCAL.test(local) || local.includes('..')) return { ok: false, reason: 'invalid' };
-  return { ok: true, address: `${local}@gmail.com` };
+  const mailbox = `${local.split('+')[0].replace(/\./g, '')}@gmail.com`;
+  if (mailbox === '@gmail.com') return { ok: false, reason: 'invalid' };
+  return { ok: true, address: `${local}@gmail.com`, mailbox };
 }
 
 export type InboxHealth = 'setup' | 'broken' | 'quiet' | 'untested' | 'healthy';

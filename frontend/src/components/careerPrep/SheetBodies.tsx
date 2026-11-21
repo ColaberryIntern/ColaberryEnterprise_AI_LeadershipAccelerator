@@ -4,12 +4,13 @@ import { fetchHireInterviews, type HireInterview } from '../../services/hireStud
 import type { PrepInterview } from './careerPrepApi';
 import type { Sheet } from './logic/askRouter';
 import { interviewWhen } from './logic/careerPrepCopy';
+import { InboxSheet } from './sheets/InboxSheet';
 
 /**
  * Career Prep v27 (CP4.6): what each sheet shows, from data that exists today. Your interviews: the ones
  * employers booked through Hire (with "Join the room" from 10 minutes before the start) and the ones the
- * student added or Cora made. Digital resume: the portfolio page employers see. The job-search inbox, offers
- * and applications are not tracked by the platform yet (declared in the run's plan), so those sheets say so
+ * student added or Cora made. Digital resume: the portfolio page employers see. The job-search inbox is real from
+ * CP6.1 (sheets/InboxSheet.tsx). Offers and applications are not tracked by the platform yet, so those sheets say so
  * plainly instead of showing anything made up.
  */
 const STATUS: Record<HireInterview['status'], string> = { requested: 'Waiting on you', confirmed: 'Confirmed', declined: 'Declined', rescheduled: 'New time proposed', cancelled: 'Cancelled', completed: 'Held' };
@@ -55,14 +56,14 @@ export function InterviewsSheet({ prep, now: fixed }: { prep: PrepInterview[]; n
   );
 }
 
-const NOT_YET: Record<'inbox' | 'offers' | 'applications', string> = {
-  inbox: 'The job-search inbox is not open yet. Until it is, add an interview from Cora so she can prepare you for it.',
+const NOT_YET: Record<'offers' | 'applications', string> = {
   offers: 'Offers are not tracked in the app yet. When an employer sends you one, it will show here with the date to reply by.',
   applications: 'Applications are not tracked in the app yet. Add the interviews they lead to from Cora, and she will prepare you.',
 };
 
 export function SheetBody({ sheet, prep }: { sheet: Sheet; prep: PrepInterview[] }): React.ReactElement {
   if (sheet === 'interviews') return <InterviewsSheet prep={prep} />;
+  if (sheet === 'inbox') return <InboxSheet />;
   if (sheet === 'resume') {
     return <p data-testid="cp-resume-sheet">Your digital resume is your portfolio page. <Link className="cp-send" to="/portal/portfolio">Open your portfolio page</Link></p>;
   }

@@ -7,9 +7,17 @@ const base: InboxFacts = { address: 'ann.lee.careers@gmail.com', verifiedAt: ago
 
 describe('normalizeJobSearchAddress', () => {
   it('accepts Gmail, trimmed and lowercased; googlemail.com is the same mailbox', () => {
-    expect(normalizeJobSearchAddress('  Ann.Lee.Careers@Gmail.com ')).toEqual({ ok: true, address: 'ann.lee.careers@gmail.com' });
-    expect(normalizeJobSearchAddress('ann.lee.careers@googlemail.com')).toEqual({ ok: true, address: 'ann.lee.careers@gmail.com' });
-    expect(normalizeJobSearchAddress('ann+jobs@gmail.com')).toEqual({ ok: true, address: 'ann+jobs@gmail.com' });
+    expect(normalizeJobSearchAddress('  Ann.Lee.Careers@Gmail.com ')).toEqual({ ok: true, address: 'ann.lee.careers@gmail.com', mailbox: 'annleecareers@gmail.com' });
+    expect(normalizeJobSearchAddress('ann.lee.careers@googlemail.com')).toEqual({ ok: true, address: 'ann.lee.careers@gmail.com', mailbox: 'annleecareers@gmail.com' });
+    expect(normalizeJobSearchAddress('ann+jobs@gmail.com')).toEqual({ ok: true, address: 'ann+jobs@gmail.com', mailbox: 'ann@gmail.com' });
+  });
+  it('T10: dots and +tags reach ONE Gmail inbox, so they share one canonical mailbox (the uniqueness key)', () => {
+    const a = normalizeJobSearchAddress('a.b.c+jobs@gmail.com');
+    const b = normalizeJobSearchAddress('abc@gmail.com');
+    const c = normalizeJobSearchAddress('A.B.C@googlemail.com');
+    expect(a.ok && b.ok && c.ok).toBe(true);
+    if (a.ok && b.ok && c.ok) { expect(a.mailbox).toBe('abc@gmail.com'); expect(b.mailbox).toBe(a.mailbox); expect(c.mailbox).toBe(a.mailbox); expect(a.address).toBe('a.b.c+jobs@gmail.com'); }
+    expect(normalizeJobSearchAddress('+jobs@gmail.com')).toEqual({ ok: false, reason: 'invalid' });
   });
   it('refuses anything that is not a Gmail address, and malformed ones', () => {
     expect(normalizeJobSearchAddress('ann@yahoo.com')).toEqual({ ok: false, reason: 'not_gmail' });

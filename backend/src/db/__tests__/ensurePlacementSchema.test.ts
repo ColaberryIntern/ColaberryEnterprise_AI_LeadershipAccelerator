@@ -12,10 +12,10 @@ describe('ensurePlacementSchema (statements)', () => {
       expect(s).not.toMatch(/\bALTER\b|\bDROP\b/i);
     }
   });
-  it('CP6.1: one inbox per learner, one address across learners (case-insensitive), one row per message', () => {
+  it('CP6.1: one inbox per learner, one Gmail mailbox across learners (dots and +tags folded), one row per message', () => {
     const inbox = PLACEMENT_STATEMENTS.find((s) => s.includes('CREATE TABLE IF NOT EXISTS job_search_inboxes')) as string;
     expect(inbox).toMatch(/enrollment_id UUID NOT NULL UNIQUE/);
-    expect(PLACEMENT_STATEMENTS).toContain('CREATE UNIQUE INDEX IF NOT EXISTS uq_job_search_inboxes_address ON job_search_inboxes (LOWER(address))');
+    expect(PLACEMENT_STATEMENTS).toContain('CREATE UNIQUE INDEX IF NOT EXISTS uq_job_search_inboxes_mailbox ON job_search_inboxes (mailbox)');
     expect(PLACEMENT_STATEMENTS.find((s) => s.includes('inbox_received ('))).toMatch(/message_id VARCHAR\(255\) NOT NULL UNIQUE/);
   });
   it('has a rollback that drops every table it creates, dependents first, never run at boot', () => {

@@ -48,10 +48,10 @@ describeIfDb('placement schema against Postgres', () => {
     expect((await one<{ n: number }>("SELECT COUNT(*)::int AS n FROM information_schema.tables WHERE table_name IN ('job_search_inboxes','inbox_received')")).n).toBe(2);
   });
 
-  it('one inbox per learner, and one address across learners whatever its case', async () => {
-    await sequelize.query(`INSERT INTO job_search_inboxes (enrollment_id, address) VALUES ('${E1}', 'ann.lee.careers@gmail.com')`);
-    await expect(sequelize.query(`INSERT INTO job_search_inboxes (enrollment_id, address) VALUES ('${E1}', 'other@gmail.com')`)).rejects.toThrow();
-    await expect(sequelize.query(`INSERT INTO job_search_inboxes (enrollment_id, address) VALUES ('${E2}', 'Ann.Lee.Careers@Gmail.com')`)).rejects.toThrow();
+  it('one inbox per learner, and one Gmail mailbox across learners (the canonical mailbox is the key)', async () => {
+    await sequelize.query(`INSERT INTO job_search_inboxes (enrollment_id, address, mailbox) VALUES ('${E1}', 'ann.lee.careers@gmail.com', 'annleecareers@gmail.com')`);
+    await expect(sequelize.query(`INSERT INTO job_search_inboxes (enrollment_id, address, mailbox) VALUES ('${E1}', 'other@gmail.com', 'other@gmail.com')`)).rejects.toThrow();
+    await expect(sequelize.query(`INSERT INTO job_search_inboxes (enrollment_id, address, mailbox) VALUES ('${E2}', 'annlee.careers+x@gmail.com', 'annleecareers@gmail.com')`)).rejects.toThrow();
   });
 
   it('keeps one received row per Message-ID, so a replay adds nothing', async () => {

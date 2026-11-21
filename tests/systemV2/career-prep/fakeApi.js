@@ -49,6 +49,8 @@ function makeState(now, opts = {}) {
     attempts: 0,
     // CP5.8: read-aloud attempt ids, and the uploads the browser sent (to prove audio only, with the line id).
     readAloud: new Set(),
+    // CP6.1: no job-search inbox set up yet.
+    inbox: { address: null, health: 'setup', healthLabel: 'Not set up yet', verifiedAt: null, forwardingConfirmedAt: null, lastReceivedAt: null, lastTestAt: null, lastTestMs: null, receivedThisMonth: 0, steps: { create: false, added: false, forwarding: false, tested: false } },
     readAloudUploads: [],
     finished: false,
     // R1.1: Try answers the student saved (attempt ids), and how long POST /plans takes (to see the busy state).
@@ -147,6 +149,10 @@ function route(state, method, path, query, body) {
     return { session: sessionView(state), resumed: false };
   }
   const attempt = /^\/api\/portal\/career-prep\/sessions\/[^/]+\/attempts(\/[^/]+)?$/.exec(path);
+  // CP6.1: the job-search inbox (the server's shape: inboxService.getInbox); nothing received in the fixture.
+  if (path === `${P}/inbox` && method === 'PUT') { state.inbox = { ...state.inbox, address: String(body.address || '').trim().toLowerCase().replace(/@googlemail\.com$/, '@gmail.com'), health: 'setup', healthLabel: 'Not set up yet', steps: { create: true, added: true, forwarding: false, tested: false } }; return { inbox: state.inbox }; }
+  if (path === `${P}/inbox`) return { inbox: state.inbox };
+  if (path === `${P}/inbox/received`) return { items: [] };
   if (path === `${P}/read-aloud/line`) return { line: { id: 'ra-02', text: 'The problem was simple to describe and hard to solve, so I started by talking to the people who lived with it.' } };
   const line = /name="lineId"\r?\n\r?\n([^\r\n]+)/.exec((body && body.raw) || '');
   if (attempt && method === 'POST' && line) {

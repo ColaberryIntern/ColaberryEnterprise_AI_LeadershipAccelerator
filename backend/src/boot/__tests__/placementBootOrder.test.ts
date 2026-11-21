@@ -1,5 +1,7 @@
 const mockEnsure = jest.fn();
 jest.mock('../../db/ensurePlacementSchema', () => ({ ensurePlacementSchema: (...a: unknown[]) => mockEnsure(...a) }));
+// The real routers import the app config; the wiring under test only needs something mountable.
+jest.mock('../../routes/careerPrepInboxRoutes', () => { const { Router: R } = jest.requireActual('express'); return { __esModule: true, default: R() }; });
 
 import fs from 'fs';
 import path from 'path';
@@ -31,7 +33,14 @@ describe('server.ts placement wiring (order)', () => {
 });
 
 describe('placementBoot', () => {
-  afterEach(() => { INTEGRATION_ROUTERS.length = 0; PUBLIC_ROUTERS.length = 0; SCHEDULERS.length = 0; jest.restoreAllMocks(); });
+  // Each test works on empty lists and puts the registered routers back afterwards.
+  let saved: { i: Router[]; p: Router[]; s: typeof SCHEDULERS } = { i: [], p: [], s: [] };
+  beforeEach(() => { saved = { i: INTEGRATION_ROUTERS.splice(0), p: PUBLIC_ROUTERS.splice(0), s: SCHEDULERS.splice(0) }; });
+  afterEach(() => { INTEGRATION_ROUTERS.splice(0, Infinity, ...saved.i); PUBLIC_ROUTERS.splice(0, Infinity, ...saved.p); SCHEDULERS.splice(0, Infinity, ...saved.s); jest.restoreAllMocks(); });
+
+  it('registers the CP6.1 inbox routes as a public (participant-gated) router', () => {
+    expect(saved.p.length).toBe(1);
+  });
 
   it('mounts every registered router, in order', () => {
     const app = express();
