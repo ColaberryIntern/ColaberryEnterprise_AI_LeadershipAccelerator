@@ -46,6 +46,14 @@ export const DEMO_KIT_ENGINE_HTML = `<!DOCTYPE html>
   --att-bg: #FDF1E3;
   --att-ink: #7C3A06;
   --att-line: #F3D3AC;
+  /* A failed or reverted action needs a tone of its own. Reusing the amber
+     "attention" tone for it would make "a person must look at this" and "this
+     did not happen" look identical, which is the confusion the trust standard
+     exists to prevent. */
+  --bad-bg: #FEF3F2;
+  --bad-ink: #912018;
+  --live-bg: #EEF4FF;
+  --live-ink: #1F3A8A;
   --demo: #3B2A78;
   --display: "Space Grotesk", Inter, system-ui, sans-serif;
   --body: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -163,6 +171,35 @@ dl.facts dd { margin: 0; min-width: 0; }
 .note { font-size: 12px; color: var(--muted); }
 .toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); max-width: min(560px, calc(100% - 32px)); background: var(--ink); color: #FFFFFF; padding: 12px 16px; border-radius: 10px; box-shadow: 0 6px 24px rgba(0,0,0,.25); }
 .toast:empty { display: none; }
+/* ---- trust timeline -----------------------------------------------------
+ * One row per action, from the spec's \`events\` array. Every row answers,
+ * without a click: who acted, which human owns it, what state the action is
+ * actually in, how much autonomy it had, whether a person approved it, what
+ * evidence backs it, and whether it can be undone.
+ * The status pill is the load-bearing part. An action that failed must never
+ * read as one that worked, so failed and reverted get their own tone rather
+ * than sharing amber with "waiting on a person".
+ */
+.tl { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.tl > li { display: grid; grid-template-columns: 78px minmax(0, 1fr); gap: 0 14px; padding: 16px 0; border-top: 1px solid var(--line); }
+.tl > li:first-child { border-top: 0; padding-top: 0; }
+.tl time { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; padding-top: 3px; }
+.tl .what { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+.tl .what b { font-size: 14px; font-weight: 600; }
+.tl .why { margin-top: 6px; color: var(--muted); }
+/* \`.actor\`, NOT \`.who\`: \`.who\` is already the engine's uppercase bordered agent/person badge
+   (see above). Reusing the name inherited its text-transform and weight, so every actor line
+   rendered as a shouting all-caps bar that outcompeted the status pill it sits under. A
+   collision patched with more overrides is a collision waiting to come back. */
+.tl .actor { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; font-size: 12px; color: var(--muted); }
+.tl .actor b { color: var(--ink); font-weight: 600; }
+.tl .refs { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px 8px; font-size: 12px; color: var(--muted); align-items: center; }
+.tl .refs code { background: var(--wash); border-radius: 4px; padding: 1px 6px; font-size: 11px; }
+.tl .unverified { color: var(--att-ink); font-weight: 600; }
+.pill.danger { background: var(--bad-bg); color: var(--bad-ink); }
+.pill.live { background: var(--live-bg); color: var(--live-ink); }
+.pill.faded { background: var(--wash); color: var(--muted); }
+.pill.tier { background: var(--surface); border: 1px solid var(--line); color: var(--ink); }
 .err { margin: 40px auto; max-width: 640px; padding: 20px; background: var(--att-bg); color: var(--att-ink); border: 1px solid var(--att-line); border-radius: 12px; }
 @media (max-width: 640px) {
   main { padding: 20px 16px 40px; }
@@ -207,6 +244,64 @@ dl.facts dd { margin: 0; min-width: 0; }
     return '<svg width="' + (size || 18) + '" height="' + (size || 18) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[name] || ICONS.dot) + '</svg>';
   };
   var LOCK = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
+
+  // ---- the trust vocabulary -------------------------------------------------
+  // These three tables are the engine's half of the demo-spec contract. The
+  // spec declares the same unions (ACTION_LIFECYCLE, AUTONOMY_TIERS,
+  // DEMO_ENVIRONMENTS); these decide how each value is shown. They live here,
+  // not in any one project's spec, so every generated demo inherits them.
+
+  // The ONE sentence that says this is not a real system. Declared once and
+  // rendered by strip() so the success page and the error page cannot drift
+  // into saying different things, or into one of them saying nothing.
+  var SIMULATED = 'Simulated, not live';
+
+  // The screen key the engine uses when it has to add the trust timeline
+  // itself. Double underscore so it cannot collide with a spec-authored key.
+  var TRUST_SCREEN = '__trust';
+
+  // The full action lifecycle. \`done: true\` is granted to exactly one state.
+  var STATUS = {
+    proposed:  { label: 'Proposed',  tone: '',       done: false },
+    queued:    { label: 'Queued',    tone: '',       done: false },
+    executing: { label: 'Executing', tone: 'live',   done: false },
+    succeeded: { label: 'Succeeded', tone: 'ok',     done: true },
+    failed:    { label: 'Failed',    tone: 'danger', done: false },
+    canceled:  { label: 'Canceled',  tone: 'faded',  done: false },
+    reverted:  { label: 'Reverted',  tone: 'danger', done: false }
+  };
+
+  /*
+   * Resolve a status, failing LOUD rather than silent.
+   *
+   * Two deliberate choices, both of which exist to honor the standard's
+   * hard gate that a demo never claims an action completed when it did not:
+   *
+   * 1. An unrecognized status renders as "Unrecognized state" in the danger
+   *    tone. It does NOT fall back to succeeded, and it does not fall back to
+   *    a neutral pill either, because a reader skims neutral as "fine".
+   * 2. hasOwnProperty, not \`STATUS[s] ||\`. A spec carrying the string
+   *    "constructor" or "toString" would otherwise find a truthy object on the
+   *    prototype chain and render a function's source as the label.
+   */
+  function statusOf(s) {
+    return Object.prototype.hasOwnProperty.call(STATUS, s)
+      ? STATUS[s]
+      : { label: 'Unrecognized state', tone: 'danger', done: false };
+  }
+
+  // What each autonomy tier actually permitted. Plain words, because "A3"
+  // alone tells a viewer nothing about what the agent was allowed to do.
+  var TIERS = {
+    A0: 'A0 · observed only',
+    A1: 'A1 · suggested, a person acted',
+    A2: 'A2 · acted after a person approved',
+    A3: 'A3 · acted alone, a person can undo it',
+    A4: 'A4 · acted alone, no undo'
+  };
+  function tierOf(t) {
+    return Object.prototype.hasOwnProperty.call(TIERS, t) ? TIERS[t] : String(t || 'tier not stated');
+  }
 
   // ---- data helpers ---------------------------------------------------------
   var ent = function (key) { return SPEC.entities[key]; };
@@ -421,6 +516,22 @@ dl.facts dd { margin: 0; min-width: 0; }
     }
   };
 
+  /*
+   * The trust screen. Added as its own assignment rather than inside the
+   * RENDER literal above because \`boot()\` also synthesizes a screen of this
+   * type when a spec does not declare one: the standard asks for the timeline
+   * to be universal, so it cannot depend on each project's spec remembering
+   * to ask for it.
+   */
+  RENDER.trust = function (s) {
+    var n = (SPEC.events || []).length;
+    return head(s, '<span class="pill">' + n + (n === 1 ? ' action' : ' actions') + '</span>')
+      + '<section class="card pad">' + trustTimeline(s.limit) + '</section>'
+      + '<p class="note" style="margin-top:14px">Every line above is invented sample data. '
+      + 'The real system records the same fields for every action an agent takes, which is what '
+      + 'makes a line like this auditable rather than decorative.</p>';
+  };
+
   function detail(ekey, row) {
     var e = ent(ekey), listScreen = Object.keys(SPEC.screens).find(function (k) { var s = SPEC.screens[k]; return (s.type === 'list' || s.type === 'queue') && s.entity === ekey; });
     var h = '<div class="crumbs">' + (listScreen ? '<a href="#' + listScreen + '">' + esc(SPEC.screens[listScreen].title) + '</a>' : '<span>' + esc(e.plural || e.label) + '</span>') + '<span aria-hidden="true">/</span><span>' + esc(title(ekey, row)) + '</span></div>';
@@ -447,6 +558,120 @@ dl.facts dd { margin: 0; min-width: 0; }
   }
 
   // ---- shell ----------------------------------------------------------------
+  // ---- the trust timeline ---------------------------------------------------
+  /*
+   * Renders SPEC.events: one row per action, in the order the spec lists them.
+   *
+   * Deliberately NOT re-sorted and deliberately NOT locale-formatted. The
+   * producer owns the order, and \`toLocaleString\` would make one spec render
+   * different bytes on a machine in another timezone, which breaks the
+   * determinism the rest of this pipeline is built on.
+   */
+  var APPROVAL = {
+    granted: ['ok', 'Approved by'],
+    pending: ['attention', 'Waiting on'],
+    denied: ['danger', 'Refused by'],
+    not_required: ['faded', 'No approval needed']
+  };
+
+  // Named environments only. An allow-list rather than an echo, so a
+  // hand-edited spec cannot get the word "production" onto a simulated screen,
+  // and so the fallback still says plainly that this is not live.
+  var ENVS = { demo: 'Demo data', sandbox: 'Sandbox', simulation: 'Simulation' };
+  function envOf(v) {
+    return Object.prototype.hasOwnProperty.call(ENVS, v) ? ENVS[v] : 'Not a live environment';
+  }
+
+  function trustEvent(e) {
+    var st = statusOf(e.status);
+    var a = e.actor || {};
+    var ap = e.approval || {};
+    var appr = Object.prototype.hasOwnProperty.call(APPROVAL, ap.status)
+      ? APPROVAL[ap.status]
+      : ['danger', 'Approval state unrecognized'];
+    var when = String(e.occurred_at || '');
+
+    var h = '<li>';
+    h += '<time datetime="' + esc(when) + '">' + esc(when.slice(11, 16)) + '<br>' + esc(when.slice(0, 10)) + '</time>';
+    h += '<div>';
+
+    // What was done, and the state it is ACTUALLY in.
+    h += '<div class="what"><b>' + esc(e.action) + '</b>'
+      + '<span class="pill ' + st.tone + '">' + esc(st.label) + '</span>'
+      + '<span class="pill' + (e.risk_level === 'high' ? ' attention' : '') + '">'
+      + esc(e.risk_level ? e.risk_level + ' risk' : 'risk not stated') + '</span>'
+      + '<span class="pill tier">' + esc(tierOf(e.autonomy_tier)) + '</span>'
+      + '<span class="pill faded">' + esc(envOf(e.environment)) + '</span></div>';
+
+    // Why. One line, and labelled as narrative rather than as the record.
+    h += '<p class="why">' + esc(e.reason_summary) + '</p>';
+
+    // Who acted, whether that identity was actually established, and which
+    // human is accountable either way.
+    h += '<div class="actor"><span>'
+      + (a.type === 'agent' ? 'Agent' : (a.type === 'human' ? 'Person' : 'System'))
+      + ' <b>' + esc(a.label) + '</b>' + (a.id ? ' <code>' + esc(a.id) + '</code>' : '') + '</span>'
+      + '<span>' + (a.verified
+        ? 'identity verified'
+        : '<span class="unverified">identity asserted, not verified</span>') + '</span>'
+      + '<span>accountable: <b>' + esc(e.human_owner_id) + '</b></span>'
+      + '<span class="pill ' + appr[0] + '">' + esc(appr[1])
+      + (ap.assigned_to ? ' ' + esc(ap.assigned_to) : '') + '</span></div>';
+
+    // What it touched, whether it can be undone, and what backs it up.
+    // An empty evidence list says so out loud: a blank space reads as "fine".
+    var evid = (e.evidence_refs || []).length
+      ? (e.evidence_refs || []).map(function (r) { return '<code>' + esc(r) + '</code>'; }).join('')
+      : '<span class="unverified">no evidence attached</span>';
+    h += '<div class="refs">'
+      + '<span class="pill ' + (e.reversible ? 'faded' : 'attention') + '">'
+      + (e.reversible ? 'Reversible' : 'Cannot be undone') + '</span>'
+      + (e.recovery_ref ? '<span>recovery <code>' + esc(e.recovery_ref) + '</code></span>' : '')
+      + ((e.side_effects || []).length
+        ? '<span>touched ' + (e.side_effects || []).map(esc).join(', ') + '</span>'
+        : '<span>no side effects</span>')
+      + '<span>evidence ' + evid + '</span>'
+      + ((e.policy_refs || []).length
+        ? '<span>policy ' + (e.policy_refs || []).map(function (r) { return '<code>' + esc(r) + '</code>'; }).join('') + '</span>'
+        : '')
+      + '<span>trace <code>' + esc(e.trace_id) + '</code></span>'
+      + '</div>';
+
+    return h + '</div></li>';
+  }
+
+  function trustTimeline(limit) {
+    var evs = SPEC.events || [];
+    if (limit) evs = evs.slice(0, limit);
+    if (!evs.length) return '<div class="empty">No actions have been recorded in this demo.</div>';
+    return '<ul class="tl">' + evs.map(trustEvent).join('') + '</ul>';
+  }
+
+  /*
+   * The permanent "this is not real" strip. ONE copy, rendered by both the
+   * working page and the error page.
+   *
+   * The error page used to render without it, so a viewer who hit a load
+   * failure saw a bare message with nothing on screen saying that what they
+   * were looking at was a simulation. Two copies of this markup would also be
+   * free to drift into saying different things, which is the hazard the whole
+   * kit is organized against.
+   */
+  function strip(withControls) {
+    var a = (SPEC && SPEC.app) || {};
+    var src = (SPEC && SPEC.source) || {};
+    var right = '';
+    if (withControls) {
+      right = '<code>plan v' + esc(src.plan_version) + ' · ' + esc(String(src.plan_sha256 || '').slice(0, 7)) + '</code>'
+        + '<button type="button" id="reset">Reset demo</button>'
+        + (a.command_center_href ? '<a href="' + esc(a.command_center_href) + '">Command Center</a>' : '');
+    }
+    return '<div class="demo-strip"><span><strong>DEMO</strong> · ' + esc(SIMULATED) + '.'
+      + (a.name ? ' A preview of the finished ' + esc(a.name) + '.' : '')
+      + ' Nothing here was produced by the real system.</span>'
+      + '<span class="right">' + right + '</span></div>';
+  }
+
   function nav(active) {
     return (SPEC.nav || []).map(function (g) {
       return '<div class="nav-group nav"><div class="nav-label">' + esc(g.group) + '</div>' + g.items.map(function (it) {
@@ -469,11 +694,10 @@ dl.facts dd { margin: 0; min-width: 0; }
       active = Object.keys(SPEC.screens).find(function (k) { var s = SPEC.screens[k]; return (s.type === 'list' || s.type === 'queue') && s.entity === rt.ekey; }) || '';
     }
     if (!body) { active = first; body = RENDER[SPEC.screens[first].type](SPEC.screens[first], first); }
-    var a = SPEC.app, src = SPEC.source || {};
+    var a = SPEC.app;
     document.title = a.name + ' demo';
     document.getElementById('app').innerHTML =
-      '<div class="demo-strip"><span><strong>DEMO</strong> · sample data. A preview of the finished ' + esc(a.name) + '. Nothing here was produced by the real system.</span>' +
-      '<span class="right"><code>plan v' + esc(src.plan_version) + ' · ' + esc(String(src.plan_sha256 || '').slice(0, 7)) + '</code><button type="button" id="reset">Reset demo</button>' + (a.command_center_href ? '<a href="' + esc(a.command_center_href) + '">Command Center</a>' : '') + '</span></div>' +
+      strip(true) +
       '<div class="shell"><nav class="rail" aria-label="Main"><a class="brand" href="#' + esc(first) + '"><span class="mark">' + esc(a.name.charAt(0)) + '</span>' + esc(a.name) + '</a>' + nav(active) +
       '<div class="rail-foot">' + ((SPEC.systems || []).length ? '<div class="conn"><b>Connections · simulated</b>' + SPEC.systems.map(function (n) { return '<div><i></i>' + esc(n) + '</div>'; }).join('') + '</div>' : '') +
       '<div class="persona"><span class="av">' + esc(a.persona.name.charAt(0)) + '</span><div><b>' + esc(a.persona.name) + '</b><span>' + esc(a.persona.role) + '</span></div></div></div></nav>' +
@@ -483,6 +707,35 @@ dl.facts dd { margin: 0; min-width: 0; }
     SPEC = spec;
     if (!SPEC || !SPEC.screens || !SPEC.nav) throw new Error('demo-spec.json has no screens or nav.');
     if (SPEC.app.accent) document.documentElement.style.setProperty('--accent', SPEC.app.accent);
+
+    /*
+     * The trust timeline is universal, so the ENGINE adds it when a spec does
+     * not declare one.
+     *
+     * The requirement is that every generated demo inherits the timeline.
+     * Leaving each project's spec responsible for asking would mean the one
+     * spec that forgets ships a demo with no accountability surface at all,
+     * and that is the demo that gets shown to the person who most needs it.
+     *
+     * Idempotent and additive: it never replaces a trust screen the spec
+     * declared, and it appends a nav group rather than editing one.
+     */
+    if ((SPEC.events || []).length) {
+      var declared = Object.keys(SPEC.screens).some(function (k) {
+        return SPEC.screens[k] && SPEC.screens[k].type === 'trust';
+      });
+      if (!declared) {
+        SPEC.screens[TRUST_SCREEN] = {
+          type: 'trust',
+          title: 'Trust and activity',
+          subtitle: 'Every action in this demo: who did it, which person is accountable, and what state it is actually in.'
+        };
+        SPEC.nav = SPEC.nav.concat([{
+          group: 'Accountability',
+          items: [{ label: 'Trust and activity', screen: TRUST_SCREEN, icon: 'shield' }]
+        }]);
+      }
+    }
     var load = function () {
       ROWS = {}; ROUTES = {};
       Object.keys(SPEC.entities).forEach(function (k) {
@@ -502,7 +755,9 @@ dl.facts dd { margin: 0; min-width: 0; }
     render();
   }
   function fail(msg) {
-    document.getElementById('app').innerHTML = '<div class="err"><strong>The demo could not load.</strong><p>' + esc(msg) + '</p><p>If you opened this file with a double-click, the browser blocks it from reading demo-spec.json. Run <code>node tools/build-standalone.mjs</code> to make a single file that opens anywhere, or serve the folder over HTTP.</p></div>';
+    // strip() first: a failure page with no label is a page that has quietly
+    // stopped saying this is a simulation.
+    document.getElementById('app').innerHTML = strip(false) + '<div class="err"><strong>The demo could not load.</strong><p>' + esc(msg) + '</p><p>If you opened this file with a double-click, the browser blocks it from reading demo-spec.json. Run <code>node tools/build-standalone.mjs</code> to make a single file that opens anywhere, or serve the folder over HTTP.</p></div>';
   }
 
   var inline = {};
