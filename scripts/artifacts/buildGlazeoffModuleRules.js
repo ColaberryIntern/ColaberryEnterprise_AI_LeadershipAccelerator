@@ -32,7 +32,7 @@ const tag = (s) => s === 'SAI'
 // Topic | Sai's platform plan | Our December plan | verdict | what changes
 const COMPARE = [
   ['Cloud', 'GCP; separate Cloud Run deployments per client, shared core (blueprint).',
-    'GCP project <code>glazeoff-billing</code>, created by Sai today.', 'same', 'Nothing.'],
+    'GCP project <code>glazeoff-billing</code>, set up by Karun on Thu 19 Nov and linked to billing.', 'same', 'Nothing.'],
   ['What "billing module" means', 'T3.10: per-client <b>usage</b> as invoice line items (GlazeOff billing its clients for cloud and AI use). Assigned to Ali.',
     'AIA <b>progress</b> billing: Middlesex PMs fill G702/G703 requisitions.', 'settle',
     'Two different modules with the same word. Name them apart (page 3).'],
@@ -64,7 +64,7 @@ const COMPARE = [
 const NAMES = [
   ['Module key', 'One key everywhere. Never the bare word "billing".', '<code>aia_billing</code> in code, database and permissions; <code>aia-billing</code> in URLs, services, labels', 'PROPOSED'],
   ['The other module', 'T3.10 usage invoicing gets its own key.', '<code>usage_billing</code> / <code>usage-billing</code>', 'PROPOSED'],
-  ['GCP project', 'Project IDs cannot be renamed after creation.', 'Sai is creating <code>glazeoff-billing</code>. If it is not created yet, <code>glazeoff-aia-billing</code>; if it is, keep it and rely on labels.', 'PROPOSED'],
+  ['GCP project', 'Project IDs cannot be renamed after creation.', '<code>glazeoff-billing</code> already exists (Karun, Thu 19 Nov). Keep it, and tell modules apart with the <code>module</code> label.', 'PROPOSED'],
   ['Cloud resources', '<code>&lt;module&gt;-&lt;role&gt;-&lt;env&gt;</code>', '<code>aia-billing-api-prod</code>, <code>aia-billing-web-prod</code>, <code>aia-billing-pg-prod</code>', 'PROPOSED'],
   ['Labels', 'Every resource carries client, module and env.', '<code>client=middlesex-glass</code> <code>module=aia-billing</code> <code>env=prod</code>', 'SAI'],
   ['Client', 'A uuid from AIX Auth plus a lowercase slug.', '<code>client_id</code> (uuid), <code>middlesex-glass</code>', 'SAI'],
@@ -190,7 +190,7 @@ function body() {
   ${QUESTIONS.map(([q, w, r]) => `<tr><td><b>${q}</b></td><td>${w}</td><td>${r}</td></tr>`).join('')}
   </tbody></table>
   <div class="note good"><b>What doesn't change:</b> the demo's screens, the four-seat approval order, the G702/G703 math, the 8 Dec two-PM pilot, and the restore test before real data goes in.</div>
-  <div class="note"><b>Sai's open asks of Karun (21 Nov email):</b> link <code>glazeoff-billing</code> to the billing account, and add Ali to karunswaroop/GlazeOff-Shopdraw. Sai adds Ali to colaberry/GlazeOff and GlazeOff-Client if he has admin there.</div>
+  <div class="note"><b>Access as of 21 Nov (Sai's second email):</b> Ali has write on colaberry/GlazeOff-Client and an invite to colaberry/GlazeOff. Karun still needs to add Ali to <code>glazeoff-billing</code> (adding people needs Owner; Sai has Editor) and to karunswaroop/GlazeOff-Shopdraw.</div>
   <p class="meta">SAI = already in Sai's tracker or blueprint. PROPOSED = ours; nothing tagged PROPOSED is agreed until Sai says so.</p>`;
 }
 
