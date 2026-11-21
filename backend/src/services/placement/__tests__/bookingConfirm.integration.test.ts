@@ -65,7 +65,7 @@ describeIfDb('after-booking work against Postgres', () => {
     await sequelize.close();
   });
 
-  it('a real confirm, then two runs at once: one room stored, done once, one done row; the sweep then finds nothing', async () => {
+  it('a real confirm, then two runs at once: one holds the lease, one room stored, done once, one done row; the sweep then finds nothing', async () => {
     const { newBookingToken } = await import('../bookingToken');
     const t = newBookingToken(NOW);
     await sequelize.query(`INSERT INTO placement_interviews (enrollment_id, source_event_id, company, contact_email, state, booking_token_hash, token_expires_at)
@@ -74,7 +74,8 @@ describeIfDb('after-booking work against Postgres', () => {
     if (r.status !== 'booked') throw new Error(`not booked: ${r.status}`);
     mockCreate.mockResolvedValue({ providerEventId: 'zm-1', joinUrl: 'https://zoom.example/j/SECRET' });
     const both = await Promise.all([fin.finishBooking(r.interviewId, { now: NOW, read: ON, learnerAllowed: allowed }), fin.finishBooking(r.interviewId, { now: NOW, read: ON, learnerAllowed: allowed })]);
-    expect(both.map((x) => x.status)).toContain('done');
+    expect(both.map((x) => x.status).sort()).toEqual(['busy', 'done']); // the row-serialized lease: the second run never reached the provider
+    expect(mockCreate).toHaveBeenCalledTimes(1);
     const row = await one(`SELECT room_provider_id, confirm_done_at, confirm_attempts FROM placement_interviews WHERE id = '${r.interviewId}'`);
     expect(row.room_provider_id).toBe('zm-1');
     expect(row.confirm_done_at).not.toBeNull();

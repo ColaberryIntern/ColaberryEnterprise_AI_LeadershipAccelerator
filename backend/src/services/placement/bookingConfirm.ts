@@ -34,8 +34,16 @@ import { employerBookedEmail, learnerBookedEmail, type ConfirmFacts, type Confir
  */
 export const MAX_CONFIRM_ATTEMPTS = 3;
 export const ROOM_TIMEOUT_MS = 25_000;
+/**
+ * ONE RUN AT A TIME per interview: a run first claims a lease (confirm_last_attempt_at) in one conditional UPDATE, which
+ * Postgres serializes on the row; a run that finds a live lease (a replayed confirm racing the original, or the sweep)
+ * returns 'busy' without calling the provider or sending. The Zoom ledger alone cannot stop a second create while the
+ * first is still 'pending' (it reconciles by listing, and a meeting mid-create is not listed yet). The lease outlasts the
+ * room cap plus the sends; a run that died holding it is picked up by the sweep once it lapses (its backoff is longer).
+ */
+export const LEASE_MS = 2 * 60_000;
 type Part = 'sent' | 'skipped' | 'held' | 'failed';
-export interface FinishResult { status: 'done' | 'incomplete' | 'not_booked' | 'not_found'; room?: 'ok' | 'failed'; learner?: Part; employer?: Part; gaveUp?: boolean }
+export interface FinishResult { status: 'done' | 'incomplete' | 'busy' | 'not_booked' | 'not_found'; room?: 'ok' | 'failed'; learner?: Part; employer?: Part; gaveUp?: boolean }
 export interface FinishOpts { now?: Date; read?: Read; learnerAllowed?: (enrollmentId: string) => Promise<boolean> }
 
 type Row = { id: string; enrollment_id: string; state: string; company: string | null; position: string | null; contact_email: string | null;
@@ -124,11 +132,13 @@ async function notifyEmployer(r: Row, f: ConfirmFacts, key: string, start: strin
   return out;
 }
 
-/** Count this run; 0 when the booking no longer stands at this time or is already done. */
+/** Claim the lease and count this run; 0 when another run holds the lease, or the booking is gone or already done. */
 async function countAttempt(id: string, start: Date, now: Date): Promise<number> {
   const [rows] = await sequelize.query(
     `UPDATE placement_interviews SET confirm_attempts = confirm_attempts + 1, confirm_last_attempt_at = :now
-      WHERE id = :id AND state = 'booked' AND starts_at = :start AND confirm_done_at IS NULL RETURNING confirm_attempts`, { replacements: { id, start, now } });
+      WHERE id = :id AND state = 'booked' AND starts_at = :start AND confirm_done_at IS NULL
+        AND (confirm_last_attempt_at IS NULL OR confirm_last_attempt_at < :lease) RETURNING confirm_attempts`,
+    { replacements: { id, start, now, lease: new Date(now.getTime() - LEASE_MS) } });
   return Number((rows as Array<{ confirm_attempts: number }>)[0]?.confirm_attempts ?? 0);
 }
 
@@ -142,7 +152,7 @@ export async function finishBooking(interviewId: string, opts: FinishOpts = {}):
   const startsAt = new Date(r.starts_at);
   const start = startsAt.toISOString();
   const attempt = await countAttempt(r.id, startsAt, now);
-  if (!attempt) return { status: 'not_booked' };
+  if (!attempt) return { status: 'busy' }; // another run holds the lease (or the booking changed under us)
   const f: ConfirmFacts = { candidateName: r.full_name, company: r.company, position: r.position, startsAt, minutes: Number(r.minutes ?? 30), bookerTz: r.booker_tz };
   const key = `placement_interview:${r.id}:booked:${start}`;
   const room = (await ensureRoom(r, startsAt, f.minutes)) ? 'ok' : 'failed';

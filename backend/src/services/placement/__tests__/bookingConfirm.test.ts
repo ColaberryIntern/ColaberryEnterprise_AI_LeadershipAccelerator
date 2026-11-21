@@ -11,7 +11,7 @@ type Iv = { id: string; enrollment_id: string; state: string; company: string | 
   starts_at: Date | null; minutes: number | null; interviewer_emails: string[]; booker_tz: string | null; room_provider_id: string | null; room_url: string | null;
   confirm_attempts: number; confirm_last_attempt_at: Date | null; confirm_done_at: Date | null; updated_at: Date;
   full_name: string | null; personal_email: string | null; job_address: string | null };
-type R = { id?: string; now?: Date; start?: Date; pid?: string; url?: string; event?: string; payload?: string; src?: string; grace?: Date; after1?: Date; after2?: Date };
+type R = { id?: string; now?: Date; lease?: Date; start?: Date; pid?: string; url?: string; event?: string; payload?: string; src?: string; grace?: Date; after1?: Date; after2?: Date };
 const db = { iv: [] as Iv[], events: [] as Array<{ event: string; src: string; payload: string }>, sql: [] as string[] };
 const byId = (id: unknown) => db.iv.find((x) => x.id === id) as Iv;
 const same = (a: Date | null, b: Date | undefined) => !!a && !!b && a.getTime() === b.getTime();
@@ -24,6 +24,9 @@ function answer(sql: string, r: R): [unknown[], number] {
   if (sql.includes('SET confirm_attempts = confirm_attempts + 1')) {
     const i = byId(r.id);
     if (!/state = 'booked' AND starts_at = :start AND confirm_done_at IS NULL/.test(sql) || i.state !== 'booked' || !same(i.starts_at, r.start) || i.confirm_done_at) return [[], 0];
+    // the lease, applied only when the statement asks for it
+    const leased = /AND \(confirm_last_attempt_at IS NULL OR confirm_last_attempt_at < :lease\)/.test(sql);
+    if (leased && i.confirm_last_attempt_at && i.confirm_last_attempt_at.getTime() >= (r.lease as Date).getTime()) return [[], 0];
     Object.assign(i, { confirm_attempts: i.confirm_attempts + 1, confirm_last_attempt_at: r.now });
     return [[{ confirm_attempts: i.confirm_attempts }], 1];
   }
@@ -141,10 +144,12 @@ describe('finishBooking: room and invites after the commit', () => {
     }
   });
   it('retried, double-clicked or run twice at once: still ONE room and ONE message per recipient', async () => {
-    await Promise.all([finishBooking('iv-1', { now: NOW, read: ON, learnerAllowed: allowed }), finishBooking('iv-1', { now: NOW, read: ON, learnerAllowed: allowed })]);
+    const both = await Promise.all([finishBooking('iv-1', { now: NOW, read: ON, learnerAllowed: allowed }), finishBooking('iv-1', { now: NOW, read: ON, learnerAllowed: allowed })]);
+    expect(both.map((r) => r.status).sort()).toEqual(['busy', 'done']); // the second found the first one's lease
     await finishBooking('iv-1', { now: NOW, read: ON, learnerAllowed: allowed });
-    db.iv[0].confirm_done_at = null; // even a forced re-run sends nothing new
-    await finishBooking('iv-1', { now: NOW, read: ON, learnerAllowed: allowed });
+    db.iv[0].confirm_done_at = null; // even a forced re-run, after the lease lapsed, sends nothing new
+    expect((await finishBooking('iv-1', { now: new Date(NOW.getTime() + 60_000), read: ON, learnerAllowed: allowed })).status).toBe('busy'); // lease still live
+    await finishBooking('iv-1', { now: new Date(NOW.getTime() + 3 * 60_000), read: ON, learnerAllowed: allowed });
     expect(meetings.size).toBe(1);
     expect(sent().map((m) => m.to).sort()).toEqual(['ann.personal@mail.example', 'kim@acme.example', 'pat@acme.example']);
   });
@@ -172,7 +177,7 @@ describe('finishBooking: room and invites after the commit', () => {
   });
   it('a rebook at a NEW time is a new room and new messages (the key carries the start)', async () => {
     await finishBooking('iv-1', { now: NOW, read: ON, learnerAllowed: allowed });
-    Object.assign(db.iv[0], { starts_at: new Date('2026-11-24T15:00:00Z'), room_provider_id: null, confirm_done_at: null, confirm_attempts: 0 });
+    Object.assign(db.iv[0], { starts_at: new Date('2026-11-24T15:00:00Z'), room_provider_id: null, confirm_done_at: null, confirm_attempts: 0, confirm_last_attempt_at: null }); // as confirmBooking resets them
     await finishBooking('iv-1', { now: NOW, read: ON, learnerAllowed: allowed });
     expect([meetings.size, sent().length]).toEqual([2, 6]);
   });
