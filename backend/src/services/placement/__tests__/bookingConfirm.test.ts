@@ -181,12 +181,7 @@ describe('finishBooking: room and invites after the commit', () => {
     expect(await finishBooking('nope', { now: NOW, read: ON })).toEqual({ status: 'not_found' });
     expect([mockCreate.mock.calls.length, mockMail.mock.calls.length, db.iv[0].confirm_attempts]).toEqual([0, 0, 0]);
   });
-  it('a rebook at a NEW time is a new room and new messages (the key carries the start)', async () => {
-    await finishBooking('iv-1', { now: NOW, read: ON, learnerAllowed: allowed });
-    Object.assign(db.iv[0], { starts_at: new Date('2026-11-24T15:00:00Z'), room_provider_id: null, confirm_done_at: null, confirm_attempts: 0, confirm_last_attempt_at: null }); // as confirmBooking resets them
-    await finishBooking('iv-1', { now: NOW, read: ON, learnerAllowed: allowed });
-    expect([meetings.size, sent().length]).toEqual([2, 6]);
-  });
+  // A rebook at a NEW time (new room, new messages) runs the REAL confirmBooking statement: bookingRebook.test.ts.
 });
 
 describe('failure paths and the recovery sweep', () => {

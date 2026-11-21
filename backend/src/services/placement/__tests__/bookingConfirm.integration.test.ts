@@ -103,4 +103,33 @@ describeIfDb('after-booking work against Postgres', () => {
     expect(res).toEqual({ tried: 1, done: 1, gaveUp: 0 });
     expect((await one(`SELECT room_provider_id FROM placement_interviews WHERE id = '${r.interviewId}'`)).room_provider_id).toBe('zm-2');
   });
+
+  it('rescheduled and booked again: a NEW time gets a new meeting (its start in the requestId); the SAME time keeps its meeting', async () => {
+    const { newBookingToken } = await import('../bookingToken');
+    const E2 = '7eeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'; // its own learner, so the earlier tests' held times do not interfere
+    await sequelize.query(`INSERT INTO enrollments (id, full_name, email) VALUES ('${E2}', 'Bo Kim', 'bo.personal@mail.example') ON CONFLICT DO NOTHING`);
+    const t1 = newBookingToken(NOW);
+    await sequelize.query(`INSERT INTO placement_interviews (enrollment_id, source_event_id, company, contact_email, state, booking_token_hash, token_expires_at)
+      VALUES ('${E2}', 'confirm:c', 'Gamma', 'sam@gamma.example', 'new', '${t1.hash}', '${t1.expiresAt.toISOString()}')`);
+    let n = 10;
+    mockCreate.mockReset().mockImplementation(async () => ({ providerEventId: `zm-${++n}`, joinUrl: 'https://zoom.example/j/SECRET' }));
+    const a = await svc.confirmBooking(t1.token, { slot: '2026-11-23T15:00:00.000Z', tz: 'America/Chicago', interviewers: [] }, NOW);
+    if (a.status !== 'booked') throw new Error(`not booked: ${a.status}`);
+    await fin.finishBooking(a.interviewId, { now: NOW, read: ON, learnerAllowed: allowed });
+    const room = async () => (await one(`SELECT room_provider_id, room_url FROM placement_interviews WHERE id = '${a.interviewId}'`)).room_provider_id;
+    expect(await room()).toBe('zm-11');
+    // the same time again (a double click): the same booking, the same meeting
+    expect(await svc.confirmBooking(t1.token, { slot: '2026-11-23T15:00:00.000Z', tz: 'America/Chicago', interviewers: [] }, NOW)).toMatchObject({ status: 'booked', replay: true });
+    expect(await room()).toBe('zm-11');
+    // the reschedule moves it back to new and a new booking link is minted (interviewIngest and bookingReply; their own suites)
+    const t2 = newBookingToken(NOW);
+    await sequelize.query(`UPDATE placement_interviews SET state = 'new', booking_token_hash = '${t2.hash}', token_expires_at = '${t2.expiresAt.toISOString()}', token_used_at = NULL WHERE id = '${a.interviewId}'`);
+    const b = await svc.confirmBooking(t2.token, { slot: '2026-11-23T16:00:00.000Z', tz: 'America/Chicago', interviewers: [] }, NOW);
+    if (b.status !== 'booked') throw new Error(`not booked: ${b.status}`);
+    expect(await room()).toBeNull(); // the booking statement itself dropped the old time's meeting
+    expect((await fin.finishBooking(b.interviewId, { now: NOW, read: ON, learnerAllowed: allowed })).status).toBe('done');
+    expect(mockCreate.mock.calls.map((c) => (c[0] as { requestId: string }).requestId)).toEqual([
+      `placement-interview-${a.interviewId}-2026-11-23T15:00:00.000Z`, `placement-interview-${a.interviewId}-2026-11-23T16:00:00.000Z`]);
+    expect(await room()).toBe('zm-12');
+  });
 });

@@ -121,9 +121,13 @@ export async function confirmBooking(token: string, input: ConfirmInput, now: Da
       { minutes, fromDate: localDate(slot, a.tz), now, held, days: 1, bufferMinutes: BUFFER_MINUTES });
     if (!open.some((s) => s.getTime() === slot.getTime())) return { status: 'taken' };
     const emails = [...new Set(input.interviewers.map((e) => e.trim().toLowerCase()))];
+    // A booking at a NEW time (after a reschedule) drops the old time's meeting, so bookingConfirm makes the room for
+    // the new time (its requestId carries the start); the same time keeps its room. The old meeting is not cancelled here.
     await sequelize.query(
       `UPDATE placement_interviews SET state = 'booked', starts_at = :at, minutes = :m, token_used_at = :now, interviewer_emails = ${emails.length ? 'ARRAY[:emails]::text[]' : "'{}'::text[]"},
-         booker_tz = :tz, confirm_done_at = NULL, confirm_attempts = 0, confirm_last_attempt_at = NULL, updated_at = NOW() WHERE id = :id`,
+         booker_tz = :tz, confirm_done_at = NULL, confirm_attempts = 0, confirm_last_attempt_at = NULL,
+         room_provider_id = CASE WHEN starts_at IS DISTINCT FROM :at THEN NULL ELSE room_provider_id END,
+         room_url = CASE WHEN starts_at IS DISTINCT FROM :at THEN NULL ELSE room_url END, updated_at = NOW() WHERE id = :id`,
       { replacements: { at: slot, m: minutes, now, emails, tz: input.tz, id: r.id }, transaction: t });
     await sequelize.query(
       `INSERT INTO placement_events (subject_type, subject_id, event, from_state, to_state, actor, payload, source_event_id)
