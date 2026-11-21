@@ -28,7 +28,7 @@ export interface PrepDashboard {
   readiness?: { value: number; target?: number; changeSinceFirst?: number; trend: Array<{ week: string; value: number }> };
   interviews: PrepInterview[];
   skills: PrepSkill[];
-  sources: { video: number; phone_mock: number; real_interview: number; training: number; project: number };
+  sources: { video: number; phone_mock: number; real_interview: number; training: number; project: number; read_aloud: number };
   weeklyMinutes: Array<{ week: string; minutes: number }>;
   streak: number;
   thisWeek: number;
@@ -73,7 +73,9 @@ export interface SessionSegment extends PrepSegment { state: 'pending' | 'done' 
 export interface PrepSessionView { id: string; planId: string; status: 'running' | 'paused' | 'finished' | 'ended' | 'abandoned'; startedAt: string; secondsActive: number; segments: SessionSegment[] }
 /** recording (R1.1, a scored attempt): saved to the profile, still saveable for up to an hour, or gone. */
 export interface AttemptView { id: string; status: 'pending' | 'done' | 'failed'; errorClass: string | null; recording?: 'saved' | 'pending' | 'gone';
-  result: { seconds: number; scores: Array<{ key: string; label: string; score: number; value: string; target: string; source: string }>; notes: string[] } | null }
+  result: { seconds: number; scores: Array<{ key: string; label: string; score: number; value: string; target: string; source: string }>; notes: string[];
+    /** CP5.8: present on a read-aloud warm-up: the one score that counts, and the line it was read from. */
+    readAloud?: { score: number; lineId: string } } | null }
 
 export async function startSessionApi(planId: string): Promise<{ session: PrepSessionView; resumed: boolean }> {
   return (await portalApi.post(`${BASE}/sessions`, { planId })).data;
@@ -105,17 +107,27 @@ export async function fetchRemindersApi(): Promise<PrepReminder[]> {
   return (await portalApi.get(`${BASE}/reminders`)).data.reminders;
 }
 
-/** Upload one Try answer. `clientKey` makes a retried upload the same attempt on the server. */
-export async function uploadAttemptApi(sessionId: string, segmentIndex: number, clientKey: string, file: Blob, onProgress?: (f: number) => void): Promise<AttemptView> {
+/**
+ * Upload one Try answer (video) or, with `lineId`, one read-aloud warm-up (CP5.8, audio only). `clientKey` makes a retried
+ * upload the same attempt on the server.
+ */
+export async function uploadAttemptApi(sessionId: string, segmentIndex: number, clientKey: string, file: Blob, onProgress?: (f: number) => void, lineId?: string): Promise<AttemptView> {
   const form = new FormData();
   form.append('segmentIndex', String(segmentIndex));
   form.append('clientKey', clientKey);
-  form.append('video', file, 'try.webm');
+  if (lineId) form.append('lineId', lineId);
+  form.append('video', file, lineId ? 'read.webm' : 'try.webm');
   const res = await portalApi.post(`${BASE}/sessions/${encodeURIComponent(sessionId)}/attempts`, form, {
     headers: { 'Content-Type': 'multipart/form-data' }, timeout: 300_000,
     onUploadProgress: (e) => { if (onProgress && e.total) onProgress(e.loaded / e.total); },
   });
   return res.data.attempt;
+}
+
+/** CP5.8: the line this student reads next (they rotate). */
+export interface ReadAloudLine { id: string; text: string }
+export async function fetchReadAloudLineApi(): Promise<ReadAloudLine> {
+  return (await portalApi.get(`${BASE}/read-aloud/line`)).data.line;
 }
 
 export async function fetchAttemptApi(sessionId: string, attemptId: string): Promise<AttemptView> {

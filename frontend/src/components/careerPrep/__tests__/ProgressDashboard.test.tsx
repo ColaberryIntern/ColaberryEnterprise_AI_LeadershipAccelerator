@@ -6,7 +6,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { ProgressDashboard, coraRead } from '../ProgressDashboard';
 import type { PrepDashboard } from '../careerPrepApi';
 
-const empty: PrepDashboard = { interviews: [], skills: [], sources: { video: 0, phone_mock: 0, real_interview: 0, training: 0, project: 0 }, weeklyMinutes: [], streak: 0, thisWeek: 0 };
+const empty: PrepDashboard = { interviews: [], skills: [], sources: { video: 0, phone_mock: 0, real_interview: 0, training: 0, project: 0, read_aloud: 0 }, weeklyMinutes: [], streak: 0, thisWeek: 0 };
 const full: PrepDashboard = {
   anchorId: 'i1',
   readiness: { value: 64, target: 75, changeSinceFirst: 9, trend: [{ week: '2026-11-02', value: 55 }, { week: '2026-11-09', value: 60 }, { week: '2026-11-16', value: 64 }] },
@@ -17,7 +17,7 @@ const full: PrepDashboard = {
     { key: 'r', label: 'Role knowledge', score: 80, count: 3, sources: ['training'] },
     { key: 'w', label: 'Proof of work', count: 0, sources: [] },
   ],
-  sources: { video: 4, phone_mock: 0, real_interview: 0, training: 2, project: 0 },
+  sources: { video: 4, phone_mock: 0, real_interview: 0, training: 2, project: 0, read_aloud: 0 },
   weeklyMinutes: [{ week: '2026-11-09', minutes: 0 }, { week: '2026-11-16', minutes: 40 }],
   streak: 3, thisWeek: 40,
 };
@@ -43,7 +43,7 @@ describe('Your progress (CP3.5)', () => {
     expect(h.querySelector('[data-testid="cp-trend-empty"]')).not.toBeNull();
     expect(h.textContent).not.toMatch(/\b0 ?\/ ?100\b/);
     expect(h.textContent).not.toContain("Cora's read");
-    expect(h.querySelectorAll('[data-testid="cp-tiles"] li')).toHaveLength(5);
+    expect(h.querySelectorAll('[data-testid="cp-tiles"] li')).toHaveLength(6); // CP5.8 adds the read-aloud tile
     expect(h.textContent).toContain('no streak yet');
     expect(h.textContent).toContain('No practice minutes yet');
   });
@@ -67,7 +67,7 @@ describe('Your progress (CP3.5)', () => {
     expect(h.querySelector('[data-testid="cp-skill-p"] .cp-delta.down')?.textContent).toBe('down 2');
     expect(h.querySelector('[data-testid="cp-skill-f"] .cp-delta.up')?.textContent).toBe('up 9');
     expect(h.querySelector('[data-testid="cp-skill-w"]')?.textContent).toContain('not enough practice yet');
-    expect(Array.from(h.querySelectorAll('[data-testid="cp-tiles"] li')).map((t) => t.textContent)).toEqual(['4video answers scored', '0phone mocks with Cora', '0real interviews recorded', '2training lessons done', '0projects verified']);
+    expect(Array.from(h.querySelectorAll('[data-testid="cp-tiles"] li')).map((t) => t.textContent)).toEqual(['4video answers scored', '0phone mocks with Cora', '0real interviews recorded', '2training lessons done', '0projects verified', '0read-aloud warm-ups']);
     expect(h.textContent).toContain('Minutes per week · 3-day streak');
     expect(h.querySelector('[data-testid="cp-weekly-svg"]')).not.toBeNull();
   });

@@ -14,7 +14,7 @@ const dash = fetchPrepDashboard as jest.Mock;
 const post = postInterview as jest.Mock;
 const ask = askCoraApi as jest.Mock;
 
-const empty: PrepDashboard = { interviews: [], skills: [], sources: { video: 0, phone_mock: 0, real_interview: 0, training: 0, project: 0 }, weeklyMinutes: [], streak: 0, thisWeek: 0 };
+const empty: PrepDashboard = { interviews: [], skills: [], sources: { video: 0, phone_mock: 0, real_interview: 0, training: 0, project: 0, read_aloud: 0 }, weeklyMinutes: [], streak: 0, thisWeek: 0 };
 // Always four days out. A fixed date (it was 2026-11-19) turned the first plan card from "N days to the
 // interview" into "Today" on that date, and every test that picks plan:days crashed on main.
 const acme = { id: 'i1', source: 'real' as const, company: 'Acme', role: 'AI Engineer', type: 'technical' as const, startsAt: new Date(Date.now() + 4 * 86_400_000).toISOString(), target: 75 };

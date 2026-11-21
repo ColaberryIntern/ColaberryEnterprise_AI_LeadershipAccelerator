@@ -27,7 +27,6 @@ export const LEARN_TEXT: Record<string, string> = {
   pace_clarity: 'Most people are easiest to follow at about 100 to 165 words a minute. Slow down on the key point.',
 };
 
-export const WARM_UP_LINE = 'Say out loud, once: "Hi, I am glad to be here. Let me tell you about one thing I built."';
 
 /** The Try question for segment `n` of a session: the interview's own questions first, then the bank. */
 export function questionFor(n: number, type: InterviewType, own: string[] | null | undefined): string {

@@ -125,8 +125,8 @@ async function flowFloorAndRoom(browser) {
     arrows: document.querySelectorAll('[data-testid="cp-skills"] .cp-delta.up, [data-testid="cp-skills"] .cp-delta.down').length,
     ivBars: document.querySelectorAll('[data-testid^="cp-iv-"] .cp-bar-tick').length, tables: document.querySelectorAll('.cp-chart figcaption button').length,
   }));
-  check('9c Your progress draws its charts from the data: the readiness line with its dashed ready line, 8 weekly bars, 9 skill bars with arrows, interview bars, 5 source tiles, a table toggle per chart',
-    charts.line === 1 && charts.dots === 8 && charts.ready && charts.bars === 8 && charts.skills === 9 && charts.arrows >= 8 && charts.ivBars === 2 && charts.tiles === 5 && charts.tables === 2, JSON.stringify(charts));
+  check('9c Your progress draws its charts from the data: the readiness line with its dashed ready line, 8 weekly bars, 9 skill bars with arrows, interview bars, 6 source tiles (CP5.8 adds read-aloud), a table toggle per chart',
+    charts.line === 1 && charts.dots === 8 && charts.ready && charts.bars === 8 && charts.skills === 9 && charts.arrows >= 8 && charts.ivBars === 2 && charts.tiles === 6 && charts.tables === 2, JSON.stringify(charts));
   for (const [how, act] of [['‹ Floor n', () => page.click(tid('cp-back'))], ['Esc', () => page.keyboard.press('Escape')]]) {
     if (how === 'Esc') { await page.goto(`${BASE}/portal/career/room`); await page.waitForSelector(tid('cp-room')); await page.click(tid('cp-cora-col')); }
     await act();

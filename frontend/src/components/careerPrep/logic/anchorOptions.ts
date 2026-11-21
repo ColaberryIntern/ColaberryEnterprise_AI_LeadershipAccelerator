@@ -18,7 +18,7 @@ export const TYPE_CARDS: ReadonlyArray<{ type: InterviewType; title: string; lin
   { type: 'behavioral', title: 'Behavioral', line: 'About 20 minutes: stories about how you work with people.' },
 ];
 
-const SOURCE_WORDS: Record<string, string> = { video: 'your videos', phone_mock: 'phone mocks', real_interview: 'real interviews', training: 'training', project: 'projects' };
+const SOURCE_WORDS: Record<string, string> = { video: 'your videos', phone_mock: 'phone mocks', real_interview: 'real interviews', training: 'training', project: 'projects', read_aloud: 'read-aloud warm-ups' };
 const sourceWords = (keys: string[]) => keys.map((k) => SOURCE_WORDS[k] ?? k).join(', ');
 
 export function anchorCards(interviews: PrepInterview[]): OptionCard[] {

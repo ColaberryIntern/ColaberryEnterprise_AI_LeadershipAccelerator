@@ -15,6 +15,7 @@ export const SOURCE_WORDS: Record<PrepSourceKey, { one: string; many: string }> 
   real_interview: { one: 'real interview', many: 'real interviews' },
   training: { one: 'lesson', many: 'lessons' },
   project: { one: 'project', many: 'projects' },
+  read_aloud: { one: 'read-aloud warm-up', many: 'read-aloud warm-ups' },
 };
 const when = (iso: string) => new Date(iso).toLocaleString('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 
