@@ -101,6 +101,25 @@ async function uploadBlob(filePath, filename) {
 }
 
 /**
+ * Every to-do in the list (or in each of its groups), OPEN AND COMPLETED.
+ *
+ * Basecamp's `todos.json` lists only open to-dos; completed ones are a separate listing behind
+ * `?completed=true`. Before this, a ticket that was already closed could not be resolved by code,
+ * so attaching its close-out artifacts failed with "matched 0 tickets" (the Career Prep PDF
+ * backfill on 2026-11-17 had to patch a throwaway copy). A to-do id seen in both listings counts once.
+ */
+async function listTicketTodos(list = listAll) {
+  const groups = await list(`/buckets/${BUCKET}/todolists/${LIST}/groups.json`);
+  const byId = new Map();
+  for (const g of (groups.length ? groups : [{ id: LIST }])) {
+    for (const q of ['', '?completed=true']) {
+      for (const t of await list(`/buckets/${BUCKET}/todolists/${g.id}/todos.json${q}`)) byId.set(t.id, t);
+    }
+  }
+  return [...byId.values()];
+}
+
+/**
  * Resolve the ticket by its AF code and REFUSE if it disagrees with the id in the spec.
  *
  * This exists because the first backfill run carried six ticket ids written from memory and ALL
@@ -111,7 +130,7 @@ async function uploadBlob(filePath, filename) {
  * Exactly one match is required. Zero means the code is wrong; two means the titles are ambiguous
  * and a human should say which.
  */
-async function resolveTicket(spec) {
+async function resolveTicket(spec, list = listAll) {
   // A ticket outside the Agent Factory list has no `AF3.2`-style code to resolve against, so the
   // id would go unchecked -- the exact hole that sent six artifacts to strangers' tickets. The
   // substitute is an assertion the spec author can actually verify by eye: a distinctive phrase
@@ -128,11 +147,7 @@ async function resolveTicket(spec) {
     return spec.ticketId;
   }
   if (!spec.ticketCode) return spec.ticketId;
-  const groups = await listAll(`/buckets/${BUCKET}/todolists/${LIST}/groups.json`);
-  const todos = [];
-  for (const g of (groups.length ? groups : [{ id: LIST }])) {
-    todos.push(...await listAll(`/buckets/${BUCKET}/todolists/${g.id}/todos.json`));
-  }
+  const todos = await listTicketTodos(list);
   const hits = todos.filter((t) => String(t.title).startsWith(`${spec.ticketCode} `));
   if (hits.length !== 1) {
     throw new Error(`${spec.ticketCode} matched ${hits.length} tickets, expected exactly 1`);
@@ -237,4 +252,7 @@ async function main() {
   console.log(`\nhttps://app.basecamp.com/${ACCOUNT}/buckets/${BUCKET}/todos/${spec.ticketId}`);
 }
 
-main().catch((e) => { console.error('FAILED: ' + e.message); process.exit(1); });
+// Run only as a script; `require` (the tests) gets the resolvers without touching Basecamp.
+if (require.main === module) main().catch((e) => { console.error('FAILED: ' + e.message); process.exit(1); });
+
+module.exports = { listTicketTodos, resolveTicket };
