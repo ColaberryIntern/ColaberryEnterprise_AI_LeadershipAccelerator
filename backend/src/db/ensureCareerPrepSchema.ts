@@ -5,7 +5,13 @@ import { sequelize } from '../config/database';
  *
  * ADDITIVE ONLY. Ten new tables (prep_attempts added in CP4.4, prep_reminders in CP4.5, prep_saved_answers in R1.1) and
  * one added column (prep_saved_answers.show_public, R1.2, default false); nothing else is altered. Every statement is IF NOT EXISTS
- * or ON CONFLICT DO NOTHING, so this runs on every boot and a re-run is a no-op. The kit says
+ * or ON CONFLICT DO NOTHING, so this runs on every boot and a re-run is a no-op. CP5.8 (read-aloud) adds prep_attempts.kind
+ * (default 'try') and line_id, and WIDENS (never narrows) the prep_observations.source CHECK with 'read_aloud', guarded so it
+ * runs once. To revert it (by hand, never at boot), first `DELETE FROM prep_observations WHERE source = 'read_aloud'`, then
+ *   ALTER TABLE prep_observations DROP CONSTRAINT prep_observations_source_check;
+ *   ALTER TABLE prep_observations ADD CONSTRAINT prep_observations_source_check
+ *     CHECK (source IN ('video','phone_mock','real_interview','training','project'));
+ * and, for the attempt columns, `ALTER TABLE prep_attempts DROP COLUMN IF EXISTS line_id, DROP COLUMN IF EXISTS kind`. The kit says
  * `participant_id`; in this repo a student is an enrollment, so the column is `enrollment_id`.
  *
  *   career_interviews     one row per interview a student prepares for. source: real (an
@@ -43,6 +49,19 @@ export const PREP_SKILLS: ReadonlyArray<{ key: string; label: string; sort: numb
 const SKILL_SEED = `INSERT INTO prep_skills (key, label, sort) VALUES ${PREP_SKILLS
   .map((s) => `('${s.key}', '${s.label.replace(/'/g, "''")}', ${s.sort})`).join(', ')} ON CONFLICT (key) DO NOTHING`;
 
+/**
+ * CP5.8: add 'read_aloud' to an EXISTING table's source CHECK (a fresh table already has it). Runs only while the current
+ * constraint lacks it, so every later boot is a no-op; it only widens the allowed set, so no stored row can violate it.
+ */
+export const READ_ALOUD_SOURCE = `DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'prep_observations_source_check'
+                 AND pg_get_constraintdef(oid) LIKE '%read_aloud%') THEN
+    ALTER TABLE prep_observations DROP CONSTRAINT IF EXISTS prep_observations_source_check;
+    ALTER TABLE prep_observations ADD CONSTRAINT prep_observations_source_check
+      CHECK (source IN ('video','phone_mock','real_interview','training','project','read_aloud'));
+  END IF;
+END $$`;
+
 export const CAREER_PREP_STATEMENTS: readonly string[] = [
   `CREATE TABLE IF NOT EXISTS career_interviews (
      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -77,7 +96,7 @@ export const CAREER_PREP_STATEMENTS: readonly string[] = [
      enrollment_id UUID NOT NULL REFERENCES enrollments(id) ON DELETE CASCADE,
      skill_key VARCHAR(40) NOT NULL REFERENCES prep_skills(key),
      value NUMERIC(5,2) NOT NULL CHECK (value BETWEEN 0 AND 100),
-     source VARCHAR(16) NOT NULL CHECK (source IN ('video','phone_mock','real_interview','training','project')),
+     source VARCHAR(16) NOT NULL CHECK (source IN ('video','phone_mock','real_interview','training','project','read_aloud')),
      source_ref VARCHAR(160) NOT NULL,
      observed_at TIMESTAMPTZ NOT NULL,
      weight NUMERIC(4,2) NOT NULL DEFAULT 1,
@@ -151,6 +170,10 @@ export const CAREER_PREP_STATEMENTS: readonly string[] = [
   'CREATE INDEX IF NOT EXISTS prep_saved_answers_enrollment_idx ON prep_saved_answers (enrollment_id, created_at)',
   // R1.2 (Ali, Q1: A): the second opt-in. A saved answer shows on the public hire profile only when this is on; off by default.
   'ALTER TABLE prep_saved_answers ADD COLUMN IF NOT EXISTS show_public BOOLEAN NOT NULL DEFAULT false',
+  // CP5.8 (Ali 2026-11-21, read-aloud at full weight): which kind of recording an attempt is, and the line it was read from.
+  "ALTER TABLE prep_attempts ADD COLUMN IF NOT EXISTS kind VARCHAR(10) NOT NULL DEFAULT 'try' CHECK (kind IN ('try','readaloud'))",
+  'ALTER TABLE prep_attempts ADD COLUMN IF NOT EXISTS line_id VARCHAR(20)',
+  READ_ALOUD_SOURCE,
   `CREATE TABLE IF NOT EXISTS prep_readiness_daily (
      enrollment_id UUID NOT NULL REFERENCES enrollments(id) ON DELETE CASCADE,
      interview_id UUID NOT NULL DEFAULT '${NO_INTERVIEW}',

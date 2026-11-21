@@ -71,6 +71,24 @@ describeIfDb('career prep schema against Postgres', () => {
     expect((await one<{ n: number }>("SELECT COUNT(*)::int AS n FROM prep_observations WHERE source_ref = 'video:abc'")).n).toBe(1);
   });
 
+  it('CP5.8: accepts a read_aloud observation, still rejects an unknown source, and widens an OLD narrow CHECK once', async () => {
+    await sequelize.query(`INSERT INTO prep_observations (enrollment_id, skill_key, value, source, source_ref, observed_at)
+      VALUES ('${E1}', 'pace_clarity', 88, 'read_aloud', 'readaloud:r1', NOW())`);
+    await expect(sequelize.query(`INSERT INTO prep_observations (enrollment_id, skill_key, value, source, source_ref, observed_at)
+      VALUES ('${E1}', 'pace_clarity', 50, 'karaoke', 'karaoke:x', NOW())`)).rejects.toThrow();
+    // A production table created before CP5.8 has the OLD five-source CHECK: put it back, then re-run the ensure.
+    await sequelize.query("DELETE FROM prep_observations WHERE source = 'read_aloud'");
+    await sequelize.query('ALTER TABLE prep_observations DROP CONSTRAINT prep_observations_source_check');
+    await sequelize.query("ALTER TABLE prep_observations ADD CONSTRAINT prep_observations_source_check CHECK (source IN ('video','phone_mock','real_interview','training','project'))");
+    await schema.ensureCareerPrepSchema();
+    await schema.ensureCareerPrepSchema();
+    const def = await one<{ d: string }>("SELECT pg_get_constraintdef(oid) AS d FROM pg_constraint WHERE conname = 'prep_observations_source_check'");
+    expect(def.d).toMatch(/read_aloud/);
+    expect(def.d).toMatch(/video/);
+    const kinds = await one<{ n: number }>("SELECT COUNT(*)::int AS n FROM information_schema.columns WHERE table_name = 'prep_attempts' AND column_name IN ('kind','line_id')");
+    expect(kinds.n).toBe(2);
+  });
+
   it('rejects an out-of-range score and an unknown skill', async () => {
     await expect(sequelize.query(`INSERT INTO prep_observations (enrollment_id, skill_key, value, source, source_ref, observed_at)
       VALUES ('${E1}', 'few_fillers', 101, 'video', 'video:x', NOW())`)).rejects.toThrow();

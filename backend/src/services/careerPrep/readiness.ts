@@ -17,7 +17,9 @@ import config from './readinessWeights.json';
  *
  * Every weight and threshold is in readinessWeights.json, not here.
  */
-export type ObservationSource = 'video' | 'phone_mock' | 'real_interview' | 'training' | 'project';
+/** read_aloud: the CP5.8 warm-up read aloud (Ali 2026-11-21, option B: weighted like a recorded answer). */
+export const OBSERVATION_SOURCES = ['video', 'phone_mock', 'real_interview', 'training', 'project', 'read_aloud'] as const;
+export type ObservationSource = (typeof OBSERVATION_SOURCES)[number];
 export type InterviewType = 'recruiter' | 'hiring_manager' | 'technical' | 'behavioral';
 export interface Observation { skill: string; value: number; source: ObservationSource; observedAt: Date; weight?: number }
 export interface SessionTime { startedAt: Date; secondsActive: number; status: string }

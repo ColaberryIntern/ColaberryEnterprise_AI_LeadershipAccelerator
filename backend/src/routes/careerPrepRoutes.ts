@@ -10,7 +10,7 @@ import { askCora } from '../services/careerPrep/coraService';
 import { activePlan, createPlan, NotYoursError, PastInterviewError } from '../services/careerPrep/plans';
 import { currentSession, NotFoundError, startSession, updateSession } from '../services/careerPrep/sessions';
 import { prepAttemptUpload } from '../config/prepAttemptUpload';
-import { getAttemptStatus, guardUpload, postAttempt } from '../controllers/careerPrepAttemptController';
+import { getAttemptStatus, getReadAloudLine, guardUpload, postAttempt } from '../controllers/careerPrepAttemptController';
 import { getReminders, postReminder } from '../controllers/careerPrepReminderController';
 import { deleteSavedAnswer, getSavedAnswers, getSkillSources, postSaveAnswer, putShowPublic, serveAnswerVideo } from '../controllers/careerPrepAnswerController';
 import rateLimit from 'express-rate-limit';
@@ -225,6 +225,7 @@ router.get('/api/portal/career-prep/sessions/current', requireParticipant, requi
 // CP4.4: a recorded Try answer (multipart, 100 MB; nginx raises its body cap for this path).
 router.post('/api/portal/career-prep/sessions/:id/attempts', requireParticipant, requireCareerPrep, guardUpload(prepAttemptUpload.single('video')), postAttempt);
 router.get('/api/portal/career-prep/sessions/:id/attempts/:attemptId', requireParticipant, requireCareerPrep, getAttemptStatus);
+router.get('/api/portal/career-prep/read-aloud/line', requireParticipant, requireCareerPrep, getReadAloudLine);
 // R1.1: where a skill's number comes from; Try answers the student chose to keep (save, delete, list, play).
 router.get('/api/portal/career-prep/skills/:key/sources', requireParticipant, requireCareerPrep, getSkillSources);
 router.get('/api/portal/career-prep/answers', requireParticipant, requireCareerPrep, getSavedAnswers);

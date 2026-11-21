@@ -6,8 +6,10 @@ jest.mock('../../services/careerPrep/interviews', () => ({ linkHireInterviews: j
 const mockCreate = jest.fn();
 const mockEnqueue = jest.fn();
 const mockGet = jest.fn();
+const mockCount = jest.fn();
 jest.mock('../../services/careerPrep/attempts', () => ({
   createAttempt: (...a: unknown[]) => mockCreate(...a), enqueueAttempt: (...a: unknown[]) => mockEnqueue(...a), getAttempt: (...a: unknown[]) => mockGet(...a),
+  readAloudCount: (...a: unknown[]) => mockCount(...a),
 }));
 
 import express from 'express';
@@ -34,7 +36,7 @@ function app(): express.Express {
 }
 const upload = (t = token()) => request(app()).post(URL).set('Authorization', t).field('segmentIndex', '2').field('clientKey', 'key-12345678').attach('video', video, { filename: 'try.webm', contentType: 'video/webm' });
 
-beforeEach(() => { mockEnabled.mockReset().mockResolvedValue(true); mockCreate.mockReset(); mockEnqueue.mockReset(); mockGet.mockReset(); });
+beforeEach(() => { mockEnabled.mockReset().mockResolvedValue(true); mockCreate.mockReset(); mockEnqueue.mockReset(); mockGet.mockReset(); mockCount.mockReset().mockResolvedValue(0); });
 
 describe('POST /sessions/:id/attempts', () => {
   it('401s without a token and 404s with Career Prep off', async () => {
@@ -47,8 +49,9 @@ describe('POST /sessions/:id/attempts', () => {
     mockCreate.mockResolvedValue({ attempt: { id: A1, status: 'pending', result: null, errorClass: null }, created: true });
     const res = await upload();
     expect(res.status).toBe(202);
-    expect(mockCreate).toHaveBeenCalledWith('enr-ali', S1, 2, 'key-12345678');
+    expect(mockCreate).toHaveBeenCalledWith('enr-ali', S1, 2, 'key-12345678', undefined);
     expect(mockEnqueue.mock.calls[0].slice(0, 2)).toEqual([A1, 'enr-ali']);
+    expect(mockEnqueue.mock.calls[0][3]).toEqual({}); // a Try answer: no read-aloud line
   });
   it('200s a retried upload (same client key) without scoring it again', async () => {
     mockCreate.mockResolvedValue({ attempt: { id: A1, status: 'done', result: null, errorClass: null }, created: false });
@@ -70,6 +73,39 @@ describe('POST /sessions/:id/attempts', () => {
   it('refuses a read-only view-as token', async () => {
     expect((await upload(token({ read_only: true, impersonated_by: 'a' }))).status).toBe(403);
     expect(mockCreate).not.toHaveBeenCalled();
+  });
+});
+
+describe('CP5.8 the read-aloud warm-up (audio, with a line id)', () => {
+  const audio = (lineId: string, contentType = 'audio/webm') => request(app()).post(URL).set('Authorization', token()).field('segmentIndex', '0').field('clientKey', 'key-ra-12345678').field('lineId', lineId).attach('video', video, { filename: 'read.webm', contentType });
+  it('accepts an audio recording with a known line, and queues it scored as a read-aloud of THAT line', async () => {
+    mockCreate.mockResolvedValue({ attempt: { id: A1, status: 'pending', result: null, errorClass: null }, created: true });
+    const res = await audio('ra-02');
+    expect(res.status).toBe(202);
+    expect(mockCreate).toHaveBeenCalledWith('enr-ali', S1, 0, 'key-ra-12345678', 'ra-02');
+    expect(mockEnqueue.mock.calls[0][3]).toEqual({ readAloudLine: expect.objectContaining({ id: 'ra-02' }) });
+  });
+  it('400s an unknown or malformed line id', async () => {
+    expect((await audio('ra-99')).status).toBe(400);
+    expect((await audio('ra-x1')).status).toBe(400);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+  it('400s AUDIO sent without a line id: a normal Try answer must be a video', async () => {
+    const noLine = await request(app()).post(URL).set('Authorization', token()).field('segmentIndex', '2').field('clientKey', 'key-ra-12345678').attach('video', video, { filename: 'try.webm', contentType: 'audio/webm' });
+    expect(noLine.status).toBe(400);
+    expect(noLine.body.error).toMatch(/video/);
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(mockEnqueue).not.toHaveBeenCalled();
+  });
+  it('GET /read-aloud/line gives the next line in rotation for the signed-in student; 401 without a token, 404 with Career Prep off', async () => {
+    mockCount.mockResolvedValue(9);
+    const res = await request(app()).get('/api/portal/career-prep/read-aloud/line').set('Authorization', token());
+    expect(res.status).toBe(200);
+    expect(res.body.line.id).toBe('ra-02');
+    expect(mockCount).toHaveBeenCalledWith('enr-ali');
+    expect((await request(app()).get('/api/portal/career-prep/read-aloud/line')).status).toBe(401);
+    mockEnabled.mockResolvedValue(false);
+    expect((await request(app()).get('/api/portal/career-prep/read-aloud/line').set('Authorization', token())).status).toBe(404);
   });
 });
 

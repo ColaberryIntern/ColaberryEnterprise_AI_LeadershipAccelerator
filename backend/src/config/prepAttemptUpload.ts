@@ -13,6 +13,9 @@ import multer from 'multer';
 import { isVideoUpload, UnsupportedVideoError } from './hireVideoUpload';
 
 export const PREP_ATTEMPT_MAX_BYTES = 100 * 1024 * 1024;
+
+/** CP5.8: the audio types a browser MediaRecorder produces for the read-aloud warm-up. */
+export const isReadAloudAudio = (mime: string): boolean => /^audio\/(webm|ogg|mp4|mpeg|wav)(;.*)?$/i.test(mime);
 export const PREP_ATTEMPT_TMP_DIR = path.join(os.tmpdir(), 'prep-attempt-uploads');
 
 export const prepAttemptUpload = multer({
@@ -21,5 +24,6 @@ export const prepAttemptUpload = multer({
     filename: (_req, _file, cb) => cb(null, `${crypto.randomUUID()}.upload`),
   }),
   limits: { fileSize: PREP_ATTEMPT_MAX_BYTES, files: 1 },
-  fileFilter: (_req, file, cb) => (isVideoUpload(file.originalname, file.mimetype) ? cb(null, true) : cb(new UnsupportedVideoError())),
+  // A Try answer is a video; the CP5.8 read-aloud warm-up is audio only (same field name, same limits).
+  fileFilter: (_req, file, cb) => (isVideoUpload(file.originalname, file.mimetype) || isReadAloudAudio(file.mimetype) ? cb(null, true) : cb(new UnsupportedVideoError())),
 });

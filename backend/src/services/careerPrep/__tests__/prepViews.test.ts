@@ -58,7 +58,7 @@ describe('buildDashboard', () => {
   });
 
   it('counts distinct evidence per source', () => {
-    expect(buildDashboard(full(), NOW).sources).toEqual({ video: 5, phone_mock: 0, real_interview: 0, training: 0, project: 0 });
+    expect(buildDashboard(full(), NOW).sources).toEqual({ video: 5, phone_mock: 0, real_interview: 0, training: 0, project: 0, read_aloud: 0 });
   });
 
   it('reports the change since the first week of the trend', () => {

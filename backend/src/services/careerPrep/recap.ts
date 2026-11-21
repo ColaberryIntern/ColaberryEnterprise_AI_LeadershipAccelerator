@@ -1,5 +1,5 @@
 import { sequelize } from '../../config/database';
-import { attemptObservationRows, type AttemptResult } from './attempts';
+import { attemptObservationRows, attemptRef, type AttemptResult } from './attempts';
 import { writeObservations } from './observationWriter';
 import { loadPrepData, type PrepData } from './prepData';
 import { buildDashboard } from './prepViews';
@@ -95,5 +95,5 @@ export async function sessionRecap(enrollmentId: string, session: SessionView, n
   const data = await (deps.load ?? loadPrepData)(enrollmentId, now);
   const [plans] = await sequelize.query('SELECT interview_id FROM prep_plans WHERE id = :p AND enrollment_id = :e', { replacements: { p: session.planId, e: enrollmentId } });
   const anchorId = (plans as Array<{ interview_id: string | null }>)[0]?.interview_id ?? undefined;
-  return buildRecap(data, new Set(attempts.map((a) => `attempt:${a.id}`)), session, { done: attempts.length, pending }, now, anchorId);
+  return buildRecap(data, new Set(attempts.map((a) => attemptRef(String(a.id), a.result as AttemptResult))), session, { done: attempts.length, pending }, now, anchorId);
 }

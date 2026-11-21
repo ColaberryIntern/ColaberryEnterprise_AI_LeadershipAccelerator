@@ -95,24 +95,39 @@ function count(list: string[]): { word: string; count: number }[] {
   return [...m].map(([word, n]) => ({ word, count: n })).sort((a, b) => b.count - a.count || a.word.localeCompare(b.word));
 }
 
-/** Fillers and hedges, each found once (a phrase consumes its words), with the time it was said. */
-export function findMarkers(words: readonly Word[]): SpeechEvent[] {
+/** One filler or hedge found in the transcript: where it starts, how many words it covers, and its label. */
+interface Marker { readonly i: number; readonly len: number; readonly kind: 'filler' | 'hedge'; readonly label: string }
+
+/** The single scan behind findMarkers and fillerWordIndexes, so both always agree on what a filler is. */
+function scanMarkers(words: readonly Word[]): Marker[] {
   const tokens = words.map((w) => norm(w.word));
-  const out: SpeechEvent[] = [];
+  const out: Marker[] = [];
   for (let i = 0; i < tokens.length; i += 1) {
     const tok = tokens[i];
     if (!tok) continue;
-    if (SINGLE_FILLERS.has(tok)) { out.push({ t: words[i].start, kind: 'filler', label: tok.replace(/^(umm|uhm)$/, 'um').replace(/^uhh$/, 'uh') }); continue; }
+    if (SINGLE_FILLERS.has(tok)) { out.push({ i, len: 1, kind: 'filler', label: tok.replace(/^(umm|uhm)$/, 'um').replace(/^uhh$/, 'uh') }); continue; }
     const pf = PHRASE_FILLERS.find((p) => startsAt(tokens, i, p));
-    if (pf) { out.push({ t: words[i].start, kind: 'filler', label: pf.join(' ') }); i += pf.length - 1; continue; }
+    if (pf) { out.push({ i, len: pf.length, kind: 'filler', label: pf.join(' ') }); i += pf.length - 1; continue; }
     if (tok === 'like' && i > 0 && !LIKE_KEEPS_BEFORE.has(tokens[i - 1]) && tokens[i + 1] !== 'to' && tokens[i + 1] !== 'this' && tokens[i + 1] !== 'that') {
       // A comma or pause around it is the tell; without one it is too often the real verb.
       const after = /,$/.test(words[i].word) || /,$/.test(words[i - 1].word) || (words[i + 1] && words[i + 1].start - words[i].end >= 0.3);
-      if (after) { out.push({ t: words[i].start, kind: 'filler', label: 'like' }); continue; }
+      if (after) { out.push({ i, len: 1, kind: 'filler', label: 'like' }); continue; }
     }
     const h = HEDGES.find((p) => startsAt(tokens, i, p));
-    if (h) { out.push({ t: words[i].start, kind: 'hedge', label: h.join(' ') }); i += h.length - 1; }
+    if (h) { out.push({ i, len: h.length, kind: 'hedge', label: h.join(' ') }); i += h.length - 1; }
   }
+  return out;
+}
+
+/** Fillers and hedges, each found once (a phrase consumes its words), with the time it was said. */
+export function findMarkers(words: readonly Word[]): SpeechEvent[] {
+  return scanMarkers(words).map((m) => ({ t: words[m.i].start, kind: m.kind, label: m.label }));
+}
+
+/** The positions of every word that is part of a filler ("um", "you know", a non-grammatical "like"). Hedges are not fillers. */
+export function fillerWordIndexes(words: readonly Word[]): Set<number> {
+  const out = new Set<number>();
+  for (const m of scanMarkers(words)) if (m.kind === 'filler') for (let k = 0; k < m.len; k += 1) out.add(m.i + k);
   return out;
 }
 

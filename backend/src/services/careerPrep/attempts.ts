@@ -7,6 +7,7 @@ import { writeObservations } from './observationWriter';
 import type { ObservationRow } from './observationAdapters';
 import { NotFoundError } from './sessions';
 import { keepPending, recordingState } from './savedAnswers';
+import { scoreReadAloud } from './readAloudScore';
 
 /**
  * Career Prep v27, CP4.4: a recorded "Try" answer (prep_attempts), scored with the same pipeline as the
@@ -22,23 +23,31 @@ import { keepPending, recordingState } from './savedAnswers';
  * R1.1), then the sweep deletes it. A failure is stored (status failed + error_class) and the student
  * records again. At boot, attempts still pending (their files are gone with the restart) are marked failed.
  * Scores become observations (source video, ref attempt:<id>) only when scoring succeeds.
+ *
+ * CP5.8 READ-ALOUD (kind readaloud): the warm-up line read aloud, audio only. Same transcription and UNCLEAR guard; scored
+ * by readAloudScore.ts into ONE Pace and clarity observation (source read_aloud, ref readaloud:<id>, weight 1, Ali's
+ * option B). Its recording is deleted as soon as it is scored: a read-aloud is never saveable to the profile.
  */
-export interface AttemptResult { seconds: number; scores: Array<{ key: string; label: string; score: number; value: string; target: string; source: string }>; notes: string[] }
+export interface AttemptResult {
+  seconds: number; scores: Array<{ key: string; label: string; score: number; value: string; target: string; source: string }>; notes: string[];
+  /** Present only on a read-aloud attempt: the composite that becomes the observation, and the line it was read from. */
+  readAloud?: { score: number; lineId: string };
+}
 /** recording (a scored attempt only): saved to the profile, still saveable (pending, under an hour), or gone. */
 export interface AttemptView { id: string; status: 'pending' | 'done' | 'failed'; result: AttemptResult | null; errorClass: string | null; recording?: 'saved' | 'pending' | 'gone' }
 type Row = { id: string; status: AttemptView['status']; result: AttemptResult | null; error_class: string | null };
 const view = (r: Row): AttemptView => ({ id: String(r.id), status: r.status, result: r.result ?? null, errorClass: r.error_class ?? null });
 const SKILL_OF: Record<string, string> = { pace: 'pace_clarity', fillers: 'few_fillers' };
 
-export async function createAttempt(enrollmentId: string, sessionId: string, segmentIndex: number, clientKey: string): Promise<{ attempt: AttemptView; created: boolean }> {
+export async function createAttempt(enrollmentId: string, sessionId: string, segmentIndex: number, clientKey: string, readAloudLineId?: string): Promise<{ attempt: AttemptView; created: boolean }> {
   const [own] = await sequelize.query(`SELECT jsonb_array_length(segments) AS n FROM prep_sessions WHERE id = :s AND enrollment_id = :e AND status IN ('running','paused')`,
     { replacements: { s: sessionId, e: enrollmentId } });
   const session = (own as Array<{ n: number }>)[0];
   if (!session || segmentIndex >= Number(session.n)) throw new NotFoundError();
   const [made] = await sequelize.query(
-    `INSERT INTO prep_attempts (session_id, enrollment_id, segment_index, client_key) VALUES (:s, :e, :i, :k)
+    `INSERT INTO prep_attempts (session_id, enrollment_id, segment_index, client_key, kind, line_id) VALUES (:s, :e, :i, :k, :kind, :line)
      ON CONFLICT (session_id, client_key) DO NOTHING RETURNING id, status, result, error_class`,
-    { replacements: { s: sessionId, e: enrollmentId, i: segmentIndex, k: clientKey } });
+    { replacements: { s: sessionId, e: enrollmentId, i: segmentIndex, k: clientKey, kind: readAloudLineId ? 'readaloud' : 'try', line: readAloudLineId ?? null } });
   if ((made as Row[]).length) return { attempt: view((made as Row[])[0]), created: true };
   const [found] = await sequelize.query('SELECT id, status, result, error_class FROM prep_attempts WHERE session_id = :s AND client_key = :k',
     { replacements: { s: sessionId, k: clientKey } });
@@ -95,13 +104,37 @@ export function attemptResult(words: Parameters<typeof speechMetrics>[0], second
   return { seconds: m.seconds, scores: deliveryScores(m).filter((s) => s.key !== 'length'), notes: coachingNotes(m).slice(1) };
 }
 
-/** The observations one scored attempt becomes (pace and fillers only; ref attempt:<id>). Shared with the recap. */
+/** Pure: a read-aloud result. The three parts are shown; the composite is what counts (never fillers, never accent). */
+export function readAloudResult(words: Parameters<typeof speechMetrics>[0], seconds: number, line: { id: string; text: string }): AttemptResult {
+  const r = scoreReadAloud(words, seconds, line.text);
+  const part = (key: string, label: string, score: number, value: string, target: string) => ({ key, label, score, value, target, source: 'Career Prep read-aloud warm-up' });
+  return {
+    seconds: Math.round(seconds * 10) / 10,
+    scores: [
+      part('pace', 'Pace', r.pace, r.wordsPerMinute === null ? 'not measured' : `${r.wordsPerMinute} wpm`, '100 to 165 wpm'),
+      part('smoothness', 'Smoothness', r.smoothness, `${r.pausesOverOneSecond} pause(s) of 1 s or more`, 'no pauses of 1 s or more'),
+      part('completeness', 'Completeness', r.completeness, `${r.wordsHeard} of ${r.wordsInLine} words`, 'every word of the line'),
+    ],
+    notes: [],
+    readAloud: { score: r.score, lineId: line.id },
+  };
+}
+
+/** The observation ref an attempt writes: readaloud:<id> for a read-aloud, attempt:<id> for a Try answer. */
+export const attemptRef = (attemptId: string, result: AttemptResult): string => (result.readAloud ? `readaloud:${attemptId}` : `attempt:${attemptId}`);
+
+/** The observations one scored attempt becomes. Shared with the recap. Read-aloud: ONE pace_clarity row at weight 1. */
 export function attemptObservationRows(enrollmentId: string, attemptId: string, result: AttemptResult, observedAt: Date): ObservationRow[] {
+  if (result.readAloud) return [{ enrollmentId, skill: 'pace_clarity', value: result.readAloud.score, source: 'read_aloud', sourceRef: attemptRef(attemptId, result), observedAt }];
   return result.scores.filter((s) => SKILL_OF[s.key])
     .map((s) => ({ enrollmentId, skill: SKILL_OF[s.key], value: s.score, source: 'video', sourceRef: `attempt:${attemptId}`, observedAt }));
 }
 
-export interface ScoreDeps { transcribeCall?: TranscribeCall }
+export interface ScoreDeps {
+  transcribeCall?: TranscribeCall;
+  /** Set for a read-aloud attempt: the line it was read from. */
+  readAloudLine?: { id: string; text: string };
+}
 
 export async function scoreAttempt(attemptId: string, enrollmentId: string, file: string, deps: ScoreDeps = {}): Promise<'done' | 'failed'> {
   let scored = false;
@@ -110,7 +143,7 @@ export async function scoreAttempt(attemptId: string, enrollmentId: string, file
     // A silent or garbled recording is failed as UnclearAudio BEFORE anything is written (no observations).
     const unclear = unclearAudio(t.words, t.duration);
     if (unclear) throw new UnclearAudioError(unclear);
-    const result = attemptResult(t.words, t.duration);
+    const result = deps.readAloudLine ? readAloudResult(t.words, t.duration, deps.readAloudLine) : attemptResult(t.words, t.duration);
     await writeObservations(attemptObservationRows(enrollmentId, attemptId, result, new Date()));
     await sequelize.query(`UPDATE prep_attempts SET status = 'done', result = CAST(:r AS JSONB) WHERE id = :a`, { replacements: { r: JSON.stringify(result), a: attemptId } });
     scored = true;
@@ -121,7 +154,7 @@ export async function scoreAttempt(attemptId: string, enrollmentId: string, file
     await sequelize.query(`UPDATE prep_attempts SET status = 'failed', error_class = :c WHERE id = :a`, { replacements: { c: String(errorClass).slice(0, 40), a: attemptId } }).catch(() => undefined);
     return 'failed';
   } finally {
-    if (scored) await keepPending(attemptId, file);
+    if (scored && !deps.readAloudLine) await keepPending(attemptId, file);
     else await fs.promises.rm(file, { force: true }).catch(() => undefined);
   }
 }
@@ -140,4 +173,10 @@ export function enqueueAttempt(attemptId: string, enrollmentId: string, file: st
 export async function failStaleAttempts(): Promise<number> {
   const [rows] = await sequelize.query(`UPDATE prep_attempts SET status = 'failed', error_class = 'Interrupted' WHERE status = 'pending' RETURNING id`);
   return (rows as unknown[]).length;
+}
+
+/** CP5.8: how many read-alouds this student has had scored (picks the next line, so the lines rotate). */
+export async function readAloudCount(enrollmentId: string): Promise<number> {
+  const [rows] = await sequelize.query("SELECT COUNT(*)::int AS n FROM prep_attempts WHERE enrollment_id = :e AND kind = 'readaloud' AND status = 'done'", { replacements: { e: enrollmentId } });
+  return Number((rows as Array<{ n: number }>)[0]?.n ?? 0);
 }
