@@ -8,7 +8,7 @@
  * source rather than from a hand-written list, so a column added next year is seeded without
  * anyone remembering to, and the test fails closed instead of passing on a stale list.
  */
-import fs from 'fs';
+import { projectColumns as sharedProjectColumns } from '../../../models/__tests__/helpers/projectColumns';
 import path from 'path';
 
 jest.mock('../../../config/database', () => ({
@@ -68,50 +68,18 @@ function input(over: Loose = {}): Loose {
 }
 
 /**
- * Every column of `projects`, from BOTH places columns are declared.
+ * The column list, from the shared helper in models/__tests__/helpers.
  *
- * The first version of this read only `Project.init(...)`, and a verifier showed that was too
- * narrow in the exact way this feature already got bitten: `external_owner`, `external_url`,
- * `evidence_provenance` and `external_verified` are added to the table by
- * `db/ensurePresentationStudioSchema.ts` and never declared on the model, so the sweep never
- * seeded them. That is T3's own defect wearing a different hat - a column can exist in the
- * database and be invisible to anything reading the model.
- *
- * So the list is the union of the model's attributes and every `ALTER TABLE projects ADD COLUMN`
- * across `db/`, plus the two timestamps Sequelize manages without declaring. A column added by
- * either route is now seeded whether or not anyone remembers this test exists.
+ * This file and demoRoutes.test.ts each had their own copy of this parse. When a verifier
+ * found the copy here was missing four DDL-only columns plus the two Sequelize-managed
+ * timestamps, fixing it left the other copy still blind. One helper, so a fix lands in both.
  */
-function projectColumns(): string[] {
-  const modelSrc = fs.readFileSync(path.resolve(__dirname, '../../../models/Project.ts'), 'utf8');
-  const init = modelSrc.slice(modelSrc.indexOf('Project.init('));
-  // `hooks` is the options object, not a column. Named here so the exclusion is deliberate
-  // rather than a silent filter that could quietly swallow a real column later.
-  const NOT_COLUMNS = new Set(['hooks', 'indexes', 'scopes', 'defaultScope', 'validate']);
-  const fromModel = [...init.matchAll(/^ {4}([a-z_]+): \{/gm)]
-    .map((m) => m[1])
-    .filter((n) => !NOT_COLUMNS.has(n));
-
-  const dbDir = path.resolve(__dirname, '../../../db');
-  const fromDdl = fs
-    .readdirSync(dbDir)
-    .filter((f) => f.startsWith('ensure') && f.endsWith('.ts'))
-    .flatMap((f) => [
-      ...fs
-        .readFileSync(path.join(dbDir, f), 'utf8')
-        .matchAll(/ALTER\s+TABLE\s+projects\s+ADD\s+COLUMN\s+IF\s+NOT\s+EXISTS\s+([a-z_]+)/gi),
-    ].map((m) => m[1]));
-
-  const names = [...new Set([...fromModel, ...fromDdl, 'created_at', 'updated_at'])].sort();
-
-  // Guards against a parse that silently stops matching and seeds nothing. Each names a column
-  // that reaches the list by a DIFFERENT route, so a break in either source is visible.
-  expect(names.length).toBeGreaterThan(20);
-  expect(names).toContain('organization_name'); // model
-  expect(names).toContain('demo_spec'); // model and DDL
-  expect(names).toContain('external_owner'); // DDL only: the case that was being missed
-  expect(fromDdl.length).toBeGreaterThan(0);
-  return names;
-}
+const projectColumns = () =>
+  sharedProjectColumns(
+    path.resolve(__dirname, '../../../models'),
+    path.resolve(__dirname, '../../../db'),
+    expect as never,
+  );
 
 /** Wire the mock: SELECT returns `row`, UPDATE returns a token and a disabled flag. */
 function mockDb(row: Loose, updateRow: Loose = { demo_share_token: 'existing-token', demo_share_enabled: false }) {

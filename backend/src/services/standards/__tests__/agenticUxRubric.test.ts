@@ -9,6 +9,7 @@ import fs from 'fs';
 import path from 'path';
 import {
   scoreAgenticUx,
+  assertWeightsTotal,
   RubricInputError,
   RUBRIC_DIMENSIONS,
   HARD_GATES,
@@ -31,6 +32,16 @@ describe('the weights are the standard\'s weights', () => {
   it('totals exactly 100 across ten dimensions', () => {
     expect(RUBRIC_DIMENSIONS).toHaveLength(10);
     expect(TOTAL_WEIGHT).toBe(100);
+  });
+
+  it('the import-time guard actually fires on a bad list, not just on a good one', () => {
+    // The guard never trips while the real weights are correct, so asserting TOTAL_WEIGHT === 100
+    // proves nothing about whether the guard exists. Calling it with a bad list does. A verifier
+    // demonstrated the gap by loading a copy whose weights totalled 1084 without complaint.
+    expect(() => assertWeightsTotal([{ weight: 50 }, { weight: 50 }])).not.toThrow();
+    expect(() => assertWeightsTotal([{ weight: 1084 }])).toThrow(/1084, not 100/);
+    expect(() => assertWeightsTotal([])).toThrow(/0, not 100/);
+    expect(() => assertWeightsTotal([{ weight: 99 }])).toThrow(/not 100/);
   });
 
   it('carries the weights the document states, dimension by dimension', () => {
@@ -216,6 +227,59 @@ describe('a failed hard gate BLOCKS, whatever the score', () => {
     expect(scoreAgenticUx({ scores: flat(5), hardGates: gates }).decision).toBe('BLOCK');
   });
 
+  /*
+   * Duplicate gate ids: the bypass a verifier found, tested in BOTH orders.
+   *
+   * `new Map(results.map(g => [g.id, g]))` is last-write-wins. A recorded failure with real
+   * evidence, followed by a passing result for the same gate, was silently erased: the sheet
+   * returned RELEASE_CANDIDATE with an empty `failed_gates` and a GATE-004 row reading
+   * `passed: true`. `[...reviewerA, ...reviewerB]` is a natural caller shape and appends land
+   * last, which was the losing order.
+   *
+   * Both orderings are tested because a fix that only works when the failure comes last is not a
+   * fix, it is the same bug with a different trigger.
+   */
+  const LEAK: HardGateResult = {
+    id: 'GATE-004',
+    passed: false,
+    evidence: 'restricted payroll data visible in the demo payload',
+  };
+
+  it('REFUSES a duplicate gate id with the failure FIRST', () => {
+    expect(() =>
+      scoreAgenticUx({ scores: flat(5), hardGates: [LEAK, ...allGatesPass()] }),
+    ).toThrow(RubricInputError);
+  });
+
+  it('REFUSES a duplicate gate id with the failure LAST', () => {
+    expect(() =>
+      scoreAgenticUx({ scores: flat(5), hardGates: [...allGatesPass(), LEAK] }),
+    ).toThrow(RubricInputError);
+  });
+
+  it('names the duplicated gate, and never silently returns a release candidate', () => {
+    for (const gates of [[LEAK, ...allGatesPass()], [...allGatesPass(), LEAK]]) {
+      let decision: string | undefined;
+      try {
+        decision = scoreAgenticUx({ scores: flat(5), hardGates: gates }).decision;
+      } catch (e) {
+        expect((e as Error).message).toContain('GATE-004');
+        expect((e as Error).message).toContain('duplicate');
+      }
+      // The property that actually matters: a recorded failure can never become a release.
+      expect(decision).not.toBe('RELEASE_CANDIDATE');
+    }
+  });
+
+  it('refuses duplicates even when both say the same thing', () => {
+    const twice = [...allGatesPass(), allGatesPass()[0]];
+    expect(() => scoreAgenticUx({ scores: flat(5), hardGates: twice })).toThrow(/duplicate/);
+  });
+
+  it('and ONE result per gate is still accepted, so the refusals are not refusing everything', () => {
+    expect(() => scoreAgenticUx({ scores: flat(5), hardGates: allGatesPass() })).not.toThrow();
+  });
+
   it('and with every gate passing, a perfect score is NOT blocked, so the above is not vacuous', () => {
     expect(scoreAgenticUx({ scores: flat(5), hardGates: allGatesPass() }).decision).toBe(
       'RELEASE_CANDIDATE',
@@ -302,6 +366,37 @@ describe('the document says what this is, and what it is not', () => {
     for (const d of RUBRIC_DIMENSIONS) expect(doc).toContain(d.label);
     for (const g of HARD_GATES) expect(doc).toContain(g.id);
     for (const t of AUTONOMY_TIERS) expect(doc).toContain(t.label);
+  });
+
+  /*
+   * The CONTENT, not just the names.
+   *
+   * A verifier pointed out that binding only labels and ids lets a gate's WORDING be narrowed in
+   * code while the document still promises the broad version, with the suite green. The document
+   * claims the two cannot drift; that claim was only true of the headings. These three bind the
+   * sentences people actually read.
+   */
+  it('states each hard gate in the same words the code does', () => {
+    for (const g of HARD_GATES) expect(doc).toContain(g.statement);
+  });
+
+  it('states each autonomy tier in the same words the code does', () => {
+    for (const t of AUTONOMY_TIERS) expect(doc).toContain(t.meaning);
+  });
+
+  it('states each dimension\'s passing evidence in the same words the code does', () => {
+    for (const d of RUBRIC_DIMENSIONS) expect(doc).toContain(d.passingEvidence);
+  });
+
+  it('says one sheet is one reviewer, which is why duplicate gate results are refused', () => {
+    expect(doc.toLowerCase()).toContain("one reviewer's");
+  });
+
+  it('no longer claims a rounding flip occurs today', () => {
+    // The corrected justification. An earlier draft asserted a threshold flip that an exhaustive
+    // check over all 6^10 sheets showed never happens with these weights.
+    expect(doc).toContain('by construction');
+    expect(doc).not.toMatch(/would make a release decision depend on rounding error/);
   });
 
   it('states each weight next to its dimension', () => {

@@ -112,7 +112,16 @@ async function serveDemo(req: Request, res: Response): Promise<void> {
     if (!engine) {
       // Our bug, not a missing resource, but it still answers 404: a 500 here would tell a
       // guesser that this particular token is real.
-      console.error('[demoRoutes] the demo engine is missing from the shipped kit');
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          service: 'backend',
+          event: 'public_demo_engine_missing',
+          error_class: 'DemoEngineUnusable',
+          outcome: 'failure',
+          context: { detail: 'the demo engine is absent from the shipped kit bundle' },
+        }),
+      );
       notFound(res);
       return;
     }

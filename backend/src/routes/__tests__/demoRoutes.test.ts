@@ -11,8 +11,8 @@
  *    a column added later is seeded automatically and this test fails until somebody decides,
  *    deliberately, whether it belongs on the allow-list.
  */
-import fs from 'fs';
 import path from 'path';
+import { projectColumns } from '../../models/__tests__/helpers/projectColumns';
 import express from 'express';
 import request from 'supertest';
 import { Op } from 'sequelize';
@@ -204,19 +204,23 @@ describe('ONE 404, and it is byte-identical however you earn it', () => {
 });
 
 describe('RESPONSE SENTINEL: no column of projects reaches the wire', () => {
-  /** Every column of `projects`, read out of the model source. */
-  function projectColumns(): string[] {
-    const src = fs.readFileSync(path.resolve(__dirname, '../../models/Project.ts'), 'utf8');
-    const init = src.slice(src.indexOf('Project.init('));
-    const names = [...init.matchAll(/^ {4}([a-z_]+): \{/gm)].map((m) => m[1]);
-    // Guard against a parse that silently stops matching and seeds nothing.
-    expect(names.length).toBeGreaterThan(20);
-    expect(names).toContain('organization_name');
-    return names;
-  }
+  /**
+   * The column list, from the shared helper.
+   *
+   * This file used to carry its own copy of the parse, reading only `Project.init(...)`. A
+   * verifier showed that copy missed four columns added to `projects` by DDL alone plus the two
+   * Sequelize-managed timestamps - and because the parse was duplicated, fixing the write-side
+   * sweep left this one still blind. One helper now, so a fix lands in both.
+   */
+  const allColumns = () =>
+    projectColumns(
+      path.resolve(__dirname, '../../models'),
+      path.resolve(__dirname, '../../db'),
+      expect as never,
+    );
 
   it('seeds every non-allowlisted column and finds none of them in the served bytes', async () => {
-    const columns = projectColumns().filter((c) => !(DEMO_PUBLIC_COLUMNS as readonly string[]).includes(c));
+    const columns = allColumns().filter((c) => !(DEMO_PUBLIC_COLUMNS as readonly string[]).includes(c));
     const sentinels = new Map(columns.map((c, i) => [c, `WIRE-${i}-${c.toUpperCase()}-QQ7`]));
 
     // The row carries a sentinel in EVERY column, as if `attributes` had been ignored. The route

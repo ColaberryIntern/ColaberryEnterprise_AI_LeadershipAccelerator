@@ -23,10 +23,18 @@
  *
  * A dimension contributes `score * weight / 5`, which is fractional for most scores: 3 on a
  * weight of 12 is 7.2, and 7.2 is not exactly representable in binary floating point. Summing ten
- * of those and comparing against 90 would make the decision depend on rounding. So the sum is
- * kept as `score * weight` (an integer from 0 to 500) and the thresholds are multiplied by 5 to
- * match. The human-facing total is that integer divided by 5, which is presentation, not a
- * decision input.
+ * such values gives a total that differs from the exact one for about 15% of all possible sheets.
+ *
+ * To be precise about what that does and does not cause: a verifier brute-forced the complete
+ * input space, all 6^10 sheets, and found that **none** of those representation errors changes a
+ * decision at 90, 80 or 70 with these ten weights. So the integer sum is not fixing a bug that
+ * exists today. It removes the dependence on rounding BY CONSTRUCTION, so the property survives
+ * someone reweighting a dimension without re-running that brute force. An earlier version of this
+ * comment claimed a threshold flip occurs, which was never checked and is not true.
+ *
+ * The sum is kept as `score * weight` (an integer from 0 to 500) and the thresholds are
+ * multiplied by 5 to match. The human-facing total is that integer divided by 5, which is
+ * presentation, not a decision input.
  */
 
 export interface RubricDimension {
@@ -244,6 +252,35 @@ export function scoreAgenticUx(input: RubricInput): RubricResult {
     throw new RubricInputError(`unknown dimension(s): ${unknown.join(', ')}`);
   }
 
+  /*
+   * Duplicate gate ids are REFUSED, and this is the most important guard in the module.
+   *
+   * A verifier found the bypass: `new Map(results.map(g => [g.id, g]))` is last-write-wins, so
+   * `[{ GATE-004 failed, with evidence }, ...everythingPassing]` silently erased the failure and
+   * returned RELEASE_CANDIDATE with `failed_gates: []`. The erased row even kept the id, so the
+   * output looked complete. `[...reviewerA, ...reviewerB]` is a perfectly natural caller shape,
+   * and appends land last, which is the losing order.
+   *
+   * Every other malformed input here fails CLOSED - unknown gates, unknown dimensions, missing
+   * evidence, a truthy-but-not-true `passed`, an unassessed gate. This one failed OPEN, in the
+   * exact direction the module exists to prevent.
+   *
+   * Refusing rather than folding, because the document specifies one reviewer per sheet. Two
+   * reviewers disagreeing about a gate is real information, and quietly resolving it to either
+   * answer would hide the disagreement instead of surfacing it.
+   */
+  const seen = new Map<string, number>();
+  for (const g of input.hardGates || []) {
+    seen.set(g.id, (seen.get(g.id) || 0) + 1);
+  }
+  const duplicated = [...seen.entries()].filter(([, n]) => n > 1).map(([id]) => id);
+  if (duplicated.length) {
+    throw new RubricInputError(
+      `duplicate hard gate result(s): ${duplicated.join(', ')}. One sheet is one reviewer's `
+      + 'assessment; score two reviewers as two sheets rather than merging them here.',
+    );
+  }
+
   const supplied = new Map((input.hardGates || []).map((g) => [g.id, g]));
   const hard_gates: HardGateResult[] = HARD_GATES.map((gate) => {
     const result = supplied.get(gate.id);
@@ -303,5 +340,26 @@ export function scoreAgenticUx(input: RubricInput): RubricResult {
   };
 }
 
-/** The weights must total 100, and this is checked at import time as well as in a test. */
-export const TOTAL_WEIGHT = RUBRIC_DIMENSIONS.reduce((s, d) => s + d.weight, 0);
+/**
+ * The weights must total 100. Called at import time, below, so a module whose arithmetic cannot
+ * be right refuses to load at all.
+ *
+ * It is a FUNCTION rather than a bare `if`, and that is deliberate. A comment here used to claim
+ * an import-time check existed when it did not, which a verifier caught by loading a copy whose
+ * weights totalled 1084 and watching it import happily. Writing the check inline would have fixed
+ * that, but nothing could test it: the guard never fires while the real weights are correct, so
+ * deleting it again would go unnoticed. As a function it can be called with a bad list, which is
+ * what makes the guard itself provable rather than merely present.
+ */
+export function assertWeightsTotal(dimensions: readonly { weight: number }[]): number {
+  const total = dimensions.reduce((sum, d) => sum + d.weight, 0);
+  if (total !== 100) {
+    throw new Error(
+      `agenticUxRubric: dimension weights total ${total}, not 100. `
+      + 'Every score would be out of the wrong denominator.',
+    );
+  }
+  return total;
+}
+
+export const TOTAL_WEIGHT = assertWeightsTotal(RUBRIC_DIMENSIONS);

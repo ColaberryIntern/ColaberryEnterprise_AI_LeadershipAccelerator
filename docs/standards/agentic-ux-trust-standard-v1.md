@@ -61,8 +61,16 @@ than merely stated.
 
 A dimension contributes `score x weight / 5`, which is fractional for most scores: a 3 on a weight
 of 12 is 7.2, and 7.2 has no exact binary floating-point representation. Summing ten such values
-and comparing the result against 90 would make a release decision depend on rounding error. The
-implementation therefore sums `score x weight` as an integer from 0 to 500 and compares against
+produces a total that differs from the exact one for roughly 15% of all possible sheets.
+
+To be precise about what that does and does not cause: an exhaustive check over the complete input
+space, all 6^10 sheets, found that none of those representation errors changes a decision at 90, 80
+or 70 with the ten weights above. The integer arithmetic is therefore not fixing a live bug. It
+removes the dependence on rounding **by construction**, so the property survives somebody
+reweighting a dimension without repeating that exhaustive check. An earlier draft of this section
+claimed a threshold flip occurs today; it does not, and the claim has been corrected.
+
+The implementation sums `score x weight` as an integer from 0 to 500 and compares against
 thresholds multiplied by 5. The out-of-100 figure is presentation; the integer is what decides.
 
 ## The hard gates
@@ -72,6 +80,10 @@ unweighted: a weighted gate is a gate that enough points elsewhere can buy past.
 
 An **unassessed** gate counts as a **failed** gate. Silence is not a pass, and every gate result
 requires written evidence whether it passed or failed, because a bare verdict is an opinion.
+
+One sheet is **one reviewer's** assessment. Supplying two results for the same gate id is refused
+rather than resolved: two reviewers disagreeing about a gate is real information, and quietly
+picking one answer would hide the disagreement. Score two reviewers as two sheets.
 
 | Id | Gate |
 |---|---|
