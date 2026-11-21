@@ -35,36 +35,10 @@ import {
   systemsOfRecord as systemsOf,
 } from './planDocument';
 import { handoffsFor, artifactsFor } from './planDocumentInsights';
+import { separateHardRules } from './planPeople';
+import { bullet, fmt, good, type TabContext } from './commandCenterTabContext';
+import { agentsTab } from './commandCenterAgentsTab';
 
-const bullet = (s: string): string => `- ${s}`;
-const fmt = (d: Date | null | undefined): string | null => (d ? d.toISOString().slice(0, 10) : null);
-
-/** How an autonomy level reads on a card, in the student's language. */
-const AUTONOMY_LABEL: Record<string, string> = {
-  suggests: 'drafts for a person',
-  acts_with_approval: 'prepares, then waits for a human to release it',
-  acts_autonomously: 'completes on its own',
-};
-
-/** The heading a reader scans for. Every tab section below begins with one. */
-const good = (text: string): string => `**What good looks like:** ${text}`;
-
-/** Everything the tab sections read, computed once per prompt. */
-interface TabContext {
-  plan: BuildPlan;
-  schedule: Schedule | null | undefined;
-  kpis: ReturnType<typeof measuresOf>;
-  safes: ReturnType<typeof guardrailsOf>;
-  systems: string[];
-  roles: string[];
-  /** Every role, uncapped: what `plan.derived` matches approvers against. */
-  allRoles: string[];
-  agents: NonNullable<BuildPlan['agents']>;
-  handoffs: ReturnType<typeof handoffsFor>;
-  artifacts: ReturnType<typeof artifactsFor>;
-  releases: BuildPlan['releases'];
-  dueBy: Map<string, Date>;
-}
 
 function tabsIntro(_c: TabContext): string[] {
   const lines: string[] = [];
@@ -317,84 +291,6 @@ function projectManagementTab(c: TabContext): string[] {
   return lines;
 }
 
-function agentsTab(c: TabContext): string[] {
-  const { plan, agents, handoffs } = c;
-  const lines: string[] = [];
-  lines.push('### 7. AI agents');
-  lines.push(
-    'Source: `plan.agents[]` — one card each, with `name`, `purpose`, `trigger_type`, '
-    + '`trigger`, `inputs`, `outputs`, `autonomy_level`, `approval_gates`, '
-    + '`escalation_rules`, `skills` and `owns` (the story ids it owns, which you join back '
-    + 'to the plan and the progress file). `plan.derived.counts.agents_by_autonomy` gives '
-    + 'you the roster breakdown without counting them yourself. `plan.derived.handoffs` is '
-    + 'the list of hand-offs: agent A produces something agent B reads.',
-  );
-  lines.push(
-    'What is NOT there: whether any agent has ever run. There is no run history, no last-run '
-    + 'time and no success rate in these files, because none of that exists until you build '
-    + 'the agent and it starts running. Show the design, and show "no runs recorded" — never '
-    + 'a zero success rate, which reads as an agent that ran and failed.',
-  );
-  if (agents.length) {
-    lines.push('One card per agent. Each shows what fires it, what it reads and produces, how much it decides on its own, and when it must stop and ask:');
-    for (const a of agents) {
-      lines.push('');
-      lines.push(`**${a.name}** — ${a.purpose}`);
-      lines.push(bullet(`Fires on: ${a.trigger || 'not specified'} (${a.trigger_type})`));
-      if (a.inputs.length) lines.push(bullet(`Reads: ${a.inputs.join(', ')}`));
-      if (a.outputs.length) lines.push(bullet(`Produces: ${a.outputs.join(', ')}`));
-      lines.push(bullet(`Autonomy: **${AUTONOMY_LABEL[a.autonomy_level]}**`));
-      if (a.approval_gates.length) {
-        lines.push(bullet(`Cannot act alone because of: ${a.approval_gates.join('; ')}`));
-      }
-      if (a.escalation_rules.length) lines.push(bullet(`Stops and asks when: ${a.escalation_rules.join('; ')}`));
-      if (a.skills.length) lines.push(bullet(`Skills it needs: ${a.skills.join(', ')}`));
-      lines.push(bullet(`Owns: ${a.owns.join(', ') || 'nothing yet'}`));
-    }
-    lines.push('');
-    if (handoffs.length) {
-      lines.push('How they hand work to each other, from `plan.derived.handoffs`:');
-      handoffs.forEach((h) => lines.push(bullet(`${h.from_agent} → ${h.to_agent} (${h.via})`)));
-      lines.push('');
-    }
-    lines.push(
-      'Autonomy is not decoration. An agent marked "waits for approval" must have somewhere on '
-      + 'this page showing what is waiting and who has to release it — otherwise the guardrail '
-      + 'exists only in the plan.',
-    );
-  } else {
-    lines.push('Your plan does not carry a scoped agent roster yet, so build this tab from who owns each story:');
-    const by = new Map<string, string[]>();
-    for (const s of plan.stories) {
-      const name = (s.owner_agent || '').trim() || 'Unassigned';
-      if (!by.has(name)) by.set(name, []);
-      by.get(name)!.push(s.id);
-    }
-    [...by.entries()].forEach(([name, ids]) => lines.push(bullet(`**${name}** — owns ${ids.join(', ')}`)));
-    lines.push('');
-    lines.push('These are owners, not scoped agents — say so on the tab rather than presenting a job title as an AI agent.');
-  }
-  lines.push('');
-  // The old line said "On real data there are no skills yet", next to a plan in
-  // which every agent HAS a skills list. Two different facts, now named apart.
-  lines.push(
-    'Each card shows two different skill facts, labelled apart: **skills it needs**, which is '
-    + '`skills[]` from the plan and is real data, and **skills built**, which nothing in these '
-    + 'files records yet, so it reads "none built yet" rather than an empty box.',
-  );
-  lines.push(good(
-    'a workflow diagram above the cards: one node per agent, laid out in the order work flows, '
-    + 'an arrow for every entry in `plan.derived.handoffs` labelled with what passes along it, '
-    + 'and the trigger drawn as the entry point (an event, a schedule, a person). Nodes are '
-    + 'shaped or coloured by autonomy, so a reader can see at a glance where a human sits in '
-    + 'the loop. Then an approval queue: for each agent that waits for a human, what it would '
-    + 'be waiting on and who releases it (empty on real data, and saying so). Then the cards, '
-    + 'each opening a detail page with its stories and their verification state.',
-  ));
-  lines.push('');
-  return lines;
-}
-
 function knowledgeBaseTab(_c: TabContext): string[] {
   const lines: string[] = [];
   lines.push('### 8. Knowledge base');
@@ -403,7 +299,10 @@ function knowledgeBaseTab(_c: TabContext): string[] {
     + '`cluster` and `fulfilled_by`) and `plan.stories[]`. The traceability view a reviewer '
     + 'will ask for is `fulfilled_by` rendered as a table: every requirement, the stories '
     + 'that cover it, and whether those stories are verified. A `must` requirement with an '
-    + 'empty `fulfilled_by` is a real gap — show it rather than hiding the row.',
+    + 'empty `fulfilled_by` is a real gap — show it rather than hiding the row. The one '
+    + 'exception is `kind` CONSTRAINT ("use Gmail and Twilio"): constraints never get a story '
+    + 'of their own, by design, because they are the tools the other stories are built with. '
+    + 'Show them in their own group labelled "built with, not built", never flagged as a gap.',
   );
   lines.push(
     'Everything the project knows about itself: your requirements, your stories, your '
@@ -480,6 +379,8 @@ function dataModelTab(c: TabContext): string[] {
 }
 
 export function commandCenterTabSections(plan: BuildPlan, schedule?: Schedule | null): string[] {
+  // The same re-sort plan.json gets, so the brief and the data never disagree.
+  const agents = separateHardRules(plan.agents ?? [], rolesOf(plan.stories));
   const c: TabContext = {
     plan,
     schedule,
@@ -488,9 +389,9 @@ export function commandCenterTabSections(plan: BuildPlan, schedule?: Schedule | 
     systems: systemsOf(plan.requirements),
     roles: rolesOf(plan.stories).slice(0, 6),
     allRoles: rolesOf(plan.stories),
-    agents: plan.agents ?? [],
-    handoffs: handoffsFor(plan.agents ?? []),
-    artifacts: artifactsFor(plan.agents ?? []),
+    agents,
+    handoffs: handoffsFor(agents),
+    artifacts: artifactsFor(agents),
     releases: [...plan.releases].sort((a, b) => a.key.localeCompare(b.key)),
     dueBy: new Map((schedule?.tasks ?? []).map((t) => [t.storyId, t.dueOn])),
   };

@@ -38,6 +38,7 @@ import {
 import { modelJsonCall, type ChatClient } from './modelJsonCall';
 import { extractRequirements } from './requirementExtraction';
 import { completeRequirements, contentWords } from './requirementCoverage';
+import { alignMeasuresToDemos } from './outlineAlignment';
 
 /** Average non-constraint requirements per release before another release is opened. */
 export const REQUIREMENTS_PER_RELEASE = 6;
@@ -184,6 +185,9 @@ export function normaliseOutline(outline: ReleaseOutline, requirements: PlanRequ
     load.set(lightest, (load.get(lightest) ?? 0) + 1);
   }
   pullGuardsForward(items, byReq);
+  // After the pull, not before: a demo that states the figure is stronger evidence of where a
+  // measure is shown than a shared word with some function ("call-out").
+  alignMeasuresToDemos(items, byReq, rels);
   for (const k of load.keys()) load.set(k, 0);
   for (const k of byReq.values()) load.set(k, (load.get(k) ?? 0) + 1);
   // Drop empty releases, then re-key densely so r0..rN has no holes.
@@ -235,6 +239,10 @@ export function buildReleaseStoriesPrompt(
       : `The previous release ends with ${previousKeyStory ?? 'its last story'}; do not repeat its work.`,
     'Use CONSTRAINT requirements as context in task_guidance (the tools to use), and you may cite them',
     'in `fulfills` alongside the work they serve.',
+    // ShiftFill v3: one story said "As a scheduler … alert the scheduler" while every other
+    // story, and every requirement, named Dana. Two names for one person reads as two people.
+    'When the requirements name a person ("Dana"), write for that person by name ("As Dana, …") and',
+    'alert, page or escalate to them by name. Never swap in a job title for someone already named.',
     '',
     '<ASSIGNED_TO_THIS_RELEASE>',
     ...mine.map((r) => `- ${r.id} [${r.kind}/${r.priority}] ${r.statement}`),

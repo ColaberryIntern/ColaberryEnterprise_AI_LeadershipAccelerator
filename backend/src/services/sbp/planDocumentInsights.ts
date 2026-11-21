@@ -109,10 +109,28 @@ const norm = (s: string): string => s.trim().toLowerCase().replace(/\s+/g, ' ');
  * Who hands what to whom: an output of one agent that is, by name, an input of
  * another. This is the edge list for the agent workflow diagram.
  *
- * Exact names only (case and spacing aside). A fuzzy join would draw arrows
- * the plan never stated, and a diagram that looks more connected than the
- * system is the failure this file is meant to avoid.
+ * Names must match, with two allowances and no others: plurals ("Gap records"
+ * reads "Gap record"), and a qualifier in front of a name of two or more words
+ * ("Unfilled gap records" reads "Gap record"). ShiftFill v3 (2026-11-20) drew
+ * no arrow from the Gap Detector to the Gap Notifier for exactly that reason.
+ * Anything looser would draw arrows the plan never stated, and a diagram that
+ * looks more connected than the system is the failure this file avoids.
  */
+export function readsWhatIsProduced(input: string, produced: string): boolean {
+  const i = singular(norm(input));
+  const p = singular(norm(produced));
+  if (!p) return false;
+  if (i === p) return true;
+  return p.includes(' ') && i.endsWith(` ${p}`);
+}
+
+/** "records" → "record", word by word. Leaves "process", "status" alone. */
+function singular(s: string): string {
+  return s.split(' ').map((w) => (w.length > 3 && /[^su]s$/.test(w) ? w.slice(0, -1) : w)).join(' ');
+}
+
+/** The workflow diagram's edges, matched by `readsWhatIsProduced`, deduped and sorted. */
+
 export function handoffsFor(agents: readonly PlanAgent[] | null | undefined): AgentHandoff[] {
   const list = agents ?? [];
   const out: AgentHandoff[] = [];
@@ -120,7 +138,7 @@ export function handoffsFor(agents: readonly PlanAgent[] | null | undefined): Ag
     for (const produced of from.outputs ?? []) {
       for (const to of list) {
         if (to === from) continue;
-        if ((to.inputs ?? []).some((i) => norm(i) === norm(produced))) {
+        if ((to.inputs ?? []).some((i) => readsWhatIsProduced(i, produced))) {
           out.push({ from_agent: from.name, to_agent: to.name, via: produced.trim() });
         }
       }

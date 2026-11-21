@@ -34,12 +34,16 @@ marked where that matters. Everything in
 | `buildTiers.ts` | pure | What `workflow` / `project` / `autonomous` actually mean |
 | `planGate.ts` | pure | The traceability gate. 17 rules, 9 of them blocking |
 | `planRepair.ts` | I/O | Targeted repair from the violations, max 3 attempts, monotone |
-| `scopeAgents.ts` | I/O | The AI roster. Flagged, fail-soft |
+| `scopeAgents.ts` | I/O | The AI roster. Flagged, fail-soft. A SAFE requirement a person can release becomes an `approval_gates` entry and caps autonomy; one nobody can override ("never text anyone on leave") goes to `hard_rules` and does not make the agent wait |
+| `planPeople.ts` | pure | `rolesFrom` (who the stories serve, named people included), `guardrailGate` (approval with approver, or hard rule) and `separateHardRules`, which re-sorts rosters scoped before hard rules existed so old projects are fixed on their next render. If a Command Center shows "never X" as something waiting for approval, the bug is here |
+| `outlineAlignment.ts` | pure | Moves a measure to the release whose demo states its figure ("within 30 minutes"), when exactly one demo does and the figure is that measure's alone. Runs after `pullGuardsForward`. Symptom it prevents: a demo promising work the plan schedules in an earlier release (ShiftFill v3, r3 vs r1) |
 | `planHash.ts` | pure | `hashPlan` — the sha the reviewer is shown |
 | `planStore.ts` | I/O | `build_intake` + `build_plans`. Raw SQL; those tables have no Sequelize model |
 | `buildSchedule.ts` | pure | Release weeks → real calendar dates, capacity, demo release, prep tasks |
 | `commandCenterStory.ts` | pure | STORY-000: its id, title, acceptance, and prompt built from the student's own plan |
 | `commandCenterTabs.ts` | pure | The nine tab specs inside the STORY-000 prompt: Source, honesty rules, and "What good looks like" per tab (release track, enforcement matrix, data flow, agent workflow, Gantt, traceability matrix, ER diagram). Split out of `commandCenterStory.ts` when the ShiftFill run produced a correct but shallow Command Center; richness is added beside the honesty rules, never instead of them |
+| `commandCenterAgentsTab.ts` | pure | The AI agents tab, split from `commandCenterTabs.ts` at the 500-line ceiling. Shows approval gates, hard rules, and an agent that "waits for a person" with no named gate as an open question rather than an empty queue |
+| `commandCenterTabContext.ts` | pure | The context every tab section reads (`TabContext`) and the shared line helpers. No logic; if a tab reads the wrong roster, check how `commandCenterTabSections` builds this |
 | `materializeTasks.ts` | I/O | Plan → `student_task_lists` + `student_tasks`, one transaction |
 | `addStoryService.ts` | I/O | A student adds one story to a PUBLISHED build. Builds the revision (next `STORY-nnn` plus a `should` requirement it fulfils, so `dangling_requirement` never fires), gates it, saves it as the next draft, and hands it to `publishBuild` — the same path as the first publish, so the repo render and materialisation are inherited. Add only: editing a story's acceptance lines rewrites the verification contract. Nothing is written before the gate passes; a plan that predates a blocking rule is refused as `PlanPredatesGate`, not blamed on the student |
 | `buildStoryPrompt.ts` | pure | The Claude Code prompt stored on each task's `build` column |
