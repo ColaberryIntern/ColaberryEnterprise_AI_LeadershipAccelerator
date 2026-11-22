@@ -83,7 +83,7 @@ async function main(): Promise<void> {
          FROM (${CATEGORY_SQL}) x
         WHERE cl.id = x.id AND x.category IN (:cats) AND cl.status IN ('enrolled', 'active')`,
       { replacements: { cats: [...FINISH_CATEGORIES] }, transaction: t },
-    ) as unknown as [unknown, number];
+    ) as unknown as [unknown, unknown];
     const mergeSettings = async (where: string, repl: Record<string, unknown>, patch: Record<string, unknown>) => {
       await sequelize.query(
         `UPDATE campaigns SET settings = COALESCE(settings, '{}'::jsonb) || CAST(:patch AS jsonb), updated_at = NOW() WHERE ${where}`,
@@ -93,12 +93,23 @@ async function main(): Promise<void> {
     await mergeSettings(`settings->>'campaign_key' = :key AND archived_at IS NULL`, { key: OPEN_HOUSE_COUNTDOWN_KEY },
       { takes_precedence: true, on_complete: { action: 'move', move_to_campaign_key: OPEN_HOUSE_FOLLOWUP_KEY } });
     await mergeSettings(`name IN (:names) AND archived_at IS NULL`, { names: PRECEDENCE_CAMPAIGN_NAMES }, { takes_precedence: true });
-    return Number(n);
+    return affectedRowCount(n);
   });
   console.log(`finished ${finished} memberships; countdown, payment and class readiness take precedence; countdown moves people to the follow-up`);
   const { setSetting } = await import('../services/settingsService');
   await setSetting(MEMBERSHIP_RULES_SETTING, true);
   console.log(`${MEMBERSHIP_RULES_SETTING} = true: one campaign at a time, the hourly exit sweep and the Explorer Growth hold are on`);
+}
+
+/**
+ * Rows touched by a raw UPDATE. On Postgres, Sequelize hands back the driver's Result object
+ * ({ rowCount, ... }) as the second element, not a number; `Number()` of that object is NaN,
+ * which is what the Nov 21 apply printed for 15,830 finished rows. Other dialects return a number.
+ */
+export function affectedRowCount(meta: unknown): number {
+  if (typeof meta === 'number' && Number.isFinite(meta)) return meta;
+  const rc = (meta as { rowCount?: unknown } | null | undefined)?.rowCount;
+  return typeof rc === 'number' && Number.isFinite(rc) ? rc : 0;
 }
 
 if (require.main === module) {

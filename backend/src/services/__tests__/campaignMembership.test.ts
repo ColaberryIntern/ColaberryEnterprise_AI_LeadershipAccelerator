@@ -179,7 +179,13 @@ describe('Explorer Growth hold', () => {
 
 describe('the one-time cleanup (scripts/cleanupCampaignMembership.ts)', () => {
   // Imported lazily: the script's main() only runs when it is executed directly.
-  const { CATEGORY_SQL, FINISH_CATEGORIES } = require('../../scripts/cleanupCampaignMembership');
+  const { CATEGORY_SQL, FINISH_CATEGORIES, affectedRowCount } = require('../../scripts/cleanupCampaignMembership');
+  it('reports the real count from a Postgres UPDATE result, not NaN (the Nov 21 apply printed NaN)', () => {
+    expect(affectedRowCount({ rowCount: 15830, rows: [] })).toBe(15830);
+    expect(affectedRowCount(42)).toBe(42);
+    expect(affectedRowCount(undefined)).toBe(0);
+    expect(affectedRowCount({})).toBe(0);
+  });
   it('finishes only campaigns that are over, paused with nothing queued, or fully handled', () => {
     expect([...FINISH_CATEGORIES]).toEqual(['1', '2b', '3b']);
   });
