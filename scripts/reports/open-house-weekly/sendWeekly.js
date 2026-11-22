@@ -25,7 +25,16 @@ const targets = require('./targets');
 const { validateBeforeSend } = require(path.join(__dirname, '..', '..', '..', 'backend', 'src', 'scripts', 'lib', 'mandrillPreflight'));
 
 const GMAIL_CLIP_BYTES = 100 * 1024;
-const DEFAULT_TO = 'taiwo@colaberry.com,sohail@colaberry.com,ali@colaberry.com';
+// Aleem added 18 Nov 2026, at Ali's request. He owns the in-app onboarding and contextual
+// guidance design (Basecamp 12724483/10518251810), and the landing page heat map below is the
+// evidence his first flow is meant to act on, so he reads the same numbers in the same week as
+// everyone else rather than being sent a summary of them.
+//
+// THE LEDGER KEY IS THE RECIPIENT LIST PLUS THE OCCURRENCE, so changing this line means the
+// Wednesday this ships can send again even if it already went to the old list. That is the
+// intended behavior for an added recipient and the reason it is worth knowing: the people
+// already on the list get the same email twice that week, once.
+const DEFAULT_TO = 'taiwo@colaberry.com,sohail@colaberry.com,aleem@colaberry.com,ali@colaberry.com';
 
 function fail(message, errorClass) { const e = new Error(message); e.error_class = errorClass; throw e; }
 

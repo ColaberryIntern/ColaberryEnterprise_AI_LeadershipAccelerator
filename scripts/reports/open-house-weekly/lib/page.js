@@ -1,11 +1,13 @@
 /**
- * C123: assembles the weekly report HTML from the view model. Charts are inline SVG; the flow (Sankey) and the
- * decision tree are Mermaid, loaded from a pinned CDN build. Styling follows the baseline-ui tokens (navy/blue, calm).
+ * C123/C125: assembles the weekly report HTML from the view model. Charts are inline SVG; the flow (Sankey) and the
+ * decision tree are Mermaid, loaded from a pinned CDN build. Colors come from lib/brand.js, the Colaberry Training
+ * theme the landing page itself renders with; the earlier "baseline-ui navy/blue" was neither of those things.
  */
 'use strict';
 const M = require('./model');
 const I = require('./insights');
 const X = require('./charts');
+const HM = require('./heatmap');
 const { esc, C, STATUS } = X;
 
 const MERMAID = 'https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js';
@@ -80,7 +82,7 @@ function mermaidTree(cur) {
     '  P --> D & Q', '  D --> R & Y', '  R --> C', '  C --> A',
     `  classDef top fill:${C.navy},color:#fff,stroke:${C.navy}`,
     '  classDef good fill:#c6f6d5,color:#22543d,stroke:#2f855a', '  classDef bad fill:#fed7d7,color:#742a2a,stroke:#c53030',
-    '  classDef mid fill:#bee3f8,color:#2a4365,stroke:#2b6cb0'];
+    `  classDef mid fill:${X.B.bgCool},color:#1F4E63,stroke:${C.blue}`];
   return `<pre class="mermaid">${lines.join('\n')}</pre>`;
 }
 
@@ -156,9 +158,27 @@ function commsPanel(c) {
     <p class="muted">Sent after each person signed up, until this window closed. Opens and clicks are read only for the welcome email (below).</p>`;
 }
 
+/**
+ * C125: the landing page heat map panel.
+ *
+ * The chart and the words sit side by side because neither is usable alone: the picture shows
+ * where the page is read and clicked, and the notes beside it carry what the picture cannot say
+ * for itself - that scrolling is recorded at five points, that one label covers three buttons,
+ * and that the click positions are measured rather than recorded.
+ */
+function heatPanel(h) {
+  if (!h.ok) return `<p class="muted">${esc(h.reason)}</p>`;
+  const notes = HM.heatNotes(h).map((n, i) => `<li${i === 0 ? ' class="lead"' : ''}>${esc(n)}</li>`).join('');
+  return `<div class="hmwrap">
+    <div>${HM.heatSvg(h)}${HM.heatLegend(h)}</div>
+    <div><ul class="hmnotes">${notes}</ul>
+      <div class="hmfacts">Measured on the live page at ${h.geom.viewport.width}x${h.geom.viewport.height}, the phone size almost every visitor uses, on ${esc(String(h.geom.measured_at).slice(0, 10))}. Scroll counts are people who had that part of the page on screen and are a floor, never a ceiling. The clicks carry no coordinates, so each one is drawn on the element it names.</div></div>
+  </div>`;
+}
+
 function shotsPanel(shots) {
   if (!shots || !shots.length) return '';
   return `<section><h2>📸 What the visitor sees</h2><p class="lede">Captured on a phone-sized screen, because most visitors are on a phone.</p><div class="shots">${shots.map((s) => `<figure><img src="${s.src}" alt="${esc(s.title)}"/><figcaption><b>${esc(s.title)}</b><br/>${esc(s.caption)}</figcaption></figure>`).join('')}</div></section>`;
 }
 
-module.exports = { kpiTiles, funnelTable, forkCards, mermaidSankey, mermaidTree, emailPanel, sessionsTable, payersPanel, commsPanel, messageLabel, shotsPanel, MERMAID, PILL, STATUS, I, X, M };
+module.exports = { kpiTiles, funnelTable, forkCards, mermaidSankey, mermaidTree, emailPanel, sessionsTable, payersPanel, commsPanel, messageLabel, heatPanel, shotsPanel, MERMAID, PILL, STATUS, I, X, M, HM };
