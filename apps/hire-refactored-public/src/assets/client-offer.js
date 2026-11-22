@@ -43,7 +43,7 @@
     var f = S.form;
     var opts = S.data.candidates.map(function (c) { return '<option value="' + esc(c.enrollmentId) + '"' + (c.enrollmentId === f.enrollmentId ? ' selected' : '') + '>' + esc(c.name) + '</option>'; }).join('');
     return '<div class="cp-dialog card" role="dialog" aria-modal="true" aria-labelledby="of-h" data-testid="offer-form"><div class="cp-dhead"><div><div class="label">Make an offer · ' + esc(S.session.clientName) + '</div>'
-      + '<h2 id="of-h" tabindex="-1">Offer for <span id="of-name">' + esc(name()) + '</span></h2></div><button type="button" class="btn btn-ghost btn-sm" data-act="close" aria-label="Close">Close</button></div>'
+      + '<h2 id="of-h" tabindex="-1">Offer for <span id="of-name">' + esc(name()) + '</span></h2></div><button type="button" class="btn btn-ghost btn-sm" data-act="close" id="of-close" aria-label="Close">Close</button></div>'
       + '<div class="cp-two"><label class="field"><span class="field-label">Candidate</span><select data-of="enrollmentId">' + opts + '</select></label>'
       + '<label class="field"><span class="field-label">Role title</span><input data-of="role" maxlength="200" value="' + esc(f.role) + '"></label></div>'
       + '<div class="field"><span class="field-label" id="basis-l">Pay is</span><div class="seg" role="group" aria-labelledby="basis-l"><button type="button" data-basis="yearly" data-testid="basis-yearly" aria-pressed="' + (f.basis === 'yearly') + '">Yearly salary</button>'
@@ -62,6 +62,8 @@
     var send = doc.getElementById('send');
     send.disabled = !st.can; send.setAttribute('aria-disabled', String(!st.can)); send.textContent = S.busy ? 'Sending...' : 'Send the offer';
     doc.getElementById('why').textContent = st.why;
+    var shut = doc.getElementById('of-close'); shut.disabled = S.busy; // no closing while a Send is in flight
+    box.setAttribute('aria-busy', String(S.busy));
     doc.getElementById('calc').innerHTML = calcHtml();
     doc.getElementById('of-name').textContent = name();
     doc.getElementById('agree-t').textContent = M.agreementText(name());
@@ -78,9 +80,12 @@
     sync();
     doc.getElementById('of-h').focus();
   }
-  function close() {
+  /** Close the dialog, unless a Send is in flight (its answer must land in front of the employer). true = closed. */
+  function close(force) {
+    if (S.busy && force !== true) return false;
     box.hidden = true; box.innerHTML = ''; doc.body.classList.remove('cp-locked'); S.form = null;
     if (opener && opener.focus) opener.focus();
+    return true;
   }
   function send() {
     if (S.busy || !M.sendState(S.form, S.data.feeRateBp, false).can) return;
@@ -89,8 +94,10 @@
     P.call('POST', '/offers', M.offerBody(S.form, S.key)).then(function (r) {
       S.busy = false;
       var st = M.offerState(r.status, r.body);
-      if (st.kind === 'sent') { close(); S.view = 'offers'; S.notice = st.message + (follow ? ' ' + M.TEXT.followUpsOff : ''); P.load(); return; }
-      if (st.kind === 'signed_out') { close(); P.signedOut(st.message); return; }
+      if (st.kind === 'sent') { close(true); S.view = 'offers'; S.notice = st.message + (follow ? ' ' + M.TEXT.followUpsOff : ''); P.load(); return; }
+      if (st.kind === 'signed_out') { close(true); P.signedOut(st.message); return; }
+      // Belt and braces: if the form is somehow gone, the outcome goes to the page notice, never nowhere.
+      if (!S.form || box.hidden) { S.notice = M.TEXT.notSent + ' ' + st.message; P.render(); return; }
       S.formMsg = st.message; sync(); // a failed Send keeps its key and its draft, so trying again stores one offer
     });
   }

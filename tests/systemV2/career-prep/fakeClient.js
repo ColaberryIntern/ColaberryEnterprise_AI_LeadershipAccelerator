@@ -50,14 +50,15 @@ async function clientPage(browser, base, opts = {}) {
     const json = (status, body) => route.fulfill({ status, contentType: 'application/json', headers: cors, body: JSON.stringify(body) });
     if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: { ...cors, 'access-control-allow-headers': 'content-type,authorization', 'access-control-allow-methods': 'GET,POST' } });
     const p = url.pathname.replace(/^\/api\/hire\/client/, '');
-    if (p === '/auth/redeem') { redeems.push(req.postDataJSON()); return req.postDataJSON().token === LINK_TOKEN && redeems.length === 1 ? json(200, { token: SESSION, expiresIn: 28800, clientName: 'Meridian Freight' }) : json(401, { error: 'This link is no longer valid.' }); }
+    if (p === '/auth/redeem') { redeems.push(req.postDataJSON()); return req.postDataJSON().token === LINK_TOKEN && redeems.length === 1 ? json(200, { token: SESSION, expiresIn: 28800, clientName: opts.clientName || 'Meridian Freight' }) : json(401, { error: 'This link is no longer valid.' }); }
     if (req.headers().authorization !== `Bearer ${SESSION}`) return json(401, { error: 'Please sign in again.' });
     if (p === '/candidates' && req.method() === 'GET') return json(200, candidates());
     if (p === '/interviews') return json(200, interviews());
     if (p === '/offers' && req.method() === 'GET') return json(200, offers(sent));
     if (p === '/offers' && req.method() === 'POST') {
       const b = req.postDataJSON(); posts.push(b);
-      await new Promise((r) => setTimeout(r, 300)); // a slow answer, so a second click lands while the first is in flight
+      await new Promise((r) => setTimeout(r, opts.reject ? 700 : 300)); // slow, so a second click (or an Escape) lands while it is in flight
+      if (opts.reject) return json(400, { error: 'The start date must be a date.' });
       const replay = posts.filter((x) => x.clientKey === b.clientKey).length > 1;
       const row = offerRow({ id: '88888888-0000-4000-8000-000000000008', enrollmentId: b.enrollmentId, role: b.role, payBasis: b.pay.basis, salaryCents: b.pay.salaryCents ?? null,
         hourlyRateCents: b.pay.rateCents ?? null, hoursPerWeek: b.pay.hoursPerWeek ?? null, firstYearCents: 10400000, feeCents: 11440000, sentAt: '2026-11-22T16:00:00.000Z' });

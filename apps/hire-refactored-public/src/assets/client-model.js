@@ -43,6 +43,7 @@
     followUpsOff: 'Follow-up emails are not switched on yet, so none was scheduled.',
     bookOff: 'Booking from the portal is not switched on yet. Your Refactored.ai contact can set up the interview for you.',
     sent: 'Offer sent.',
+    notSent: 'The offer was not sent.',
     replay: 'This offer was already sent. Nothing new was sent.',
   };
 

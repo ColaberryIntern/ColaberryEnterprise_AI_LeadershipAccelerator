@@ -24,6 +24,8 @@
  *       click on Send sends ONE offer, agreed, with no fee from the page
  *   HS8 (CP10.2) the portal fits a phone (390 wide): no horizontal scroll, every action at least 44px tall
  *   HS9 (CP10.2) a spent or unknown sign-in link shows the plain message, leaves the address bar, asks for no data
+ *   HS10 (CP10.2) Escape, Close and the backdrop do nothing while a Send is in flight; the answer lands in the form
+ *   (HS6 to HS10 live in clientPortal.checks.js; HS8 also measures the Make an offer dialog at 390)
  *   HSX zero console errors in these flows
  *
  * Env: HIRE_DIR (default apps/hire-refactored-public/dist), HIRE_PORT (default 3171), PW_CHANNEL (default msedge),
@@ -35,7 +37,8 @@ const fs = require('fs');
 const path = require('path');
 const { chromium } = require(process.env.PW_PATH || 'playwright');
 const { check, results, shot } = require('./harness');
-const { clientPage, inventory, save, T, SHOTS, CLIENT_SHOTS, OFFER_COLS, ROOM: CLIENT_ROOM } = require('./fakeClient');
+const { SHOTS, CLIENT_SHOTS } = require('./fakeClient');
+const { runClient } = require('./clientPortal.checks');
 
 const DIR = path.resolve(process.env.HIRE_DIR || path.join(__dirname, '..', '..', '..', 'apps', 'hire-refactored-public', 'dist'));
 const PORT = Number(process.env.HIRE_PORT || 3171);
@@ -159,73 +162,6 @@ async function runRoom(browser, all) {
     check('HS5 the employer room fits a phone (390): no sideways scroll, 44px targets', m.over <= 0 && m.minH >= 44, `overflow ${m.over}px, smallest control ${Math.round(m.minH)}px`);
   } catch (e) { check('HS5 the employer room fits a phone (390): no sideways scroll, 44px targets', false, String(e.message).split('\n')[0].slice(0, 160)); }
   all.push(...p.errors); await p.ctx.close();
-}
-
-async function runClient(browser, all, base) {
-  const name = 'HS6 client portal matches the design inventory';
-  const c = await clientPage(browser, base);
-  try {
-    const { cards, ivs, offers, form } = await inventory(c);
-    const ph = await clientPage(browser, base, { viewport: { width: 390, height: 844 } });
-    try { await ph.page.waitForSelector(T('cand-card')); await save(ph.page, 'client-candidates-390'); } finally { all.push(...ph.errors); await ph.ctx.close(); }
-    const shots = CLIENT_SHOTS.filter((s) => !fs.existsSync(path.join(SHOTS, `${s}.png`)));
-    check(name, cards.search === '' && c.redeems.length === 1 && cards.n === 2 && cards.missing.length === 0 && /72/.test(cards.first) && /Freight ETA forecasting/.test(cards.first)
-      && offers.kpis.join('|') === 'Offers out 1|Accepted 1|Fees on accepted offers $114,400 110% of first-year salary' && offers.cols.join('|') === OFFER_COLS.join('|')
-      && /110% of the first-year salary/.test(offers.callout || '') && form.yearly && form.hourly === 'true' && form.hours === '40' && form.start === 'date' && form.respond === 'date'
-      && form.calc && form.agree === false && form.send === true && form.follow === true && shots.length === 0
-      && ivs.join.join('|') === CLIENT_ROOM && !ivs.pwned && /onerror/.test(ivs.text) && !/zoom\.example/.test(ivs.text),
-    `address "${cards.search}", ${cards.n} cards, missing [${cards.missing.join(',')}], join [${ivs.join.length}], script ran ${ivs.pwned}, kpis [${offers.kpis.join('|')}], cols ${offers.cols.length}, hours ${form.hours}, send disabled ${form.send}, missing shots [${shots.join(',')}]`);
-  } catch (e) { check(name, false, String(e.message).split('\n')[0].slice(0, 160)); }
-  all.push(...c.errors); await c.ctx.close();
-  await runOfferSend(browser, all, base);
-  await runClientPhone(browser, all, base);
-  await runBadLink(browser, all, base);
-}
-
-async function runBadLink(browser, all, base) {
-  const name = 'HS9 a spent or unknown sign-in link: the plain message, the address bar cleared, no data asked for';
-  const c = await clientPage(browser, base, { token: '0f0f0f0f-1111-4111-8111-999999999999' });
-  try {
-    await c.page.waitForSelector(T('signin-msg'));
-    const s = await c.page.evaluate(() => ({ search: location.search, msg: document.querySelector('[data-testid="signin-msg"]').textContent, cards: document.querySelectorAll('[data-testid="cand-card"]').length }));
-    check(name, s.search === '' && /no longer valid/.test(s.msg) && s.cards === 0 && c.redeems.length === 1, `address "${s.search}", "${s.msg.slice(0, 60)}"`);
-  } catch (e) { check(name, false, String(e.message).split('\n')[0].slice(0, 160)); }
-  // The redeem 401 is the answer under test (the browser logs every non-2xx response).
-  all.push(...c.errors.filter((e) => !/status of 401/.test(e))); await c.ctx.close();
-}
-
-async function runOfferSend(browser, all, base) {
-  const name = 'HS7 client portal: Send disabled until agreed; hourly $50 x 40 shows $104,000 and $114,400';
-  const c = await clientPage(browser, base);
-  try {
-    await c.page.waitForSelector(T('cand-card'));
-    await c.page.click(`${T('cand-card')} ${T('act-offer')}`);
-    await c.page.click(T('basis-hourly'));
-    await c.page.fill(T('offer-rate'), '50');
-    const calc = await c.page.evaluate(() => [document.querySelector('[data-testid="calc-first-year"]')?.textContent, document.querySelector('[data-testid="calc-fee"]')?.textContent]);
-    const before = await c.page.locator(T('offer-send')).isDisabled();
-    await c.page.check(T('offer-agree'));
-    const after = await c.page.locator(T('offer-send')).isDisabled();
-    await c.page.locator(T('offer-send')).dblclick();
-    await c.page.waitForSelector(T('notice'));
-    const b = c.posts[0] || {};
-    check(name, calc.join('|') === '$104,000|$114,400' && before === true && after === false && c.posts.length === 1 && b.agreed === true && b.pay.rateCents === 5000 && b.pay.hoursPerWeek === 40
-      && !/fee/i.test(Object.keys(b).join(',') + Object.keys(b.pay || {}).join(',')),
-    `calc ${calc.join(' / ')}, disabled before ${before}, after ${after}, ${c.posts.length} offer request(s)`);
-  } catch (e) { check(name, false, String(e.message).split('\n')[0].slice(0, 160)); }
-  all.push(...c.errors); await c.ctx.close();
-}
-
-async function runClientPhone(browser, all, base) {
-  const name = 'HS8 the employer portal fits a phone (390): no sideways scroll, 44px targets';
-  const c = await clientPage(browser, base, { viewport: { width: 390, height: 844 } });
-  try {
-    await c.page.waitForSelector(T('cand-card'));
-    const m = await c.page.evaluate(() => ({ over: document.documentElement.scrollWidth - window.innerWidth,
-      minH: Math.min(...[...document.querySelectorAll('.cp-acts .btn, .cp-tabs button')].map((b) => b.getBoundingClientRect().height)) }));
-    check(name, m.over <= 0 && m.minH >= 44, `overflow ${m.over}px, smallest control ${Math.round(m.minH)}px`);
-  } catch (e) { check(name, false, String(e.message).split('\n')[0].slice(0, 160)); }
-  all.push(...c.errors); await c.ctx.close();
 }
 
 async function run(browser) {
