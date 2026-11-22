@@ -31,6 +31,22 @@ import * as path from 'path';
  * taken from what is actually on disk today. A refactor that moves Maya
  * wholesale will fail this and should: the scan needs re-pointing, and the
  * alternative is a guard that silently stops guarding.
+ *
+ * ─── WHAT THIS SCAN PROVABLY CANNOT SEE ─────────────────────────────────────
+ *
+ * Written down because `redactionAndFlags.test.ts` resolves three hops for the
+ * same evasion class and says so, and a guard without this section invites the
+ * assumption that it catches everything.
+ *
+ * It DOES catch a static import, a `require`, a type-only import, and a dynamic
+ * `await import(...)` - each verified by mutation rather than by reading the
+ * regex. It does NOT catch a RE-EXPORT SHIM: a third module that re-exports
+ * `getBrandRole` under another name, imported by a Maya file, is invisible here
+ * because the Maya file never names this module. Closing that needs a
+ * module-graph walk, which is the heavier mechanism `redactionAndFlags` reaches
+ * for. It is left open deliberately: the shim does not exist, nothing imports
+ * this service at all today (asserted below), and a guard that constrains
+ * SPELLING is honest about constraining spelling.
  */
 
 const SERVICES = path.join(__dirname, '..', '..');
@@ -60,16 +76,30 @@ function agentSurfaceFiles(): string[] {
   });
 }
 
-/** An import of the role service, however it is spelled. */
-const IMPORTS_ROLE_SERVICE = /(?:from\s+['"][^'"]*brandRoleService['"]|require\(\s*['"][^'"]*brandRoleService['"])/;
+/**
+ * An import of the role service, however it is spelled.
+ *
+ * `import(` as well as `require(`, because a dynamic `await import(...)` inside
+ * a prompt builder is the version that would have slipped past the first draft
+ * of this regex, and a lazy import is exactly how a heavy service gets pulled
+ * into a hot path.
+ */
+const IMPORTS_ROLE_SERVICE =
+  /(?:from\s+['"][^'"]*brandRoleService['"]|(?:require|import)\s*\(\s*['"][^'"]*brandRoleService['"])/;
 
 describe('the brand role never reaches an agent', () => {
   const files = agentSurfaceFiles();
 
   it('finds the Maya and agent surface it is supposed to be scanning', () => {
-    // Measured on 2026-11-22: 77 maya-matching files plus 189 under agents/.
-    // The floor is deliberately well below that, so ordinary growth or tidying
-    // does not fail the suite, while a scan pointed at nothing does.
+    // Measured 2026-11-22 under THIS scanner's own walk rules, which exclude
+    // `__tests__`: 43 maya-matching, 164 under `agents/`, 207 in the union.
+    // (An earlier version of this comment said 77 and 189, which counted the
+    // test files the walk skips. The figures now describe the set actually
+    // scanned, because a floor justified by the wrong measurement is a floor
+    // nobody can check.)
+    //
+    // The floor sits well below 207 so ordinary growth or tidying does not fail
+    // the suite, while a scan pointed at nothing does.
     expect(files.length).toBeGreaterThan(150);
     const rels = files.map((p) => path.relative(SERVICES, p).replace(/\\/g, '/'));
     // The three places a directory-only scan would have missed.
@@ -85,6 +115,23 @@ describe('the brand role never reaches an agent', () => {
 
     // Named rather than counted, so a failure says which file to look at.
     expect(offenders).toEqual([]);
+  });
+
+  it('catches a dynamic import, a require and a type-only import', () => {
+    // The regex is proven against each spelling here rather than read and
+    // trusted. A lazy `await import(...)` inside a prompt builder is the version
+    // that slipped past the first draft of this pattern.
+    for (const line of [
+      "import { getBrandRole } from '../growthJourney/brandRoleService';",
+      "import type { BrandRole } from '../growthJourney/brandRoleService';",
+      "const { getBrandRole } = require('../growthJourney/brandRoleService');",
+      "const m = await import('../growthJourney/brandRoleService');",
+      'const m = await import("./brandRoleService");',
+    ]) {
+      expect(IMPORTS_ROLE_SERVICE.test(line)).toBe(true);
+    }
+    // And does not fire on a module that merely shares a prefix.
+    expect(IMPORTS_ROLE_SERVICE.test("from './brandRoleServiceDocs'")).toBe(false);
   });
 
   it('and neither does anything that builds a prompt', () => {

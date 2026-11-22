@@ -26,6 +26,17 @@ import { getBrandRole, setBrandRole, roleOf, ROLE_DEFAULTS, ROLE_METADATA_KEY } 
 import { Brand } from '../../../models';
 import { JourneyProgram } from '../../../models/JourneyProgram';
 import { TERMINOLOGY, TERMINOLOGY_METADATA_KEY, terminologyOf } from '../journeyTerminology';
+import { brandRoleBodySchema } from '../../../schemas/growthJourneyBrandRoleSchema';
+
+/**
+ * Every write below goes through the real schema, because `setBrandRole` takes a
+ * BRANDED type that only `parse` produces. That is deliberate: a plain object
+ * would not compile here, which is the same wall a controller hits if it forgets
+ * to validate. It also means these cells exercise the strip and the bound rather
+ * than assuming a controller somewhere will.
+ */
+const body = (title: string, description: string) =>
+  brandRoleBodySchema.parse({ title, description });
 
 const mockBrand = (Brand as unknown as { findByPk: jest.Mock }).findByPk;
 const mockFindByPk = (JourneyProgram as unknown as { findByPk: jest.Mock }).findByPk;
@@ -137,7 +148,7 @@ describe('THE CLOBBER GUARD', () => {
     });
     mockFindAll.mockResolvedValue([row]);
 
-    await setBrandRole(BRAND_CT, { title: 'Enrollment Specialist', description: 'Reaches out.' });
+    await setBrandRole(BRAND_CT, body('Enrollment Specialist', 'Reaches out.'));
 
     const written = row.update.mock.calls[0][0].metadata as Record<string, unknown>;
     // Byte-identical, not merely "present and shaped right". A merge that
@@ -153,7 +164,7 @@ describe('THE CLOBBER GUARD', () => {
     });
     mockFindAll.mockResolvedValue([row]);
 
-    await setBrandRole(BRAND_CT, { title: 'A', description: 'B' });
+    await setBrandRole(BRAND_CT, body('A', 'B'));
 
     const written = row.update.mock.calls[0][0].metadata as Record<string, unknown>;
     expect(written.operator_note).toBe('do not touch');
@@ -167,7 +178,7 @@ describe('THE CLOBBER GUARD', () => {
     const row = programRow({ metadata });
     mockFindAll.mockResolvedValue([row]);
 
-    await setBrandRole(BRAND_CT, { title: 'A', description: 'B' });
+    await setBrandRole(BRAND_CT, body('A', 'B'));
 
     const written = row.update.mock.calls[0][0].metadata as Record<string, unknown>;
     // Exactly one key: the role. Spreading a string would have produced
@@ -179,10 +190,31 @@ describe('THE CLOBBER GUARD', () => {
     const row = programRow({});
     mockFindAll.mockResolvedValue([row]);
 
-    const result = await setBrandRole(BRAND_CT, { title: 'A', description: 'B' });
+    const result = await setBrandRole(BRAND_CT, body('A', 'B'));
 
     expect(result.status).toBe('saved');
     expect(result.role?.updated_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it('is idempotent: the same input twice converges on the same row', async () => {
+    const row = programRow({ metadata: { [TERMINOLOGY_METADATA_KEY]: TERMINOLOGY.learner } });
+    mockFindAll.mockResolvedValue([row]);
+
+    await setBrandRole(BRAND_CT, body('Enrollment Specialist', 'Reaches out.'));
+    const first = JSON.parse(JSON.stringify(row.metadata));
+    await setBrandRole(BRAND_CT, body('Enrollment Specialist', 'Reaches out.'));
+    const second = JSON.parse(JSON.stringify(row.metadata));
+
+    // CLAUDE.md's fourth mandatory test type. The write replaces one key rather
+    // than appending, so a second run must not add a key, duplicate the role, or
+    // lose terminology on the way through.
+    expect(Object.keys(second).sort()).toEqual(Object.keys(first).sort());
+    expect(second[TERMINOLOGY_METADATA_KEY]).toEqual(TERMINOLOGY.learner);
+    expect(second[ROLE_METADATA_KEY].title).toBe(first[ROLE_METADATA_KEY].title);
+    expect(second[ROLE_METADATA_KEY].description).toBe(first[ROLE_METADATA_KEY].description);
+    // `updated_at` is the one field allowed to move: it records when the choice
+    // was last confirmed, which is a different question from what the choice is.
+    expect(typeof second[ROLE_METADATA_KEY].updated_at).toBe('string');
   });
 
   it('logs the PRIOR metadata before writing, so a bad write is restorable', async () => {
@@ -190,12 +222,31 @@ describe('THE CLOBBER GUARD', () => {
     const row = programRow({ metadata: { ...prior } });
     mockFindAll.mockResolvedValue([row]);
 
-    await setBrandRole(BRAND_CT, { title: 'A', description: 'B' });
+    await setBrandRole(BRAND_CT, body('A', 'B'));
 
     const logged = (console.log as jest.Mock).mock.calls
       .map((c) => JSON.parse(c[0] as string))
-      .find((l) => l.event === 'brand_role_write');
+      .find((l) => l.event === 'brand_role_write_starting');
     expect(logged.prior_metadata).toEqual(prior);
+    // Not `success`. It is emitted before the update, so nothing has succeeded
+    // yet, and a line that claimed otherwise could not be read during a restore
+    // to tell "about to write" from "wrote".
+    expect(logged.outcome).toBe('partial');
+  });
+
+  it('claims success only in a line emitted AFTER the update', async () => {
+    const row = programRow({});
+    mockFindAll.mockResolvedValue([row]);
+
+    await setBrandRole(BRAND_CT, body('A', 'B'));
+
+    const events = (console.log as jest.Mock).mock.calls
+      .map((c) => JSON.parse(c[0] as string))
+      .filter((l) => String(l.event).startsWith('brand_role_write'));
+    expect(events.map((e) => [e.event, e.outcome])).toEqual([
+      ['brand_role_write_starting', 'partial'],
+      ['brand_role_write', 'success'],
+    ]);
   });
 });
 
@@ -212,7 +263,7 @@ describe('a brand with no journey programme', () => {
   it('refuses the write, because there is nowhere to store it', async () => {
     mockFindAll.mockResolvedValue([]);
 
-    const result = await setBrandRole(BRAND_NO_PROGRAMME, { title: 'A', description: 'B' });
+    const result = await setBrandRole(BRAND_NO_PROGRAMME, body('A', 'B'));
 
     // Honest refusal, not a silently dropped write and not a programme invented
     // on the operator's behalf. Creating a journey is not configuring one.
@@ -228,6 +279,20 @@ describe('more than one programme on a brand', () => {
 
     expect(result.status).toBe('ambiguous_programme');
     expect(result.role).toBeNull();
+  });
+
+  it('refuses the WRITE too, not just the read', async () => {
+    const a = programRow({});
+    const b = programRow({});
+    mockFindAll.mockResolvedValue([a, b]);
+
+    const result = await setBrandRole(BRAND_CT, body('A', 'B'));
+
+    expect(result.status).toBe('ambiguous_programme');
+    // And nothing was written to either candidate. A refusal that still wrote
+    // somewhere would be the worst of both.
+    expect(a.update).not.toHaveBeenCalled();
+    expect(b.update).not.toHaveBeenCalled();
   });
 
   it('resolves through the brand\'s own default pointer when there is one', async () => {

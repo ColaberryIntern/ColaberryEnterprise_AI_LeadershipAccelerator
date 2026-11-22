@@ -65,12 +65,23 @@ export const brandRoleParamsSchema = z.object({
  * `terminology`, so a body that smuggled extra keys through would be a way to
  * write arbitrary structure into a column the rest of the journey reads from.
  */
+/**
+ * `.brand()`: the service accepts ONLY a value this schema produced.
+ *
+ * Without it the inferred type is `{ title: string; description: string }`, which
+ * TypeScript satisfies structurally - so a controller that forgot to `parse`
+ * would compile, store unbounded markup, and no test would fail. The brand makes
+ * skipping validation a type error at the call site rather than a defect
+ * discovered in the row. A cast can still defeat it, but a cast is visible in
+ * review, and "forgot to validate" is not.
+ */
 export const brandRoleBodySchema = z
   .object({
     title: cleanText(ROLE_TITLE_MAX, 'Title'),
     description: cleanText(ROLE_DESCRIPTION_MAX, 'Description'),
   })
-  .strict();
+  .strict()
+  .brand<'BrandRoleBody'>();
 
 export type BrandRoleParams = z.infer<typeof brandRoleParamsSchema>;
 export type BrandRoleBody = z.infer<typeof brandRoleBodySchema>;

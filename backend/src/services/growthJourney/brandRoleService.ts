@@ -1,5 +1,6 @@
 import { Brand } from '../../models';
 import { JourneyProgram, type JourneyProgramKind } from '../../models/JourneyProgram';
+import type { BrandRoleBody } from '../../schemas/growthJourneyBrandRoleSchema';
 
 /**
  * What the growth agent is CALLED on a given brand.
@@ -141,13 +142,22 @@ export type BrandRoleWriteResult =
   | { status: 'no_programme'; brand_id: string; role: null }
   | { status: 'ambiguous_programme'; brand_id: string; role: null };
 
-function logRole(event: string, fields: Record<string, unknown>): void {
+/**
+ * `outcome` is a parameter, not a constant, and that is not pedantry.
+ *
+ * The pre-write line is the designated rollback record, so it has to be emitted
+ * BEFORE the update - at which point nothing has succeeded yet. Hardcoding
+ * `success` there would mean a write that then threw still read as a success in
+ * the log, and the one line somebody reaches for during a restore could not
+ * distinguish "about to write" from "wrote".
+ */
+function logRole(event: string, outcome: 'success' | 'failure' | 'partial', fields: Record<string, unknown>): void {
   console.log(
     JSON.stringify({
       level: 'info',
       service: 'growth-journey-admin',
       event,
-      outcome: 'success',
+      outcome,
       ...fields,
     })
   );
@@ -179,7 +189,11 @@ async function programmeFor(
   if (programs.length === 1) return { ok: true, program: programs[0] };
   if (programs.length === 0) return { ok: false, reason: 'no_programme' };
 
-  logRole('brand_role_programme_ambiguous', { brand_id: brandId, programme_count: programs.length });
+  logRole('brand_role_programme_ambiguous', 'failure', {
+    brand_id: brandId,
+    error_class: 'ContractViolation',
+    programme_count: programs.length,
+  });
   return { ok: false, reason: 'ambiguous_programme' };
 }
 
@@ -210,11 +224,22 @@ export async function getBrandRole(brandId: string): Promise<BrandRoleResolution
  * The prior `metadata` is logged BEFORE the write so a bad value is restorable
  * from the log without a backup, through this same guarded path. That is safe to
  * log because the column holds operator configuration only - terminology and
- * this role - and carries no personal data by construction.
+ * this role - and carries no personal data by construction. A second line after
+ * the update is what actually claims success.
+ *
+ * `input` is `BrandRoleBody`, a BRANDED type only `brandRoleBodySchema.parse`
+ * produces. A plain `{ title, description }` does not satisfy it, so a caller
+ * cannot reach this function without having validated and stripped its input.
+ * Typing it structurally would have compiled and stored unbounded markup.
+ *
+ * IDEMPOTENT: the same input twice converges on the same row. The write is a
+ * single-row replacement of one key, not an append, so there is no duplicate to
+ * create; only `updated_at` moves, which records when the choice was last
+ * confirmed and is the honest answer to "when was this set".
  */
 export async function setBrandRole(
   brandId: string,
-  input: { title: string; description: string }
+  input: BrandRoleBody
 ): Promise<BrandRoleWriteResult> {
   const found = await programmeFor(brandId);
   if (!found.ok) return { status: found.reason, brand_id: brandId, role: null };
@@ -230,7 +255,9 @@ export async function setBrandRole(
     updated_at: new Date().toISOString(),
   };
 
-  logRole('brand_role_write', {
+  // `partial`: emitted before the update, so nothing has succeeded yet. This is
+  // the line a restore reads.
+  logRole('brand_role_write_starting', 'partial', {
     brand_id: brandId,
     journey_program_id: program.id,
     prior_metadata: existing,
@@ -240,6 +267,11 @@ export async function setBrandRole(
   // The spread, not a replacement. See the header: a bare `{ role }` here
   // destroys `terminology` and five tabs silently rebrand.
   await program.update({ metadata: { ...(existing ?? {}), [ROLE_METADATA_KEY]: role } });
+
+  logRole('brand_role_write', 'success', {
+    brand_id: brandId,
+    journey_program_id: program.id,
+  });
 
   return { status: 'saved', brand_id: brandId, role };
 }
