@@ -92,10 +92,11 @@ const RATE_FACTS = {
   check: (r) => `${r.pct}% of credit collectors took the Quick check (${r.n} of ${r.d}).`,
   bounce: (r) => `${r.pct}% of visitors left before a quarter of the page (${r.n} of ${r.d}).`,
   emailOpen: (r) => `${r.pct}% of welcome emails were opened (${r.n} of ${r.d}, Mandrill, a floor).`,
+  attend: (r) => `${r.pct}% of sign-ups whose Open House happened checked in (${r.n} of ${r.d}, platform check-ins, a floor).`,
 };
 const ANCHOR = { seatClick: 'sec-forks', formFinish: 'sec-forks', signup: 'sec-funnel', enter: 'sec-account', play: 'sec-account',
-  finish: 'sec-account', credit: 'sec-forks', check: 'sec-forks', bounce: 'sec-page', emailOpen: 'sec-email' };
-const STAGE = { seatClick: 1, bounce: 0.9, formFinish: 1.2, signup: 1.1, enter: 1.5, play: 2, finish: 2.2, credit: 2.4, check: 2.4, emailOpen: 1 };
+  finish: 'sec-account', credit: 'sec-forks', check: 'sec-forks', bounce: 'sec-page', emailOpen: 'sec-email', attend: 'sec-openhouse' };
+const STAGE = { seatClick: 1, bounce: 0.9, formFinish: 1.2, signup: 1.1, enter: 1.5, play: 2, finish: 2.2, credit: 2.4, check: 2.4, emailOpen: 1, attend: 2.6 };
 
 /** The 10 numbers that matter most this week, as tour stops. */
 function topTen(w, email, targets) {

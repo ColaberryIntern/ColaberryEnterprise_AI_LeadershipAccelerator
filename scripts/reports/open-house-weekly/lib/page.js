@@ -90,9 +90,23 @@ function emailPanel(em) {
   return `<table class="tbl sm"><tbody>${rows.map(([l, v]) => `<tr><td>${l}</td><td class="num">${v}</td><td class="num">${M.pct(v, em.emails) ?? 0}%</td></tr>`).join('')}</tbody></table>`;
 }
 
+/** OH1y: every Open House since launch. All doors; "walk-ins" checked in without a registration for that session. */
+function sessionsTable(sessions) {
+  if (!sessions || !sessions.length) return '<p class="muted">No Open House sessions yet.</p>';
+  const tr = sessions.map((s) => {
+    const rate = s.held ? `${M.pct(s.checked_in, s.registered) ?? 0}%` : 'n/a';
+    return `<tr><td>${esc(s.date)}</td><td>${s.held ? 'Happened' : 'Upcoming'}</td><td class="num">${s.registered}</td><td class="num">${s.registered_lp}</td>
+      <td class="num">${s.held ? s.checked_in : 'n/a'}</td><td class="num">${s.held ? rate : 'n/a'}</td><td class="num">${s.held ? s.checked_in_lp : 'n/a'}</td>
+      <td class="num">${s.held ? s.walk_ins : 'n/a'}</td><td class="num">${s.followups_booked}</td><td class="num">${s.followups_sent}</td></tr>`;
+  }).join('');
+  return `<table class="tbl"><thead><tr><th>Open House</th><th>State</th><th>Registered</th><th>From the ad page</th><th>Checked in</th><th>% checked in</th>
+    <th>Checked in, ad page</th><th>Walk-ins</th><th>Follow-ups booked</th><th>Follow-ups sent</th></tr></thead><tbody>${tr}</tbody></table>
+    <p class="muted">${esc(M.ATTEND_FLOOR)} Walk-ins checked in without registering for that session. Follow-ups start with the 3 Dec Open House.</p>`;
+}
+
 function shotsPanel(shots) {
   if (!shots || !shots.length) return '';
   return `<section><h2>📸 What the visitor sees</h2><p class="lede">Captured on a phone-sized screen, because most visitors are on a phone.</p><div class="shots">${shots.map((s) => `<figure><img src="${s.src}" alt="${esc(s.title)}"/><figcaption><b>${esc(s.title)}</b><br/>${esc(s.caption)}</figcaption></figure>`).join('')}</div></section>`;
 }
 
-module.exports = { kpiTiles, funnelTable, forkCards, mermaidSankey, mermaidTree, emailPanel, shotsPanel, MERMAID, PILL, STATUS, I, X, M };
+module.exports = { kpiTiles, funnelTable, forkCards, mermaidSankey, mermaidTree, emailPanel, sessionsTable, shotsPanel, MERMAID, PILL, STATUS, I, X, M };

@@ -67,6 +67,14 @@ module.exports = {
     files: ['the open_house_welcome email template'],
     hypothesis: { metric: 'emailOpen', op: '>=', value: 40 },
   },
+  // OH1y. The first half of the move is measurement on purpose: attendance counts platform check-ins only, so until
+  // Zoom-direct joiners are counted we cannot tell a no-show from someone who skipped the check-in page.
+  attend: {
+    weight: 2.6, executor: 'build', title: 'Count everyone who comes to the Open House, then get more of them in the room',
+    how: ['Compare the platform check-ins for the last Open House with the Zoom participant count for the same meeting; the gap is the people we are not counting.', 'Make the check-in page the only door: every reminder, the Today card and the countdown emails link to the check-in page, which then opens Zoom. No link goes to Zoom directly.', 'Do NOT add new outreach: Maya owns reach-out. Fix the path from "signed up" to "in the room".'],
+    files: ['frontend/src/pages/portal/ClassCheckinPage.tsx', 'backend/src/services/email/sessionReminderEmail.ts', 'backend/src/services/openHouseCountdown.ts'],
+    hypothesis: { metric: 'attend', op: '>=', value: 40 },
+  },
   source: {
     weight: 1, executor: 'human', title: 'Move ad spend from the weaker source to the stronger one',
     how: ['Share the source split with whoever runs the Meta ads.', 'Shift the weaker placement\'s budget to the stronger one for one week; compare sign-ups per visitor.'],

@@ -1,6 +1,6 @@
 # Open House weekly funnel report (C123)
 
-One HTML report a week that follows every person who comes in through the ads. The path is Facebook and Instagram ad → landing page → Open House sign-up → account → welcome video → Quick check. At every point where people choose, it shows what share went each way. It is read-only and counts people, never names.
+One HTML report a week that follows every person who comes in through the ads. The path is Facebook and Instagram ad → landing page → Open House sign-up → account → welcome video → Quick check → the Open House itself. At every point where people choose, it shows what share went each way. It is read-only and counts people, never names.
 
 ```
 # 1. On the prod host, from /opt/colaberry-accelerator (last 7 days, compared with the 7 days before)
@@ -72,6 +72,7 @@ node scripts/reports/open-house-weekly/render.js docs/reports/open-house-weekly/
 | Inside the account | Button vs email link; where quitters left the video; median timings | `timeline_card_progress`, `sign_in_link_uses` |
 | Day by day | Clustered columns | |
 | Welcome email | Delivered, opened and clicked, from Mandrill (a floor) | `../../audits/open-house-funnel/mandrillFunnel.js` |
+| At the Open House (OH1y) | Landing-page sign-ups whose Open House happened, how many checked in, and a table of every Open House since launch: registered, from the ad page, checked in, walk-ins, follow-ups booked and sent | `open_house_registrations` → `live_sessions.open_house_event_id`; `session_guests` + `attendance_records` (the follow-up's rule); `scheduled_emails` `event_followup` |
 | What we cannot see yet | Each blind spot, with the next build that would close it | |
 
 ## Rules it follows
@@ -92,7 +93,7 @@ node scripts/reports/open-house-weekly/render.js docs/reports/open-house-weekly/
 node --test scripts/reports/open-house-weekly/__tests__
 ```
 
-There are 16 tests. They cover:
+There are 39 tests (`attendance.test.js` holds the OH1y ones). They cover:
 
 - grading: thresholds, the boundary value, small samples, and lower-is-better;
 - funnel math: what each step is measured against;
@@ -111,7 +112,7 @@ Each of 4 deliberate code breaks fails at least one test.
 
 ## Next builds (in order of decision value)
 
-1. **Open House attendance.** Join the Zoom/Eventbrite attendee list by email, which adds the last step.
+1. **Zoom-direct joiners.** Platform check-ins are in (OH1y, below). Join the Zoom participant report by email so people who skipped the check-in page count too (needs the Zoom participant scope).
 2. **Ad spend by campaign:** cost per sign-up, cost per entered account, cost per finished video.
 3. **Page views on the `/open-house` form,** so "opened the form, did not submit" is measured, not inferred.
 4. **A tag on the welcome-email link,** so its sign-ins are counted apart from other links.

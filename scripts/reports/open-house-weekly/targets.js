@@ -24,5 +24,9 @@ module.exports = {
     keepGoing: { label: 'Entered who opened another assignment', good: 40, ok: 20 },
     emailOpen: { label: 'Welcome emails opened', good: 40, ok: 20 },
     emailClick: { label: 'Welcome emails clicked', good: 15, ok: 5 },
+    // OH1y, 22 Nov 2026: the share of landing-page sign-ups whose Open House has happened who checked in on the
+    // platform. A floor (Zoom-direct joiners never check in). Assumption: an open live session commonly holds
+    // 35-45% of registrants; reset once the Zoom participant count is joined in.
+    attend: { label: 'Sign-ups whose Open House happened who checked in', good: 40, ok: 25 },
   },
 };

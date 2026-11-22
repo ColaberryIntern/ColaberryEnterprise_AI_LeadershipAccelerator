@@ -34,7 +34,7 @@ function buildHtml(snap, targets = defaultTargets, shots = [], entries = S.load(
   const srcGrade = (r) => M.grade('signup', r.signups, r.visitors, targets);
 
   const hero = `<header class="hero"><div class="wrap"><h1>🎯 Open House Funnel: Weekly Report</h1>
-    <div class="sub">From ad click to the first win, every person, every fork. Facebook and Instagram ads → landing page → Open House sign-up → account → welcome video → Quick check.</div>
+    <div class="sub">From ad click to the first win, every person, every fork. Facebook and Instagram ads → landing page → Open House sign-up → account → welcome video → Quick check → the Open House itself.</div>
     <div class="chips"><span class="chip">📅 ${esc(cur.from_ct)} → ${esc(cur.to_ct)} CT (${cur.hours} h)</span>
     <span class="chip">${prev ? `↔️ compared with ${esc(prev.from_ct)} → ${esc(prev.to_ct)}` : '🚀 launch week: no earlier week to compare'}</span>
     <span class="chip">🕒 generated ${esc(snap.generated_ct)} CT</span><span class="chip">🔒 read-only, people not names</span></div></div></header>`;
@@ -73,6 +73,8 @@ function buildHtml(snap, targets = defaultTargets, shots = [], entries = S.load(
        <div class="panel"><h3>Timing (median)</h3><div class="stat">${j.median_min_signup_to_enter ?? 'n/a'} min</div><div class="statl">sign-up → in the account</div>
          <div class="stat" style="margin-top:10px">${j.median_min_enter_to_finish ?? 'n/a'} min</div><div class="statl">in the account → finished the video</div>
          <div class="stat" style="margin-top:10px">${j.returned_later}</div><div class="statl">came back on a later day</div></div></div>`, 'sec-account'),
+    j.oh_held === undefined ? '' : section('🎤 At the Open House', `This week's landing-page sign-ups: ${j.oh_held} had their Open House happen and ${j.attended} checked in; ${j.oh_upcoming} are still waiting for theirs. Below: every Open House since launch, all doors.`,
+      P.sessionsTable(snap.sessions), 'sec-openhouse'),
     section('📅 Day by day', 'Landing page door, by the day of the visit or sign-up (CT).', X.columnsSvg(cur.daily, [
       { key: 'visitors', label: 'Visitors', color: C.sky }, { key: 'signups', label: 'Sign-ups', color: C.blue },
       { key: 'entered', label: 'Entered', color: C.green }, { key: 'finished', label: 'Finished video', color: C.navy }])),

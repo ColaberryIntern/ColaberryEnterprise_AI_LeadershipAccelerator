@@ -49,7 +49,8 @@ document.getElementById('tourPrev').onclick=function(){i=Math.max(0,i-1);show();
 document.querySelectorAll('.tourhi').forEach(function(e){e.classList.remove('tourhi');});};})();`;
 
 const OVERVIEW_KEYS = [['seatClick', 'Clicked Save my seat'], ['formFinish', 'Finished the form'], ['enter', 'Entered the account'],
-  ['play', 'Pressed play'], ['finish', 'Watched 75%+'], ['credit', 'Collected the credit'], ['check', 'Took the Quick check'], ['ace', 'Scored 5 of 5']];
+  ['play', 'Pressed play'], ['finish', 'Watched 75%+'], ['credit', 'Collected the credit'], ['check', 'Took the Quick check'], ['ace', 'Scored 5 of 5'],
+  ['attend', 'Came to the Open House']];
 
 /** Summary overview: every step's pass-through rate vs its target (Power BI bullet chart). */
 function overviewRows(w, email, targets) {

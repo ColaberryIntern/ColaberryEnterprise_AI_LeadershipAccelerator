@@ -42,6 +42,16 @@ SELECT name, visitor_id, min(created_at) FILTER (WHERE event_type = 'pageview') 
        coalesce(bool_or(event_type = 'cta_click' AND event_data->>'href' ILIKE '%/portal/signup%'), false) AS cta_start
 FROM lpev GROUP BY 1, 2 HAVING bool_or(event_type = 'pageview');
 
+-- OH1y: visitor_sessions has no visitor_id index. A per-visitor lookup scanned the whole table once per visitor and
+-- passed the 60 s statement timeout on 22 Nov 2026 (144k sessions x ~700 visitors). Read the landing-page sessions for
+-- both windows ONCE (the started_at index serves it), then look visitors up in that small set.
+CREATE TEMP TABLE lpsess AS
+SELECT s.visitor_id, s.started_at, s.utm_source, s.device_type, s.is_bounce, s.duration_seconds, s.fbclid, s.gclid, s.referrer_domain
+FROM visitor_sessions s
+WHERE s.started_at >= (SELECT min(s) FROM win) - interval '1 hour' AND s.started_at < (SELECT max(e) FROM win)
+  AND s.entry_page ILIKE :'lp' AND s.visitor_id IS NOT NULL;
+CREATE INDEX ON lpsess (visitor_id, started_at);
+
 CREATE TEMP TABLE visx AS
 SELECT v.*, ss.device, ss.bounce, ss.duration_s,
   CASE WHEN lower(ss.utm_source) IN ('fb', 'facebook') THEN 'Facebook'
@@ -55,8 +65,8 @@ JOIN win w ON w.name = v.name
 LEFT JOIN LATERAL (
   SELECT s.utm_source, coalesce(nullif(s.device_type, ''), 'unknown') AS device, s.is_bounce AS bounce,
          s.duration_seconds AS duration_s, s.fbclid IS NOT NULL AS fbclid, s.gclid IS NOT NULL AS gclid, s.referrer_domain
-  FROM visitor_sessions s
-  WHERE s.visitor_id = v.visitor_id AND s.entry_page ILIKE :'lp' AND s.started_at >= w.s - interval '1 hour' AND s.started_at < w.e
+  FROM lpsess s
+  WHERE s.visitor_id = v.visitor_id AND s.started_at >= w.s - interval '1 hour' AND s.started_at < w.e
   ORDER BY s.started_at LIMIT 1
 ) ss ON true;
 
@@ -76,6 +86,20 @@ LEFT JOIN LATERAL (
 WHERE r.email_lower NOT LIKE 'ali+%' AND r.email_lower NOT LIKE '%@colaberry.com'
   AND r.email_lower NOT LIKE '%@colaberry-test.local' AND r.email_lower !~ '^(e2e[-_]|test-fixture-)';
 
+-- ── 3b. OH1y: who checked in at each Open House (platform check-ins; same rule as the follow-up) ───────────────────
+CREATE TEMP TABLE oh_here AS
+SELECT DISTINCT x.session_id, x.email FROM (
+  SELECT sg.session_id, sg.email_lower AS email FROM session_guests sg
+    JOIN live_sessions s ON s.id = sg.session_id AND s.open_house_event_id IS NOT NULL
+   WHERE NOT sg.awaiting_class AND sg.email_lower IS NOT NULL
+  UNION ALL
+  SELECT ar.session_id, lower(e.email) FROM attendance_records ar JOIN enrollments e ON e.id = ar.enrollment_id
+    JOIN live_sessions s ON s.id = ar.session_id AND s.open_house_event_id IS NOT NULL
+   WHERE ar.status::text IN ('present', 'late') AND e.email IS NOT NULL
+) x
+WHERE x.email NOT LIKE 'ali+%' AND x.email NOT LIKE '%@colaberry.com'
+  AND x.email NOT LIKE '%@colaberry-test.local' AND x.email !~ '^(e2e[-_]|test-fixture-)';
+
 CREATE TEMP TABLE regx AS
 SELECT g.*, wl.sent_at AS email_at,
   (SELECT min(u.used_at) FROM sign_in_link_uses u WHERE u.enrollment_id = g.enrollment_id AND u.used_at >= wl.sent_at) AS signin_at,
@@ -92,8 +116,25 @@ SELECT g.*, wl.sent_at AS email_at,
   EXISTS (SELECT 1 FROM sign_in_link_uses u WHERE u.enrollment_id = g.enrollment_id
           AND (u.used_at AT TIME ZONE 'America/Chicago')::date > (g.reg_at AT TIME ZONE 'America/Chicago')::date) AS returned_later,
   EXISTS (SELECT 1 FROM timeline_card_progress q WHERE q.enrollment_id = g.enrollment_id
-          AND q.card_id NOT IN (:'video', :'check') AND q.created_at >= g.reg_at) AS kept_going
+          AND q.card_id NOT IN (:'video', :'check') AND q.created_at >= g.reg_at) AS kept_going,
+  -- OH1y: the Open House they signed up for. "Held" = it ended before the window closed; "attended" = checked in on
+  -- the platform, the same rule the follow-up uses (backend/src/services/openHouseFollowup.ts FOLLOWUP_PEOPLE_SQL).
+  -- Zoom-direct joiners never check in, so attended is a floor.
+  os.session_id, os.starts_at AS oh_starts_at,
+  (os.ends_at IS NOT NULL AND os.ends_at < (SELECT e FROM win WHERE name = 'cur')) AS oh_held,
+  EXISTS (SELECT 1 FROM oh_here h WHERE h.session_id = os.session_id AND h.email = g.email_lower) AS attended,
+  (os.session_id IS NOT NULL AND EXISTS (SELECT 1 FROM scheduled_emails se JOIN leads l2 ON l2.id = se.lead_id
+     WHERE se.metadata->>'event_session_id' = os.session_id::text AND se.metadata ? 'event_followup'
+       AND se.status::text = 'sent' AND lower(l2.email) = g.email_lower)) AS followup_sent
 FROM reg g
+LEFT JOIN LATERAL (
+  SELECT s.id AS session_id,
+         ((s.session_date + s.start_time::time)::timestamp AT TIME ZONE 'America/Chicago') AS starts_at,
+         ((s.session_date + coalesce(s.end_time::time, s.start_time::time + interval '90 minutes'))::timestamp AT TIME ZONE 'America/Chicago') AS ends_at
+  FROM open_house_registrations r2 JOIN live_sessions s ON s.open_house_event_id = r2.event_id
+  WHERE r2.id = g.reg_id AND s.status::text <> 'cancelled'
+  ORDER BY s.session_date LIMIT 1
+) os ON true
 LEFT JOIN LATERAL (
   SELECT min(c.created_at) AS sent_at FROM communication_logs c
   WHERE c.status = 'sent' AND c.metadata->>'event' = 'open_house_welcome' AND c.metadata->>'enrollment_id' = g.enrollment_id::text
@@ -172,6 +213,13 @@ SELECT json_build_object(
         'aced', count(*) FILTER (WHERE new_account AND entered_at IS NOT NULL AND aced),
         'kept_going', count(*) FILTER (WHERE new_account AND entered_at IS NOT NULL AND kept_going),
         'returned_later', count(*) FILTER (WHERE new_account AND returned_later),
+        -- OH1y: every landing-page sign-up (new account or not) whose Open House has happened, and who came.
+        'oh_held', count(*) FILTER (WHERE oh_held),
+        'oh_upcoming', count(*) FILTER (WHERE session_id IS NOT NULL AND NOT oh_held),
+        'attended', count(*) FILTER (WHERE oh_held AND attended),
+        'followup_sent', count(*) FILTER (WHERE oh_held AND followup_sent),
+        'held_watched', count(*) FILTER (WHERE oh_held AND finished_at IS NOT NULL AND finished_at < oh_starts_at),
+        'attended_watched', count(*) FILTER (WHERE oh_held AND attended AND finished_at IS NOT NULL AND finished_at < oh_starts_at),
         'exits', coalesce(json_agg(round(exit_s)::int ORDER BY exit_s) FILTER (
             WHERE new_account AND played_at IS NOT NULL AND finished_at IS NULL AND exit_s IS NOT NULL), '[]'),
         'median_min_signup_to_enter', round((extract(epoch FROM percentile_cont(0.5) WITHIN GROUP (ORDER BY entered_at - reg_at)) / 60.0)::numeric, 1),
@@ -184,7 +232,25 @@ SELECT json_build_object(
           (SELECT count(*) FROM regy y WHERE y.name = w.name AND y.door = 'landing_page' AND y.new_account AND y.entered_at IS NOT NULL AND (y.reg_at AT TIME ZONE 'America/Chicago')::date = day) AS entered,
           (SELECT count(*) FROM regy y WHERE y.name = w.name AND y.door = 'landing_page' AND y.new_account AND y.finished_at IS NOT NULL AND (y.reg_at AT TIME ZONE 'America/Chicago')::date = day) AS finished
         FROM generate_series((w.s AT TIME ZONE 'America/Chicago')::date, (w.e AT TIME ZONE 'America/Chicago')::date, interval '1 day') AS day) d)
-  )) FROM win w)
+  )) FROM win w),
+  -- OH1y: every Open House since launch, whatever window the sign-ups fell in. All doors, test addresses excluded.
+  'sessions', (SELECT coalesce(json_agg(t ORDER BY t.date), '[]') FROM (
+    SELECT to_char(s.session_date, 'YYYY-MM-DD') AS date, s.status::text AS status,
+      ((s.session_date + coalesce(s.end_time::time, s.start_time::time + interval '90 minutes'))::timestamp AT TIME ZONE 'America/Chicago')
+        < (SELECT e FROM win WHERE name = 'cur') AS held,
+      count(DISTINCT r.email_lower) AS registered,
+      count(DISTINCT r.email_lower) FILTER (WHERE r.source = 'landing_page') AS registered_lp,
+      count(DISTINCT r.email_lower) FILTER (WHERE r.email_lower IN (SELECT h.email FROM oh_here h WHERE h.session_id = s.id)) AS checked_in,
+      count(DISTINCT r.email_lower) FILTER (WHERE r.source = 'landing_page' AND r.email_lower IN (SELECT h.email FROM oh_here h WHERE h.session_id = s.id)) AS checked_in_lp,
+      (SELECT count(*) FROM oh_here h WHERE h.session_id = s.id AND h.email NOT IN (SELECT r3.email_lower FROM open_house_registrations r3 WHERE r3.event_id = s.open_house_event_id)) AS walk_ins,
+      (SELECT count(*) FROM scheduled_emails se WHERE se.metadata->>'event_session_id' = s.id::text AND se.metadata ? 'event_followup') AS followups_booked,
+      (SELECT count(*) FROM scheduled_emails se WHERE se.metadata->>'event_session_id' = s.id::text AND se.metadata ? 'event_followup' AND se.status::text = 'sent') AS followups_sent
+    FROM live_sessions s
+    LEFT JOIN open_house_registrations r ON r.event_id = s.open_house_event_id
+      AND r.email_lower NOT LIKE 'ali+%' AND r.email_lower NOT LIKE '%@colaberry.com'
+      AND r.email_lower NOT LIKE '%@colaberry-test.local' AND r.email_lower !~ '^(e2e[-_]|test-fixture-)'
+    WHERE s.open_house_event_id IS NOT NULL AND s.status::text <> 'cancelled' AND s.session_date >= (:'launch'::timestamptz AT TIME ZONE 'America/Chicago')::date
+    GROUP BY s.id, s.session_date, s.status, s.start_time, s.end_time, s.open_house_event_id) t)
 );
 
 -- Recipients for the Mandrill step (welcome emails sent to new landing-page accounts in "cur"), when run.sh asks.
