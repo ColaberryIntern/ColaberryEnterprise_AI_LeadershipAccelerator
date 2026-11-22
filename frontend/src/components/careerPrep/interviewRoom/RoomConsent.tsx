@@ -36,23 +36,29 @@ export function ConsentChoice({ onDecide, busy }: Props): React.ReactElement {
 }
 
 /** After the student's own decision: what they chose, the recording line, and the way into the meeting. */
+export const BAD_LINK = 'The meeting link could not be checked. Try again in a moment.';
+/** The same rule as the employer page (room-model.js joinView): only an https meeting link is ever offered. */
+export const safeMeetingUrl = (url: string | null): string | null => (url && /^https:\/\//.test(url) ? url : null);
+
 export function JoinPanel({ room, stalled, onRetry }: { room: RoomData; stalled: boolean; onRetry: () => void }): React.ReactElement {
   const j = room.join;
+  const url = j.status === 'ready' ? safeMeetingUrl(j.url) : null;
+  const badLink = j.status === 'ready' && !url;
   return (
     <section className="cp-iroom-card" aria-labelledby="cp-iroom-join-h" data-testid="cp-iroom-join">
-      <h2 id="cp-iroom-join-h" tabIndex={-1}>{j.status === 'ready' ? 'The room is open' : 'Getting the room ready'}</h2>
+      <h2 id="cp-iroom-join-h" tabIndex={-1}>{url ? 'The room is open' : 'Getting the room ready'}</h2>
       <p data-testid="cp-iroom-mine">{room.yourDecision === 'consent' ? 'You said yes to recording.' : 'You said no to recording. The interview goes ahead unrecorded, with no replay.'}</p>
       {room.recording.note && <p className="cp-muted" data-testid="cp-iroom-recnote">{room.recording.note}</p>}
-      {j.status === 'ready' && j.url && (
+      {url && (
         <p className="cp-iroom-go">
-          <a className="cp-send" href={j.url} target="_blank" rel="noopener noreferrer" data-testid="cp-iroom-open">Open the meeting</a>
+          <a className="cp-send" href={url} target="_blank" rel="noopener noreferrer" data-testid="cp-iroom-open">Open the meeting</a>
           <span className="cp-muted">It opens in Zoom, in a new tab.</span>
         </p>
       )}
       {j.status === 'starting' && !stalled && <p aria-live="polite" data-testid="cp-iroom-starting">{j.reason}</p>}
-      {(j.status === 'withheld' || stalled) && (
+      {(j.status === 'withheld' || stalled || badLink) && (
         <div role="alert" className="cp-iroom-alert" data-testid="cp-iroom-withheld">
-          <p>{stalled ? 'The recording is taking longer than usual to set up.' : j.reason}</p>
+          <p>{stalled ? 'The recording is taking longer than usual to set up.' : badLink ? BAD_LINK : j.reason}</p>
           <button type="button" className="cp-ghost" onClick={onRetry} data-testid="cp-iroom-retry">Try again</button>
         </div>
       )}

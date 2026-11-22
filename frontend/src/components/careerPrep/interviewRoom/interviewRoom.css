@@ -11,7 +11,8 @@
 @keyframes cp-iroom-blink{50%{opacity:.25}}
 @media (prefers-reduced-motion:reduce){.cp-room .cp-iroom-rec i{animation:none}}
 .cp-room .cp-iroom-stage{flex:1;display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px;padding:16px;min-height:0;overflow:auto;background:var(--cp-sunk)}
-.cp-room .cp-iroom-main{display:flex;flex-direction:column;gap:12px;min-width:0;max-width:760px;margin:0 auto;width:100%}
+/* The main column fills the stage beside the side panel (the design's tiles area), like the employer room; no centered gap. */
+.cp-room .cp-iroom-main{display:flex;flex-direction:column;gap:12px;min-width:0;width:100%}
 .cp-room .cp-iroom-card{padding:20px 22px;border:1px solid var(--line);border-radius:10px;background:var(--bg-elevated);display:flex;flex-direction:column;gap:10px}
 .cp-room .cp-iroom-card h2{font-size:1.25rem}
 .cp-room .cp-iroom-card p{margin:0}

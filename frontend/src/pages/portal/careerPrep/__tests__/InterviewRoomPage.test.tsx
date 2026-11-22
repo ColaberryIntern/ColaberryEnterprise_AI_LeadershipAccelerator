@@ -6,7 +6,7 @@ import InterviewRoomPage from '../InterviewRoomPage';
 import { useCareerPrepFlag } from '../../../../components/careerPrep/careerPrepFlag';
 import { decideRoomApi, fetchRoomApi, roomAnswer, type RoomData } from '../../../../components/careerPrep/interviewRoom/interviewRoomApi';
 import { MAX_POLLS, POLL_MS } from '../../../../components/careerPrep/interviewRoom/useInterviewRoom';
-import { CONSENT_COPY } from '../../../../components/careerPrep/interviewRoom/RoomConsent';
+import { CONSENT_COPY, safeMeetingUrl } from '../../../../components/careerPrep/interviewRoom/RoomConsent';
 import { fetchPlacementInterviewsApi } from '../../../../components/careerPrep/interviewsApi';
 import { fetchPrepDashboard } from '../../../../components/careerPrep/careerPrepApi';
 
@@ -140,6 +140,19 @@ describe('deciding', () => {
     await mount();
     expect($('cp-iroom-withheld')?.textContent).toMatch(/A recruiter is checking it/);
     expect($('cp-iroom-open')).toBeNull();
+  });
+  it('a ready answer whose link is not https offers no link (the employer page\'s rule): the alert and Try again', async () => {
+    for (const bad of ['javascript:alert(1)', 'http://zoom.example/j/1', '//zoom.example/j/1', '']) {
+      (fetchRoomApi as jest.Mock).mockResolvedValue({ kind: 'ok', room: room({ yourDecision: 'consent', join: { status: 'ready', url: bad, reason: null } }) });
+      await mount();
+      expect($('cp-iroom-open')).toBeNull();
+      expect($('cp-iroom-withheld')?.textContent).toMatch(/could not be checked/);
+      expect(host.innerHTML).not.toContain('javascript:');
+      act(() => root.unmount()); host.remove();
+    }
+    await mount(); // afterEach unmounts this one
+    expect(safeMeetingUrl(ZOOM)).toBe(ZOOM);
+    expect(safeMeetingUrl(null)).toBeNull();
   });
   it(`'starting' re-reads every ${POLL_MS / 1000} s at most ${MAX_POLLS} times, then stops and offers Try again`, async () => {
     jest.useFakeTimers();
