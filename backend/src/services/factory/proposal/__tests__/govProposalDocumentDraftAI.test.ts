@@ -3,7 +3,31 @@
  * sanitizeProposalHtml is the XSS rail: it reduces the HTML to an allowlist of structural tags with NO attributes,
  * dropping <script>/<style>/<iframe> and their contents entirely. generateProposalDocumentDraftAI FAILS SOFT.
  */
-import { sanitizeProposalHtml, generateProposalDocumentDraftAI } from '../govProposalDocumentDraftAI';
+import { sanitizeProposalHtml, generateProposalDocumentDraftAI, batchRequirements } from '../govProposalDocumentDraftAI';
+
+describe('batchRequirements — chunk large docs so each model call fits the token budget', () => {
+  const reqs = (n: number) => Array.from({ length: n }, (_, i) => ({ canonicalReqId: `REQ-${i + 1}`, statement: `s${i + 1}` }));
+  it('splits into order-preserving batches of at most `size`', () => {
+    const out = batchRequirements(reqs(25), 12);
+    expect(out.map((b) => b.length)).toEqual([12, 12, 1]);
+    expect(out[0][0].canonicalReqId).toBe('REQ-1');
+    expect(out[2][0].canonicalReqId).toBe('REQ-25'); // order preserved across batches
+  });
+  it('a set at or below the batch size is a single batch (small docs keep one call)', () => {
+    expect(batchRequirements(reqs(8), 12)).toHaveLength(1);
+    expect(batchRequirements(reqs(12), 12)).toHaveLength(1);
+  });
+  it('157 requirements (the OLMS technical doc) batch into 14 calls, none over the size', () => {
+    const out = batchRequirements(reqs(157), 12);
+    expect(out).toHaveLength(14);
+    expect(out.every((b) => b.length <= 12)).toBe(true);
+    expect(out.reduce((a, b) => a + b.length, 0)).toBe(157); // every requirement is covered
+  });
+  it('an empty set yields no batches; size is clamped to at least 1', () => {
+    expect(batchRequirements([], 12)).toEqual([]);
+    expect(batchRequirements(reqs(3), 0)).toHaveLength(3);
+  });
+});
 
 describe('sanitizeProposalHtml — the XSS rail', () => {
   it('removes <script>/<style>/<iframe> and their contents entirely', () => {
