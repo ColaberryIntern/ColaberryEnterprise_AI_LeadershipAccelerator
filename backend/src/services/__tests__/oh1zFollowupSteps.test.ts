@@ -18,7 +18,7 @@ jest.mock('../openHouseCountdown', () => ({ ...jest.requireActual('../openHouseC
 jest.mock('../campaignMembership', () => ({ admitToCampaign: jest.fn(async () => ({ admitted: true, moved_from: [] })) }));
 
 import { followupStepCopy, screenFollowupCopy, PORTAL_PLANS_URL, OPEN_HOUSE_SIGNUP_URL } from '../openHouseFollowupCopy';
-import { bookOpenHouseFollowups, followupAiNotes, hasPaidMembership, PAID_MEMBER_SQL, FOLLOWUP_PEOPLE_SQL } from '../openHouseFollowup';
+import { bookOpenHouseFollowups, followupAiNotes, hasPaidMembership, PAID_MEMBER_SQL, FOLLOWUP_PEOPLE_SQL, HELD_BY_PRECEDENCE_SQL } from '../openHouseFollowup';
 import { addFollowupSteps, OH1Z_STEPS } from '../openHouseFollowupUpgrade';
 import { PORTAL_TODAY_URL } from '../openHouseCountdown';
 
@@ -94,11 +94,11 @@ describe('adding the steps to the live sequence', () => {
   });
 });
 
-function db(people: any[], nextRegs: any[] = []) {
+function db(people: any[], nextRegs: any[] = [], sessionDate = '2026-12-03') {
   query.mockImplementation(async (sql: string) => {
     if (/FROM campaigns/.test(sql)) return [{ id: 'camp-f', status: 'active', sequence_id: 'seq-f', settings: { replay_urls: {} } }];
     if (/FROM follow_up_sequences/.test(sql)) return [{ steps: addFollowupSteps(ALI_STEPS).steps }];
-    if (/FROM live_sessions WHERE id = :sid/.test(sql)) return [{ id: 'sess-1', title: 'Open House', session_date: '2026-12-03', start_time: '18:30', end_time: '19:30', status: 'completed', open_house_event_id: 'ev-1' }];
+    if (/FROM live_sessions WHERE id = :sid/.test(sql)) return [{ id: 'sess-1', title: 'Open House', session_date: sessionDate, start_time: '18:30', end_time: '19:30', status: 'completed', open_house_event_id: 'ev-1' }];
     if (/session_date > CAST/.test(sql)) return [{ d: '2026-12-17', start_time: '18:30', open_house_event_id: 'ev-2' }];
     if (/FROM open_house_registrations WHERE event_id/.test(sql)) return nextRegs;
     if (sql === FOLLOWUP_PEOPLE_SQL) return people;
@@ -132,6 +132,44 @@ describe('booking the five-step follow-up', () => {
     await bookOpenHouseFollowups('sess-1', { now: AFTER, log: quiet });
     expect(createEmail.mock.calls.map((c) => c[0].metadata.copy_key)).toEqual(['catch_up']);
     expect(findOrCreate.mock.calls[0][0].defaults.total_steps).toBe(1);
+  });
+});
+
+describe('booking an older Open House (Nov 19, booked Nov 22 to start Nov 23)', () => {
+  const NOW = new Date('2026-11-22T23:00:00Z'); // Sunday evening, long past Nov 20's morning-after
+  const START = new Date('2026-11-23T16:00:00Z'); // Monday 10:00 AM CST
+
+  it('day 0 is the start given, and every later step counts from it', async () => {
+    db([{ email: 'a@x.io', track: 'attended', lead_id: 1, name: 'Ana' }], [], '2026-11-19');
+    await bookOpenHouseFollowups('sess-1', { now: NOW, startAt: START, log: quiet });
+    const rows = createEmail.mock.calls.map((c) => c[0]);
+    expect(rows.map((x) => x.scheduled_for.toISOString())).toEqual([
+      '2026-11-23T16:00:00.000Z', '2026-11-26T16:00:00.000Z', '2026-11-30T16:00:00.000Z']);
+  });
+
+  it('a start already in the past is ignored (no back-dated sends)', async () => {
+    db([{ email: 'a@x.io', track: 'attended', lead_id: 1, name: 'Ana' }], [], '2026-11-19');
+    await bookOpenHouseFollowups('sess-1', { now: NOW, startAt: new Date('2026-11-20T16:00:00Z'), log: quiet });
+    expect(createEmail.mock.calls[0][0].scheduled_for.getTime()).toBe(NOW.getTime());
+  });
+
+  it('never moves someone out of a campaign that takes precedence (a countdown to Dec 3)', async () => {
+    db([{ email: 'a@x.io', track: 'attended', lead_id: 1, name: 'Ana' }, { email: 'b@x.io', track: 'missed', lead_id: 2, name: 'Ben' }], [], '2026-11-19');
+    const base = query.getMockImplementation()!;
+    query.mockImplementation(async (sql: string, o: any) => (sql === HELD_BY_PRECEDENCE_SQL ? (o.replacements.leadId === 2 ? [{ '?column?': 1 }] : []) : base(sql, o)));
+    const r = await bookOpenHouseFollowups('sess-1', { now: NOW, startAt: START, log: quiet });
+    expect(r).toMatchObject({ booked: 1, held_by_other: 1 });
+    expect(createEmail.mock.calls.every((c) => c[0].lead_id === 1)).toBe(true);
+    expect(HELD_BY_PRECEDENCE_SQL).toMatch(/takes_precedence'\) = 'true'/);
+    expect(HELD_BY_PRECEDENCE_SQL).toMatch(/cl\.campaign_id <> :campaignId/);
+  });
+
+  it('a dry run counts what it would book and writes nothing', async () => {
+    db([{ email: 'a@x.io', track: 'attended', lead_id: 1, name: 'Ana' }, { email: 'b@x.io', track: 'missed', lead_id: 2, name: 'Ben' }], [], '2026-11-19');
+    const r = await bookOpenHouseFollowups('sess-1', { now: NOW, startAt: START, dryRun: true, log: quiet });
+    expect(r).toMatchObject({ booked: 2, rows: { thanks: 1, enroll: 1, last_call: 1, catch_up: 1, invite: 1 } });
+    expect(createEmail).not.toHaveBeenCalled();
+    expect(findOrCreate).not.toHaveBeenCalled();
   });
 });
 

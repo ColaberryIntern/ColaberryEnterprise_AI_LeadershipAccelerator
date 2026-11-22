@@ -131,10 +131,24 @@ async function nextOpenHouseAfter(sessionDate: string): Promise<{ when_label: st
 export interface FollowupBookResult {
   outcome: 'booked' | 'no_campaign' | 'not_active' | 'no_session' | 'not_open_house' | 'not_ended';
   attended: number; missed: number; booked: number; no_lead: number; screened_out: number; errors: number;
+  /** OH1z: in a running campaign that takes precedence (a countdown to the next Open House, payment or class readiness); left there. */
+  held_by_other: number;
+  /** Rows booked (or, on a dry run, that would be), by step copy_key. */
+  rows: Record<string, number>;
 }
 
 const empty = (outcome: FollowupBookResult['outcome']): FollowupBookResult =>
-  ({ outcome, attended: 0, missed: 0, booked: 0, no_lead: 0, screened_out: 0, errors: 0 });
+  ({ outcome, attended: 0, missed: 0, booked: 0, no_lead: 0, screened_out: 0, errors: 0, held_by_other: 0, rows: {} });
+
+/**
+ * OH1z: a running membership in another campaign that takes precedence. The follow-up never moves
+ * someone out of one: a Nov 19 registrant already counting down to Dec 3 keeps their Dec 3 reminders.
+ */
+export const HELD_BY_PRECEDENCE_SQL = `
+SELECT 1 FROM campaign_leads cl JOIN campaigns c ON c.id = cl.campaign_id
+ WHERE cl.lead_id = :leadId AND cl.campaign_id <> :campaignId AND cl.status IN ('enrolled', 'active')
+   AND c.status = 'active' AND c.archived_at IS NULL AND (c.settings->>'takes_precedence') = 'true'
+ LIMIT 1`;
 
 /**
  * OH1w: which of the follow-up sequence's steps this person gets. A sequence with audience tags
@@ -233,7 +247,12 @@ export async function hasPaidMembership(email: string): Promise<boolean> {
 }
 
 /** Book the follow-ups for one Open House session (or one person in it). Never throws for a single person. */
-export async function bookOpenHouseFollowups(sessionId: string, opts: { now?: Date; log?: Log; leadId?: number } = {}): Promise<FollowupBookResult> {
+/**
+ * opts.startAt (OH1z): the day-0 send time, instead of 10:00 CT the morning after. For booking an
+ * Open House whose morning-after has passed (Nov 19, booked on Nov 22 to start Nov 23).
+ * opts.dryRun: compute everything, write nothing; result.rows says what would be booked.
+ */
+export async function bookOpenHouseFollowups(sessionId: string, opts: { now?: Date; log?: Log; leadId?: number; startAt?: Date; dryRun?: boolean } = {}): Promise<FollowupBookResult> {
   const now = opts.now ?? new Date();
   const log = opts.log ?? defaultLog;
   const campaign = await findFollowupCampaign();
@@ -252,7 +271,7 @@ export async function bookOpenHouseFollowups(sessionId: string, opts: { now?: Da
   );
   const replayUrl = String(campaign.settings?.replay_urls?.[sessionId] || '') || null;
   const next = await nextOpenHouseAfter(s.session_date);
-  const sendAt = followupSendAt(s.session_date, now);
+  const sendAt = opts.startAt && opts.startAt.getTime() > now.getTime() ? opts.startAt : followupSendAt(s.session_date, now);
   const eventDate = longSessionDate(s.session_date);
   const result = empty('booked');
   const { ScheduledEmail, CampaignLead } = await import('../models');
@@ -283,6 +302,13 @@ export async function bookOpenHouseFollowups(sessionId: string, opts: { now?: Da
       if (bad.length) {
         result.screened_out += 1;
         log('followup_screened_out', { outcome: 'failure', error_class: 'ContractViolation', context: { lead_id: p.lead_id, track: p.track, problems: bad.map((x) => `${x.key || 'first'}: ${x.problems.join('; ')}`) } });
+        continue;
+      }
+      const held = await sequelize.query(HELD_BY_PRECEDENCE_SQL, { replacements: { leadId: p.lead_id, campaignId: campaign.id }, type: QueryTypes.SELECT, transaction: t });
+      if (held.length) { result.held_by_other += 1; continue; }
+      if (opts.dryRun) {
+        result.booked += 1;
+        for (const x of planned) result.rows[x.key || 'first'] = (result.rows[x.key || 'first'] || 0) + 1;
         continue;
       }
       try {
@@ -320,6 +346,7 @@ export async function bookOpenHouseFollowups(sessionId: string, opts: { now?: Da
           if (!created && (cl as any).status === 'completed') await cl.update({ status: 'active', completed_at: null } as any, { transaction: sp });
         });
         result.booked += 1;
+        for (const x of planned) result.rows[x.key || 'first'] = (result.rows[x.key || 'first'] || 0) + 1;
       } catch (err: any) {
         result.errors += 1;
         log('followup_book_failed', { outcome: 'failure', error_class: err?.name || 'DatabaseError', context: { lead_id: p.lead_id, message: err?.message } });
