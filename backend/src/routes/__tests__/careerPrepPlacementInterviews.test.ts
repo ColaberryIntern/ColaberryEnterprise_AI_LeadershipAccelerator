@@ -128,7 +128,7 @@ describe('GET /interviews/placement: what the sheet gets', () => {
     // T24: the statement may COMPARE the meeting id (is the recording state for the meeting the interview was held in?),
     // but it never reads the link and never selects the meeting id as a column.
     expect(db.sql.join('\n')).not.toMatch(/room_url/);
-    expect(db.sql.join('\n')).not.toMatch(/(?:SELECT|,)\s*i\.room_provider_id\s*(?:,|FROM\b|AS\b)/);
+    for (const s of db.sql) expect(providerIdLeaks(s)).toEqual([]);
     expect(res.body.kpis).toEqual({ upcoming: 1, waiting: 1, recruiter: 1, held: 2, scored: 1 });
     expect(res.body.interviews.map((i: { id: string }) => i.id)).toEqual(['iv-1', 'iv-2', 'iv-3', 'iv-5', 'iv-4', 'iv-6']);
     const [booked, waiting, recruiter, cancelled, held, unrecorded] = res.body.interviews;
@@ -173,6 +173,47 @@ describe('GET /interviews/placement: what the sheet gets', () => {
     expect(res.body.kpis.upcoming).toBe(0);
     const beta = res.body.interviews.find((i: { id: string }) => i.id === 'iv-2');
     expect(beta.history.at(-1)).toEqual({ at: new Date(NOW - 0.5 * H).toISOString(), label: 'Passed to your recruiter' });
+  });
+});
+
+/**
+ * T24 fold (6): the select list's items (top level, between SELECT and FROM) that could hand the meeting id out. An item
+ * may only COMPARE it, as `i.room_provider_id IS NOT NULL` or `= i.room_provider_id` inside a named boolean; anything else
+ * (selected bare or unqualified, cast, COALESCE'd, concatenated, or `*` / `i.*`) is a leak.
+ */
+function providerIdLeaks(sql: string): string[] {
+  const at = sql.search(/\bSELECT\b/);
+  if (at < 0) return [];
+  const items: string[] = []; let depth = 0; let cur = '';
+  for (let k = at + 6; k < sql.length; k += 1) {
+    const ch = sql[k];
+    if (depth === 0 && /^\s+FROM\b/.test(sql.slice(k, k + 7)) && /\s/.test(ch)) break;
+    if (ch === '(') depth += 1;
+    if (ch === ')') depth -= 1;
+    if (ch === ',' && depth === 0) { items.push(cur.trim()); cur = ''; } else cur += ch;
+  }
+  items.push(cur.trim());
+  return items.filter((it) => /(^|[\s(,.])\*/.test(it)
+    || (/room_provider_id/.test(it) && (!/\)\s+AS\s+\w+$/.test(it)
+      || /room_provider_id(?:\s*::|\s*\|\|)|(?:COALESCE|CAST|CONCAT|NULLIF|GREATEST|LEAST)\s*\([^)]*room_provider_id/i.test(it)
+      || /room_provider_id/.test(it.replace(/\bi\.room_provider_id IS NOT NULL\b|= i\.room_provider_id\b(?!\s*::)/g, '')))));
+}
+
+describe('the list query never hands out the meeting id (T24 guard)', () => {
+  it('passes the real statement and catches every leak shape', () => {
+    const ok = "SELECT i.id, (i.recording_meeting_id IS NOT NULL AND i.recording_meeting_id = i.room_provider_id) AS rec_current, (i.room_provider_id IS NOT NULL AND x = 1) AS consented FROM placement_interviews i";
+    expect(providerIdLeaks(ok)).toEqual([]);
+    for (const bad of [
+      'SELECT i.id, i.room_provider_id FROM placement_interviews i',
+      'SELECT i.id, room_provider_id FROM placement_interviews i',
+      'SELECT i.id, i.room_provider_id AS m FROM placement_interviews i',
+      'SELECT i.id, i.room_provider_id::text AS m FROM placement_interviews i',
+      "SELECT i.id, COALESCE(i.room_provider_id, '') AS m FROM placement_interviews i",
+      "SELECT i.id, (i.room_provider_id || '') AS m FROM placement_interviews i",
+      'SELECT i.id, (x = i.room_provider_id::text) AS m FROM placement_interviews i',
+      'SELECT i.*, c.id AS prep_id FROM placement_interviews i',
+      'SELECT * FROM placement_interviews i',
+    ]) expect(providerIdLeaks(bad)).not.toEqual([]);
   });
 });
 

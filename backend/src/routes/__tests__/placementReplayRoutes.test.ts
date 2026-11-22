@@ -34,7 +34,7 @@ import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import { env } from '../../config/env';
 import { roomPageUrl } from '../../services/placement/roomLink';
-import { recordingPath } from '../../services/placement/replayView';
+import { recordingPath } from '../../services/placement/replayLink';
 import { streamStoredRecording } from '../../services/placement/replayFiles';
 import { __resetZoomTokenCacheForTests } from '../../services/zoom/zoomApiClient';
 import { expectNoRoomUrl, SENTINEL_PROVIDER_URL } from '../../services/placement/__tests__/helpers/noRoomUrl';
@@ -64,7 +64,7 @@ beforeAll(async () => {
   const { createReplayRouters } = await import('../placementReplayRoutes');
   const make = (opts: Parameters<typeof createReplayRouters>[0]) => { const r = createReplayRouters(opts); const a = express(); a.use(express.json()); a.use(r.candidate, r.public); return a; };
   shared = make({ now: () => clock });
-  timeoutApp = make({ now: () => clock, stream: (rec) => streamStoredRecording(rec, 50) });
+  timeoutApp = make({ now: () => clock, stream: (rec, o) => streamStoredRecording(rec, { ...o, connectMs: 50 }) });
 }, 60_000);
 const app = () => { if (!shared) throw new Error('the router did not load'); return shared; };
 
@@ -104,7 +104,7 @@ describe('candidate replay', () => {
     expect(r.headers['cache-control']).toBe('no-store');
     expect(CandidateReplayResponse.safeParse(r.body).success).toBe(true);
     expect(r.body.replay).toMatchObject({ status: 'scored', score: 81, questions: [QUESTION], note: 'Scored from the audio and the words only, never the video.' });
-    expect(r.body.replay.recording).toMatch(new RegExp(`^/api/public/replays/${ID}/recording\\?x=\\d+&t=`));
+    expect(r.body.replay.recording).toMatch(new RegExp(`^/api/public/replays/${ID}/recording\\?p=c&x=\\d+&t=`)); // signed for the candidate only
     expectNoRoomUrl(r.body);
     expect(JSON.stringify(r.body)).not.toContain('zoom.example');
   });
@@ -136,6 +136,8 @@ describe('employer replay (the signed room link)', () => {
     expect(EmployerReplayResponse.safeParse(r.body).success).toBe(true);
     expect(r.body.replay).toMatchObject({ status: 'recorded', note: 'Recorded. The recording is ready.', notes: [{ body: 'Strong on pipelines.' }] });
     for (const k of ['score', 'questions', 'turns', 'scores', 'pace', 'fillers', 'content']) expect(JSON.stringify(r.body)).not.toContain(`"${k}"`);
+    expect(JSON.stringify(r.body)).not.toContain('zoom.example'); // neither the meeting link nor Zoom's file location
+    expect(r.body.replay.recording).toContain(`?p=e&e=${END.getTime()}&x=`);
     expect(mockRows.asked).toEqual(['employer']);
     expectNoRoomUrl(r.body);
   });
@@ -146,31 +148,63 @@ describe('employer replay (the signed room link)', () => {
 });
 
 describe('the recording stream', () => {
-  const path = (id = ID, now = clock) => recordingPath(id, now);
+  const cand = (id = ID, now = clock) => recordingPath(id, { kind: 'candidate' }, now);
+  const emp = (id = ID, now = clock, e = END.getTime()) => recordingPath(id, { kind: 'employer', e }, now);
+  const bytes = (req: request.Test) => req.buffer(true).parse((res, cb) => { const b: Buffer[] = []; res.on('data', (d: Buffer) => b.push(d)); res.on('end', () => cb(null, Buffer.concat(b))); });
   it('401 for a bad signature, another interview, or after one hour; nothing read', async () => {
-    expect((await request(app()).get(`/api/public/replays/${ID}/recording?x=1&t=${'A'.repeat(43)}`)).status).toBe(401);
-    expect((await request(app()).get(path(OTHER).replace(OTHER, ID))).status).toBe(401);
-    const old = path(ID, new Date(clock.getTime() - 61 * 60_000));
+    expect((await request(app()).get(`/api/public/replays/${ID}/recording?p=c&x=1&t=${'A'.repeat(43)}`)).status).toBe(401);
+    expect((await request(app()).get(cand(OTHER).replace(OTHER, ID))).status).toBe(401);
+    const old = cand(ID, new Date(clock.getTime() - 61 * 60_000));
     expect((await request(app()).get(old)).body.reason).toBe('expired');
     expect(mockRows.asked).toEqual([]);
   });
+  it('bound to ONE party: a candidate link cannot be used as an employer link, nor the reverse, nor for another booking', async () => {
+    const c = cand(); const e = emp();
+    const asEmployer = c.replace('p=c', `p=e&e=${END.getTime()}`);
+    const asCandidate = e.replace(`p=e&e=${END.getTime()}`, 'p=c');
+    const otherBooking = e.replace(`e=${END.getTime()}`, `e=${END.getTime() + 60_000}`);
+    for (const bad of [asEmployer, asCandidate, otherBooking]) expect((await request(app()).get(bad)).status).toBe(401);
+    expect((await bytes(request(app()).get(c))).status).toBe(200);
+    expect((await bytes(request(app()).get(e))).status).toBe(200);
+    expect(mockRows.asked.filter((a) => a === 'recording')).toHaveLength(2);
+  });
+  it('an employer\'s link also ends with their room link (end + 2 h), and a moved booking is 410', async () => {
+    clock = new Date(END.getTime() + 119 * 60_000);
+    const e = emp();
+    clock = new Date(END.getTime() + 121 * 60_000);
+    expect((await request(app()).get(e)).body.reason).toBe('expired');
+    clock = new Date(END.getTime() + 30 * 60_000);
+    mockRows.list = [row({ starts_at: new Date(START.getTime() + 60 * 60_000) })];
+    expect((await request(app()).get(emp())).status).toBe(410);
+  });
   it('200 video/mp4: the bytes come through our server from Zoom\'s file (the location never leaves)', async () => {
-    const r = await request(app()).get(path()).buffer(true).parse((res, cb) => { const b: Buffer[] = []; res.on('data', (d: Buffer) => b.push(d)); res.on('end', () => cb(null, Buffer.concat(b))); });
+    const r = await bytes(request(app()).get(cand()));
     expect(r.status).toBe(200);
-    expect(r.headers['content-type']).toBe('video/mp4');
+    expect([r.headers['content-type'], r.headers['accept-ranges']]).toEqual(['video/mp4', 'bytes']);
     expect(String(r.body)).toBe('MP4!');
     expect(zoom.calls.some((c) => c.url === MP4_URL)).toBe(true);
   });
-  it('no recording: 404; Zoom failing: 502; Zoom not answering in time: 502 (bounded)', async () => {
+  it('HTTP Range: forwarded to Zoom, answered 206 with Content-Range; a malformed Range is not forwarded', async () => {
+    const r = await bytes(request(app()).get(cand()).set('Range', 'bytes=1-2'));
+    expect(r.status).toBe(206);
+    expect([r.headers['content-range'], r.headers['accept-ranges'], String(r.body)]).toEqual(['bytes 1-2/4', 'bytes', 'P4']);
+    expect(zoom.calls.find((c) => c.url === MP4_URL)?.range).toBe('bytes=1-2');
+    const bad = await bytes(request(app()).get(cand()).set('Range', 'bytes=1-2, 3-4; x'));
+    expect(bad.status).toBe(200);
+    expect(zoom.calls.filter((c) => c.url === MP4_URL).at(-1)?.range).toBeUndefined();
+  });
+  it('no recording: 404; Zoom failing: 502; Zoom not answering in time: 502 and the Zoom request is ABORTED', async () => {
     mockRows.recording = null;
-    expect((await request(app()).get(path())).status).toBe(404);
+    expect((await request(app()).get(cand())).status).toBe(404);
     mockRows.recording = { downloadUrl: MP4_URL, sizeBytes: 4, providerFileId: 'f-mp4' };
     zoom = makeZoom({ detail: 'down', mp4: true });
     global.fetch = zoom.fetch as unknown as typeof fetch;
-    expect((await request(app()).get(path())).status).toBe(502);
+    expect((await request(app()).get(cand())).status).toBe(502);
     zoom = makeZoom({ detail: 'ok', mp4: true, hang: true });
     global.fetch = zoom.fetch as unknown as typeof fetch;
-    expect((await request(timeoutApp!).get(path())).status).toBe(502);
+    expect((await request(timeoutApp!).get(cand())).status).toBe(502);
     expect(String((console.error as jest.Mock).mock.calls.at(-1)?.[0])).toContain('"error_class":"TimeoutError"');
+    expect(zoom.signals).toHaveLength(1);
+    expect(zoom.signals[0]?.aborted).toBe(true);
   });
 });

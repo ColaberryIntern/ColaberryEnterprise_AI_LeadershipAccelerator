@@ -10,6 +10,7 @@ import type { StoredRecording } from '../../replayFiles';
 
 export const MEETING = '81234567890';
 export const MP4_URL = 'https://zoom.example/rec/download/MP4-SECRET';
+export const OTHER_MP4_URL = 'https://zoom.example/rec/download/OTHER-INSTANCE';
 export const VTT_URL = 'https://zoom.example/rec/download/VTT-SECRET';
 
 const cue = (n: number, from: string, to: string, text: string) => `${n}\n${from} --> ${to}\n${text}`;
@@ -24,7 +25,7 @@ export const VTT = ['WEBVTT', '',
   cue(7, '00:00:49.000', '00:00:50.000', 'Ann Lee: Thank you.'), ''].join('\n');
 
 export interface ZoomScript { detail: 'ok' | 'missing' | 'scope' | 'down' | 'no_transcript'; mp4: boolean; hang?: boolean }
-export interface ZoomCall { method: string; url: string }
+export interface ZoomCall { method: string; url: string; range?: string }
 
 export function makeZoom(script: ZoomScript = { detail: 'ok', mp4: true }) {
   const calls: ZoomCall[] = [];
@@ -33,22 +34,36 @@ export function makeZoom(script: ZoomScript = { detail: 'ok', mp4: true }) {
     ...(script.mp4 ? [{ id: 'f-mp4', file_type: 'MP4', file_size: 4, recording_type: 'active_speaker', download_url: MP4_URL }] : []),
     ...(script.detail === 'no_transcript' ? [] : [{ id: 'f-vtt', file_type: 'TRANSCRIPT', file_extension: 'VTT', download_url: VTT_URL }]),
   ];
-  const fetch = jest.fn((url: string, init: { method?: string } = {}): Promise<Response> => {
-    calls.push({ method: init.method ?? 'GET', url });
+  const signals: Array<AbortSignal | undefined> = [];
+  const fetch = jest.fn((url: string, init: { method?: string; headers?: Record<string, string>; signal?: AbortSignal } = {}): Promise<Response> => {
+    calls.push({ method: init.method ?? 'GET', url, range: init.headers?.Range });
     if (url.startsWith('https://zoom.us/oauth/token')) return json({ access_token: 'tok-1', expires_in: 3600, scope: 'cloud_recording:read:list_user_recordings:admin' });
     if (script.detail === 'scope') return json({ code: 4711, message: 'Invalid access token, does not contain scopes:[cloud_recording:read:list_recording_files:admin].' }, 400);
     if (script.detail === 'down') return json({ message: 'upstream' }, 503);
     if (url.includes(`/meetings/${MEETING}/recordings`)) {
       return script.detail === 'missing' ? json({ code: 3301, message: 'This recording does not exist.' }, 404) : json({ uuid: 'u-1', recording_files: files() });
     }
+    // The host-wide listing holds TWO recordings of this meeting, the other one first: a replay must never use it.
     if (url.includes('/users/') && url.includes('/recordings')) {
-      return json({ meetings: script.detail === 'missing' ? [] : [{ id: Number(MEETING), uuid: 'u-1', topic: 'Interview', recording_files: files() }] });
+      return json({ meetings: [{ id: Number(MEETING), uuid: 'u-0', topic: 'Interview', recording_files: [{ id: 'f-old', file_type: 'MP4', file_size: 9, download_url: OTHER_MP4_URL }] },
+        { id: Number(MEETING), uuid: 'u-1', topic: 'Interview', recording_files: files() }] });
     }
     if (url === VTT_URL) return Promise.resolve(new Response(VTT, { status: 200 }));
-    if (url === MP4_URL) return script.hang ? new Promise<Response>(() => undefined) : Promise.resolve(new Response('MP4!', { status: 200 }));
+    if (url === MP4_URL) {
+      if (script.hang) {
+        // Like the real fetch: it never answers, but an abort rejects it (the signal is kept for the test to inspect).
+        return new Promise<Response>((_, reject) => { signals.push(init.signal); init.signal?.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' }))); });
+      }
+      const range = /^bytes=(\d+)-(\d+)$/.exec(init.headers?.Range ?? '');
+      if (range) {
+        const part = 'MP4!'.slice(Number(range[1]), Number(range[2]) + 1);
+        return Promise.resolve(new Response(part, { status: 206, headers: { 'content-range': `bytes ${range[1]}-${range[2]}/4`, 'content-length': String(part.length), 'accept-ranges': 'bytes' } }));
+      }
+      return Promise.resolve(new Response('MP4!', { status: 200, headers: { 'accept-ranges': 'bytes', 'content-length': '4' } }));
+    }
     return json({ message: `unexpected ${url}` }, 500);
   });
-  return { fetch, calls, script, zoomCalls: () => calls.filter((c) => !c.url.startsWith('https://zoom.us/oauth')) };
+  return { fetch, calls, signals, script, zoomCalls: () => calls.filter((c) => !c.url.startsWith('https://zoom.us/oauth')) };
 }
 
 export interface FakeIv {

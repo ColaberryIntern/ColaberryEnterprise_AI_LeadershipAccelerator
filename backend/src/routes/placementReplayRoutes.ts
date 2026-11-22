@@ -5,7 +5,9 @@ import { requireParticipant } from '../middlewares/participantAuth';
 import { requireCareerPrep } from './careerPrepRoutes';
 import { logFailure, sendValidated } from './campusRoutes';
 import { signedLink } from './placementRoomRoutes';
-import { candidateReplay, checkRecordingLink, employerReplay } from '../services/placement/replayView';
+import { candidateReplay, employerReplay } from '../services/placement/replayView';
+import { checkRecordingLink, type RecordingParty } from '../services/placement/replayLink';
+import { employerGuide } from '../services/placement/roomGuide';
 import { storedRecording } from '../services/placement/replayStore';
 import { roomProvider } from '../services/placement/roomProvider';
 
@@ -17,14 +19,16 @@ import { roomProvider } from '../services/placement/roomProvider';
  *   employer   GET /api/public/room/:interviewId/replay?e=&t=            the signed room link (checked FIRST, 401), then a
  *                                                                         limiter per link. Status, recording, their notes;
  *                                                                         NEVER the candidate's feedback (strict schema).
- *   recording  GET /api/public/replays/:interviewId/recording?x=&t=      the one-hour path the two answers above carry
- *                                                                         (signature first, 401), per-link limit, then the
- *                                                                         MP4 streamed from Zoom through our server.
+ *   recording  GET /api/public/replays/:interviewId/recording?p=c|p=e&e=&x=&t=   the one-hour path the two answers above
+ *                                                                         carry, signed for ONE party (replayLink.ts;
+ *                                                                         signature first, 401), per-link limit, then the
+ *                                                                         MP4 streamed from Zoom through our server
+ *                                                                         (byte Range forwarded: 206 + Content-Range).
  * No answer carries the meeting provider's link or Zoom's download location. Never cached.
  */
 const Id = z.object({ interviewId: z.string().uuid() }).strict();
 const NoQuery = z.object({}).strict();
-const RecQuery = z.object({ x: z.string().regex(/^\d{1,15}$/), t: z.string().regex(/^[A-Za-z0-9_-]{43}$/) }).strict();
+const RecQuery = z.object({ p: z.enum(['c', 'e']), e: z.string().regex(/^\d{1,15}$/).optional(), x: z.string().regex(/^\d{1,15}$/), t: z.string().regex(/^[A-Za-z0-9_-]{43}$/) }).strict();
 
 const iso = z.string().datetime();
 const Part = z.object({ score: z.number().int().min(0).max(100), value: z.string(), target: z.string() }).strict();
@@ -33,7 +37,7 @@ const Question = z.object({
   pace: Part.nullable(), fillers: Part.nullable(),
   content: z.object({ score: z.number().int().min(0).max(100), covered: z.number().int().min(0), of: z.number().int().positive() }).strict().nullable(),
 }).strict();
-const RecPath = z.string().regex(/^\/api\/public\/replays\/[0-9a-f-]{36}\/recording\?x=\d+&t=[A-Za-z0-9_-]{43}$/).nullable();
+const RecPath = z.string().regex(/^\/api\/public\/replays\/[0-9a-f-]{36}\/recording\?(?:p=c|p=e&e=\d+)&x=\d+&t=[A-Za-z0-9_-]{43}$/).nullable();
 const head = { interviewId: z.string().uuid(), company: z.string().nullable(), role: z.string().nullable(), startsAt: iso.nullable(), note: z.string(), recording: RecPath };
 export const CandidateReplayResponse = z.object({ replay: z.object({ ...head,
   status: z.enum(['not_held', 'not_recorded', 'waiting', 'scored', 'no_score', 'unavailable']), score: z.number().int().min(0).max(100).nullable(),
@@ -81,23 +85,36 @@ function signedRecording(now: () => Date): RequestHandler {
   return (req, res, next) => {
     res.set('Cache-Control', 'no-store');
     const q = RecQuery.safeParse(req.query);
-    const check = q.success ? checkRecordingLink({ i: String(req.params.interviewId ?? ''), x: q.data.x, t: q.data.t, now: now() }) : 'invalid';
-    if (check === 'ok') { next(); return; }
-    res.status(401).json({ error: check === 'expired' ? 'This recording link has expired. Open the replay again.' : 'This recording link is not valid.', reason: check });
+    const check = q.success ? checkRecordingLink({ i: String(req.params.interviewId ?? ''), p: q.data.p, e: q.data.e, x: q.data.x, t: q.data.t, now: now() }) : { status: 'invalid' as const };
+    if (check.status === 'ok') { res.locals.recordingParty = check.party; next(); return; }
+    res.status(401).json({ error: check.status === 'expired' ? 'This recording link has expired. Open the replay again.' : 'This recording link is not valid.', reason: check.status });
   };
 }
 
 export interface ReplayRouterOptions { now?: () => Date; makeStore?: () => Store; stream?: typeof roomProvider.streamRecording }
 
+/**
+ * The MP4 through our server. An employer's link also needs the booking it was signed for (moved = 410). A plain
+ * bytes Range is forwarded to Zoom; Zoom's 206 + Content-Range comes back as ours (Accept-Ranges says whether seeking
+ * works). The viewer leaving destroys the stream, which cancels Zoom's download.
+ */
 function recording(stream: typeof roomProvider.streamRecording): RequestHandler {
   return async (req: Request, res: Response) => {
     try {
-      const rec = await storedRecording(String(req.params.interviewId));
+      const id = String(req.params.interviewId);
+      const party = res.locals.recordingParty as RecordingParty;
+      if (party.kind === 'employer') {
+        const g = await employerGuide(id, party.e);
+        if (g.status !== 'ok') { res.status(g.status === 'not_found' ? 404 : 410).json({ error: 'This interview was moved or is not booked.', reason: g.status }); return; }
+      }
+      const rec = await storedRecording(id);
       if (!rec) { res.status(404).json({ error: 'There is no recording to play.' }); return; }
-      const body = await stream(rec);
-      res.status(200).set({ 'Content-Type': 'video/mp4', ...(rec.sizeBytes ? { 'Content-Length': String(rec.sizeBytes) } : {}) });
-      body.on('error', (err) => { logFailure('placement_replay_stream_broke', err); res.destroy(); });
-      body.pipe(res);
+      const range = typeof req.headers.range === 'string' ? req.headers.range : undefined;
+      const out = await stream(rec, { range });
+      res.status(out.status).set(out.headers);
+      res.on('close', () => { if (!out.body.destroyed) out.body.destroy(); });
+      out.body.on('error', (err) => { logFailure('placement_replay_stream_broke', err); res.destroy(); });
+      out.body.pipe(res);
     } catch (err) {
       logFailure('placement_replay_recording_failed', err);
       if (!res.headersSent) res.status(502).json({ error: 'Could not reach the recording. Try again in a moment.' });
@@ -115,8 +132,8 @@ export function createReplayRouters(opts: ReplayRouterOptions = {}): { candidate
   cand.get('/api/portal/career-prep/replays/:interviewId', requireParticipant, requireCareerPrep, candidateView);
   const pub = Router();
   pub.get('/api/public/room/:interviewId/replay', signedLink(now), limiter(60 * 1000, 60, 'room-replay', 'e'), employerView(now));
-  pub.get('/api/public/replays/:interviewId/recording', signedRecording(now), limiter(15 * 60 * 1000, 30, 'replay-recording', 'x'),
-    recording(opts.stream ?? ((rec) => roomProvider.streamRecording(rec))));
+  pub.get('/api/public/replays/:interviewId/recording', signedRecording(now), limiter(15 * 60 * 1000, 300, 'replay-recording', 'x'),
+    recording(opts.stream ?? ((rec, o) => roomProvider.streamRecording(rec, o))));
   return { candidate: cand, public: pub };
 }
 

@@ -9,7 +9,7 @@ import { __resetRecordingHostCache } from '../../zoomService';
 import { GAVE_UP_REASON, NO_TRANSCRIPT_REASON, NOTHING_REASON, runReplayPass, SCOPE_REASON } from '../replayJob';
 import { NO_SPEAKER } from '../replayScoring';
 import { BACKOFF_MINUTES, MAX_ATTEMPTS } from '../replayStore';
-import { fakeIv, makeObservations, makeStore, makeZoom, MEETING, MP4_URL, type FakeIv, type ZoomScript } from './helpers/fakeReplayZoom';
+import { fakeIv, makeObservations, makeStore, makeZoom, MEETING, MP4_URL, OTHER_MP4_URL, type FakeIv, type ZoomScript } from './helpers/fakeReplayZoom';
 
 /**
  * CP9.2 (kit F5 "replay"): the replay job on the REAL Zoom path (roomProvider -> replayFiles -> zoomTranscripts and
@@ -53,16 +53,23 @@ describe('a held, fully consented, recorded interview', () => {
     expect(qs[0].content).toEqual({ covered: 5, of: 5, score: 100 });
     expect(qs[1].fillers.value).toMatch(/^2 \(/); // "Um" and "you know", as the transcript shows them
     expect((r.scores as { score: number }).score).toBeGreaterThan(0);
-    expect(r.recording).toEqual({ downloadUrl: MP4_URL, sizeBytes: 4, providerFileId: 'f-mp4' });
+    expect(r.recording).toEqual({ downloadUrl: MP4_URL, sizeBytes: 4, providerFileId: 'f-mp4', recordingId: 'u-1' });
     expect([...t.obs.rows.values()].map((o) => [o.sourceRef, o.skill, o.source])).toEqual([
       [`replay:${fakeIv().id}:1`, 'pace_clarity', 'real_interview'], [`replay:${fakeIv().id}:1`, 'few_fillers', 'real_interview'],
       [`replay:${fakeIv().id}:2`, 'pace_clarity', 'real_interview'], [`replay:${fakeIv().id}:2`, 'few_fillers', 'real_interview']]);
-    // The real fetch path: the recording detail, the transcript download, and the host's recordings for the MP4.
+    // The real fetch path: ONE recording detail, its transcript download; the MP4 is that same recording's file.
     const urls = zoom.zoomCalls().map((c) => c.url);
-    expect(urls.some((u) => u.endsWith(`/meetings/${MEETING}/recordings`))).toBe(true);
+    expect(urls.filter((u) => u.endsWith(`/meetings/${MEETING}/recordings`))).toHaveLength(1);
     expect(urls.some((u) => u.includes('VTT-SECRET'))).toBe(true);
-    expect(urls.some((u) => /\/users\/.+\/recordings\?from=2026-11-20&to=2026-11-21/.test(u))).toBe(true);
     expect(urls.some((u) => u.includes('MP4-SECRET'))).toBe(false); // the video is never downloaded to be analyzed
+  });
+
+  it('two recordings of one meeting at Zoom: the MP4 is the one the transcript came from, never the host listing\'s first match', async () => {
+    const t = setup([fakeIv()]);
+    await t.run();
+    expect(t.replays.get(fakeIv().id)?.recording).toMatchObject({ downloadUrl: MP4_URL, recordingId: 'u-1' });
+    expect(JSON.stringify([...t.replays.values()])).not.toContain(OTHER_MP4_URL);
+    expect(zoom.zoomCalls().some((c) => c.url.includes('/users/'))).toBe(false);
   });
 
   it('the job run twice makes one replay and no new observations (and asks Zoom nothing the second time)', async () => {

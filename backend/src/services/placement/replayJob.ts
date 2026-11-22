@@ -1,5 +1,5 @@
 import { roomProvider } from './roomProvider';
-import { ReplayScopeError, type ReplayTranscript, type StoredRecording } from './replayFiles';
+import { ReplayScopeError, type ReplayFiles, type ReplayTranscript, type StoredRecording } from './replayFiles';
 import { replayObservationRows, scoreTranscript } from './replayScoring';
 import * as store from './replayStore';
 import { writeObservations } from '../careerPrep/observationWriter';
@@ -11,7 +11,7 @@ import type { ObservationRow } from '../careerPrep/observationAdapters';
  * fetch), fetch Zoom's transcript and recording through roomProvider, score the candidate's answers (replayScoring.ts)
  * and store ONE replay (interview_replays, interview_id UNIQUE). Never for an unconsented or partly consented interview.
  *
- * Order inside one attempt: claim (the lease) -> transcript -> recording file -> score -> observations (ON CONFLICT DO
+ * Order inside one attempt: claim (the lease) -> ONE Zoom recording (its transcript and its MP4) -> score -> observations (ON CONFLICT DO
  * NOTHING, so a retry after a crash writes nothing twice) -> finish (only the claiming attempt). Running the pass twice
  * therefore makes one replay and no new observations.
  *
@@ -32,8 +32,7 @@ export const NO_TRANSCRIPT_REASON = 'Zoom made no transcript of this recording, 
 export const GAVE_UP_REASON = 'Zoom could not be reached for this recording after many tries, so there is no replay.';
 
 export interface ReplayProvider {
-  transcript(meetingId: string): Promise<ReplayTranscript | null>;
-  recordingFile(meetingId: string, startsAt: Date): Promise<StoredRecording | null>;
+  replayFiles(meetingId: string): Promise<ReplayFiles>;
 }
 export interface ReplayDeps {
   provider?: ReplayProvider;
@@ -54,8 +53,7 @@ type Fetched = { kind: 'scope' } | { kind: 'error'; err: unknown } | { kind: 'ok
 
 async function fetchBoth(p: ReplayProvider, c: store.Claimed): Promise<Fetched> {
   try {
-    const transcript = await p.transcript(c.meetingId);
-    const recording = await p.recordingFile(c.meetingId, c.startsAt);
+    const { transcript, recording } = await p.replayFiles(c.meetingId);
     return { kind: 'ok', transcript, recording };
   } catch (err) {
     return err instanceof ReplayScopeError ? { kind: 'scope' } : { kind: 'error', err };

@@ -19,7 +19,7 @@ function heldInterview(now) {
 
 function replayView(iv) {
   return { replay: { interviewId: iv.id, company: iv.company, role: iv.role, startsAt: iv.startsAt, status: 'scored', note: iv.replay.note, score: 84,
-    recording: `/api/public/replays/${iv.id}/recording?x=1&t=${'A'.repeat(43)}`,
+    recording: `/api/public/replays/${iv.id}/recording?p=c&x=1&t=${'A'.repeat(43)}`,
     questions: [
       { n: 1, question: 'Tell me about a data pipeline you built and how you measured its impact.', answer: 'I built a pipeline that moved sales data from three systems into one warehouse every night, and the wait for reports dropped from two days to one hour.',
         at: 67, seconds: 20, pace: { score: 100, value: '117 wpm', target: '100 to 165 wpm' }, fillers: { score: 100, value: '0 (0%)', target: 'under 3% of words' }, content: { score: 100, covered: 5, of: 5 } },

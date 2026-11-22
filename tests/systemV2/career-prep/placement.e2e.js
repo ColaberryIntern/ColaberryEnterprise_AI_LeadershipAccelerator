@@ -195,7 +195,7 @@ async function flowReplay(browser, viewport) {
       check(name, /Held and scored/.test(s.kpis) && /1 scored/.test(s.kpis) && s.row.trim() === 'Score 84' && !s.bookedScore
         && /Replay: score 84/.test(s.replay) && /never the video/.test(s.replay) && /Question 1: Tell me about a data pipeline/.test(s.replay)
         && /Pace 100: 117 wpm/.test(s.replay) && /Covered the question 50: 2 of 4 key words/.test(s.replay) && s.cards === 2
-        && /^\/api\/public\/replays\/pi-8\/recording\?x=/.test(s.video) && !s.zoom && !s.words, JSON.stringify({ ...s, replay: s.replay.slice(0, 120) }));
+        && /^\/api\/public\/replays\/pi-8\/recording\?p=c&x=/.test(s.video) && !s.zoom && !s.words, JSON.stringify({ ...s, replay: s.replay.slice(0, 120) }));
     }
   } catch (e) {
     check(name, false, String(e && e.message).split('\n')[0].slice(0, 200));
