@@ -22,6 +22,9 @@
 /* CP10.4: the #offers sheet. Each offer is a card (it reuses .cp-ivs-next); the list itself has no bullets. */
 .cp-room .cp-offers{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
 .cp-room .cp-offer p{margin:2px 0}
+/* The design's danger button (Decline and its confirmation): the room's "bad" red on the ghost button, 6.9:1 on white. */
+.cp-room .cp-ghost.cp-danger{border-color:var(--cp-bad);color:var(--cp-bad)}
+.cp-room .cp-ghost.cp-danger:hover{background:var(--cp-badsoft);border-color:var(--cp-bad);color:var(--cp-bad)}
 /* CP8.3: the #interviews sheet (KPIs, the next interview, every interview, its history). The table reuses .cp-inbox-table. */
 .cp-room .cp-ivs{display:flex;flex-direction:column;gap:12px}
 .cp-room .cp-ivs h3{margin-top:6px;font-size:1rem}

@@ -232,6 +232,8 @@ async function flowOffers(browser, viewport) {
         hash: location.hash, pay: document.querySelector('[data-testid="cp-offer-pay-of-1"]')?.textContent || '',
         buttons: [...document.querySelectorAll('[data-testid="cp-offer-actions-of-1"] button')].map((b) => b.textContent).join('|'),
         text: document.querySelector('[data-testid="cp-offers-sheet"]')?.textContent || '', waiting: document.querySelector('[data-testid="cp-offers-waiting"]')?.textContent || '',
+        good: document.querySelector('[data-testid="cp-offers-good-to-know"]')?.textContent || '',
+        decline: getComputedStyle(document.querySelector('[data-testid="cp-offer-decline-of-1"]')).color,
       }));
       await page.click(tid('cp-offer-accept-of-1'));
       const before = api.state.offerAnswers.length;
@@ -239,7 +241,8 @@ async function flowOffers(browser, viewport) {
       await page.waitForFunction(() => document.querySelector('[data-testid="cp-offer-status-of-1"]')?.textContent === 'Accepted');
       const leaks = api.sent.filter((x) => x.path.includes('/offers')).flatMap((x) => feeKeys(x.payload));
       check(name, s.hash === '#offers' && s.pay === '$105,000 a year' && s.buttons === 'Accept|Talk to my recruiter first|Decline' && /There's no cost to you\./.test(s.text)
-        && /^Waiting on you: 1 offer to answer, the first by /.test(s.waiting) && !/\bfees?\b|invoice/i.test(s.text) && before === 0 && leaks.length === 0
+        && /^Waiting on you: 1 offer to answer, the first by /.test(s.waiting) && s.good === "Good to knowThere's no cost to you. Employers pay Refactored.ai when they hire."
+        && s.decline === 'rgb(168, 44, 44)' && !/\bfees?\b|invoice/i.test(s.text) && before === 0 && leaks.length === 0
         && JSON.stringify(api.state.offerAnswers) === JSON.stringify([{ groupId: '0f0f0f0f-0000-4000-8000-000000000001', decision: 'accept', version: 1 }]),
       JSON.stringify({ ...s, text: s.text.slice(0, 160), answers: api.state.offerAnswers, leaks }));
     }

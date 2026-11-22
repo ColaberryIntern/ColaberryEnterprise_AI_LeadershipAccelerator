@@ -2,7 +2,7 @@ import React from 'react';
 import { act } from 'react-dom/test-utils';
 import { createRoot, type Root } from 'react-dom/client';
 import type { CandidateOffer } from '../../offersApi';
-import { NO_COST, OffersSheet, payText, startText, waitingLine } from '../OffersSheet';
+import { aboutAYear, NO_COST, OffersSheet, payText, startText, waitingLine } from '../OffersSheet';
 import { OPEN_OFFERS_CARD, offerNotice } from '../../useOfferNotice';
 
 /**
@@ -38,7 +38,10 @@ describe('the #offers sheet (CP10.4)', () => {
     mockFetch.mockResolvedValue([acme, beta]);
     const h = await mount();
     expect(NO_COST).toBe("There's no cost to you.");
-    expect(q(h, 'cp-offers-no-cost')?.textContent).toBe("Offers employers send you through Refactored.ai show here. There's no cost to you.");
+    expect(q(h, 'cp-offers-good-to-know')?.textContent).toBe("Good to knowThere's no cost to you. Employers pay Refactored.ai when they hire.");
+    expect(q(h, 'cp-offer-year-o-1')).toBeNull(); // a salary needs no "About a year"
+    expect(q(h, 'cp-offer-year-o-2')?.textContent).toBe('About a year: $97,500'); // $50.00 x 37.5 x 52
+    expect(q(h, 'cp-offer-decline-o-1')?.className).toBe('cp-ghost cp-danger');
     expect(q(h, 'cp-offer-pay-o-1')?.textContent).toBe('$105,000 a year');
     expect(q(h, 'cp-offer-pay-o-2')?.textContent).toBe('$50.00 an hour, 37.5 hours a week');
     expect(q(h, 'cp-offer-o-1')?.textContent).toContain('Starts Mon, Dec 7, 2026');
@@ -68,6 +71,8 @@ describe('the #offers sheet (CP10.4)', () => {
     mockFetch.mockResolvedValue([acme]);
     const h = await mount();
     await click(q(h, 'cp-offer-decline-o-1'));
+    expect(mockAnswer).not.toHaveBeenCalled(); // Decline is behind the confirm step, and the confirmation is the danger button too
+    expect([q(h, 'cp-offer-yes-o-1')?.textContent, q(h, 'cp-offer-yes-o-1')?.className]).toEqual(['Yes, decline the offer from Acme', 'cp-ghost cp-danger']);
     await click([...h.querySelectorAll('button')].find((b) => b.textContent === 'Not yet') ?? null);
     expect(mockAnswer).not.toHaveBeenCalled();
     mockAnswer.mockResolvedValue({ ok: true, offer: { ...acme, status: 'talk_first' } });
@@ -107,6 +112,12 @@ describe('the #offers sheet (CP10.4)', () => {
 });
 
 describe('pure parts', () => {
+  it('aboutAYear: rate x hours x 52 for hourly only, from the pay fields', () => {
+    expect(aboutAYear({ ...beta, hourlyRateCents: 4800, hoursPerWeek: 40 })).toBe('$99,840');
+    expect(aboutAYear({ ...beta, hourlyRateCents: 2533, hoursPerWeek: 37.5 })).toBe('$49,394'); // 4,939,350 cents rounds to the dollar
+    expect(aboutAYear(acme)).toBeNull();
+    expect(aboutAYear({ ...beta, hoursPerWeek: null })).toBeNull();
+  });
   it('payText, startText (the calendar day, never shifted) and waitingLine', () => {
     expect(payText({ ...beta, hourlyRateCents: 4250, hoursPerWeek: 40 })).toBe('$42.50 an hour, 40 hours a week');
     expect(startText('2027-01-01')).toBe('Fri, Jan 1, 2027');
