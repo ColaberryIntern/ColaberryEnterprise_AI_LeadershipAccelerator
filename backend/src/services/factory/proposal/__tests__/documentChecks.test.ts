@@ -2,7 +2,7 @@
  * documentChecks — the deterministic checks + the pure pass rule. Table-driven. Includes the hazard-3.2 guard: a
  * build-track (scope) requirement is EXCLUDED from the coverage denominator, so it is never counted as "uncovered".
  */
-import { checkCoverage, checkLocationCoverage, checkFormat, checkFact, passes, runDocumentChecks, isSubstantiveAnswer, isBoilerplateAnswer, isSubmissionInstructionRequirement, isNonTechnicalAdministrativeRequirement, type DocumentCheckInput } from '../documentChecks';
+import { checkCoverage, checkLocationCoverage, checkFormat, checkFact, passes, runDocumentChecks, isSubstantiveAnswer, isBoilerplateAnswer, isSubmissionInstructionRequirement, isNonTechnicalAdministrativeRequirement, extractRequirementSections, hydrateSectionAnswers, type DocumentCheckInput } from '../documentChecks';
 import type { CheckScores } from '../proposalReviewTypes';
 
 const scoreAll = (n: number): CheckScores => ({ coverage: n, format: n, fact: n, evaluator: n, proof: n, clarity: n });
@@ -55,6 +55,53 @@ describe('isNonTechnicalAdministrativeRequirement (R3)', () => {
     expect(isNonTechnicalAdministrativeRequirement("Describe, in sufficient detail, the Proposer's understanding of the proposed project and the services provided.")).toBe(false);
     expect(isNonTechnicalAdministrativeRequirement('The system must provide a configurable review workflow where a supervisor approves a work order before dispatch.')).toBe(false);
     expect(isNonTechnicalAdministrativeRequirement('System must support bidirectional GIS integration to autofill work order fields.')).toBe(false);
+  });
+});
+
+describe('extractRequirementSections / hydrateSectionAnswers (coverage crediting)', () => {
+  // A whole-document draft with the new per-requirement heading anchor; each answer names specifics (substantive).
+  const DOC = [
+    '<h3>REQ-001: Overview</h3><p>Our approach to the work order management workflow: ' + 'detail '.repeat(30) + 'with GIS integration and a 2-week migration of records.</p>',
+    '<h3>REQ-002: Work orders</h3><p>The intake-to-dispatch workflow: ' + 'steps '.repeat(30) + 'an SLA dashboard, role-based access, and an acceptance test.</p>',
+  ].join('');
+
+  it('splits a whole-document draft into per-requirement slices by the heading anchor', () => {
+    const m = extractRequirementSections(DOC, ['REQ-001', 'REQ-002']);
+    expect(m.get('REQ-001')).toMatch(/REQ-001/);
+    expect(m.get('REQ-002')).toMatch(/REQ-002/);
+    expect(m.get('REQ-001')).not.toMatch(/REQ-002/); // the slice boundary is respected
+  });
+
+  it('also recognizes the legacy "responds to requirement REQ-x" phrasing in already-stored drafts', () => {
+    const legacy = '<p>This section responds to requirement REQ-010. We propose an API integration workflow: ' + 'detail '.repeat(30) + 'with SSO and encryption.</p>';
+    const m = extractRequirementSections(legacy, ['REQ-010']);
+    expect(m.get('REQ-010')).toMatch(/REQ-010/);
+  });
+
+  it('a boundary anchor never matches a longer id (REQ-1 does not match REQ-10)', () => {
+    const doc = '<h3>REQ-10: Ten</h3><p>' + 'detail '.repeat(30) + 'GIS integration.</p>';
+    const m = extractRequirementSections(doc, ['REQ-1']);
+    expect(m.has('REQ-1')).toBe(false);
+  });
+
+  it('hydrates empty sections so checkCoverage credits an answer written inside the single content blob', () => {
+    const sections = [{ sectionKey: 'REQ-001' }, { sectionKey: 'REQ-002' }];
+    const hydrated = hydrateSectionAnswers(sections, DOC, ['REQ-001', 'REQ-002']);
+    const cov = checkCoverage({ ...base, requirementIds: ['REQ-001', 'REQ-002'], contentHtml: DOC, sections: hydrated });
+    expect(cov.score).toBe(100); // the headline fix: a substantive whole-document draft no longer scores coverage 0
+  });
+
+  it('leaves an already-authored section untouched and omits an unanchored requirement', () => {
+    const sections = [{ sectionKey: 'REQ-001', contentHtml: SUBSTANTIVE }, { sectionKey: 'REQ-999' }];
+    const hydrated = hydrateSectionAnswers(sections, DOC, ['REQ-001', 'REQ-999']);
+    expect(hydrated.find((s) => s.sectionKey === 'REQ-001')!.contentHtml).toBe(SUBSTANTIVE); // author's content wins
+    expect(hydrated.find((s) => s.sectionKey === 'REQ-999')!.contentHtml).toBeUndefined();   // no anchor -> stays empty
+  });
+
+  it('no anchors at all -> sections returned unchanged (fail-soft, no regression)', () => {
+    const sections = [{ sectionKey: 'REQ-001' }];
+    const out = hydrateSectionAnswers(sections, '<p>no markers anywhere here</p>', ['REQ-001']);
+    expect(out).toEqual(sections);
   });
 });
 
