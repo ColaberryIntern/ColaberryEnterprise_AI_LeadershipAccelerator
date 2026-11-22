@@ -25,11 +25,12 @@ const CreateBody = z.object({
   include: z.object({ thumbnail: z.boolean(), join_link: z.boolean(), registration_link: z.boolean() }).partial().strict().optional(),
 }).strict();
 const RegenerateBody = z.object({ instruction: z.enum(['shorter', 'warmer', 'more_detail']) }).strict();
-const EditBody = z.object({ channel: z.enum(['community_post', 'in_app']), title: z.string().max(120).nullable().optional(), body: z.string().trim().min(1, 'Write something first.').max(2000) }).strict();
+const EditBody = z.object({ channel: z.enum(['community_post', 'in_app', 'whatsapp']), title: z.string().max(120).nullable().optional(), body: z.string().trim().min(1, 'Write something first.').max(2000) }).strict();
 const DestBody = z.object({
   destinations: z.array(z.object({
     // CH9.6 event_registrants: the message's own managed Eventbrite event (setDestinations enforces it).
-    channel: z.enum(['community_post', 'in_app']), target_type: z.enum(['cohort_feed', 'in_app_audience', 'event_registrants']),
+    // CH10.3 whatsapp_group: an enabled, sendable group in the hub (setDestinations enforces it).
+    channel: z.enum(['community_post', 'in_app', 'whatsapp']), target_type: z.enum(['cohort_feed', 'in_app_audience', 'event_registrants', 'whatsapp_group']),
     target_id: z.string().min(1).max(64), label: z.string().max(255).nullable(),
   }).strict()).max(50),
 }).strict();

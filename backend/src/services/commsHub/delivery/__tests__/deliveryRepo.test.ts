@@ -30,6 +30,8 @@ jest.mock('../../../../models/CommsHubDestination', () => ({ __esModule: true, d
 jest.mock('../../../../models/Cohort', () => ({ __esModule: true, default: { findByPk: jest.fn(async () => (cohortExists ? { id: 'c1' } : null)) } }));
 jest.mock('../../../../models/CommsHubDraft', () => ({ __esModule: true, default: { findOne: jest.fn(async () => draft) } }));
 jest.mock('../../../../models/CommsHubEvent', () => ({ __esModule: true, default: { findByPk: jest.fn(async () => event) } }));
+let mockGroup: Record<string, unknown> | null = null;
+jest.mock('../../../../models/CommsHubWhatsAppGroup', () => ({ __esModule: true, default: { findByPk: jest.fn(async () => mockGroup), findAll: jest.fn(async () => []) } }));
 jest.mock('../../../../models/CommsHubSettings', () => ({ __esModule: true, default: { findByPk: jest.fn(async () => settings) } }));
 jest.mock('../../connectors/inAppConnector', () => ({ ALL_MEMBERS: 'all_members' }));
 jest.mock('../messageLifecycle', () => ({ approvalStillMatches: jest.fn(async () => matches), finishMessage: jest.fn(), startMessage: jest.fn() }));
@@ -115,6 +117,26 @@ describe('withSendLock', () => {
     expect(await run({ kind: 'failed', error: 'Error: y' })).toEqual({ status: 'failed', next_attempt_at: null, error: 'Error: y' });
     expect(await run({ kind: 'hold', until: later, reason: 'quiet_hours' })).toEqual({ status: 'pending', next_attempt_at: later, attempt_count: 0, error: 'held: quiet_hours' });
     expect(await run({ kind: 'skip', status: 'skipped', reason: 'destination_not_allowed' })).toEqual({ status: 'skipped', next_attempt_at: null, error: 'destination_not_allowed' });
+  });
+
+  it('CH10.3 a WhatsApp group is allowed only while it is in the hub, switched on and one the number can post in; never via a cohort lookup', async () => {
+    const allowed = async (): Promise<boolean> => {
+      let a = false;
+      delivery = rowOf({ id: 'dl1', status: 'sending', attempt_count: 1 });
+      await deliveryRepo.withSendLock(claim({ channel: 'whatsapp', target_type: 'whatsapp_group', target_id: 'g1' }), NOW, async (ctx) => { a = ctx.destinationAllowed; return { kind: 'failed', error: 'x' }; });
+      return a;
+    };
+    destination = { id: 'd1', message_id: 'm1', channel: 'whatsapp', target_type: 'whatsapp_group', target_id: 'g1' };
+    cohortExists = false;
+    const ok = { id: 'g1', enabled: true, left_at: null, suspended: false, terminated: false, announcements: false, our_rank: 'member', cant_send_reason: null };
+    mockGroup = ok; expect(await allowed()).toBe(true);
+    mockGroup = { ...ok, enabled: false }; expect(await allowed()).toBe(false);
+    mockGroup = { ...ok, left_at: new Date() }; expect(await allowed()).toBe(false);
+    mockGroup = { ...ok, announcements: true }; expect(await allowed()).toBe(false);
+    mockGroup = { ...ok, cant_send_reason: 'forbidden' }; expect(await allowed()).toBe(false);
+    mockGroup = null; expect(await allowed()).toBe(false);
+    mockGroup = ok; destination = { ...destination, target_type: 'cohort_feed' }; expect(await allowed()).toBe(false);
+    mockGroup = null; cohortExists = true;
   });
 
   it('the destination is not allowed when its row is gone, belongs elsewhere, does not match the channel, or its cohort is gone', async () => {

@@ -34,19 +34,35 @@ import { sequelize } from '../config/database';
 export const COMMS_HUB_EVENT_TYPES = ['session', 'open_house', 'office_hours', 'workshop', 'other'] as const;
 export const COMMS_HUB_EVENT_STATUSES = ['draft', 'scheduled', 'live', 'ended', 'cancelled'] as const;
 export const COMMS_HUB_THUMBNAIL_SOURCES = ['template', 'upload', 'ai'] as const;
-/** CH6: the two channels this build sends to (WhatsApp is added after the build). */
-export const COMMS_HUB_CHANNELS = ['community_post', 'in_app'] as const;
+/** CH6: community feed and in-app; CH10.3 adds WhatsApp (phase 3, ships switched off). */
+export const COMMS_HUB_CHANNELS = ['community_post', 'in_app', 'whatsapp'] as const;
 /** CH6.2's status machine owns the transitions; these are the values the column may hold. */
 export const COMMS_HUB_MESSAGE_STATUSES = ['draft', 'needs_approval', 'approved', 'scheduled', 'sending', 'sent', 'partially_failed', 'failed', 'cancelled'] as const;
 export const COMMS_HUB_MESSAGE_KINDS = ['announcement', 'reminder', 'starting_soon', 'recording_thanks', 'time_change', 'cancellation', 'update', 'other'] as const;
 export const COMMS_HUB_PLAN_KINDS = ['announcement', 'reminder', 'starting_soon', 'recording_thanks'] as const;
 // CH9.6 event_registrants: in-app to the people registered for one Eventbrite event the hub manages.
-export const COMMS_HUB_DESTINATION_TYPES = ['cohort_feed', 'in_app_audience', 'event_registrants'] as const;
+export const COMMS_HUB_DESTINATION_TYPES = ['cohort_feed', 'in_app_audience', 'event_registrants', 'whatsapp_group'] as const;
 export const COMMS_HUB_DELIVERY_STATUSES = ['pending', 'sending', 'sent', 'failed', 'cancelled', 'skipped'] as const;
 export const COMMS_HUB_ALERT_STATUSES = ['pending', 'sending', 'sent', 'failed'] as const;
 export const COMMS_HUB_ALERT_STATES = ['failed', 'partially_failed'] as const;
 
 const list = (xs: readonly string[]): string => xs.map((x) => `'${x}'`).join(', ');
+
+/**
+ * Widen an existing CHECK (CH9.6 pattern, generalized in CH10.3). Production created these CHECKs in
+ * an earlier phase with fewer values, and the ADD CONSTRAINT before each is then a no-op. Replace the
+ * constraint only when its definition lacks `marker` (the newest value), in ONE statement, so a normal
+ * boot changes nothing and the table is never without the check. It drops a rule, never data.
+ */
+export function widenCheck(table: string, constraint: string, column: string, values: readonly string[], marker: string): string {
+  return `DO $$ BEGIN
+     IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = '${constraint}'
+                AND pg_get_constraintdef(oid) NOT LIKE '%${marker}%') THEN
+       ALTER TABLE ${table} DROP CONSTRAINT ${constraint},
+         ADD CONSTRAINT ${constraint} CHECK (${column} IN (${list(values)}));
+     END IF;
+   END $$`;
+}
 
 export const COMMS_HUB_SCHEMA_STATEMENTS: readonly string[] = [
   `CREATE TABLE IF NOT EXISTS comms_hub_events (
@@ -197,6 +213,7 @@ export const COMMS_HUB_SCHEMA_STATEMENTS: readonly string[] = [
    )`,
   `ALTER TABLE comms_hub_drafts ADD CONSTRAINT comms_hub_drafts_channel_check
      CHECK (channel IN (${list(COMMS_HUB_CHANNELS)}))`,
+  widenCheck('comms_hub_drafts', 'comms_hub_drafts_channel_check', 'channel', COMMS_HUB_CHANNELS, 'whatsapp'),
   `ALTER TABLE comms_hub_drafts ADD CONSTRAINT comms_hub_drafts_version_check CHECK (version >= 1)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS uq_comms_hub_drafts_version ON comms_hub_drafts (message_id, channel, version)`,
 
@@ -213,16 +230,10 @@ export const COMMS_HUB_SCHEMA_STATEMENTS: readonly string[] = [
      CHECK (channel IN (${list(COMMS_HUB_CHANNELS)}))`,
   `ALTER TABLE comms_hub_destinations ADD CONSTRAINT comms_hub_destinations_type_check
      CHECK (target_type IN (${list(COMMS_HUB_DESTINATION_TYPES)}))`,
-  // CH9.6: production already has this CHECK from phase 1 without 'event_registrants', and the ADD above
-  // is a no-op once it exists. Widen it only when its definition lacks the new type, in one statement,
-  // so a normal boot changes nothing and the table is never left without the check.
-  `DO $$ BEGIN
-     IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'comms_hub_destinations_type_check'
-                AND pg_get_constraintdef(oid) NOT LIKE '%event_registrants%') THEN
-       ALTER TABLE comms_hub_destinations DROP CONSTRAINT comms_hub_destinations_type_check,
-         ADD CONSTRAINT comms_hub_destinations_type_check CHECK (target_type IN (${list(COMMS_HUB_DESTINATION_TYPES)}));
-     END IF;
-   END $$`,
+  // CH9.6 then CH10.3: production has these CHECKs from earlier phases without 'event_registrants' /
+  // 'whatsapp' / 'whatsapp_group'; widened in place only when a value is missing.
+  widenCheck('comms_hub_destinations', 'comms_hub_destinations_channel_check', 'channel', COMMS_HUB_CHANNELS, 'whatsapp'),
+  widenCheck('comms_hub_destinations', 'comms_hub_destinations_type_check', 'target_type', COMMS_HUB_DESTINATION_TYPES, 'whatsapp_group'),
   `CREATE UNIQUE INDEX IF NOT EXISTS uq_comms_hub_destinations_target ON comms_hub_destinations (message_id, channel, target_type, target_id)`,
 
   `CREATE TABLE IF NOT EXISTS comms_hub_approvals (
@@ -262,6 +273,7 @@ export const COMMS_HUB_SCHEMA_STATEMENTS: readonly string[] = [
      CHECK (status IN (${list(COMMS_HUB_DELIVERY_STATUSES)}))`,
   `ALTER TABLE comms_hub_deliveries ADD CONSTRAINT comms_hub_deliveries_channel_check
      CHECK (channel IN (${list(COMMS_HUB_CHANNELS)}))`,
+  widenCheck('comms_hub_deliveries', 'comms_hub_deliveries_channel_check', 'channel', COMMS_HUB_CHANNELS, 'whatsapp'),
   `CREATE UNIQUE INDEX IF NOT EXISTS uq_comms_hub_deliveries_key ON comms_hub_deliveries (idempotency_key)`,
   // ONE delivery row per destination per message (the build prompt's Data table): an edit and
   // re-approval after a partly failed send reuses the row, so a destination that already received the

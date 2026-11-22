@@ -13,6 +13,9 @@ import { factsFor, problemsFor } from './draftFacts';
 import { recommendDestinations, type Recommendation } from './drafting';
 import { replayLink } from './links';
 import CommsHubSettings from '../../../models/CommsHubSettings';
+import CommsHubWhatsAppGroup from '../../../models/CommsHubWhatsAppGroup';
+import { cantSendReason } from '../whatsapp/groupRules';
+import { readWhatsAppConfig } from '../channelConfig';
 
 /**
  * The Compose tab's server side (CH6.5): one message as the organizer sees it, its recipients and
@@ -88,6 +91,16 @@ export async function setDestinations(messageId: string, wanted: DestinationInpu
       const ev = m.event_id === d.target_id ? await CommsHubEvent.findByPk(d.target_id, { attributes: ['id', 'ccpp_event_id'], transaction: t }) : null;
       if (!ev || !ev.ccpp_event_id) throw new MessageRuleError('Registrants can only be chosen for a message about an Eventbrite event managed in the hub.', 400, 'bad_destination');
     }
+    // CH10.3: a WhatsApp group goes by WhatsApp only, must be in the hub, switched on, and one the number
+    // can post in; and WhatsApp itself must be switched on. Groups already on the message are kept as-is.
+    const currentKeys = new Set((await CommsHubDestination.findAll({ where: { message_id: m.id }, attributes: ['channel', 'target_type', 'target_id'], transaction: t })).map(keyOf));
+    for (const d of wanted.filter((x) => (x.target_type === 'whatsapp_group' || x.channel === 'whatsapp') && !currentKeys.has(keyOf(x)))) {
+      if (d.channel !== 'whatsapp' || d.target_type !== 'whatsapp_group') throw new MessageRuleError('A WhatsApp group can only be reached by WhatsApp.', 400, 'bad_destination');
+      if (readWhatsAppConfig().notConfigured) throw new MessageRuleError('WhatsApp is not connected, so a WhatsApp group cannot be chosen.', 409, 'whatsapp_off');
+      const g = /^[0-9a-f-]{36}$/i.test(d.target_id) ? await CommsHubWhatsAppGroup.findByPk(d.target_id, { transaction: t }) : null;
+      if (!g) throw new MessageRuleError('That WhatsApp group is not in the hub. Sync the groups first.', 400, 'bad_destination');
+      if (!g.enabled || cantSendReason(g)) throw new MessageRuleError(`WhatsApp sending to ${g.name} is not switched on, so it cannot be chosen.`, 409, 'whatsapp_group_off');
+    }
     const current = await CommsHubDestination.findAll({ where: { message_id: m.id }, transaction: t });
     const want = new Map(wanted.map((d) => [keyOf(d), d]));
     const removed = current.filter((d) => !want.has(keyOf(d)));
@@ -158,5 +171,14 @@ export async function destinationOptions(eventId: string | null = null): Promise
     ...cohorts.map((c) => ({ channel: 'community_post' as const, target_type: 'cohort_feed' as const, target_id: c.id, label: `${c.name} feed` })),
     { channel: 'in_app' as const, target_type: 'in_app_audience' as const, target_id: 'all_members', label: 'Everyone in the program' },
     ...cohorts.map((c) => ({ channel: 'in_app' as const, target_type: 'in_app_audience' as const, target_id: c.id, label: `${c.name} members` })),
+    ...await whatsappOptions(),
   ];
+}
+
+/** CH10.3: switched-on groups the number can post in, only while WhatsApp itself is switched on. */
+async function whatsappOptions(): Promise<DestinationInput[]> {
+  if (readWhatsAppConfig().notConfigured) return [];
+  const groups = await CommsHubWhatsAppGroup.findAll({ where: { enabled: true, left_at: { [Op.is]: null } }, order: [['name', 'ASC']] });
+  return groups.filter((g) => cantSendReason(g) === null)
+    .map((g) => ({ channel: 'whatsapp' as const, target_type: 'whatsapp_group' as const, target_id: g.id, label: g.name }));
 }

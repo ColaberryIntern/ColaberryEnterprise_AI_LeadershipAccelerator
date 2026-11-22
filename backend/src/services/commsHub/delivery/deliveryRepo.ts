@@ -8,6 +8,8 @@ import CommsHubDraft from '../../../models/CommsHubDraft';
 import CommsHubEvent from '../../../models/CommsHubEvent';
 import CommsHubMessage from '../../../models/CommsHubMessage';
 import CommsHubSettings from '../../../models/CommsHubSettings';
+import CommsHubWhatsAppGroup from '../../../models/CommsHubWhatsAppGroup';
+import { cantSendReason } from '../whatsapp/groupRules';
 import { ALL_MEMBERS } from '../connectors/inAppConnector';
 import { approvalStillMatches, finishMessage, startMessage } from './messageLifecycle';
 import { MAX_ATTEMPTS, SENDING_LEASE_MS } from './retryPolicy';
@@ -27,7 +29,7 @@ import type { ClaimedDelivery, DeliveryRepo, SendContext, SendOutcome, WorkerSet
  * the next sender to that feed sees the recorded post (CH7.1's retry rule depends on that).
  */
 // CH9.6: a channel allows a SET of target types; in-app reaches an audience or an event's registrants.
-const TARGET_TYPES_FOR: Record<string, readonly string[]> = { community_post: ['cohort_feed'], in_app: ['in_app_audience', 'event_registrants'] };
+const TARGET_TYPES_FOR: Record<string, readonly string[]> = { community_post: ['cohort_feed'], in_app: ['in_app_audience', 'event_registrants'], whatsapp: ['whatsapp_group'] };
 
 /** Pure: is this a legal destination shape for its channel, before the target itself is looked up. */
 export function destinationShapeAllowed(channel: string, targetType: string): boolean {
@@ -56,6 +58,10 @@ async function readContext(d: ClaimedDelivery, t: Transaction): Promise<SendCont
     // CH9.6: the message's own event, still an Eventbrite event managed in the hub (never a cohort lookup).
     const ev = await CommsHubEvent.findByPk(dest!.target_id, { attributes: ['id', 'ccpp_event_id'], transaction: t });
     destinationAllowed = !!ev && !!ev.ccpp_event_id && m?.event_id === ev.id;
+  } else if (destinationAllowed && dest!.target_type === 'whatsapp_group') {
+    // CH10.3: a group in the hub, switched on, and one the number can still post in (never a cohort lookup).
+    const g = await CommsHubWhatsAppGroup.findByPk(dest!.target_id, { transaction: t });
+    destinationAllowed = !!g && g.enabled && cantSendReason(g) === null;
   } else {
     if (destinationAllowed && dest!.target_id !== ALL_MEMBERS) destinationAllowed = !!(await Cohort.findByPk(dest!.target_id, { attributes: ['id'], transaction: t }));
     if (destinationAllowed && dest!.target_id === ALL_MEMBERS) destinationAllowed = d.channel === 'in_app';

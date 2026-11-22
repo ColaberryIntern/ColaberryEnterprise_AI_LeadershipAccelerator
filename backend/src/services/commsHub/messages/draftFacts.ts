@@ -138,7 +138,7 @@ function all<T>(re: RegExp, text: string, map: (m: RegExpExecArray) => T): T[] {
 const fmtMin = (min: number): string => `${((Math.floor(min / 60) + 11) % 12) + 1}:${String(min % 60).padStart(2, '0')} ${min < 720 ? 'AM' : 'PM'}`;
 const cleanUrl = (u: string): string => u.replace(/[.,;:!?]+$/, '').replace(/\/+$/, '').toLowerCase();
 
-export interface DraftForCheck { channel: 'community_post' | 'in_app'; title: string | null; body: string }
+export interface DraftForCheck { channel: 'community_post' | 'in_app' | 'whatsapp'; title: string | null; body: string }
 
 /**
  * Why a draft may not be submitted or approved, as sentences for the organizer (empty = fine).
@@ -153,10 +153,21 @@ export interface CheckOptions {
   postEvent?: boolean;
 }
 
+/** CH10.3: a WhatsApp message is plain text, at most this many characters. */
+export const WHATSAPP_MAX_CHARS = 1000;
+const MARKDOWN = /(\*\*|__|~~|`|^\s{0,3}#{1,6}\s|\[[^\]]+\]\([^)]+\))/m;
+const EMOJI = /\p{Extended_Pictographic}/u;
+const WHERE: Record<DraftForCheck['channel'], string> = { community_post: 'The community post', in_app: 'The in-app notification', whatsapp: 'The WhatsApp message' };
+
 export function problemsFor(d: DraftForCheck, f: DraftFacts | null, opts: CheckOptions = {}): string[] {
   const text = `${d.title ?? ''}\n${d.body}`;
-  const where = d.channel === 'community_post' ? 'The community post' : 'The in-app notification';
+  const where = WHERE[d.channel];
   const out: string[] = [];
+  if (d.channel === 'whatsapp') {
+    if (d.body.length > WHATSAPP_MAX_CHARS) out.push(`${where} is ${d.body.length.toLocaleString('en-US')} characters. Keep it to ${WHATSAPP_MAX_CHARS.toLocaleString('en-US')} or fewer.`);
+    if (MARKDOWN.test(d.body)) out.push(`${where} uses formatting symbols (like ** or #). Write it as plain text.`);
+    if (EMOJI.test(d.body)) out.push(`${where} has an emoji. Write it as plain text.`);
+  }
   const left = PLACEHOLDERS.filter((p) => text.includes(p));
   if (left.length) out.push(`${where} still has ${left.join(', ')} in it, and this event has no value for it. Remove it or add it to the event.`);
   for (const rule of BANNED_COPY_RULES) {

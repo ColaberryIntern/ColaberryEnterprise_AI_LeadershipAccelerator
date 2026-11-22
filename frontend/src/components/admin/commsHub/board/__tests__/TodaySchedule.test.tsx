@@ -192,7 +192,7 @@ describe('Schedule & history', () => {
     expect(container.textContent).toContain('The event list did not load, so the event filter only offers Any event.');
   });
 
-  it('the filters narrow both lists; WhatsApp is not offered as a channel', async () => {
+  it('the filters narrow both lists; WhatsApp is a channel filter too (CH10.3)', async () => {
     await renderAt('/admin/comms-hub/schedule');
     await type(field('Status') as unknown as HTMLSelectElement, 'failed');
     await type(field('Channel') as unknown as HTMLSelectElement, 'in_app');
@@ -200,7 +200,7 @@ describe('Schedule & history', () => {
     const want = { status: ['failed'], channel: 'in_app', event_id: 'e2' };
     expect(api.getBoard).toHaveBeenCalledWith('schedule', want);
     expect(api.getBoard).toHaveBeenCalledWith('history', want);
-    expect(Array.from((field('Channel') as unknown as HTMLSelectElement).options).map((o) => o.textContent)).toEqual(['Any channel', 'Community feed', 'In-app notification']);
+    expect(Array.from((field('Channel') as unknown as HTMLSelectElement).options).map((o) => o.textContent)).toEqual(['Any channel', 'Community feed', 'In-app notification', 'WhatsApp']);
   });
 
   it('safety controls save quiet hours, alert recipients and the test cohort; a refused save shows why', async () => {

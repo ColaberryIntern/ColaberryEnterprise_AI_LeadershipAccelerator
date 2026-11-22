@@ -67,15 +67,16 @@ describeIfDb('CH10.2 WhatsApp group sync, on a scratch Postgres', () => {
     expect((await q<{ n: number }>("SELECT count(*)::int n FROM comms_hub_activity WHERE action = 'whatsapp.groups_synced'"))[0].n).toBe(2);
   });
 
-  it('a group no longer listed is kept and marked left; enabled survives; a returning group is no longer left', async () => {
+  it('a group no longer listed is kept, marked left and switched off; enabled survives on listed groups; a returning group needs a fresh opt-in', async () => {
     await sync(ACTOR, conn([G(1), G(2)]));
-    const [g1] = await q<{ id: string }>("SELECT id FROM comms_hub_whatsapp_groups WHERE name = 'Group 1'");
-    await setEnabled(g1.id, true, ACTOR);
+    const ids = await q<{ id: string; name: string }>('SELECT id, name FROM comms_hub_whatsapp_groups ORDER BY name');
+    await setEnabled(ids[0].id, true, ACTOR);
+    await setEnabled(ids[1].id, true, ACTOR);
     expect(await sync(ACTOR, conn([G(1, { name: 'Group 1 renamed' })]))).toEqual({ listed: 1, added: 0, left: 1 });
     const rows = await snapshot();
     expect(rows.map((r) => [r.name, r.left, r.enabled])).toEqual([['Group 1 renamed', false, true], ['Group 2', true, false]]);
     expect(await sync(ACTOR, conn([G(1), G(2)]))).toEqual({ listed: 2, added: 0, left: 0 });
-    expect((await snapshot()).map((r) => r.left)).toEqual([false, false]);
+    expect((await snapshot()).map((r) => [r.left, r.enabled])).toEqual([[false, true], [false, false]]);
   });
 
   it('a provider failure on a later page writes nothing at all', async () => {

@@ -26,6 +26,7 @@ jest.mock('../../../../models/CommsHubDelivery', () => ({ __esModule: true, defa
 jest.mock('../../../../models/Cohort', () => ({ __esModule: true, default: { findAll: jest.fn(async () => [{ id: 'c1', name: 'November 2026' }, { id: 'ct', name: 'Hub test' }].slice(0, mockOpenCount)), findByPk: jest.fn(async (id: string) => (id === 'ct' ? { id: 'ct', name: 'Hub test' } : null)) } }));
 let mockOpenCount = 1;
 let mockTestCohort: string | null = null;
+jest.mock('../../../../models/CommsHubWhatsAppGroup', () => ({ __esModule: true, default: { findByPk: jest.fn(async () => null), findAll: jest.fn(async () => []) } }));
 jest.mock('../../../../models/CommsHubSettings', () => ({ __esModule: true, default: { findByPk: jest.fn(async () => ({ id: 1, test_cohort_id: mockTestCohort })) } }));
 jest.mock('../../activityLog', () => ({ logActivity: jest.fn(async () => undefined) }));
 const mockApprove = jest.fn(async () => undefined);

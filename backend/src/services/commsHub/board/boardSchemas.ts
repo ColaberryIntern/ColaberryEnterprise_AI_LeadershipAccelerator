@@ -28,7 +28,7 @@ export const PauseBody = z.object({ paused: z.boolean() }).strict();
 export const BoardQuery = z.object({
   scope: z.enum(['approval', 'schedule', 'history']),
   status: z.string().max(200).optional(),
-  channel: z.enum(['community_post', 'in_app']).optional(),
+  channel: z.enum(['community_post', 'in_app', 'whatsapp']).optional(),
   event_id: z.string().uuid().optional(),
   limit: z.coerce.number().int().min(1).max(200).optional(),
 }).strict();
@@ -37,7 +37,7 @@ export const BoardRow = z.object({
   id: z.string(), status: Status, kind: z.enum(COMMS_HUB_MESSAGE_KINDS as unknown as [string, ...string[]]), title: z.string(),
   event: z.object({ id: z.string(), title: z.string(), thumbnail_id: z.string().nullable() }).nullable(),
   send_at: Iso.nullable(), updated_at: Iso,
-  destinations: z.array(z.object({ channel: z.enum(['community_post', 'in_app']), label: z.string().nullable() })),
+  destinations: z.array(z.object({ channel: z.enum(['community_post', 'in_app', 'whatsapp']), label: z.string().nullable() })),
   preview: z.string().nullable(),
   include: z.object({ thumbnail: z.boolean(), join_link: z.boolean(), registration_link: z.boolean() }),
   approved_by: z.string().nullable(),

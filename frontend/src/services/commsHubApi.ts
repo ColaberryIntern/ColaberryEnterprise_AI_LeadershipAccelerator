@@ -311,10 +311,10 @@ export async function savePromotionPlan(eventId: string, kinds: PlanKind[]): Pro
 /* Compose (CH6.5: backend/src/routes/admin/commsHubMessageRoutes.ts). */
 export type MessageKind = 'announcement' | 'reminder' | 'starting_soon' | 'recording_thanks' | 'time_change' | 'cancellation' | 'update' | 'other';
 export type Tone = 'friendly' | 'professional' | 'urgent';
-export type Channel = 'community_post' | 'in_app';
+export type Channel = 'community_post' | 'in_app' | 'whatsapp';
 export interface DraftView { id: string; channel: Channel; version: number; title: string | null; body: string; author: string; instruction: string | null; created_at: string }
 /** CH9.6 'event_registrants': target_id is the hub event id of a managed Eventbrite event (in-app only). */
-export interface DestinationView { id?: string; channel: Channel; target_type: 'cohort_feed' | 'in_app_audience' | 'event_registrants'; target_id: string; label: string | null; has_delivery?: boolean; reason?: string }
+export interface DestinationView { id?: string; channel: Channel; target_type: 'cohort_feed' | 'in_app_audience' | 'event_registrants' | 'whatsapp_group'; target_id: string; label: string | null; has_delivery?: boolean; reason?: string }
 export interface MessageView {
   id: string; status: HubMessageStatus; kind: MessageKind; tone: Tone | null; notes: string | null; subject: string | null;
   include: { thumbnail?: boolean; join_link?: boolean; registration_link?: boolean }; send_at: string | null; created_by: string | null;

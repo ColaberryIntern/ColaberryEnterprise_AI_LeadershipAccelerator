@@ -61,11 +61,20 @@ describe('ensureCommsHubSchema: safe to run on every boot', () => {
   });
 
   it('touches no existing table except the one nullable column, and drops nothing', () => {
-    // CH9.6: the ONE allowed DROP. Widening the destinations type CHECK (phase 1 created it without
-    // 'event_registrants') replaces the constraint in a single ALTER, only when its definition lacks
-    // the new value. It drops a rule, never data, and the table is never without the check.
-    const WIDEN = /^DO \$\$ BEGIN\s+IF EXISTS \(SELECT 1 FROM pg_constraint WHERE conname = 'comms_hub_destinations_type_check'[\s\S]*ALTER TABLE comms_hub_destinations DROP CONSTRAINT comms_hub_destinations_type_check,\s+ADD CONSTRAINT comms_hub_destinations_type_check CHECK \(target_type IN \([^)]*'event_registrants'[^)]*\)\);\s+END IF;\s+END \$\$$/;
-    expect(COMMS_HUB_SCHEMA_STATEMENTS.filter((s) => /\bDROP\b/i.test(s))).toHaveLength(1);
+    // CH9.6 / CH10.3: the ONLY allowed DROPs. Widening a CHECK an earlier phase created with fewer
+    // values replaces the constraint in a single ALTER, only when its definition lacks the newest value.
+    // It drops a rule, never data, and the table is never without the check. Exactly these four, and
+    // each re-adds the SAME constraint on the SAME table.
+    const WIDEN = /^DO \$\$ BEGIN\s+IF EXISTS \(SELECT 1 FROM pg_constraint WHERE conname = '(\w+)'\s+AND pg_get_constraintdef\(oid\) NOT LIKE '%(\w+)%'\) THEN\s+ALTER TABLE (\w+) DROP CONSTRAINT \1,\s+ADD CONSTRAINT \1 CHECK \((\w+) IN \(([^)]*)\)\);\s+END IF;\s+END \$\$$/;
+    const widened = COMMS_HUB_SCHEMA_STATEMENTS.map((s) => WIDEN.exec(s)).filter((m): m is RegExpExecArray => !!m)
+      .map((m) => ({ constraint: m[1], marker: m[2], table: m[3], column: m[4], lists: m[5].includes(`'${m[2]}'`) }));
+    expect(widened).toEqual([
+      { constraint: 'comms_hub_drafts_channel_check', marker: 'whatsapp', table: 'comms_hub_drafts', column: 'channel', lists: true },
+      { constraint: 'comms_hub_destinations_channel_check', marker: 'whatsapp', table: 'comms_hub_destinations', column: 'channel', lists: true },
+      { constraint: 'comms_hub_destinations_type_check', marker: 'whatsapp_group', table: 'comms_hub_destinations', column: 'target_type', lists: true },
+      { constraint: 'comms_hub_deliveries_channel_check', marker: 'whatsapp', table: 'comms_hub_deliveries', column: 'channel', lists: true },
+    ]);
+    expect(COMMS_HUB_SCHEMA_STATEMENTS.filter((s) => /\bDROP\b/i.test(s))).toHaveLength(4);
     for (const s of COMMS_HUB_SCHEMA_STATEMENTS) {
       if (WIDEN.test(s)) continue;
       // ON DELETE CASCADE / RESTRICT on a FK is a rule, not a statement; strip it before looking for deletes.
@@ -87,10 +96,17 @@ describe('ensureCommsHubSchema: safe to run on every boot', () => {
 
 describe('CH6.1 the guarantees the message tables carry', () => {
   const joined = COMMS_HUB_SCHEMA_STATEMENTS.join('\n');
-  it('nine message statuses (the brief eight plus needs_approval); WhatsApp is only its groups table until CH10.3 adds the channel', () => {
+  it('nine message statuses (the brief eight plus needs_approval); CH10.3 three channels and the WhatsApp group destination', () => {
     expect(COMMS_HUB_MESSAGE_STATUSES).toHaveLength(9);
-    expect(COMMS_HUB_CHANNELS).toEqual(['community_post', 'in_app']);
-    expect(COMMS_HUB_SCHEMA_STATEMENTS.filter((s) => /whatsapp/i.test(s)).every((s) => /comms_hub_whatsapp_groups/.test(s))).toBe(true);
+    expect(COMMS_HUB_CHANNELS).toEqual(['community_post', 'in_app', 'whatsapp']);
+    expect(COMMS_HUB_DESTINATION_TYPES).toEqual(['cohort_feed', 'in_app_audience', 'event_registrants', 'whatsapp_group']);
+    // Every channel CHECK, created fresh or widened, lists whatsapp; the destination type CHECKs list whatsapp_group.
+    for (const con of ['comms_hub_drafts_channel_check', 'comms_hub_destinations_channel_check', 'comms_hub_deliveries_channel_check']) {
+      const defs = COMMS_HUB_SCHEMA_STATEMENTS.filter((s) => s.includes(`CONSTRAINT ${con}`));
+      expect(defs.length).toBe(2);
+      for (const d of defs) expect(d).toContain("'whatsapp'");
+    }
+    for (const d of COMMS_HUB_SCHEMA_STATEMENTS.filter((s) => s.includes('CONSTRAINT comms_hub_destinations_type_check'))) expect(d).toContain("'whatsapp_group'");
   });
 
   it('CH10.2 WhatsApp groups: one row per provider group (unique), the id shape checked, every group starts not enabled', () => {

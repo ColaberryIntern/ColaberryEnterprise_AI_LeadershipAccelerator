@@ -4,6 +4,9 @@ import CommsHubWhatsAppGroup from '../../../models/CommsHubWhatsAppGroup';
 import { logActivity, type Actor } from '../activityLog';
 import type { ProviderGroup, WhatsAppProvider } from './provider';
 import { requireConnection, sameNumber, type Connection } from './whatsappConnection';
+import { CANT_SEND_TEXT, cantSendReason, type CantSendReason } from './groupRules';
+
+export { CANT_SEND_TEXT, cantSendReason, type CantSendReason } from './groupRules';
 
 /**
  * CH10.2 WhatsApp groups: sync from the provider, list, and switch sending on or off per group (W3).
@@ -19,16 +22,6 @@ export const SYNC_PAGE_SIZE = 100;
 /** Bound on the page loop: 50 pages is 5,000 groups, far more than one number belongs to. */
 export const SYNC_MAX_PAGES = 50;
 
-export type CantSendReason = 'left' | 'suspended' | 'terminated' | 'admins_only' | 'not_a_member' | 'forbidden';
-export const CANT_SEND_TEXT: Record<CantSendReason, string> = {
-  left: 'The hub number is no longer in this group.',
-  suspended: 'WhatsApp has suspended this group.',
-  terminated: 'This group has been closed.',
-  admins_only: 'Only admins can post here, and the hub number is not an admin.',
-  not_a_member: 'The hub number is not listed as a member of this group.',
-  forbidden: 'WhatsApp refused a message to this group.',
-};
-
 export interface WhatsAppGroupView {
   id: string;
   name: string;
@@ -42,18 +35,6 @@ export interface WhatsAppGroupView {
 export class GroupNotFoundError extends Error { constructor() { super('That WhatsApp group is not in the hub.'); this.name = 'NotFound'; } }
 export class GroupNotSendableError extends Error {
   constructor(readonly reason: CantSendReason) { super(`This group cannot be switched on: ${CANT_SEND_TEXT[reason]}`); this.name = 'GroupNotSendable'; }
-}
-
-type GroupFacts = Pick<CommsHubWhatsAppGroup, 'left_at' | 'suspended' | 'terminated' | 'announcements' | 'our_rank' | 'cant_send_reason'>;
-
-export function cantSendReason(g: GroupFacts): CantSendReason | null {
-  if (g.left_at) return 'left';
-  if (g.terminated) return 'terminated';
-  if (g.suspended) return 'suspended';
-  if (!g.our_rank) return 'not_a_member';
-  if (g.announcements && g.our_rank !== 'admin' && g.our_rank !== 'creator') return 'admins_only';
-  if (g.cant_send_reason === 'forbidden') return 'forbidden';
-  return null;
 }
 
 export function toView(g: CommsHubWhatsAppGroup): WhatsAppGroupView {
@@ -108,7 +89,9 @@ export async function syncWhatsAppGroups(actor: Actor, deps: { connection?: Conn
       if (rows[0]?.inserted) added += 1;
     }
     const left = await sequelize.query<{ id: string }>(
-      `UPDATE comms_hub_whatsapp_groups SET left_at = now(), updated_at = now()
+      // CH10.3 consent: leaving a group also switches it off, so a group the number rejoins later needs
+      // a fresh opt-in from Jackie before anything is sent to it again.
+      `UPDATE comms_hub_whatsapp_groups SET left_at = now(), enabled = false, updated_at = now()
         WHERE left_at IS NULL AND NOT (provider_group_id = ANY($1::text[])) RETURNING id`,
       { bind: [groups.map((g) => g.id)], type: QueryTypes.SELECT, transaction: t },
     );
