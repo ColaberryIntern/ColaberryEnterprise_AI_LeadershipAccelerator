@@ -1,5 +1,6 @@
 import { roomPageUrl } from './roomLink';
 import type { CandidateRow, ClientInterviewRow, ClientOfferRow } from './clientStore';
+import type { CardFacts, CardProfile } from './clientCards';
 
 /**
  * Career Prep v27, CP10.2: what the employer portal is shown, PURE (rows in, response shapes out; clientStore.ts scoped
@@ -7,7 +8,7 @@ import type { CandidateRow, ClientInterviewRow, ClientOfferRow } from './clientS
  * roomLink.ts), only for a booked interview with a time, never the meeting provider's link. Offers carry the fee: the
  * fee is the employer's (kit F7); the candidate's shape (offerService.candidateOffer) never does.
  */
-export interface ClientCandidate { enrollmentId: string; name: string; initials: string; putForwardAt: string }
+export interface ClientCandidate { enrollmentId: string; name: string; initials: string; putForwardAt: string; readiness: number | null; profile: CardProfile | null }
 export interface ClientInterview {
   id: string; enrollmentId: string; candidateName: string; company: string | null; role: string | null;
   status: 'not_booked' | 'booked' | 'held' | 'cancelled'; startsAt: string | null; minutes: number | null; joinPage: string | null; recorded: boolean;
@@ -28,7 +29,9 @@ export function initials(name: string | null): string {
   return ((parts[0]?.[0] ?? '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
 }
 
-export const candidateView = (r: CandidateRow): ClientCandidate => ({ enrollmentId: r.enrollment_id, name: displayName(r.full_name), initials: initials(r.full_name), putForwardAt: iso(r.put_forward_at) });
+/** A card: the name from the scoped row, the facts from clientCards (absent facts are null, never guessed). */
+export const candidateView = (r: CandidateRow, f?: CardFacts): ClientCandidate => ({ enrollmentId: r.enrollment_id, name: displayName(r.full_name), initials: initials(r.full_name),
+  putForwardAt: iso(r.put_forward_at), readiness: f?.readiness ?? null, profile: f?.profile ?? null });
 
 /** new / awaiting / review = not booked yet; booked; done = held; cancelled. */
 function status(state: string): ClientInterview['status'] {

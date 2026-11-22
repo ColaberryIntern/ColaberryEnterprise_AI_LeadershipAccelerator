@@ -28,7 +28,19 @@ const mockMail = { send: jest.fn() };
 jest.mock('../../services/emailService', () => ({ guardedSendMail: (...a: unknown[]) => mockMail.send(...a), resolveEmailRecipient: async (to: string, subject: string) => ({ to, subject }) }));
 jest.mock('../../services/email/idempotentSend', () => ({ sendOnce: async (_id: unknown, send: () => Promise<{ ok: boolean }>) => ((await send()).ok ? { outcome: 'sent' } : { outcome: 'failed', errorClass: 'X' }) }));
 const mockCreate = jest.fn();
-jest.mock('../../services/placement/offerService', () => ({ createOffer: (...a: unknown[]) => mockCreate(...a) }));
+jest.mock('../../services/placement/offerService', () => ({ createOffer: (...a: unknown[]) => mockCreate(...a), feeRate: async () => 1.1 }));
+// The card facts (clientCards.ts, tested on its own): records which ids the route asked about, so a test can prove it
+// only ever asks about the signed-in client's own candidates.
+const mockCards = { asked: [] as string[][], unavailable: false, xss: false };
+jest.mock('../../services/placement/clientCards', () => ({
+  loadCardFacts: async (ids: string[]) => {
+    mockCards.asked.push(ids);
+    const facts = new Map(ids.map((id) => [id, id.startsWith('1111') ? { readiness: 72, profile: mockCards.unavailable ? null : {
+      url: mockCards.xss ? 'javascript:alert(1)//talent/x/' : 'https://hire.refactored.ai/talent/ann-lee/', role: 'AI Solutions Analyst',
+      verifiedProjects: ['Freight ETA forecasting'], verifiedCount: 1 } } : { readiness: null, profile: null }]));
+    return { facts, profilesUnavailable: mockCards.unavailable };
+  },
+}));
 
 import express from 'express';
 import request from 'supertest';
@@ -120,11 +132,40 @@ describe('sign-in answers', () => {
 describe('scoped to the signed-in client', () => {
   it('candidates: client A sees only Ann; client B sees only Bob; B asking for Ann is 404', async () => {
     const a = await request(app).get('/api/hire/client/candidates').set('Authorization', PAT);
-    expect(a.body.candidates).toEqual([{ enrollmentId: ANN, name: 'Ann Lee', initials: 'AL', putForwardAt: '2026-11-20T15:00:00.000Z' }]);
+    expect(a.body.candidates).toEqual([{ enrollmentId: ANN, name: 'Ann Lee', initials: 'AL', putForwardAt: '2026-11-20T15:00:00.000Z', readiness: 72,
+      profile: { url: 'https://hire.refactored.ai/talent/ann-lee/', role: 'AI Solutions Analyst', verifiedProjects: ['Freight ETA forecasting'], verifiedCount: 1 } }]);
+    expect(a.body).toMatchObject({ profilesUnavailable: false, feeRateBp: 11000 });
     expect((await request(app).get(`/api/hire/client/candidates/${ANN}`).set('Authorization', SAM)).status).toBe(404);
-    expect((await request(app).get(`/api/hire/client/candidates/${ANN}`).set('Authorization', PAT)).status).toBe(200);
+    const one = await request(app).get(`/api/hire/client/candidates/${ANN}`).set('Authorization', PAT);
+    expect(one.status).toBe(200);
+    expect(one.body).toMatchObject({ candidate: { enrollmentId: ANN, readiness: 72 }, profilesUnavailable: false });
     expect((await request(app).get('/api/hire/client/candidates/not-a-uuid').set('Authorization', PAT)).status).toBe(404);
     expect(a.headers['cache-control']).toBe('no-store');
+  });
+  it('card facts are asked ONLY for this client\'s own candidates (never another client\'s, never a 404\'d id)', async () => {
+    mockCards.asked = [];
+    await request(app).get('/api/hire/client/candidates').set('Authorization', SAM);
+    await request(app).get(`/api/hire/client/candidates/${ANN}`).set('Authorization', SAM); // 404: no facts read
+    expect(mockCards.asked).toEqual([[BOB]]);
+    const b = await request(app).get('/api/hire/client/candidates').set('Authorization', SAM);
+    expect(b.body.candidates[0]).toMatchObject({ enrollmentId: BOB, readiness: null, profile: null }); // absent = null, never invented
+  });
+  it('the Hire profiles could not be read: the list still loads and says so (profilesUnavailable), with no profile', async () => {
+    mockCards.unavailable = true;
+    try {
+      const a = await request(app).get('/api/hire/client/candidates').set('Authorization', PAT);
+      expect(a.status).toBe(200);
+      expect(a.body).toMatchObject({ profilesUnavailable: true, candidates: [{ profile: null, readiness: 72 }] });
+    } finally { mockCards.unavailable = false; }
+  });
+  it('a profile link that is not an https /talent/ address is refused by the response contract (500, never sent on)', async () => {
+    mockCards.xss = true;
+    const err = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const a = await request(app).get('/api/hire/client/candidates').set('Authorization', PAT);
+      expect(a.status).toBe(500);
+      expect(JSON.stringify(a.body)).not.toContain('javascript:');
+    } finally { mockCards.xss = false; err.mockRestore(); }
   });
   it('interviews: never the provider link; Join is the signed room PAGE, only when booked', async () => {
     const r = await request(app).get('/api/hire/client/interviews').set('Authorization', PAT);

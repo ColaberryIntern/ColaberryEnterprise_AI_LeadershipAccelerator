@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Employer portal &middot; Hire &middot; Refactored.ai</title>
+  <!-- ALWAYS noindex: the portal is private to each signed-in employer and is never a search result. -->
+  <meta name="robots" content="noindex, nofollow" />
+  <!-- The sign-in link carries a one-time token: no request from this page may pass the address on. -->
+  <meta name="referrer" content="no-referrer" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" />
+  <link rel="stylesheet" href="/assets/tokens.css" />
+  <link rel="stylesheet" href="/assets/hire.css" />
+  <link rel="stylesheet" href="/assets/portfolio.css" />
+  <link rel="stylesheet" href="/assets/schedule.css" />
+  <link rel="stylesheet" href="/assets/client.css" />
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+</head>
+<body data-api="{{brand.platformApiBase}}" data-site="hire-refactored" data-view="client">
+  <a class="skip" href="#portal">Skip to content</a>
+  <div class="cp">
+    <header class="cp-top">
+      <a class="logo" href="/" aria-label="Hire &middot; Refactored.ai home">Refactored<span class="faint">.ai</span></a>
+      <span class="cp-prod">Employer portal</span>
+      <span id="who" class="cp-who-top"></span>
+    </header>
+    <main id="portal" tabindex="-1" class="cp-main" aria-live="polite">
+      <p class="lede">Loading the employer portal...</p>
+      <noscript><p class="lede">The employer portal needs JavaScript. Email your Refactored.ai contact and we will help you sign in.</p></noscript>
+    </main>
+    <footer class="cp-foot"><span>Refactored.ai &middot; Hire: candidates put forward by your Refactored.ai contact. Fees apply only when a candidate accepts.</span></footer>
+  </div>
+  <div id="dialog" class="cp-backdrop" hidden></div>
+  <script src="/assets/common.js" defer></script>
+  <script src="/assets/client-model.js" defer></script>
+  <script src="/assets/client-views.js" defer></script>
+  <script src="/assets/client-portal.js" defer></script>
+  <script src="/assets/client-offer.js" defer></script>
+</body>
+</html>

@@ -4,7 +4,8 @@ import { logFailure, sendValidated } from './campusRoutes';
 import { LINK_INVALID, redeemLink, REQUEST_LINK_RESPONSE, requestLink, requireHireClient, type ClientRequest, type RequestLinkOutcome } from '../services/placement/clientAuth';
 import * as store from '../services/placement/clientStore';
 import { candidateView, interviewView, offerView } from '../services/placement/clientView';
-import { createOffer } from '../services/placement/offerService';
+import { createOffer, feeRate } from '../services/placement/offerService';
+import { loadCardFacts } from '../services/placement/clientCards';
 import type { Read } from '../services/placement/darkSwitches';
 
 /**
@@ -12,7 +13,9 @@ import type { Read } from '../services/placement/darkSwitches';
  *
  *   POST /api/hire/client/auth/request-link  { email }   ALWAYS 202 + one message (no enumeration; clientAuth.ts)
  *   POST /api/hire/client/auth/redeem        { token }   200 { token, expiresIn, clientName } or 401 one message
- *   GET  /api/hire/client/candidates                     the learners staff put forward to THIS client
+ *   GET  /api/hire/client/candidates                     the learners staff put forward to THIS client, each card's facts
+ *                                                          (clientCards.ts: readiness, Hire profile; null when absent), and
+ *                                                          the fee rate in force (feeRateBp) for the page's live estimate
  *   GET  /api/hire/client/candidates/:enrollmentId       one of them; anyone else's is 404 (never 403: no disclosure)
  *   GET  /api/hire/client/interviews                     this client's interviews (Join = the signed room PAGE, never the
  *                                                          provider's link; every answer passes the no-room-url scan in tests)
@@ -43,7 +46,10 @@ export const MakeOfferBody = z.object({
 }).strict();
 
 const iso = z.string().datetime();
-const Candidate = z.object({ enrollmentId: z.string().uuid(), name: z.string(), initials: z.string().max(2), putForwardAt: iso }).strict();
+const Profile = z.object({ url: z.string().regex(/^https:\/\/[^/\s]+\/talent\/[^/?#\s]+\/$/), role: z.string().max(120).nullable(),
+  verifiedProjects: z.array(z.string().max(120)).max(3), verifiedCount: z.number().int().min(0) }).strict();
+const Candidate = z.object({ enrollmentId: z.string().uuid(), name: z.string(), initials: z.string().max(2), putForwardAt: iso,
+  readiness: z.number().int().min(0).max(100).nullable(), profile: Profile.nullable() }).strict();
 const Interview = z.object({ id: z.string().uuid(), enrollmentId: z.string().uuid(), candidateName: z.string(), company: z.string().nullable(), role: z.string().nullable(),
   status: z.enum(['not_booked', 'booked', 'held', 'cancelled']), startsAt: iso.nullable(), minutes: z.number().int().nullable(),
   joinPage: z.string().regex(/^https:\/\/[^/]+\/room\/\?i=[0-9a-f-]{36}&e=\d+&t=[A-Za-z0-9_-]{43}$/).nullable(), recorded: z.boolean() }).strict();
@@ -51,8 +57,8 @@ const Offer = z.object({ id: z.string().uuid(), groupId: z.string().uuid(), vers
   role: z.string(), payBasis: z.enum(['yearly', 'hourly']), salaryCents: z.number().int().nullable(), hourlyRateCents: z.number().int().nullable(),
   hoursPerWeek: z.number().nullable(), firstYearCents: z.number().int(), feeRateBp: z.number().int(), feeCents: z.number().int(), startDate: z.string().nullable(),
   respondBy: iso.nullable(), status: z.string(), invoiceStatus: z.enum(['not_invoiced', 'invoiced', 'paid']).nullable(), sentAt: iso }).strict();
-export const CandidatesResponse = z.object({ candidates: z.array(Candidate) }).strict();
-export const CandidateResponse = z.object({ candidate: Candidate }).strict();
+export const CandidatesResponse = z.object({ candidates: z.array(Candidate), profilesUnavailable: z.boolean(), feeRateBp: z.number().int().min(10_001).max(30_000) }).strict();
+export const CandidateResponse = z.object({ candidate: Candidate, profilesUnavailable: z.boolean() }).strict();
 export const InterviewsResponse = z.object({ interviews: z.array(Interview) }).strict();
 export const OffersResponse = z.object({ offers: z.array(Offer) }).strict();
 export const OfferResponse = z.object({ offer: Offer, replay: z.boolean() }).strict();
@@ -77,7 +83,11 @@ const noQuery = (req: Request, res: Response): boolean => {
 
 const listCandidates: Handler = async (req, res) => {
   if (!noQuery(req, res)) return;
-  sendValidated(res, CandidatesResponse, { candidates: (await store.clientCandidates(req.hireClient!.clientId)).map(candidateView) }, 'hire_client_candidates');
+  const rows = await store.clientCandidates(req.hireClient!.clientId);
+  // The card facts are read ONLY for the ids this client-scoped read returned.
+  const [cards, rate] = await Promise.all([loadCardFacts(rows.map((r) => r.enrollment_id)), feeRate()]);
+  sendValidated(res, CandidatesResponse, { candidates: rows.map((r) => candidateView(r, cards.facts.get(r.enrollment_id))),
+    profilesUnavailable: cards.profilesUnavailable, feeRateBp: Math.round(rate * 10_000) }, 'hire_client_candidates');
 };
 const oneCandidate: Handler = async (req, res) => {
   const p = EnrollmentParam.safeParse(req.params);
@@ -85,7 +95,8 @@ const oneCandidate: Handler = async (req, res) => {
   if (!noQuery(req, res)) return;
   const row = await store.clientCandidate(req.hireClient!.clientId, p.data.enrollmentId);
   if (!row) { res.status(404).json(NOT_FOUND); return; }
-  sendValidated(res, CandidateResponse, { candidate: candidateView(row) }, 'hire_client_candidate');
+  const cards = await loadCardFacts([row.enrollment_id]);
+  sendValidated(res, CandidateResponse, { candidate: candidateView(row, cards.facts.get(row.enrollment_id)), profilesUnavailable: cards.profilesUnavailable }, 'hire_client_candidate');
 };
 const listInterviews: Handler = async (req, res) => {
   if (!noQuery(req, res)) return;

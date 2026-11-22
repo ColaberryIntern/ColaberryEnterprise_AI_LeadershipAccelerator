@@ -219,6 +219,9 @@ export const BRAND_PAGE_CATEGORIES: Record<string, BrandPageCategoryMap> = {
       // Career Prep CP9.1: the employer's interview room for a booked interview (/room/?i=&e=&t=,
       // one shell, private signed link, no tracker). Meeting the candidate: the same meaning.
       '/room': 'contact',
+      // Career Prep CP10.2: the employer portal (/client/, one shell, signed in by emailed link, no tracker). An
+      // employer working with us on hires: the same "talk to a person" meaning as the room.
+      '/client': 'contact',
       // The shells above are what is ON DISK; what the browser REPORTS is the live path
       // nginx serves them under (nginx/hire-refactored.conf): /talent/<slug>/,
       // /talent/<slug>/schedule/, /case-studies/<slug>/. The tracker sends

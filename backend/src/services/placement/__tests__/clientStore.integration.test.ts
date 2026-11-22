@@ -103,6 +103,22 @@ describeIfDb('employer portal scoping against Postgres', () => {
     expect((await store.membershipsFor('pat@acme.example')).map((m) => [m.client_id, m.client_name])).toEqual([[A, 'Acme']]);
   });
 
+  it('card readiness (CP10.2b): the latest GENERAL readiness per given id, as written; another learner and interview rows ignored', async () => {
+    const { latestReadiness } = await import('../clientCards');
+    const { NO_INTERVIEW } = await import('../../../db/ensureCareerPrepSchema');
+    // The real table shape (ensureCareerPrepSchema); created here only when this database does not have it yet.
+    await sequelize.query(`CREATE TABLE IF NOT EXISTS prep_readiness_daily (enrollment_id UUID NOT NULL, interview_id UUID NOT NULL DEFAULT '${NO_INTERVIEW}',
+      date DATE NOT NULL, readiness NUMERIC(5,2), skills JSONB NOT NULL DEFAULT '{}'::jsonb, PRIMARY KEY (enrollment_id, interview_id, date))`);
+    const iv = '7fffffff-eeee-4eee-8eee-000000000001';
+    await sequelize.query(`DELETE FROM prep_readiness_daily WHERE enrollment_id IN ('${ANN}', '${BOB}')`);
+    await sequelize.query(`INSERT INTO prep_readiness_daily (enrollment_id, interview_id, date, readiness) VALUES
+      ('${ANN}', '${NO_INTERVIEW}', '2026-11-20', 60.4), ('${ANN}', '${NO_INTERVIEW}', '2026-11-21', 71.6), ('${ANN}', '${iv}', '2026-11-22', 99),
+      ('${ANN}', '${NO_INTERVIEW}', '2026-11-22', NULL), ('${BOB}', '${NO_INTERVIEW}', '2026-11-21', 55)`);
+    expect(await latestReadiness([ANN])).toEqual(new Map([[ANN, 72]]));
+    expect(await latestReadiness([ANN, BOB])).toEqual(new Map([[ANN, 72], [BOB, 55]]));
+    await sequelize.query(`DELETE FROM prep_readiness_daily WHERE enrollment_id IN ('${ANN}', '${BOB}')`);
+  });
+
   it('the database refuses a mixed-case member email and a second identical membership', async () => {
     const upper = await sequelize.query(`INSERT INTO hire_client_members (client_id, email) VALUES ('${A}', 'Pat@acme.example')`).then(() => null, (e: unknown) => e);
     expect(upper).toMatchObject({ parent: { code: '23514' } });
