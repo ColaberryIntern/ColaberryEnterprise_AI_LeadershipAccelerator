@@ -177,7 +177,37 @@ production runs those paths.
   Plan A's retainer. That is a change to W28's own form, not to this surface. The panel names
   the gap on the row rather than hiding it.
 
+---
+
+## What CI caught that I had not run
+
+First CI run: **9 pass, 1 fail.** Both typechecks passed, which was the real unknown given
+the local false clean. The failure was `frontendTypographyLint.test.ts`, a tree-wide
+shrink-only ratchet over `frontend/src` guarding em dashes, en dashes and emoji in **rendered
+copy**. Three violations, all in the new panel:
+
+```
+L336  {valueBasis} - {confirmedBy}     ->  a middot, as the badge above it already uses
+L437  ' - required'                     ->  ' (required)'
+L524  'Good - this can be checked...'   ->  'Good. Someone else can check this.'
+```
+
+Two of the three were **inherited by copying `BidPricingPanel`**, which is grandfathered in
+the frozen baseline. A new file has to be clean, which is the ratchet working as designed. The
+dashes in this file's *comments* were correctly not counted; both scanners exempt comments.
+
+**The process miss, recorded because it is the second of its kind today.** I ran the suites I
+touched plus the TWC banned-word ratchet, and did not run the frontend typography ratchet,
+which lives in the same directory and also scans a whole tree. Earlier today the same class of
+oversight put `'free-text'` into CI. The rule that would have caught both: **a tree-scanning
+ratchet is triggered by touching any file in its tree, not by touching the ratchet's own
+area.** Adding frontend copy means running the frontend typography lint.
+
+Saved to memory against the existing `frontendCopyLint` note, which had not recorded that a
+second ratchet of the same family exists.
+
 ## Commits
 
 - `8646de548` — R23 Phase 3: the write path
 - `1855927a3` — pin the error diagnostics, because a mutation survived without them
+- `09798fc17` — clear the frontend typography ratchet
