@@ -12,7 +12,7 @@ export interface CommsHubDeliveryAttributes {
   id?: string;
   message_id: string;
   destination_id: string;
-  channel: 'community_post' | 'in_app';
+  channel: 'community_post' | 'in_app' | 'whatsapp';
   idempotency_key: string;
   status?: CommsHubDeliveryStatus;
   attempt_count?: number;
@@ -29,7 +29,7 @@ class CommsHubDelivery extends Model<CommsHubDeliveryAttributes> implements Comm
   declare id: string;
   declare message_id: string;
   declare destination_id: string;
-  declare channel: 'community_post' | 'in_app';
+  declare channel: 'community_post' | 'in_app' | 'whatsapp';
   declare idempotency_key: string;
   declare status: CommsHubDeliveryStatus;
   declare attempt_count: number;

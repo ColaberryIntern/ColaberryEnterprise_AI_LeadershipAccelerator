@@ -12,9 +12,9 @@ import type { ClaimedDelivery, DeliveryRepo, SendContext, SendOutcome, StartResu
  * Concurrency in these tests is real interleaving on the event loop (two ticks awaited together).
  */
 export interface FakeMessage { id: string; status: CommsHubMessageStatus; send_at: Date | null; approvalMatches: boolean; voided?: boolean }
-export interface FakeDestination { id: string; message_id: string; channel: 'community_post' | 'in_app'; target_type: string; target_id: string; allowed: boolean }
+export interface FakeDestination { id: string; message_id: string; channel: 'community_post' | 'in_app' | 'whatsapp'; target_type: string; target_id: string; allowed: boolean; eventStarted?: boolean }
 export interface FakeDelivery {
-  id: string; message_id: string; destination_id: string; channel: 'community_post' | 'in_app'; idempotency_key: string;
+  id: string; message_id: string; destination_id: string; channel: 'community_post' | 'in_app' | 'whatsapp'; idempotency_key: string;
   status: 'pending' | 'sending' | 'sent' | 'failed' | 'cancelled' | 'skipped'; attempt_count: number; next_attempt_at: Date | null;
   claimed_at: Date | null; updated_at: Date; provider_message_id: string | null; error: string | null;
 }
@@ -66,7 +66,7 @@ export class FakeRepo implements DeliveryRepo {
       if (!due) continue;
       d.status = 'sending'; d.claimed_at = d.claimed_at ?? now; d.attempt_count += 1; d.updated_at = now;
       const dest = this.destinations.find((x) => x.id === d.destination_id)!;
-      out.push({ id: d.id, message_id: d.message_id, destination_id: d.destination_id, channel: d.channel, idempotency_key: d.idempotency_key, attempt: d.attempt_count, first_claimed_at: d.claimed_at, target_type: dest.target_type, target_id: dest.target_id });
+      out.push({ id: d.id, message_id: d.message_id, destination_id: d.destination_id, channel: d.channel, idempotency_key: d.idempotency_key, attempt: d.attempt_count, first_claimed_at: d.claimed_at, previous_error: d.error, target_type: dest.target_type, target_id: dest.target_id });
     }
     return out;
   }
@@ -88,6 +88,7 @@ export class FakeRepo implements DeliveryRepo {
         settings: { ...this.settingsRow }, messageStatus: m.status, approvalMatches: m.approvalMatches,
         destinationAllowed: !!dest?.allowed, draft: this.drafts.get(`${d.message_id}:${d.channel}`) ?? null,
         media_urls: d.channel === 'community_post' ? ['https://enterprise.example/api/comms-hub/thumbnails/e1/3x1.png?v=t1'] : [],
+        eventStarted: !!dest?.eventStarted,
       });
       if (out.kind === 'sent') Object.assign(row, { status: 'sent', provider_message_id: out.provider_message_id, error: null, next_attempt_at: null });
       if (out.kind === 'retry') Object.assign(row, { status: 'pending', next_attempt_at: out.at, error: out.error });

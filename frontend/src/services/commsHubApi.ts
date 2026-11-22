@@ -311,10 +311,10 @@ export async function savePromotionPlan(eventId: string, kinds: PlanKind[]): Pro
 /* Compose (CH6.5: backend/src/routes/admin/commsHubMessageRoutes.ts). */
 export type MessageKind = 'announcement' | 'reminder' | 'starting_soon' | 'recording_thanks' | 'time_change' | 'cancellation' | 'update' | 'other';
 export type Tone = 'friendly' | 'professional' | 'urgent';
-export type Channel = 'community_post' | 'in_app';
+export type Channel = 'community_post' | 'in_app' | 'whatsapp';
 export interface DraftView { id: string; channel: Channel; version: number; title: string | null; body: string; author: string; instruction: string | null; created_at: string }
 /** CH9.6 'event_registrants': target_id is the hub event id of a managed Eventbrite event (in-app only). */
-export interface DestinationView { id?: string; channel: Channel; target_type: 'cohort_feed' | 'in_app_audience' | 'event_registrants'; target_id: string; label: string | null; has_delivery?: boolean; reason?: string }
+export interface DestinationView { id?: string; channel: Channel; target_type: 'cohort_feed' | 'in_app_audience' | 'event_registrants' | 'whatsapp_group'; target_id: string; label: string | null; has_delivery?: boolean; reason?: string }
 export interface MessageView {
   id: string; status: HubMessageStatus; kind: MessageKind; tone: Tone | null; notes: string | null; subject: string | null;
   include: { thumbnail?: boolean; join_link?: boolean; registration_link?: boolean }; send_at: string | null; created_by: string | null;
@@ -376,6 +376,8 @@ export interface BoardRow {
   approved_by: string | null;
   deliveries: { total: number; sent: number; failed: number; pending: number; cancelled: number };
   failure: { reason: string; missed: string[]; attempts: number } | null;
+  /** CH10.4: WhatsApp waits and already-sent notes, in plain words. Older servers may not send it. */
+  notes?: string[];
 }
 export interface BoardFilter { status?: HubMessageStatus[]; channel?: Channel | null; event_id?: string | null; limit?: number }
 export async function getBoard(scope: BoardScope, f: BoardFilter = {}): Promise<BoardRow[]> {
@@ -404,3 +406,31 @@ export async function getActivity(limit = 20): Promise<ActivityRow[]> {
 }
 /** Try the recipients that missed a partly sent or failed message again (CH7.2 route). */
 export async function retryHubMessage(id: string): Promise<MessageView> { return one(api.post(`${messages}/${id}/retry`)); }
+
+/** CH10.1: the WhatsApp channel's state. Never carries the token or the full number. */
+export type WhatsAppState = 'not_configured' | 'connected' | 'waiting_for_qr' | 'disconnected';
+export interface WhatsAppStatus { configured: boolean; enabled: boolean; state: WhatsAppState; number_last4: string | null; reason: string | null; paused_until?: string | null }
+export async function getWhatsAppStatus(): Promise<WhatsAppStatus> {
+  const { data } = await api.get<WhatsAppStatus>('/api/admin/comms-hub/whatsapp/status');
+  return data;
+}
+
+/** CH10.4: resume WhatsApp sends before the 48-hour pause ends (organizers only; asks for a confirm first). */
+export async function clearWhatsAppPause(): Promise<{ cleared: boolean }> {
+  return (await api.post<{ cleared: boolean }>('/api/admin/comms-hub/whatsapp/breaker/clear', { confirm: true })).data;
+}
+
+/** CH10.2: the number's WhatsApp groups. Every group starts switched off. */
+export interface WhatsAppGroup {
+  id: string; name: string; participants_count: number; enabled: boolean; sendable: boolean; cant_send_reason: string | null; last_synced_at: string;
+}
+export interface WhatsAppSyncResult { listed: number; added: number; left: number }
+export async function listWhatsAppGroups(): Promise<WhatsAppGroup[]> {
+  return (await api.get<{ groups: WhatsAppGroup[] }>('/api/admin/comms-hub/whatsapp/groups')).data.groups;
+}
+export async function syncWhatsAppGroups(): Promise<WhatsAppSyncResult> {
+  return (await api.post<WhatsAppSyncResult>('/api/admin/comms-hub/whatsapp/groups/sync')).data;
+}
+export async function setWhatsAppGroupEnabled(id: string, enabled: boolean): Promise<WhatsAppGroup> {
+  return (await api.put<{ group: WhatsAppGroup }>(`/api/admin/comms-hub/whatsapp/groups/${encodeURIComponent(id)}`, { enabled })).data.group;
+}

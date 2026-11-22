@@ -8,6 +8,8 @@ import CommsHubDraft from '../../../models/CommsHubDraft';
 import CommsHubEvent from '../../../models/CommsHubEvent';
 import CommsHubMessage from '../../../models/CommsHubMessage';
 import CommsHubSettings from '../../../models/CommsHubSettings';
+import CommsHubWhatsAppGroup from '../../../models/CommsHubWhatsAppGroup';
+import { cantSendReason } from '../whatsapp/groupRules';
 import { ALL_MEMBERS } from '../connectors/inAppConnector';
 import { approvalStillMatches, finishMessage, startMessage } from './messageLifecycle';
 import { MAX_ATTEMPTS, SENDING_LEASE_MS } from './retryPolicy';
@@ -27,7 +29,7 @@ import type { ClaimedDelivery, DeliveryRepo, SendContext, SendOutcome, WorkerSet
  * the next sender to that feed sees the recorded post (CH7.1's retry rule depends on that).
  */
 // CH9.6: a channel allows a SET of target types; in-app reaches an audience or an event's registrants.
-const TARGET_TYPES_FOR: Record<string, readonly string[]> = { community_post: ['cohort_feed'], in_app: ['in_app_audience', 'event_registrants'] };
+const TARGET_TYPES_FOR: Record<string, readonly string[]> = { community_post: ['cohort_feed'], in_app: ['in_app_audience', 'event_registrants'], whatsapp: ['whatsapp_group'] };
 
 /** Pure: is this a legal destination shape for its channel, before the target itself is looked up. */
 export function destinationShapeAllowed(channel: string, targetType: string): boolean {
@@ -35,6 +37,8 @@ export function destinationShapeAllowed(channel: string, targetType: string): bo
 }
 
 export function sendLockKey(d: Pick<ClaimedDelivery, 'channel' | 'target_type' | 'target_id' | 'message_id'>): string {
+  // CH10.4: ONE WhatsApp send at a time across the whole hub (W6), whatever the group or message.
+  if (d.channel === 'whatsapp') return 'comms_hub:whatsapp';
   return d.channel === 'community_post' ? `comms_hub:post:${d.target_type}:${d.target_id}` : `comms_hub:in_app:${d.message_id}`;
 }
 
@@ -48,7 +52,7 @@ async function readSettings(t?: Transaction): Promise<WorkerSettings> {
   return { paused: !!s?.sending_paused, quietHours: s?.quiet_hours ?? null };
 }
 
-async function readContext(d: ClaimedDelivery, t: Transaction): Promise<SendContext> {
+async function readContext(d: ClaimedDelivery, t: Transaction, now: Date): Promise<SendContext> {
   const m = await CommsHubMessage.findByPk(d.message_id, { transaction: t });
   const dest = await CommsHubDestination.findByPk(d.destination_id, { transaction: t });
   let destinationAllowed = !!dest && dest.message_id === d.message_id && dest.channel === d.channel && destinationShapeAllowed(d.channel, dest.target_type);
@@ -56,13 +60,17 @@ async function readContext(d: ClaimedDelivery, t: Transaction): Promise<SendCont
     // CH9.6: the message's own event, still an Eventbrite event managed in the hub (never a cohort lookup).
     const ev = await CommsHubEvent.findByPk(dest!.target_id, { attributes: ['id', 'ccpp_event_id'], transaction: t });
     destinationAllowed = !!ev && !!ev.ccpp_event_id && m?.event_id === ev.id;
+  } else if (destinationAllowed && dest!.target_type === 'whatsapp_group') {
+    // CH10.3: a group in the hub, switched on, and one the number can still post in (never a cohort lookup).
+    const g = await CommsHubWhatsAppGroup.findByPk(dest!.target_id, { transaction: t });
+    destinationAllowed = !!g && g.enabled && cantSendReason(g) === null;
   } else {
     if (destinationAllowed && dest!.target_id !== ALL_MEMBERS) destinationAllowed = !!(await Cohort.findByPk(dest!.target_id, { attributes: ['id'], transaction: t }));
     if (destinationAllowed && dest!.target_id === ALL_MEMBERS) destinationAllowed = d.channel === 'in_app';
   }
   const draft = await CommsHubDraft.findOne({ where: { message_id: d.message_id, channel: d.channel }, order: [['version', 'DESC']], transaction: t });
   let media_urls: string[] = [];
-  if (m && d.channel === 'community_post' && m.include?.thumbnail !== false && m.event_id) {
+  if (m && (d.channel === 'community_post' || d.channel === 'whatsapp') && m.include?.thumbnail !== false && m.event_id) {
     const e = await CommsHubEvent.findByPk(m.event_id, { attributes: ['id', 'thumbnail_id'], transaction: t });
     if (e?.thumbnail_id) media_urls = [bannerUrl(e.id, e.thumbnail_id)];
   }
@@ -73,13 +81,18 @@ async function readContext(d: ClaimedDelivery, t: Transaction): Promise<SendCont
     destinationAllowed,
     draft: draft ? { title: draft.title ?? null, body: draft.body } : null,
     media_urls,
+    // CH10.4: a held WhatsApp reminder must never go out after its event has started.
+    eventStarted: d.channel === 'whatsapp' && !!m?.plan_kind && !!m.occurrence_starts_at && m.occurrence_starts_at.getTime() <= now.getTime(),
   };
 }
+
+export const ALREADY_DONE_NOTE = 'already_done: an earlier attempt had already sent it, so it was not sent again';
 
 async function record(row: CommsHubDelivery, out: SendOutcome, now: Date, t: Transaction): Promise<void> {
   switch (out.kind) {
     case 'sent':
-      await row.update({ status: 'sent', provider_message_id: out.provider_message_id, sent_at: now, error: null, next_attempt_at: null }, { transaction: t });
+      // An earlier attempt had already sent it: recorded as sent, with a note saying it was not sent again.
+      await row.update({ status: 'sent', provider_message_id: out.provider_message_id, sent_at: now, error: out.already_done ? ALREADY_DONE_NOTE : null, next_attempt_at: null }, { transaction: t });
       return;
     case 'retry':
       await row.update({ status: 'pending', next_attempt_at: out.at, error: out.error }, { transaction: t });
@@ -125,13 +138,31 @@ export const deliveryRepo: DeliveryRepo = {
         WHERE status = 'sending' AND updated_at < :stale AND attempt_count >= :max`,
       { replacements: { now, stale, max: MAX_ATTEMPTS } },
     );
+    // CH10.4 (W6): at most ONE WhatsApp delivery per claim, none while the pacing gap or the breaker is
+    // in force (read from the settings row in the same statement), and none while another WhatsApp send
+    // is still in flight. The pick is an UNLOCKED subquery; the outer select keeps FOR UPDATE SKIP LOCKED,
+    // so two workers never take the same row. A WhatsApp row not picked stays pending: no try is spent.
     const [rows] = await sequelize.query(
-      `WITH due AS (
+      `WITH wa AS (
+         SELECT d.id FROM comms_hub_deliveries d
+           JOIN comms_hub_messages m ON m.id = d.message_id
+          WHERE d.channel = 'whatsapp' AND m.status = 'sending'
+            AND ((d.status = 'pending' AND (d.next_attempt_at IS NULL OR d.next_attempt_at <= :now))
+              OR (d.status = 'sending' AND d.updated_at < :stale AND d.attempt_count < :max))
+            AND NOT EXISTS (SELECT 1 FROM comms_hub_settings s WHERE s.id = 1
+                             AND ((s.whatsapp_next_send_at IS NOT NULL AND s.whatsapp_next_send_at > :now)
+                               OR (s.whatsapp_breaker_until IS NOT NULL AND s.whatsapp_breaker_until > :now)))
+            AND NOT EXISTS (SELECT 1 FROM comms_hub_deliveries x
+                             WHERE x.channel = 'whatsapp' AND x.status = 'sending' AND x.updated_at >= :stale AND x.id <> d.id)
+          ORDER BY d.next_attempt_at NULLS FIRST, d.created_at, d.id
+          LIMIT 1
+       ), due AS (
          SELECT d.id FROM comms_hub_deliveries d
            JOIN comms_hub_messages m ON m.id = d.message_id
           WHERE m.status = 'sending'
             AND ((d.status = 'pending' AND (d.next_attempt_at IS NULL OR d.next_attempt_at <= :now))
               OR (d.status = 'sending' AND d.updated_at < :stale AND d.attempt_count < :max))
+            AND (d.channel <> 'whatsapp' OR d.id IN (SELECT id FROM wa))
           ORDER BY d.created_at
           LIMIT :limit
           FOR UPDATE OF d SKIP LOCKED
@@ -140,7 +171,7 @@ export const deliveryRepo: DeliveryRepo = {
           SET status = 'sending', claimed_at = COALESCE(d.claimed_at, :now), attempt_count = d.attempt_count + 1, updated_at = :now
          FROM due, comms_hub_destinations dest
         WHERE d.id = due.id AND dest.id = d.destination_id
-       RETURNING d.id, d.message_id, d.destination_id, d.channel, d.idempotency_key, d.attempt_count AS attempt,
+       RETURNING d.id, d.message_id, d.destination_id, d.channel, d.idempotency_key, d.attempt_count AS attempt, d.error AS previous_error,
                  d.claimed_at AS first_claimed_at, dest.target_type, dest.target_id`,
       { replacements: { now, stale, limit, max: MAX_ATTEMPTS } },
     );
@@ -153,7 +184,7 @@ export const deliveryRepo: DeliveryRepo = {
       const row = await CommsHubDelivery.findByPk(d.id, { lock: t.LOCK.UPDATE, transaction: t });
       // No longer this claim's: sent meanwhile, or reclaimed after the lease (the attempt number moved on).
       if (!row || row.status !== 'sending' || row.attempt_count !== d.attempt) return null;
-      const out = await decide(await readContext(d, t));
+      const out = await decide(await readContext(d, t, now));
       await record(row, out, now, t);
       return out;
     });

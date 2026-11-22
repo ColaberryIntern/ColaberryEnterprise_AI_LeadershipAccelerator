@@ -18,6 +18,20 @@ export const MESSAGE_DRAFT_SYSTEM = [
   'Reply with one JSON object: {"community_post": {"body": string}, "in_app": {"title": string, "body": string}}.',
 ].join('\n');
 
+/**
+ * CH10.3: the same rules with a third version for WhatsApp groups, used only while the WhatsApp channel
+ * is switched on. Plain text: WhatsApp shows symbols like ** and # literally.
+ */
+export const MESSAGE_DRAFT_SYSTEM_WITH_WHATSAPP = [
+  ...MESSAGE_DRAFT_SYSTEM.split('\n').slice(0, -1).map((l) => l.replace('You write two versions of one message:', 'You write three versions of one message:').replace('both versions must include', 'every version must include')),
+  '3. whatsapp: a message for a WhatsApp group. Plain text only, 2 to 5 short sentences, at most 900 characters. No markdown, no asterisks, no bullet symbols, no emoji.',
+  'Reply with one JSON object: {"community_post": {"body": string}, "in_app": {"title": string, "body": string}, "whatsapp": {"body": string}}.',
+].join('\n');
+
+export function messageDraftSystem(withWhatsApp: boolean): string {
+  return withWhatsApp ? MESSAGE_DRAFT_SYSTEM_WITH_WHATSAPP : MESSAGE_DRAFT_SYSTEM;
+}
+
 const INSTRUCTION_WORDS: Record<string, string> = {
   shorter: 'Make it noticeably shorter, keeping the same meaning and every placeholder it needs.',
   warmer: 'Make it warmer and more personal, keeping the same facts.',
@@ -30,7 +44,7 @@ export interface DraftPromptInput {
   tone: string | null;
   notes: string | null;
   /** Shorter / Warmer / More detail: the previous version to rework. */
-  revise?: { instruction: 'shorter' | 'warmer' | 'more_detail'; previous: { community_post?: string; in_app_title?: string; in_app_body?: string } };
+  revise?: { instruction: 'shorter' | 'warmer' | 'more_detail'; previous: { community_post?: string; in_app_title?: string; in_app_body?: string; whatsapp?: string } };
 }
 
 export function messageDraftUserPrompt(i: DraftPromptInput): string {

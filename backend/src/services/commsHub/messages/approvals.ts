@@ -6,8 +6,9 @@ import CommsHubDestination from '../../../models/CommsHubDestination';
 import CommsHubApproval from '../../../models/CommsHubApproval';
 import CommsHubEvent from '../../../models/CommsHubEvent';
 import { logActivity, type Actor } from '../activityLog';
-import { factsFor, problemsFor } from './draftFacts';
+import { factsFor, problemsFor, type DraftForCheck } from './draftFacts';
 import { replayLink } from './links';
+import { readWhatsAppConfig } from '../channelConfig';
 import { APPROVED_STATUSES, approvalHash, transition, type ApprovalContent, type VoidReason } from './messageStatus';
 
 /**
@@ -60,8 +61,18 @@ async function assertDraftsValid(m: CommsHubMessage, content: ApprovalContent, t
   }
   const facts = event ? factsFor(event, m.occurrence_starts_at, now, replayLink()) : null;
   const postEvent = m.kind === 'recording_thanks';
-  const problems = content.drafts.flatMap((d) => problemsFor({ channel: d.channel as 'community_post' | 'in_app', title: d.title, body: d.body }, facts, { postEvent }));
+  const problems = content.drafts.flatMap((d) => problemsFor({ channel: d.channel as DraftForCheck['channel'], title: d.title, body: d.body }, facts, { postEvent }));
   if (problems.length) throw new MessageRuleError(`Fix the drafts before ${doing}.`, 409, 'draft_invalid', problems);
+}
+
+/**
+ * CH10.3: a message going to a WhatsApp group needs its own WhatsApp text, and WhatsApp switched on.
+ * (Drafts are written before recipients are chosen, so a message drafted while WhatsApp was off has none.)
+ */
+export function assertWhatsAppReady(content: ApprovalContent): void {
+  if (!content.destinations.some((d) => d.channel === 'whatsapp')) return;
+  if (readWhatsAppConfig().notConfigured) throw new MessageRuleError('WhatsApp is not connected, so this message cannot go to a WhatsApp group. Remove the WhatsApp groups or connect WhatsApp first.', 409, 'whatsapp_off');
+  if (!content.drafts.some((d) => d.channel === 'whatsapp')) throw new MessageRuleError('This message goes to a WhatsApp group but has no WhatsApp text yet. Use Shorter, Warmer or More detail to draft it.', 409, 'no_whatsapp_draft');
 }
 
 async function locked(messageId: string, t: Transaction): Promise<CommsHubMessage> {
@@ -110,6 +121,7 @@ export async function approveMessage(messageId: string, actor: Actor, now: Date 
     const content = await loadContent(m.id, t);
     if (content.drafts.length === 0) throw new MessageRuleError('There is no text to approve yet.', 409, 'no_draft');
     if (content.destinations.length === 0) throw new MessageRuleError('Choose who it goes to before approving.', 409, 'no_destination');
+    assertWhatsAppReady(content);
     await assertDraftsValid(m, content, t, now, 'approving');
     const previous = await inForce(m.id, t);
     if (previous) await previous.update({ voided_at: now, voided_reason: 'superseded' }, { transaction: t });

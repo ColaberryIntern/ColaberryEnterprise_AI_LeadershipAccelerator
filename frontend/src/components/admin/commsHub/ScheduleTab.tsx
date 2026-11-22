@@ -9,11 +9,12 @@ import { CHANNEL_LABEL, MESSAGE_STATUS, STATUS_ORDER } from './board/boardDispla
 import { HistoryTable, NextSevenDays } from './schedule/ScheduleLists';
 import SafetyControls from './schedule/SafetyControls';
 import ActivityLog from './schedule/ActivityLog';
+import WhatsAppCard from './schedule/WhatsAppCard';
 
 /**
  * Schedule & history (design 04, CH7.4): filters, everything going out in the next 7 days, the
- * history with failure detail and Retry, the safety controls, and the activity log. WhatsApp groups
- * are not built yet: that area is a single "coming next" note.
+ * history with failure detail and Retry, the safety controls, the WhatsApp card (CH10.1) and the
+ * activity log.
  */
 interface Filter { status: HubMessageStatus | ''; channel: Channel | ''; event: string }
 
@@ -71,9 +72,7 @@ export default function ScheduleTab(): React.ReactElement {
         </div>
         <div className="col-12 col-xl-4 d-flex flex-column gap-3">
           <SafetyControls paused={summary.sending_paused} pauseBusy={pauseBusy} setPaused={pause} />
-          <SectionCard title="WhatsApp groups" icon="whatsapp-line">
-            <p className="mb-0"><span className="ch-status ch-status-neutral me-2"><i className="ri-time-line" aria-hidden="true" />Coming next</span>WhatsApp: coming next. Groups, audiences and test sends arrive after the community feed and in-app channels are live.</p>
-          </SectionCard>
+          <WhatsAppCard />
           <ActivityLog refreshKey={changes} />
         </div>
       </div>

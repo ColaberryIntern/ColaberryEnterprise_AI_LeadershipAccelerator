@@ -13,6 +13,8 @@ const TABLES = [
   'comms_hub_messages', 'comms_hub_drafts', 'comms_hub_destinations', 'comms_hub_approvals', 'comms_hub_deliveries',
   // CH7.5
   'comms_hub_alerts',
+  // CH10.2
+  'comms_hub_whatsapp_groups',
 ];
 
 function respond(opts: { presentTables: string[]; hasColumn: boolean; secondBoot: boolean }) {

@@ -296,3 +296,25 @@ describe('CH7.3 a message about a cancelled event cannot be submitted or approve
     expect(r).not.toBe('event_cancelled');
   });
 });
+
+describe('CH10.3 approval runs the WhatsApp gate', () => {
+  const ENV = { ...process.env };
+  afterEach(() => { process.env = { ...ENV }; });
+  const toGroup = (): void => { destinations.push({ message_id: 'm1', channel: 'whatsapp', target_type: 'whatsapp_group', target_id: '11111111-1111-4111-8111-111111111111' }); };
+  it('a WhatsApp group while WhatsApp is off: refused, nothing approved', async () => {
+    delete process.env.COMMS_HUB_WHATSAPP_ENABLED; delete process.env.WHAPI_TOKEN;
+    toGroup();
+    expect((await err(approveMessage('m1', TAIWO, AT))).reason).toBe('whatsapp_off');
+    expect(approvals).toEqual([]);
+    expect(messages.get('m1')!.status).toBe('needs_approval');
+  });
+  it('WhatsApp on but no WhatsApp text: refused; with the text it is approved', async () => {
+    process.env.COMMS_HUB_WHATSAPP_ENABLED = 'true'; process.env.WHAPI_TOKEN = 'tok_test';
+    toGroup();
+    expect((await err(approveMessage('m1', TAIWO, AT))).reason).toBe('no_whatsapp_draft');
+    expect(approvals).toEqual([]);
+    drafts.push({ message_id: 'm1', channel: 'whatsapp', version: 1, title: null, body: 'Demo Tuesday at 6:00 PM CST.' });
+    const { message } = await approveMessage('m1', TAIWO, AT);
+    expect(message.status).toBe('approved');
+  });
+});

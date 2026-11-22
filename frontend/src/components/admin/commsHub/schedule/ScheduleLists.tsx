@@ -57,7 +57,7 @@ export function NextSevenDays({ list, onChanged }: { list: BoardList; onChanged:
             {g.rows.map((r) => (
               <li key={r.id} className="ch-sched-row">
                 <span className="ch-sched-time">{r.send_at ? timeOf(r.send_at) : 'On approval'}</span>
-                <span className="ch-sched-main"><span className="fw-bold d-block">{r.title}</span><span className="small text-muted">{whereLabel(r)}</span></span>
+                <span className="ch-sched-main"><span className="fw-bold d-block">{r.title}</span><span className="small text-muted">{whereLabel(r)}</span>{(r.notes ?? []).map((n) => <span key={n} className="small d-block ch-note">{n}</span>)}</span>
                 <MessageStatus status={r.status} />
                 <NextAction row={r} busy={act.busy === r.id} onCancel={() => { void act.run(r.id, () => messageAction(r.id, 'cancel'), 'It was not cancelled. Try again.'); }} />
               </li>
@@ -100,6 +100,7 @@ export function HistoryTable({ list, onChanged }: { list: BoardList; onChanged: 
                         {r.failure.attempts > 1 && ` Tried ${r.failure.attempts} times.`}
                       </span>
                     )}
+                    {(r.notes ?? []).map((n) => <span key={n} className="small d-block ch-note">{n}</span>)}
                   </td>
                   <td>{whereLabel(r)}</td>
                   <td><MessageStatus status={r.status} /></td>

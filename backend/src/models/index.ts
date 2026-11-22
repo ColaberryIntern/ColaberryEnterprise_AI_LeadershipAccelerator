@@ -438,6 +438,7 @@ import CommsHubDestination from './CommsHubDestination';
 import CommsHubApproval from './CommsHubApproval';
 import CommsHubDelivery from './CommsHubDelivery';
 import CommsHubAlert from './CommsHubAlert';
+import CommsHubWhatsAppGroup from './CommsHubWhatsAppGroup';
 // --- Marketing Operations: Content OS ---
 import ContentItem from './ContentItem';
 import ChannelAccount from './ChannelAccount';
@@ -1647,6 +1648,7 @@ export {
   CommsHubApproval,
   CommsHubDelivery,
   CommsHubAlert,
+  CommsHubWhatsAppGroup,
   // Marketing Operations: Content OS
   ContentItem,
   ChannelAccount,

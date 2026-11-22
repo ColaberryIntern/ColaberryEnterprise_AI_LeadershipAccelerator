@@ -145,3 +145,30 @@ All of it is deleted in a `finally`.
 - **The member must have a phone number.** Without one, the portal stops at "Add your phone number" (PortalPhoneGate) before any page.
 - **Report a problem answers 503 locally.** No recipients are configured. The e2e checks where the report went, not that mail was sent.
 - **One shared contrast issue, outside the hub, is reported but does not fail.** The admin shell's mobile header shows the brand red on white at 3.85:1. It is printed as a note, because it is shared by every admin page.
+
+## Phase 3: WhatsApp (CH10.6)
+
+WhatsApp is tested ONLY against the local fake, `tests/systemV2/lib/fakeWhapi.js`. It listens on 127.0.0.1 only and keeps a record of every message. Never point a local run at the real Whapi.Cloud or a real group (phase 3 hard stop).
+
+1. Start the fake: `FAKE_WHAPI_PORT=3299 node tests/systemV2/lib/fakeWhapi.js`.
+2. Start the backend with phase 2's env plus:
+   ```
+   COMMS_HUB_WHATSAPP_ENABLED=true WHAPI_TOKEN=fake-whapi-token WHAPI_BASE_URL=http://127.0.0.1:3299
+   COMMS_HUB_WHATSAPP_ALWAYS_OPEN=true   # test seam: skip the 8 AM to 8 PM window (ignored in production)
+   ```
+3. Restart `fakeOpenAI.js` after pulling. It answers the WhatsApp version when the prompt asks for one.
+4. Rebuild the frontend (`CI=true npx react-scripts build`) so `localServe` serves the WhatsApp card.
+5. Run the end-to-end test:
+   ```
+   BASE_URL=http://localhost:3150 API_URL=http://127.0.0.1:3101 WHAPI_FAKE_URL=http://127.0.0.1:3299      DATABASE_URL=... JWT_SECRET=... node tests/systemV2/commsHubWhatsApp.e2e.js
+   ```
+   It covers connected, sync, the refusal, opt-in, the draft, Compose, one send, the hang-after-send dedup, the 429 pause and resume, and a cleanup check.
+6. Run `commsHub.a11y.js` as before. With the backend on the fake, it also measures the WhatsApp card at 390 px with its groups and the pause banner.
+
+Fake controls:
+- `POST /__script {"path":"/messages/text","status":429}` and `{"hangAfterSend":true}`
+- `GET /__sent`
+- `POST /__reset`
+
+Stopping a background shell does NOT stop its node child on Windows. Check the port's owner (`Get-NetTCPConnection -LocalPort 3101`) and its command line before restarting.
+
