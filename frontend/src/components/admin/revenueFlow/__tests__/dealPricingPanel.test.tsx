@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import DealPricingPanel, {
   EnterpriseDealRow,
   dealValuePayload,
+  flagWarning,
   initialMode,
   retainerTotalCents,
 } from '../DealPricingPanel';
@@ -34,6 +35,8 @@ const deal = (over: Partial<EnterpriseDealRow> = {}): EnterpriseDealRow => ({
   shape: 'monthly_retainer',
   stage: 'signed',
   signed: true,
+  // Clean by default, so a case that says nothing about flags gets a row with none.
+  flags: [],
   priced: null,
   ...over,
 });
@@ -209,5 +212,64 @@ describe('what the panel states', () => {
       },
     })]);
     expect(html).toContain('Every signed deal that exists is valued');
+  });
+});
+
+/**
+ * Phase 4 — the warning that stands between a test row and a revenue total.
+ *
+ * `flagWarning` is tested directly because it renders only inside an opened form, which no
+ * test here can reach. The chip and the summary line ARE statically rendered, so those go
+ * through `renderToStaticMarkup`.
+ */
+describe('a flagged row says so before anybody prices it', () => {
+  it('returns null for a clean row, so nothing is drawn', () => {
+    expect(flagWarning([])).toBeNull();
+  });
+
+  it('names every reason in one warning, joined so they read as a list', () => {
+    const w = flagWarning(['looks like a test row (company name)', 'duplicate company name']);
+    expect(w).toContain('looks like a test row (company name); duplicate company name');
+  });
+
+  it('tells the reader what pricing it would DO, not merely that it is flagged', () => {
+    // The actionable half. "This row is flagged" alone leaves the reader to guess whether
+    // that is a warning or a label.
+    const w = flagWarning(['looks like a test row (company name)']) ?? '';
+    expect(w).toContain('price it only if it is a real deal');
+    expect(w).toContain('Nothing else downstream can tell a test row from a real one');
+  });
+
+  it('marks the row itself, so the list is readable without opening anything', () => {
+    const html = render([deal({
+      company: 'Acme Test Logistics',
+      flags: ['looks like a test row (company name)'],
+    })]);
+    expect(html).toContain('data-testid="deal-pricing-flagged"');
+    expect(html).toContain('may not be a real inquiry');
+    // And the reasons in full, on the row, not hidden behind the chip.
+    expect(html).toContain('data-testid="deal-pricing-flag-reasons"');
+    expect(html).toContain('looks like a test row (company name)');
+  });
+
+  it('leaves a clean row unmarked', () => {
+    const html = render([deal()]);
+    expect(html).not.toContain('data-testid="deal-pricing-flagged"');
+    expect(html).not.toContain('data-testid="deal-pricing-flag-reasons"');
+  });
+
+  it('counts the flagged rows at the top, and says they still count in the funnel', () => {
+    const html = render([
+      deal({ enterpriseIntakeId: 'a', company: 'Northside Glass', flags: [] }),
+      deal({ enterpriseIntakeId: 'b', company: 'Acme Test Logistics', flags: ['looks like a test row (company name)'] }),
+    ]);
+    expect(html).toContain('data-testid="deal-pricing-flagged-count"');
+    expect(html).toContain('1 of 2 row(s) are flagged');
+    // The sentence that stops the count being read as a promise that they were removed.
+    expect(html).toContain('They still count in the funnel');
+  });
+
+  it('says nothing about flags when no row carries one', () => {
+    expect(render([deal()])).not.toContain('data-testid="deal-pricing-flagged-count"');
   });
 });
