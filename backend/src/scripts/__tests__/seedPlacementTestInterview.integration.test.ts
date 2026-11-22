@@ -67,6 +67,8 @@ describeIfDb('the test-records seed against Postgres', () => {
     await ev('hire_client', c);
     // An UNTAGGED audit row whose subject_id is the same text as the test invoice id, under another subject_type: it must survive.
     await ev('placement_review_item', invId);
+    // An untagged review item (no interview) takes the first id, so the colliding audit row above belongs to IT, not to the test.
+    await sequelize.query("INSERT INTO placement_review_items (kind, source_event_id, enrollment_id) VALUES ('unmatched_learner', 'untagged-1', :e)", { replacements: { e: E } });
     // The tagged interview's review item and its audit row; its replay observation, readiness rollup and Zoom ledger row.
     const ri = (await rows<{ id: string }>("INSERT INTO placement_review_items (kind, source_event_id, enrollment_id, interview_id) VALUES ('not_booked', 'seed-test', :e, :iv) RETURNING id", { e: E, iv }))[0].id;
     await ev('placement_review_item', ri);
