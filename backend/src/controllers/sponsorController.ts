@@ -6,6 +6,7 @@ import { requiredPhone } from '../schemas/phone';
 import { capturePhoneConsent } from '../services/consent/capturePhoneConsent';
 import { requestSponsorPortalLink, verifySponsorPortalToken } from '../services/sponsorAuthService';
 import { Cohort, Enrollment } from '../models';
+import { recountCohortSeats } from '../services/cohortSeatCounter';
 // These four models are not (yet) re-exported from the models barrel, so they
 // are imported directly from their definition files. Importing the file runs
 // the `Model.init(...)` side effect that registers the model with Sequelize.
@@ -252,12 +253,9 @@ export async function handleRedeemSeat(
         { transaction: t },
       );
 
-      // Reserve the cohort seat.
-      await Cohort.increment('seats_taken', {
-        by: 1,
-        where: { id: cohort.id },
-        transaction: t,
-      });
+      // Reserve the cohort seat: recounted from the rows inside this transaction, so a
+      // rollback leaves the counter untouched (cohortSeatCounter).
+      await recountCohortSeats([cohort.id], { transaction: t });
 
       // Attach the participant to the sponsor's company-scoped challenge so they
       // appear on the company leaderboard. findOrCreate keeps this idempotent

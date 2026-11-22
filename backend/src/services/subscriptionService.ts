@@ -26,6 +26,7 @@ async function applyFlashOffer(enrollmentId: string, nowMs: number): Promise<voi
   catch (err: any) { console.error('[Subscription] flash offer check failed (non-fatal):', err?.message); }
 }
 import { resolvePaidBatchPlacement } from './batch/batchPlacementService';
+import { recountCohortSeats } from './cohortSeatCounter';
 import type { SubscriptionPlan } from '../models/Subscription';
 
 /**
@@ -648,6 +649,7 @@ async function grantMembership(
   // Nothing here touches the billing anchor: `billingAnchorMs` has ignored the cohort's
   // start date since 2026-10-30 (a membership renews on the day it was bought), so
   // changing which batch they land in cannot move their money.
+  const arrivedInCohortId = enrollment.cohort_id;
   const placedCohortId = await resolvePaidBatchPlacement({
     currentCohortId: opts.cohortId ?? enrollment.cohort_id,
     alreadyPaid: enrollment.payment_status === 'paid',
@@ -664,6 +666,12 @@ async function grantMembership(
     payment_mode: env.paymentMode === 'live' ? 'live' : 'test',
     enrolled_at: enrollment.enrolled_at || opts.now,
   });
+
+  // The seat counter. This path, which is how nearly everyone pays now, never touched it,
+  // which is most of why November read 4 seats with 30 paid members (2026-11-22). A recount
+  // rather than +1 so a renewal or a re-run cannot double-count (cohortSeatCounter), over
+  // both the cohort they arrived in and the one they were placed into. Never throws.
+  await recountCohortSeats([arrivedInCohortId, enrollment.cohort_id]);
 
   // The legacy CB- payment path (markEnrollmentPaid, enrollmentService.ts) has
   // always retired a paying student's lingering free Explorer duplicate on

@@ -30,6 +30,12 @@ jest.mock('../../services/emailService', () => ({
   sendTrainingWelcome: (...a: any[]) => mockSendTrainingWelcome(...a),
 }));
 
+// The seat counter is recounted from the rows (cohortSeatCounter), not incremented.
+const mockRecount = jest.fn();
+jest.mock('../../services/cohortSeatCounter', () => ({
+  recountCohortSeats: (...a: any[]) => mockRecount(...a),
+}));
+
 const mockLogCommunication = jest.fn();
 jest.mock('../../services/communicationLogService', () => ({
   logCommunication: (...a: any[]) => mockLogCommunication(...a),
@@ -78,10 +84,9 @@ describe('markEnrollmentPaid', () => {
     expect(result?.payment_status).toBe('paid');
     expect(result?.portal_enabled).toBe(true);
     expect(enrollment.save).toHaveBeenCalledTimes(1);
-    expect(cohortIncrement).toHaveBeenCalledWith(
-      'seats_taken',
-      expect.objectContaining({ by: 1, where: { id: 'cohort-1' } }),
-    );
+    // Recounts the cohort the row is in (arrived-in and placed-into are both cohort-1 here).
+    expect(mockRecount).toHaveBeenCalledWith(['cohort-1', 'cohort-1']);
+    expect(cohortIncrement).not.toHaveBeenCalled();
   });
 
   it('is idempotent — re-processing an already-paid enrollment does not double-increment seats', async () => {
@@ -92,7 +97,7 @@ describe('markEnrollmentPaid', () => {
 
     expect(result).toBe(enrollment);
     expect(enrollment.save).not.toHaveBeenCalled();
-    expect(cohortIncrement).not.toHaveBeenCalled();
+    expect(mockRecount).not.toHaveBeenCalled();
   });
 
   it('returns null when no enrollment matches the external id', async () => {
