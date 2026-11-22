@@ -17,7 +17,9 @@ import * as store from './clientStore';
  * same uniform message and writes nothing, redeem refuses every link, and requireHireClient refuses every session, so
  * no session can exist (execution contract). The switch is read on EVERY request, so turning it off ends sessions at once.
  * NO ENUMERATION: request-link gives one answer for an address with access, without access, malformed, rate-limited,
- * switched off or failed. Only an address that is a member gets a token row and an email.
+ * switched off or failed, AND at the same speed: the route answers 202 BEFORE any of this runs (requestLink is run
+ * detached after the answer), so a member's token insert and mail send can never be timed from outside.
+ * Only an address that is a member gets a token row and an email.
  * SESSION: a JWT signed with the app secret, audience 'hire-client', kind 'hire_client_session', 8 hours, carrying
  * the member and client ids only. It has NO role claim (so requireAdmin / requireParticipant refuse it) and other
  * tokens lack the audience (so this guard refuses them). Each request re-reads the member: a removed member is out.
@@ -68,11 +70,17 @@ export async function requestLink(rawEmail: unknown, opts: { read?: Read; now?: 
     if (!(await portalOn(opts.read))) return 'off';
     const email = normalizeEmail(rawEmail);
     if (!email) return 'invalid';
-    const verdict = checkRateLimit((await store.recentLinkRequests(email)).map((createdAt) => ({ createdAt })), opts.now ?? new Date());
-    if (!verdict.allowed) { log('warn', 'hire_client_link_rate_limited', { reason: verdict.reason }, 'RateLimitError'); return 'limited'; }
     if (!(await store.membershipsFor(email)).length) { log('info', 'hire_client_link_no_access', {}); return 'no_access'; }
     const { token, tokenHash, expiresAt } = mintToken();
-    const rowId = await store.insertSigninToken(email, tokenHash, expiresAt); // stored BEFORE the send: a link never sent still counts
+    // The rate limit and the insert are ONE locked step (clientStore.reserveSigninToken), so two requests at once send at
+    // most one link. Stored BEFORE the send: a link never sent still counts against the limit.
+    let reason = '';
+    const rowId = await store.reserveSigninToken(email, tokenHash, expiresAt, (recent) => {
+      const v = checkRateLimit(recent.map((createdAt) => ({ createdAt })), opts.now ?? new Date());
+      if (!v.allowed) reason = v.reason;
+      return v.allowed;
+    });
+    if (!rowId) { log('warn', 'hire_client_link_rate_limited', { reason }, 'RateLimitError'); return 'limited'; }
     const res = await sendOnce({ recipient: email, subject: SIGNIN_SUBJECT, businessEventId: `hire_client_signin:${rowId}` }, () => deliver(email, token));
     if (res.outcome === 'sent') return 'sent';
     log('warn', 'hire_client_link_send_failed', { token_row: rowId }, res.outcome === 'failed' ? res.errorClass : 'SendSkipped');

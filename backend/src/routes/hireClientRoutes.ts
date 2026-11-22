@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { logFailure, sendValidated } from './campusRoutes';
-import { LINK_INVALID, redeemLink, REQUEST_LINK_RESPONSE, requestLink, requireHireClient, type ClientRequest } from '../services/placement/clientAuth';
+import { LINK_INVALID, redeemLink, REQUEST_LINK_RESPONSE, requestLink, requireHireClient, type ClientRequest, type RequestLinkOutcome } from '../services/placement/clientAuth';
 import * as store from '../services/placement/clientStore';
 import { candidateView, interviewView, offerView } from '../services/placement/clientView';
 import { createOffer } from '../services/placement/offerService';
@@ -119,13 +119,29 @@ const makeOffer: Handler = async (req, res) => {
   sendValidated(res, OfferResponse, { offer: offerView(row), replay: out.replay }, 'hire_client_make_offer');
 };
 
-export function createHireClientRouter(opts: { read?: Read } = {}): Router {
+/**
+ * request-link answers FIRST and works after: the 202 goes out before any lookup, insert or send, so a member's address
+ * (token row + mail) cannot be told from an unknown one by response time. The work runs detached on the next turn of
+ * the event loop; requestLink never throws (every failure is logged with its error_class), and the extra catch below
+ * guarantees no unhandled rejection. `track` lets tests await the detached work.
+ */
+export function detachedRequestLink(email: unknown, read: Read | undefined, track?: (p: Promise<RequestLinkOutcome>) => void): void {
+  setImmediate(() => {
+    const p = requestLink(email, { read }).catch((err: unknown) => {
+      logFailure('hire_client_link_detached_failed', err);
+      return 'failed' as const;
+    });
+    track?.(p);
+  });
+}
+
+export function createHireClientRouter(opts: { read?: Read; track?: (p: Promise<RequestLinkOutcome>) => void } = {}): Router {
   const r = Router();
   const guard = requireHireClient(opts.read);
   r.use('/api/hire/client', (_req: Request, res: Response, next: () => void) => { res.set('Cache-Control', 'no-store'); next(); });
-  r.post('/api/hire/client/auth/request-link', async (req: Request, res: Response) => {
-    await requestLink((req.body as { email?: unknown } | undefined)?.email, { read: opts.read });
+  r.post('/api/hire/client/auth/request-link', (req: Request, res: Response) => {
     res.status(202).json({ message: REQUEST_LINK_RESPONSE });
+    detachedRequestLink((req.body as { email?: unknown } | undefined)?.email, opts.read, opts.track);
   });
   r.post('/api/hire/client/auth/redeem', async (req: Request, res: Response) => {
     const out = await redeemLink((req.body as { token?: unknown } | undefined)?.token, { read: opts.read });

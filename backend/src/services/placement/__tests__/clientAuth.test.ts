@@ -6,10 +6,12 @@ const mockDb = {
   now: new Date('2026-11-22T15:00:00Z'),
 };
 jest.mock('../clientStore', () => ({
-  recentLinkRequests: async (email: string) => mockDb.tokens.filter((t) => t.email === email && mockDb.now.getTime() - t.created_at.getTime() < 3_600_000).map((t) => t.created_at),
   membershipsFor: async (email: string) => mockDb.members.filter((m) => m.email === email),
   memberById: async (id: string, c: string) => mockDb.members.find((m) => m.member_id === id && m.client_id === c),
-  insertSigninToken: async (email: string, token_hash: string, expires_at: Date) => {
+  // Read and insert in one synchronous step, as the advisory lock makes them one step in Postgres.
+  reserveSigninToken: async (email: string, token_hash: string, expires_at: Date, allow: (recent: Date[]) => boolean) => {
+    const recent = mockDb.tokens.filter((t) => t.email === email && mockDb.now.getTime() - t.created_at.getTime() < 3_600_000).map((t) => t.created_at);
+    if (!allow(recent)) return undefined;
     const id = String(mockDb.tokens.length + 1);
     mockDb.tokens.push({ id, email, token_hash, expires_at, consumed_at: null, created_at: new Date(mockDb.now) });
     return id;
@@ -83,6 +85,11 @@ describe('request a link', () => {
     await requestLink(ANN, { read: ON });
     expect(await requestLink(ANN, { read: ON, now: new Date(mockDb.now.getTime() + 30_000) })).toBe('limited');
     expect(mockSend).toHaveBeenCalledTimes(1);
+  });
+  it('two requests at the same moment: at most ONE link (the limit and the insert are one locked step)', async () => {
+    const both = await Promise.all([requestLink(ANN, { read: ON }), requestLink(ANN, { read: ON })]);
+    expect(both.sort()).toEqual(['limited', 'sent']);
+    expect([mockDb.tokens.length, mockSend.mock.calls.length]).toEqual([1, 1]);
   });
   it('a failed send or a store error is reported as failed, never thrown', async () => {
     mockSend.mockResolvedValue(undefined);

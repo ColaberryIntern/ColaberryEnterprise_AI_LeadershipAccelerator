@@ -87,12 +87,19 @@ describeIfDb('employer portal scoping against Postgres', () => {
   });
 
   it('a sign-in link is spent once: two redemptions at once, one email back; an expired link is refused', async () => {
-    await store.insertSigninToken('pat@acme.example', 'a'.repeat(64), new Date(Date.now() + 3_600_000));
+    const always = () => true;
+    await store.reserveSigninToken('pat@acme.example', 'a'.repeat(64), new Date(Date.now() + 3_600_000), always);
     const both = await Promise.all([store.consumeSigninToken('a'.repeat(64)), store.consumeSigninToken('a'.repeat(64))]);
     expect(both.filter(Boolean)).toEqual(['pat@acme.example']);
-    await store.insertSigninToken('pat@acme.example', 'b'.repeat(64), new Date(Date.now() - 1000));
+    await store.reserveSigninToken('pat@acme.example', 'b'.repeat(64), new Date(Date.now() - 1000), always);
     expect(await store.consumeSigninToken('b'.repeat(64))).toBeUndefined();
-    expect((await store.recentLinkRequests('pat@acme.example')).length).toBe(2);
+    // The rate limit is atomic with the insert: two reservations at once, each allowed only when no earlier request
+    // exists, make ONE row (the advisory lock makes the second wait and then see the first).
+    const firstOnly = (recent: Date[]) => recent.length === 0;
+    const pair = await Promise.all([store.reserveSigninToken('sam@globex.example', 'c'.repeat(64), new Date(Date.now() + 3_600_000), firstOnly),
+      store.reserveSigninToken('sam@globex.example', 'd'.repeat(64), new Date(Date.now() + 3_600_000), firstOnly)]);
+    expect(pair.filter(Boolean)).toHaveLength(1);
+    expect(Number((await one("SELECT COUNT(*)::int AS n FROM hire_client_signin_tokens WHERE email = 'sam@globex.example'")).n)).toBe(1);
     expect((await store.membershipsFor('pat@acme.example')).map((m) => [m.client_id, m.client_name])).toEqual([[A, 'Acme']]);
   });
 

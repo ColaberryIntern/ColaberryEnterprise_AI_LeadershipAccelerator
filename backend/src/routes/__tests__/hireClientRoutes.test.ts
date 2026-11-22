@@ -11,6 +11,7 @@ const mockDb = {
   candidates: [{ client_id: A, enrollment_id: ANN, full_name: 'Ann Lee', put_forward_at: new Date('2026-11-20T15:00:00Z') },
     { client_id: B, enrollment_id: BOB, full_name: 'Bob Ray', put_forward_at: new Date('2026-11-20T15:00:00Z') }],
   interviews: [] as Array<Record<string, unknown>>,
+  tokens: [] as string[],
   offers: [] as Array<Record<string, unknown>>,
 };
 jest.mock('../../services/placement/clientStore', () => ({
@@ -19,7 +20,13 @@ jest.mock('../../services/placement/clientStore', () => ({
   clientCandidate: async (c: string, e: string) => mockDb.candidates.find((x) => x.client_id === c && x.enrollment_id === e),
   clientInterviews: async (c: string, id?: string) => mockDb.interviews.filter((x) => x.client_id === c && (!id || x.id === id)),
   clientOffers: async (c: string) => mockDb.offers.filter((x) => x.client_id === c),
+  membershipsFor: async (email: string) => mockDb.members.filter((m) => m.email === email),
+  reserveSigninToken: async (email: string) => { mockDb.tokens.push(email); return String(mockDb.tokens.length); },
 }));
+// The sign-in mail: a send the test controls (it hangs until released), so the 202 can be timed against it.
+const mockMail = { send: jest.fn() };
+jest.mock('../../services/emailService', () => ({ guardedSendMail: (...a: unknown[]) => mockMail.send(...a), resolveEmailRecipient: async (to: string, subject: string) => ({ to, subject }) }));
+jest.mock('../../services/email/idempotentSend', () => ({ sendOnce: async (_id: unknown, send: () => Promise<{ ok: boolean }>) => ((await send()).ok ? { outcome: 'sent' } : { outcome: 'failed', errorClass: 'X' }) }));
 const mockCreate = jest.fn();
 jest.mock('../../services/placement/offerService', () => ({ createOffer: (...a: unknown[]) => mockCreate(...a) }));
 
@@ -33,9 +40,11 @@ import { expectNoRoomUrl, SENTINEL_PROVIDER_URL } from '../../services/placement
 
 /** CP10.2 (kit "Employer portal"): the employer API through the REAL router, guard and views. */
 let switchOn = true;
+let detached: Array<Promise<string>> = [];
 const app = express();
 app.use(express.json());
-app.use(createHireClientRouter({ read: async () => switchOn }));
+app.use(createHireClientRouter({ read: async () => switchOn, track: (p) => { detached.push(p); } }));
+const settle = async () => { for (let i = 0; i < 5; i += 1) await new Promise((r) => setImmediate(r)); };
 const as = (mid: string, cid: string) => `Bearer ${jwt.sign({ kind: 'hire_client_session', mid, cid }, env.jwtSecret, { audience: 'hire-client', expiresIn: 600 })}`;
 const PAT = as('m-a', A); const SAM = as('m-b', B);
 const offerBody = (over: Record<string, unknown> = {}) => ({ clientKey: '44444444-0000-4000-8000-000000000004', enrollmentId: ANN, role: 'AI Solutions Analyst',
@@ -55,7 +64,10 @@ beforeEach(() => {
     { client_id: A, id: '99999999-0000-4000-8000-000000000009', enrollment_id: ANN, full_name: 'Ann Lee', company: 'Acme', position: 'Analyst', state: 'done',
       starts_at: new Date('2026-11-21T16:00:00Z'), minutes: 30, recording_consent: 'declined', room_url: SENTINEL_PROVIDER_URL },
   ];
-  mockDb.offers = [];
+  mockDb.offers = []; mockDb.tokens = []; detached = [];
+  mockMail.send.mockReset().mockResolvedValue({ messageId: 'mid-1' });
+  jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+  jest.spyOn(console, 'log').mockImplementation(() => undefined);
   mockCreate.mockReset().mockImplementation(async () => { mockDb.offers = [OFFER_ROW]; return { status: 'ok', offer: OFFER_ROW, replay: false }; });
   jest.spyOn(console, 'error').mockImplementation(() => undefined);
 });
@@ -68,6 +80,35 @@ describe('sign-in answers', () => {
     switchOn = true;
     const junk = await request(app).post('/api/hire/client/auth/request-link').send({ email: 'nope' });
     for (const r of [off, junk]) expect([r.status, r.body]).toEqual([202, { message: REQUEST_LINK_RESPONSE }]);
+  });
+  it('a member is answered as fast as an unknown address: the 202 goes out before the token row and the (hanging) send', async () => {
+    let release: (v: unknown) => void = () => undefined;
+    mockMail.send.mockImplementation(() => new Promise((r) => { release = r; })); // never resolves until released
+    const time = async (email: string) => { const t0 = Date.now(); const r = await request(app).post('/api/hire/client/auth/request-link').send({ email }); return { r, ms: Date.now() - t0 }; };
+    const member = await time('pat@acme.example');
+    const unknown = await time('nobody@nowhere.example');
+    for (const x of [member, unknown]) expect([x.r.status, x.r.body]).toEqual([202, { message: REQUEST_LINK_RESPONSE }]);
+    expect(member.ms).toBeLessThan(250);
+    expect(Math.abs(member.ms - unknown.ms)).toBeLessThan(150);
+    // ...and the work still happens afterwards: one token row, one send (still hanging), then sent once released.
+    await settle();
+    expect([mockDb.tokens, mockMail.send.mock.calls.length]).toEqual([['pat@acme.example'], 1]);
+    release({ messageId: 'mid-2' });
+    expect(await Promise.all(detached)).toEqual(['sent', 'no_access']);
+  });
+  it('switch off: 202, and no token row and no send happen afterwards either', async () => {
+    switchOn = false;
+    expect((await request(app).post('/api/hire/client/auth/request-link').send({ email: 'pat@acme.example' })).status).toBe(202);
+    await settle();
+    expect(await Promise.all(detached)).toEqual(['off']);
+    expect([mockDb.tokens.length, mockMail.send.mock.calls.length]).toEqual([0, 0]);
+  });
+  it('a failure in the detached work is logged with its class, never an unhandled rejection', async () => {
+    mockMail.send.mockRejectedValue(Object.assign(new Error('smtp down'), { name: 'TimeoutError' }));
+    expect((await request(app).post('/api/hire/client/auth/request-link').send({ email: 'pat@acme.example' })).status).toBe(202);
+    await settle();
+    expect(await Promise.all(detached)).toEqual(['failed']);
+    expect((console.warn as jest.Mock).mock.calls.map((c) => JSON.parse(String(c[0]))).find((l) => l.event === 'hire_client_link_request_error')).toMatchObject({ error_class: 'TimeoutError' });
   });
   it('redeem with a bad token: 401, one message', async () => {
     const r = await request(app).post('/api/hire/client/auth/redeem').send({ token: 'x' });

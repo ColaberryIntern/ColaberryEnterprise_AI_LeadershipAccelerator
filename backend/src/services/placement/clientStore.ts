@@ -25,10 +25,22 @@ export interface ClientOfferRow {
   invoice_status: string | null; created_at: Date | string;
 }
 
-/** Sign-in links requested for this address in the last hour (the per-address rate limit). */
-export async function recentLinkRequests(email: string): Promise<Date[]> {
-  const rows = await q<{ created_at: Date }>("SELECT created_at FROM hire_client_signin_tokens WHERE email = :email AND created_at > NOW() - INTERVAL '1 hour'", { email });
-  return rows.map((r) => new Date(r.created_at));
+/**
+ * The per-address rate limit and the token insert, ATOMIC: one transaction holding a transaction-scoped advisory lock
+ * keyed on the address, so two requests at once are serialized and the second sees the first's row (at most one link).
+ * `allow` gets the last hour's request times (clientMagicLink.checkRateLimit decides). The new row's id, or undefined
+ * when the limit refused it.
+ */
+export async function reserveSigninToken(email: string, tokenHash: string, expiresAt: Date, allow: (recent: Date[]) => boolean): Promise<string | undefined> {
+  return sequelize.transaction(async (transaction) => {
+    const run = async <T>(sql: string) => (await sequelize.query(sql, { replacements: { email, tokenHash, expiresAt }, transaction }))[0] as T[];
+    await run("SELECT pg_advisory_xact_lock(hashtextextended('hire_client_signin:' || :email, 0))");
+    const recent = (await run<{ created_at: Date }>("SELECT created_at FROM hire_client_signin_tokens WHERE email = :email AND created_at > NOW() - INTERVAL '1 hour'"))
+      .map((r) => new Date(r.created_at));
+    if (!allow(recent)) return undefined;
+    const [row] = await run<{ id: string }>('INSERT INTO hire_client_signin_tokens (email, token_hash, expires_at) VALUES (:email, :tokenHash, :expiresAt) RETURNING id');
+    return String(row.id);
+  });
 }
 
 /** The memberships for an address, oldest first (a sign-in uses the first). Read only: a sign-in never creates one. */
@@ -41,12 +53,6 @@ export async function membershipsFor(email: string): Promise<MemberRow[]> {
 export async function memberById(memberId: string, clientId: string): Promise<MemberRow | undefined> {
   return (await q<MemberRow>(`SELECT m.id AS member_id, m.client_id, c.name AS client_name, m.email FROM hire_client_members m JOIN hire_clients c ON c.id = m.client_id
     WHERE m.id = :memberId AND m.client_id = :clientId`, { memberId, clientId }))[0];
-}
-
-export async function insertSigninToken(email: string, tokenHash: string, expiresAt: Date): Promise<string> {
-  const [row] = await q<{ id: string }>('INSERT INTO hire_client_signin_tokens (email, token_hash, expires_at) VALUES (:email, :tokenHash, :expiresAt) RETURNING id',
-    { email, tokenHash, expiresAt });
-  return String(row.id);
 }
 
 /** Spend a link: ONE conditional UPDATE, so two redemptions at once cannot both succeed. The email, or undefined. */
