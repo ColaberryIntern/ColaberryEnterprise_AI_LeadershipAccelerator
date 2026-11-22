@@ -10,6 +10,7 @@ const LIB = path.join(__dirname, '..', '..', '..', '..', 'backend', 'src', 'scri
 const K = require(path.join(LIB, 'emailLayoutKit'));
 const { SIG_HTML, SIG_TEXT } = require(path.join(LIB, 'internDeliveryEmailSend'));
 const { messageLabel } = require('./page');
+const { ORIGIN } = require('./insights');
 
 const { C, esc } = K;
 const TONE = { good: [C.okSoft, C.ok], bad: [C.actionSoft, C.action], warn: [C.warnSoft, C.warn], ok: [C.warnSoft, C.warn], info: [C.infoSoft, C.info], low: [C.lineSoft, C.ink2], none: [C.lineSoft, C.ink2] };
@@ -47,6 +48,17 @@ function topTenCard(top10) {
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">${rows}</table>${K.sectionClose()}`;
 }
 
+/** A rate, or "too few to judge" when its denominator is under minSample (3 of 4 is not "75%"). */
+const pctOrFew = (r) => (!r.d ? 'n/a' : r.status === 'low' ? 'too few to judge' : `${r.pct}%`);
+
+/** OH1y: everyone who paid this window, by origin, one line each. */
+function payerLines(p) {
+  if (!p) return [];
+  if (!p.total) return ['Nobody paid to enroll this week.'];
+  return [`${p.total} paid to enroll (${p.monthly} monthly, ${p.annual} annual); ${p.came_before_paying} came to an Open House first.`,
+    ...p.by_origin.map((o) => `${o.n} ${ORIGIN[o.origin] || o.origin}`)];
+}
+
 /** Summary overview: a bullet row per step (bar = this week, number = vs target), table-based for Outlook. */
 function overviewCard(rows) {
   const body = rows.map((r) => {
@@ -55,7 +67,7 @@ function overviewCard(rows) {
     return `<tr><td style="padding:5px 8px 5px 0;font-size:12.5px;color:${C.ink};white-space:nowrap">${esc(r.label)}</td>
       <td width="200" style="width:200px;padding:5px 0"><table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="${C.lineSoft}" style="background:${C.lineSoft}"><tr>
         ${fill ? `<td width="${fill}%" bgcolor="${fg}" style="background:${fg};height:10px;line-height:10px;font-size:0">&nbsp;</td>` : ''}<td style="height:10px;line-height:10px;font-size:0">&nbsp;</td></tr></table></td>
-      <td style="padding:5px 0 5px 8px;font-size:12px;font-weight:700;color:${C.ink};white-space:nowrap">${r.d ? `${r.pct}%` : 'n/a'} <span style="font-weight:400;color:${C.muted}">${r.d ? `(${r.n}/${r.d})` : ''} target ${r.target}%</span></td></tr>`;
+      <td style="padding:5px 0 5px 8px;font-size:12px;font-weight:700;color:${C.ink};white-space:nowrap">${pctOrFew(r)} <span style="font-weight:400;color:${C.muted}">${r.d ? `(${r.n}/${r.d})` : ''} target ${r.target}%</span></td></tr>`;
   }).join('');
   return `${K.sectionOpen('Summary overview')}${K.hTitle('Every step against its target', 'Pass-through from the step before. Green on target, amber watch, red below, grey too few to judge.')}
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">${body}</table>${K.sectionClose()}`;
@@ -96,7 +108,10 @@ function renderEmail(view) {
     <b>OPEN_HOUSE_WEEKLY_REPORT.html</b>: the full report with the guided tour, the flow of every person, every fork, the hypothesis board and the decision timeline. Open it in a browser.<br/>
     <b>ONE_MOVE_PROMPT.md</b>: the detailed prompt that makes the starred move and records it in the story, so next week's report grades it.</div>${K.sectionClose()}`;
   const comms = view.snap && view.snap.comms;
-  const body = [hero, starCard(rec), topTenCard(view.top10), overviewCard(view.overview), commsCard(comms), storyCard(view.story), attached].join('\n')
+  const paid = payerLines(cur.payers);
+  const paidCard = paid.length ? `${K.sectionOpen('Who paid this week')}${K.hTitle(paid[0], 'Every payer, wherever they came from, not only the ad funnel.')}
+    ${paid.slice(1).map((l) => `<div style="font-size:12.5px;margin:0 0 5px 0">${esc(l)}</div>`).join('')}${K.sectionClose()}` : '';
+  const body = [hero, starCard(rec), topTenCard(view.top10), overviewCard(view.overview), paidCard, commsCard(comms), storyCard(view.story), attached].join('\n')
     + `\n<tr><td style="padding:0 16px 8px 16px">${SIG_HTML}</td></tr>`;
   const html = K.shell({ title: subject, preheaderText: rec.star ? `The one move: ${rec.star.title}` : 'No move this week', banner: 'OPEN HOUSE FUNNEL · WEEKLY REPORT', body });
 
@@ -104,7 +119,8 @@ function renderEmail(view) {
     `Visitors ${cur.visitors} · Sign-ups ${cur.signups.landing_page} · Entered ${j.entered} of ${j.new_account} new accounts`, '',
     '***** THE ONE MOVE *****', rec.star ? rec.star.title : 'None this week', ...(rec.star ? rec.star.how.map((h, i) => `${i + 1}. ${h}`) : []), '',
     'THE 10 NUMBERS THAT MATTER MOST', ...view.top10.map((f) => `${f.rank}. ${f.text}${f.why ? ` (${f.why})` : ''}`), '',
-    'EVERY STEP AGAINST ITS TARGET', ...view.overview.map((r) => `- ${r.label}: ${r.d ? `${r.pct}% (${r.n}/${r.d})` : 'n/a'}, target ${r.target}%`), '',
+    'EVERY STEP AGAINST ITS TARGET', ...view.overview.map((r) => `- ${r.label}: ${pctOrFew(r)}${r.d ? ` (${r.n}/${r.d})` : ''}, target ${r.target}%`), '',
+    ...(paid.length ? ['WHO PAID THIS WEEK', ...paid.map((l) => `- ${l}`), ''] : []),
     ...(commsLines(comms).length ? ['EVERY MESSAGE THEY RECEIVED', ...commsLines(comms).map((l) => `- ${l}`), ''] : []),
     'HYPOTHESES', ...view.story.hypotheses.map((h) => `- ${h.title}: ${h.grade.label || VERDICT[h.grade.status]}`), '',
     'Attached: OPEN_HOUSE_WEEKLY_REPORT.html (open in a browser) and ONE_MOVE_PROMPT.md (say "make the Open House move" in inbox zero).',
