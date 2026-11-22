@@ -21,7 +21,7 @@ function fake(found: { iv?: string; client?: string } = {}) {
     sql.push({ s, r, tx: inTx });
     if (s.startsWith('SELECT id FROM placement_interviews')) return found.iv ? [{ id: found.iv }] : [];
     if (s.startsWith('SELECT id FROM hire_clients')) return found.client ? [{ id: found.client }] : [];
-    if (s.includes('information_schema.tables')) return ['prep_observations', 'prep_readiness_daily', 'zoom_meeting_requests', 'career_interviews'].map((table_name) => ({ table_name }));
+    if (s.includes('to_regclass')) return [{ prep_observations: true, prep_readiness_daily: true, zoom_meeting_requests: true, career_interviews: true }];
     if (/RETURNING id/.test(s)) return [{ id: `new-${++n}` }];
     return [];
   };

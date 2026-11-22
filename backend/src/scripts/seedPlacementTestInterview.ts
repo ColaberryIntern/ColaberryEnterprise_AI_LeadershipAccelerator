@@ -136,8 +136,10 @@ export async function remove(a: Args, deps: { query?: Q; transaction?: Tx } = {}
   const tag = tagFor(a.enrollment);
   await (deps.transaction ?? realTx)(async (r) => {
     // Tables another subsystem owns may be absent on a fresh database: their deletes are skipped, never guessed.
-    const present = new Set(((await r(`SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema()
-      AND table_name IN ('prep_observations', 'prep_readiness_daily', 'zoom_meeting_requests', 'career_interviews')`, {})) as Array<{ table_name: string }>).map((x) => x.table_name));
+    // to_regclass resolves through the search_path, exactly as the deletes below will (information_schema did not, in CI).
+    const found2 = (await r(`SELECT to_regclass('prep_observations') IS NOT NULL AS prep_observations, to_regclass('prep_readiness_daily') IS NOT NULL AS prep_readiness_daily,
+      to_regclass('zoom_meeting_requests') IS NOT NULL AS zoom_meeting_requests, to_regclass('career_interviews') IS NOT NULL AS career_interviews`, {}))[0] as Record<string, boolean> | undefined;
+    const present = new Set(OPTIONAL.filter((tbl) => found2?.[tbl] === true));
     const has = (label: string) => { const tbl = label.split(' ')[0]; return !OPTIONAL.includes(tbl) || (present.has(tbl) && (tbl !== 'prep_readiness_daily' || present.has('career_interviews'))); };
     if (found.clientId) for (const [label, sql] of REMOVE_CLIENT_SQL) if (has(label)) await r(sql, { clientId: found.clientId, tag });
     if (found.interviewId) for (const [label, sql] of REMOVE_INTERVIEW_SQL) if (has(label)) await r(sql, { interviewId: found.interviewId, tag });
