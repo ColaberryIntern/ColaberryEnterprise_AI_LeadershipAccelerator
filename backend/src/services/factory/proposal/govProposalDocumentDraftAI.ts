@@ -100,6 +100,12 @@ export async function generateProposalDocumentDraftAI(input: DocumentDraftInput)
     'it rather than speaking generically. NEVER answer a technical requirement with bare compliance language ("we ' +
     'comply", "we understand", "the system shall ...") or a Benefit/Proof/Compliance restatement template — that earns ' +
     'zero. ' +
+    // TRACEABILITY: one heading per requirement, carrying its canonical id, so each answer maps back to the
+    // requirement it satisfies (the coverage check credits a requirement by its own section's substance).
+    'STRUCTURE RULE: begin the response to EACH requirement with its own heading in the exact form ' +
+    '"<h3>REQ-ID: short title</h3>" using that requirement\'s canonical id (for example "<h3>REQ-012: GIS ' +
+    'integration</h3>"), then the full response beneath it. Exactly one heading per requirement, and never merge two ' +
+    'requirements under one heading. ' +
     // Submission instructions are NOT technical strategy. This is the exact failure an independent review caught.
     'SUBMISSION-INSTRUCTION RULE: a requirement that only governs HOW, WHEN, WHERE or in WHAT FORMAT the proposal is ' +
     'submitted (email vs portal, number of copies, file type, page/font limits, deadlines, labeling) is an ' +

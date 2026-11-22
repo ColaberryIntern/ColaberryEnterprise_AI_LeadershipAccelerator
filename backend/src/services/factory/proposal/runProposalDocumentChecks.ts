@@ -11,7 +11,7 @@ import { QueryTypes } from 'sequelize';
 import { sequelize } from '../../../config/database';
 import GovProposalDocument from '../../../models/GovProposalDocument';
 import GovProposalBlueprint from '../../../models/GovProposalBlueprint';
-import { runDocumentChecks, type DocumentCheckInput } from './documentChecks';
+import { runDocumentChecks, hydrateSectionAnswers, type DocumentCheckInput } from './documentChecks';
 import { runAiChecks } from './documentChecksAI';
 import { renderProposalPdf } from './renderProposalPdf';
 import { recordVersionChecks, recordAiGates } from './govProposalReviewStore';
@@ -40,8 +40,12 @@ export async function runProposalDocumentChecks(deliveryProjectId: string, docKe
   const blueprint: ProposalBlueprint | null = bpRow ? (bpRow.blueprint_json as ProposalBlueprint) : null;
 
   const contentHtml: string | null = doc.content_html ?? null;
-  const sections = Array.isArray(doc.sections_json) ? doc.sections_json : [];
+  const rawSections = Array.isArray(doc.sections_json) ? doc.sections_json : [];
   const requirementIds: string[] = Array.isArray(doc.requirement_ids) ? doc.requirement_ids : [];
+  // Trace the whole-document draft back to each requirement it answers: fill any empty per-requirement section from
+  // its slice of content_html so SUBSTANTIVE coverage credits an answer written inside the single blob (authored
+  // section content is preserved; with no anchors this is a no-op). Fixes coverage reading 0 on a substantive draft.
+  const sections = hydrateSectionAnswers(rawSections, contentHtml, requirementIds);
   // v3 (T03): every [PLACEHOLDER] in the current content gets one open gap carrying its typed need; an answered one
   // closes. Runs BEFORE loadGaps so the fact check scores against the reconciled markers.
   await reconcilePlaceholderGaps(deliveryProjectId, docKey, contentHtml);
