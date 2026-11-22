@@ -95,6 +95,12 @@ describe('the Follow-ups rows', () => {
     assert.doesNotMatch(r.tracking, /Opened \d/);
     assert.doesNotMatch(F.TEXT.checks, /opens show/i);
   });
+  test('there is no "Opened" status pill (opens are never tracked, so no row can be in that state)', () => {
+    for (const s of ['scheduled', 'sending', 'sent', 'clicked', 'replied', 'cancelled', 'failed', 'held']) {
+      assert.doesNotMatch(F.row(fu({ status: s, sentAt: '2026-11-25T15:01:00.000Z' })).status.text, /open/i, s);
+    }
+    assert.notEqual(F.row(fu({ status: 'opened', sentAt: '2026-11-25T15:01:00.000Z' })).status.text, 'Opened');
+  });
   test('a link typed into the message must be https://', () => {
     assert.equal(F.problem(form({ body: 'See http://a.example/x' })), F.TEXT.httpsOnly);
     assert.equal(F.problem(form({ body: 'See www.a.example' })), F.TEXT.httpsOnly);

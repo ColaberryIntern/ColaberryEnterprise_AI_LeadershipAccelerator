@@ -45,7 +45,7 @@
     loadFailed: 'Could not load your follow-ups just now. Your offers and candidates are fine; try again in a moment.',
     nowNote: 'It goes out within 5 minutes.',
   };
-  var STATUS = { scheduled: ['Scheduled', 'p-info'], sending: ['Sending', 'p-info'], sent: ['Sent', 'p-ok'], opened: ['Opened', 'p-ok'], clicked: ['Clicked', 'p-ok'],
+  var STATUS = { scheduled: ['Scheduled', 'p-info'], sending: ['Sending', 'p-info'], sent: ['Sent', 'p-ok'], clicked: ['Clicked', 'p-ok'],
     replied: ['Replied', 'p-ok'], cancelled: ['Cancelled', 'p-mute'], failed: ['Not sent', 'p-warn'], held: ['Held', 'p-warn'] };
   var REASON = { employer_mail_off: 'Held: employer email is switched off, so it was not sent.', replied: 'Cancelled: they replied before it went.',
     employer: 'Cancelled by your team.', candidate_removed: 'Cancelled: this candidate is no longer put forward to you.',
