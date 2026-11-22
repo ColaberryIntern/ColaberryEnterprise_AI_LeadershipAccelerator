@@ -55,6 +55,15 @@ import { sequelize } from '../config/database';
  *                        attempts / last_attempt_at bound the retries), scored, no_score (recorded, nothing scored, reason
  *                        says why) or unavailable (reason says why). turns / scores = the candidate's feedback (served to
  *                        the candidate only); recording = where Zoom keeps the file (server side only, never served).
+ *   placement_offers     (CP10.1, kit F7, services/placement/offerService.ts) VERSIONED: one offer_group_id, an edit adds
+ *                        version n+1 and supersedes the old one (one current version per group, a partial UNIQUE
+ *                        index). Every F7 field: pay basis (yearly salary, or hourly rate x hours a week), first-year
+ *                        salary, the fee rate and fee (integer cents, computed by feeCalculator.ts and stored as sent),
+ *                        start date, respond-by, the employer's fee agreement, status sent / accepted / declined /
+ *                        talk_first / withdrawn. client_key UNIQUE = one row per Send (a double click makes one).
+ *                        client_id is the employer account (T26 adds its table; no foreign key until then).
+ *   placement_invoices   (CP10.1) the invoice RECORD an accepted offer creates, at most one per offer (offer_id UNIQUE);
+ *                        not_invoiced / invoiced / paid. Nothing is sent or charged (D8).
  */
 export const PLACEMENT_STATEMENTS: readonly string[] = [
   `CREATE TABLE IF NOT EXISTS job_search_inboxes (
@@ -213,10 +222,53 @@ export const PLACEMENT_STATEMENTS: readonly string[] = [
      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
    )`,
+  `CREATE TABLE IF NOT EXISTS placement_offers (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     offer_group_id UUID NOT NULL,
+     version SMALLINT NOT NULL CHECK (version >= 1),
+     superseded_at TIMESTAMPTZ,
+     client_key UUID NOT NULL UNIQUE,
+     enrollment_id UUID NOT NULL REFERENCES enrollments(id) ON DELETE CASCADE,
+     interview_id UUID REFERENCES placement_interviews(id) ON DELETE SET NULL,
+     client_id UUID,
+     company VARCHAR(200) NOT NULL,
+     role VARCHAR(200) NOT NULL,
+     pay_basis VARCHAR(6) NOT NULL CHECK (pay_basis IN ('yearly','hourly')),
+     salary_cents BIGINT CHECK (salary_cents IS NULL OR (salary_cents > 0 AND salary_cents <= 200000000)),
+     hourly_rate_cents INTEGER CHECK (hourly_rate_cents IS NULL OR (hourly_rate_cents > 0 AND hourly_rate_cents <= 100000)),
+     hours_per_week NUMERIC(4,1) CHECK (hours_per_week IS NULL OR (hours_per_week >= 1 AND hours_per_week <= 80)),
+     first_year_cents BIGINT NOT NULL CHECK (first_year_cents > 0),
+     fee_rate_bp INTEGER NOT NULL CHECK (fee_rate_bp > 10000 AND fee_rate_bp <= 30000),
+     fee_cents BIGINT NOT NULL CHECK (fee_cents > 0),
+     start_date DATE,
+     respond_by TIMESTAMPTZ,
+     fee_agreed_at TIMESTAMPTZ NOT NULL,
+     status VARCHAR(12) NOT NULL CHECK (status IN ('sent','accepted','declined','talk_first','withdrawn')),
+     decided_at TIMESTAMPTZ,
+     created_by VARCHAR(120) NOT NULL,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     CONSTRAINT uq_placement_offers_version UNIQUE (offer_group_id, version),
+     CONSTRAINT ck_placement_offers_pay CHECK ((pay_basis = 'yearly' AND salary_cents IS NOT NULL AND hourly_rate_cents IS NULL AND hours_per_week IS NULL)
+       OR (pay_basis = 'hourly' AND salary_cents IS NULL AND hourly_rate_cents IS NOT NULL AND hours_per_week IS NOT NULL))
+   )`,
+  // At most ONE current version per offer (an edit supersedes the old one in the same transaction).
+  'CREATE UNIQUE INDEX IF NOT EXISTS uq_placement_offers_current ON placement_offers (offer_group_id) WHERE superseded_at IS NULL',
+  'CREATE INDEX IF NOT EXISTS idx_placement_offers_enrollment ON placement_offers (enrollment_id, created_at DESC)',
+  `CREATE TABLE IF NOT EXISTS placement_invoices (
+     id BIGSERIAL PRIMARY KEY,
+     offer_id UUID NOT NULL UNIQUE REFERENCES placement_offers(id) ON DELETE RESTRICT,
+     enrollment_id UUID NOT NULL REFERENCES enrollments(id) ON DELETE CASCADE,
+     fee_cents BIGINT NOT NULL CHECK (fee_cents > 0),
+     status VARCHAR(14) NOT NULL DEFAULT 'not_invoiced' CHECK (status IN ('not_invoiced','invoiced','paid')),
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
 ];
 
 /** Run by hand to roll the placement tables back. Never run at boot. Dependents first. */
 export const PLACEMENT_SCHEMA_ROLLBACK: readonly string[] = [
+  'DROP TABLE IF EXISTS placement_invoices',
+  'DROP TABLE IF EXISTS placement_offers',
   'DROP TABLE IF EXISTS interview_replays',
   'DROP TABLE IF EXISTS interview_notes',
   'DROP TABLE IF EXISTS interview_consents',

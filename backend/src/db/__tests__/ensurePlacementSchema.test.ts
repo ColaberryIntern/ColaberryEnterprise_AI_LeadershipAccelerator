@@ -52,6 +52,13 @@ describe('ensurePlacementSchema (statements)', () => {
     expect(rp).toMatch(/interview_id UUID NOT NULL UNIQUE REFERENCES placement_interviews\(id\)/);
     expect(rp).toMatch(/status IN \('waiting','scored','no_score','unavailable'\)/);
     expect(rp).toMatch(/attempts SMALLINT NOT NULL DEFAULT 0 CHECK \(attempts >= 0\)/);
+    // T25 (CP10.1): versioned offers (one current version per group), one invoice record per offer.
+    const of = PLACEMENT_STATEMENTS.find((s) => s.includes('CREATE TABLE IF NOT EXISTS placement_offers')) as string;
+    expect(of).toMatch(/status IN \('sent','accepted','declined','talk_first','withdrawn'\)/);
+    expect(of).toMatch(/UNIQUE \(offer_group_id, version\)/);
+    expect(of).toMatch(/client_key UUID NOT NULL UNIQUE/);
+    expect(PLACEMENT_STATEMENTS).toContain('CREATE UNIQUE INDEX IF NOT EXISTS uq_placement_offers_current ON placement_offers (offer_group_id) WHERE superseded_at IS NULL');
+    expect(PLACEMENT_STATEMENTS.find((s) => s.includes('CREATE TABLE IF NOT EXISTS placement_invoices'))).toMatch(/offer_id UUID NOT NULL UNIQUE REFERENCES placement_offers\(id\)/);
   });
   it('has a rollback that drops every table it creates, dependents first, never run at boot', () => {
     const made = tables(PLACEMENT_STATEMENTS, /CREATE TABLE IF NOT EXISTS (\w+)/);
@@ -61,6 +68,8 @@ describe('ensurePlacementSchema (statements)', () => {
     expect(dropped.indexOf('interview_consents')).toBeLessThan(dropped.indexOf('placement_interviews'));
     expect(dropped.indexOf('interview_notes')).toBeLessThan(dropped.indexOf('placement_interviews'));
     expect(dropped.indexOf('interview_replays')).toBeLessThan(dropped.indexOf('placement_interviews'));
+    expect(dropped.indexOf('placement_invoices')).toBeLessThan(dropped.indexOf('placement_offers'));
+    expect(dropped.indexOf('placement_offers')).toBeLessThan(dropped.indexOf('placement_interviews'));
   });
   it('keeps booting when one statement fails, and says so', async () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
