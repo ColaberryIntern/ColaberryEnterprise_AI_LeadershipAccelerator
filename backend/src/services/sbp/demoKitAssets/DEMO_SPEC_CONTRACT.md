@@ -1,4 +1,4 @@
-# demo-spec.json — the contract
+# demo-spec.json: the contract
 
 `demo/index.html` is an engine. It contains nothing about any project and draws whatever
 `demo/demo-spec.json` describes. To change the demo, change the spec. Never edit the engine.
@@ -10,7 +10,9 @@ The builder's agent refines it. This file says what each part means.
 
 | Key | What it is |
 |---|---|
-| `schema_version` | `1`. |
+| `schema_version` | **`2`.** Not 1. The renderer validates against this contract and REFUSES any other value, so a spec at version 1 renders nothing and cannot be published. |
+| `environment` | One of `demo`, `sandbox`, `simulation`. **`production` is not a permitted value**, which is the point: a simulated screen can never claim to be the real system. |
+| `events` | **Required.** The trust-and-work timeline, one entry per action. See *Events* below. An empty array is valid and means "this build performs no actions yet"; omitting the key is not. |
 | `source` | Where the demo came from: `project`, `plan_version`, `plan_sha256`, `generated_at` (all copied from `.colaberry/manifest.json`), `seed`, `inputs`, and `refined` (false from the scaffold; set true once a person or agent has shaped the scenario). The banner shows the plan version and hash, so a demo built from an old plan is visible as one. |
 | `app` | `name`, `descriptor`, `accent` (one hex colour, the only brand lever), `persona` `{name, role}` (who the home screen is for), `clock` (the one moment the sample is set in), `command_center_href`, and `log` (which entity records activity, see Actions). |
 | `nav` | Groups of `{screen, label, icon, badge?}`. `badge` is `{entity, where, tone?, suffix?}` and is a live count, never a typed number. Icons: `home calendar check grid people list doc shield flow`. |
@@ -21,6 +23,33 @@ The builder's agent refines it. This file says what each part means.
 | `guardrails` | From the plan's SAFE requirements: `id`, `statement`, and `shown_as`, one sentence naming where in the sample the guardrail visibly holds. |
 | `systems` | From `plan.derived.systems`. Always drawn as simulated. |
 | `coverage` | One row per story: `{story, title, screen, label}` or `{story, title, screen: null, note}`. |
+
+## Events
+
+The timeline is what makes this a TRUST demo rather than a product tour. Each entry is one
+action, and every field exists because a viewer would otherwise have to take something on faith.
+
+| Key | What it is |
+|---|---|
+| `event_id` | Unique within the spec. |
+| `occurred_at` | ISO-8601. Derived from the plan's sync time, never from a clock read, so the same plan gives the same timeline. |
+| `work_id` | The piece of work this action belongs to, so several actions on one item group together. The scaffold uses the story id. |
+| `trace_id` | The thread through a whole chain of actions. |
+| `parent_event_id` | The action that caused this one, or `null` for the first. This is the CAUSAL field: a timeline that cannot say what caused what is a list, not a trace. |
+| `actor` | `{type, id, label, verified}`. `type` is `agent`, `human` or `system`: a structured identity, not a flat "who". `id` is stable, so two actions by the same agent are provably the same agent. **`verified` is `false` in every demo**, because a demo can verify no identity and must say so rather than implying a guarantee it does not have. |
+| `human_owner_id` | The accountable person. Required **even when the actor is a human**, so accountability is never ambiguous. |
+| `action` | What was done, in the product's words. |
+| `status` | The full lifecycle: `proposed`, `queued`, `executing`, `succeeded`, `failed`, `canceled`, `reverted`. A timeline where everything succeeded teaches a viewer that the system always works, which is the one thing no system does, so the scaffold fails every third action and reverts every fifth. |
+| `risk_level` | `low`, `medium`, `high`. |
+| `autonomy_tier` | `A0` to `A4`, and it is attached to the ACTION, never to an agent as a personality trait. The same agent may act at different tiers. |
+| `reason_summary` | Why, in one line. Narrative, and explicitly **not** audit truth on its own: that is what the two reference lists below are for. |
+| `evidence_refs` | What the action was based on. |
+| `policy_refs` | The stated rules it is answerable to. The scaffold uses the requirements the story fulfills, which come from the plan rather than from the tool. |
+| `approval` | `{required, status, assigned_to}`, where status is `pending`, `granted`, `denied` or `not_required`. |
+| `side_effects` | What changed outside the system. A failed action usually has none, and saying so is the claim. |
+| `reversible` | Whether it can be undone. |
+| `recovery_ref` | Where to undo it, or `null`. A `reverted` action without one is a dead end. |
+| `environment` | Same permitted set as the top level. |
 
 ## Entities
 

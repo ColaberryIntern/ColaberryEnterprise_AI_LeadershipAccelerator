@@ -786,8 +786,9 @@ dl.facts dd { margin: 0; min-width: 0; }
 /** Byte-for-byte `demoKitAssets/scaffold-demo-spec.mjs`. */
 export const DEMO_KIT_SCAFFOLD_MJS = `#!/usr/bin/env node
 /*
- * scaffold-demo-spec — read a project's Command Center data and write a first-pass
- * demo-spec.json: screens, navigation, the Human / Agent split, and seeded sample rows.
+ * scaffold-demo-spec: read a project's Command Center data and write a first-pass
+ * demo-spec.json at schema_version 2: screens, navigation, the Human / Agent split, seeded
+ * sample rows, AND the trust-and-work timeline the spec contract requires.
  *
  *   node tools/scaffold-demo-spec.mjs --repo <repo root> [--out demo/demo-spec.json]
  *
@@ -1052,10 +1053,100 @@ const coverage = (plan.stories || []).map((s) => {
   return { story: s.id, title: s.title, screen: hit || (headless ? 'who-does-what' : null), label: hit ? screens[hit].title : headless ? 'Runs in the background: Who does what' : undefined, note: hit || headless ? undefined : 'No screen yet. Add one when you refine the demo.' };
 });
 
+// ---- the trust-and-work timeline (demo-spec v2) -------------------------------
+/*
+ * WHY THIS BLOCK EXISTS, and why it was missing.
+ *
+ * The spec contract moved to v2 when the trust standard landed: \`schema_version: 2\`, an
+ * \`environment\`, and an \`events\` array where every action carries a structured actor, an
+ * accountable human, a causal reason, evidence and policy references, an approval state, its
+ * side effects, whether it is reversible, and where to recover. \`demoRender.ts\` validates
+ * against that contract and REFUSES anything else.
+ *
+ * This tool kept emitting v1 with no events at all. The engine shipped beside it reads
+ * \`SPEC.events\` and renders the timeline, so a hand-scaffolded spec rendered a demo with no
+ * timeline, and the platform's public route rejected it outright. A student following this
+ * kit's own instructions produced a file that could not be published.
+ *
+ * THE SHAPE MIRRORS \`connectedDemoSpec.ts\`, deliberately, because two derivations of the same
+ * contract is the duplicate-truth failure the kit is vendored in one place to prevent. One
+ * difference, and it is an improvement rather than a divergence: the generator picks actors and
+ * owners from a fixed list because it has only a plan, while this tool is run inside the
+ * student's repo and can name the agents and the persona THEIR plan declares.
+ *
+ * THE LIFECYCLE IS SPREAD ON PURPOSE. A timeline where every action succeeded is the demo the
+ * trust standard exists to prevent: it teaches a viewer that the system always works, which is
+ * the one thing no system does. Every third action fails and every fifth is reverted, so a
+ * scaffolded demo always shows at least one action that did not complete, and what was done
+ * about it.
+ */
+const specStories = (plan.stories || []).filter((s) => s && s.id && s.title);
+
+/* The actors this plan actually declares. A plan with no agents gets the system as the actor,
+ * which is true rather than convenient: something performed the action. */
+const eventActors = agents.length
+  ? agents.map((a) => ({ type: 'agent', id: a.id, label: a.name || a.id }))
+  : [{ type: 'system', id: 'system', label: \`\${project.name || plan.project_name || 'The build'} runtime\` }];
+
+const events = specStories.map((s, i) => {
+  const failed = i > 0 && i % 3 === 0;
+  const reverted = i > 0 && i % 5 === 0;
+  const status = reverted ? 'reverted' : failed ? 'failed' : i === 1 ? 'executing' : 'succeeded';
+  const highRisk = failed || reverted;
+  const actor = eventActors[i % eventActors.length];
+  const occurred = new Date(base.getTime() + i * 37 * 60 * 1000);
+
+  return {
+    event_id: \`\${s.id}-E1\`,
+    occurred_at: occurred.toISOString(),
+    work_id: s.id,
+    trace_id: \`trace-\${String(s.id).toLowerCase()}\`,
+    parent_event_id: i === 0 ? null : \`\${specStories[i - 1].id}-E1\`,
+
+    // \`verified: false\` is not a placeholder. A demo can verify no identity, and the contract
+    // requires it be able to say so rather than implying a guarantee it does not have.
+    actor: { ...actor, verified: false },
+    human_owner_id: personaName === 'You' ? personaRole : personaName,
+
+    action: s.title,
+    status,
+    risk_level: highRisk ? 'high' : i % 2 === 0 ? 'low' : 'medium',
+    autonomy_tier: highRisk ? 'A2' : i % 2 === 0 ? 'A1' : 'A3',
+
+    reason_summary: s.narrative || \`\${s.title} (no narrative on this story)\`,
+    evidence_refs: [\`\${s.id}/acceptance\`],
+    // The requirements this story fulfills ARE its policy references: they are the stated rules
+    // the action is answerable to, and they come from the plan rather than from this tool.
+    policy_refs: (s.fulfills || []).slice(0, 2),
+
+    approval: highRisk
+      ? { required: true, status: 'granted', assigned_to: personaName === 'You' ? personaRole : personaName }
+      : { required: false, status: 'not_required', assigned_to: null },
+
+    side_effects: failed ? [] : ['demo-fixtures'],
+    reversible: !reverted,
+    recovery_ref: reverted ? \`\${s.id}/recovery\` : null,
+    environment: 'demo',
+  };
+});
+
 const privateTables = Object.values(entities).filter((e) => e.fields.some((f) => f.type === 'private'));
 const spec = {
-  schema_version: 1,
-  source: { project: project.name || plan.project_name, plan_version: manifest.plan_version ?? project.plan_version ?? null, plan_sha256: sha || null, generated_at: manifest.generated_at || null, seed, inputs: ['.colaberry/plan.json', '.colaberry/manifest.json', 'command-center/data-model.json'], refined: false },
+  schema_version: 2,
+  environment: 'demo',
+  events,
+  // Every key here is a STRING or omitted, never null. The contract types them as optional
+  // strings, and Zod treats null as a type error rather than as absence, so a repo without a
+  // manifest used to emit \`plan_version: null\` and the whole spec was refused. \`seed\` was a
+  // number for the same reason: nobody had ever validated this block, because the version
+  // check failed first, so the first validation of it found both at once.
+  source: Object.fromEntries(Object.entries({
+    project: project.name || plan.project_name,
+    plan_version: manifest.plan_version ?? project.plan_version,
+    plan_sha256: sha,
+    generated_at: manifest.generated_at,
+    seed: String(seed),
+  }).filter(([, v]) => v !== undefined && v !== null && v !== '').map(([k, v]) => [k, String(v)])),
   app: {
     name: project.name || plan.project_name || 'Project', descriptor: project.descriptor || plan.descriptor || '', accent: ACCENTS[seed % ACCENTS.length],
     persona: { name: personaName, role: personaRole }, clock: \`\${DAYS[base.getUTCDay()]}, \${LONG_MONTHS[base.getUTCMonth()]} \${base.getUTCDate()}\`,
@@ -1077,7 +1168,7 @@ const spec = {
 
 fs.mkdirSync(path.dirname(out), { recursive: true });
 fs.writeFileSync(out, \`\${JSON.stringify(spec, null, 2)}\\n\`);
-console.log(\`wrote \${out}: \${Object.keys(screens).length} screens, \${Object.keys(entities).length} entities, \${Object.values(entities).reduce((n, e) => n + e.rows.length, 0)} sample rows, seed \${seed}\`);
+console.log(\`wrote \${out}: \${Object.keys(screens).length} screens, \${Object.keys(entities).length} entities, \${Object.values(entities).reduce((n, e) => n + e.rows.length, 0)} sample rows, \${events.length} timeline events, seed \${seed}\`);
 `;
 
 /** Byte-for-byte `demoKitAssets/build-standalone.mjs`. */
@@ -1110,7 +1201,7 @@ console.log(\`wrote \${out} (\${(html.length / 1024).toFixed(0)} KB)\`);
 `;
 
 /** Byte-for-byte `demoKitAssets/DEMO_SPEC_CONTRACT.md`. */
-export const DEMO_KIT_CONTRACT_MD = `# demo-spec.json — the contract
+export const DEMO_KIT_CONTRACT_MD = `# demo-spec.json: the contract
 
 \`demo/index.html\` is an engine. It contains nothing about any project and draws whatever
 \`demo/demo-spec.json\` describes. To change the demo, change the spec. Never edit the engine.
@@ -1122,7 +1213,9 @@ The builder's agent refines it. This file says what each part means.
 
 | Key | What it is |
 |---|---|
-| \`schema_version\` | \`1\`. |
+| \`schema_version\` | **\`2\`.** Not 1. The renderer validates against this contract and REFUSES any other value, so a spec at version 1 renders nothing and cannot be published. |
+| \`environment\` | One of \`demo\`, \`sandbox\`, \`simulation\`. **\`production\` is not a permitted value**, which is the point: a simulated screen can never claim to be the real system. |
+| \`events\` | **Required.** The trust-and-work timeline, one entry per action. See *Events* below. An empty array is valid and means "this build performs no actions yet"; omitting the key is not. |
 | \`source\` | Where the demo came from: \`project\`, \`plan_version\`, \`plan_sha256\`, \`generated_at\` (all copied from \`.colaberry/manifest.json\`), \`seed\`, \`inputs\`, and \`refined\` (false from the scaffold; set true once a person or agent has shaped the scenario). The banner shows the plan version and hash, so a demo built from an old plan is visible as one. |
 | \`app\` | \`name\`, \`descriptor\`, \`accent\` (one hex colour, the only brand lever), \`persona\` \`{name, role}\` (who the home screen is for), \`clock\` (the one moment the sample is set in), \`command_center_href\`, and \`log\` (which entity records activity, see Actions). |
 | \`nav\` | Groups of \`{screen, label, icon, badge?}\`. \`badge\` is \`{entity, where, tone?, suffix?}\` and is a live count, never a typed number. Icons: \`home calendar check grid people list doc shield flow\`. |
@@ -1133,6 +1226,33 @@ The builder's agent refines it. This file says what each part means.
 | \`guardrails\` | From the plan's SAFE requirements: \`id\`, \`statement\`, and \`shown_as\`, one sentence naming where in the sample the guardrail visibly holds. |
 | \`systems\` | From \`plan.derived.systems\`. Always drawn as simulated. |
 | \`coverage\` | One row per story: \`{story, title, screen, label}\` or \`{story, title, screen: null, note}\`. |
+
+## Events
+
+The timeline is what makes this a TRUST demo rather than a product tour. Each entry is one
+action, and every field exists because a viewer would otherwise have to take something on faith.
+
+| Key | What it is |
+|---|---|
+| \`event_id\` | Unique within the spec. |
+| \`occurred_at\` | ISO-8601. Derived from the plan's sync time, never from a clock read, so the same plan gives the same timeline. |
+| \`work_id\` | The piece of work this action belongs to, so several actions on one item group together. The scaffold uses the story id. |
+| \`trace_id\` | The thread through a whole chain of actions. |
+| \`parent_event_id\` | The action that caused this one, or \`null\` for the first. This is the CAUSAL field: a timeline that cannot say what caused what is a list, not a trace. |
+| \`actor\` | \`{type, id, label, verified}\`. \`type\` is \`agent\`, \`human\` or \`system\`: a structured identity, not a flat "who". \`id\` is stable, so two actions by the same agent are provably the same agent. **\`verified\` is \`false\` in every demo**, because a demo can verify no identity and must say so rather than implying a guarantee it does not have. |
+| \`human_owner_id\` | The accountable person. Required **even when the actor is a human**, so accountability is never ambiguous. |
+| \`action\` | What was done, in the product's words. |
+| \`status\` | The full lifecycle: \`proposed\`, \`queued\`, \`executing\`, \`succeeded\`, \`failed\`, \`canceled\`, \`reverted\`. A timeline where everything succeeded teaches a viewer that the system always works, which is the one thing no system does, so the scaffold fails every third action and reverts every fifth. |
+| \`risk_level\` | \`low\`, \`medium\`, \`high\`. |
+| \`autonomy_tier\` | \`A0\` to \`A4\`, and it is attached to the ACTION, never to an agent as a personality trait. The same agent may act at different tiers. |
+| \`reason_summary\` | Why, in one line. Narrative, and explicitly **not** audit truth on its own: that is what the two reference lists below are for. |
+| \`evidence_refs\` | What the action was based on. |
+| \`policy_refs\` | The stated rules it is answerable to. The scaffold uses the requirements the story fulfills, which come from the plan rather than from the tool. |
+| \`approval\` | \`{required, status, assigned_to}\`, where status is \`pending\`, \`granted\`, \`denied\` or \`not_required\`. |
+| \`side_effects\` | What changed outside the system. A failed action usually has none, and saying so is the claim. |
+| \`reversible\` | Whether it can be undone. |
+| \`recovery_ref\` | Where to undo it, or \`null\`. A \`reverted\` action without one is a dead end. |
+| \`environment\` | Same permitted set as the top level. |
 
 ## Entities
 
