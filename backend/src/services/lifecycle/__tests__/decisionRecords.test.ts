@@ -15,6 +15,14 @@ import path from 'path';
 
 const DIR = path.resolve(__dirname, '../../../../../docs/project-lifecycle');
 
+/** Every file under a directory, recursively. Used to assert an ABSENCE across the tree. */
+function walk(dir: string): string[] {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+    const p = path.join(dir, e.name);
+    return e.isDirectory() ? walk(p) : [p];
+  });
+}
+
 const RECORDS: ReadonlyArray<[string, string, readonly string[]]> = [
   [
     'L9.7',
@@ -164,11 +172,45 @@ describe('the L9.7 record agrees with the code it describes', () => {
     expect(src('blueprintApproval.ts'))
       .toContain('selected_design_ref: input.selectedDesignRef ?? null');
 
-    // 2. Nothing to compare it against: the design-decision model has no non-test reader. Read
-    //    as an absence, which is the only way to assert "nothing reads this".
-    const readers = ['blueprintApproval.ts', 'lifecycleStatus.ts', 'lifecyclePrerequisites.ts']
-      .filter((p) => src(p).includes('BlueprintDesignDecision'));
+    /*
+     * 2. Nothing to compare it against: the design-decision model has no non-test reader. Read
+     *    as an absence, which is the only way to assert "nothing reads this".
+     *
+     *    SCANNED OVER THE TREE, not over three named files. The first version named
+     *    `blueprintApproval.ts`, `lifecycleStatus.ts` and `lifecyclePrerequisites.ts`, so a
+     *    reader added anywhere else would have left this record false with the suite green. A
+     *    verifier pointed that out. The DDL, the schema-contract name list, the model itself and
+     *    the model registry are not readers: they are where the table is DECLARED.
+     */
+    const DECLARATIONS = [
+      'db/ensureProjectLifecycleSchema.ts',
+      'db/projectLifecycleSchemaContract.ts',
+      'models/BlueprintDesignDecision.ts',
+      'models/index.ts',
+    ];
+    /*
+     * COMMENTS ARE STRIPPED FIRST. The tree scan's first run reported
+     * `models/BlueprintVisualContract.ts`, which mentions `BlueprintDesignDecision` only in a
+     * doc comment explaining why neither model declares an `indexes` block. Prose about a module
+     * is not a read of it, and a check that cannot tell them apart would make this record
+     * unmaintainable: every comment naming the model would read as a closure of the limb. The
+     * same strip was needed in T10's sweep for the same reason.
+     */
+    const stripComments = (s: string): string =>
+      s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
+    const readers = walk(path.resolve(__dirname, '../../..'))
+      .filter((p) => !p.includes('__tests__') && /\.ts$/.test(p))
+      .filter((p) => !DECLARATIONS.some((d) => p.replace(/\\/g, '/').endsWith(d)))
+      .filter((p) => stripComments(fs.readFileSync(p, 'utf8')).includes('BlueprintDesignDecision'));
     expect(readers).toEqual([]);
+    // The control for the STRIP, not just for the scan: the comment-only mention is still on
+    // disk, so if the strip stopped working this test would fail rather than pass more easily.
+    expect(fs.readFileSync(path.resolve(__dirname, '../../../models/BlueprintVisualContract.ts'), 'utf8'))
+      .toContain('BlueprintDesignDecision');
+    // The control: the declarations DO mention it, so the scan is looking in the right tree.
+    expect(fs.readFileSync(path.resolve(__dirname, '../../../models/BlueprintDesignDecision.ts'), 'utf8'))
+      .toContain('BlueprintDesignDecision');
 
     // 3. The approval boundary does not re-check the design-selection gate. Prerequisites are
     //    not cumulative, and only `planning` spreads another stage's predicate.

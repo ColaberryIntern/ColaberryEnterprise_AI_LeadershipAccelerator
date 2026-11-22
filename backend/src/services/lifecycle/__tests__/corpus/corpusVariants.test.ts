@@ -428,6 +428,15 @@ describe('§103 case 7, the SBP path: an over-budget source is REFUSED, not clip
       expect(prompt).toContain(`</${tag}>`);
     }
     expect(briefPrecedesDocument(prompt)).toBe(true);
+    /*
+     * AND THE NEGATIVE DIRECTION, which nothing in this repo asserted. A verifier hollowed
+     * `briefPrecedesDocument` to `return true` and every corpus suite stayed green: all seven
+     * call sites in `src/` assert `true` and none asserted `false`, so the function could not
+     * fail. Grounding order is the SAFE-002 invariant; a predicate that cannot say no does not
+     * check it.
+     */
+    expect(briefPrecedesDocument('<EXPANDED_DOCUMENT></EXPANDED_DOCUMENT><ORIGINAL_BRIEF></ORIGINAL_BRIEF>')).toBe(false);
+    expect(briefPrecedesDocument('neither tag is present')).toBe(false);
   });
 
   it('with the block OFF the same source is CLIPPED rather than refused, which is what changed', () => {

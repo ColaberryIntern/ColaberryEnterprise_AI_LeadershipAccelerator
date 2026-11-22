@@ -201,6 +201,41 @@ describe(`${GUIDE} covers the demo, which it did not mention at all`, () => {
     expect(g).toContain('refs_sha256');
   });
 
+  it('cites the L7.1 corpus run, which is the clause L8.6 asked for', () => {
+    /*
+     * T16's acceptance ends "and cited by L8.6". A verifier found that half unmet: the record was
+     * written and nothing referenced it, so a reviewer had no way to reach the evidence from the
+     * document that is supposed to lead them to it.
+     *
+     * The citation names the artifact AND the command that regenerates it, because the record is
+     * gitignored on purpose: a run record is evidence of one run, and a stale committed copy
+     * would read as current. A citation to a file nobody can regenerate is not a citation.
+     */
+    const g = read(GUIDE);
+    expect(g).toContain('corpus-run-l71.md');
+    expect(g).toContain('generateCorpusRecord.ts');
+    // The generator it names must exist, which is the half a citation usually leaves unchecked.
+    expect(fs.existsSync(path.resolve(
+      __dirname, '../../lifecycle/__tests__/corpus/generateCorpusRecord.ts',
+    ))).toBe(true);
+    // And all eight shapes are named, not just the artifact's path.
+    for (const shape of [
+      'Ordinary service application', 'Government project, two linked tracks',
+      'Human-heavy workflow', 'Manual-only workflow', 'One person in several roles',
+      'Low-information interview', "Source over the model's limit", 'Blueprint changed mid-flight',
+    ]) {
+      expect(g).toContain(shape);
+    }
+  });
+
+  it('and says what the corpus run does NOT establish', () => {
+    // The limit matters more than the citation. The run calls no model and cannot reach five of
+    // the fifteen stages, so presenting it as end-to-end evidence would overstate it.
+    const g = read(GUIDE);
+    expect(g).toContain('What this does NOT establish');
+    expect(g).toContain('No model was called');
+  });
+
   it('the overwrite it warns about is what the store actually does', () => {
     // The limitation checked against the code, so it cannot outlive the behavior it describes.
     const store = fs.readFileSync(

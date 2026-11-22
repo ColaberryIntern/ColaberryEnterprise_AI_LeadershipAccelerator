@@ -390,3 +390,51 @@ off, and nothing records who opened it.
 **Nobody has looked at it on a phone.** Same caveat as the lifecycle workspace above, and for the
 same reason. It was built to wrap rather than to fix a width, which is a structural claim, not a
 look.
+
+---
+
+## Where the evidence behind these tests comes from
+
+*Added 2026-11-22. L8.6 asks this guide to say what has actually been exercised, so that a check
+you run yourself sits beside the checks that were run for you.*
+
+The eight reference shapes in `reference-fixtures.md` were run against this change and recorded
+per shape, not as a test tally. The record lives at
+`.loop-architect/runs/20261120-spine-closeout-connected-demo/results/corpus-run-l71.md`, with the
+machine-readable form beside it as `corpus-run-l71.json`.
+
+**It is not committed**, deliberately: a run record is evidence of one run, and a stale copy in
+the repo would read as current. Regenerate it with
+
+```sh
+cd backend
+node ../node_modules/ts-node/dist/bin.js --transpile-only \
+  src/services/lifecycle/__tests__/corpus/generateCorpusRecord.ts <output directory>
+```
+
+and read the regenerated file rather than a copy, because the generator refuses to write at all
+if any shape has no outcome, if a shape's stage partition is incomplete, or if the over-limit
+shape is not refused.
+
+What the eight shapes cover, in one line each:
+
+| Shape | What it establishes |
+|---|---|
+| Ordinary service application | the common path runs to `complete` |
+| Government project, two linked tracks | one requirement keeps a single canonical id in both tracks |
+| Human-heavy workflow | a below-target automation share is reported honestly, with its denominator, rather than reclassified upward |
+| Manual-only workflow | "all human" is a recorded decision, not an empty allocation |
+| One person in several roles | a second role hat does not launder a self-approval; the rule keys on identity |
+| Low-information interview | an unassessed task refuses rather than shrinking the denominator, so there is no precise-looking percentage over missing data |
+| Source over the model's limit | an over-budget brief is **refused**, not silently clipped |
+| Blueprint changed mid-flight | an approval for a superseded revision is refused, and re-checked when the plan is authorized |
+
+Three of those are properties of a gate or a prompt rather than journeys through the build
+stages, and the record says which is which rather than presenting all eight as the same kind of
+evidence.
+
+**What this does NOT establish.** No model was called: the fixtures supply model output as input,
+which is what makes the run repeatable with no network. Five of the fifteen stages need a
+database and are reported not reached, each naming the blocker. So the record is evidence about
+the system's rules and refusals, not about the quality of generated content, and the five checks
+in Test 9 above remain the only way to see the published result with your own eyes.

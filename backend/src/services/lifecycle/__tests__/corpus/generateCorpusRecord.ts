@@ -343,7 +343,14 @@ function renderMarkdown(r: { shapes: ShapeRecord[]; stages: string[] }, when: st
     '',
     `Run ${when} - session \`CC-20261120-k4d9\` - ticket L7.1 (\`10396178198\`).`,
     '',
-    '## The ticket says six stages. The vocabulary is ten, across fifteen names.',
+    /*
+     * The counts are INTERPOLATED here too, not written out. A verifier found the heading
+     * reading "ten, across fifteen names" as literal prose while the body below read both from
+     * the code, and then demonstrated them diverging: shrinking `DB_BACKED_STAGES` made the body
+     * say thirteen while this line still said fifteen. "Every count is read from the code" has
+     * to include the heading, or it is not that claim.
+     */
+    `## The ticket says six stages. The vocabulary is ${GENERATION_STAGES.length}, across ${r.stages.length} names.`,
     '',
     'L7.1 is titled "Run the reference corpus across all six stages", written when the generation',
     'vocabulary was `handoff`, `process`, `allocation`, `agents`, `effort` and `complete`. P5-T1.4',

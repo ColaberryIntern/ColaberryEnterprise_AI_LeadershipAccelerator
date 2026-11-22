@@ -196,7 +196,13 @@ describe('the spread the document publishes is the spread the code applies', () 
 
   it('caps at 2 from one list, which is the default the document states', () => {
     const picked = pickFive(orders(6, 'List one', 'P1'), TODAY);
-    expect(picked.picks.length).toBeLessThanOrEqual(2);
+    /*
+     * EXACTLY 2, not "at most 2". A verifier tightened the default from 2 to 1 and every test
+     * stayed green while the document published 2, because an upper bound cannot tell a cap
+     * from a tighter cap. The mutations in `t14.json` only widened the caps, so the tightening
+     * direction was the untested half.
+     */
+    expect(picked.picks.length).toBe(2);
     // And it did have more to choose from, so the cap is what limited it.
     expect(picked.qualified).toBe(6);
     expect(doc()).toContain('2 from one list');
@@ -209,7 +215,7 @@ describe('the spread the document publishes is the spread the code applies', () 
       ...orders(2, 'List three', 'P1', 'c'),
     ];
     const picked = pickFive(many, TODAY);
-    expect(picked.picks.length).toBeLessThanOrEqual(3);
+    expect(picked.picks.length).toBe(3);
     expect(picked.qualified).toBe(6);
     expect(doc()).toContain('3 from one project');
   });
