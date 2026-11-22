@@ -4,12 +4,16 @@ import { act } from 'react-dom/test-utils';
 import { MemoryRouter } from 'react-router-dom';
 import AdminFactoryCommandCenterPage from './AdminFactoryCommandCenterPage';
 import * as factoryApi from '../../services/factoryApi';
+import * as projectDemoApi from '../../services/projectDemoApi';
 import type { FactoryCommandCenterView } from '../../services/factoryApi';
 
 // This repo has no @testing-library; component tests render via react-dom/client + act and read
 // container.textContent (see components/admin/agentDetailV2/__tests__). The page uses useSearchParams,
 // so it is wrapped in a MemoryRouter.
 jest.mock('../../services/factoryApi');
+// The demo-links panel on this page makes its own request. Mocked so these cases stay about the
+// factory view, and so the panel's PRESENCE can be asserted at the bottom of this file.
+jest.mock('../../services/projectDemoApi');
 
 const sampleView: FactoryCommandCenterView = {
   deliveryProjectId: 'dp-1',
@@ -55,6 +59,16 @@ async function renderPage() {
   // flush the mocked fetch resolution + the setState it triggers
   await act(async () => { await Promise.resolve(); });
 }
+
+beforeEach(() => {
+  // `jest.mock(...)` automocks every export to return undefined, and the demo-links panel awaits
+  // its call, so without a default every case on this page dies with "Cannot read properties of
+  // undefined (reading 'then')" from a panel it is not even testing. An empty directory is the
+  // quiet default; the two cases at the bottom override it.
+  (projectDemoApi.listProjectDemoLinks as jest.Mock).mockResolvedValue({
+    rows: [], counts: { published: 0, generated: 0, none: 0 }, truncated: false,
+  });
+});
 
 afterEach(() => {
   act(() => { root.unmount(); });
@@ -278,5 +292,47 @@ describe('the human/AI flow diagram', () => {
     (factoryApi.getFactorySample as jest.Mock).mockResolvedValue(sampleView);
     await renderPage();
     expect(container.textContent).not.toContain('Show the diagram');
+  });
+});
+
+/**
+ * The Connected demo links panel is ON this page.
+ *
+ * `DemoLinksPanel.test.tsx` proves what the panel does and nothing about whether anything mounts
+ * it. An independent verifier replaced `<DemoLinksPanel />` here with a comment and watched 15
+ * page tests, 11 panel tests and both `tsc --noEmit` gates stay green while the feature was gone
+ * from the product. These two cases are what make the mount real.
+ */
+describe('the Connected demo links panel', () => {
+  const directory = {
+    rows: [{
+      project_id: 'a', name: 'Dispatch console', enrollment_id: 'e1',
+      state: 'published' as const, url: '/api/public/demo/tok', event_count: 3,
+    }],
+    counts: { published: 1, generated: 0, none: 0 },
+    truncated: false,
+  };
+
+  it('is rendered on the page', async () => {
+    (projectDemoApi.listProjectDemoLinks as jest.Mock).mockResolvedValue(directory);
+    (factoryApi.listFactoryContracts as jest.Mock).mockResolvedValue([]);
+    (factoryApi.getFactorySample as jest.Mock).mockResolvedValue(sampleView);
+    await renderPage();
+    expect(container.textContent).toContain('Connected demo links');
+  });
+
+  it('survives a failed factory view, which is the reason it sits outside that block', async () => {
+    /*
+     * The comment in the page says the panel is outside the `view &&` block so the links do not
+     * vanish when the factory view errors, "which is exactly when somebody is here looking for
+     * something that still works". This is the assertion that earns that comment: without it the
+     * placement is a claim, and moving the element inside the block would pass every other test.
+     */
+    (projectDemoApi.listProjectDemoLinks as jest.Mock).mockResolvedValue(directory);
+    (factoryApi.listFactoryContracts as jest.Mock).mockRejectedValue(new Error('down'));
+    (factoryApi.getFactorySample as jest.Mock).mockRejectedValue(new Error('down'));
+    await renderPage();
+    expect(container.textContent).toContain('Could not load the factory command center');
+    expect(container.textContent).toContain('Connected demo links');
   });
 });

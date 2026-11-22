@@ -88,6 +88,8 @@ function input(opts: {
         task({ id: 't-ai', title: 'Check compliance', data_sensitivity: 'confidential', ...aiTaskOver }),
         task({ id: 't-human', title: 'Approve the response', decision_authority: 'decide_bounded' }),
       ],
+      // Required, and empty on purpose: see the note in `factoryDeliveryBridge.test.ts`.
+      roles: [],
       allocation: [alloc('t-ai', aiClass), alloc('t-human', 'human')],
       requirements: [requirement('REQ-1')],
       agent_teams: [team(teamOver)],

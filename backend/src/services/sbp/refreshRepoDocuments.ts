@@ -41,6 +41,7 @@ import { loadBuildProgress } from './buildProgressSnapshot';
 import { scheduleForEnrollment, truthForRender } from './scheduleForEnrollment';
 import { ensureGovPlanPublishedForSync, isGovBuildProjectVariables } from './govPlanForSync';
 import { scheduleFromBoard } from './scheduleFromBoard';
+import { connectedDemoMaterializedFor } from './connectedDemoFlag';
 
 export type RefreshOutcome =
   | 'written'          // files changed and were committed
@@ -166,6 +167,10 @@ export async function refreshRepoDocuments(
       baselineByStory: snapshot.baselineByStory,
       repoWriteAccess: writeAccess,
       commandCenterOverride,
+      // From the BOARD, not from the env flag. A refresh must keep rendering STORY-900.md for
+      // every build that has the row; asking the flag instead would delete the instructions out
+      // from under a student the day the rollout narrowed. See connectedDemoFlag.ts.
+      connectedDemo: await connectedDemoMaterializedFor(projectId),
     });
 
     const existingManifest = await readRepoManifest(

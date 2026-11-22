@@ -460,6 +460,73 @@ router.get('/api/portal/project/portfolio', requireParticipant, async (req: Requ
 });
 
 /**
+ * GET /api/portal/project/demo/share?project_id=...
+ * Read one project's Connected Demo sharing state.
+ *
+ * The project id is an explicit PARAMETER, not derived from the session, and the handler
+ * authorizes it. The portfolio pair below derives it, and that is a defect this route
+ * deliberately does not inherit: an enrollment can own several projects
+ * (`models/Project.ts:164-166`), so deriving picks whichever row Postgres returns first.
+ */
+router.get('/api/portal/project/demo/share', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { getConnectedDemoShare, GetConnectedDemoShareSchema } = await import('../services/connectedDemoShareService');
+    const parsed = GetConnectedDemoShareSchema.safeParse(req.query);
+    if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+    // The caller is the SESSION, never the request. `req.query.enrollment_id` is ignored here by
+    // construction, which is the property the test beside this asserts: this route discloses a
+    // share token, so whose token it is may not be something a caller gets to name.
+    res.json(await getConnectedDemoShare(req.participant!.sub, parsed.data.project_id));
+  } catch (err: any) {
+    const status = err?.error_class === 'NotFoundError' ? 404
+      : err?.error_class === 'ForbiddenError' ? 403 : 500;
+    console.error('[ProjectRoutes] GET /project/demo/share error:', err.message);
+    /*
+     * A CLASSIFIED refusal's message is written for the caller and is safe to return. An
+     * unclassified 500 is not: it is whatever threw, which on this route means a Sequelize or
+     * driver message, and that can carry column names, SQL fragments or connection details.
+     * Logged in full above, answered with a fixed string here. The admin demo route next door
+     * already does this; an independent review caught that this one did not.
+     */
+    res.status(status).json({
+      error: status === 500 ? 'Could not read the demo share state.' : err.message,
+    });
+  }
+});
+
+/**
+ * POST /api/portal/project/demo/share
+ * Publish or revoke one project's public Connected Demo link.
+ *
+ * Idempotent. Enabling a project that has no spec yet generates one first from the posted
+ * `data_model`, so the row is never published with nothing to serve.
+ */
+router.post('/api/portal/project/demo/share', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { SetConnectedDemoShareSchema, setConnectedDemoShare } = await import('../services/connectedDemoShareService');
+    const parsed = SetConnectedDemoShareSchema.safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+    res.json(await setConnectedDemoShare(req.participant!.sub, parsed.data));
+  } catch (err: any) {
+    const status = err?.error_class === 'NotFoundError' ? 404
+      : err?.error_class === 'ForbiddenError' ? 403
+        : err?.error_class === 'DataModelRequired' ? 400
+          // A refusal from the producer is the caller's fault, not ours: an invalid data model
+          // or a spec carrying restricted project data. 422 rather than 500 so the client can
+          // tell "you sent something I will not publish" from "I broke".
+          : String(err?.error_class || '').startsWith('ConnectedDemo') ? 422 : 500;
+    console.error('[ProjectRoutes] POST /project/demo/share error:', err?.error_class, err.message);
+    // Same rule as the GET above: the classified refusals are the caller's to read, the
+    // unclassified 500 is not. `error_class` stays either way, because a client that can tell
+    // 422-because-of-your-data-model from 500-because-we-broke is the point of classifying it.
+    res.status(status).json({
+      error: status === 500 ? 'Could not publish or revoke the demo link.' : err.message,
+      error_class: err?.error_class,
+    });
+  }
+});
+
+/**
  * GET /api/portal/project/portfolio/share
  * Read the current sharing state (token + enabled) for the participant's project.
  */

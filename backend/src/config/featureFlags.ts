@@ -63,16 +63,64 @@ export const FLAGS = {
   // "have" to "partial" and move live go/no-go coverage. Evidence citation and possibleProof ship ON regardless; only
   // the downgrade waits for links to be confirmed. Read once at boot: set the env var, then restart the backend.
   govFitRequireProof: process.env.ENABLE_GOV_FIT_REQUIRE_PROOF === 'true',
-  // SBP source-overflow BLOCK (P7-T1.3). Ships DARK (default off). With it off, an over-long
-  // brief or document is clipped and labelled exactly as it is today; with it on, `sourceBlocks`
-  // refuses rather than silently sending the model half a student's brief.
+  // SBP source-overflow BLOCK (P7-T1.3, L9.6). DEFAULT ON since 2026-11-21. With it off, an
+  // over-long brief or document is clipped and labelled; with it on, `sourceBlocks` refuses
+  // rather than silently sending the model half a student's brief and returning a plan for a
+  // brief they did not write.
   //
-  // The promotion from detect-only to blocking is not a preference. `plan-phase7.md` section 3.3
-  // pre-registered the rule BEFORE the data was seen -- "any build in the last 90 days exceeded
-  // the cap -> implement a blocking overflow behind the new flag" -- precisely so the measurement
-  // could not be read to suit the outcome. Measured 16 Oct 2026 with the shipped `buildBriefText`
-  // over the stored rows: 11 of 48, p90 27,772 against a 20,000 cap. The blocking branch fires.
-  sbpSourceOverflowBlock: process.env.ENABLE_SBP_SOURCE_OVERFLOW_BLOCK === 'true',
+  // THE EARLIER JUSTIFICATION IN THIS COMMENT WAS STALE, AND THE CORRECTION IS THE POINT.
+  // It read: "Measured 16 Oct 2026 ... 11 of 48, p90 27,772 against a 20,000 cap. The blocking
+  // branch fires." That measurement was real and is no longer about this code. L12.2 raised
+  // `MAX_BRIEF_CHARS` from 20,000 to 150,000 so the questions step could read a whole scope
+  // document, which moved the cap 7.5x and left the sentence describing a limit that no longer
+  // exists. Shipping the flip while that paragraph still claimed the branch fires on live data
+  // would have been a contradiction inside one file.
+  //
+  // Measured again 20 Nov 2026 against `accelerator_prod`, read-only, at the budgets this code
+  // actually uses (`decomposePrompt.ts`: brief 150,000, document 200,000, intake 60,000):
+  //   - `build_intake.idea`, 56 rows: max 19,996. Over budget: 0. Over the intake cap: 0.
+  //   - assembled intake, 56 rows: max 38,820. Over budget: 0.
+  //   - `project_understandings.items`, 26 rows: max 80,613 against 200,000. Over budget: 0.
+  // `build_plans.plan_json` reaches 497,062 and is deliberately excluded: it is generation
+  // OUTPUT, not an input source, and these budgets do not govern it.
+  //
+  // TWO INDEPENDENT ARGUMENTS, because 56 rows is a modest sample and the structural one does
+  // not depend on it.
+  //
+  // (1) STRUCTURAL, stated at its real margin rather than a flattering one. The brief is the
+  //     idea (at most INTAKE_IDEA_MAX, 60,000) PLUS up to 20 interview answers of 4,000, so the
+  //     constructive ceiling is 140,000 against a 150,000 budget: a margin of 10,000, not the
+  //     90,000 an earlier version of this comment implied by quoting the intake cap alone. A
+  //     verifier caught that. The conclusion survives and the headroom is thinner than it looked,
+  //     which is worth knowing if either constant moves again.
+  // (2) MEASURED: the largest real brief has 7.5x of headroom and the largest expansion 2.5x.
+  //
+  // Turning this on therefore cannot fail a STUDENT build that succeeds today; what it can do is
+  // refuse an input the system has never yet received, which is exactly where clipping would be
+  // worst.
+  //
+  // THE SCOPE OF THAT SENTENCE, narrowed 22 Nov 2026 after an independent review. It used to read
+  // "cannot fail a build that succeeds today", unqualified, and both arguments above are about
+  // the student pipeline ONLY: every row counted is an SBP table, and the structural ceiling is
+  // built from `INTAKE_IDEA_MAX` plus interview answers, which are student-intake shapes.
+  //
+  // `decomposeBuild` has a SECOND non-test caller. `factory/govBuildPlanAI.ts` reuses this engine
+  // unchanged, and nothing bounds its input the way intake bounds a student's: its `document` is
+  // up to 200 solicitation requirement texts joined, and its `brief` is a generated build spec.
+  // No row of the measurement above covers it, and claiming otherwise would be asserting a
+  // measurement one scope wider than it was taken.
+  //
+  // So the honest statement is: the gov build-plan path CAN now be refused where it was
+  // previously clipped, that has not been measured, and the refusal is therefore made ACTIONABLE
+  // rather than silent. `govBuildPlanAI` classifies `SourceOverflowBlocked` and tells the
+  // operator which input is over and by how much, instead of the generic "could not be generated
+  // right now" behind a Regenerate button that cannot succeed. A refusal somebody can act on is a
+  // better answer than a clip nobody can see, which is the whole argument for this flag; it is
+  // not a substitute for measuring that path, which is owed.
+  //
+  // `!== 'false'` rather than `=== 'true'`: on by default, with an escape hatch that does not
+  // need a deploy. Read once at boot.
+  sbpSourceOverflowBlock: process.env.ENABLE_SBP_SOURCE_OVERFLOW_BLOCK !== 'false',
   // SAFE-002. `delimited()` interpolates an untrusted body raw, so a body carrying its own
   // `</TAG>` closes the block early and everything after it sits outside any delimiter. On it,
   // `neutraliseDelimiters` rewrites those brackets to single angle quotation marks: readable to

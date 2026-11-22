@@ -39,6 +39,7 @@ import { stagedGenerationEnabled } from './stagedGeneration';
 import { GateResult, formatViolations, blockingViolations, advisoryViolations, isPublishable } from './planGate';
 import { gateAndRepair } from './planRepair';
 import { scopeAgents, agentScopingEnabledFor } from './scopeAgents';
+import { connectedDemoForPublish } from './connectedDemoFlag';
 import { env } from '../../config/env';
 import { BuildPlan } from './planContract';
 import { renderDocs } from './renderDocs';
@@ -790,6 +791,23 @@ export async function publishBuild(
   const windowOrigin = (await firstPublishedAt(projectId)) ?? published.published_at;
   const correlationId = published.correlation_id;
 
+  /*
+   * Does this build carry the Connected Demo story? Resolved ONCE, here, above both return
+   * paths, and then passed down.
+   *
+   * Computing it twice is the bug this placement prevents. `renderDocs` writes STORY-900.md and
+   * `materializePlanAsTasks` writes the STORY-900 row; if each asked independently and the answer
+   * moved between the two calls - an env change, a failed row lookup - one publish would produce
+   * a doc with no task, or a task with no doc. Both are worse than not shipping the feature,
+   * because a student can see them.
+   *
+   * Includes `|| already materialized`, so a republish keeps a demo the student is already
+   * building even if the flag has since been narrowed. See connectedDemoFlag.ts.
+   */
+  const connectedDemo = await connectedDemoForPublish(
+    projectId, opts.enrollmentId, env.sbpConnectedDemo,
+  );
+
   // Second and last chance to name the project. Five of the twenty live builds
   // reached publish with no intake name — the wizard's name field is optional —
   // and for those the plan's own `project_name` is the best thing anybody has.
@@ -808,7 +826,9 @@ export async function publishBuild(
     const schedule = await scheduleFor(
       opts.enrollmentId, published.plan as BuildPlan, correlationId, windowOrigin,
     );
-    const m = await materializePlanAsTasks(projectId, opts.enrollmentId, published.plan as BuildPlan, { schedule });
+    const m = await materializePlanAsTasks(
+      projectId, opts.enrollmentId, published.plan as BuildPlan, { schedule, connectedDemo },
+    );
     await makeActiveProject(opts.enrollmentId, projectId, correlationId);
     // Hold it for review, IF the gate is on for this enrollment (no-op otherwise).
     // Never throws — a failed mark must not fail the publish.
@@ -861,6 +881,7 @@ export async function publishBuild(
     progress: snapshot.progress,
     baselineByStory: snapshot.baselineByStory,
     repoWriteAccess,
+    connectedDemo,
   });
 
   // Read the manifest that is already in the repo, so the content-hash check in
@@ -889,6 +910,7 @@ export async function publishBuild(
     repoUrl: opts.repo.url,
     manifestPaths: files.map((f) => f.path),
     schedule,
+    connectedDemo,
   });
   await makeActiveProject(opts.enrollmentId, projectId, correlationId);
   // Hold it for review, IF the gate is on for this enrollment (no-op otherwise).

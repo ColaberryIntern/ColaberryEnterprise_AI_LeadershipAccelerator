@@ -49,6 +49,7 @@
  */
 import { getPublishedPlan, getPlan } from './planStore';
 import { renderDocs, RenderedFile } from './renderDocs';
+import { connectedDemoMaterializedFor } from './connectedDemoFlag';
 import { repoWriteAccessForProject } from './repoWriteAccess';
 import { createZip } from './zipArchive';
 import { BuildPlan } from './planContract';
@@ -212,6 +213,10 @@ export async function buildDocsBundle(projectId: string, opts: { generatedAt?: D
     schedule,
     repoWriteAccess,
     commandCenterOverride,
+    // Resolved from the board for the same reason the repo write is: this bundle IS the document
+    // set, and a download that omitted a story the student's board asks for would be the one
+    // copy that disagrees. See connectedDemoFlag.ts.
+    connectedDemo: await connectedDemoMaterializedFor(projectId),
   });
 
   const notice = { path: BUNDLE_NOTICE_PATH, content: renderBundleNotice(plan.project_name, projectId) };

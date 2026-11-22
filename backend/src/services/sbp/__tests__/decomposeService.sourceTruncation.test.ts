@@ -1,3 +1,4 @@
+import { FLAGS } from '../../../config/featureFlags';
 import { decomposeBuild } from '../decomposeService';
 import { MAX_BRIEF_CHARS, MAX_DOCUMENT_CHARS } from '../decomposePrompt';
 
@@ -57,14 +58,50 @@ function captureLogs(): { lines: Array<Record<string, unknown>>; restore: () => 
 
 const over = (n: number) => 'x'.repeat(n);
 
+/**
+ * Run with the overflow BLOCK off.
+ *
+ * L9.6 turned `sbpSourceOverflowBlock` on by default, so over-budget source is now REFUSED
+ * before this detect-only reporting is ever reached. The reporting is still shipped and still
+ * correct: it is what an operator sees after turning the block off, which is the whole point of
+ * the escape hatch. These cases therefore force the flag off rather than being deleted, and the
+ * blocked path gets its own describe below. Deleting them would have retired the detect-only
+ * coverage on the day the flag flipped.
+ */
+function clipping<T>(fn: () => T): T {
+  const prev = FLAGS.sbpSourceOverflowBlock;
+  (FLAGS as { sbpSourceOverflowBlock: boolean }).sbpSourceOverflowBlock = false;
+  try {
+    return fn();
+  } finally {
+    (FLAGS as { sbpSourceOverflowBlock: boolean }).sbpSourceOverflowBlock = prev;
+  }
+}
+
 async function run(brief: string, document: string) {
   const cap = captureLogs();
   try {
-    await decomposeBuild({ brief, document, client: stubClient(), correlationId: 'corr-t4' } as never);
+    await clipping(() => decomposeBuild(
+      { brief, document, client: stubClient(), correlationId: 'corr-t4' } as never,
+    ));
   } finally {
     cap.restore();
   }
   return cap.lines.filter((l) => l.event === 'sbp_decompose_source_truncated');
+}
+
+/** The same call at the DEFAULT, returning whatever was logged on the way to the refusal. */
+async function blocked(brief: string, document: string) {
+  const cap = captureLogs();
+  let thrown: unknown;
+  try {
+    await decomposeBuild({ brief, document, client: stubClient(), correlationId: 'corr-t4' } as never);
+  } catch (e) {
+    thrown = e;
+  } finally {
+    cap.restore();
+  }
+  return { thrown, lines: cap.lines };
 }
 
 describe('decomposeBuild makes dropped source visible', () => {
@@ -116,14 +153,135 @@ describe('decomposeBuild makes dropped source visible', () => {
     const cap = captureLogs();
     const client = { create: jest.fn(async () => { throw new Error('upstream down'); }) };
     try {
-      await decomposeBuild({
+      await clipping(() => decomposeBuild({
         brief: 'b', document: over(MAX_DOCUMENT_CHARS + 3), client, correlationId: 'corr-fail',
-      } as never).catch(() => undefined);
+      } as never).catch(() => undefined));
     } finally {
       cap.restore();
     }
     const truncation = cap.lines.filter((l) => l.event === 'sbp_decompose_source_truncated');
     expect(truncation).toHaveLength(1);
     expect((truncation[0].context as Record<string, unknown>).droppedChars).toBe(3);
+  });
+});
+
+/**
+ * The blocked path, which is what production now does.
+ *
+ * The suite above proves the detect-only reporting still works behind the escape hatch. This one
+ * proves the default behaves like every other failure in `decomposeService`: it refuses, and it
+ * says so with an `error_class` an operator can filter on. Without it, the single most
+ * consequential outcome in this service would have been the only one with no log line.
+ */
+describe('with the block at its DEFAULT, an over-budget build is refused and SAID so', () => {
+  it('refuses rather than generating from source the model will not see', async () => {
+    const { thrown } = await blocked('b', over(MAX_DOCUMENT_CHARS + 7_000));
+    expect((thrown as Error)?.name).toBe('SourceOverflowError');
+  });
+
+  it('logs the refusal with an error_class, a tag and the characters that would have been lost', async () => {
+    const { lines } = await blocked('b', over(MAX_DOCUMENT_CHARS + 7_000));
+    const line = lines.find((l) => l.event === 'sbp_decompose_source_blocked');
+    expect(line).toBeDefined();
+    expect(line).toMatchObject({
+      outcome: 'failure',
+      context: {
+        error_class: 'SourceOverflowBlocked',
+        tag: 'EXPANDED_DOCUMENT',
+        limit: MAX_DOCUMENT_CHARS,
+        // `actual` as well as `droppedChars`. A verifier deleted this one field with the suite
+        // green: without it an operator knows something was refused and not how far over the
+        // input was, which is the first number they need to decide what to tell the student.
+        actual: MAX_DOCUMENT_CHARS + 7_000,
+        droppedChars: 7_000,
+      },
+    });
+  });
+
+  it('emits one blocked line PER overflowing input, like the truncation report it replaces', async () => {
+    const { lines } = await blocked(over(MAX_BRIEF_CHARS + 5), over(MAX_DOCUMENT_CHARS + 9));
+    const blockedLines = lines.filter((l) => l.event === 'sbp_decompose_source_blocked');
+    expect(blockedLines.map((l) => (l.context as { tag: string }).tag).sort())
+      .toEqual(['EXPANDED_DOCUMENT', 'ORIGINAL_BRIEF']);
+  });
+
+  it('does NOT refuse a build whose source fits, so the default is a gate and not an outage', async () => {
+    const { thrown, lines } = await blocked('a short brief', 'a short document');
+    expect(thrown).toBeUndefined();
+    expect(lines.some((l) => l.event === 'sbp_decompose_source_blocked')).toBe(false);
+  });
+
+  it('does not ALSO emit the truncation line, because nothing was truncated', async () => {
+    // The two reports describe different outcomes. A build that was refused did not clip, and
+    // logging both would make an operator think the model saw a partial document.
+    const { lines } = await blocked('b', over(MAX_DOCUMENT_CHARS + 7_000));
+    expect(lines.some((l) => l.event === 'sbp_decompose_source_truncated')).toBe(false);
+  });
+});
+
+/**
+ * The STAGED path, which is what production actually runs.
+ *
+ * `SBP_STAGED_GENERATION` is on unless set to 'off', so `decomposeBuild` delegates to
+ * `generateStagedPlan` before it ever builds its own prompt, and the refusal surfaces through
+ * that catch rather than the one above. An independent verifier measured it arriving as
+ * `UpstreamError`, whose student-facing recovery is the Retry button: a retry of an input that is
+ * too long can never succeed, so the one thing the person is offered is the one thing that cannot
+ * work. The class is ours now, and it says what happened.
+ */
+describe('a staged build classifies a refusal as a refusal, not as an upstream failure', () => {
+  it('fails with SourceOverflowBlocked rather than UpstreamError', async () => {
+    const cap = captureLogs();
+    let thrown: unknown;
+    try {
+      await decomposeBuild({
+        brief: 'b',
+        document: over(MAX_DOCUMENT_CHARS + 7_000),
+        client: stubClient(),
+        correlationId: 'corr-staged',
+        staged: true,
+      } as never);
+    } catch (e) {
+      thrown = e;
+    } finally {
+      cap.restore();
+    }
+    expect((thrown as { error_class?: string })?.error_class).toBe('SourceOverflowBlocked');
+    expect((thrown as { error_class?: string })?.error_class).not.toBe('UpstreamError');
+  });
+
+  it('and the failure line carries that class too, so a log search finds it', async () => {
+    const cap = captureLogs();
+    try {
+      await decomposeBuild({
+        brief: 'b',
+        document: over(MAX_DOCUMENT_CHARS + 7_000),
+        client: stubClient(),
+        correlationId: 'corr-staged',
+        staged: true,
+      } as never).catch(() => undefined);
+    } finally {
+      cap.restore();
+    }
+    const failed = cap.lines.find((l) => l.event === 'sbp_decompose_failed');
+    expect(failed).toBeDefined();
+    expect((failed!.context as { error_class?: string }).error_class).toBe('SourceOverflowBlocked');
+  });
+
+  it('a staged build whose source fits is not refused, so the class is not a blanket', async () => {
+    // The control: without it, a classifier that returned SourceOverflowBlocked for everything
+    // would satisfy both cases above.
+    const cap = captureLogs();
+    let thrown: unknown;
+    try {
+      await decomposeBuild({
+        brief: 'b', document: 'fits', client: stubClient(), correlationId: 'corr-staged', staged: true,
+      } as never);
+    } catch (e) {
+      thrown = e;
+    } finally {
+      cap.restore();
+    }
+    expect((thrown as { error_class?: string })?.error_class).not.toBe('SourceOverflowBlocked');
   });
 });

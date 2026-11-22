@@ -34,7 +34,7 @@
  * the next ticket's work, named in the run handoff rather than left to be discovered.
  */
 import type {
-  FactoryProject, AgentTeam, Surface, AllocationRow, Assignment,
+  FactoryProject, AgentTeam, Surface, AllocationRow, Assignment, Role,
 } from './contracts/factoryContract';
 import {
   validateStoryContract, findDeliveryTraceabilityGaps,
@@ -46,6 +46,9 @@ import {
   type ReleaseGateResult, type DeploymentAuthorizationRefusal,
 } from '../delivery/releaseGate';
 import { sourceBlockIdFor } from './factoryDecomposeInput';
+// ONE definition of "a role a human holds", shared with `validateAllocation`. Duplicating the
+// predicate is how the upstream gate and this one would come to disagree about the same task.
+import { humanlyFilledRoleIds } from '../lifecycle/generation/allocation';
 // The SAME predicate the decompose adapter uses to demote a non-binding row to a `context`
 // block. Read from the other end here: a row the decomposer told the model not to cite must not
 // then be demanded by traceability.
@@ -60,7 +63,11 @@ import type { DeliveryEvidenceType } from '../../modules/delivery/deliveryEviden
 /** A gap the bridge could not fill from the decomposition. Reported, never guessed. */
 export interface BridgeGap {
   rule: 'AI_TASK_WITHOUT_TEAM' | 'HUMAN_TASK_WITHOUT_SURFACE' | 'REQUIREMENT_LINK_UNAVAILABLE'
-  | 'POLICY_ESCALATION_REFUSED';
+  | 'POLICY_ESCALATION_REFUSED'
+  // L10.8. Not a failure: the story is sound and its approver is named, just on the ALLOCATION
+  // row rather than in an explicit assignment. Reported so the provenance is visible and a
+  // reviewer can disagree with it, which is the difference between deriving and assuming.
+  | 'APPROVER_FROM_ALLOCATION';
   ref: string;
   detail: string;
 }
@@ -86,7 +93,9 @@ export interface BridgeInput {
   // for human work, which made every high-risk human story fail its own contract.
   project: Pick<FactoryProject,
     'delivery_project_id' | 'tasks' | 'allocation' | 'requirements' | 'agent_teams' | 'surfaces'
-    | 'assignments'>;
+    // `roles` was added 2026-11-21 for L10.8, so an accountable role named on an ALLOCATION row
+    // can be resolved to a real roster entry instead of being taken on trust as an id.
+    | 'assignments' | 'roles'>;
   /** Release profile. Pinned by the caller; `mandatoryChecksFor` silently widens an unknown key. */
   profileKey: string;
   /** Check results from the pipeline. The bridge NEVER manufactures these. */
@@ -135,11 +144,19 @@ function policiesFor(
    * decomposition CAN state an approver, as it already does for agent work.
    */
   approvers: readonly Assignment[],
+  /**
+   * The ACCOUNTABLE ROLE the allocation row itself names, resolved against the contract's roster,
+   * or null when the row names none or names one the roster does not contain. See the human
+   * branch below for why this is read at all.
+   */
+  accountableRole: Role | null,
 ): {
   executionPolicy: ExecutionPolicy | null;
   approvalPolicy: ApprovalPolicy | null;
   /** Set only when a declared policy was REFUSED and replaced with the restrictive one. */
   escalation?: { from: ExecutionPolicy; to: ExecutionPolicy; teamId: string };
+  /** Set when the approver came from the ALLOCATION rather than an explicit assignment. */
+  approverFromAllocation?: Role;
 } {
   // An AI task's policies are the OWNING TEAM's policies. That is the point of a team: the
   // governance is declared once, for a subject, rather than per task.
@@ -189,7 +206,39 @@ function policiesFor(
     // documents and the insurance verification - had NO approver at all, and the honest answer
     // is to say so rather than to invent one so the gate turns green.
     const human = approvers.find((a) => a.executor?.type !== 'agent');
-    return { executionPolicy: 'manual_only', approvalPolicy: human ? 'internal_review' : null };
+    if (human) return { executionPolicy: 'manual_only', approvalPolicy: 'internal_review' };
+
+    /*
+     * L10.8. SECOND PLACE TO LOOK, and it is reading the document rather than guessing.
+     *
+     * Five of Herriman's thirteen delivery stories were refused as
+     * `high_risk_story_without_approval` - four R4s and an R3 - and the refusal was correct: no
+     * ASSIGNMENT named anybody. But `AllocationRow.accountable_role_id` is a separate field, on
+     * the same task, whose entire job is to say who is accountable for it, and this function was
+     * never shown it. So a decomposition could name an accountable human on the allocation and
+     * still produce a story the gate reads as naming nobody.
+     *
+     * That is the same defect the comment above describes one field earlier ("the first half was
+     * only true because this function was never shown the assignments"), arriving again through
+     * the other door.
+     *
+     * The GATE IS NOT WEAKENED. A task that names nobody in either place still gets `null` and
+     * is still refused - there is a test for exactly that, with a synthetic R4. What changes is
+     * only that a named accountable human is no longer discarded. The provenance is recorded as
+     * a gap by the caller, so a reviewer can see which stories got their approver from the
+     * allocation rather than from an explicit APPROVER assignment, and can disagree.
+     *
+     * Still nothing is DEFAULTED. `internal_review` here means "a named person reviews this",
+     * which is what the policy means, and it is derived from a name that exists in the roster.
+     */
+    if (accountableRole) {
+      return {
+        executionPolicy: 'manual_only',
+        approvalPolicy: 'internal_review',
+        approverFromAllocation: accountableRole,
+      };
+    }
+    return { executionPolicy: 'manual_only', approvalPolicy: null };
   }
   return { executionPolicy: null, approvalPolicy: null };
 }
@@ -200,7 +249,14 @@ export function buildDeliveryStories(input: BridgeInput): {
 } {
   const { project } = input;
   const gaps: BridgeGap[] = [];
-  const classOf = new Map(project.allocation.map((a) => [a.task_id, a.execution_class]));
+
+  // The WHOLE row, not just its class: `accountable_role_id` lives here and is what L10.8 reads.
+  const allocOf = new Map(project.allocation.map((a) => [a.task_id, a]));
+  const roleOf = new Map((project.roles ?? []).map((r) => [r.id, r]));
+  // Role ids a PERSON OR TEAM holds, by the project-wide definition `validateAllocation` uses.
+  // Not "appears in the roster": see the accountable-role resolution below for the two inputs
+  // that distinction was letting through.
+  const humanRoles = humanlyFilledRoleIds({ assignments: project.assignments ?? [] } as FactoryProject);
 
   const teamOf = new Map<string, AgentTeam>();
   for (const t of project.agent_teams ?? []) {
@@ -239,7 +295,7 @@ export function buildDeliveryStories(input: BridgeInput): {
   for (const task of project.tasks) {
     if (task.kind === 'START' || task.kind === 'END') continue;
 
-    const cls = classOf.get(task.id);
+    const cls = allocOf.get(task.id)?.execution_class;
     const team = teamOf.get(task.id);
     const isAi = cls !== undefined && AI_CLASSES.includes(cls);
 
@@ -269,7 +325,41 @@ export function buildDeliveryStories(input: BridgeInput): {
       (a) => a.task_id === task.id
         && (a.responsibility === 'APPROVER' || a.responsibility === 'ACCOUNTABLE'),
     );
-    const { executionPolicy, approvalPolicy, escalation } = policiesFor(cls, team, taskApprovers);
+    /*
+     * The accountable role this task names, and the TWO things it has to satisfy.
+     *
+     * It must exist in the roster, and it must be a role A HUMAN ACTUALLY HOLDS on this project.
+     * The first version checked only the roster and an independent verifier measured two inputs
+     * it let through that the gate had been refusing:
+     *
+     *   A. a roster role nobody fills. `allocation.ts:150` already writes the rule down: "A role
+     *      that exists in `roles` but nobody fills is a name, not an accountability."
+     *   B. worse: a task whose only ACCOUNTABLE assignment has an `{type: 'agent'}` executor.
+     *      The `executor?.type !== 'agent'` filter one branch above exists precisely to stop an
+     *      agent counting as the approver, and reading the same role id back off the allocation
+     *      walked straight around it. An R4 `regulated` / `decide_full` task accountable only to
+     *      an agent passed its own contract with no blocking issue at all.
+     *
+     * `humanlyFilledRoleIds` is REUSED rather than reimplemented. It is the same predicate
+     * `validateAllocation` applies at `allocation.ts:263`, and "who counts as a human holder"
+     * must have one definition or the two gates will drift apart.
+     */
+    const accountableId = allocOf.get(task.id)?.accountable_role_id ?? null;
+    const accountableRole = accountableId && humanRoles.has(accountableId)
+      ? roleOf.get(accountableId) ?? null
+      : null;
+    const {
+      executionPolicy, approvalPolicy, escalation, approverFromAllocation,
+    } = policiesFor(cls, team, taskApprovers, accountableRole);
+    if (approverFromAllocation) {
+      gaps.push({
+        rule: 'APPROVER_FROM_ALLOCATION',
+        ref: task.id,
+        detail: `${task.id} names no APPROVER or ACCOUNTABLE assignment, so its approval policy `
+          + `was derived from the accountable role the allocation names, "${approverFromAllocation.name}". `
+          + 'Record an explicit assignment if somebody else should approve it.',
+      });
+    }
     if (escalation) {
       gaps.push({
         rule: 'POLICY_ESCALATION_REFUSED',

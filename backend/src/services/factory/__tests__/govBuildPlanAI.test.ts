@@ -166,3 +166,96 @@ describe('assembleGovDatedPlan (pure, deterministic)', () => {
     expect(last > '2026-10-19').toBe(true);
   });
 });
+/**
+ * THE SECOND CALLER OF THE NOW-REFUSING PATH.
+ *
+ * `ENABLE_SBP_SOURCE_OVERFLOW_BLOCK` defaults ON, so `decomposeBuild` refuses an input over the
+ * prompt budget rather than clipping it. The measurement that justified that default was taken
+ * on the STUDENT pipeline: every row counted is an SBP table and the structural ceiling is built
+ * from intake shapes.
+ *
+ * This function is the other non-test caller, and nothing bounds its input the same way: the
+ * `document` is up to 200 solicitation requirement texts joined and the `brief` is a generated
+ * build spec. An independent review found it, and found that the refusal fell through to "could
+ * not be generated right now" behind a Regenerate button that cannot succeed on the same input,
+ * which is the exact defect `decomposeService` gained `SourceOverflowBlocked` to prevent.
+ *
+ * `grep -rn "decomposeBuild(" --include=*.ts backend/src | grep -v __tests__` finds two callers.
+ * A claim about the flip's blast radius has to cover both.
+ */
+describe('a solicitation over the prompt budget is REFUSED, and the refusal is actionable', () => {
+  const OLD = process.env.OPENAI_API_KEY;
+  beforeEach(() => {
+    __clearGovBuildPlanAICache();
+    (getInstrumentedOpenAI as jest.Mock).mockReset();
+    (generateBuildSpec as jest.Mock).mockReset();
+    process.env.OPENAI_API_KEY = 'test-key';
+  });
+  afterAll(() => {
+    if (OLD === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = OLD;
+  });
+
+  /** Over `MAX_BRIEF_CHARS` (150,000) by one character, through the spec the brief is built from. */
+  const overBudgetReq: GovBuildPlanAIRequest = {
+    ...baseReq,
+    buildSpec: 'x'.repeat(150_001),
+  };
+
+  it('names what is over budget and says REGENERATING WILL NOT HELP', async () => {
+    const client = fakeClient(okCreate);
+    (getInstrumentedOpenAI as jest.Mock).mockReturnValue(client);
+
+    const out = await generateGovBuildPlanAI(overBudgetReq);
+
+    expect(out.plan).toBeNull();
+    expect(out.error).toBeTruthy();
+    // The three things an operator needs: that it is too long, by how much, and that retrying
+    // is pointless. Each asserted separately, because a message carrying one of the three reads
+    // as helpful while leaving them stuck.
+    expect(out.error).toContain('too long');
+    expect(out.error).toContain('150000');
+    expect(out.error).toContain('Regenerating will not help');
+    // What it must NOT be: the transient-sounding fallback that invites the useless retry.
+    expect(out.error).not.toContain('could not be generated right now');
+  });
+
+  it('and the model is never called, so the refusal costs nothing', async () => {
+    // The budget check runs while BUILDING the prompt, before any request. A refusal that still
+    // paid for a completion would be a worse bug than the clipping it replaced.
+    const client = fakeClient(okCreate);
+    (getInstrumentedOpenAI as jest.Mock).mockReturnValue(client);
+
+    await generateGovBuildPlanAI(overBudgetReq);
+
+    expect(client.chat.completions.create).not.toHaveBeenCalled();
+  });
+
+  it('CONTROL: the same request under budget still produces a plan', async () => {
+    /*
+     * The assertion that stops the refusal being unconditional. Without it, a `sourceBlocks`
+     * that threw on every input would satisfy both tests above while breaking every gov build
+     * plan in the system, which is the failure mode this flag flip has to not have.
+     */
+    const client = fakeClient(okCreate);
+    (getInstrumentedOpenAI as jest.Mock).mockReturnValue(client);
+
+    const out = await generateGovBuildPlanAI(baseReq);
+
+    expect(out.error).toBeFalsy();
+    expect(out.plan).not.toBeNull();
+    expect(client.chat.completions.create).toHaveBeenCalled();
+  });
+
+  it('and a genuinely transient failure STILL reads as transient', async () => {
+    // The other direction on the classifier: it must distinguish the refusal from an upstream
+    // error, not relabel everything. A model that throws is retryable and should say so.
+    const client = fakeClient(() => Promise.reject(new Error('503 upstream unavailable')));
+    (getInstrumentedOpenAI as jest.Mock).mockReturnValue(client);
+
+    const out = await generateGovBuildPlanAI(baseReq);
+
+    expect(out.plan).toBeNull();
+    expect(out.error).toContain('could not be generated right now');
+    expect(out.error).not.toContain('Regenerating will not help');
+  });
+});
