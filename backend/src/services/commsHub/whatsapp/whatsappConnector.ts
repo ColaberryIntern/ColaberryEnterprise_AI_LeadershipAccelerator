@@ -1,9 +1,9 @@
 import { readWhatsAppConfig, NOT_CONFIGURED_TEXT, type WhatsAppConfig } from '../channelConfig';
 import { ConnectorHoldError, ConnectorPermanentError, type Connector, type ConnectorDelivery, type ConnectorResult } from '../connectors/types';
 import { ForbiddenError, NotConnectedError, QuotaExceededError, RateLimitedError, WhatsAppProviderError, BadRequestError, type WhatsAppProvider } from './provider';
-import { requireConnection } from './whatsappConnection';
+import { requireConnection, sameNumber } from './whatsappConnection';
 import {
-  CHECK_FAILED_HOLD_MS, DISCONNECTED_HOLD_MS, dailyCapHoldUntil, findEarlierSend, lookBackFrom, nextSendAt, windowHoldUntil,
+  CHECK_FAILED_HOLD_MS, CHECK_GIVE_UP_MS, DISCONNECTED_HOLD_MS, dailyCapHoldUntil, findEarlierSend, lookBackFrom, nextSendAt, windowHoldUntil,
 } from './sendRules';
 import { sendStateStore, type SendStateStore } from './sendState';
 import { raiseChannelAlert, type ChannelAlert } from './channelAlerts';
@@ -17,6 +17,9 @@ import { raiseChannelAlert, type ChannelAlert } from './channelAlerts';
  *      hub-wide send lock (the claim already skips them; this holds even with two backends);
  *   3. the 8 AM to 8 PM Central window, and the daily cap;
  *   4. the phone is linked (health AUTH): otherwise a 10-minute hold, so a re-link resumes sending;
+ *   4b. the group pre-flight (GET /groups/{id}): the number can still post there (403, admins-only,
+ *      suspended, closed or no longer a member marks it can't-send and fails). A failed pre-flight or
+ *      dedup check holds 5 minutes, and after a whole day since the first claim fails for good;
  *   5. W5 dedup: our own messages in the group since the first claim (minus 120 s of clock margin),
  *      matched on the exact text (normalized), excluding ids other deliveries recorded. One match:
  *      recorded as sent, not sent again. Several: a permanent failure and an alert (never resend).
@@ -60,13 +63,29 @@ export function createWhatsAppConnector(overrides: Partial<WhatsAppConnectorDeps
       const group = await deps.state.providerGroupId(d.destination.target_id);
       if (!group) throw new ConnectorPermanentError('That WhatsApp group is no longer in the hub.', 'whatsapp_group_gone');
       let provider: WhatsAppProvider;
-      try { ({ provider } = await deps.connect()); } catch (err) {
+      let number: string;
+      try { ({ provider, number } = await deps.connect()); } catch (err) {
         if (err instanceof RateLimitedError) return handleProviderError(err, d, group, now);
         // Not linked, not AUTH, or the health check did not answer: wait 10 minutes (a re-link resumes sending).
         if (err instanceof WhatsAppProviderError) throw new ConnectorHoldError(new Date(now.getTime() + DISCONNECTED_HOLD_MS), 'whatsapp_disconnected');
         throw err;
       }
       const body = d.draft.body;
+
+      // 4b. Pre-flight: the group as WhatsApp sees it now. 403 marks it can't-send; admins-only without
+      // admin rank, suspended or closed is refused here, before anything is reserved or sent.
+      try {
+        const g = await provider.getGroup(group);
+        const mine = g.participants.find((p) => sameNumber(p.id, number));
+        if (g.suspended || g.terminated || !mine || (g.announcements && mine.rank !== 'admin' && mine.rank !== 'creator')) {
+          await deps.state.markForbidden(d.destination.target_id);
+          throw new ConnectorPermanentError('The hub number can no longer post in this group. The group is switched off.', 'whatsapp_cannot_post');
+        }
+      } catch (err) {
+        if (err instanceof ConnectorPermanentError) throw err;
+        if (err instanceof RateLimitedError || err instanceof ForbiddenError || err instanceof NotConnectedError) return handleProviderError(err, d, group, now);
+        throw checkFailed(d, now);
+      }
 
       // 5. W5: was it already sent by an earlier attempt?
       let earlier;
@@ -75,7 +94,7 @@ export function createWhatsAppConnector(overrides: Partial<WhatsAppConnectorDeps
         earlier = findEarlierSend(sent, body, await deps.state.recordedElsewhere(sent.map((m) => m.id), d.deliveryId));
       } catch (err) {
         if (err instanceof RateLimitedError) return handleProviderError(err, d, group, now);
-        throw new ConnectorHoldError(new Date(now.getTime() + CHECK_FAILED_HOLD_MS), 'whatsapp_check_failed');
+        throw checkFailed(d, now);
       }
       if (earlier.kind === 'one') return { provider_message_id: earlier.id, reached: 1, already_done: true };
       if (earlier.kind === 'many') {
@@ -94,6 +113,16 @@ export function createWhatsAppConnector(overrides: Partial<WhatsAppConnectorDeps
       }
     },
   };
+
+  /**
+   * A check that keeps failing must not wait forever without spending a try: after CHECK_GIVE_UP_MS
+   * since the first claim it becomes a permanent failure (the message's result and the CH7.5 alert
+   * then say so). Until then it is a 5-minute hold.
+   */
+  function checkFailed(d: ConnectorDelivery, now: Date): Error {
+    if (now.getTime() - d.since.getTime() >= CHECK_GIVE_UP_MS) return new ConnectorPermanentError('WhatsApp could not be checked for a whole day, so the message was not sent.', 'whatsapp_check_gave_up');
+    return new ConnectorHoldError(new Date(now.getTime() + CHECK_FAILED_HOLD_MS), 'whatsapp_check_failed');
+  }
 
   async function handleProviderError(err: unknown, d: ConnectorDelivery, _group: string, now: Date): Promise<never> {
     if (err instanceof RateLimitedError) {

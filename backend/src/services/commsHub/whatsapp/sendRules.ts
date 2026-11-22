@@ -15,6 +15,8 @@ export const WINDOW = { start: '20:00', end: '08:00' } as const; // the closed p
 export const BREAKER_MS = 48 * 3600_000;
 export const DISCONNECTED_HOLD_MS = 10 * 60_000;
 export const CHECK_FAILED_HOLD_MS = 5 * 60_000;
+/** A pre-flight or dedup check failing this long since the first claim fails the delivery (no endless wait). */
+export const CHECK_GIVE_UP_MS = 24 * 3600_000;
 /** The W5 look-back margin: WhatsApp's clock is not ours, and its timestamps are whole seconds. */
 export const SKEW_MARGIN_S = 120;
 

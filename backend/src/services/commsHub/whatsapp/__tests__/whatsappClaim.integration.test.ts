@@ -83,6 +83,16 @@ describeIfDb('CH10.4 WhatsApp claim and sending state, on a scratch Postgres', (
     expect((await repo.claimDue(at(63_000), 25)).map((c) => c.id)).toEqual([wa[1]]);
   });
 
+  it('the breaker closes by itself after 48 hours: nothing before, claimed again after, with no one clearing it', async () => {
+    const [w] = await pending('whatsapp', 1);
+    const until = await state.openBreaker(T0, 'rate_limited');
+    expect(until).toEqual(at(48 * 3600_000));
+    expect(await repo.claimDue(at(47 * 3600_000), 25)).toEqual([]);
+    expect(await repo.claimDue(at(48 * 3600_000 - 1000), 25)).toEqual([]);
+    expect((await repo.claimDue(at(48 * 3600_000 + 1000), 25)).map((c) => c.id)).toEqual([w]);
+    expect((await state.read()).breaker_until).toEqual(until); // still recorded: it simply no longer applies
+  });
+
   it('two claims at once never take two WhatsApp deliveries', async () => {
     await pending('whatsapp', 5);
     const [a, b] = await Promise.all([repo.claimDue(T0, 25), repo.claimDue(T0, 25)]);

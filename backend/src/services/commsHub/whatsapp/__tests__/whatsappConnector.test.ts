@@ -1,6 +1,6 @@
 jest.mock('../sendState', () => ({ sendStateStore: {} }));
 jest.mock('../channelAlerts', () => ({ raiseChannelAlert: jest.fn() }));
-jest.mock('../whatsappConnection', () => ({ requireConnection: jest.fn() }));
+jest.mock('../whatsappConnection', () => ({ ...jest.requireActual('../whatsappConnection'), requireConnection: jest.fn() }));
 
 import { createWhatsAppConnector } from '../whatsappConnector';
 import { readWhatsAppConfig } from '../../channelConfig';
@@ -24,7 +24,8 @@ const delivery = (o: Partial<ConnectorDelivery> = {}): ConnectorDelivery => ({
 function setup(o: { state?: Partial<WhatsAppSendState>; config?: typeof ON; provider?: Partial<Record<keyof WhatsAppProvider, jest.Mock>>; connect?: jest.Mock; recorded?: string[]; now?: Date } = {}) {
   const calls: string[] = [];
   const provider = {
-    health: jest.fn(), listGroups: jest.fn(), getGroup: jest.fn(),
+    health: jest.fn(), listGroups: jest.fn(),
+    getGroup: jest.fn(async () => { calls.push('group'); return { id: GROUP, name: 'Test', participants: [{ id: '15550001234', rank: 'member' }], participants_count: 2, announcements: false, suspended: false, terminated: false }; }),
     listSentSince: jest.fn(async () => { calls.push('list'); return []; }),
     sendText: jest.fn(async () => { calls.push('sendText'); return { id: 'wa-1' }; }),
     sendImage: jest.fn(async () => { calls.push('sendImage'); return { id: 'wa-2' }; }),
@@ -115,7 +116,7 @@ describe('the send', () => {
   it('reserves the pacing slot BEFORE sending, then sends one text message', async () => {
     const s = setup();
     expect(await s.c.send(delivery())).toEqual({ provider_message_id: 'wa-1', reached: 1, already_done: false });
-    expect(s.calls).toEqual(['list', 'reserve', 'sendText']);
+    expect(s.calls).toEqual(['group', 'list', 'reserve', 'sendText']);
     expect(s.state.reserve).toHaveBeenCalledWith(NOW, new Date(NOW.getTime() + 40_000 + 20_000));
     expect(s.provider.sendText).toHaveBeenCalledWith(GROUP, BODY);
   });
@@ -151,5 +152,51 @@ describe('W7 provider errors on the send', () => {
     expect((await outcome(failing(new BadRequestError()).c.send(delivery()))).reason).toBe('whatsapp_rejected');
     const e = await outcome(failing(new UnavailableError()).c.send(delivery()));
     expect(e).toBeInstanceOf(UnavailableError);
+  });
+});
+
+describe('the group pre-flight (GET /groups/{id}) and the bounded check', () => {
+  const group = (o: Record<string, unknown>) => jest.fn(async () => ({ id: GROUP, name: 'Test', participants: [{ id: '15550001234', rank: 'member' }], participants_count: 2, announcements: false, suspended: false, terminated: false, ...o }));
+  it.each([
+    ['admins only and the number is a member', { announcements: true }],
+    ['suspended', { suspended: true }],
+    ['closed', { terminated: true }],
+    ['the number is no longer in it', { participants: [{ id: '15559990000', rank: 'admin' }] }],
+  ])('%s: marked as cannot-send and failed before anything is reserved or sent', async (_n, o) => {
+    const s = setup({ provider: { getGroup: group(o) } });
+    expect((await outcome(s.c.send(delivery()))).reason).toBe('whatsapp_cannot_post');
+    expect(s.state.markForbidden).toHaveBeenCalledWith('g1');
+    expect(s.state.reserve).not.toHaveBeenCalled();
+    expect(s.provider.sendText).not.toHaveBeenCalled();
+  });
+  it('admins only is fine when the number is an admin', async () => {
+    const s = setup({ provider: { getGroup: group({ announcements: true, participants: [{ id: '15550001234@s.whatsapp.net', rank: 'admin' }] }) } });
+    expect((await s.c.send(delivery())).provider_message_id).toBe('wa-1');
+  });
+  it('a 403 on the pre-flight marks the group; a 429 opens the breaker', async () => {
+    const f = setup({ provider: { getGroup: jest.fn(async () => { throw new ForbiddenError(); }) } });
+    expect((await outcome(f.c.send(delivery()))).reason).toBe('whatsapp_forbidden');
+    expect(f.state.markForbidden).toHaveBeenCalledWith('g1');
+    const r = setup({ provider: { getGroup: jest.fn(async () => { throw new RateLimitedError(); }) } });
+    expect((await outcome(r.c.send(delivery()))).reason).toBe('whatsapp_paused_by_whatsapp');
+  });
+  it('a check that keeps failing holds 5 minutes, and after a whole day since the first claim fails for good', async () => {
+    const down = { getGroup: jest.fn(async () => { throw new UnavailableError(); }) };
+    const early = setup({ provider: down });
+    expect((await outcome(early.c.send(delivery({ since: new Date(NOW.getTime() - 23 * 3600_000) })))).reason).toBe('whatsapp_check_failed');
+    const late = setup({ provider: down });
+    const e = await outcome(late.c.send(delivery({ since: new Date(NOW.getTime() - 24 * 3600_000) })));
+    expect([e instanceof ConnectorPermanentError, e.reason]).toEqual([true, 'whatsapp_check_gave_up']);
+    const list = setup({ provider: { listSentSince: jest.fn(async () => { throw new UnavailableError(); }) } });
+    expect((await outcome(list.c.send(delivery({ since: new Date(NOW.getTime() - 25 * 3600_000) })))).reason).toBe('whatsapp_check_gave_up');
+  });
+  it('a second 429 after the first breaker closed opens a NEW breaker with its own alert key', async () => {
+    const s = setup({ provider: { sendText: jest.fn(async () => { throw new RateLimitedError(); }) } });
+    await outcome(s.c.send(delivery()));
+    const later = createWhatsAppConnector({ config: () => ON, connect: async () => ({ provider: s.provider, number: '15550001234' }), state: s.state, alert: s.alert, now: () => new Date(NOW.getTime() + 49 * 3600_000), random: () => 0.5 });
+    await outcome(later.send(delivery()));
+    expect(s.alert.mock.calls.map((c) => (c as unknown as [{ key: string }])[0].key)).toEqual([
+      `breaker:${new Date(NOW.getTime() + 48 * 3600_000).toISOString()}`, `breaker:${new Date(NOW.getTime() + 97 * 3600_000).toISOString()}`,
+    ]);
   });
 });
