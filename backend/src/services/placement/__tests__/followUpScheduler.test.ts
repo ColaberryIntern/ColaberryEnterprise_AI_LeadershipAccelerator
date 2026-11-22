@@ -65,7 +65,7 @@ const at = (ms: number) => new Date(NOW.getTime() + ms);
 function seed(over: Partial<Row> = {}, id = ID): Row {
   const r: Row = { id, status: 'scheduled', send_on: at(-60_000), next_attempt_at: null, last_attempt_at: null, attempts: 0, subject: 'Next steps',
     body: 'Hi {first},\n\nPick a time here: {booking link}\n\nDana', booking_link: 'https://cal.example/dana', only_if: 'always', full_name: 'Ann Lee',
-    to_email: 'ann@learner.example', member_email: 'dana@meridian.example', display_name: 'Dana Ruiz', company: 'Meridian Freight', put_forward: true, replied: false,
+    to_email: 'ann@learner.example', member_email: 'dana@northgate.example', display_name: 'Dana Ruiz', company: 'Northgate Logistics', put_forward: true, replied: false,
     status_reason: null, mandrill_id: null, sent_at: null, link: null, last_error_class: null, ...over };
   mockRows.set(id, r);
   return r;
@@ -116,7 +116,7 @@ describe('sending', () => {
     const r = seed();
     expect((await runFollowUpPass(NOW, on)).sent).toBe(1);
     const m = mockMail.mock.calls[0][0];
-    expect(m).toMatchObject({ from: '"Dana Ruiz at Meridian Freight via Refactored.ai" <team@refactored.example>', to: 'ann@learner.example', replyTo: 'dana@meridian.example',
+    expect(m).toMatchObject({ from: '"Dana Ruiz at Northgate Logistics via Refactored.ai" <team@refactored.example>', to: 'ann@learner.example', replyTo: 'dana@northgate.example',
       subject: 'Next steps', text: 'Hi Ann,\n\nPick a time here: https://cal.example/dana\n\nDana' });
     expect(m.html).toBeUndefined(); expect(m.attachments).toBeUndefined();
     expect(JSON.parse(m.headers['X-MC-Metadata'])).toEqual({ follow_up_id: ID });

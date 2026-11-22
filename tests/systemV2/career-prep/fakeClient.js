@@ -21,9 +21,9 @@ const candidates = () => ({ profilesUnavailable: false, feeRateBp: 11000, candid
   { enrollmentId: PRIYA, name: 'Priya Nair', initials: 'PN', putForwardAt: '2026-11-18T15:00:00.000Z', readiness: null, profile: null },
 ] });
 const interviews = () => ({ interviews: [
-  { id: '33333333-0000-4000-8000-000000000003', enrollmentId: ANN, candidateName: 'Ann Lee', company: 'Meridian Freight', role: 'AI Solutions Analyst', status: 'booked',
+  { id: '33333333-0000-4000-8000-000000000003', enrollmentId: ANN, candidateName: 'Ann Lee', company: 'Northgate Logistics', role: 'AI Solutions Analyst', status: 'booked',
     startsAt: '2026-11-24T20:00:00.000Z', minutes: 45, joinPage: ROOM, recorded: false },
-  { id: '44444444-0000-4000-8000-000000000004', enrollmentId: PRIYA, candidateName: 'Priya Nair', company: 'Meridian Freight', role: 'Data Analyst <img src=x onerror="window.__pwned=1">', status: 'not_booked',
+  { id: '44444444-0000-4000-8000-000000000004', enrollmentId: PRIYA, candidateName: 'Priya Nair', company: 'Northgate Logistics', role: 'Data Analyst <img src=x onerror="window.__pwned=1">', status: 'not_booked',
     startsAt: null, minutes: null, joinPage: null, recorded: false },
 ] });
 const offerRow = (over) => ({ id: '55555555-0000-4000-8000-000000000005', groupId: '66666666-0000-4000-8000-000000000006', version: 1, enrollmentId: ANN, candidateName: 'Ann Lee',
@@ -50,7 +50,7 @@ async function clientPage(browser, base, opts = {}) {
     const json = (status, body) => route.fulfill({ status, contentType: 'application/json', headers: cors, body: JSON.stringify(body) });
     if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: { ...cors, 'access-control-allow-headers': 'content-type,authorization', 'access-control-allow-methods': 'GET,POST' } });
     const p = url.pathname.replace(/^\/api\/hire\/client/, '');
-    if (p === '/auth/redeem') { redeems.push(req.postDataJSON()); return req.postDataJSON().token === LINK_TOKEN && redeems.length === 1 ? json(200, { token: SESSION, expiresIn: 28800, clientName: opts.clientName || 'Meridian Freight' }) : json(401, { error: 'This link is no longer valid.' }); }
+    if (p === '/auth/redeem') { redeems.push(req.postDataJSON()); return req.postDataJSON().token === LINK_TOKEN && redeems.length === 1 ? json(200, { token: SESSION, expiresIn: 28800, clientName: opts.clientName || 'Northgate Logistics' }) : json(401, { error: 'This link is no longer valid.' }); }
     if (req.headers().authorization !== `Bearer ${SESSION}`) return json(401, { error: 'Please sign in again.' });
     if (p === '/candidates' && req.method() === 'GET') return json(200, candidates());
     if (p === '/interviews') return json(200, interviews());

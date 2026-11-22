@@ -41,7 +41,7 @@ async function runFollowUp(browser, all, base) {
     await c.page.waitForSelector(T('followup-form'));
     await c.page.fill(T('fu-body'), `Hi {first} ${String.fromCharCode(0x2014)} just checking in.`);
     const dash = await c.page.evaluate(() => ({ why: document.querySelector('[data-testid="fu-why"]').textContent, save: document.querySelector('[data-testid="fu-save"]').disabled }));
-    await c.page.fill(T('fu-body'), 'Hi {first}, just checking in on our offer.\n\nMeridian Freight');
+    await c.page.fill(T('fu-body'), 'Hi {first}, just checking in on our offer.\n\nNorthgate Logistics');
     await c.page.fill(T('fu-date'), '2026-12-01');
     await c.page.locator(T('fu-save')).dblclick();
     await c.page.waitForSelector(T('followups-table'));
@@ -125,7 +125,7 @@ async function runOfferSend(browser, all, base) {
 async function runClientPhone(browser, all, base) {
   const name = 'HS8 the employer portal fits a phone (390): no sideways scroll, 44px targets';
   // One long unbroken client name (it reaches the header and the dialog label): it must wrap, never push the dialog wide.
-  const c = await clientPage(browser, base, { viewport: { width: 390, height: 844 }, clientName: 'MeridianFreightLogisticsInternationalHoldingsGroup' });
+  const c = await clientPage(browser, base, { viewport: { width: 390, height: 844 }, clientName: 'NorthgateFreightLogisticsInternationalHoldingsGroup' });
   try {
     await c.page.waitForSelector(T('cand-card'));
     const m = await c.page.evaluate(() => ({ over: document.documentElement.scrollWidth - window.innerWidth,

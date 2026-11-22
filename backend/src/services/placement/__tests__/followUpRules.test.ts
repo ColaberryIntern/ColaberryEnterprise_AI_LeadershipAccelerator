@@ -96,8 +96,8 @@ describe('retries and the sender name', () => {
     expect(nextAttemptAt(4, now)).toBeNull();
   });
   it('"<person> at <company> via Refactored.ai"; header-breaking characters removed', () => {
-    expect(fromName('Dana Ruiz', 'Meridian Freight')).toBe('Dana Ruiz at Meridian Freight via Refactored.ai');
-    expect(fromName(null, 'Meridian Freight')).toBe('Meridian Freight via Refactored.ai');
+    expect(fromName('Dana Ruiz', 'Northgate Logistics')).toBe('Dana Ruiz at Northgate Logistics via Refactored.ai');
+    expect(fromName(null, 'Northgate Logistics')).toBe('Northgate Logistics via Refactored.ai');
     expect(fromName('Dana "x" <evil@x>\r\nBcc: y', 'Co')).toBe('Dana x evil@xBcc: y at Co via Refactored.ai');
   });
 });

@@ -10,16 +10,16 @@ const F = require('../src/assets/client-followup-model.js');
 const ANN = '11111111-0000-4000-8000-000000000001';
 const KEY = '99999999-0000-4000-8000-000000000009';
 const EM = String.fromCharCode(0x2014);
-const form = (over = {}) => ({ ...F.draft(ANN, 'thank_you', 'Meridian Freight', '2026-11-01'), ...over });
+const form = (over = {}) => ({ ...F.draft(ANN, 'thank_you', 'Northgate Logistics', '2026-11-01'), ...over });
 const fu = (over = {}) => ({ id: 'f1', enrollmentId: ANN, candidateName: 'Ann Lee', subject: 'Next steps', template: 'next_steps', sendOn: '2026-11-25T15:00:00.000Z',
   onlyIf: 'no_reply', status: 'scheduled', reason: null, retrying: false, sentAt: null, opens: 0, clicks: { link: 0, other: 0 }, ...over });
 
 describe('templates', () => {
   test('four, in the design order, each signed with the company; Custom is empty', () => {
     assert.deepEqual(F.ORDER.map((k) => F.TEMPLATES[k].label), ['Thank you', 'Next steps', 'Offer reminder', 'Custom']);
-    const d = F.draft(ANN, 'offer_reminder', 'Meridian Freight', '2026-11-25');
+    const d = F.draft(ANN, 'offer_reminder', 'Northgate Logistics', '2026-11-25');
     assert.equal(d.subject, 'Checking in on our offer');
-    assert.match(d.body, /^Hi \{first\},\n\n.*\n\nMeridian Freight$/s);
+    assert.match(d.body, /^Hi \{first\},\n\n.*\n\nNorthgate Logistics$/s);
     assert.equal(F.draft(ANN, 'custom', 'X').body, '');
     assert.deepEqual([d.time, d.onlyIf], ['09:00', 'no_reply']);
   });

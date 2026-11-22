@@ -18664,9 +18664,9 @@ Branch `workstream/career-prep-r2r3`, one PR (https://github.com/ColaberryIntern
   - Session: CC-20261106-fv8g
   - What changed: `frontend/src/pages/admin/careerDesk/` (review queue, inbox health, bookings, placements and fees), four Placement sidebar links, focus fold (dcb82fbde, d11481779).
   - Verification: verifier PASS 12/12; careerDesk.e2e.js 6/6 (1/6 on the previous build); every PR check green.
-- [x] T33 (in progress) Phase G quality gate: attach-tool fetch timeouts and the flag-inventory refresh
+- [x] T33 Phase G quality gate: attach-tool fetch timeouts, flag-inventory refresh, the test-interview seed script
   - Date: 2026-11-22
   - Session: CC-20261106-fv8g
-  - What changed: `attachArtifactToTicket.js` bounds both Basecamp calls at 30 s (b7e1ede36); flag-inventory.md refreshed with the T01 findings.
-  - Verification: fetchTimeout.test.js red before (0/3), green after (12/12 in the folder); checkFlagInventory.js both modes exit 0.
+  - What changed: `attachArtifactToTicket.js` bounds both Basecamp calls at 30 s (b7e1ede36); flag-inventory.md refreshed with the T01 findings; `backend/src/scripts/seedPlacementTestInterview.ts` writes ONE tagged test interview for an allow-listed learner (dry run by default, `--remove` deletes exactly it) so Ali can test booking, the room, the replay, offers and follow-ups while intake is dark; PR screenshots in `docs/screenshots/career-prep-r2r3/`; test fixtures drop prototype company names.
+  - Verification: fetchTimeout.test.js red before (0/3), green after (12/12 in the folder); seedPlacementTestInterview.test.ts 5/5 (dry run, apply, idempotent, remove exactly it, refuses a learner not on the list); checkFlagInventory.js both modes exit 0; full gate green (both tsc with planted control errors, backend and frontend jest with only the known CRLF artifacts, build, browser suites 70/70, hire 198/198); every PR check green.
   - Notes: the full gate results and the PR state are recorded in the PR body and the run's T33 logs.
