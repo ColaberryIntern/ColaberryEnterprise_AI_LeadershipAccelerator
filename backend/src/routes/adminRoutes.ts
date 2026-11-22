@@ -102,6 +102,7 @@ import schedulerControlRoutes from './admin/schedulerControlRoutes';
 import agentGovernanceRoutes from './admin/agentGovernanceRoutes';
 import agentOrphanRoutes from './admin/agentOrphanRoutes';
 import projectOverviewRoutes from './admin/projectOverviewRoutes';
+import projectDemoLinkRoutes from './admin/projectDemoLinkRoutes';
 import previewStackRoutes from './admin/previewStackRoutes';
 import testSetupRoutes from './admin/testSetupRoutes';
 import productionCleanupRoutes from './admin/productionCleanupRoute';
@@ -400,6 +401,10 @@ router.use(deploymentRoutes);
 router.use(schedulerControlRoutes);
 router.use(agentGovernanceRoutes);
 router.use(agentOrphanRoutes);
+// BEFORE projectOverviewRoutes, which declares `/api/admin/projects/:projectId/...` patterns.
+// `/demos` is a single segment and collides with none of them today, but Express matches in
+// registration order and a future `/api/admin/projects/:id` would swallow this path silently.
+router.use(projectDemoLinkRoutes);
 router.use(projectOverviewRoutes);
 router.use(previewStackRoutes);
 router.use(testSetupRoutes);

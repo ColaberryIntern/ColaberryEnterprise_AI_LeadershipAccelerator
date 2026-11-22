@@ -244,6 +244,104 @@ describe('only the publish path may consult the env variable', () => {
   });
 });
 
+/**
+ * Extract every CALL EXPRESSION of `name(` in a source file, parentheses balanced.
+ *
+ * The first version of the sweep below asked `fileText.includes('connectedDemo')` per caller, and
+ * an independent verifier showed what that actually enforces: "every caller MENTIONS the string
+ * somewhere in the file". It deleted the `connectedDemo` argument from five separate call sites -
+ * including the orchestrator's `renderDocs` context, which leaves a student with a STORY-900 task
+ * and no STORY-900.md - and every test and both sweeps stayed green, because the leftover import
+ * line and the explanatory comments kept the word in the file.
+ *
+ * Reading the call expression is the difference between checking that a file talks about
+ * something and checking that it does it.
+ */
+/**
+ * Strip comments, because a call expression carries its own.
+ *
+ * The first version of the call-expression sweep still missed two deletions, and the reason is
+ * worth writing down: the explanatory comment ABOVE an argument sits inside the call's
+ * parentheses, and those comments name `connectedDemo`. So removing the argument left the comment
+ * behind and `call.includes('connectedDemo')` was still true. The sweep had moved from "the file
+ * mentions it" to "the call mentions it" and needed to reach "the call DOES it".
+ */
+function stripComments(code: string): string {
+  return code.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+}
+
+function callExpressions(src: string, name: string): string[] {
+  const out: string[] = [];
+  const needle = `${name}(`;
+  for (let i = src.indexOf(needle); i !== -1; i = src.indexOf(needle, i + 1)) {
+    // Skip the DECLARATION: `export function planStorySpecs(` is not a call of itself.
+    if (/\bfunction\s+$/.test(src.slice(Math.max(0, i - 20), i))) continue;
+    // Skip an identifier that merely ends with the name, e.g. `myRenderDocs(`.
+    if (/[A-Za-z0-9_$]/.test(src[i - 1] ?? '')) continue;
+    let depth = 0;
+    let j = i + name.length;
+    for (; j < src.length; j += 1) {
+      if (src[j] === '(') depth += 1;
+      else if (src[j] === ')') {
+        depth -= 1;
+        if (depth === 0) break;
+      }
+    }
+    out.push(stripComments(src.slice(i, j + 1)));
+  }
+  return out;
+}
+
+describe('the call-expression scanner itself works', () => {
+  // Without this, a scanner that returned nothing would make every sweep below pass forever.
+  it('finds a call, skips the declaration, and keeps nested parentheses together', () => {
+    const src = 'export function f(a = 1) {}\nconst x = f(g(1), h(2));\nconst y = notf(3);';
+    const calls = callExpressions(src, 'f');
+    expect(calls).toEqual(['f(g(1), h(2))']);
+  });
+
+  it('strips comments, so a comment naming the argument cannot stand in for the argument', () => {
+    // The exact miss this control exists for: two deletions survived a call-expression sweep
+    // because the comment above the deleted line was still inside the parentheses and still
+    // named it. Asserted in BOTH directions, which is what makes it a control and not a claim.
+    const withArg = callExpressions('r(plan, {\n  // see connectedDemo\n  connectedDemo: x,\n});', 'r');
+    const withoutArg = callExpressions('r(plan, {\n  // see connectedDemo\n});', 'r');
+    expect(withArg[0]).toContain('connectedDemo');
+    expect(withoutArg[0]).not.toContain('connectedDemo');
+    // Block comments too, since both styles appear in these call sites.
+    expect(callExpressions('r(plan, {\n  /* connectedDemo */\n});', 'r')[0]).not.toContain('connectedDemo');
+  });
+});
+
+describe('every planStorySpecs caller resolves the Connected Demo story', () => {
+  /**
+   * The SHOW side and the PAY side must agree.
+   *
+   * `storyPoints.ts`' own header: "A number advertised on a tile has to be the number the student
+   * is paid, so the two cannot be computed in two places." There are three production callers and
+   * the first version of this work resolved two, which would have had the tile advertise
+   * `budget / N` while the verifier paid `budget / (N + 1)` on any build carrying STORY-900.
+   */
+  it('every call passes the resolution, and there are at least three of them', () => {
+    const callers = walk(SRC)
+      .map((f) => [rel(f), fs.readFileSync(f, 'utf8')] as const)
+      .flatMap(([file, src]) => callExpressions(src, 'planStorySpecs').map((call) => [file, call] as const));
+
+    expect(callers.length).toBeGreaterThanOrEqual(3);
+    const missing = callers.filter(([, call]) => !call.includes('connectedDemo'));
+    expect(missing.map(([file]) => file)).toEqual([]);
+  });
+
+  it('and the three known call sites are among them, so the scan is not reading the wrong tree', () => {
+    const files = walk(SRC)
+      .filter((f) => callExpressions(fs.readFileSync(f, 'utf8'), 'planStorySpecs').length > 0)
+      .map(rel);
+    expect(files).toContain('services/sbp/verification/storyPoints.ts');
+    expect(files).toContain('services/sbp/verification/buildVerificationService.ts');
+    expect(files).toContain('services/progression/milestoneService.ts');
+  });
+});
+
 describe('every renderDocs caller resolves the Connected Demo story', () => {
   /**
    * Why this is a directory sweep and not a list.
@@ -263,23 +361,25 @@ describe('every renderDocs caller resolves the Connected Demo story', () => {
     ],
   ];
 
-  it('every caller passes connectedDemo, or is exempt for a written reason', () => {
-    const callers = walk(SRC)
-      .filter((f) => rel(f) !== 'services/sbp/renderDocs.ts')
-      .filter((f) => /\brenderDocs\(/.test(fs.readFileSync(f, 'utf8')))
-      .map(rel);
-
-    // Found the ones we know about: a sweep that found nothing would pass trivially.
-    expect(callers).toContain('services/sbp/sbpOrchestrator.ts');
-    expect(callers).toContain('services/sbp/docsBundle.ts');
-    expect(callers).toContain('services/sbp/refreshRepoDocuments.ts');
-    expect(callers).toContain('services/sbp/studentProgressFile.ts');
-
+  it('every CALL passes connectedDemo, or its file is exempt for a written reason', () => {
     const exemptPaths = EXEMPT.map(([p]) => p);
-    const missing = callers
-      .filter((f) => !exemptPaths.includes(f))
-      .filter((f) => !fs.readFileSync(path.join(SRC, f), 'utf8').includes('connectedDemo'));
-    expect(missing).toEqual([]);
+    const calls = walk(SRC)
+      .filter((f) => rel(f) !== 'services/sbp/renderDocs.ts')
+      .map((f) => [rel(f), fs.readFileSync(f, 'utf8')] as const)
+      .flatMap(([file, src]) => callExpressions(src, 'renderDocs').map((call) => [file, call] as const));
+
+    const files = [...new Set(calls.map(([f]) => f))];
+    // Found the ones we know about: a sweep that found nothing would pass trivially.
+    expect(files).toContain('services/sbp/sbpOrchestrator.ts');
+    expect(files).toContain('services/sbp/docsBundle.ts');
+    expect(files).toContain('services/sbp/refreshRepoDocuments.ts');
+    expect(files).toContain('services/sbp/studentProgressFile.ts');
+
+    // The ARGUMENT, not the file. See `callExpressions` for what the file-level version missed.
+    const missing = calls
+      .filter(([file]) => !exemptPaths.includes(file))
+      .filter(([, call]) => !call.includes('connectedDemo'));
+    expect(missing.map(([file]) => file)).toEqual([]);
   });
 
   it('every exemption names a file that exists and gives a reason', () => {

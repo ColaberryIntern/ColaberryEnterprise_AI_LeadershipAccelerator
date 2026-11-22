@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { PageHeader, StatCard, SectionCard } from '../../components/admin/shell';
+import DemoLinksPanel from '../../components/admin/DemoLinksPanel';
 import {
   getFactorySample, getFactoryContract, listFactoryContracts, approveFactoryContract, requestFactoryChanges,
   ingestProposal, generateDecomposition, getFactoryFlowSvg,
@@ -360,6 +361,14 @@ export default function AdminFactoryCommandCenterPage(): React.ReactElement {
           </SectionCard>
         </>
       )}
+
+      {/*
+        * OUTSIDE the `view &&` block on purpose. Student project demos are independent of whether
+        * a delivery contract decomposition loaded, and nesting them would make the links vanish
+        * whenever the factory view errored - which is exactly when somebody is here looking for
+        * something that still works. Collapsed by default so it adds a line, not a screen.
+        */}
+      <DemoLinksPanel />
     </div>
   );
 }

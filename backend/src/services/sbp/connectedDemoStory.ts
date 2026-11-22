@@ -198,6 +198,15 @@ export function connectedDemoPrompt(plan: BuildPlan): string {
   lines.push('## Step 4 — connect it to the Command Center, one way');
   lines.push(bullet(`On the Command Center's Overview tab add one card, "Preview the finished app", linking to \`${CONNECTED_DEMO_ENTRY_PATH}\`. A link only. Do not read \`${CONNECTED_DEMO_SPEC_PATH}\` from any Command Center tab.`));
   lines.push(bullet(`Run \`node ${DEMO_KIT_STANDALONE_PATH} ${CONNECTED_DEMO_DIR.replace(/\/$/, '')}\`. It writes \`${CONNECTED_DEMO_STANDALONE_PATH}\`: the whole demo in one file that opens with a double-click and attaches to an email.`));
+  /*
+   * THE PUBLIC LINK, and why the instruction belongs here rather than in a release note.
+   *
+   * The publish control is an authenticated participant endpoint with a panel on the project page.
+   * Neither is any use to somebody who does not know it exists: a student who finishes this story
+   * has a demo that opens on their own machine and no idea there is a link they can send to a
+   * hiring manager. Naming the file is deliberate too, since the panel asks for it by name.
+   */
+  lines.push(bullet('On your project page in the portal, find "Your demo link" and pick your `command-center/data-model.json`. That builds the demo on the platform and gives you one link anybody can open with no login. Unpublishing later takes the link away and keeps the demo, so you can publish the same one again.'));
   lines.push('');
 
   lines.push('## Step 5 — check it the way a stranger would, then tell me');
