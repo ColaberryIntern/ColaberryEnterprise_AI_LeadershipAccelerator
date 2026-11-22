@@ -431,3 +431,112 @@ source. **CI is the only type authority here and no local pass is claimed.**
 - An end-to-end submission through the new contract against a real database.
 - Whether a real prospect now picks a plan, which is the only thing that will actually move
   `plan_unattributed` off its current count.
+
+---
+
+## Phase 5 in production, and I deployed nothing
+
+Merged as `53b1f5ba8` at 22:47:48Z. **By the time I came to deploy it, it was already live**, and
+not by my hand. `/var/log/colaberry-registry-deploys.log`:
+
+```
+2026-11-22T22:57:23Z 53b1f5ba8...  services=nginx     <- my own merge, deployed by another session
+2026-11-22T23:12:03Z 48e55fcb6...  services=backend
+2026-11-22T23:12:31Z 66770932c...  services=nginx
+```
+
+Three merges landed within half an hour and other sessions deployed main's tip, which carried
+my commit along. Backend started 23:11:33Z on image `60e6e310c6fd`, nginx 23:12:27Z on
+`bd43aac005fe`, host HEAD and `origin/main` both `66770932c`.
+
+So there was no deploy to perform, and claiming one would have been a lie. What was left was
+verification.
+
+### The baseline was a FALSE ZERO, and a positive control is the only reason I know
+
+This is the finding worth keeping from this phase.
+
+My first pre-deploy baseline ran the markers through nested PowerShell into `ssh` into
+`docker exec sh -c "grep -rlF '$m' ..."` with backtick-escaped quotes. **It reported 0 for all
+seven markers.** Every one of them was actually non-zero: `normalizeService` 4, `attributionOf`
+4, `SERVICE_NOT_SURE` 4, `plan_not_sure` 1, `plan not chosen yet` 1, `serviceLabel` 3,
+`planBreakdown` 5.
+
+The quoting was eaten somewhere in that chain and the grep returned nothing, which looks
+**exactly** like a clean baseline. Had I trusted it, I would then have measured the same markers
+after a deploy, watched them "rise from zero", and reported that as proof. The numbers would
+have been real; the baseline they were compared against would have been fabricated.
+
+What caught it was a **positive control inside the harness**: the same script also grepped for
+three strings known to be present from Phase 4 (`enterprise_suspect`, `looks like a test row`,
+`buildEnterpriseFlow`). Those returned 2, 4 and 3 on the re-run via a scp'd script, and would
+have returned 0 under the broken harness. The negative control alone would NOT have caught
+this: a broken grep and an absent string both return 0.
+
+So the rule tightens. Phase 4's lesson was *baseline every marker at zero before deploying*.
+Phase 5's is **the harness that takes the baseline must itself carry a positive control**, or
+the zero it reports is unfalsifiable. And the quoting lesson already in memory applies to reads,
+not just writes: scp a script, never inline a remote command through PowerShell.
+
+### What is proven, and by what
+
+I could not baseline at zero, because the deploy preceded me. The complementary proof is
+stronger anyway, because it is a disappearance that only this change causes:
+
+| Claim | Evidence |
+|---|---|
+| Phase 5 backend code is live | `plan_not_sure`, `plan not chosen yet`, `normalizeService`, `attributionOf`, `SERVICE_NOT_SURE`, `serviceLabel`, `planBreakdown` all present in `/app/dist`; `enterprisePlanFunnel.js` exists, 6026 bytes, exporting `planBreakdown` |
+| The PRE-Phase-5 code is gone | `left the service field empty` **0**, `does not yet constrain` **0**, `cannot be attributed to one of the` **0**. Those strings existed only in the old build |
+| The form change is served | nginx bundle carries `not_sure` (4) and `Please pick one, or` (2), the latter a string that exists nowhere else in the tree |
+| The harness was honest | positive controls > 0 and negative control 0, on both the backend dist and the nginx bundle |
+
+### Verified through the deployed code, not by grep
+
+Run read-only inside the container:
+
+```
+normalizeService('Not sure yet')            = "not_sure"
+normalizeService('Build')                   = "build"
+normalizeService('not sure, maybe training') = "not_sure"   <- the ordering trap, holding in prod
+attributionOf('')                           = "unrecorded"
+attributionOf('consulting')                 = "unreadable"
+serviceLabel('build')                       = "A new build"
+
+planBreakdown stage keys = plan_build, plan_guide, plan_train, plan_not_sure, plan_unattributed
+  notSure=1 unrecorded=1 unreadable=1   caveats=2
+
+plan_not_sure stage present: true   label: "Not sure yet"
+  says "recorded answer, not a gap": true
+plan_unattributed
+  says "carry no service answer": true
+  says "since R23 Phase 5":       true
+  still says the OLD wording:     false
+```
+
+### The row Phase 4 verified against no longer exists
+
+`enterprise_intakes` holds **0 rows**. `enterprise_deal_values` 0. No lead named "Acme Test"
+anywhere. The test row that Phase 4 proved the flag against, at 19:18Z, was purged by someone
+between then and 23:17Z.
+
+Plausibly *because* Phase 4's flag identified it as a test row, which would be the flag doing
+precisely its job. I cannot prove that causation and am not claiming it.
+
+The consequence for this phase is honest and worth stating plainly: **the funnel's new
+behaviour is verified at the code level and against synthetic rows run through the deployed
+build, but not against a real intake row, because there is no longer one to verify against.**
+
+### A second false control, caught the same way
+
+The first data check used "leads with `form_type = demo_pilot_request`" as its control. That
+returned **0**, same as the subject, so it distinguished nothing. A control that happens to be
+zero is not a control. `SELECT COUNT(*) FROM leads` returning **25,702** is the one that
+established the harness reads real data.
+
+### Not verified
+
+- Behaviour against a real intake row. The table is empty.
+- An end-to-end submission through the new contract.
+- The rendered page. The new radio values and the removed "optional" are proven present in the
+  served bundle; nobody has loaded `/demo-pilot` in a browser.
+- Every value-dependent branch, since `enterprise_deal_values` still holds 0 rows.
