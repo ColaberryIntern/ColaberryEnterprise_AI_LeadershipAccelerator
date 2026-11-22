@@ -19,6 +19,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { assertLocalOnly, checkLocalUrl } = require('./lib/localOnly');
+const { sweepEnrollment, countLeft } = require('./lib/enrollmentSweep');
 
 const { base, api } = assertLocalOnly({ base: process.env.BASE_URL || 'http://localhost:3150', api: process.env.API_URL || 'http://127.0.0.1:3101' });
 const DB_URL = process.env.DATABASE_URL || '';
@@ -43,8 +44,8 @@ const check = (name, ok, detail = '') => { results.push({ name, ok: !!ok, detail
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const centralWall = (daysOut, hhmm) => `${new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(Date.now() + daysOut * 86400_000))}T${hhmm}:00Z`;
 
-/** Measured in the page: what overflows, which controls are under 44 x 44, badges without text. */
-function measure() {
+/** Measured in the page: what overflows, which controls under `scope` are under 44 x 44, badges without text. */
+function measure(scope) {
   const vw = document.documentElement.clientWidth;
   const visible = (el) => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el); return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none'; };
   const label = (el) => (el.getAttribute('aria-label') || el.textContent || el.id || el.tagName).trim().replace(/\s+/g, ' ').slice(0, 50);
@@ -52,7 +53,7 @@ function measure() {
     .map((el) => `${el.tagName.toLowerCase()}.${String(el.className).split(' ')[0]} ${Math.round(el.getBoundingClientRect().right)}px`);
   const inText = (el) => el.tagName === 'A' && el.closest('p, li, td') && !el.className.includes('btn');
   const small = [...document.querySelectorAll('button, a[href], input:not([type="hidden"]), select, textarea, [role="button"], summary')]
-    .filter((el) => visible(el) && !inText(el) && el.closest('.comms-hub'))
+    .filter((el) => visible(el) && !inText(el) && el.closest(scope))
     .map((el) => {
       let r = el.getBoundingClientRect();
       if (el.type === 'checkbox' || el.type === 'radio') {
@@ -70,7 +71,7 @@ function measure() {
   const p = pause ? pause.getBoundingClientRect() : null;
   const rep = box('[data-testid="report-problem-open"]');
   const overlap = !!(p && rep && rep.left < p.right && rep.right > p.left && rep.top < p.bottom && rep.bottom > p.top);
-  return { scrollW: document.documentElement.scrollWidth, vw, wide: wide.slice(0, 8), small: small.slice(0, 12), smallCount: small.length, badges, overlap, hasReport: !!rep };
+  return { scrollW: document.documentElement.scrollWidth, vw, wide: wide.slice(0, 8), small: small.slice(0, 12), smallCount: small.length, badges, overlap, hasReport: !!rep, hasPause: !!p };
 }
 
 /**
@@ -88,7 +89,8 @@ async function axe(page, scope) {
         const el = document.querySelector(n.target[0]);
         const d = (n.any[0] && n.any[0].data) || {};
         const line = `${v.id}: ${n.target.join(' ')}${d.fgColor ? ` ${d.fgColor} on ${d.bgColor} = ${d.contrastRatio}` : ''}`;
-        (el && el.closest(sel) ? out.inside : out.outside).push(line);
+        // An element the selector cannot find again (a frame, a shadow root) counts against the page, never as "outside".
+        (!el || el.closest(sel) ? out.inside : out.outside).push(line);
       }
     }
     return out;
@@ -129,8 +131,9 @@ async function main() {
         await page.goto(`${base}${url}`); // eslint-disable-line no-await-in-loop
         await page.locator('.comms-hub').waitFor(); // eslint-disable-line no-await-in-loop
         await page.waitForLoadState('networkidle').catch(() => undefined); // eslint-disable-line no-await-in-loop
-        const m = await page.evaluate(measure); // eslint-disable-line no-await-in-loop
-        check(`${name} @${width}: Report a problem does not cover Pause`, m.hasReport && !m.overlap);
+        const m = await page.evaluate(measure, '.comms-hub'); // eslint-disable-line no-await-in-loop
+        // Both buttons must be found: a missing Pause must fail, not pass as "no overlap".
+        check(`${name} @${width}: Report a problem does not cover Pause`, m.hasReport && m.hasPause && !m.overlap, `report ${m.hasReport}, pause ${m.hasPause}`);
         if (width !== 390) continue; // eslint-disable-line no-continue
         check(`${name} @390: nothing wider than the screen`, m.scrollW <= m.vw && m.wide.length === 0, m.wide.join('; ') || `${m.scrollW}/${m.vw}`);
         check(`${name} @390: every control is at least 44x44`, m.smallCount === 0, `${m.smallCount}: ${m.small.join('; ')}`);
@@ -148,10 +151,13 @@ async function main() {
     await mctx.addInitScript((t) => { localStorage.setItem('participant_token', t); }, member);
     const mp = await mctx.newPage();
     await mp.goto(`${base}/portal/events`);
-    await mp.locator('article').filter({ hasText: TITLE }).first().waitFor({ timeout: 30_000 });
-    const pm = await mp.evaluate(measure);
-    check('/portal/events @390: the managed event is shown', true);
+    await mp.locator('article').filter({ hasText: TITLE }).first().waitFor({ timeout: 30_000 }).catch(() => undefined);
+    const shown = await mp.locator('article').filter({ hasText: TITLE }).count();
+    check('/portal/events @390: the managed event is shown', shown === 1, `${shown} card(s)`);
+    const pm = await mp.evaluate(measure, '.evt-root');
     check('/portal/events @390: nothing wider than the screen', pm.scrollW <= pm.vw && pm.wide.length === 0, pm.wide.join('; ') || `${pm.scrollW}/${pm.vw}`);
+    check('/portal/events @390: every control on the Events page is at least 44x44', pm.smallCount === 0, `${pm.smallCount}: ${pm.small.join('; ')}`);
+    check('/portal/events @390: status badges carry visible text', pm.badges.length === 0, pm.badges.join(', '));
     const pv = await axe(mp, 'body'); // the whole member page must pass
     check('/portal/events @390: axe finds no WCAG A/AA violations', pv.inside.length === 0, pv.inside.slice(0, 4).join(' | '));
     await mp.screenshot({ path: path.join(SHOTS, 'portal-events-390.png'), fullPage: true });
@@ -168,11 +174,16 @@ async function main() {
       await step('hub event', 'DELETE FROM comms_hub_events WHERE id = $1', [hubEventId]);
     }
     await step('activity (organizer)', 'DELETE FROM comms_hub_activity WHERE actor_id = $1', [organizerId]);
-    await step('enrollment', 'DELETE FROM enrollments WHERE id = $1', [enrollmentId]);
+    // Every row the member's portal visit left anywhere (presence, room visits, level, community profile...).
+    await sweepEnrollment(db, enrollmentId, problems);
     await step('cohort', 'DELETE FROM cohorts WHERE id = $1', [cohortId]);
     try { fs.writeFileSync(FIXTURE, JSON.stringify({ events: [], attendees: [] })); } catch (e) { problems.push(`fixture: ${e.message}`); }
-    const left = (await db.query('SELECT (SELECT count(*) FROM comms_hub_events WHERE ccpp_event_id = $1) + (SELECT count(*) FROM enrollments WHERE id = $2) AS n', [EID, enrollmentId])).rows[0].n;
-    check('cleanup removed every row this run made', Number(left) === 0 && problems.length === 0, problems.join('; ') || 'nothing left');
+    const left = [...await countLeft(db, enrollmentId)];
+    const hub = (await db.query(`SELECT (SELECT count(*) FROM comms_hub_events WHERE ccpp_event_id = $1)::int AS events,
+      (SELECT count(*) FROM comms_hub_activity WHERE actor_id = $2)::int AS activity, (SELECT count(*) FROM cohorts WHERE id = $3)::int AS cohorts`, [EID, organizerId, cohortId])).rows[0];
+    for (const [k, v] of Object.entries(hub)) if (v) left.push(`${k} ${v}`);
+    // The backend's append-only audit log keeps its rows by design; everything else is counted here.
+    check('cleanup removed every row this run made, except the backend\'s append-only logs', left.length === 0 && problems.length === 0, [...left, ...problems].join('; ') || 'nothing left');
     await db.end();
   }
   const failed = results.filter((r) => !r.ok).length;

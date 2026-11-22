@@ -114,7 +114,7 @@ If the database has no `colaberry-training` media brand, a tenant and that brand
 
 Two more scripts run on the same stack:
 - `commsHubEventbrite.e2e.js` covers the Eventbrite list, registrants and their CSV, Manage in the hub, messaging registrants (the worker notifies them), Report a problem, and /portal/events.
-- `commsHub.a11y.js` covers each hub tab and /portal/events at 390 px: overflow, axe, 44 px targets, badge text, and Report a problem not covering Pause.
+- `commsHub.a11y.js` covers each hub tab and /portal/events at 390 px: overflow, axe, 44 px targets (the member Events page too), badge text, and Report a problem not covering Pause (Pause must be found).
 
 **Eventbrite without CCPP.** There is no CCPP database locally, so the hub reads a JSON file instead.
 1. Start the backend with `COMMS_HUB_EVENTBRITE_FIXTURE=<path to a writable .json>`. Add it to the environment in section 2.
@@ -135,7 +135,10 @@ node tests/systemV2/commsHub.a11y.js
 - one of our own registrations;
 - the managed hub event and its messages and activity.
 
-All of it is deleted in a `finally`, and the last check counts what is left.
+All of it is deleted in a `finally`.
+- **The member.** Every row tied to the test member in any table is found by its `enrollment_id` column, not from a list, and deleted. The portal visit alone writes campus presence, room visits, student level and a community profile. Then the enrollment itself goes.
+- **What stays.** The backend's append-only logs keep their rows by design: `audit_logs`, `ai_events` and `content_generation_logs`.
+- **The proof.** The last check counts what is left. A before-and-after count of all 628 tables shows only those logs changed.
 
 **Known and expected:**
 - **The Eventbrite list is cached for two minutes.** The scripts wait until their event appears.

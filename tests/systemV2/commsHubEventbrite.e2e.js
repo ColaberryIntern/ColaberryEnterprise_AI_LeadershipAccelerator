@@ -23,6 +23,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { assertLocalOnly, checkLocalUrl } = require('./lib/localOnly');
+const { sweepEnrollment, countLeft } = require('./lib/enrollmentSweep');
 
 const { base, api } = assertLocalOnly({ base: process.env.BASE_URL || 'http://localhost:3150', api: process.env.API_URL || 'http://127.0.0.1:3101' });
 const DB_URL = process.env.DATABASE_URL || '';
@@ -187,6 +188,9 @@ async function main() {
       })(),
     ]);
     check('Report a problem posts to the hub\'s own endpoint, not Marketing\'s', new URL(resp.url()).pathname === '/api/admin/comms-hub/bug-report', `${resp.status()}`);
+    // No recipients are configured locally: the hub answers 503, and the page says so in plain words.
+    const said = await page.getByTestId('report-problem-error').innerText().catch(() => '');
+    check('with no recipients set up, it answers 503 and the page tells the person to tell Ali', resp.status() === 503 && /No one is set up to receive problem reports yet\. Tell Ali directly\./.test(said), `${resp.status()}: ${said}`);
 
     // 8. The member Events page shows the managed event (the hub card, with its Eventbrite Sign up).
     const member = jwt.sign({ sub: enrollmentId, email: A, role: 'participant' }, process.env.JWT_SECRET, { expiresIn: '1h' });
@@ -227,8 +231,9 @@ async function main() {
     await step('bug reports', `DO $$ BEGIN IF to_regclass('public.marketing_bug_reports') IS NOT NULL THEN
       DELETE FROM marketing_bug_reports WHERE summary = '[e2e] registrants check'; END IF; END $$`, []);
     await step('our-site registration', 'DELETE FROM open_house_registrations WHERE event_id = $1', [EID]);
-    await step('member', 'DELETE FROM community_members WHERE id = $1', [memberId]);
-    await step('enrollment', 'DELETE FROM enrollments WHERE id = $1', [enrollmentId]);
+    // Every row the test member left anywhere (the portal visit writes presence, room visits, level...),
+    // found by column rather than listed, then the enrollment itself.
+    await sweepEnrollment(db, enrollmentId, problems);
     await step('cohort', 'DELETE FROM cohorts WHERE id = $1', [cohortId]);
     try { fs.writeFileSync(FIXTURE, JSON.stringify({ events: [], attendees: [] })); } catch (e) { problems.push(`fixture: ${e.message}`); }
     const left = (await db.query(`SELECT
@@ -238,8 +243,12 @@ async function main() {
         (SELECT count(*) FROM comms_hub_activity WHERE actor_id = $3) AS activity,
         (SELECT count(*) FROM open_house_registrations WHERE event_id = $1) AS registrations,
         (SELECT count(*) FROM enrollments WHERE email = $4) AS enrollments`, [EID, msgIds, organizerId, A])).rows[0];
-    const remaining = Object.entries(left).filter(([, v]) => Number(v) > 0).map(([k, v]) => `${k} ${v}`);
-    check('cleanup removed every row this run made', remaining.length === 0 && problems.length === 0, [...remaining, ...problems].join('; ') || 'nothing left');
+    const remaining = [...Object.entries(left).filter(([, v]) => Number(v) > 0).map(([k, v]) => `${k} ${v}`), ...await countLeft(db, enrollmentId),
+      ...((await db.query('SELECT count(*)::int AS n FROM cohorts WHERE id = $1', [cohortId])).rows[0].n ? ['cohorts 1'] : [])];
+    // Said precisely: the backend's append-only logs (audit_logs, ai_events, content_generation_logs)
+    // keep their rows by design. Everything else this run made, including every row tied to the test
+    // member in any table, is gone and counted here.
+    check('cleanup removed every row this run made, except the backend\'s append-only logs', remaining.length === 0 && problems.length === 0, [...remaining, ...problems].join('; ') || 'nothing left');
     await db.end();
   }
   const failed = results.filter((r) => !r.ok).length;

@@ -121,8 +121,9 @@
 .evt-root .evt-btn{
   display:inline-flex;align-items:center;gap:7px;
   font-size:13.5px;font-weight:700;text-decoration:none;
-  /* CH9.9: --berry on the sunken surface measured 4.34:1 (axe, under 4.5); --berry-hover is 5.3:1. */
-  color:var(--berry-hover);background:var(--surface-sunken);
+  /* CH9.9: --berry on the sunken surface measured 4.34:1 (axe, under 4.5); --berry-hover is 5.3:1.
+     44 px tall, the touch target the rest of the hub's surfaces meet (it measured about 40). */
+  color:var(--berry-hover);background:var(--surface-sunken);min-height:44px;
   border:1px solid var(--border-default);border-radius:var(--r-pill);
   padding:8px 15px;
   transition:background .16s var(--ease),color .16s var(--ease),border-color .16s var(--ease)
