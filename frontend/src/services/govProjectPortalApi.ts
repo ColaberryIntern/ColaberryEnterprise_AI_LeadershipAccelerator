@@ -256,6 +256,9 @@ export interface GovProjectNeed {
   /** Present iff kind === 'record': whether this groups a past-performance reference or a key person, and the
    *  field keys the grouped form collects. */
   recordType?: GovRecordType; recordFields?: string[];
+  /** Where this input is curated: `global` = a reusable company-dossier asset (one answer serves every bid);
+   *  `local` = specific to this solicitation. Drives the inbox's global/local split and the "where to add it" link. */
+  scope?: 'global' | 'local';
 }
 /** The one needs list, grouped Blocking-export (fatal) then Holding-score. */
 export interface GovNeedsGrouped { needs: GovProjectNeed[]; blockingExport: GovProjectNeed[]; holdingScore: GovProjectNeed[]; }

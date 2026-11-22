@@ -11,8 +11,8 @@ import { needControl, needKindLabel, unblockLabel, submissionFor, recordTypeLabe
  * are already dropped server-side for interns, so the view renders whatever the needs route returns.
  */
 export default function NeedsInbox(
-  { projectId, docs, studioApi, onReload, onNavigate, onToast }:
-  { projectId: string; docs: GovProposalDocument[]; studioApi: GovStudioApi; onReload: () => void; onNavigate: (v: StudioView) => void; onToast: (m: string) => void },
+  { projectId, docs, studioApi, onReload, onNavigate, onToast, onOpenDossier }:
+  { projectId: string; docs: GovProposalDocument[]; studioApi: GovStudioApi; onReload: () => void; onNavigate: (v: StudioView) => void; onToast: (m: string) => void; onOpenDossier?: () => void },
 ): React.ReactElement {
   const [needs, setNeeds] = useState<GovProjectNeed[] | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
@@ -58,8 +58,8 @@ export default function NeedsInbox(
         <div className="gps-panel"><p className="gps-muted" style={{ margin: 0 }}>Nothing needs you right now. The agent has what it needs — follow progress in Where we are, or review the gates.</p></div>
       ) : (
         <>
-          <NeedGroup testid="needs-group-fatal" label="Blocking export" tone="bad" needs={blocking} busyKey={busyKey} titleFor={titleFor} onResolve={resolve} onResolveRecord={resolveRecord} onNavigate={onNavigate} />
-          <NeedGroup testid="needs-group-score" label="Holding a score under 95" tone="warn" needs={holding} busyKey={busyKey} titleFor={titleFor} onResolve={resolve} onResolveRecord={resolveRecord} onNavigate={onNavigate} />
+          <NeedGroup testid="needs-group-fatal" label="Blocking export" tone="bad" needs={blocking} busyKey={busyKey} titleFor={titleFor} onResolve={resolve} onResolveRecord={resolveRecord} onNavigate={onNavigate} onOpenDossier={onOpenDossier} />
+          <NeedGroup testid="needs-group-score" label="Holding a score under 95" tone="warn" needs={holding} busyKey={busyKey} titleFor={titleFor} onResolve={resolve} onResolveRecord={resolveRecord} onNavigate={onNavigate} onOpenDossier={onOpenDossier} />
         </>
       )}
     </div>
@@ -67,8 +67,8 @@ export default function NeedsInbox(
 }
 
 function NeedGroup(
-  { testid, label, tone, needs, busyKey, titleFor, onResolve, onResolveRecord, onNavigate }:
-  { testid: string; label: string; tone: string; needs: GovProjectNeed[]; busyKey: string | null; titleFor: (k: string) => string; onResolve: (n: GovProjectNeed, c: NeedControl, v: string) => void; onResolveRecord: (n: GovProjectNeed, fields: Record<string, string>) => void; onNavigate: (v: StudioView) => void },
+  { testid, label, tone, needs, busyKey, titleFor, onResolve, onResolveRecord, onNavigate, onOpenDossier }:
+  { testid: string; label: string; tone: string; needs: GovProjectNeed[]; busyKey: string | null; titleFor: (k: string) => string; onResolve: (n: GovProjectNeed, c: NeedControl, v: string) => void; onResolveRecord: (n: GovProjectNeed, fields: Record<string, string>) => void; onNavigate: (v: StudioView) => void; onOpenDossier?: () => void },
 ): React.ReactElement {
   return (
     <div className="gps-panel" data-testid={testid} style={{ marginTop: 14 }}>
@@ -76,7 +76,7 @@ function NeedGroup(
       <div className="gps-needs">
         {needs.length === 0 && <div className="gps-muted gps-small">None.</div>}
         {needs.map((n) => (
-          <NeedCard key={n.key} need={n} busy={busyKey === n.key} titleFor={titleFor} onResolve={onResolve} onResolveRecord={onResolveRecord} onNavigate={onNavigate} />
+          <NeedCard key={n.key} need={n} busy={busyKey === n.key} titleFor={titleFor} onResolve={onResolve} onResolveRecord={onResolveRecord} onNavigate={onNavigate} onOpenDossier={onOpenDossier} />
         ))}
       </div>
     </div>
@@ -84,8 +84,8 @@ function NeedGroup(
 }
 
 function NeedCard(
-  { need, busy, titleFor, onResolve, onResolveRecord, onNavigate }:
-  { need: GovProjectNeed; busy: boolean; titleFor: (k: string) => string; onResolve: (n: GovProjectNeed, c: NeedControl, v: string) => void; onResolveRecord: (n: GovProjectNeed, fields: Record<string, string>) => void; onNavigate: (v: StudioView) => void },
+  { need, busy, titleFor, onResolve, onResolveRecord, onNavigate, onOpenDossier }:
+  { need: GovProjectNeed; busy: boolean; titleFor: (k: string) => string; onResolve: (n: GovProjectNeed, c: NeedControl, v: string) => void; onResolveRecord: (n: GovProjectNeed, fields: Record<string, string>) => void; onNavigate: (v: StudioView) => void; onOpenDossier?: () => void },
 ): React.ReactElement {
   const control = needControl(need);
   const [value, setValue] = useState('');
@@ -93,6 +93,8 @@ function NeedCard(
   const border = need.blocking === 'fatal' ? 'var(--gps-bad)' : 'var(--gps-warn)';
   const blockLabel = need.blocking === 'fatal' ? 'blocks export' : 'holds a score under 95';
   const typeChip = control === 'record' ? recordTypeLabel(need.recordType) : needKindLabel(need.kind);
+  // Global = a reusable company-dossier asset (one answer serves every bid); local = specific to this solicitation.
+  const isGlobal = (need.scope ?? 'local') === 'global';
 
   return (
     <div className="gps-need-card gps-need-2col" data-testid="need-card" data-key={need.key} data-kind={need.kind} data-blocking={need.blocking} data-done="false" style={{ borderLeft: `3px solid ${border}` }}>
@@ -100,10 +102,20 @@ function NeedCard(
         <div className="gps-need-head">
           <span className="gps-tag">{typeChip}</span>
           <span className={`gps-tag ${need.blocking === 'fatal' ? 'bad' : 'warn'}`}>{blockLabel}</span>
+          <span className={`gps-tag ${isGlobal ? 'ok' : ''}`} data-testid="need-scope" data-scope={isGlobal ? 'global' : 'local'} title={isGlobal ? 'Reusable company fact — one answer serves every bid. Add it in the Company Dossier.' : 'Specific to this solicitation — used only on this bid.'}>{isGlobal ? 'Company dossier' : 'This bid only'}</span>
           {(need.usedIn || []).some((u) => u.docKey === 'pricing') && <span className="gps-tag gold">admin only</span>}
         </div>
         <b style={{ display: 'block', marginTop: 4 }}>{need.ask}</b>
         {need.why && <div className="gps-small gps-muted" style={{ marginTop: 2 }}>{need.why}</div>}
+        <div className="gps-small" data-testid="need-where" style={{ marginTop: 3 }}>
+          {isGlobal ? (
+            onOpenDossier
+              ? <button type="button" className="gps-chip-btn gps-tag" data-testid="need-add-global" onClick={onOpenDossier}>Add in the Company Dossier &rarr;</button>
+              : <span className="gps-muted">Add once in the Company Dossier &mdash; it is reused on every bid.</span>
+          ) : (
+            <span className="gps-muted" data-testid="need-add-local">Add it here &mdash; used only on this bid.</span>
+          )}
+        </div>
         {need.source && (
           <div className="gps-quote" data-testid="need-quote">&ldquo;{need.source.quote}&rdquo; <span className="gps-small gps-muted">— {need.source.file}{need.source.page ? `, p.${need.source.page}` : ''}</span></div>
         )}
