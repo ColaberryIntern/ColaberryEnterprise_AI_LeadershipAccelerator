@@ -25,7 +25,7 @@ const EVENT: HubEvent = {
   id: 'e1', title: 'Demo Tuesday', event_type: 'session', audience: { kind: 'all_members' }, status: 'scheduled',
   starts_at: '2026-12-02T00:00:00.000Z', ends_at: null, central: { date: '2026-12-01', start_time: '18:00', end_time: null, label: 'x' },
   repeat_rule: null, next_occurrence_at: null, upcoming_preview: [], join_url: null, registration_url: null, hosts: [],
-  description: 'About.', placement: { calendar: true, events_page: true, campus_rail: true }, thumbnail_id: null, broadcast_occurrence_id: null,
+  description: 'About.', placement: { calendar: true, events_page: true, campus_rail: true }, thumbnail_id: null, broadcast_occurrence_id: null, ccpp_event_id: null, ccpp_missing_since: null,
   created_at: '2026-11-20T00:00:00.000Z', updated_at: '2026-11-20T00:00:00.000Z',
 };
 const opt = (id: string, o: Partial<ThumbOption> = {}): ThumbOption => ({

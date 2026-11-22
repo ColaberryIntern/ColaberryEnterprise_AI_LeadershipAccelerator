@@ -22,6 +22,8 @@ const VERB: Record<string, string> = {
   'message.approval_voided': 'sent back for approval', 'message.sending': 'started sending', 'message.retry': 'retried',
   'message.sent': 'sent', 'message.partially_failed': 'partly sent', 'message.failed': 'could not send',
   'sending.paused': 'paused all sending', 'sending.resumed': 'resumed sending', 'settings.changed': 'changed the safety controls',
+  'bug.reported': 'reported a problem',
+  'registrants.viewed': 'viewed the registrants of', 'registrants.exported': 'downloaded the registrants of',
 };
 
 export interface ActivityRow { id: string; at: string; who: string; did: string; about: string | null; entity_type: string; entity_id: string | null }
@@ -41,7 +43,10 @@ export async function activityFeed(limit = 20): Promise<ActivityRow[]> {
   return rows.map((r) => ({
     id: r.id, at: r.created_at.toISOString(), who: personLabel(r.actor_label) ?? 'Someone',
     did: VERB[r.action] ?? r.action.replace(/[._]/g, ' '),
-    about: r.entity_type === 'message' ? msgTitle.get(r.entity_id ?? '') ?? null : (r.entity_id ? eventTitle.get(r.entity_id) ?? null : null),
+    about: r.entity_type === 'message' ? msgTitle.get(r.entity_id ?? '') ?? null
+      // CH9.3: an Eventbrite event has no hub row; its title travels in the activity detail.
+      : r.entity_type === 'eventbrite_event' ? (typeof (r.detail as Record<string, unknown>)?.title === 'string' ? String((r.detail as Record<string, unknown>).title) : null)
+        : (r.entity_id ? eventTitle.get(r.entity_id) ?? null : null),
     entity_type: r.entity_type, entity_id: r.entity_id,
   }));
 }

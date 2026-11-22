@@ -58,8 +58,12 @@ export function useCompose() {
 
   useEffect(() => {
     listHubEvents('upcoming').then((e) => { setEvents(e); setForm((f) => (f.eventId || !e[0] ? f : { ...f, eventId: e[0].id })); }, () => setEvents([]));
-    getDestinationOptions().then(setOptions, () => setOptions([]));
   }, []);
+  // CH9.6: the options follow the open message's event, so a managed Eventbrite event offers its registrants.
+  const optionsEventId = message?.event?.id ?? null;
+  useEffect(() => {
+    getDestinationOptions(optionsEventId).then(setOptions, () => setOptions([]));
+  }, [optionsEventId]);
   // The message already on screen (just created or changed here) is not fetched again when the URL catches up.
   const shown = useRef<string | null>(null);
   useEffect(() => {

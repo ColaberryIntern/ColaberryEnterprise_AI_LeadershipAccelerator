@@ -40,6 +40,7 @@ export function toView(e: CommsHubEvent, now: Date = new Date()): EventView {
     upcoming_preview: upcoming.slice(0, 3).map((o) => o.starts_at.toISOString()),
     join_url: e.join_url, registration_url: e.registration_url, hosts: e.hosts, description: e.description,
     placement: e.placement, thumbnail_id: e.thumbnail_id, broadcast_occurrence_id: e.broadcast_occurrence_id,
+    ccpp_event_id: e.ccpp_event_id ?? null, ccpp_missing_since: iso(e.ccpp_missing_since ?? null),
     created_at: e.created_at.toISOString(), updated_at: e.updated_at.toISOString(),
   };
 }
@@ -103,7 +104,12 @@ export async function updateEvent(id: string, input: EventInput, actor: Actor): 
     if (!e) throw new EventNotFoundError('Event not found.');
     if (e.status === 'cancelled' || e.status === 'ended') throw new EventStateError(`A ${e.status} event cannot be edited; duplicate it instead.`);
     // A live event keeps its live status; the form only chooses draft or scheduled.
-    const next = { ...fields, status: e.status === 'live' ? 'live' as const : fields.status };
+    // CH9.5: an event managed from Eventbrite keeps Eventbrite's title, times and link whatever the
+    // request says (the editor locks them; this is the server-side lock). Edit those in Eventbrite.
+    const owned = e.ccpp_event_id
+      ? { title: e.title, starts_at: e.starts_at, ends_at: e.ends_at, repeat_rule: null, registration_url: e.registration_url }
+      : {};
+    const next = { ...fields, ...owned, status: e.status === 'live' ? 'live' as const : fields.status };
     const changed = changedFields(e, next);
     if (changed.length === 0) return e;
     await e.update({ ...next, updated_by: actor.id }, { transaction: t });

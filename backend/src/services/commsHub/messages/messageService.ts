@@ -81,6 +81,13 @@ export async function setDestinations(messageId: string, wanted: DestinationInpu
     const m = await CommsHubMessage.findByPk(messageId, { transaction: t, lock: t.LOCK.UPDATE });
     if (!m) throw new MessageRuleError('That message was not found.', 404, 'not_found');
     if (['sending', 'sent', 'cancelled'].includes(m.status)) throw new MessageRuleError(`A ${m.status} message cannot change its recipients.`, 409, 'locked');
+    // CH9.6: registrants go in-app only, and only to the message's OWN event when that event is a
+    // managed Eventbrite event. A message cannot be pointed at another event's people.
+    for (const d of wanted.filter((x) => x.target_type === 'event_registrants')) {
+      if (d.channel !== 'in_app') throw new MessageRuleError('Registrants can be reached by in-app notification only.', 400, 'bad_destination');
+      const ev = m.event_id === d.target_id ? await CommsHubEvent.findByPk(d.target_id, { attributes: ['id', 'ccpp_event_id'], transaction: t }) : null;
+      if (!ev || !ev.ccpp_event_id) throw new MessageRuleError('Registrants can only be chosen for a message about an Eventbrite event managed in the hub.', 400, 'bad_destination');
+    }
     const current = await CommsHubDestination.findAll({ where: { message_id: m.id }, transaction: t });
     const want = new Map(wanted.map((d) => [keyOf(d), d]));
     const removed = current.filter((d) => !want.has(keyOf(d)));
@@ -132,7 +139,12 @@ export async function approveAndSchedule(messageId: string, actor: Actor, now: D
  * The test cohort in the hub settings (CH7.1) comes FIRST and says so, so a rehearsal or the E2E run
  * can send to it without reaching real members; it is listed even when that cohort is not open.
  */
-export async function destinationOptions(): Promise<DestinationInput[]> {
+export async function destinationOptions(eventId: string | null = null): Promise<DestinationInput[]> {
+  // CH9.6: a message about a managed Eventbrite event can also go to that event's registrants (in-app).
+  const managed = eventId ? await CommsHubEvent.findByPk(eventId, { attributes: ['id', 'title', 'ccpp_event_id'] }) : null;
+  const registrants: DestinationInput[] = managed?.ccpp_event_id
+    ? [{ channel: 'in_app', target_type: 'event_registrants', target_id: managed.id, label: `Registrants of ${managed.title} (in-app)` }]
+    : [];
   const settings = await CommsHubSettings.findByPk(1);
   const test = settings?.test_cohort_id ? await Cohort.findByPk(settings.test_cohort_id, { attributes: ['id', 'name'] }) : null;
   const cohorts = (await Cohort.findAll({ where: { status: 'open' }, attributes: ['id', 'name'], order: [['start_date', 'DESC']] }))
@@ -142,6 +154,7 @@ export async function destinationOptions(): Promise<DestinationInput[]> {
       { channel: 'community_post' as const, target_type: 'cohort_feed' as const, target_id: test.id, label: `Test: ${test.name} feed` },
       { channel: 'in_app' as const, target_type: 'in_app_audience' as const, target_id: test.id, label: `Test: ${test.name} members` },
     ] : []),
+    ...registrants,
     ...cohorts.map((c) => ({ channel: 'community_post' as const, target_type: 'cohort_feed' as const, target_id: c.id, label: `${c.name} feed` })),
     { channel: 'in_app' as const, target_type: 'in_app_audience' as const, target_id: 'all_members', label: 'Everyone in the program' },
     ...cohorts.map((c) => ({ channel: 'in_app' as const, target_type: 'in_app_audience' as const, target_id: c.id, label: `${c.name} members` })),

@@ -36,6 +36,27 @@ describe('the subject can be triaged without opening it', () => {
   it('truncates a rambling summary rather than producing an unreadable subject line', () => {
     expect(buildSubject({ ...base, summary: 'x'.repeat(400) }).length).toBeLessThan(160);
   });
+
+  it('is tagged [Marketing bug] by default, so the Marketing and agent subjects are unchanged', () => {
+    expect(buildSubject(base)).toBe('[Marketing bug] The campaign list shows email campaigns — /admin/marketing/composer');
+    expect(buildSubject(base, {})).toBe(buildSubject(base));
+    expect(buildSubject(base, { tag: '  ' })).toBe(buildSubject(base));
+  });
+
+  it('carries the Communications Hub tag when the hub asks for it (CH9.1)', () => {
+    const s = buildSubject({ ...base, routePath: '/admin/comms-hub/events' }, { tag: 'Comms Hub bug' });
+    expect(s).toBe('[Comms Hub bug] The campaign list shows email campaigns — /admin/comms-hub/events');
+  });
+});
+
+describe('the likely source file covers the Communications Hub tabs (CH9.1)', () => {
+  it.each([
+    ['/admin/comms-hub', 'frontend/src/components/admin/commsHub/TodayTab.tsx'],
+    ['/admin/comms-hub/', 'frontend/src/components/admin/commsHub/TodayTab.tsx'],
+    ['/admin/comms-hub/events', 'frontend/src/components/admin/commsHub/EventsTab.tsx'],
+    ['/admin/comms-hub/compose', 'frontend/src/components/admin/commsHub/ComposeTab.tsx'],
+    ['/admin/comms-hub/schedule', 'frontend/src/components/admin/commsHub/ScheduleTab.tsx'],
+  ])('%s -> %s', (route, file) => expect(likelySourceFile(route)).toBe(file));
 });
 
 describe('the body answers the questions that would otherwise need a reply', () => {

@@ -9,7 +9,7 @@ const EV: HubEvent = {
   central: { date: '2026-11-24', start_time: '18:00', end_time: '19:00', label: 'Nov 24, 6:00 PM CST' },
   repeat_rule: { freq: 'weekly', until: '2026-12-29' }, next_occurrence_at: '2026-11-25T00:00:00.000Z', upcoming_preview: [],
   join_url: 'https://zoom.us/j/1', registration_url: null, hosts: [{ name: 'Aleem', role: 'Design' }], description: 'Builders demo.',
-  placement: { calendar: true, events_page: true, campus_rail: false }, thumbnail_id: null, broadcast_occurrence_id: null,
+  placement: { calendar: true, events_page: true, campus_rail: false }, thumbnail_id: null, broadcast_occurrence_id: null, ccpp_event_id: null, ccpp_missing_since: null,
   created_at: '2026-11-20T00:00:00.000Z', updated_at: '2026-11-20T00:00:00.000Z',
 };
 

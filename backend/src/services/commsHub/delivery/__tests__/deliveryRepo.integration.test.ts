@@ -202,6 +202,42 @@ describeIfDb('CH7.2 sending worker on a scratch Postgres', () => {
     expect((await q<{ status: string }>('SELECT status FROM comms_hub_messages WHERE id = $1', [m]))[0].status).toBe('cancelled');
   });
 
+  it('CH9.6 the destinations CHECK from phase 1 (no event_registrants) is widened on the next boot, and still refuses an unknown type', async () => {
+    await sequelize.query('ALTER TABLE comms_hub_destinations DROP CONSTRAINT comms_hub_destinations_type_check');
+    await sequelize.query(`ALTER TABLE comms_hub_destinations ADD CONSTRAINT comms_hub_destinations_type_check CHECK (target_type IN ('cohort_feed', 'in_app_audience'))`);
+    const { ensureCommsHubSchema } = await import('../../../../db/ensureCommsHubSchema');
+    await ensureCommsHubSchema();
+    const def = (await q<{ d: string }>(`SELECT pg_get_constraintdef(oid) AS d FROM pg_constraint WHERE conname = 'comms_hub_destinations_type_check'`))[0].d;
+    expect(def).toMatch(/event_registrants/);
+    await ensureCommsHubSchema(); // a second boot changes nothing and does not fail
+    const m = (await q<{ id: string }>(`INSERT INTO comms_hub_messages (kind, status, subject) VALUES ('reminder', 'draft', 'x') RETURNING id`))[0].id;
+    await expect(sequelize.query(`INSERT INTO comms_hub_destinations (message_id, channel, target_type, target_id) VALUES ('${m}', 'in_app', 'everyone_ever', 'x')`)).rejects.toThrow(/comms_hub_destinations_type_check/);
+  });
+
+  it('CH9.6 an in-app delivery to an event\'s registrants is allowed only for the message\'s own managed Eventbrite event', async () => {
+    const managed = (await q<{ id: string }>(`INSERT INTO comms_hub_events (title, starts_at, ccpp_event_id) VALUES ('AI Open House', '2026-12-04T00:30:00Z', '1992498063344') RETURNING id`))[0].id;
+    const hubMade = (await q<{ id: string }>(`INSERT INTO comms_hub_events (title, starts_at) VALUES ('Demo Tuesday', '2026-12-02T00:00:00Z') RETURNING id`))[0].id;
+    const allowed: boolean[] = [];
+    for (const [eventId, target] of [[managed, managed], [hubMade, hubMade], [hubMade, managed]] as const) {
+      // eslint-disable-next-line no-await-in-loop
+      const m = (await q<{ id: string }>(`INSERT INTO comms_hub_messages (kind, status, subject, event_id) VALUES ('reminder', 'scheduled', 'x', $1) RETURNING id`, [eventId]))[0].id;
+      // eslint-disable-next-line no-await-in-loop
+      await q(`INSERT INTO comms_hub_drafts (message_id, channel, version, title, body, author) VALUES ($1, 'in_app', 1, 'AI Open House', 'Starts Thursday, December 3 at 6:30 PM CST.', 'ai') RETURNING id`, [m]);
+      // eslint-disable-next-line no-await-in-loop
+      await q(`INSERT INTO comms_hub_destinations (message_id, channel, target_type, target_id) VALUES ($1, 'in_app', 'event_registrants', $2) RETURNING id`, [m, target]);
+      // eslint-disable-next-line no-await-in-loop
+      await q(`INSERT INTO comms_hub_approvals (message_id, approved_by, content_hash) VALUES ($1, 'jackie-1', $2) RETURNING id`, [m, approvalHash(await loadContent(m))]);
+      // eslint-disable-next-line no-await-in-loop
+      expect(await repo.startMessage(m, NOW)).toBe('started');
+      // eslint-disable-next-line no-await-in-loop
+      const [claimed] = await repo.claimDue(NOW, 10);
+      // eslint-disable-next-line no-await-in-loop
+      await repo.withSendLock(claimed, NOW, async (ctx) => { allowed.push(ctx.destinationAllowed); return { kind: 'failed', error: 'test stop' }; });
+    }
+    // Its own managed event: yes. A hub-made event: no. Pointed at ANOTHER event's registrants: no.
+    expect(allowed).toEqual([true, false, false]);
+  });
+
   it('paused in the settings row: nothing starts', async () => {
     const m = await approvedMessage([await cohort('A')]);
     await sequelize.query('UPDATE comms_hub_settings SET sending_paused = true');

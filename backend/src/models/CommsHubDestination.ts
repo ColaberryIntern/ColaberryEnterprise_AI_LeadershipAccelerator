@@ -6,7 +6,8 @@ import { sequelize } from '../config/database';
  * cohort id or the audience key; label is what the organizer saw when choosing it.
  * Columns match ensureCommsHubSchema.ts exactly (modelParity test).
  */
-export type CommsHubDestinationType = 'cohort_feed' | 'in_app_audience';
+// CH9.6 'event_registrants': target_id is the hub event id of a managed Eventbrite event (in-app only).
+export type CommsHubDestinationType = 'cohort_feed' | 'in_app_audience' | 'event_registrants';
 
 export interface CommsHubDestinationAttributes {
   id?: string;

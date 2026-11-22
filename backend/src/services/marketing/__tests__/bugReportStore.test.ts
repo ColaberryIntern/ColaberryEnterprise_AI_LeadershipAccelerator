@@ -2,7 +2,7 @@ jest.mock('../../../config/database', () => ({ sequelize: { query: jest.fn() } }
 jest.mock('../../../db/ensureBugReportSchema', () => ({ ensureBugReportSchema: jest.fn() }));
 // eslint-disable-next-line import/first
 import {
-  markBugReportDelivered, markBugReportFailed, recordBugReport, type BugReportInput,
+  markBugReportDelivered, markBugReportFailed, recordBugReport, recordBugReportDetailed, type BugReportInput,
 } from '../bugReportStore';
 
 /**
@@ -97,6 +97,25 @@ describe('recordBugReport', () => {
     expect(repl.errors).toBe('[]');
     expect(repl.failedRequests).toBe('[]');
     expect(repl.whatExpected).toBeNull();
+  });
+});
+
+describe('recordBugReportDetailed (CH9.1: lets a caller skip re-sending a duplicate)', () => {
+  it('a new row is not a duplicate', async () => {
+    const query = jest.fn().mockResolvedValue([{ id: 'new-row' }]);
+    await expect(recordBugReportDetailed(INPUT, { query, ensure, log: silent })).resolves.toEqual({ id: 'new-row', duplicate: false });
+  });
+  it('a suppressed insert inside the window IS a duplicate, with the row it collided with', async () => {
+    const query = jest.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: 'first-row' }]);
+    await expect(recordBugReportDetailed(INPUT, { query, ensure, log: silent })).resolves.toEqual({ id: 'first-row', duplicate: true });
+  });
+  it('a store failure is NOT reported as a duplicate, so the caller still sends', async () => {
+    const query = jest.fn().mockRejectedValue(new Error('deadlock detected'));
+    await expect(recordBugReportDetailed(INPUT, { query, ensure, log: silent })).resolves.toEqual({ id: null, duplicate: false });
+  });
+  it('recordBugReport still returns the bare id for the Marketing and agent callers', async () => {
+    const query = jest.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: 'first-row' }]);
+    await expect(recordBugReport(INPUT, { query, ensure, log: silent })).resolves.toBe('first-row');
   });
 });
 

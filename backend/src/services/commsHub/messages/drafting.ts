@@ -48,7 +48,7 @@ export interface MessageInput {
 
 export const DEFAULT_INCLUDE: CommsHubInclude = { thumbnail: true, join_link: true, registration_link: true };
 
-export interface Recommendation { channel: CommsHubChannel; target_type: 'cohort_feed' | 'in_app_audience'; target_id: string; label: string; reason: string }
+export interface Recommendation { channel: CommsHubChannel; target_type: 'cohort_feed' | 'in_app_audience' | 'event_registrants'; target_id: string; label: string; reason: string }
 
 async function eventOr404(id: string, t?: Transaction): Promise<CommsHubEvent> {
   const e = await CommsHubEvent.findByPk(id, { transaction: t });
@@ -114,7 +114,12 @@ export async function recommendDestinations(e: CommsHubEvent | null): Promise<Re
   const inApp: Recommendation[] = allMembers
     ? [{ channel: 'in_app', target_type: 'in_app_audience', target_id: 'all_members', label: 'Everyone in the program', reason: 'The event is for all members, so everyone gets the notification.' }]
     : cohorts.map((c) => ({ channel: 'in_app', target_type: 'in_app_audience', target_id: c.id, label: `${c.name} members`, reason: 'Only this cohort is invited, so only its members are notified.' }));
-  return [...feeds, ...inApp];
+  // CH9.6: an Eventbrite event managed in the hub also reaches the people who registered for it. Someone
+  // both registered and a member is notified once (the connector skips anyone this message already reached).
+  const registrants: Recommendation[] = e?.ccpp_event_id
+    ? [{ channel: 'in_app', target_type: 'event_registrants', target_id: e.id, label: `Registrants of ${e.title} (in-app)`, reason: 'These people registered for this event on Eventbrite or our site.' }]
+    : [];
+  return [...feeds, ...inApp, ...registrants];
 }
 
 /** Start a message from an event or a subject, with AI drafts (version 1) and the recommended recipients. */
