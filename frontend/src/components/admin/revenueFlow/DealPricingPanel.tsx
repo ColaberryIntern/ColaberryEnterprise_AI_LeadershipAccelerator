@@ -333,7 +333,9 @@ export default function DealPricingPanel({
                   </div>
                   {deal.priced && (
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-                      {deal.priced.valueBasis} — {deal.priced.confirmedBy},{' '}
+                      {deal.priced.valueBasis}
+                      {' · '}
+                      {deal.priced.confirmedBy},{' '}
                       {String(deal.priced.confirmedAt).slice(0, 10)}
                     </div>
                   )}
@@ -434,7 +436,7 @@ export default function DealPricingPanel({
                         className="form-label small fw-medium"
                         htmlFor={`mon-${deal.enterpriseIntakeId}`}
                       >
-                        Term (months){mode === 'monthly_retainer' && ' — required'}
+                        Term (months){mode === 'monthly_retainer' && ' (required)'}
                       </label>
                       <input
                         id={`mon-${deal.enterpriseIntakeId}`}
@@ -521,7 +523,7 @@ export default function DealPricingPanel({
                         data-testid={`${testId}-basis-hint`}
                       >
                         {basisOk
-                          ? 'Good — this can be checked by someone else.'
+                          ? 'Good. Someone else can check this.'
                           : `At least ${MIN_BASIS} characters. "SOW" is not a basis; name the `
                             + 'document, the date and the figure.'}
                       </div>
