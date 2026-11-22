@@ -1,6 +1,7 @@
 import { getSetting, getTestOverrides } from './settingsService';
 import { resolveGhlAccountForSource } from './leads/ghlAccountRouting';
 import { provenanceTagsFor } from './leads/ghlProvenanceTags';
+import { tagsNeedingTheirOwnRequest } from './leads/explorerSignupTag';
 import { isSyntheticContactEmail } from './leads/syntheticContacts';
 import { logActivity } from './activityService';
 import Lead from '../models/Lead';
@@ -495,18 +496,11 @@ export async function syncLeadToGhl(
        * Best effort per tag: a tag that will not apply must not cost the person their sync,
        * which is already linked by this point.
        */
-      /**
-       * Classification tags are added HERE only when the contact already existed.
-       *
-       * A contact we just created carries them on its create payload, so repeating
-       * them would be a second request for a tag that is already on. A contact we
-       * MATCHED by email or phone never saw that payload — and that is the case
-       * that matters most, because a returning person signing up for the free class
-       * is exactly who an outbound dialer is most likely to call again.
-       */
-      const classificationTags = isNewContact ? [] : (createTags ?? []);
-
-      for (const tag of [...provenanceTagsFor(lead), ...classificationTags]) {
+      // Classification tags land here only when the contact already existed; a
+      // contact we just created carries them on its create payload. The rule and
+      // the reason it matters live in `tagsNeedingTheirOwnRequest`, where they can
+      // be tested without standing up routing, settings and two contact lookups.
+      for (const tag of tagsNeedingTheirOwnRequest(provenanceTagsFor(lead), createTags, isNewContact)) {
         // eslint-disable-next-line no-await-in-loop -- GHL v1 has no bulk tag endpoint
         await addContactTag(contactId, tag, apiKey).catch((e: unknown) =>
           console.error('[GHL] tag not applied', {

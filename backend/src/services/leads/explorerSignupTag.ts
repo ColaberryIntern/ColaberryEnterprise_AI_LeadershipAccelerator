@@ -50,3 +50,36 @@ export const AI_EXPLORER_TAG = 'ai-explorer';
  * later without touching four call sites and their signatures.
  */
 export const EXPLORER_SIGNUP_TAGS: readonly string[] = [AI_EXPLORER_TAG];
+
+/**
+ * Which tags still need a request of their own after a contact has been synced.
+ *
+ * ─── WHY THIS IS A FUNCTION RATHER THAN TWO LINES INSIDE THE SYNC ───────────
+ *
+ * It encodes the one rule that is easy to get wrong and impossible to see from
+ * the outside: a contact we CREATED already carries its classification tags on
+ * the create payload, and a contact we MATCHED never saw that payload.
+ *
+ * The matched case is the one that matters. A returning person signing up for
+ * the free class already has a GoHighLevel contact, so the create branch never
+ * runs for them — and they are exactly who an outbound dialer is most likely to
+ * call again, because they have been in the system longest. A version of this
+ * that only tagged new contacts would look correct in every test written about
+ * sign-ups and would quietly miss the highest-risk group.
+ *
+ * Extracted so that rule can be tested directly. Reaching it through
+ * `syncLeadToGhl` means standing up account routing, settings, test overrides and
+ * two contact lookups first, which is how a branch ends up with no test at all.
+ *
+ * @param provenanceTags      where the person came from; always applied here
+ * @param classificationTags  what the person IS; applied here only on a match
+ * @param contactWasJustCreated  true when the create branch ran for this contact
+ */
+export function tagsNeedingTheirOwnRequest(
+  provenanceTags: readonly string[],
+  classificationTags: readonly string[] | undefined,
+  contactWasJustCreated: boolean
+): string[] {
+  const classification = contactWasJustCreated ? [] : (classificationTags ?? []);
+  return Array.from(new Set([...provenanceTags, ...classification]));
+}
