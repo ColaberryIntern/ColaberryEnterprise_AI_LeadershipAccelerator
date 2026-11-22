@@ -102,7 +102,7 @@ function NeedCard(
         <div className="gps-need-head">
           <span className="gps-tag">{typeChip}</span>
           <span className={`gps-tag ${need.blocking === 'fatal' ? 'bad' : 'warn'}`}>{blockLabel}</span>
-          <span className={`gps-tag ${isGlobal ? 'ok' : ''}`} data-testid="need-scope" data-scope={isGlobal ? 'global' : 'local'} title={isGlobal ? 'Reusable company fact — one answer serves every bid. Add it in the Company Dossier.' : 'Specific to this solicitation — used only on this bid.'}>{isGlobal ? 'Company dossier' : 'This bid only'}</span>
+          <span className={`gps-tag ${isGlobal ? 'ok' : ''}`} data-testid="need-scope" data-scope={isGlobal ? 'global' : 'local'} title={isGlobal ? 'Reusable company fact. One answer serves every bid, so add it in the Company Dossier.' : 'Specific to this solicitation, used only on this bid.'}>{isGlobal ? 'Company dossier' : 'This bid only'}</span>
           {(need.usedIn || []).some((u) => u.docKey === 'pricing') && <span className="gps-tag gold">admin only</span>}
         </div>
         <b style={{ display: 'block', marginTop: 4 }}>{need.ask}</b>
@@ -111,9 +111,9 @@ function NeedCard(
           {isGlobal ? (
             onOpenDossier
               ? <button type="button" className="gps-chip-btn gps-tag" data-testid="need-add-global" onClick={onOpenDossier}>Add in the Company Dossier &rarr;</button>
-              : <span className="gps-muted">Add once in the Company Dossier &mdash; it is reused on every bid.</span>
+              : <span className="gps-muted">Add once in the Company Dossier, and it is reused on every bid.</span>
           ) : (
-            <span className="gps-muted" data-testid="need-add-local">Add it here &mdash; used only on this bid.</span>
+            <span className="gps-muted" data-testid="need-add-local">Add it here. Used only on this bid.</span>
           )}
         </div>
         {need.source && (
