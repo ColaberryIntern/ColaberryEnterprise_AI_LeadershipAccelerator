@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Sunday, November 22, 2026 at 4:26 PM</div>
-    <div><span class="sid">CC-20261120-e2fc</span><span class="count">14 changes</span></div>
+    <div class="meta">Generated Sunday, November 22, 2026 at 4:44 PM</div>
+    <div><span class="sid">CC-20261120-e2fc</span><span class="count">15 changes</span></div>
   </header>
   <main>
     
@@ -255,6 +255,20 @@
         <div class="card-body">
           <div class="row"><span class="k">What changed</span><span class="v">three v6 findings, each checked against v6&#39;s plan.json.</span></div>
           <div class="row"><span class="k">Verification</span><span class="v ver">`planV6Findings.test.ts` 7/7 on v6&#39;s agents verbatim (the gate repair is mutation-checked); sbp + factory + delivery + runbook coverage 377 suites / 5,786 tests pass; backend tsc clean with the backend&#39;s own TypeScript; `checkTestTypecheck` shows only the 3 known files.</span></div>
+          
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">15</span>
+          <h2>PR #4327 (another workstream&#39;s): banned-word check fixed at Ali&#39;s request</h2>
+          <span class="badge">2026-11-22</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">on `workstream/paid-out-of-explorer`, commit 40239dad5 rewords the note `backend/src/scripts/fixPaidOutOfExplorerCohort.js` writes from &quot;free-access (comp) grant&quot; to &quot;comp (complimentary access) grant&quot;. `bannedWordOutboundCopy.test.ts` had rejected it as a new banned-word occurrence. Behavior is unchanged.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`bannedWordOutboundCopy.test.ts` fails on the original file and passes 17/17 with the fix. CI run 45078773230 on 40239dad5 passes all 9 jobs. The PR now needs a fresh approval, because the push dismissed the earlier one.</span></div>
           
           
         </div>
