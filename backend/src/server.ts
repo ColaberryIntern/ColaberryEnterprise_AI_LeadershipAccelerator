@@ -151,6 +151,7 @@ import { ensureAiAgentIdentitySchema } from './db/ensureAiAgentIdentitySchema';
 import { ensureAiAgentReportsToSchema } from './db/ensureAiAgentReportsToSchema';
 import { ensureAiAgentHierarchySchema } from './db/ensureAiAgentHierarchySchema';
 import { ensureAiAgentAutonomyLevelSchema } from './db/ensureAiAgentAutonomyLevelSchema';
+import { ensureAgentCommsSchema } from './db/ensureAgentCommsSchema';
 import { ensureAiAgentAutonomySourceSchema } from './db/ensureAiAgentAutonomySourceSchema';
 import { ensureAiAgentAbacOverrideSchema } from './db/ensureAiAgentAbacOverrideSchema';
 import { ensureAiAgentReportsToAuditSchema } from './db/ensureAiAgentReportsToAuditSchema';
@@ -3272,6 +3273,8 @@ async function start(): Promise<void> {
   // AI Workforce Reset, Phase C — autonomy_level (docs/ai-governance/abac-design.md's
   // 4-level ladder), required at agent reactivation time. Additive, idempotent, no flag.
   await ensureAiAgentAutonomyLevelSchema();
+  // Agent comms tool (2026-11-22): agent email identities + agent attribution index.
+  await ensureAgentCommsSchema();
   // Fleet-wide autonomy-level auto-classification, Phase 2 — autonomy_level_source
   // ('auto'|'manual'|null), distinguishing a classifier-set level from a real human
   // decision. Additive, idempotent, no flag.
@@ -3882,6 +3885,9 @@ async function start(): Promise<void> {
   } catch (err: any) {
     console.warn('[CommsHub] worker failed to start (non-fatal):', err?.message);
   }
+
+  // Agent comms (T10): finish place_ai_call rows whose completion webhook never arrived (20/run, 3 tries, then dead-letter).
+  cron.schedule('*/15 * * * *', async () => { try { const { runAgentCommsSweep, defaultSweepDeps } = await import('./services/agents/agentCommsSweep'); await runAgentCommsSweep(defaultSweepDeps()); } catch (err: unknown) { console.warn(JSON.stringify({ level: 'warn', service: 'agent-comms-sweep', event: 'agent_comms_sweep_crashed', outcome: 'failure', error_class: err instanceof Error ? err.constructor.name : 'UnknownError', context: { message: String((err as Error)?.message ?? err).slice(0, 200) } })); } });
 
   // AI Ops Command Center metrics_daily rollup — runs on the 5-minute
   // cadence so the Today's Pulse tile stays fresh during the day. The

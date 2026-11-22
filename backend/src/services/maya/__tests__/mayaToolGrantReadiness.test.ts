@@ -106,7 +106,7 @@ describe('T11 the dry run is a real one', () => {
     expect(REFUSED_TOOLS).toHaveLength(REFUSED_CAPABILITIES.length);
     expect([...REFUSED_TOOLS, ...EXPECT_CONFIRMATION_ONLY].sort())
       .toEqual([...MAYA_TOOLS_ALL].sort());
-    // The four are no longer a group of their own; they are inside the thirteen.
+    // The four are no longer a group of their own; they are inside the fourteen.
     for (const tool of Object.keys(RECORDED_2026_11_15)) {
       expect(EXPECT_CONFIRMATION_ONLY).toContain(tool);
     }
@@ -127,12 +127,22 @@ describe('T11 the ONLY thing left is a human confirmation', () => {
     },
   );
 
-  it('and that is thirteen of her sixteen tools', () => {
-    expect(EXPECT_CONFIRMATION_ONLY).toHaveLength(13);
+  it('and that is fourteen of her sixteen tools (voice left the refused list 2026-11-22)', () => {
+    expect(EXPECT_CONFIRMATION_ONLY).toHaveLength(14);
   });
 
-  it('each of those thirteen is required by a capability that names it', () => {
-    for (const tool of EXPECT_CONFIRMATION_ONLY) {
+  /**
+   * Voice left the refused list on 2026-11-22 (agent comms tool: granted per agent, consent-gated,
+   * shadow until Ali promotes it) and is OWED a capability record. Adding one to admissions.json
+   * re-projects the agent-domain story board (pinned at 448 records / 558 stories), so it is filed
+   * as its own change rather than folded in here. Pinned by name so nothing else can join it.
+   */
+  const OWED_A_RECORD = ['initiate_voice_call'];
+
+  it('each of those fourteen, except the one owed a record, is required by a capability that names it', () => {
+    expect(OWED_A_RECORD.every((t) => EXPECT_CONFIRMATION_ONLY.includes(t))).toBe(true);
+    expect(capabilityRequiring('initiate_voice_call')).toBeNull();
+    for (const tool of EXPECT_CONFIRMATION_ONLY.filter((t) => !OWED_A_RECORD.includes(t))) {
       const capability = capabilityRequiring(tool);
       expect({ tool, found: capability !== null }).toEqual({ tool, found: true });
       expect(capability!.tools).toContain(tool);
@@ -217,15 +227,17 @@ describe('T11 the four that were owed a capability record', () => {
 
 describe('T11 a refused capability is never proposed for a grant', () => {
   it.each(REFUSED_TOOLS.map((t) => [t]))('%s wants no grant at all', (tool) => {
-    // SMS, voice and campaign enrolment resolve `off` by refusal, not by default. Filing a
+    // SMS and campaign enrolment resolve `off` by refusal, not by default. Filing a
     // grant request for one would be asking Ali to approve a tool that cannot run whatever he
     // decides, which is worse than noise: it would read as though approving it changed
     // something.
     expect(isRefusedCapability(MAYA_TOOL_GOVERNANCE[tool].capability)).toBe(true);
   });
 
-  it('pins the three by name, so a fourth cannot join them silently', () => {
+  it('pins the two by name, so a third cannot join them silently', () => {
+    // Voice left this list 2026-11-22: it now runs through the shared place_ai_call tool, granted
+    // per agent and consent-gated, and ships in shadow until Ali promotes it.
     expect([...REFUSED_TOOLS].sort())
-      .toEqual(['enroll_in_campaign', 'initiate_voice_call', 'send_sms_summary']);
+      .toEqual(['enroll_in_campaign', 'send_sms_summary']);
   });
 });

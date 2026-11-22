@@ -139,7 +139,11 @@ export const FRONTEND_TYPOGRAPHY_BASELINE_TOTALS: Readonly<Record<string, number
   // dropped its "repo &mdash; and their demo videos once recorded" clause (demo videos
   // now have their own block above it), so its entry drops 2 -> 1. The header blurb keeps
   // its one escaped dash.
-  [ESCAPED_DASH_RULE.id]: 66,
+  //
+  // 2026-11-22: 66 -> 65. Agent comms: the Email tab's "no address" paragraph moved into the new
+  // AgentEmailSections.tsx and was written to house style on the move (the escaped dash became a
+  // colon). AgentEmailTab's entry (1) is DELETED.
+  [ESCAPED_DASH_RULE.id]: 65,
   // 2026-11-16: 659 -> 657. TV-2 deleted `TvManager.tsx`, the in-campus playlist editor
   // that TV-1 left unreachable when the Manage button started opening the marketing
   // library instead. Its two emoji went with the file, so its entry is DELETED rather

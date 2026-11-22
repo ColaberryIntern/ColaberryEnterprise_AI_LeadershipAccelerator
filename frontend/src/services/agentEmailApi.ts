@@ -36,24 +36,66 @@ export interface AgentSentItem {
   errorMessage: string | null;
 }
 
+/** One message someone sent to the agent's address (agent comms, 2026-11-22). */
+export interface AgentInboundItem {
+  id: string;
+  fromAddress: string | null;
+  subject: string | null;
+  preview: string;
+  leadId: number | null;
+  receivedAt: string;
+  /** What happened to it: queued (a reply draft is waiting), blocked, rate_capped, ... */
+  draftOutcome: string | null;
+  draftReason: string | null;
+}
+
 /**
- * Inbound replies.
+ * Inbound mail.
  *
- * `reason` is non-null when the panel is UNAVAILABLE rather than empty - today always
- * `no_agent_address`, because no agent has a real address yet. The UI must say so instead of
- * rendering an empty list: "nobody replied" and "she has no address to be replied to" lead to
- * opposite actions.
+ * `reason` is non-null when the panel is UNAVAILABLE rather than empty: `no_agent_address` when
+ * the agent has no email identity. The UI must say so instead of rendering an empty list:
+ * "nobody replied" and "she has no address to be replied to" lead to opposite actions.
  */
 export interface AgentInboundPanel {
-  items: never[];
-  reason: 'no_agent_address' | null;
+  items: AgentInboundItem[];
+  /** `identity_unavailable`: the address could not be read right now (not "she has none"). */
+  reason: 'no_agent_address' | 'identity_unavailable' | null;
+}
+
+/** A reply the agent drafted to someone who wrote to her. Approving it SENDS it, from her address. */
+export interface AgentPendingReply {
+  id: string;
+  toAddress: string;
+  subject: string | null;
+  /** The exact HTML that will be sent. */
+  body: string;
+  status: string;
+  createdAt: string;
+  expiresAt: string | null;
+}
+
+/** A call the agent placed with place_ai_call. The number is never sent to the browser in full. */
+export interface AgentCall {
+  id: string;
+  leadId: number | null;
+  phoneLast4: string | null;
+  status: string;
+  purpose: string | null;
+  outcome: string | null;
+  summary: string | null;
+  summaryState: string | null;
+  createdAt: string;
 }
 
 export interface AgentEmailInbox {
   agentName: string;
+  /** From and Reply-To the agent sends with; null when she has no email identity. */
+  identity?: { fromHeader: string; replyTo: string } | null;
   drafts: AgentEmailDraft[];
   sent: AgentSentItem[];
   inbound: AgentInboundPanel;
+  pendingReplies?: { items: AgentPendingReply[]; reason: 'no_agent_address' | 'identity_unavailable' | null };
+  calls?: AgentCall[];
 }
 
 export async function getAgentEmailInbox(agentId: string): Promise<AgentEmailInbox> {
@@ -85,3 +127,10 @@ export async function discardAgentEmailDraft(
   );
   return res.data;
 }
+
+/**
+ * Decide a reply draft. These go through the ONE outbound review doorway
+ * (POST /api/admin/maya/outbound/:id/approve|reject), not an agent-scoped route: approving SENDS
+ * the reply, and that endpoint is the one gated to Ali or a super_admin. A 403 means "not you".
+ */
+export { approveOutboundMessage as approveAgentReply, rejectOutboundMessage as rejectAgentReply } from './mayaConsoleApi';

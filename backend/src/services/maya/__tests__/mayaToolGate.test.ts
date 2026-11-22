@@ -85,6 +85,17 @@ describe('T4(a) every tool on the map can be gated', () => {
   );
 });
 
+describe('T9 (2026-11-22) voice is no longer refused at the gate', () => {
+  it('initiate_voice_call at shadow passes the gate: shadow is enforced in the effect, not here', async () => {
+    // The gate blocks only `off`. Voice ships `shadow`, so the phone-ringing decision lives in
+    // voiceTool.initiateVoiceCall, which dials ONLY at `live`. That half is proven in
+    // mayaVoiceToolHonesty.test.ts ("at mode shadow ... NOTHING is dialed").
+    asMode('shadow');
+    expect((await guardMayaTool('initiate_voice_call')).blocked).toBe(false);
+    expect(mockResolveMode).toHaveBeenCalledWith('placeVoiceCall');
+  });
+});
+
 describe('T4(a) the refusals say what she cannot do and what she can', () => {
   it.each([
     ['sendSmsSummary', /text messages/i, /email|call/i],

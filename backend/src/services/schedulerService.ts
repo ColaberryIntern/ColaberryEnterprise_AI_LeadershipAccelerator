@@ -1325,7 +1325,7 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
     campaignId: action.campaign_id ?? null,
   });
 
-  const replyDomain = env.mandrillInboundDomain || 'reply.colaberry.com';
+  const replyDomain = env.mandrillInboundDomain || 'reply.colaberry.ai'; // was .com, a domain Mandrill never receives (agent comms 2026-11-22)
   const replyToAddr = campaignType === 'executive_outreach'
     ? 'ali@colaberry.com'
     : senderEmail.replace(/@[^@]+$/, '@' + replyDomain);

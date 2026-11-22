@@ -580,7 +580,6 @@
   },
   "house-style-escaped-dash": {
     "frontend/src/components/admin/agentDetailV2/AgentEmailExplorerPreview.tsx": 5,
-    "frontend/src/components/admin/agentDetailV2/AgentEmailTab.tsx": 1,
     "frontend/src/components/admin/caseStudy/CaseStudyDraftPanel.tsx": 2,
     "frontend/src/components/admin/caseStudy/CaseStudyGateBand.tsx": 1,
     "frontend/src/components/admin/caseStudy/CaseStudyQuotesPanel.tsx": 1,

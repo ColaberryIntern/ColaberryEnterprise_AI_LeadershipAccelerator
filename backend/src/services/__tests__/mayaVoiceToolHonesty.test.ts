@@ -45,6 +45,8 @@ jest.mock('../../models', () => ({
   Lead: { findByPk: jest.fn(), findOne: jest.fn() },
   Visitor: { findByPk: jest.fn() },
   ChatMessage: { findAll: jest.fn(async (..._a: unknown[]) => []) },
+  // Agent comms (2026-11-22): Maya dials through place_ai_call, which needs her grant.
+  AiAgent: { findOne: jest.fn(async () => ({ autonomy_level: 'communicate', tools_granted: ['place_ai_call'], enabled: true, status: 'active' })) },
 }));
 jest.mock('../../models/AdmissionsActionLog', () => ({
   __esModule: true, default: { create: (...a: unknown[]) => mockActionLogCreate(...a) },
@@ -112,6 +114,17 @@ jest.mock('../communicationLogService', () => ({
 jest.mock('../communicationSafetyService', () => ({
   evaluateSend: (...a: unknown[]) => mockEvaluateSend(...a),
 }));
+// T9: the voice capability's MODE decides whether a phone rings. Default live here (these suites are
+// about what happens on the path where dialing is permitted); the shadow cases set it explicitly.
+let mockVoiceMode = 'live';
+jest.mock('../maya/mayaPromotion', () => {
+  const actual = jest.requireActual('../maya/mayaPromotion');
+  return {
+    ...actual,
+    resolveMayaMode: async (cap: string, ...rest: unknown[]) =>
+      (cap === 'placeVoiceCall' ? { capability: cap, mode: mockVoiceMode, reason: 'test' } : actual.resolveMayaMode(cap, ...rest)),
+  };
+});
 jest.mock('../settingsService', () => ({
   getTestOverrides: jest.fn(async (..._a: unknown[]) => ({ enabled: false, phone: null, email: null })),
 }));
@@ -159,7 +172,7 @@ beforeEach(() => {
   mockRouteCampaign.mockResolvedValue(undefined as never);
   Visitor.findByPk.mockResolvedValue({ lead_id: 77 });
   Lead.findByPk.mockResolvedValue({
-    id: 77, company: 'Acme', email: 'dana@example.com',
+    id: 77, company: 'Acme', email: 'dana@example.com', phone: PHONE,
     getDataValue: (k: string) => (k === 'name' ? 'Dana Reyes' : undefined),
   });
   warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
@@ -388,5 +401,54 @@ describe('the failure is observable, and carries no contact detail', () => {
     // and neither does the audit row for a refusal
     const audit = JSON.stringify(mockActionLogCreate.mock.calls);
     expect(audit).not.toContain(PHONE);
+  });
+});
+
+describe('agent comms (2026-11-22): Maya dials through the shared place_ai_call tool', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { AiAgent } = require('../../models');
+
+  it('dials on the agent-tool path (not the cold-call "interest" key) and logs the call as Maya', async () => {
+    mockTriggerVoiceCall.mockResolvedValue({ success: true, data: { call_id: 'sf-call-9' } });
+    const res = await initiateVoiceCall(ARGS, VISITOR, CONVO);
+    expect(res.success).toBe(true);
+    expect(mockTriggerVoiceCall.mock.calls[0][0]).toMatchObject({ callType: 'callback', brandSlug: 'agent-tool', phone: PHONE });
+    expect(mockLogCommunication.mock.calls[0][0]).toMatchObject({
+      channel: 'voice', provider_message_id: 'sf-call-9',
+      metadata: expect.objectContaining({ source: 'agent-tool', agent_name: 'Maya', origin: 'maya_chat' }),
+    });
+  });
+
+  it('without the place_ai_call grant, nothing is dialed and no call is promised', async () => {
+    AiAgent.findOne.mockResolvedValueOnce({ autonomy_level: 'communicate', tools_granted: ['retrieve_knowledge'], enabled: true, status: 'active' });
+    const res = await initiateVoiceCall(ARGS, VISITOR, CONVO);
+    expect(res.success).toBe(false);
+    expect(res.summary).not.toMatch(PROMISES_A_CALL);
+    expect(mockTriggerVoiceCall).not.toHaveBeenCalled();
+  });
+
+  afterEach(() => { mockVoiceMode = 'live'; });
+
+  it.each(['shadow', 'review', 'off'])('at mode %s (grant, consent and number all fine) NOTHING is dialed and nothing is logged as a call', async (mode) => {
+    mockVoiceMode = mode;
+    const res = await initiateVoiceCall(ARGS, VISITOR, CONVO);
+    expect(res.success).toBe(false);
+    expect(res.summary).not.toMatch(PROMISES_A_CALL);
+    expect(mockTriggerVoiceCall).not.toHaveBeenCalled();
+    expect(mockLogCommunication.mock.calls.filter((c) => (c[0] as { channel?: string }).channel === 'voice')).toHaveLength(0);
+  });
+
+  it('CONTROL: the same request at mode live does dial', async () => {
+    mockVoiceMode = 'live';
+    mockTriggerVoiceCall.mockResolvedValue({ success: true, data: { call_id: 'sf-call-live' } });
+    expect((await initiateVoiceCall(ARGS, VISITOR, CONVO)).success).toBe(true);
+    expect(mockTriggerVoiceCall).toHaveBeenCalledTimes(1);
+  });
+
+  it('a number that is not the one on her lead is refused, nothing dialed', async () => {
+    const res = await initiateVoiceCall({ ...ARGS, phone: '+15125559999' }, VISITOR, CONVO);
+    expect(res.success).toBe(false);
+    expect(res.summary).toMatch(/not the one on their record/);
+    expect(mockTriggerVoiceCall).not.toHaveBeenCalled();
   });
 });

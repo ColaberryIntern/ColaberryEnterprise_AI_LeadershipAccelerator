@@ -128,9 +128,10 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
         await logActivity({
           lead_id: commLog.lead_id as number,
           type: 'call',
+          // Agent comms (T10): a place_ai_call row names the agent that called; everything else is Maya's.
           subject: isVoicemail
-            ? `Maya called ${firstName} — voicemail`
-            : `Maya called ${firstName}${durationMin ? ` (${durationMin})` : ''}`,
+            ? `${commMeta.agent_name || 'Maya'} called ${firstName} — voicemail`
+            : `${commMeta.agent_name || 'Maya'} called ${firstName}${durationMin ? ` (${durationMin})` : ''}`,
           body: transcript ? transcript.substring(0, 2000) : undefined,
           metadata: {
             activity_subtype: 'voice_call',
@@ -215,6 +216,13 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
           context: { message: intErr?.message },
         }));
       }
+    }
+
+    // Agent comms (T10): a place_ai_call result goes back to the agent that placed it (summary on its
+    // row, for its dashboard). Never throws; the sweep finishes the row if this webhook never comes.
+    if (commMeta.source === 'agent-tool') {
+      const { completeAgentToolCallFromWebhook } = await import('../services/agents/tools/agentCallCompletion');
+      await completeAgentToolCallFromWebhook({ logId: String(commLog.id), meta: commMeta, transcript: transcript || '', status: String(status || '') });
     }
 
     // W28: the Enterprise intake call is the same spoken interview and ends the same way.
@@ -369,7 +377,9 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
     // Send post-call SMS summary with CTA (fire-and-forget).
     // OH1: never after an Open House countdown call. That text pushes "book a strategy
     // call", and the countdown call is help-not-sell (Ali, 2026-11-17).
-    if (callCompleted && transcript && commLog.lead_id && !commMeta.event_countdown) {
+    // Agent comms (T10): never after a place_ai_call either. That tool was granted for a CALL with
+    // phone consent; a text is a separate channel (sendSmsSummary stays refused), not a side effect.
+    if (callCompleted && transcript && commLog.lead_id && !commMeta.event_countdown && commMeta.source !== 'agent-tool') {
       sendPostCallSms(commLog.lead_id, transcript, call_id).catch((err: any) => {
         console.warn('[Synthflow Webhook] Post-call SMS failed:', err.message);
       });

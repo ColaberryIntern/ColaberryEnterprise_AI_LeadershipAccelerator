@@ -10,12 +10,13 @@ import { addMayaInteractionTag } from '../mayaCampaignRouter';
 // rather than by reading, which is the reason that test scans the whole dispatcher closure
 // instead of a hand-written list of files.
 import { enrolLeadInCampaign } from '../maya/deliverOrQueue';
+import { resolveMayaMode } from '../maya/mayaPromotion';
 import { logCommunication } from '../communicationLogService';
 import { getTestOverrides } from '../settingsService';
 import { pricingPitchRule } from '../admissionsPricing';
 import type { MayaActionResult } from '../mayaActionService';
 import { resolveLeadForVisitor, logAction, logOutboundOutcome } from './toolContext';
-import { voiceSkipSummary, VOICE_SKIP_SUMMARY_FALLBACK } from './voiceSummaries';
+import { voiceSkipSummary, VOICE_SKIP_SUMMARY_FALLBACK, VOICE_NOT_LIVE_SUMMARY } from './voiceSummaries';
 import { checkPhoneConsent, CONSENT_REFUSED_SUMMARY } from './outboundConsent';
 
 /**
@@ -27,7 +28,7 @@ import { checkPhoneConsent, CONSENT_REFUSED_SUMMARY } from './outboundConsent';
  *
  * ── THE DEFECT THIS FILE WAS SPLIT OUT TO FIX, AND IT WAS NOT HYPOTHETICAL ──
  *
- * `triggerVoiceCall` returns `{ success: true, data: { skipped: true, reason } }` for SEVEN
+ * `triggerVoiceCall` returns `{ success: true, data: { skipped: true, reason } }` for EIGHT
  * reasons it did not dial. That is a 200-shaped success: nothing throws and no error class is
  * ever constructed. This handler read `result.success` alone.
  *
@@ -38,7 +39,7 @@ import { checkPhoneConsent, CONSENT_REFUSED_SUMMARY } from './outboundConsent';
  * production, so every attempt takes the `feature_disabled` branch and no call can arrive.
  *
  * Two consequences worth naming separately:
- *   - `kill_switch_active` is one of the seven, so the platform-wide emergency stop halted the
+ *   - `kill_switch_active` is one of the eight, so the platform-wide emergency stop halted the
  *     dial and left Maya still promising calls - the opposite of what that switch is for.
  *   - The phantom row broke the retry. The 24h dedup below matches ANY row for the visitor
  *     regardless of `call_status`, so a skipped attempt blocked the next genuine one for a day.
@@ -192,36 +193,88 @@ ${conversationContext}
 
 Your goal: Continue the conversation naturally, answer their questions about the program, and guide them toward booking a strategy call or enrollment. During the conversation, try to naturally learn: their full name, company, job title, email address, what specifically interests them about the program, and any timeline or budget considerations. Don't interrogate — weave these into natural conversation. Remember: you ARE Maya — speak in first person as Maya throughout the call.`;
 
+  // THE CAPABILITY MODE DECIDES WHETHER A PHONE RINGS (T9, 2026-11-22). Voice left the refused list
+  // and ships `shadow`; `guardMayaTool` only blocks `off`, so this is where shadow is enforced. Only
+  // `live` (Ali's explicit promotion) reaches the dialer: `shadow` is a dry run, and `review` cannot
+  // hold a phone call for approval, so it is refused rather than allowed to fall through.
+  const { mode } = await resolveMayaMode('placeVoiceCall');
+  if (mode !== 'live') {
+    logOutboundOutcome({
+      event: 'maya_effect_shadowed:voice', outcome: 'success',
+      context: { visitor_id: visitorId, conversation_id: conversationId, mode },
+    });
+    await logAction(visitorId, conversationId, 'voice_call_initiated', 'denied', { lead_id: lead.id, reason: `capability_${mode}` });
+    return { success: false, summary: VOICE_NOT_LIVE_SUMMARY };
+  }
+
   try {
-    const result = await triggerVoiceCall({
-      name: leadName,
-      phone: dialPhone,
-      callType: 'interest',
+    // Agent comms (Ali, 2026-11-22): Maya dials through the shared place_ai_call tool, so her calls
+    // need her grant and run on the 'agent-tool' path (allowlisted on its own, no longer sharing the
+    // 'interest' key with the automatic cold-call paths). Her own script, consent check and 24h
+    // visitor dedupe above are reused as the tool's inputs; the number must be the one on her lead.
+    const { placeAgentCall, defaultCallDeps } = await import('../agents/tools/agentCallTool');
+    const base = defaultCallDeps();
+    const placed = await placeAgentCall({
+      agentName: 'Maya',
+      leadId: lead.id,
+      purpose: 'Continue the admissions conversation the visitor started in the site chat',
+      context: conversationContext.slice(0, 4000),
       prompt: callPrompt,
-      context: {
-        lead_name: leadName,
-        lead_company: lead?.company || undefined,
-        lead_title: (lead as any)?.title || undefined,
-        lead_email: lead?.email || undefined,
-        lead_score: (lead as any)?.lead_score || undefined,
-        conversation_history: conversationContext,
-        step_goal: 'Continue admissions conversation and guide toward strategy call or enrollment',
+      phone: String(phone),
+      correlationId: conversationId,
+    }, {
+      ...base,
+      lead: async () => ({ id: lead.id, name: leadName, phone: lead.phone ?? null, email: lead.email ?? null, company: lead.company ?? null }),
+      consent: async () => ({ allowed: true, redirectPhone: consent.redirectPhone ?? null }),
+      // The shared tool's once-a-day key is OFF for Maya on purpose: her own 24h visitor dedupe
+      // (CallContactLog, above) is the guard she has always had, and a second, differently keyed
+      // guard would refuse a visitor who legitimately asks again after a failed attempt.
+      // So her reservation is a no-op and her row is written at settle, under `maya_call_key` (not
+      // idempotency_key, which is unique among voice rows and would refuse her legitimate re-ask).
+      reserve: async () => 'maya',
+      release: async () => undefined,
+      persona: async () => ({ displayName: 'Maya', systemPrompt: null }),
+      dial: (p) => triggerVoiceCall({
+        name: leadName,
+        phone: p.phone,
+        callType: 'callback',
+        brandSlug: 'agent-tool',
+        prompt: p.prompt,
+        context: {
+          lead_name: leadName,
+          lead_company: lead?.company || undefined,
+          lead_title: lead.title || undefined,
+          lead_email: lead?.email || undefined,
+          lead_score: lead.lead_score || undefined,
+          conversation_history: conversationContext,
+          step_goal: 'Continue admissions conversation and guide toward strategy call or enrollment',
+        },
+      }),
+      settle: async (_reservation, r) => {
+        await logCommunication({
+          lead_id: r.leadId, channel: 'voice', direction: 'outbound', delivery_mode: 'live', status: 'pending',
+          to_address: r.phone, provider: 'synthflow', provider_message_id: r.callId,
+          metadata: { source: 'agent-tool', agent_name: 'Maya', origin: 'maya_chat', visitor_id: visitorId, conversation_id: conversationId, purpose: r.purpose, maya_call_key: r.key },
+        }).catch((err: unknown) => {
+          logOutboundOutcome({
+            event: 'maya_voice_communication_log_failed', outcome: 'failure',
+            errorClass: err instanceof Error ? err.constructor.name : 'UnknownError',
+            context: { visitor_id: visitorId, conversation_id: conversationId },
+          });
+        });
       },
     });
 
-    // THE PROVIDER'S `success` IS NOT A PLACED CALL. See this file's header for the measured
-    // production evidence and the three-outcome rule. The guard is keyed on `data.skipped`
-    // rather than on a list of reason names, deliberately: the reason set has already grown
-    // once under this code (a reviewer found `invalid_phone` at `synthflowService.ts:222`
-    // after the first six were enumerated), so correctness must not depend on the list being
-    // complete. `voiceSkipSummary` answers for any reason, known or not.
-    const skipReason = result.data?.skipped === true
-      ? String(result.data?.reason ?? 'unspecified')
-      : null;
-    const providerAccepted = result.success && !skipReason;
-    const callId = typeof result.data?.call_id === 'string' && result.data.call_id
-      ? result.data.call_id
-      : null;
+    if (placed.outcome === 'refused' || placed.outcome === 'deduped') {
+      await logAction(visitorId, conversationId, 'voice_call_initiated', 'denied', { lead_id: lead.id, reason: placed.reason });
+      return { success: false, summary: placed.summary };
+    }
+
+    // THE PROVIDER'S `success` IS NOT A PLACED CALL (three-outcome rule, this file's header): a
+    // skip inside the dial is 'not_placed' with its reason; a provider error is provider_rejected.
+    const skipReason = placed.outcome === 'not_placed' && placed.reason !== 'provider_rejected' ? String(placed.reason ?? 'unspecified') : null;
+    const providerAccepted = placed.outcome === 'placed';
+    const callId = placed.callId ?? null;
 
     if (!providerAccepted) {
       // Nothing was dialled, and we know it. Report the refusal and write nothing that implies
@@ -274,7 +327,6 @@ Your goal: Continue the conversation naturally, answer their questions about the
         context: {
           visitor_id: visitorId,
           conversation_id: conversationId,
-          response_keys: Object.keys(result.data || {}),
         },
       });
       await logAction(visitorId, conversationId, 'voice_call_initiated', 'failed', {
@@ -290,24 +342,8 @@ Your goal: Continue the conversation naturally, answer their questions about the
 
     // Log to CommunicationLog so the Synthflow webhook can match this call
     // and store the transcript for post-call processing
-    logCommunication({
-      lead_id: lead?.id || null,
-      channel: 'voice',
-      direction: 'outbound',
-      delivery_mode: 'live',
-      status: 'pending',
-      to_address: dialPhone,
-      provider: 'synthflow',
-      provider_message_id: callId,
-      metadata: { visitor_id: visitorId, conversation_id: conversationId, source: 'maya_chat' },
-    } as any).catch((err: any) => {
-      logOutboundOutcome({
-        event: 'maya_voice_communication_log_failed',
-        outcome: 'failure',
-        errorClass: err instanceof Error ? err.constructor.name : 'UnknownError',
-        context: { visitor_id: visitorId, conversation_id: conversationId },
-      });
-    });
+    // The voice communication_logs row was written by place_ai_call's record step (agent_name
+    // 'Maya', source 'agent-tool', origin 'maya_chat'), so it is not written a second time here.
 
     logOutboundOutcome({
       event: 'maya_voice_call_placed',

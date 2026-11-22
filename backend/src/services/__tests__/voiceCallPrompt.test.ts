@@ -162,7 +162,9 @@ describe('W28: the Colaberry Enterprise intake call', () => {
   });
 
   it('promises a first meeting with pilot options, not a project being set up', () => {
-    expect(prompt).toContain('come to the first meeting with options for their pilot');
+    // Agent comms (2026-11-22): the meeting is booked on the website before the call now.
+    expect(prompt).toContain('come to the meeting with options for their pilot, ranked by what each could return');
+    expect(prompt).toContain('If they already booked their meeting with Ali on the website');
     expect(prompt).not.toContain('their project is being set up now');
   });
 

@@ -1,6 +1,10 @@
-import { QueryTypes } from 'sequelize';
 import { sequelize } from '../../../config/database';
 import { AGENT_DRAFT_STATUS, AGENT_EMAIL_TOOL } from './agentEmailTool';
+import { resolveAgentEmailIdentity, type AgentEmailIdentity } from '../email/agentEmailIdentity';
+import {
+  AGENT_APPROVED_STATUS, logFailure, readCalls, readDrafts, readInbound, readPendingReplies, readSent,
+  type AgentCall, type AgentDraft, type AgentSentItem, type InboundItem, type PendingReply,
+} from './agentEmailInboxReaders';
 
 /**
  * An agent's email, for her own dashboard.
@@ -19,7 +23,7 @@ import { AGENT_DRAFT_STATUS, AGENT_EMAIL_TOOL } from './agentEmailTool';
  * Decision Journal). That is a DIFFERENT inbox: it holds decisions, not correspondence. This is
  * her mail, sitting beside it.
  *
- * ── APPROVAL NEVER SENDS ────────────────────────────────────────────────────
+ * ── APPROVAL NEVER SENDS (agentEmailTool drafts) ────────────────────────────
  *
  * `approveAgentDraft` flips the status and writes who approved it. It does not mail anybody. That
  * is not a limitation of this change, it is the repo's existing precedent, stated in
@@ -27,150 +31,87 @@ import { AGENT_DRAFT_STATUS, AGENT_EMAIL_TOOL } from './agentEmailTool';
  * `pending_review -> approved` and writes the ledger row." Keeping the two acts separate is what
  * makes an approval auditable and a send revocable right up to the moment it leaves.
  *
+ * ── REPLY DRAFTS ARE DIFFERENT: APPROVING ONE SENDS IT, AS THE AGENT ─────────
+ *
+ * Agent comms (Ali, 2026-11-22: "draft, a person approves"). A reply to mail sent to the agent's
+ * address lives in maya_outbound_approvals. This service only READS those rows (pendingReplies).
+ * Deciding one goes through the ONE existing doorway, routes/admin/mayaOutboundRoutes.ts
+ * (approve: requireCoryAuthorized, Ali or a super_admin; reject: any admin), which
+ * mayaOutboundContainment.test.ts pins as the only caller of approveOutbound/rejectOutbound.
+ * A second, manager-level approve route was considered and refused: it would widen who may send.
+ *
  * ── ABSENCE IS REPORTED, NOT RENDERED AS ZERO ───────────────────────────────
  *
- * Inbound replies need an agent address that exists and is synced, and no agent has one yet. So
- * `inbound.reason` says `no_agent_address` rather than returning `[]`, because an empty list reads
- * as "nobody replied" when the truth is "she has no address to be replied to". Those lead to
- * opposite actions.
+ * An agent with no email identity (no ai_agents.email_slug) gets `reason: 'no_agent_address'` on
+ * inbound and pending replies rather than `[]`, because an empty list reads as "nobody replied"
+ * when the truth is "she has no address to be replied to". Those lead to opposite actions.
+ *
+ * The readers live in agentEmailInboxReaders.ts.
  */
 
 export type DraftStatus = typeof AGENT_DRAFT_STATUS | 'agent_approved';
-
-/** Set when a human approves a draft. Still not a send; see the docblock. */
-export const AGENT_APPROVED_STATUS = 'agent_approved';
-
-export interface AgentDraft {
-  id: string;
-  toEmail: string;
-  subject: string;
-  body: string;
-  status: string;
-  draftReason: string | null;
-  createdAt: string;
-  approvedBy: string | null;
-}
-
-export interface AgentSentItem {
-  id: string;
-  toAddress: string;
-  subject: string | null;
-  status: string;
-  sentAt: string | null;
-  errorMessage: string | null;
-}
+export { AGENT_APPROVED_STATUS };
+export type { AgentDraft, AgentSentItem, InboundItem, PendingReply, AgentCall };
 
 /** A panel that may be legitimately unavailable, as opposed to empty. */
 export interface InboundPanel {
-  items: never[];
-  /** Null when the panel is genuinely available. Non-null names why it is not. */
-  reason: 'no_agent_address' | null;
+  items: InboundItem[];
+  /**
+   * Null when the panel is genuinely available. Non-null names why it is not:
+   * `no_agent_address` (she has none) or `identity_unavailable` (we could not read it right now).
+   */
+  reason: PanelReason;
+}
+
+/** Why a panel is unavailable. A read failure is never reported as "she has no address". */
+export type PanelReason = 'no_agent_address' | 'identity_unavailable' | null;
+
+export interface AgentReplyPanel {
+  items: PendingReply[];
+  reason: PanelReason;
 }
 
 export interface AgentEmailInbox {
   agentName: string;
+  /** Null when the agent has no email identity. */
+  identity: { fromHeader: string; replyTo: string } | null;
   drafts: AgentDraft[];
   sent: AgentSentItem[];
   inbound: InboundPanel;
+  pendingReplies: AgentReplyPanel;
+  calls: AgentCall[];
 }
 
-interface DraftRow {
-  id: string;
-  to_email: string;
-  subject: string;
-  body: string;
-  status: string;
-  created_at: Date | string;
-  metadata: unknown;
-}
-
-function metaString(metadata: unknown, key: string): string | null {
-  if (!metadata || typeof metadata !== 'object') return null;
-  const v = (metadata as Record<string, unknown>)[key];
-  return typeof v === 'string' ? v : null;
+async function identityFor(agentName: string): Promise<{ identity: AgentEmailIdentity | null; failed: boolean }> {
+  try {
+    return { identity: await resolveAgentEmailIdentity(agentName), failed: false };
+  } catch (err) {
+    logFailure('agent_email_identity_read_failed', err);
+    return { identity: null, failed: true };
+  }
 }
 
 /**
- * Everything this agent has drafted or sent.
+ * Everything this agent has drafted, sent, received and dialed.
  *
- * Scoped by `metadata->>'agent_name'`, which `agentEmailTool` writes on every draft. NOT by
- * sender address: addresses are per brand today and shared, so an address filter would show one
- * agent another's mail. The agent name is the only field that identifies the author.
+ * Scoped by `metadata->>'agent_name'` (and, for reply drafts, the composed_by prefix), NOT by
+ * sender address, so one agent never sees another's mail.
  */
 export async function getAgentEmailInbox(agentName: string): Promise<AgentEmailInbox> {
-  const drafts = await readDrafts(agentName);
-  const sent = await readSent(agentName);
+  const { identity, failed } = await identityFor(agentName);
+  const [drafts, sent, calls, inbound, pending] = await Promise.all([
+    readDrafts(agentName), readSent(agentName), readCalls(agentName),
+    identity ? readInbound(agentName) : Promise.resolve([] as InboundItem[]),
+    identity ? readPendingReplies(agentName, identity.slug) : Promise.resolve([] as PendingReply[]),
+  ]);
+  const reason: PanelReason = identity ? null : failed ? 'identity_unavailable' : 'no_agent_address';
   return {
     agentName,
-    drafts,
-    sent,
-    // Hard-coded until an agent actually has an address. When sender profiles become per-agent
-    // this reads the profile and matches `inbox_emails.to_addresses` on the threading token.
-    inbound: { items: [], reason: 'no_agent_address' },
+    identity: identity ? { fromHeader: identity.fromHeader, replyTo: identity.replyTo } : null,
+    drafts, sent, calls,
+    inbound: { items: inbound, reason },
+    pendingReplies: { items: pending, reason },
   };
-}
-
-async function readDrafts(agentName: string): Promise<AgentDraft[]> {
-  try {
-    const rows = await sequelize.query<DraftRow>(
-      `SELECT id, to_email, subject, body, status, created_at, metadata
-         FROM scheduled_emails
-        WHERE status IN ($draftStatus, $approvedStatus)
-          AND metadata->>'agent_name' = $agentName
-          AND metadata->>'tool' = $tool
-        ORDER BY created_at DESC
-        LIMIT 200`,
-      {
-        bind: {
-          draftStatus: AGENT_DRAFT_STATUS,
-          approvedStatus: AGENT_APPROVED_STATUS,
-          agentName,
-          tool: AGENT_EMAIL_TOOL,
-        },
-        type: QueryTypes.SELECT,
-      },
-    );
-    return rows.map((r) => ({
-      id: r.id,
-      toEmail: r.to_email,
-      subject: r.subject,
-      body: r.body,
-      status: r.status,
-      draftReason: metaString(r.metadata, 'draft_reason'),
-      createdAt: new Date(r.created_at).toISOString(),
-      approvedBy: metaString(r.metadata, 'approved_by'),
-    }));
-  } catch (err) {
-    logFailure('agent_email_drafts_read_failed', err);
-    return [];
-  }
-}
-
-async function readSent(agentName: string): Promise<AgentSentItem[]> {
-  try {
-    const rows = await sequelize.query<{
-      id: string; to_address: string; subject: string | null; status: string;
-      sent_at: Date | string | null; error_message: string | null;
-    }>(
-      `SELECT id, to_address, subject, status, sent_at, error_message
-         FROM communication_logs
-        WHERE metadata->>'agent_name' = $agentName
-        ORDER BY created_at DESC
-        LIMIT 200`,
-      { bind: { agentName }, type: QueryTypes.SELECT },
-    );
-    return rows.map((r) => ({
-      id: r.id,
-      toAddress: r.to_address,
-      subject: r.subject,
-      status: r.status,
-      sentAt: r.sent_at ? new Date(r.sent_at).toISOString() : null,
-      errorMessage: r.error_message,
-    }));
-  } catch (err) {
-    logFailure('agent_email_sent_read_failed', err);
-    return [];
-  }
 }
 
 export interface DraftActionResult {
@@ -246,18 +187,6 @@ async function transition(
     logFailure('agent_email_draft_transition_failed', err);
     return { ok: false, reason: 'transition_failed' };
   }
-}
-
-function logFailure(event: string, err: unknown): void {
-  console.error(JSON.stringify({
-    timestamp: new Date().toISOString(),
-    level: 'error',
-    service: 'backend',
-    event,
-    error_class: err instanceof Error ? err.constructor.name : 'UnknownError',
-    outcome: 'failure',
-    message: err instanceof Error ? err.message : String(err),
-  }));
 }
 
 export default getAgentEmailInbox;

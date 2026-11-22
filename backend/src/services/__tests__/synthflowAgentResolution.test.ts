@@ -99,8 +99,45 @@ describe('W28: the Enterprise intake agent', () => {
     expect(resolveAgentId({ callType: 'callback', brandSlug: 'enterprise-intake' })).toBe('agent-enterprise');
   });
 
-  it('has NO fallback: unset means no call, never AI Flotation\'s caller ID', () => {
+  // Ali, 2026-11-22: "let's use that agent" - the intake now borrows the prompt-only shell.
+  it('with no agent of its own, borrows the AI Flotation shell', () => {
     anyEnv.synthflowEnterpriseIntakeAgentId = '';
-    expect(resolveAgentId({ callType: 'callback', brandSlug: 'enterprise-intake' })).toBe('');
+    anyEnv.synthflowAiFlotationAgentId = 'agent-flotation';
+    try {
+      expect(resolveAgentId({ callType: 'callback', brandSlug: 'enterprise-intake' })).toBe('agent-flotation');
+    } finally {
+      delete anyEnv.synthflowAiFlotationAgentId;
+    }
+  });
+
+  it('with neither configured, there is no agent (no call)', () => {
+    anyEnv.synthflowEnterpriseIntakeAgentId = '';
+    anyEnv.synthflowAiFlotationAgentId = '';
+    try {
+      expect(resolveAgentId({ callType: 'callback', brandSlug: 'enterprise-intake' })).toBe('');
+    } finally {
+      delete anyEnv.synthflowAiFlotationAgentId;
+    }
+  });
+});
+
+describe('agent comms tool: the agent-tool path', () => {
+  const anyEnv = env as any;
+  afterEach(() => { delete anyEnv.synthflowAgentToolAgentId; delete anyEnv.synthflowAiFlotationAgentId; });
+
+  it('uses its own agent when set, else the shell, else none', () => {
+    anyEnv.synthflowAiFlotationAgentId = 'agent-flotation';
+    expect(resolveAgentId({ callType: 'callback', brandSlug: 'agent-tool' })).toBe('agent-flotation');
+    anyEnv.synthflowAgentToolAgentId = 'agent-tool-own';
+    expect(resolveAgentId({ callType: 'callback', brandSlug: 'agent-tool' })).toBe('agent-tool-own');
+    anyEnv.synthflowAgentToolAgentId = '';
+    anyEnv.synthflowAiFlotationAgentId = '';
+    expect(resolveAgentId({ callType: 'callback', brandSlug: 'agent-tool' })).toBe('');
+  });
+
+  it('project discovery and Open House still never borrow the shell', () => {
+    anyEnv.synthflowAiFlotationAgentId = 'agent-flotation';
+    expect(resolveAgentId({ callType: 'project_discovery' } as any)).not.toBe('agent-flotation');
+    expect(resolveAgentId({ callType: 'open_house' } as any)).not.toBe('agent-flotation');
   });
 });

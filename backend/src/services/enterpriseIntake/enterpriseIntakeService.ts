@@ -29,6 +29,8 @@ import type { IntakeOutcome } from '../delivery/projectIntake';
 import { requestInstantCallback } from '../callbackRequestService';
 import { env } from '../../config/env';
 import { ENTERPRISE_INTAKE_SOURCE } from './enterpriseIntakeSource';
+import { resolveAgentId } from '../synthflowService';
+import { isVoicePathAllowed } from '../voice/voiceCallPaths';
 import { openClientListSoon, postInterviewSoon } from './enterpriseIntakeBasecamp';
 import { clientResearchBlock } from './enterpriseIntakeFiles';
 
@@ -67,9 +69,15 @@ export type IntakeForm = z.infer<typeof intakeFormSchema>;
 export const callable = (i: { phone: string; call_consent: boolean }): boolean =>
   i.call_consent && i.phone.replace(/\D/g, '').length >= 7;
 
-/** Whether "Call me now" can work at all on this server. Unset agent means typing only. */
+/**
+ * Whether "Call me now" can work at all on this server: voice on, a key, an agent the dial would
+ * actually use (resolveAgentId, so this and the dial can never disagree), and the intake's path on
+ * the VOICE_CALL_PATHS allowlist. Anything missing means typing only.
+ */
 export const voiceConfigured = (): boolean =>
-  Boolean(env.enableVoiceCalls && env.synthflowApiKey && env.synthflowEnterpriseIntakeAgentId);
+  Boolean(env.enableVoiceCalls && env.synthflowApiKey
+    && resolveAgentId({ callType: 'callback', brandSlug: ENTERPRISE_INTAKE_SOURCE })
+    && isVoicePathAllowed(ENTERPRISE_INTAKE_SOURCE));
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
