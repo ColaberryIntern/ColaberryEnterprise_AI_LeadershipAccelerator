@@ -40,7 +40,10 @@ const OH_KEYS = ['oh_held', 'oh_upcoming', 'attended', 'followup_sent', 'held_wa
   'paid', 'paid_held', 'paid_attended', 'paid_interacted', 'checkout_held', 'already_paid'];
 const legacy = () => { const w = win(); for (const k of OH_KEYS) delete w.journey[k]; return w; };
 // Second ask (interaction, paid, every message). Numbers shaped like production on 22 Nov, with one made-up payer.
-const full = (over = {}) => win({ interacted: 3, paid: 1, paid_held: 1, paid_attended: 1, paid_interacted: 1, checkout_held: 2, already_paid: 0, ...over });
+const full = (over = {}) => win({ interacted: 3, paid: 1, paid_held: 1, paid_attended: 1, paid_interacted: 1, checkout_held: 2, checkout: 2, already_paid: 0, ...over });
+// Every payer this window, any source. Shaped like production, 15-22 Nov 2026.
+const PAYERS = { total: 6, monthly: 4, annual: 2, oh_registered: 1, came_before_paying: 0, by_origin: [
+  { origin: 'earlier_oh_lead', n: 3, came: 0 }, { origin: 'winback', n: 2, came: 0 }, { origin: 'oh_other_door', n: 1, came: 0 }] };
 const COMMS = { people: 139, reached: 131, median_per_person: 2, max_per_person: 4, messages: [
   { key: 'event:open_house_welcome:email', channel: 'email', kind: 'system', source: 'open_house_welcome', step: null, sent: 125, not_sent: 0, people: 125, subject: "You're in. Your first assignment takes 2 minutes.", subjects: 1, first_ct: '2026-11-15', last_ct: '2026-11-22' },
   { key: 'campaign:x:2:email', channel: 'email', kind: 'campaign', source: 'Open House Countdown (Maya)', step: 3, sent: 71, not_sent: 0, people: 71, subject: null, subjects: 15, first_ct: '2026-11-19', last_ct: '2026-11-19' },
@@ -114,33 +117,56 @@ test('render: the Open House section and session table appear, escaped and witho
   assert.doesNotMatch(old, /sec-openhouse/);
 });
 
-test('funnel: took part is a share of those who came; paid is a share of everyone whose Open House happened', () => {
+test('funnel: took part is a share of those who came; paid is a share of every ad sign-up', () => {
   const rows = M.funnel(full(), targets);
   const steps = rows.map((r) => r.step);
   const i = steps.indexOf('Came to the Open House');
   assert.equal(steps[i + 1], 'Took part (poll, question or status)');
-  assert.equal(steps[i + 2], 'Paid to enroll (of everyone whose Open House happened)');
+  assert.equal(steps[i + 2], 'Paid to enroll (of every ad sign-up)');
   assert.equal(rows[i + 1].prevN, 4);
-  assert.equal(rows[i + 2].prevN, 74, 'paid is measured against held, so paying without coming still counts');
+  assert.equal(rows[i + 1].status, 'low', '3 of 4 is too few to judge, never "75%" in green');
+  assert.equal(rows[i + 2].prevN, 139, 'paid is measured against every ad sign-up: paying before the Open House counts');
   assert.equal(rateOf('interact', full(), null).d, 4);
-  assert.deepEqual(rateOf('paid', full(), null), { n: 1, d: 74 });
+  assert.deepEqual(rateOf('paid', full(), null), { n: 1, d: 139 });
 });
 
-test('forks: who paid adds up to everyone whose Open House happened', () => {
+test('forks: which ad sign-ups paid adds up to every ad sign-up', () => {
   const f = M.forks(full(), null, targets).find((x) => x.id === 'paid');
-  assert.equal(f.total, 74);
-  assert.deepEqual(f.options.map((o) => o.n), [1, 0, 0, 1, 72]);
-  const none = M.forks(full({ paid: 0, paid_held: 0, paid_attended: 0, paid_interacted: 0, checkout_held: 1 }), null, targets).find((x) => x.id === 'paid');
-  assert.equal(none.total, 74);
+  assert.equal(f.total, 139);
+  assert.deepEqual(f.options.map((o) => o.n), [1, 0, 0, 1, 137]);
+  const none = M.forks(full({ paid: 0, paid_attended: 0, paid_interacted: 0, checkout: 1 }), null, targets).find((x) => x.id === 'paid');
+  assert.equal(none.total, 139);
 });
 
-test('findings: paid and took part are stated, including nobody paying yet', () => {
-  const f = I.findings(full(), targets).map((x) => x.text);
+test('findings: ad sign-ups who paid, took part, and every payer from every source', () => {
+  const w = full();
+  w.payers = PAYERS;
+  const f = I.findings(w, targets).map((x) => x.text);
   assert.ok(f.some((t) => /3 of the 4 who came took part/.test(t)));
-  assert.ok(f.some((t) => /1 of 74 paid to enroll after their Open House \(1\.4%\): 1 took part, 0 came and watched, 0 never came\. 1 more started checkout and did not pay\./.test(t)));
-  const none = I.findings(full({ paid: 0, paid_held: 0, paid_attended: 0, paid_interacted: 0, checkout_held: 1 }), targets).map((x) => x.text);
-  assert.ok(none.some((t) => /Nobody whose Open House has happened has paid to enroll yet \(0 of 74\)\. 1 started checkout/.test(t)));
-  assert.ok(I.kpis(full(), null, targets).some((t) => t.label === 'Paid to enroll' && t.value === 1));
+  assert.ok(f.some((t) => /1 of 139 ad sign-ups paid to enroll \(0\.7%\): 1 took part at the Open House, 0 came and watched, 0 paid without coming\. 1 more started checkout and did not pay\./.test(t)));
+  assert.ok(f.some((t) => /6 people paid to enroll this week \(4 monthly, 2 annual\): 3 earlier Open House leads \(before the ads\), 2 from a win-back or alumni campaign, 1 Open House registrants from another door\. 0 had come to an Open House before paying\./.test(t)));
+  const none = I.findings(full({ paid: 0, paid_attended: 0, paid_interacted: 0, checkout: 1 }), targets).map((x) => x.text);
+  assert.ok(none.some((t) => /No ad sign-up has paid to enroll yet \(0 of 139\)\. 1 started checkout/.test(t)));
+  const tile = I.kpis(w, null, targets).find((t) => t.label === 'Paid to enroll, every source');
+  assert.equal(tile.value, 6);
+  assert.match(tile.sub, /1 of them came from the ads/);
+});
+
+test('who paid: the report and the email show every payer, and "too few to judge" replaces a 4-person %', () => {
+  const w = full();
+  w.payers = PAYERS;
+  const html = buildHtml(snap(w), targets, [], []);
+  assert.match(html, /id="sec-paid"/);
+  assert.match(html, /<b>6<\/b> people paid to enroll \(4 monthly, 2 annual\)/);
+  assert.match(html, /<td>earlier Open House leads \(before the ads\)<\/td><td class="num">3<\/td>/);
+  const { buildView } = require('../lib/view');
+  const { renderEmail } = require('../lib/emailRender');
+  const e = renderEmail(buildView(snap(w), targets, []));
+  assert.match(e.text, /WHO PAID THIS WEEK\n- 6 paid to enroll \(4 monthly, 2 annual\); 0 came to an Open House first\.\n- 3 earlier Open House leads/);
+  assert.match(e.text, /- Took part at the Open House: too few to judge \(3\/4\), target 60%/);
+  assert.doesNotMatch(e.text, /Took part at the Open House: 75%/);
+  const nobody = full(); nobody.payers = { total: 0, monthly: 0, annual: 0, oh_registered: 0, came_before_paying: 0, by_origin: [] };
+  assert.match(buildHtml(snap(nobody), targets, [], []), /Nobody paid to enroll in this window/);
 });
 
 test('messages: every one listed in order with plain names; a one-person subject never shows', () => {
@@ -180,6 +206,7 @@ test('collect.sql: interaction, payment and messages come from the tables that h
   assert.match(sql, /CREATE TEMP TABLE commz/);
   assert.match(sql, /p\.email_lower = lower\(c\.to_address\)[\s\S]*cl\.lead_id = c\.lead_id/, 'texts are matched by lead');
   assert.match(sql, /session_presence_events pe[\s\S]*classroom_enter/, 'in the room = the follow-up rule');
+  assert.match(sql, /CREATE TEMP TABLE payers[\s\S]*p\.paid_at >= w\.s AND p\.paid_at < w\.e/, 'every payer in the window, any source');
 });
 
 test('collect.sql reads visitor_sessions once, never per visitor (it timed out on 22 Nov 2026)', () => {
