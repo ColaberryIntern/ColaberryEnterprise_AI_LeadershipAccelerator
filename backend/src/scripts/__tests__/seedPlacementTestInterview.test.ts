@@ -21,6 +21,7 @@ function fake(found: { iv?: string; client?: string } = {}) {
     sql.push({ s, r, tx: inTx });
     if (s.startsWith('SELECT id FROM placement_interviews')) return found.iv ? [{ id: found.iv }] : [];
     if (s.startsWith('SELECT id FROM hire_clients')) return found.client ? [{ id: found.client }] : [];
+    if (s.includes('information_schema.tables')) return ['prep_observations', 'prep_readiness_daily', 'zoom_meeting_requests', 'career_interviews'].map((table_name) => ({ table_name }));
     if (/RETURNING id/.test(s)) return [{ id: `new-${++n}` }];
     return [];
   };
@@ -72,19 +73,21 @@ describe('create', () => {
 
 describe('remove', () => {
   it('deletes in foreign-key order, every statement keyed to the tagged client or interview, all in one transaction', async () => {
-    expect(REMOVE_CLIENT_SQL.map(([t]) => t)).toEqual(['employer_follow_up_events', 'employer_follow_ups', 'placement_events (offers, invoices)', 'placement_invoices',
+    expect(REMOVE_CLIENT_SQL.map(([t]) => t)).toEqual(['employer_follow_up_events', 'employer_follow_ups', 'placement_events (placement_invoice)', 'placement_events (hire_client)', 'placement_invoices',
       'placement_offers', 'hire_client_candidates', 'hire_client_signin_tokens', 'hire_client_members', 'hire_clients']);
-    expect(REMOVE_INTERVIEW_SQL.map(([t]) => t)).toEqual(['placement_events (interview)', 'career_interviews', 'placement_interviews']);
+    expect(REMOVE_INTERVIEW_SQL.map(([t]) => t)).toEqual(['prep_observations', 'prep_readiness_daily', 'zoom_meeting_requests', 'placement_events (placement_review_item)',
+      'placement_events (interview)', 'career_interviews', 'placement_interviews']);
+    for (const [label, s] of [...REMOVE_CLIENT_SQL, ...REMOVE_INTERVIEW_SQL]) if (/^DELETE FROM placement_events/.test(s)) expect([label, /subject_type = '[a-z_]+'/.test(s)]).toEqual([label, true]);
     for (const [, s] of REMOVE_CLIENT_SQL) expect(s).toMatch(/:clientId/);
     for (const [, s] of REMOVE_INTERVIEW_SQL) expect(s).toMatch(/:interviewId/);
-    expect(REMOVE_CLIENT_SQL[8][1]).toMatch(/created_by = :tag/);
-    expect(REMOVE_INTERVIEW_SQL[2][1]).toMatch(/source_event_id = :tag/);
+    expect(REMOVE_CLIENT_SQL[9][1]).toMatch(/created_by = :tag/);
+    expect(REMOVE_INTERVIEW_SQL[6][1]).toMatch(/source_event_id = :tag/);
     const f = fake({ iv: 'iv-1', client: 'c-1' });
     expect(await remove(parseArgs(['--enrollment', E, '--remove']), f)).toMatchObject({ dry: true, changed: true });
     expect(f.sql.every((x) => x.s.startsWith('SELECT'))).toBe(true);
     expect(await remove(parseArgs(['--enrollment', E, '--remove', '--apply']), f)).toMatchObject({ dry: false, changed: true, clientId: 'c-1', interviewId: 'iv-1' });
     const deletes = f.sql.filter((x) => x.s.startsWith('DELETE'));
-    expect(deletes).toHaveLength(12);
+    expect(deletes).toHaveLength(17);
     expect(deletes.every((x) => x.tx && (x.r.clientId === 'c-1' || x.r.interviewId === 'iv-1') && x.r.tag === tagFor(E))).toBe(true);
   });
 

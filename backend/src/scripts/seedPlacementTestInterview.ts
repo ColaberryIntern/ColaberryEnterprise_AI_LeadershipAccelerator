@@ -99,8 +99,10 @@ export async function create(a: Args, deps: { query?: Q; transaction?: Tx; allow
 export const REMOVE_CLIENT_SQL: ReadonlyArray<[string, string]> = [
   ['employer_follow_up_events', 'DELETE FROM employer_follow_up_events WHERE follow_up_id IN (SELECT id FROM employer_follow_ups WHERE client_id = :clientId)'],
   ['employer_follow_ups', 'DELETE FROM employer_follow_ups WHERE client_id = :clientId'],
-  ['placement_events (offers, invoices)', `DELETE FROM placement_events WHERE subject_id IN (SELECT id::text FROM placement_offers WHERE client_id = :clientId
-     UNION SELECT inv.id::text FROM placement_invoices inv JOIN placement_offers o ON o.id = inv.offer_id WHERE o.client_id = :clientId)`],
+  // Audit rows are matched by subject_type AND id: invoice ids are BIGSERIAL text ('3') that other subject types also use.
+  ['placement_events (placement_invoice)', `DELETE FROM placement_events WHERE subject_type = 'placement_invoice' AND subject_id IN
+     (SELECT inv.id::text FROM placement_invoices inv JOIN placement_offers o ON o.id = inv.offer_id WHERE o.client_id = :clientId)`],
+  ['placement_events (hire_client)', "DELETE FROM placement_events WHERE subject_type = 'hire_client' AND subject_id = CAST(:clientId AS text)"],
   ['placement_invoices', 'DELETE FROM placement_invoices WHERE offer_id IN (SELECT id FROM placement_offers WHERE client_id = :clientId)'],
   ['placement_offers', 'DELETE FROM placement_offers WHERE client_id = :clientId'],
   ['hire_client_candidates', 'DELETE FROM hire_client_candidates WHERE client_id = :clientId'],
@@ -110,20 +112,35 @@ export const REMOVE_CLIENT_SQL: ReadonlyArray<[string, string]> = [
   ['hire_clients', 'DELETE FROM hire_clients WHERE id = :clientId AND created_by = :tag'],
 ];
 export const REMOVE_INTERVIEW_SQL: ReadonlyArray<[string, string]> = [
+  ['prep_observations', "DELETE FROM prep_observations WHERE source = 'real_interview' AND source_ref LIKE 'replay:' || :interviewId || ':%'"],
+  ['prep_readiness_daily', 'DELETE FROM prep_readiness_daily WHERE interview_id IN (SELECT id FROM career_interviews WHERE placement_interview_id = :interviewId)'],
+  ['zoom_meeting_requests', "DELETE FROM zoom_meeting_requests WHERE request_id LIKE 'placement-interview-' || :interviewId || '-%'"],
+  ['placement_events (placement_review_item)', `DELETE FROM placement_events WHERE subject_type = 'placement_review_item'
+     AND subject_id IN (SELECT id::text FROM placement_review_items WHERE interview_id = :interviewId)`],
   ['placement_events (interview)', "DELETE FROM placement_events WHERE subject_type = 'placement_interview' AND subject_id = :interviewId"],
   ['career_interviews', 'DELETE FROM career_interviews WHERE placement_interview_id = :interviewId'],
   ['placement_interviews', 'DELETE FROM placement_interviews WHERE id = :interviewId AND source_event_id = :tag'],
 ];
 
-/** Remove exactly the tagged test records, in one transaction. Dry run names what would go. */
+const OPTIONAL = ['prep_observations', 'prep_readiness_daily', 'zoom_meeting_requests', 'career_interviews'];
+
+/**
+ * Remove exactly the tagged test records, in one transaction. Dry run names what would go. Known leftover (by design, not
+ * guessed at): the learner-wide readiness rollup row (interview_id = none) for each day the test ran keeps the value
+ * computed that day; the nightly rollup rewrites only the current Central day, so earlier days are not recomputed.
+ */
 export async function remove(a: Args, deps: { query?: Q; transaction?: Tx } = {}): Promise<Outcome> {
   const found = await findTagged(deps.query ?? q, a);
   if (!found.interviewId && !found.clientId) return { action: 'remove', dry: !a.apply, changed: false, ...found };
   if (!a.apply) return { action: 'remove', dry: true, changed: true, ...found };
   const tag = tagFor(a.enrollment);
   await (deps.transaction ?? realTx)(async (r) => {
-    if (found.clientId) for (const [, sql] of REMOVE_CLIENT_SQL) await r(sql, { clientId: found.clientId, tag });
-    if (found.interviewId) for (const [, sql] of REMOVE_INTERVIEW_SQL) await r(sql, { interviewId: found.interviewId, tag });
+    // Tables another subsystem owns may be absent on a fresh database: their deletes are skipped, never guessed.
+    const present = new Set(((await r(`SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema()
+      AND table_name IN ('prep_observations', 'prep_readiness_daily', 'zoom_meeting_requests', 'career_interviews')`, {})) as Array<{ table_name: string }>).map((x) => x.table_name));
+    const has = (label: string) => { const tbl = label.split(' ')[0]; return !OPTIONAL.includes(tbl) || (present.has(tbl) && (tbl !== 'prep_readiness_daily' || present.has('career_interviews'))); };
+    if (found.clientId) for (const [label, sql] of REMOVE_CLIENT_SQL) if (has(label)) await r(sql, { clientId: found.clientId, tag });
+    if (found.interviewId) for (const [label, sql] of REMOVE_INTERVIEW_SQL) if (has(label)) await r(sql, { interviewId: found.interviewId, tag });
   });
   return { action: 'remove', dry: false, changed: true, ...found };
 }
