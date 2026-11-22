@@ -245,9 +245,42 @@ export async function decomposeGovBuildPlanRaw(req: GovRawPlanRequest): Promise<
     return { plan: repaired.plan, cached: false };
   } catch (err) {
     logFail('gov_build_plan_ai', err);
-    const msg = err instanceof DecomposeError && err.error_class === 'ConfigError'
+    /*
+     * THE SOURCE-OVERFLOW ARM, added 2026-11-22 after an independent review found this caller.
+     *
+     * `ENABLE_SBP_SOURCE_OVERFLOW_BLOCK` now defaults ON, so `decomposeBuild` REFUSES an input
+     * over the prompt budget instead of silently clipping it. The measurement that justified
+     * that flip was taken on the student pipeline only. This function is the OTHER non-test
+     * caller of `decomposeBuild`, and nothing bounds its `document`: it is up to 200 solicitation
+     * requirement texts joined, and its `brief` is a generated build spec.
+     *
+     * Without this arm the refusal fell through to "could not be generated right now" and the
+     * operator got a Regenerate button that can never succeed on the same input, which is
+     * precisely the defect `decomposeService` gained `SourceOverflowBlocked` to prevent. Saying
+     * WHICH input is too long and by how much is the difference between a dead end and a fix.
+     */
+    /*
+     * Matched on the stable `error_class` STRING, not on `instanceof DecomposeError`, and that is
+     * load bearing: `decomposeService` wraps the refusal on its STAGED path
+     * (`new DecomposeError('SourceOverflowBlocked', ...)`) and RETHROWS the raw
+     * `SourceOverflowError` unwrapped on the other one. Both carry the same `error_class`, which
+     * the repo's observability rules require precisely so a caller can branch without knowing
+     * which internal path produced the failure. An `instanceof` check here would have covered
+     * one of the two paths and looked complete.
+     */
+    const classOf = (e: unknown): string | null =>
+      (typeof e === 'object' && e !== null && typeof (e as { error_class?: unknown }).error_class === 'string')
+        ? (e as { error_class: string }).error_class
+        : null;
+    const cls = classOf(err);
+    const msg = cls === 'ConfigError'
       ? 'AI build plan is unavailable (no API key configured).'
-      : 'The AI build plan could not be generated right now.';
+      : cls === 'SourceOverflowBlocked'
+        ? `The solicitation is too long for one build plan. ${(err as Error).message} `
+          + 'Regenerating will not help, because the same input is refused the same way. Narrow '
+          + 'the established requirements to the solution scope, or shorten the build spec, and '
+          + 'plan again.'
+        : 'The AI build plan could not be generated right now.';
     return { plan: null, cached: false, error: msg };
   }
 }

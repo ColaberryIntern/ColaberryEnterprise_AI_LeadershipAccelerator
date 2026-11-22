@@ -4,6 +4,7 @@ import {
   REQUIREMENT_EXTRACTION_SYSTEM_PROMPT,
   REQUIREMENTS_JSON_SCHEMA,
 } from '../requirementExtraction';
+import { FLAGS } from '../../../config/featureFlags';
 import { BUILD_PLAN_JSON_SCHEMA } from '../planContract';
 import {
   PROMPT_SECTIONS, briefPrecedesDocument, MAX_DOCUMENT_CHARS,
@@ -157,20 +158,49 @@ describe('extractRequirements returns a requirement set and nothing else', () =>
       .rejects.toThrow(/did not match refined_requirements/);
   });
 
-  it('RETURNS the source overflow, so a reviewer knows what the model never read', async () => {
-    // Stronger than the plan stage, which only logs it. This stage exists to be reviewed, and a
-    // reviewer judging whether a requirement set is complete has to know that 40,000 characters
-    // of the document were clipped before the model saw any of it.
+  it('RETURNS the source overflow with the block OFF, so a reviewer knows what was never read', async () => {
+    /*
+     * Stronger than the plan stage, which only logs it. This stage exists to be reviewed, and a
+     * reviewer judging whether a requirement set is complete has to know that 40,000 characters
+     * of the document were clipped before the model saw any of it.
+     *
+     * L9.6 turned `sbpSourceOverflowBlock` on, so at the DEFAULT this input is refused and there
+     * is no partial set to review at all. That is the better outcome and it is asserted below.
+     * This case keeps the escape hatch's behavior covered rather than deleting it.
+     */
     const doc = 'x'.repeat(MAX_DOCUMENT_CHARS + 40_000);
-    const { overflows } = await extractRequirements({
+    const prev = FLAGS.sbpSourceOverflowBlock;
+    (FLAGS as { sbpSourceOverflowBlock: boolean }).sbpSourceOverflowBlock = false;
+    try {
+      const { overflows } = await extractRequirements({
+        brief: 'b', document: doc, client: clientReturning(SET) as never,
+      } as never);
+      expect(overflows).toEqual([{
+        tag: 'EXPANDED_DOCUMENT',
+        limit: MAX_DOCUMENT_CHARS,
+        actual: MAX_DOCUMENT_CHARS + 40_000,
+        droppedChars: 40_000,
+      }]);
+    } finally {
+      (FLAGS as { sbpSourceOverflowBlock: boolean }).sbpSourceOverflowBlock = prev;
+    }
+  });
+
+  it('at the DEFAULT it refuses instead, so no half-read requirement set reaches a reviewer', async () => {
+    // The reason the flip is an improvement here rather than a loss: a reviewer cannot be misled
+    // by a set extracted from a document the model only partly saw, because there is no set.
+    const doc = 'x'.repeat(MAX_DOCUMENT_CHARS + 40_000);
+    await expect(extractRequirements({
       brief: 'b', document: doc, client: clientReturning(SET) as never,
+    } as never)).rejects.toThrow('source exceeds the prompt budget');
+  });
+
+  it('and a document that FITS still returns an empty overflow list, not a refusal', async () => {
+    // The control: a gate that refused everything would satisfy the case above.
+    const { overflows } = await extractRequirements({
+      brief: 'b', document: 'a short document', client: clientReturning(SET) as never,
     } as never);
-    expect(overflows).toEqual([{
-      tag: 'EXPANDED_DOCUMENT',
-      limit: MAX_DOCUMENT_CHARS,
-      actual: MAX_DOCUMENT_CHARS + 40_000,
-      droppedChars: 40_000,
-    }]);
+    expect(overflows).toEqual([]);
   });
 
   it('classifies a timeout as retry-later, not as broken', async () => {
@@ -183,5 +213,82 @@ describe('extractRequirements returns a requirement set and nothing else', () =>
     };
     await expect(extractRequirements({ ...INPUTS, client: client as never }))
       .rejects.toThrow(/UpstreamTimeout/);
+  });
+});
+
+
+/**
+ * The STAGED path is the default, and it reaches this module first.
+ *
+ * `SBP_STAGED_GENERATION` is on unless set to 'off', so a build arrives at `extractRequirements`
+ * before `decomposeService` ever assembles its own prompt. An independent verifier measured what
+ * the L9.6 flip produced here before this branch existed: `sbp_requirements_source_truncated`
+ * with outcome `partial`, asserting the model had read clipped source, and then a throw from
+ * deeper in with the model never called at all. A line claiming a generation ran on partial
+ * input, for a generation that never ran, is worse than no line.
+ */
+describe('the staged path refuses where it logs, and says which it did', () => {
+  function captureLogs(): { lines: Array<Record<string, unknown>>; restore: () => void } {
+    const lines: Array<Record<string, unknown>> = [];
+    const original = console.log;
+    // eslint-disable-next-line no-console
+    console.log = (...args: unknown[]) => {
+      const first = args[0];
+      if (typeof first === 'string') {
+        try { lines.push(JSON.parse(first)); } catch { /* not a structured line */ }
+      }
+    };
+    return { lines, restore: () => { console.log = original; } };
+  }
+
+  const OVER = { brief: 'b', document: 'x'.repeat(MAX_DOCUMENT_CHARS + 40_000) };
+
+  async function run(inputs: Record<string, unknown>) {
+    const cap = captureLogs();
+    let thrown: unknown;
+    const client = clientReturning(SET) as never;
+    try {
+      await extractRequirements({ ...inputs, client, correlationId: 'corr-staged' } as never);
+    } catch (e) {
+      thrown = e;
+    } finally {
+      cap.restore();
+    }
+    return { thrown, lines: cap.lines };
+  }
+
+  it('logs the refusal as a FAILURE with its own error_class', async () => {
+    const { lines } = await run(OVER);
+    const line = lines.find((l) => l.event === 'sbp_requirements_source_blocked');
+    expect(line).toBeDefined();
+    expect(line).toMatchObject({
+      outcome: 'failure',
+      context: {
+        error_class: 'SourceOverflowBlocked',
+        tag: 'EXPANDED_DOCUMENT',
+        limit: MAX_DOCUMENT_CHARS,
+        actual: MAX_DOCUMENT_CHARS + 40_000,
+        droppedChars: 40_000,
+      },
+    });
+  });
+
+  it('does NOT also log a truncation, because the model was never called', async () => {
+    // The measured defect, inverted into an assertion.
+    const { lines } = await run(OVER);
+    expect(lines.some((l) => l.event === 'sbp_requirements_source_truncated')).toBe(false);
+  });
+
+  it('throws rather than returning a set built from source the model did not see', async () => {
+    const { thrown } = await run(OVER);
+    expect((thrown as Error)?.name).toBe('SourceOverflowError');
+  });
+
+  it('a document that FITS logs neither line and returns normally', async () => {
+    // The control. A branch that fired on everything would satisfy all three cases above.
+    const { thrown, lines } = await run({ brief: 'b', document: 'a short document' });
+    expect(thrown).toBeUndefined();
+    expect(lines.some((l) => l.event === 'sbp_requirements_source_blocked')).toBe(false);
+    expect(lines.some((l) => l.event === 'sbp_requirements_source_truncated')).toBe(false);
   });
 });

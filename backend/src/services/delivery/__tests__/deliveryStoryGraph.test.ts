@@ -85,6 +85,42 @@ describe('story contract validation', () => {
     expect(issues.map((i) => i.rule)).toContain('high_risk_story_without_approval');
   });
 
+  /*
+   * The cases around the one above, added 2026-11-21 with L10.8, and A CORRECTION ATTACHED.
+   *
+   * While turning the allocation fallback on I ran a mutation that changed the rule from
+   * `(!story.approvalPolicy || story.approvalPolicy === 'none')` to `(!story.approvalPolicy)`,
+   * saw it survive, and recorded that the `none` branch was untested and that a decomposition
+   * stating `approval_policy: "none"` on an R4 would walk through the gate. THAT WAS WRONG. The
+   * mutation survived only the six-suite subset my mutation spec happened to run; the case
+   * directly above has covered that branch all along, and an independent verifier reproduced the
+   * mutation dying here. The mutation spec now runs this file.
+   *
+   * The cases below are what was genuinely missing: the `null` arm, the positive arms, and the
+   * R2/R3 boundary. They are here rather than in `factoryDeliveryBridge.test.ts` because this is
+   * where the gate's own tests live, and because that file is already past the 500-line ceiling.
+   */
+  it('BLOCKS a high-risk story whose approval policy is NULL, not only one that declares none', () => {
+    // The other arm of the same condition. `none` and `null` arrive from different places: one
+    // is a decomposition stating it, the other is the bridge declining to derive one.
+    expect(blocking(story({ riskLevel: 'R4', approvalPolicy: null })).map((i) => i.rule))
+      .toContain('high_risk_story_without_approval');
+  });
+
+  it('ALLOWS a high-risk story with a real approval policy, so the rule is a gate not a blanket', () => {
+    for (const approvalPolicy of ['internal_review', 'client_approval'] as const) {
+      expect(blocking(story({ riskLevel: 'R4', approvalPolicy })).map((i) => i.rule))
+        .not.toContain('high_risk_story_without_approval');
+    }
+  });
+
+  it('fires from R3 upward, and not below, which is where the ladder puts consequential work', () => {
+    expect(blocking(story({ riskLevel: 'R2', approvalPolicy: 'none' })).map((i) => i.rule))
+      .not.toContain('high_risk_story_without_approval');
+    expect(blocking(story({ riskLevel: 'R3', approvalPolicy: 'none' })).map((i) => i.rule))
+      .toContain('high_risk_story_without_approval');
+  });
+
   it('rejects an unknown trust dimension', () => {
     expect(blocking(story({ trustDimensions: ['fast'] })).map((i) => i.rule)).toContain(
       'trust_dimension_unknown',

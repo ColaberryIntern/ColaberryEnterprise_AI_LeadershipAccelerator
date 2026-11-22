@@ -15,6 +15,20 @@
  * So the assertion is made on `renderDocs` itself.
  */
 
+/*
+ * The board lookup behind the Connected Demo resolution, mocked so this stays a UNIT test.
+ *
+ * These paths now ask whether the project carries STORY-900. Unmocked, that is a real query:
+ * green today only because nothing is listening on the database port, and on a box with Postgres
+ * up it becomes real I/O in a unit test, while on a host that is reachable but not answering it
+ * hangs for the 30s pool acquire. An independent verifier found eight suites in this state.
+ * Zero rows is the pre-existing behavior, so nothing else in this file changes.
+ */
+jest.mock('../../../models/StudentTask', () => ({
+  __esModule: true,
+  default: { count: jest.fn(async () => 0) },
+}));
+
 import fs from 'fs';
 import path from 'path';
 import { BUILDER_STAGES } from '../builderPath';

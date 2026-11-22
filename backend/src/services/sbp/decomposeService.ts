@@ -18,6 +18,7 @@ import {
   DECOMPOSE_SYSTEM_PROMPT,
   buildDecomposeUserPrompt,
   sourceOverflows,
+  SourceOverflowError,
 } from './decomposePrompt';
 import {
   type RefinedRequirements,
@@ -42,7 +43,15 @@ export type DecomposeErrorClass =
   | 'UpstreamTimeout'
   | 'UpstreamError'
   | 'EmptyResponse'
-  | 'ContractViolation';
+  | 'ContractViolation'
+  /**
+   * The source-overflow block refused the input (L9.6). OURS, not an upstream failure, and the
+   * distinction is the point: `UpstreamError` is the class whose student-facing recovery is the
+   * Retry button, and retrying an input that is too long can never succeed. An independent
+   * verifier measured a refusal on the staged path arriving as `UpstreamError`, which offered
+   * exactly that useless retry.
+   */
+  | 'SourceOverflowBlocked';
 
 export class DecomposeError extends Error {
   constructor(public readonly error_class: DecomposeErrorClass, message: string) {
@@ -197,7 +206,10 @@ export async function decomposeBuild(opts: DecomposeOptions): Promise<DecomposeR
     } catch (err) {
       if (err instanceof DecomposeError) throw err;
       const cls = (err as ModelCallError)?.errorClass;
-      const errorClass: DecomposeErrorClass = cls ?? 'UpstreamError';
+      // A refusal is classified as a refusal. See `SourceOverflowBlocked` on the union above.
+      const errorClass: DecomposeErrorClass = err instanceof SourceOverflowError
+        ? 'SourceOverflowBlocked'
+        : cls ?? 'UpstreamError';
       log('sbp_decompose_failed', opts.correlationId, 'failure', {
         error_class: errorClass, model, path: 'staged', message: (err as Error)?.message,
       });
@@ -205,9 +217,37 @@ export async function decomposeBuild(opts: DecomposeOptions): Promise<DecomposeR
     }
   }
 
-  const userPrompt = opts.requirements
-    ? `${approvedRequirementsPromptBlock(opts.requirements)}\n\n${buildDecomposeUserPrompt(opts)}`
-    : buildDecomposeUserPrompt(opts);
+  /*
+   * THE REFUSAL IS LOGGED BEFORE IT PROPAGATES.
+   *
+   * With `sbpSourceOverflowBlock` on, its default since L9.6, `buildDecomposeUserPrompt` THROWS
+   * on over-budget source rather than clipping it. That happens here, ABOVE the truncation
+   * logging below, so without this catch the one build that gets refused would be the only one
+   * in this service to fail with no `sbp_decompose_*` event at all: every other failure path
+   * logs an `error_class`, and the most consequential one would have been silent.
+   *
+   * Logged and rethrown, never swallowed. The caller still fails the build; it now has a line
+   * naming the tag, the limit and the characters that would have been lost.
+   */
+  let userPrompt: string;
+  try {
+    userPrompt = opts.requirements
+      ? `${approvedRequirementsPromptBlock(opts.requirements)}\n\n${buildDecomposeUserPrompt(opts)}`
+      : buildDecomposeUserPrompt(opts);
+  } catch (err) {
+    if (err instanceof SourceOverflowError) {
+      for (const o of err.overflows) {
+        // All four numbers, and a test pins each one. `actual` was droppable with the suite
+        // green until a verifier found it: without it an operator knows something was refused
+        // and not how far over the input was, which is the first thing they need to act.
+        log('sbp_decompose_source_blocked', opts.correlationId, 'failure', {
+          error_class: err.error_class,
+          tag: o.tag, limit: o.limit, actual: o.actual, droppedChars: o.droppedChars,
+        });
+      }
+    }
+    throw err;
+  }
 
   // SOURCE THAT NEVER REACHES THE MODEL, said out loud.
   //
@@ -219,8 +259,13 @@ export async function decomposeBuild(opts: DecomposeOptions): Promise<DecomposeR
   //
   // Logged as `partial`, not `success`: the generation that follows is working from less than
   // it was given, and an operator reading outcomes should be able to see that without diffing
-  // character counts by hand. It does NOT refuse — see `SourceOverflow`'s own comment for why
-  // refusing on an unmeasured budget would fail builds that succeed today.
+  // character counts by hand.
+  //
+  // REACHED ONLY WITH THE BLOCK OFF, since L9.6. This paragraph used to end "It does NOT refuse:
+  // refusing on an unmeasured budget would fail builds that succeed today", and the budget is
+  // now measured: zero of 56 intakes and zero of 26 understandings are within range of the
+  // limit, and a brief cannot reach it by construction. So the default refuses above, and this
+  // detect-only reporting is what the escape hatch gives an operator who turns the block off.
   const overflows = sourceOverflows(opts);
   for (const o of overflows) {
     log('sbp_decompose_source_truncated', opts.correlationId, 'partial', {

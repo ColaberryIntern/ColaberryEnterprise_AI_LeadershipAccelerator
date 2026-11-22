@@ -274,3 +274,167 @@ lost or added.
 **What should worry you:** a report that requirements were lost and an equal number invented.
 Nothing was lost — it means the system stopped recognising its own earlier work, and a real loss
 would be invisible among the false ones.
+
+---
+
+## Test 9 - The Connected Demo: five checks you can run yourself
+
+*Added 2026-11-22 with the spine closeout. Unlike tests 1 to 8, these five need no program
+permission for the parts that matter: four of the five are things you do in a browser with no
+login at all, which is the point of them.*
+
+Every student build now generates a **Connected Demo**: a clickable, fictional walkthrough of the
+app the student is building, published at a public address so you can send it to somebody who will
+never have an account here. It is a simulation. The five checks below are the five ways that
+sentence could stop being true.
+
+### Check 1. A project with no demo says so, and never shows a broken link
+
+Open the platform Command Center and find the **Demo links** panel. Every project in the system is
+listed with one of three states.
+
+**What you should see:** a project that has not generated a demo reads **"No demo yet"** as plain
+text. The summary line above the table counts all three states, for example *"4 published, 11 not
+published, 83 with no demo"*.
+
+**What should worry you:** a link you can click that goes nowhere. A dead link is worse than an
+honest blank, because the person you sent it to concludes the student's work is broken rather than
+unfinished.
+
+### Check 2. The link is dead until somebody turns it on
+
+This is the check that matters most, and you can do it without being logged in.
+
+1. In the Demo links panel, find a project whose demo is generated but **not** published.
+2. There is no address to copy, because there is nothing to copy yet.
+
+**What you should see:** nothing publishable. The column in the database is `demo_share_enabled`
+and it **defaults to false**, so generating a demo does not publish it. A demo becomes public only
+when the student presses the button on their own project page, and a project created before this
+change can never be public by accident.
+
+**What should worry you:** any demo that is reachable without somebody having turned it on. That
+would mean the default flipped, and the right response is to stop and say so rather than to count
+how many are exposed.
+
+### Check 3. The published page says it is simulated, on every screen
+
+Ask a student to publish one, or publish one on a test project, and open the address they give you
+**in a private browsing window** so you are certainly not logged in.
+
+**What you should see:** a strip across the top of every screen, which is not dismissible:
+
+> **DEMO ·** Simulated, not live. Nothing here was produced by the real system.
+ The browser tab is
+titled *"<the app's name> demo (simulated)"*, which is deliberate: the tab title is the one part
+of the page that survives into a screenshot, a screen share or a bookmark, where the strip does
+not.
+
+**What should worry you:** any screen where the strip is missing, and any use of the word
+*production* or *live* describing what you are looking at. A simulated screen that reads as real
+is the single failure this feature has to not have.
+
+### Check 4. The page is not indexable by search engines
+
+Still in the private window, on the published demo page.
+
+**What you should see:** `noindex`, twice. In the page source (right-click, view source) there is
+`<meta name="robots" content="noindex, nofollow">`, and the response itself carries the header
+`X-Robots-Tag: noindex, nofollow`. Both, because the meta tag is for the page and the header is
+for anything that fetches it without parsing HTML.
+
+**What should worry you:** a student's fictional demo appearing in a search result for their own
+name or a client's. Two mechanisms are there because one of them was always going to be the one
+somebody removed.
+
+### Check 5. Turning it off actually turns it off, and does not unpublish anything else
+
+1. Ask the student to switch the demo back off.
+2. Reload the address you had open. Then check their portfolio page, which is a different thing.
+
+**What you should see:** the demo address answers **404** with a page reading *"This demo is not
+available."*, within a single reload. Every response from that address carries
+`Cache-Control: no-store`, because a revocable link a browser or a CDN keeps serving is not
+revocable. The
+student's portfolio is **untouched** and still reachable, because the demo has its own switch
+(`demo_share_enabled`) rather than sharing the portfolio's (`share_enabled`). One boolean cannot
+carry two revocations, and the two were separated for exactly this check.
+
+**What should worry you:** a demo that still renders after being switched off, which means a cache
+is serving a revoked page; or a portfolio that disappeared, which means turning off a demo
+unpublished a student's actual work.
+
+---
+
+## What the Connected Demo does NOT do, stated so you are not misled
+
+Four limitations, each of which is a thing somebody could reasonably assume and be wrong about.
+
+**It is not the project's real state.** The demo is fiction, generated from the student's plan. The
+Command Center on the same project shows actual state. They are deliberately separate surfaces and
+neither borrows the other's wording: nothing in the demo claims to be live, and nothing in the
+Command Center is simulated.
+
+**The published spec is not versioned, and republishing overwrites.** When a student regenerates
+and republishes, the new spec replaces the old one in place. There is no content hash and no
+revision history on it, unlike `operating_blueprint_manifests`, where a blueprint carries a
+`refs_sha256` and a revision number precisely so that a change can be proved after the fact. So if
+you review a demo and the student republishes, **you cannot later prove which version you
+reviewed**. The address does not change either. If that matters for something you are signing off,
+take a screenshot: that is the honest workaround, and it is a workaround rather than a feature.
+
+**The link has no expiry and no access log.** The token is unguessable and revocable, which is not
+the same as controlled. Anyone who has the address keeps working access until somebody switches it
+off, and nothing records who opened it.
+
+**Nobody has looked at it on a phone.** Same caveat as the lifecycle workspace above, and for the
+same reason. It was built to wrap rather than to fix a width, which is a structural claim, not a
+look.
+
+---
+
+## Where the evidence behind these tests comes from
+
+*Added 2026-11-22. L8.6 asks this guide to say what has actually been exercised, so that a check
+you run yourself sits beside the checks that were run for you.*
+
+The eight reference shapes in `reference-fixtures.md` were run against this change and recorded
+per shape, not as a test tally. The record lives at
+`.loop-architect/runs/20261120-spine-closeout-connected-demo/results/corpus-run-l71.md`, with the
+machine-readable form beside it as `corpus-run-l71.json`.
+
+**It is not committed**, deliberately: a run record is evidence of one run, and a stale copy in
+the repo would read as current. Regenerate it with
+
+```sh
+cd backend
+node ../node_modules/ts-node/dist/bin.js --transpile-only \
+  src/services/lifecycle/__tests__/corpus/generateCorpusRecord.ts <output directory>
+```
+
+and read the regenerated file rather than a copy, because the generator refuses to write at all
+if any shape has no outcome, if a shape's stage partition is incomplete, or if the over-limit
+shape is not refused.
+
+What the eight shapes cover, in one line each:
+
+| Shape | What it establishes |
+|---|---|
+| Ordinary service application | the common path runs to `complete` |
+| Government project, two linked tracks | one requirement keeps a single canonical id in both tracks |
+| Human-heavy workflow | a below-target automation share is reported honestly, with its denominator, rather than reclassified upward |
+| Manual-only workflow | "all human" is a recorded decision, not an empty allocation |
+| One person in several roles | a second role hat does not launder a self-approval; the rule keys on identity |
+| Low-information interview | an unassessed task refuses rather than shrinking the denominator, so there is no precise-looking percentage over missing data |
+| Source over the model's limit | an over-budget brief is **refused**, not silently clipped |
+| Blueprint changed mid-flight | an approval for a superseded revision is refused, and re-checked when the plan is authorized |
+
+Three of those are properties of a gate or a prompt rather than journeys through the build
+stages, and the record says which is which rather than presenting all eight as the same kind of
+evidence.
+
+**What this does NOT establish.** No model was called: the fixtures supply model output as input,
+which is what makes the run repeatable with no network. Five of the fifteen stages need a
+database and are reported not reached, each naming the blocker. So the record is evidence about
+the system's rules and refusals, not about the quality of generated content, and the five checks
+in Test 9 above remain the only way to see the published result with your own eyes.

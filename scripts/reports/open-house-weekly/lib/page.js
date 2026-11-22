@@ -90,9 +90,65 @@ function emailPanel(em) {
   return `<table class="tbl sm"><tbody>${rows.map(([l, v]) => `<tr><td>${l}</td><td class="num">${v}</td><td class="num">${M.pct(v, em.emails) ?? 0}%</td></tr>`).join('')}</tbody></table>`;
 }
 
+/** OH1y: every Open House since launch. All doors; "walk-ins" checked in without a registration for that session. */
+function sessionsTable(sessions) {
+  if (!sessions || !sessions.length) return '<p class="muted">No Open House sessions yet.</p>';
+  const h = (s, v) => (s.held ? v : 'n/a');
+  const tr = sessions.map((s) => {
+    const rate = `${M.pct(s.checked_in, s.registered) ?? 0}%`;
+    const took = s.interacted === undefined ? '' : `<td class="num">${h(s, s.interacted)}</td><td class="num">${h(s, `${s.answered_poll} / ${s.asked_question} / ${s.set_status_or_chat}`)}</td>`;
+    const paid = s.paid_after === undefined ? '' : `<td class="num">${h(s, s.paid_after)}</td><td class="num">${h(s, s.paid_after_checked_in)}</td>`;
+    return `<tr><td>${esc(s.date)}</td><td>${s.held ? 'Happened' : 'Upcoming'}</td><td class="num">${s.registered}</td><td class="num">${s.registered_lp}</td>
+      <td class="num">${h(s, s.checked_in)}</td><td class="num">${h(s, rate)}</td><td class="num">${h(s, s.checked_in_lp)}</td>
+      <td class="num">${h(s, s.walk_ins)}</td>${took}${paid}<td class="num">${s.followups_booked}</td><td class="num">${s.followups_sent}</td></tr>`;
+  }).join('');
+  const s0 = sessions[0];
+  const tookTh = s0.interacted === undefined ? '' : '<th>Took part</th><th>Poll / question / status</th>';
+  const paidTh = s0.paid_after === undefined ? '' : '<th>Paid after</th><th>Paid after, came</th>';
+  return `<table class="tbl"><thead><tr><th>Open House</th><th>State</th><th>Registered</th><th>From the ad page</th><th>Came</th><th>% came</th>
+    <th>Came, ad page</th><th>Walk-ins</th>${tookTh}${paidTh}<th>Follow-ups booked</th><th>Follow-ups sent</th></tr></thead><tbody>${tr}</tbody></table>
+    <p class="muted">${esc(M.ATTEND_FLOOR)} Walk-ins came without registering for that session. "Took part" counts everyone who did something in the room, walk-ins and members included. "Paid after" = registrants who paid to enroll after that Open House started. Follow-ups start with the 3 Dec Open House.</p>`;
+}
+
+/** Plain names for the messages the platform sends on its own (not campaign steps). */
+const MESSAGE_NAMES = {
+  open_house_welcome: 'Welcome email, right after sign-up',
+  portal_welcome: 'Account welcome email',
+  paid_member_welcome: 'Paid member welcome email',
+  'accelerator-session-reminder 24h': 'Open House reminder, the day before',
+  'accelerator-session-reminder 1h': 'Open House reminder, one hour before',
+};
+const CHANNEL = { email: '✉️ Email', sms: '💬 Text', voice: '📞 Call' };
+
+/**
+ * OH1y: every message this week's landing-page sign-ups received. A subject is shown only when every send carried the
+ * same one AND at least 3 people got it, so a subject written for one person (some carry a first name) never shows.
+ */
+function messageLabel(m) {
+  if (m.kind === 'campaign') return `${m.source}${m.step ? `, step ${m.step}` : ''}`;
+  return MESSAGE_NAMES[m.source] || m.source;
+}
+function subjectCell(m) {
+  if (m.channel !== 'email') return '<span class="muted">(text, no subject)</span>';
+  if (m.subjects === 1 && m.people >= 3 && m.subject) return `“${esc(m.subject)}”`;
+  return `<span class="muted">${m.subjects > 1 ? `written for each person, ${m.subjects} versions` : 'not shown'}</span>`;
+}
+function commsPanel(c) {
+  if (!c) return '<p class="muted">Messages were not read for this run.</p>';
+  if (!c.messages.length) return '<p class="muted">No messages went to this week\'s sign-ups yet.</p>';
+  const tr = c.messages.map((m) => `<tr><td>${esc(m.first_ct === m.last_ct ? m.first_ct : `${m.first_ct} → ${m.last_ct}`)}</td><td>${CHANNEL[m.channel] || esc(m.channel)}</td>
+    <td>${esc(messageLabel(m))}</td><td>${subjectCell(m)}</td><td class="num">${m.people}</td><td class="num">${m.sent}</td>
+    <td class="num">${m.not_sent ? `${m.not_sent} <span class="muted">(${esc(m.not_sent_status || '')})</span>` : '0'}</td></tr>`).join('');
+  const q = (c.queued || []).map((x) => `<tr><td>${esc(x.next_ct)} CT</td><td>${CHANNEL[x.channel] || esc(x.channel)}</td><td>${esc(x.source)}</td><td class="num">${x.people}</td><td class="num">${x.sends}</td></tr>`).join('');
+  return `<p>${c.reached} of ${c.people} sign-ups got at least one message. Each got a median of ${c.median_per_person ?? 0} (most: ${c.max_per_person ?? 0}).</p>
+    <table class="tbl"><thead><tr><th>When (CT)</th><th>Channel</th><th>Message</th><th>Subject</th><th>People</th><th>Sent</th><th>Not sent</th></tr></thead><tbody>${tr}</tbody></table>
+    ${q ? `<h3 style="margin-top:18px">Still to go out</h3><table class="tbl sm"><thead><tr><th>Next send</th><th>Channel</th><th>From</th><th>People</th><th>Messages</th></tr></thead><tbody>${q}</tbody></table>` : ''}
+    <p class="muted">Sent after each person signed up, until this window closed. Opens and clicks are read only for the welcome email (below).</p>`;
+}
+
 function shotsPanel(shots) {
   if (!shots || !shots.length) return '';
   return `<section><h2>📸 What the visitor sees</h2><p class="lede">Captured on a phone-sized screen, because most visitors are on a phone.</p><div class="shots">${shots.map((s) => `<figure><img src="${s.src}" alt="${esc(s.title)}"/><figcaption><b>${esc(s.title)}</b><br/>${esc(s.caption)}</figcaption></figure>`).join('')}</div></section>`;
 }
 
-module.exports = { kpiTiles, funnelTable, forkCards, mermaidSankey, mermaidTree, emailPanel, shotsPanel, MERMAID, PILL, STATUS, I, X, M };
+module.exports = { kpiTiles, funnelTable, forkCards, mermaidSankey, mermaidTree, emailPanel, sessionsTable, commsPanel, messageLabel, shotsPanel, MERMAID, PILL, STATUS, I, X, M };

@@ -20,6 +20,13 @@ const mockDomainKeyForProject = jest.fn();
 jest.mock('../../../agentDomain/agentDomainCommandCenterForSync', () => ({
   domainKeyForProject: (...a: any[]) => mockDomainKeyForProject(...a),
 }));
+// The board lookup for STORY-900, pinned for the same reason as the domain one above: it is a
+// real query, and left unmocked it would reach for a database, fall back to false, and make the
+// SHOW-side tests below pass for the wrong reason.
+const mockConnectedDemoMaterializedFor = jest.fn();
+jest.mock('../../connectedDemoFlag', () => ({
+  connectedDemoMaterializedFor: (...a: any[]) => mockConnectedDemoMaterializedFor(...a),
+}));
 
 import { planStorySpecs, storyPointsForProject, pointsByStoryId, STORY_XP_KEY } from '../storyPoints';
 import { COMMAND_CENTER_STORY_ID, COMMAND_CENTER_ACCEPTANCE } from '../../commandCenterStory';
@@ -32,6 +39,8 @@ beforeEach(() => {
   mockGetBudgetPerUnitXp.mockResolvedValue({ per_unit: 57, budget: 800, reason: null });
   // Not an agent-domain project: the bare Command Center id, as before.
   mockDomainKeyForProject.mockResolvedValue(null);
+  // No Connected Demo row by default, so every existing case prices exactly as it did.
+  mockConnectedDemoMaterializedFor.mockResolvedValue(false);
 });
 
 describe('planStorySpecs — the stories that are judged and paid', () => {
@@ -86,5 +95,65 @@ describe('pointsByStoryId — what the tree mapper reads', () => {
   it('is empty for a null plan and for a 0 rate — no "+0 pts" badges anywhere', () => {
     expect(pointsByStoryId(null).size).toBe(0);
     expect(pointsByStoryId({ per_story: 0, story_ids: new Set(['STORY-001']), stories_in_plan: 1 }).size).toBe(0);
+  });
+});
+
+
+/**
+ * The SHOW side and the PAY side, on the same build.
+ *
+ * An independent verifier found this gap after the Connected Demo wiring landed in the verifier
+ * and the milestone count but not here. The consequence is arithmetic: `getBudgetPerUnitXp`
+ * divides the build budget by the number of stories judged, so a build carrying STORY-900 would
+ * have been paid `budget / (N + 1)` while the project tree and the Today tile advertised
+ * `budget / N` for every story on it, and STORY-900 would have shown no price while being paid
+ * one. Both directions are asserted, because only showing the fixed case would leave the
+ * regression invisible.
+ */
+describe('storyPointsForProject prices the SAME stories the verifier judges', () => {
+  const FOUR = plan([{ id: 'STORY-001' }, { id: 'STORY-002' }, { id: 'STORY-003' }, { id: 'STORY-004' }]);
+
+  it('counts STORY-900 when the board carries it, and prices it', async () => {
+    mockGetPublishedPlan.mockResolvedValue({ plan: FOUR });
+    mockConnectedDemoMaterializedFor.mockResolvedValue(true);
+    const sp = (await storyPointsForProject(PROJECT_ID))!;
+    // Four plan stories + STORY-000 + STORY-900 = the six the verifier grades.
+    expect(sp.stories_in_plan).toBe(6);
+    expect(mockGetBudgetPerUnitXp).toHaveBeenCalledWith(STORY_XP_KEY, 6);
+    // And the demo story is PRICED, not merely counted: an unpriced row is the AF3.9 gap.
+    expect(sp.story_ids.has('STORY-900')).toBe(true);
+    expect(pointsByStoryId(sp).get('STORY-900')).toBe(sp.per_story);
+  });
+
+  it('does NOT count it when the board does not, so existing builds price exactly as they do now', async () => {
+    mockGetPublishedPlan.mockResolvedValue({ plan: FOUR });
+    mockConnectedDemoMaterializedFor.mockResolvedValue(false);
+    const sp = (await storyPointsForProject(PROJECT_ID))!;
+    expect(sp.stories_in_plan).toBe(5);
+    expect(mockGetBudgetPerUnitXp).toHaveBeenCalledWith(STORY_XP_KEY, 5);
+    expect(sp.story_ids.has('STORY-900')).toBe(false);
+    expect(pointsByStoryId(sp).get('STORY-900')).toBeUndefined();
+  });
+
+  it('asks the BOARD for this project, not a feature flag', async () => {
+    mockGetPublishedPlan.mockResolvedValue({ plan: FOUR });
+    await storyPointsForProject(PROJECT_ID);
+    expect(mockConnectedDemoMaterializedFor).toHaveBeenCalledWith(PROJECT_ID);
+  });
+
+  it('prices the same unit count the verifier would, which is the invariant that was broken', async () => {
+    // Stated as the comparison rather than as two numbers: the verifier builds its specs with
+    // `planStorySpecs(plan, commandCenterSpec, materialized)`, so the show side must land on the
+    // same length for the same inputs.
+    mockGetPublishedPlan.mockResolvedValue({ plan: FOUR });
+    mockConnectedDemoMaterializedFor.mockResolvedValue(true);
+    const sp = (await storyPointsForProject(PROJECT_ID))!;
+    const verifierSpecs = planStorySpecs(
+      FOUR as any,
+      { id: COMMAND_CENTER_STORY_ID, acceptance: [...COMMAND_CENTER_ACCEPTANCE] },
+      true,
+    );
+    expect(sp.stories_in_plan).toBe(verifierSpecs.length);
+    expect([...sp.story_ids].sort()).toEqual(verifierSpecs.map((s) => s.id).sort());
   });
 });

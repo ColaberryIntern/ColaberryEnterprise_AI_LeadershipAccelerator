@@ -62,6 +62,14 @@ export interface ProjectAttributes {
   share_token?: string | null;
   share_enabled?: boolean;
   /**
+   * The Connected Demo's own switch, deliberately NOT `share_token`/`share_enabled` above.
+   * Those are the portfolio's. One boolean cannot carry two revocations: reusing them would make
+   * "turn this demo off" also mean "unpublish this project's portfolio".
+   */
+  demo_share_token?: string | null;
+  demo_share_enabled?: boolean;
+  demo_spec?: any;
+  /**
    * Soft-delete stamp. NULL = live; a timestamp = the student archived it then.
    * Archived projects are filtered out of every listing and of active-project
    * resolution (see services/projectService.ts) but no row is ever deleted, so
@@ -130,6 +138,9 @@ class Project extends Model<ProjectAttributes> implements ProjectAttributes {
   declare requirements_document: string;
   declare share_token: string | null;
   declare share_enabled: boolean;
+  declare demo_share_token: string | null;
+  declare demo_share_enabled: boolean;
+  declare demo_spec: any;
   declare archived_at: Date | null;
   declare archived_by: string | null;
   declare archived_reason: string | null;
@@ -289,6 +300,23 @@ Project.init(
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: false,
+    },
+    // The Connected Demo's switch. Declared here for the reason the archived_at comment below
+    // spells out: an attribute missing from `init` is silently stripped from reads AND writes,
+    // so without these three a demo would appear to publish and quietly not.
+    // Applied to the database by `db/ensureConnectedDemoSchema.ts`.
+    demo_share_token: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    demo_share_enabled: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    demo_spec: {
+      type: DataTypes.JSONB,
+      allowNull: true,
     },
     // MUST be declared here, not only in the interface: Sequelize silently
     // strips any attribute absent from `init` out of both writes and reads, so

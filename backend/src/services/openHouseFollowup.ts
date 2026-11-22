@@ -2,9 +2,11 @@
  * OH1u: book Maya's follow-up email after an Open House (copy: openHouseFollowupCopy.ts).
  *
  * Who gets which email (FOLLOWUP_PEOPLE_SQL):
- *   attended  checked in on the platform for that session: a session_guests row that is not
- *             awaiting_class, or a present/late attendance_records row of a signed-in member.
- *   missed    registered for that Open House (open_house_registrations) and not in the above.
+ *   attended  in the room for that session: a session_guests row that is not awaiting_class, a
+ *             present/late attendance_records row, a classroom_enter presence event or a status
+ *             (session_pulse) of a signed-in member. Staff addresses (@colaberry.com) never count.
+ *   missed    registered for that Open House (open_house_registrations) and not in the above
+ *             (staff registrations excluded).
  * Attended wins, so nobody gets both.
  *
  * Gates, in order (fail closed at each):
@@ -57,17 +59,28 @@ export async function findFollowupCampaign(): Promise<FollowupCampaign | null> {
   return rows[0] ?? null;
 }
 
+// OH1y (22 Nov 2026): a signed-in member who entered the classroom or set their status was in the room even when the
+// system marked them absent for skipping the check-in button: six registrants of the 19 Nov Open House were. Staff
+// (@colaberry.com) are never attendees of their own Open House.
 export const FOLLOWUP_PEOPLE_SQL = `
 WITH here AS (
-  SELECT g.email_lower AS email FROM session_guests g
-   WHERE g.session_id = :sid AND NOT g.awaiting_class AND g.email_lower IS NOT NULL
-  UNION
-  SELECT LOWER(e.email) FROM attendance_records ar JOIN enrollments e ON e.id = ar.enrollment_id
-   WHERE ar.session_id = :sid AND ar.status::text IN ('present', 'late') AND e.email IS NOT NULL
+  SELECT email FROM (
+    SELECT g.email_lower AS email FROM session_guests g
+     WHERE g.session_id = :sid AND NOT g.awaiting_class AND g.email_lower IS NOT NULL
+    UNION
+    SELECT LOWER(e.email) FROM attendance_records ar JOIN enrollments e ON e.id = ar.enrollment_id
+     WHERE ar.session_id = :sid AND ar.status::text IN ('present', 'late') AND e.email IS NOT NULL
+    UNION
+    SELECT LOWER(e.email) FROM session_presence_events pe JOIN enrollments e ON e.id = pe.enrollment_id
+     WHERE pe.session_id = :sid AND pe.event_type = 'classroom_enter' AND e.email IS NOT NULL
+    UNION
+    SELECT LOWER(e.email) FROM session_pulse sp JOIN enrollments e ON e.id = sp.enrollment_id
+     WHERE sp.session_id = :sid AND e.email IS NOT NULL
+  ) h WHERE email NOT LIKE '%@colaberry.com'
 ), reg AS (
   SELECT DISTINCT r.email_lower AS email FROM open_house_registrations r
     JOIN live_sessions s ON s.open_house_event_id = r.event_id
-   WHERE s.id = :sid AND r.email_lower IS NOT NULL
+   WHERE s.id = :sid AND r.email_lower IS NOT NULL AND r.email_lower NOT LIKE '%@colaberry.com'
 ), people AS (
   SELECT email, 'attended' AS track FROM here
   UNION ALL

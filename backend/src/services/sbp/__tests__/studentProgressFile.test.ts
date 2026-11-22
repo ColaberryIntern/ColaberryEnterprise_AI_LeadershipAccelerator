@@ -49,6 +49,23 @@ jest.mock('../../../models/Project', () => ({
   __esModule: true,
   default: { findByPk: jest.fn(async () => ({ id: 'prj-1', enrollment_id: 'enr-1' })) },
 }));
+/*
+ * The BOARD, for the Connected Demo resolution.
+ *
+ * `buildStudentProgressFile` now asks whether this project carries STORY-900 before rendering,
+ * because the progress file seeds one entry per story and this download must not disagree with
+ * the copy a push-access student receives (the paragraph in the module about the fourth copy).
+ * Mocked at the MODEL rather than at `connectedDemoFlag`, so the real resolver stays in the path
+ * and `countStory900` below can prove the wiring in both directions.
+ *
+ * Without this mock the suite reached the real `models/StudentTask`, which loads the real
+ * `config/database` and hangs until the test times out.
+ */
+const countStory900 = jest.fn(async () => 0);
+jest.mock('../../../models/StudentTask', () => ({
+  __esModule: true,
+  default: { count: (...a: unknown[]) => countStory900(...(a as [])) },
+}));
 
 import { buildStudentProgressFile } from '../studentProgressFile';
 import { PROGRESS_FILE_PATH } from '../verification/progressContract';
@@ -114,6 +131,7 @@ beforeEach(() => {
   mockWriteAccess.mockResolvedValue('pull_only');
   mockConnection.mockResolvedValue(pullOnlyRow());
   mockReadProgress.mockResolvedValue(null);
+  countStory900.mockResolvedValue(0);
 });
 
 describe('a pull-only student can reach their own progress file', () => {
@@ -230,5 +248,44 @@ describe('when there is nothing to merge over', () => {
     await expect(buildStudentProgressFile(PRJ)).rejects.toMatchObject({
       error_class: 'NoPublishedPlan',
     });
+  });
+});
+
+/**
+ * The Connected Demo story, and why it is asserted HERE rather than only where the resolver lives.
+ *
+ * A unit test of `connectedDemoMaterializedFor` proves the resolver answers correctly. It proves
+ * nothing about whether this download ASKS it. The module's own header names the failure mode:
+ * four copies of the file set exist, and the expensive way this feature breaks is one of them
+ * disagreeing with the others about which stories exist. So the assertion that matters is that
+ * the seed this student downloads tracks the board, in BOTH directions.
+ */
+describe('the downloaded seed tracks the board on STORY-900', () => {
+  it('omits it when the board does not carry it, and asks the board by story id', async () => {
+    countStory900.mockResolvedValue(0);
+    const file = await buildStudentProgressFile(PRJ);
+    const ids = JSON.parse(file.content).stories.map((s: { id: string }) => s.id);
+    expect(ids).not.toContain('STORY-900');
+    // The literal matters: a lookup on the wrong id would answer 0 forever and look like "off".
+    expect(countStory900).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ story_id: 'STORY-900' }) }),
+    );
+  });
+
+  it('includes it when the board does carry it', async () => {
+    countStory900.mockResolvedValue(1);
+    const file = await buildStudentProgressFile(PRJ);
+    const ids = JSON.parse(file.content).stories.map((s: { id: string }) => s.id);
+    expect(ids).toContain('STORY-900');
+  });
+
+  it('omits it rather than failing the download when the board lookup throws', async () => {
+    // Fails soft on purpose: a student who cannot download their progress file is worse off than
+    // one whose file is missing a story the next download will carry.
+    countStory900.mockRejectedValue(new Error('connection terminated unexpectedly'));
+    const file = await buildStudentProgressFile(PRJ);
+    const ids = JSON.parse(file.content).stories.map((s: { id: string }) => s.id);
+    expect(ids).not.toContain('STORY-900');
+    expect(ids.length).toBeGreaterThan(0);
   });
 });

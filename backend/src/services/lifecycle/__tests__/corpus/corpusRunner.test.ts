@@ -160,6 +160,32 @@ describe('THE VOCABULARY CONTROL: the stage lists are derived, not retyped', () 
   it('CORPUS_STAGES is DISTINCT, so the partition cannot be satisfied by a duplicate', () => {
     expect(new Set(CORPUS_STAGES).size).toBe(CORPUS_STAGES.length);
   });
+
+  it('DB_BACKED_STAGES is pinned by NAME, not merely checked for membership', () => {
+    /*
+     * `GENERATION_STAGES` is pinned by the slice partition above. The database-backed five were
+     * not pinned at all, and a verifier proved it costs: deleting `plan_ready` and
+     * `release_review` left every test green, and the L7.1 corpus record then reported "3
+     * database-backed stages, 13 names" with nothing failing.
+     *
+     * The membership test above cannot catch a deletion, because a shorter list is still a list
+     * of real stages. Only the names can.
+     *
+     * These five are the stages whose evidence needs a database: `approveBlueprint` writes the
+     * approval row and `publishedPlanState` reads the published plan. Adding one here is a claim
+     * that a sixth stage cannot be driven without a database, and removing one is a claim that
+     * it now can. Either is a real change and should fail this until the list is updated with it.
+     */
+    expect([...DB_BACKED_STAGES]).toEqual([
+      'awaiting_blueprint_approval',
+      'blueprint_approved',
+      'planning',
+      'plan_ready',
+      'release_review',
+    ]);
+    // And the whole vocabulary is the two lists joined, so neither can shrink unnoticed.
+    expect(CORPUS_STAGES.length).toBe(GENERATION_STAGES.length + DB_BACKED_STAGES.length);
+  });
 });
 
 describe('a clean case: the runner drives every composed stage and says so', () => {

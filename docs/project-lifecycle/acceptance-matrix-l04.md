@@ -5,8 +5,11 @@ Ticket L0.4 · Blocks L8.6 · Approver: Ali · Drafted 2026-11-02, session `CC-2
 > **Success metric (the ticket's own words):** "Ali can pick any LC ID and reach its evidence in
 > one hop, and every row says deployed versus activated rather than just 'done'."
 
-**Status: DRAFT. It cannot close.** The ticket says so itself — *"Completed only when Phase 8
-closes"* — and L9.7 (LC-10/LC-11 withdrawn) is listed as its input.
+**Status: DRAFT, amended 2026-11-22. It cannot close, for one fewer reason than before.** The
+ticket says so itself: *"Completed only when Phase 8 closes."* Its other stated input was L9.7
+(LC-10/LC-11 withdrawn), and **that input is now satisfied**: the ruling is written at
+`decision-l97-lc10-lc11-rescoped.md` and the two rows below cite it. What remains is Phase 8
+closing, which is not a document.
 
 ## What this file is, and what it deliberately is not
 
@@ -49,8 +52,8 @@ Phase 5. That is the honest number."*
 | **LC-07** | Effort measures disclose basis, coverage, uncertainty, deterministic share | P3-T5 | unit | **no evidence row** | Owed retroactively by Phases 1–3 | unknown |
 | **LC-08** | Every task maps to a justified surface/action or explicit background operation | P4-T1 | unit | `acceptance-evidence.md` → *LC-08* and *LC-08 amended* | **Met, with a stated limit.** Amended to "strengthened": the surface exists and enforces per route. "Proves a workflow" is still not claimed | **Deployed and activated** (routes enforce) |
 | **LC-09** | Interactive design + human controls exist before authorized planning | P4-T6, P6-T2 | int | `acceptance-evidence.md` → *LC-09* | **Partial.** The gate is real and blocking; "interactive" is **declared, not rendered** — nothing clicks anything | Deployed; the gate is activated, the *interaction* claim is unevidenced |
-| **LC-10** | Approval binds authorized human, project/tenant, exact version/hash, selected design | P2-T3 | unit+int | `ruling-lc10-coverage.md`; PR #3595 | **WITHDRAWN, advanced tonight but still not writable.** See below | Deployed; **not** activated — see the role limb |
-| **LC-11** | Material changes invalidate only affected approvals; block stale downstream work | P5-T4 | unit | `phase5-handoff.md` | **WITHDRAWN**, not waiting. Dropped when P5-T1.3's evidence failed five gradings | unknown |
+| **LC-10** | Approval binds authorized human, project/tenant, exact version/hash, selected design | P2-T3 | unit+int | `decision-l97-lc10-lc11-rescoped.md`; `ruling-lc10-coverage.md`; PR #3595; PR #3613 | **WITHDRAWN and RE-SCOPED by the L9.7 ruling, not satisfied and not silently open.** One of two blockers cleared; see below | Deployed; **not** activated, see the role limb |
+| **LC-11** | Material changes invalidate only affected approvals; block stale downstream work | P5-T4 | unit | `decision-l97-lc10-lc11-rescoped.md`; `phase5-handoff.md`; PR #3613 | **WITHDRAWN and RE-SCOPED by the L9.7 ruling**, not waiting. Dropped when P5-T1.3's evidence failed five gradings; the ruling records what would reopen it | unknown |
 | **LC-12** | Stories/releases carry blueprint traceability and demonstrate complete workflows | P6-T3, P6-T4 | unit+int | **no evidence row** | Owed by Phase 6, which **has run**. **See discrepancy 2** | unknown |
 | **LC-13** | Retries/restarts/concurrent commands do not duplicate, erase or silently publish | P2-T4, P7-T3 | int | `blueprintApproval.concurrency.integration.test.ts`; PR #3595 | **No evidence row, but the integration suite EXECUTED on 2026-11-02** — 8 tests incl. its mandatory positive control. Previously it self-skipped in CI | Deployed; the unique index is active |
 | **LC-14** | Cross-tenant access, forged approvals, direct API and worker bypass refused | P7-T2 | int | `acceptance-evidence.md` → *LC-14* | **Partial — 3 of 4 clauses.** The fourth has no path to test and carries a falsifiable tripwire instead | Deployed; the cross-tenant guard sits on a **self-closing migration ramp** — see caveat |
@@ -62,6 +65,13 @@ Phase 5. That is the honest number."*
 ---
 
 ## The four rows tonight moved, and exactly how far
+
+**LC-10 and LC-11 are now ruled, in writing.** Both rows are **withdrawn from the Phase 0 to 8
+acceptance set and re-scoped as named follow-on work** by the L9.7 ruling recorded at
+`decision-l97-lc10-lc11-rescoped.md` (PR #3613), on Ali's delegation of 2026-11-20. A withdrawn
+row and a satisfied row look identical in a summary count and mean opposite things, so the ruling
+states which happened, rejects the three easier answers in writing, and lists what would reopen
+each row. Neither row is claimed by the closing packet.
 
 **LC-10 — one of two blockers cleared, so still not writable.** `ruling-lc10-coverage.md` named the
 outstanding item as *"one integration-tier refusal from the live approve path — stale CAS or

@@ -6,6 +6,7 @@
  * and the failure behaviour (bounded retry, clean typed failure, never a
  * half-built plan) — the two things the pilot got wrong.
  */
+import { FLAGS } from '../../../config/featureFlags';
 import { decomposeBuild, DecomposeError } from '../decomposeService';
 import {
   buildDecomposeUserPrompt,
@@ -85,10 +86,29 @@ describe('prompt grounding', () => {
     expect(p.indexOf(nasty)).toBeLessThan(close);
   });
 
-  it('truncates oversized inputs rather than blowing the context window', () => {
-    const p = buildDecomposeUserPrompt({ brief: 'b'.repeat(MAX_BRIEF_CHARS + 500), document: 'd'.repeat(MAX_DOCUMENT_CHARS + 500) });
-    expect(p).toContain('[truncated at');
-    expect(p.length).toBeLessThan(MAX_BRIEF_CHARS + MAX_DOCUMENT_CHARS + 5000);
+  it('truncates oversized inputs rather than blowing the context window, with the block OFF', () => {
+    /*
+     * L9.6 turned `sbpSourceOverflowBlock` on by default, so this input is now REFUSED rather
+     * than clipped. The clamp is still shipped and still the SAFE-002 defense for anybody using
+     * the escape hatch, so the case forces the flag off instead of being deleted. The default
+     * behavior is asserted directly below it, because a suite that only described clipping would
+     * be describing something production no longer does.
+     */
+    const prev = FLAGS.sbpSourceOverflowBlock;
+    (FLAGS as { sbpSourceOverflowBlock: boolean }).sbpSourceOverflowBlock = false;
+    try {
+      const p = buildDecomposeUserPrompt({ brief: 'b'.repeat(MAX_BRIEF_CHARS + 500), document: 'd'.repeat(MAX_DOCUMENT_CHARS + 500) });
+      expect(p).toContain('[truncated at');
+      expect(p.length).toBeLessThan(MAX_BRIEF_CHARS + MAX_DOCUMENT_CHARS + 5000);
+    } finally {
+      (FLAGS as { sbpSourceOverflowBlock: boolean }).sbpSourceOverflowBlock = prev;
+    }
+  });
+
+  it('and at the DEFAULT it refuses those same inputs instead', () => {
+    expect(() => buildDecomposeUserPrompt({
+      brief: 'b'.repeat(MAX_BRIEF_CHARS + 500), document: 'd'.repeat(MAX_DOCUMENT_CHARS + 500),
+    })).toThrow('source exceeds the prompt budget');
   });
 });
 

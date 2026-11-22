@@ -44,6 +44,7 @@ import showcaseArtifactRoutes from './routes/showcaseArtifactRoutes';
 import buildArtifactRoutes from './routes/buildArtifactRoutes';
 import buildLogDraftRoutes from './routes/buildLogDraftRoutes';
 import publicPortfolioRoutes from './routes/publicPortfolioRoutes';
+import demoRoutes from './routes/demoRoutes';
 import publicCareerPortfolioRoutes from './routes/publicCareerPortfolioRoutes';
 import internVideoStreamRoutes from './routes/internVideoStreamRoutes';
 import publicHireTalentRoutes from './routes/publicHireTalentRoutes';
@@ -95,6 +96,7 @@ import { ensureProjectApprovalSchema } from './db/ensureProjectApprovalSchema';
 import { ensureContractTrackSchema } from './db/ensureContractTrackSchema';
 import { ensureProjectTenantSchema } from './db/ensureProjectTenantSchema';
 import { ensureProjectLifecycleSchema } from './db/ensureProjectLifecycleSchema';
+import { ensureConnectedDemoSchema } from './db/ensureConnectedDemoSchema';
 import { ensureGovQualificationSchema } from './db/ensureGovQualificationSchema';
 import { ensureGovOpportunityDismissalSchema } from './db/ensureGovOpportunityDismissalSchema';
 import { ensureGovSourceBundleSchema } from './db/ensureGovSourceBundleSchema';
@@ -308,6 +310,8 @@ app.use(showcaseArtifactRoutes);
 app.use(buildArtifactRoutes);
 app.use(buildLogDraftRoutes);
 app.use(publicPortfolioRoutes);
+// The public Connected Demo. Unauthenticated, gated on demo_share_enabled, which defaults false.
+app.use(demoRoutes);
 app.use(advisorRoutes);
 app.use(alumniReferralRoutes);
 app.use(qrRedirectRoutes);
@@ -3002,6 +3006,16 @@ async function start(): Promise<void> {
   // and a project created between the two would be unattributable for no reason.
   await ensureProjectTenantSchema();
   await ensureProjectLifecycleSchema();
+  // The Connected Demo's three columns on `projects`. Additive, every statement IF NOT EXISTS,
+  // and `demo_share_enabled` defaults false so no existing project becomes public on deploy.
+  // Wrapped, like every ensure here, because a demo feature must never take the platform down.
+  // Unlike the lifecycle ensure above, this one REJECTS rather than warning, so the catch below
+  // receives a real failure instead of a log line nobody reads.
+  try {
+    await ensureConnectedDemoSchema();
+  } catch (err: any) {
+    console.warn('[boot] connected demo schema unavailable:', err?.error_class || err?.message);
+  }
   // AI Project Factory Phase 2: the Enterprise-owned gov qualification model (gov_qualifications,
   // build_authorizations, gov_opportunity_aliases). Additive NEW tables that FK to delivery_projects
   // (and the qualification table itself) — no existing table is altered; placed after the contract

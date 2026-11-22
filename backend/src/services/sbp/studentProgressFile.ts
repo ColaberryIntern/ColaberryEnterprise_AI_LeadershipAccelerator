@@ -45,6 +45,7 @@
  */
 import { getPublishedPlan, getPlan } from './planStore';
 import { renderDocs } from './renderDocs';
+import { connectedDemoMaterializedFor } from './connectedDemoFlag';
 import { repoWriteAccessForProject } from './repoWriteAccess';
 import { loadBuildProgress } from './buildProgressSnapshot';
 import { readRepoProgressFile } from './repoWriter';
@@ -142,6 +143,10 @@ export async function buildStudentProgressFile(
     progress: snapshot.progress,
     baselineByStory: snapshot.baselineByStory,
     repoWriteAccess,
+    // The paragraph above is exactly why this is here. The progress file carries a seed entry per
+    // story, STORY-900 included; omitting the resolution would make THIS download the fourth copy
+    // that disagrees with the pushed one about whether the demo story exists.
+    connectedDemo: await connectedDemoMaterializedFor(projectId),
   }).find((f) => f.path === PROGRESS_FILE_PATH);
 
   if (!rendered) {
