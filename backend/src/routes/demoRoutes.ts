@@ -78,7 +78,20 @@ function publicHeaders(res: Response, nonce?: string): void {
       "style-src 'self' https: 'unsafe-inline'",
       "font-src 'self' https: data:",
       "img-src 'self' data:",
-      "connect-src 'none'",
+      /*
+       * `'self'`, not `'none'`.
+       *
+       * The demo itself makes no network call: its spec is inline and the engine is
+       * self-contained, so `'none'` was correct about THIS page and wrong about the page as
+       * served. Cloudflare sits in front of production and injects its own bot-detection beacon,
+       * which posts to `/cdn-cgi/challenge-platform/...` on this same origin. Under `'none'` that
+       * post was blocked and every visitor's console carried an error for a request the demo
+       * never made, on a page meant to be shown to outsiders.
+       *
+       * `'self'` is the narrow answer: same origin only, so the beacon works and a demo still
+       * cannot phone anywhere else. Observed on the live page 2026-11-22, after the nonce fix.
+       */
+      "connect-src 'self'",
       "object-src 'none'",
       "base-uri 'none'",
       "form-action 'none'",

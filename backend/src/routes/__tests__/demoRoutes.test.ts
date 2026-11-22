@@ -353,3 +353,16 @@ describe('the content security policy actually permits the page it is sent with'
     }
   });
 });
+
+describe('connect-src', () => {
+  it("allows the same origin, so the edge's own beacon is not blocked, and nothing further", async () => {
+    findOne.mockResolvedValue(rowOf({ demo_spec: SPEC }));
+    const res = await request(app).get(`/api/public/demo/${TOKEN}`);
+    const csp = String(res.headers['content-security-policy'] || '');
+    const directive = csp.split('; ').find((d) => d.startsWith('connect-src ')) || '';
+
+    // Pinned exactly. An assertion that it merely CONTAINS 'self' would pass just as happily
+    // under `connect-src 'self' https:`, which is the whole internet.
+    expect(directive).toBe("connect-src 'self'");
+  });
+});
