@@ -72,7 +72,7 @@ async function assertDraftsValid(m: CommsHubMessage, content: ApprovalContent, t
 export function assertWhatsAppReady(content: ApprovalContent): void {
   if (!content.destinations.some((d) => d.channel === 'whatsapp')) return;
   if (readWhatsAppConfig().notConfigured) throw new MessageRuleError('WhatsApp is not connected, so this message cannot go to a WhatsApp group. Remove the WhatsApp groups or connect WhatsApp first.', 409, 'whatsapp_off');
-  if (!content.drafts.some((d) => d.channel === 'whatsapp')) throw new MessageRuleError('This message goes to a WhatsApp group but has no WhatsApp text yet. Use Shorter, Warmer or More detail to draft it, or write it.', 409, 'no_whatsapp_draft');
+  if (!content.drafts.some((d) => d.channel === 'whatsapp')) throw new MessageRuleError('This message goes to a WhatsApp group but has no WhatsApp text yet. Use Shorter, Warmer or More detail to draft it.', 409, 'no_whatsapp_draft');
 }
 
 async function locked(messageId: string, t: Transaction): Promise<CommsHubMessage> {

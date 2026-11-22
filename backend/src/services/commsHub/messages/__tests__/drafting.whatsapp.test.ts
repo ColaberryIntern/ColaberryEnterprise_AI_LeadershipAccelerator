@@ -111,6 +111,13 @@ describe('the WhatsApp rules in the validator', () => {
     expect(check(`${ok}
 ${fmt}`)).toContain('The WhatsApp message uses formatting symbols (like ** or #). Write it as plain text.');
   });
+  it.each(['*Demo*', '_Demo night_', '~old time~', '* bring a laptop', '- bring a laptop', '• bring a laptop', 'Come (*really*) build'])('WhatsApp\'s own formatting %s is refused', (fmt) => {
+    expect(check(`${ok}\n${fmt}`)).toContain('The WhatsApp message uses formatting symbols (like ** or #). Write it as plain text.');
+  });
+  it.each(['Bring a laptop - and one question.', 'snake_case_names are fine', 'Rated 5*', '©2026 Colaberry™ and Colaberry®'])('plain text %s is NOT taken for formatting or emoji', (txt) => {
+    expect(check(`${ok} ${txt}`)).toEqual([]);
+  });
+  it('a keycap digit counts as an emoji', () => { expect(check(`${ok} 5️⃣`)).toContain('The WhatsApp message has an emoji. Write it as plain text.'); });
   it('an emoji is refused', () => { expect(check(`${ok} \u{1F389}`)).toContain('The WhatsApp message has an emoji. Write it as plain text.'); });
   it('the shared date rules apply: a relative day, a wrong date, or a missing date are refused', () => {
     expect(check(`${ok} See you tomorrow.`).join(' ')).toMatch(/says "tomorrow"/);

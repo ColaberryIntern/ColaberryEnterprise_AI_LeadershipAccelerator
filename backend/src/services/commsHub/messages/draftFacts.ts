@@ -156,7 +156,11 @@ export interface CheckOptions {
 /** CH10.3: a WhatsApp message is plain text, at most this many characters. */
 export const WHATSAPP_MAX_CHARS = 1000;
 const MARKDOWN = /(\*\*|__|~~|`|^\s{0,3}#{1,6}\s|\[[^\]]+\]\([^)]+\))/m;
-const EMOJI = /\p{Extended_Pictographic}/u;
+// WhatsApp's OWN formatting: *bold*, _italic_, ~strike~ around a word or phrase, and line-start bullets.
+// WhatsApp renders these, while the preview shows the symbols, so they are refused too.
+const WA_FORMAT = /(^|[\s(])([*_~])(?=\S)[^\n*_~]*?\S\2(?=$|[\s).,!?:;])|^\s*[*\-•]\s+\S/m;
+// Pictographs (and keycap digits like 5 plus U+20E3), but not the ©, ® and ™ signs.
+const EMOJI = /(?![©®™])\p{Extended_Pictographic}|⃣/u;
 const WHERE: Record<DraftForCheck['channel'], string> = { community_post: 'The community post', in_app: 'The in-app notification', whatsapp: 'The WhatsApp message' };
 
 export function problemsFor(d: DraftForCheck, f: DraftFacts | null, opts: CheckOptions = {}): string[] {
@@ -165,7 +169,7 @@ export function problemsFor(d: DraftForCheck, f: DraftFacts | null, opts: CheckO
   const out: string[] = [];
   if (d.channel === 'whatsapp') {
     if (d.body.length > WHATSAPP_MAX_CHARS) out.push(`${where} is ${d.body.length.toLocaleString('en-US')} characters. Keep it to ${WHATSAPP_MAX_CHARS.toLocaleString('en-US')} or fewer.`);
-    if (MARKDOWN.test(d.body)) out.push(`${where} uses formatting symbols (like ** or #). Write it as plain text.`);
+    if (MARKDOWN.test(d.body) || WA_FORMAT.test(d.body)) out.push(`${where} uses formatting symbols (like ** or #). Write it as plain text.`);
     if (EMOJI.test(d.body)) out.push(`${where} has an emoji. Write it as plain text.`);
   }
   const left = PLACEHOLDERS.filter((p) => text.includes(p));
