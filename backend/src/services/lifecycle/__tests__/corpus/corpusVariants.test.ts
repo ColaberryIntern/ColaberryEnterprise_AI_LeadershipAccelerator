@@ -19,6 +19,11 @@ import {
   MAX_BLOCK_CHARS, MAX_BLOCKS,
 } from '../../../factory/factoryDecomposePrompt';
 import { fieldsOf, abcComposition, caseOf } from './corpusCaseFixtures';
+import {
+  buildDecomposeUserPrompt, sourceOverflows, SourceOverflowError, briefPrecedesDocument,
+  MAX_BRIEF_CHARS,
+} from '../../../sbp/decomposePrompt';
+import { FLAGS } from '../../../../config/featureFlags';
 
 describe('§103 case 5: one person in several roles does NOT satisfy separation of duty', () => {
   /**
@@ -337,5 +342,115 @@ describe('§103 case 7: source overflow drops blocks SILENTLY, and the check doe
     const extra = { ...inputs, sourceBlocks: [...inputs.sourceBlocks, block('blk-never-asked', 'absent')] };
 
     expect(coversRequirementBlocks(prompt, extra)).toBe(false);
+  });
+});
+// ───────── case 7, second path: the SBP pipeline, which now REFUSES rather than clipping ─────────
+
+/**
+ * §103 case 7 asks for "an explicit completeness check, chunking, or a **visible blocking
+ * overflow**". The block above records the FACTORY path, which drops, labels, and whose coverage
+ * check now refuses. This block covers the other path with a budget, and it is the one where the
+ * behavior changed: the **SBP** pipeline, which every student build goes through.
+ *
+ * Until 2026-11-21 `ENABLE_SBP_SOURCE_OVERFLOW_BLOCK` defaulted OFF, so an over-budget brief was
+ * clipped with a `…[truncated at N chars]` label inside the prompt and the build proceeded. The
+ * flag now defaults ON, and the refusal is `SourceOverflowError`, carrying
+ * `error_class: 'SourceOverflowBlocked'`.
+ *
+ * ## Why this arm is here and not only in `decomposePrompt`'s own suite
+ *
+ * `decomposePrompt.sourceTruncation.test.ts` tests the function. This tests the CORPUS CASE: that
+ * one of the eight shapes `reference-fixtures.md` requires is now satisfied by a visible blocking
+ * overflow rather than by a silent one. Those are different claims, and §103 case 7's row is the
+ * one that says which of the three permitted answers the system actually gives.
+ *
+ * Every assertion runs in BOTH directions. A refusal that fired on every input would satisfy a
+ * one-way test while making the pipeline unusable, which is the recurring defect this repo pays
+ * for, so the under-budget control is not optional.
+ */
+describe('§103 case 7, the SBP path: an over-budget source is REFUSED, not clipped', () => {
+  const overBudget = { brief: 'x'.repeat(MAX_BRIEF_CHARS + 1), document: '' };
+  const underBudget = { brief: 'a short brief the student actually wrote', document: '' };
+
+  it('the overflow is DETECTED, with the dropped character count named', () => {
+    // Detection is separate from refusal: `sourceOverflows` is what the operator sees in the log
+    // after turning the block off, and it has to keep working for that to be true.
+    const overflows = sourceOverflows(overBudget);
+
+    expect(overflows).toHaveLength(1);
+    expect(overflows[0].tag).toBe('ORIGINAL_BRIEF');
+    expect(overflows[0].limit).toBe(MAX_BRIEF_CHARS);
+    expect(overflows[0].actual).toBe(MAX_BRIEF_CHARS + 1);
+    // The number that makes the refusal arguable rather than a bare rejection.
+    expect(overflows[0].droppedChars).toBe(1);
+  });
+
+  it('and an under-budget source overflows NOTHING, so detection is not unconditional', () => {
+    expect(sourceOverflows(underBudget)).toEqual([]);
+  });
+
+  it('THE BEHAVIOR CHANGE: the prompt build REFUSES with `SourceOverflowBlocked`', () => {
+    /*
+     * The assertion L7.1's acceptance names. Asserted on the error's own `error_class` rather
+     * than on its message, because the class is what `decomposeService` reads to classify the
+     * failure and what an operator greps for; the message is prose and may be reworded.
+     */
+    expect(FLAGS.sbpSourceOverflowBlock).toBe(true);
+
+    let caught: unknown = null;
+    try {
+      buildDecomposeUserPrompt(overBudget);
+    } catch (err: unknown) {
+      caught = err;
+    }
+
+    expect(caught).toBeInstanceOf(SourceOverflowError);
+    expect((caught as SourceOverflowError).error_class).toBe('SourceOverflowBlocked');
+    // The message names the budget and says what the consequence of proceeding would have been,
+    // because "too long" is not actionable and "shorten or split" is.
+    expect((caught as SourceOverflowError).message).toContain(String(MAX_BRIEF_CHARS));
+    expect((caught as SourceOverflowError).message).toContain('Shorten the input or split the build');
+  });
+
+  it('and an under-budget source still builds, so the refusal is SELECTIVE', () => {
+    // The control, and the one that matters most: a `sourceBlocks` that threw on every input
+    // would pass the test above while refusing every student build in the system.
+    expect(() => buildDecomposeUserPrompt(underBudget)).not.toThrow();
+    expect(buildDecomposeUserPrompt(underBudget)).toContain('a short brief the student actually wrote');
+  });
+
+  it('the SAFE-002 delimiters survive the refusal path, exactly as on the factory path', () => {
+    // The named trap applies to both paths: a fix that refused without keeping the tags would
+    // harden the overflow and weaken injection resistance in the same change.
+    const prompt = buildDecomposeUserPrompt(underBudget);
+    for (const tag of ['ORIGINAL_BRIEF', 'EXPANDED_DOCUMENT']) {
+      expect(prompt).toContain(`<${tag}>`);
+      expect(prompt).toContain(`</${tag}>`);
+    }
+    expect(briefPrecedesDocument(prompt)).toBe(true);
+  });
+
+  it('with the block OFF the same source is CLIPPED rather than refused, which is what changed', () => {
+    /*
+     * The before-state, kept rather than deleted. This is what an operator gets after setting
+     * `ENABLE_SBP_SOURCE_OVERFLOW_BLOCK=false`, which is the documented rollback, so deleting
+     * its coverage on the day the default changed would stop testing a shipped behavior.
+     *
+     * Read through the flag object rather than through `process.env`, because `FLAGS` is
+     * evaluated at module load and an env write here would not reach it.
+     */
+    const saved = FLAGS.sbpSourceOverflowBlock;
+    try {
+      (FLAGS as { sbpSourceOverflowBlock: boolean }).sbpSourceOverflowBlock = false;
+      const prompt = buildDecomposeUserPrompt(overBudget);
+      expect(prompt).toContain('truncated');
+      // And the overflow is still DETECTED with the block off, which is what makes the label
+      // honest rather than decorative.
+      expect(sourceOverflows(overBudget)).toHaveLength(1);
+    } finally {
+      (FLAGS as { sbpSourceOverflowBlock: boolean }).sbpSourceOverflowBlock = saved;
+    }
+    // Restored, so the suite order cannot change the result of the test above.
+    expect(FLAGS.sbpSourceOverflowBlock).toBe(true);
   });
 });
