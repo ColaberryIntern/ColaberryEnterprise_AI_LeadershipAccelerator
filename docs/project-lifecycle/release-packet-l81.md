@@ -39,7 +39,7 @@ That is the commit to roll back *to* if either merge turns out badly. Record the
 
 | PR | Branch | Head SHA | Checks |
 |---|---|---|---|
-| the spine closeout PR | `workstream/spine-closeout-connected-demo` | `aa1df0c79f067925e5c3d4bcc228540fbc9db14e` | recorded on the PR |
+| [#4311](https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/4311) | `workstream/spine-closeout-connected-demo` | `aa1df0c79f067925e5c3d4bcc228540fbc9db14e` | recorded on the PR |
 
 - **Reviewed head SHA:** `aa1df0c79f067925e5c3d4bcc228540fbc9db14e`
 
