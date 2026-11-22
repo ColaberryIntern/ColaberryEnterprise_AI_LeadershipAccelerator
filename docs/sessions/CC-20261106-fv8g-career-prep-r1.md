@@ -753,3 +753,24 @@ tests/systemV2/career-prep/.
     compares text split on LF. Proof: with mountLearnerPortalRoutes.ts converted to LF the suite passes 7/7 (the file
     was then restored). CI checks out LF. Postgres integration suites (ensurePlacementSchema, inboxService,
     inboxTestJob, inboxEvents) run in CI's integration tier; no local Postgres.
+
+- [x] CP8.4 Release 2 checkpoint: interviews and booking, on branch workstream/career-prep-r2r3
+  - Date: 2026-11-21
+  - Session: CC-20261106-fv8g
+  - What changed (loop run 20261121-career-prep-r2r3, T15 to T20, gates run at head c15b39b11 plus the T21 commit,
+    draft PR https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/4292, not merged, not
+    deployed): interview states, events and ingestion (T15); the booking-link reply (T16); the token, slot grid and public
+    booking API (T17, 8011e8726); the booking page, room with recording off, and confirmations (T18, 81696245f);
+    reminders and the 24 h nudge (T19, c82a6880b, 5dba200cb); the Interviews sheet, the booked interview as the learner's
+    prep row, the card and the anchors (T20, a30c9e62c, c15b39b11). Employer email is switched off at ship.
+    T21 itself: careerPrepInboxRoutes.test.ts loads its router once in beforeAll (it timed out on a loaded machine,
+    the same pattern T20 fixed); 4 parallel batches green.
+  - Verification: backend tsc 0, frontend tsc 0; backend `npx jest -c jest.ci.config.ts --ci` 3115 suites passed,
+    4 failed, 62 skipped (50438 tests passed): careerPrepInboxRoutes (load timeout, fixed in this commit, then 4 of 4
+    green under 4 parallel batches) and the 3 known CRLF artifacts (mountLearnerPortalRoutes, generateReese*); frontend
+    jest (testEnv excluded, as CI) 823 suites passed, 2 failed (publicNextOpenHouseJs, governmentHeaderParity: the
+    known CRLF artifacts); CI=true build compiled; secret-scan OK; lint-route-auth OK; test typecheck baseline matched;
+    hire site node --test 149/149; Career Prep browser suites 49/49 across 4 suites (Edge, built app); scope check
+    clean. CI on c15b39b11: every PR check green, Integration tier all 59 suites (bookingConfirm 4/4, bookingService 2/2,
+    bookingScheduler 2/2, interviewIngest, careerPrep interviews 4/4).
+  - Notes: no local Postgres; the integration suites run only in CI.

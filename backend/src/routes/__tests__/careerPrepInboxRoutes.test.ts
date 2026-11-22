@@ -23,12 +23,18 @@ const token = (sub = 'enr-ali', extra: Record<string, unknown> = {}) => `Bearer 
 // The real server's view right after a save: forwarding not verified yet, so health is 'setup' (inboxHealth.ts).
 const VIEW = { address: 'ann.lee.careers@gmail.com', health: 'setup', healthLabel: 'Not set up yet', verifiedAt: null, forwardingConfirmedAt: null, lastReceivedAt: null,
   lastTestAt: null, lastTestMs: null, receivedThisMonth: 0, steps: { create: true, added: true, forwarding: false, tested: false } };
+// The route module pulls in the app's models; loading it is slow on a loaded machine, so it is loaded ONCE before any
+// test, with its own budget (never inside a test's 5 seconds), and every test reuses one app (T20 fold pattern).
+let shared: express.Express | null = null;
+beforeAll(async () => {
+  const router = (await import('../careerPrepInboxRoutes')).default;
+  shared = express();
+  shared.use(express.json());
+  shared.use(router);
+}, 60_000);
 function app(): express.Express {
-  const a = express();
-  a.use(express.json());
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  a.use(require('../careerPrepInboxRoutes').default);
-  return a;
+  if (!shared) throw new Error('the router did not load');
+  return shared;
 }
 const URL = '/api/portal/career-prep/inbox';
 beforeEach(() => { mockEnabled.mockReset().mockResolvedValue(true); mockGet.mockReset().mockResolvedValue(VIEW); mockSave.mockReset(); mockList.mockReset().mockResolvedValue([]); });
