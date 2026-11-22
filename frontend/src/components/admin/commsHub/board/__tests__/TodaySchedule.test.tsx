@@ -90,7 +90,7 @@ beforeEach(() => {
     history: [
       row({ id: 'h1', status: 'partially_failed', title: 'Office Hours: starting soon', send_at: iso(-48 * HOUR), deliveries: { total: 3, sent: 2, failed: 1, pending: 0, cancelled: 0 }, failure: { reason: 'Some recipients did not receive it after every try.', missed: ['Alumni cohort'], attempts: 4 } }),
       row({ id: 'h2', status: 'failed', title: 'Office Hours: reminder', send_at: iso(-96 * HOUR), failure: { reason: 'Nothing was delivered after every try.', missed: ['All members'], attempts: 4 } }),
-      row({ id: 'h3', status: 'sent', title: 'Demo Tuesday: recording and thanks', send_at: iso(-120 * HOUR) }),
+      row({ id: 'h3', status: 'sent', title: 'Demo Tuesday: recording and thanks', send_at: iso(-120 * HOUR), notes: ['Already in the WhatsApp group, so it was not sent again.'] }),
     ],
   };
   (api.getCommsHubSummary as jest.Mock).mockResolvedValue(SUMMARY);
@@ -231,6 +231,8 @@ describe('Schedule & history', () => {
 
   it('the WhatsApp card says it is not connected (CH10.1); the activity log reads as sentences', async () => {
     await renderAt('/admin/comms-hub/schedule');
+    // CH10.4: a history row shows its plain-words note (here: an earlier try had already sent it).
+    expect(container.textContent).toContain('Already in the WhatsApp group, so it was not sent again.');
     expect(container.querySelector('[data-testid="ch-whatsapp-card"]')?.textContent).toContain('Not connected');
     expect(container.textContent).not.toContain('WhatsApp: coming next.');
     expect(container.querySelector('.ch-activity')?.textContent).toContain('Jackie approvedDemo Tuesday: reminder');

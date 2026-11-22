@@ -376,6 +376,8 @@ export interface BoardRow {
   approved_by: string | null;
   deliveries: { total: number; sent: number; failed: number; pending: number; cancelled: number };
   failure: { reason: string; missed: string[]; attempts: number } | null;
+  /** CH10.4: WhatsApp waits and already-sent notes, in plain words. Older servers may not send it. */
+  notes?: string[];
 }
 export interface BoardFilter { status?: HubMessageStatus[]; channel?: Channel | null; event_id?: string | null; limit?: number }
 export async function getBoard(scope: BoardScope, f: BoardFilter = {}): Promise<BoardRow[]> {
@@ -407,10 +409,15 @@ export async function retryHubMessage(id: string): Promise<MessageView> { return
 
 /** CH10.1: the WhatsApp channel's state. Never carries the token or the full number. */
 export type WhatsAppState = 'not_configured' | 'connected' | 'waiting_for_qr' | 'disconnected';
-export interface WhatsAppStatus { configured: boolean; enabled: boolean; state: WhatsAppState; number_last4: string | null; reason: string | null }
+export interface WhatsAppStatus { configured: boolean; enabled: boolean; state: WhatsAppState; number_last4: string | null; reason: string | null; paused_until?: string | null }
 export async function getWhatsAppStatus(): Promise<WhatsAppStatus> {
   const { data } = await api.get<WhatsAppStatus>('/api/admin/comms-hub/whatsapp/status');
   return data;
+}
+
+/** CH10.4: resume WhatsApp sends before the 48-hour pause ends (organizers only; asks for a confirm first). */
+export async function clearWhatsAppPause(): Promise<{ cleared: boolean }> {
+  return (await api.post<{ cleared: boolean }>('/api/admin/comms-hub/whatsapp/breaker/clear', { confirm: true })).data;
 }
 
 /** CH10.2: the number's WhatsApp groups. Every group starts switched off. */

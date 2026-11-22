@@ -36,7 +36,7 @@ jest.mock('../../../../models/CommsHubSettings', () => ({ __esModule: true, defa
 jest.mock('../../connectors/inAppConnector', () => ({ ALL_MEMBERS: 'all_members' }));
 jest.mock('../messageLifecycle', () => ({ approvalStillMatches: jest.fn(async () => matches), finishMessage: jest.fn(), startMessage: jest.fn() }));
 
-import { bannerUrl, deliveryRepo, sendLockKey } from '../deliveryRepo';
+import { ALREADY_DONE_NOTE, bannerUrl, deliveryRepo, sendLockKey } from '../deliveryRepo';
 import type { ClaimedDelivery, SendContext, SendOutcome } from '../types';
 
 const NOW = new Date('2026-11-20T16:00:00Z');
@@ -90,6 +90,7 @@ describe('withSendLock', () => {
     expect(seen).toEqual({
       settings: { paused: false, quietHours: { start: '21:00', end: '08:00' } }, messageStatus: 'sending', approvalMatches: true,
       destinationAllowed: true, draft: { title: null, body: 'Body' }, media_urls: ['https://enterprise.colaberry.ai/api/comms-hub/thumbnails/e1/3x1.png?v=t7'],
+      eventStarted: false,
     });
     expect(out?.kind).toBe('sent');
     expect(delivery!.update).toHaveBeenCalledWith({ status: 'sent', provider_message_id: 'post-9', sent_at: NOW, error: null, next_attempt_at: null }, { transaction: tx });
@@ -117,6 +118,36 @@ describe('withSendLock', () => {
     expect(await run({ kind: 'failed', error: 'Error: y' })).toEqual({ status: 'failed', next_attempt_at: null, error: 'Error: y' });
     expect(await run({ kind: 'hold', until: later, reason: 'quiet_hours' })).toEqual({ status: 'pending', next_attempt_at: later, attempt_count: 0, error: 'held: quiet_hours' });
     expect(await run({ kind: 'skip', status: 'skipped', reason: 'destination_not_allowed' })).toEqual({ status: 'skipped', next_attempt_at: null, error: 'destination_not_allowed' });
+  });
+
+  it('CH10.4 one WhatsApp send at a time across the hub: every WhatsApp delivery shares one lock', () => {
+    expect(sendLockKey(claim({ channel: 'whatsapp', target_type: 'whatsapp_group', target_id: 'g1' }))).toBe('comms_hub:whatsapp');
+    expect(sendLockKey(claim({ channel: 'whatsapp', target_type: 'whatsapp_group', target_id: 'g2', message_id: 'm9' }))).toBe('comms_hub:whatsapp');
+  });
+
+  it('CH10.4 a send an earlier attempt had already made is recorded as sent WITH a note; a fresh send has none', async () => {
+    delivery = rowOf({ id: 'dl1', status: 'sending', attempt_count: 1 });
+    await deliveryRepo.withSendLock(claim(), NOW, async () => ({ kind: 'sent', provider_message_id: 'wa-1', reached: 1, already_done: true }));
+    expect(delivery!.update.mock.calls[0][0]).toMatchObject({ status: 'sent', provider_message_id: 'wa-1', error: ALREADY_DONE_NOTE });
+  });
+
+  it('CH10.4 a WhatsApp send gets the banner too, and a plan message whose event has started is flagged too late', async () => {
+    destination = { id: 'd1', message_id: 'm1', channel: 'whatsapp', target_type: 'whatsapp_group', target_id: 'g1' };
+    mockGroup = { id: 'g1', enabled: true, left_at: null, suspended: false, terminated: false, announcements: false, our_rank: 'member', cant_send_reason: null };
+    const ctxFor = async (m: Record<string, unknown>): Promise<SendContext> => {
+      message = m;
+      let seen: SendContext | null = null;
+      delivery = rowOf({ id: 'dl1', status: 'sending', attempt_count: 1 });
+      await deliveryRepo.withSendLock(claim({ channel: 'whatsapp', target_type: 'whatsapp_group', target_id: 'g1' }), NOW, async (ctx) => { seen = ctx; return { kind: 'failed', error: 'x' }; });
+      return seen!;
+    };
+    const base = { id: 'm1', status: 'sending', event_id: 'e1', include: { thumbnail: true } };
+    const plain = await ctxFor(base);
+    expect([plain.media_urls, plain.eventStarted]).toEqual([['https://enterprise.colaberry.ai/api/comms-hub/thumbnails/e1/3x1.png?v=t7'], false]);
+    expect((await ctxFor({ ...base, plan_kind: 'reminder', occurrence_starts_at: new Date(NOW.getTime() - 1) })).eventStarted).toBe(true);
+    expect((await ctxFor({ ...base, plan_kind: 'reminder', occurrence_starts_at: new Date(NOW.getTime() + 3600_000) })).eventStarted).toBe(false);
+    expect((await ctxFor({ ...base, plan_kind: null, occurrence_starts_at: new Date(NOW.getTime() - 1) })).eventStarted).toBe(false);
+    mockGroup = null;
   });
 
   it('CH10.3 a WhatsApp group is allowed only while it is in the hub, switched on and one the number can post in; never via a cohort lookup', async () => {

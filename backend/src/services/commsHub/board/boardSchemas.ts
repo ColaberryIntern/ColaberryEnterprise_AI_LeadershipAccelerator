@@ -43,6 +43,7 @@ export const BoardRow = z.object({
   approved_by: z.string().nullable(),
   deliveries: z.object({ total: z.number(), sent: z.number(), failed: z.number(), pending: z.number(), cancelled: z.number() }),
   failure: z.object({ reason: z.string(), missed: z.array(z.string()), attempts: z.number() }).nullable(),
+  notes: z.array(z.string()),
 }).strict();
 export const BoardResponse = z.object({ rows: z.array(BoardRow) }).strict();
 

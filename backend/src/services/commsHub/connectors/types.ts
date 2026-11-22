@@ -34,6 +34,14 @@ export interface Connector {
   send(d: ConnectorDelivery): Promise<ConnectorResult>;
 }
 
+/**
+ * CH10.4: not now, and not a failure (WhatsApp pacing, its daily window or cap, a disconnected phone,
+ * the breaker). The worker records a hold: back to pending at `until`, and the try is given back.
+ */
+export class ConnectorHoldError extends Error {
+  constructor(readonly until: Date, readonly reason: string) { super(`held until ${until.toISOString()}: ${reason}`); this.name = 'ConnectorHoldError'; }
+}
+
 /** A refusal the worker must not retry (bad destination, missing cohort): the delivery fails. */
 export class ConnectorPermanentError extends Error {
   constructor(message: string, public readonly reason: string) { super(message); }

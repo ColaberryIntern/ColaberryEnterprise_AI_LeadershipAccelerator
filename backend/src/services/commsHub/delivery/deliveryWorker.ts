@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { connectorFor, ConnectorPermanentError, type Connector } from '../connectors';
+import { connectorFor, ConnectorHoldError, ConnectorPermanentError, type Connector } from '../connectors';
 import type { CommsHubChannel } from '../../../models/CommsHubDraft';
 import { quietUntil } from './quietHours';
 import { DELIVERIES_PER_TICK, MESSAGES_PER_TICK, nextAttemptAt, SEND_HARD_LIMIT_MS, SEND_TIMEOUT_MS } from './retryPolicy';
@@ -60,6 +60,7 @@ export function preSendCheck(ctx: SendContext, now: Date): SendOutcome | null {
   if (ctx.messageStatus !== 'sending') return { kind: 'skip', status: 'cancelled', reason: `message is ${ctx.messageStatus}` };
   if (!ctx.approvalMatches) return { kind: 'failed', error: 'approval_changed: the message changed after it was approved' };
   if (!ctx.destinationAllowed) return { kind: 'skip', status: 'skipped', reason: 'destination_not_allowed' };
+  if (ctx.eventStarted) return { kind: 'skip', status: 'skipped', reason: 'event_already_started' };
   const quiet = quietUntil(now, ctx.settings.quietHours);
   if (quiet) return { kind: 'hold', until: quiet, reason: 'quiet_hours' };
   if (!ctx.draft) return { kind: 'failed', error: 'no_draft: there is no draft for this channel' };
@@ -74,14 +75,16 @@ export async function deliverOne(deps: WorkerDeps, d: ClaimedDelivery, now: Date
       const sending = deps.connector(d.channel).send({
         deliveryId: d.id, messageId: d.message_id, since: d.first_claimed_at,
         destination: { target_type: d.target_type, target_id: d.target_id },
-        draft: ctx.draft!, media_urls: d.channel === 'community_post' ? ctx.media_urls : undefined,
+        draft: ctx.draft!, media_urls: d.channel === 'community_post' || d.channel === 'whatsapp' ? ctx.media_urls : undefined,
       });
       const r = await settleHoldingLock(sending, SEND_TIMEOUT_MS, SEND_HARD_LIMIT_MS,
         () => deps.log('warn', 'comms_hub_send_slow', { delivery_id: d.id, channel: d.channel, outcome: 'partial', after_ms: SEND_TIMEOUT_MS }));
-      return { kind: 'sent', provider_message_id: r.provider_message_id, reached: r.reached };
+      return { kind: 'sent', provider_message_id: r.provider_message_id, reached: r.reached, already_done: r.already_done };
     } catch (err) {
       // Not recorded: leave the transaction so it rolls back; the lease reclaims the row.
       if (err instanceof SendAbandonedError) throw err;
+      // CH10.4: WhatsApp pacing, window, cap, breaker or a disconnected phone: wait, without spending the try.
+      if (err instanceof ConnectorHoldError) return { kind: 'hold', until: err.until, reason: err.reason };
       const e = err as Error & { reason?: string };
       const error = `${e?.name ?? 'Error'}: ${e?.message ?? String(err)}`.slice(0, 2000);
       if (err instanceof ConnectorPermanentError) return { kind: 'failed', error };

@@ -147,11 +147,25 @@ export const COMMS_HUB_SCHEMA_STATEMENTS: readonly string[] = [
      alert_recipients JSONB NOT NULL DEFAULT '[]'::jsonb,
      test_cohort_id UUID,
      updated_by VARCHAR(64),
-     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+     whatsapp_next_send_at TIMESTAMPTZ,
+     whatsapp_day DATE,
+     whatsapp_day_count INTEGER NOT NULL DEFAULT 0,
+     whatsapp_breaker_until TIMESTAMPTZ,
+     whatsapp_breaker_reason VARCHAR(64),
+     whatsapp_breaker_alerted_for VARCHAR(128)
    )`,
   `ALTER TABLE comms_hub_settings ADD CONSTRAINT comms_hub_settings_singleton CHECK (id = 1)`,
   // updated_at given explicitly: a table created by a model sync has no database default for it.
   `INSERT INTO comms_hub_settings (id, updated_at) VALUES (1, now()) ON CONFLICT (id) DO NOTHING`,
+  // CH10.4 WhatsApp sending state (W6 pacing, W7 breaker), on the one settings row. All nullable or
+  // defaulted, so the existing row is untouched until WhatsApp first sends.
+  `ALTER TABLE comms_hub_settings ADD COLUMN IF NOT EXISTS whatsapp_next_send_at TIMESTAMPTZ`,
+  `ALTER TABLE comms_hub_settings ADD COLUMN IF NOT EXISTS whatsapp_day DATE`,
+  `ALTER TABLE comms_hub_settings ADD COLUMN IF NOT EXISTS whatsapp_day_count INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE comms_hub_settings ADD COLUMN IF NOT EXISTS whatsapp_breaker_until TIMESTAMPTZ`,
+  `ALTER TABLE comms_hub_settings ADD COLUMN IF NOT EXISTS whatsapp_breaker_reason VARCHAR(64)`,
+  `ALTER TABLE comms_hub_settings ADD COLUMN IF NOT EXISTS whatsapp_breaker_alerted_for VARCHAR(128)`,
 
   `CREATE TABLE IF NOT EXISTS comms_hub_activity (
      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

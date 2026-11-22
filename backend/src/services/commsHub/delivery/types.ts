@@ -34,10 +34,13 @@ export interface SendContext {
   destinationAllowed: boolean;
   draft: { title: string | null; body: string } | null;
   media_urls: string[];
+  /** CH10.4: a WhatsApp send for a promotion-plan message whose event has already started (too late to go out). */
+  eventStarted?: boolean;
 }
 
 export type SendOutcome =
-  | { kind: 'sent'; provider_message_id: string; reached: number }
+  /** already_done: an earlier attempt had already sent it (found, not sent again). */
+  | { kind: 'sent'; provider_message_id: string; reached: number; already_done?: boolean }
   /** Try again at `at` (the same row, the same idempotency key). */
   | { kind: 'retry'; at: Date; error: string }
   | { kind: 'failed'; error: string }

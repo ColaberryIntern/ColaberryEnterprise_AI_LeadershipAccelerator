@@ -40,10 +40,13 @@ describe('ensureCommsHubSchema: DDL and models agree', () => {
       { table: 'comms_hub_events', column: 'ccpp_event_id' },
       { table: 'comms_hub_events', column: 'source_image_url' },
       { table: 'comms_hub_events', column: 'ccpp_missing_since' },
+      // CH10.4 WhatsApp sending state on the settings row.
+      ...['whatsapp_next_send_at', 'whatsapp_day', 'whatsapp_day_count', 'whatsapp_breaker_until', 'whatsapp_breaker_reason', 'whatsapp_breaker_alerted_for'].map((column) => ({ table: 'comms_hub_settings', column })),
       { table: 'community_events', column: 'hub_event_id' },
     ]);
     expect(modelColumnNames(modelsByTable().community_events).has('hub_event_id')).toBe(true);
     for (const c of ['ccpp_event_id', 'source_image_url', 'ccpp_missing_since']) expect(modelColumnNames(modelsByTable().comms_hub_events).has(c)).toBe(true);
+    for (const c of ['whatsapp_next_send_at', 'whatsapp_day', 'whatsapp_day_count', 'whatsapp_breaker_until', 'whatsapp_breaker_reason', 'whatsapp_breaker_alerted_for']) expect(modelColumnNames(modelsByTable().comms_hub_settings).has(c)).toBe(true);
   });
 });
 

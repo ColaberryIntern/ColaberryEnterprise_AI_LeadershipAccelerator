@@ -6,6 +6,8 @@ import {
   GroupNotFoundError, GroupNotSendableError, listWhatsAppGroups, setGroupEnabled, syncWhatsAppGroups, type WhatsAppGroupView,
 } from '../../services/commsHub/whatsapp/whatsappGroups';
 import { NotConnectedError, WhatsAppProviderError } from '../../services/commsHub/whatsapp/provider';
+import { sendStateStore } from '../../services/commsHub/whatsapp/sendState';
+import { logActivity } from '../../services/commsHub/activityLog';
 import { logFailure, sendValidated } from '../campusRoutes';
 import { actorOf } from './commsHubEventRoutes';
 
@@ -19,7 +21,28 @@ export const WhatsAppStatusSchema = z.object({
   state: z.enum(['not_configured', 'connected', 'waiting_for_qr', 'disconnected']),
   number_last4: z.string().regex(/^\d{4}$/).nullable(),
   reason: z.string().max(300).nullable(),
+  /** CH10.4: WhatsApp limited the number, so the hub stopped WhatsApp sends until this instant. */
+  paused_until: z.string().datetime().nullable(),
 }).strict();
+
+/** CH10.4: who may clear the breaker early (with a confirm): legacy admins, owners, admins, community organizers. */
+const CLEAR_ROLES = new Set(['owner', 'admin', 'community_organizer']);
+function mayClearBreaker(req: Request): boolean {
+  const a = req.admin as { role?: string; mgmt_role?: string } | undefined;
+  if (!a) return false;
+  if (a.mgmt_role) return CLEAR_ROLES.has(a.mgmt_role);
+  return a.role === 'admin' || a.role === 'super_admin';
+}
+
+async function pausedUntil(): Promise<string | null> {
+  try {
+    const s = await sendStateStore.read();
+    return s.breaker_until && s.breaker_until.getTime() > Date.now() ? s.breaker_until.toISOString() : null;
+  } catch (err) {
+    logFailure('comms_hub_whatsapp_breaker_read_failed', err);
+    return null;
+  }
+}
 
 const router = Router();
 router.get('/api/admin/comms-hub/whatsapp/status', requireSection('comms_hub'), async (_req: Request, res: Response) => {
@@ -32,6 +55,7 @@ router.get('/api/admin/comms-hub/whatsapp/status', requireSection('comms_hub'), 
       configured: s.configured, enabled: s.enabled, state: s.state,
       number_last4: typeof s.number_last4 === 'string' && /^\d{4}$/.test(s.number_last4) ? s.number_last4 : null,
       reason: s.reason === null ? null : String(s.reason).slice(0, 300),
+      paused_until: await pausedUntil(),
     };
     sendValidated(res, WhatsAppStatusSchema, body, 'comms_hub_whatsapp_status');
   } catch (err) {
@@ -94,6 +118,25 @@ router.put('/api/admin/comms-hub/whatsapp/groups/:id', requireSection('comms_hub
     if (err instanceof GroupNotSendableError) { res.status(409).json({ error: err.message, error_class: 'GroupNotSendable' }); return; }
     logFailure('comms_hub_whatsapp_group_failed', err);
     res.status(500).json({ error: 'The group could not be changed.', error_class: 'GroupFailed' });
+  }
+});
+
+/**
+ * CH10.4 POST /whatsapp/breaker/clear {confirm: true}: resume WhatsApp sends before the 48 hours are up.
+ * WhatsApp limited the number for a reason, so this needs the hub section AND an organizer-level role,
+ * an explicit confirm, and leaves an activity row naming who did it.
+ */
+const ClearBody = z.object({ confirm: z.literal(true) }).strict();
+router.post('/api/admin/comms-hub/whatsapp/breaker/clear', requireSection('comms_hub'), async (req: Request, res: Response) => {
+  if (!mayClearBreaker(req)) { res.status(403).json({ error: 'Only an owner, admin or community organizer can resume WhatsApp early.', error_class: 'Forbidden' }); return; }
+  if (!ClearBody.safeParse(req.body).success) { res.status(400).json({ error: 'Send { "confirm": true } to resume WhatsApp sends.', error_class: 'ValidationError' }); return; }
+  try {
+    const was = await sendStateStore.clearBreaker();
+    await logActivity(actorOf(req), 'whatsapp.breaker_cleared', 'settings', null, { was_until: was ? was.toISOString() : null });
+    res.json({ cleared: was !== null });
+  } catch (err) {
+    logFailure('comms_hub_whatsapp_breaker_clear_failed', err);
+    res.status(500).json({ error: 'WhatsApp could not be resumed.', error_class: 'BreakerClearFailed' });
   }
 });
 

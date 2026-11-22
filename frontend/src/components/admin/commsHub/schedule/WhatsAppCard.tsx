@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { SectionCard } from '../../shell';
 import { getWhatsAppStatus, type WhatsAppStatus } from '../../../../services/commsHubApi';
 import WhatsAppGroups from './WhatsAppGroups';
+import WhatsAppPause from './WhatsAppPause';
 
 /**
  * CH10.1 The WhatsApp card on Schedule & history: the channel's state in plain words. WhatsApp ships
@@ -46,6 +47,7 @@ export default function WhatsAppCard(): React.ReactElement {
             </p>
             <p className="mb-0">{whatsAppHeadline(status)}</p>
             {status.state === 'not_configured' && status.reason && <p className="small text-muted mt-1 mb-0">{status.reason}</p>}
+            {status.paused_until && <WhatsAppPause until={status.paused_until} onCleared={load} />}
             {status.configured && <WhatsAppGroups connected={status.state === 'connected'} />}
           </>
         )}

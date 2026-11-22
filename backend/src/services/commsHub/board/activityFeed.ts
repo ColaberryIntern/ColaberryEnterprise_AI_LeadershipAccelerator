@@ -26,6 +26,7 @@ const VERB: Record<string, string> = {
   'registrants.viewed': 'viewed the registrants of', 'registrants.exported': 'downloaded the registrants of',
   'whatsapp.groups_synced': 'synced the WhatsApp groups', 'whatsapp.group_enabled': 'switched on WhatsApp sending to',
   'whatsapp.group_disabled': 'switched off WhatsApp sending to',
+  'whatsapp.breaker_cleared': 'resumed WhatsApp sends early', 'whatsapp.alert': 'raised a WhatsApp alert',
 };
 
 export interface ActivityRow { id: string; at: string; who: string; did: string; about: string | null; entity_type: string; entity_id: string | null }
