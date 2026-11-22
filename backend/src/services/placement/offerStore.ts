@@ -30,8 +30,15 @@ export async function byClientKey(key: string, t?: Transaction): Promise<OfferRo
   return (await rows<OfferRow>('SELECT * FROM placement_offers WHERE client_key = :key', { key }, t))[0];
 }
 
-/** The group's current version, locked. */
+/**
+ * The group's current version, locked. The group's VERSION 1 row is locked first as the group's anchor (it always
+ * exists and never changes), then the current row is read. Locking the current row directly loses a race: a second
+ * writer waiting on it re-checks `superseded_at IS NULL` after the first commits, finds that row superseded, and gets
+ * nothing (found by offerStore.integration: two concurrent edits, the second answered not_found).
+ */
 export async function lockCurrent(groupId: string, t: Transaction): Promise<OfferRow | undefined> {
+  const anchor = await rows<{ id: string }>('SELECT id FROM placement_offers WHERE offer_group_id = :g AND version = 1 FOR UPDATE', { g: groupId }, t);
+  if (!anchor.length) return undefined;
   return (await rows<OfferRow>('SELECT * FROM placement_offers WHERE offer_group_id = :g AND superseded_at IS NULL FOR UPDATE', { g: groupId }, t))[0];
 }
 
