@@ -206,6 +206,80 @@ area.** Adding frontend copy means running the frontend typography lint.
 Saved to memory against the existing `frontendCopyLint` note, which had not recorded that a
 second ratchet of the same family exists.
 
+---
+
+## Deployed and verified
+
+Merged as `7cdbaeabb`, deployed 2026-11-22 01:05Z. **Both containers genuinely replaced:**
+
+| | image before → after | started before → after |
+|---|---|---|
+| backend | `32db6cce143b` → `4896d7ffe697` | 2026-11-21T22:04:35Z → 2026-11-22T01:05:12Z |
+| nginx | `d5bf425c2f56` → `3b85731fd7bc` | 2026-11-21T22:05:47Z → 2026-11-22T01:06:05Z |
+
+Registry mode confirmed `:main` matched `sha-7cdbaeabb...` for both images before pulling.
+
+Note for next time: compose printed **`backend Running`** rather than `Recreated`, which
+yesterday was the signature of a genuine partial deploy. It was not one here — the image id
+and `StartedAt` both moved. **That is exactly why the proof is the image id and the timestamp
+and never the compose verb.**
+
+### The build cascade happened again and was waited out
+
+Four consecutive merges had their builds cancelled by the next: `88a74603f`, `478960c76`,
+`c7ae23a26`, `afe1c288f`. The last successful build at that moment was `136909d41`, and
+`git merge-base --is-ancestor` proved it does **not** contain this merge, with the reversed
+direction confirming the check itself works. Deploying then would have served pre-merge code
+and reported success.
+
+### Evidence, with controls both ways
+
+Backend container: deal-value route 1, confirmed event 1, revised event 1, no-identity refusal
+1, `monthlyFeeCents` 3, roster builder 1; positive control 2, **negative control 0**.
+Served nginx bundle: panel heading 2, multiplication line 2, basis hint 2, empty-state copy 2;
+positive control 2, **negative control 0**. All four admin surfaces 200, `/health` 200 ok.
+
+### One piece of evidence discarded as worthless
+
+The unauthenticated `POST .../deal-value` returns 401 — but so does a negative control
+(`POST .../deal-value-zzzz`, a route that does not exist), because `requireAdmin` runs before
+route matching on that prefix. **The 401 proves the prefix is gated and nothing about whether
+the route is mounted.** The mount rests on the compiled artifact instead.
+
+### Two hours lost to a hostname I invented
+
+I verified against `https://app.colaberry.ai/...`, which **does not exist**. Every URL returned
+`000` from both the prod box and the laptop, which reads exactly like a total outage
+immediately after a deploy. The real admin surface is **`enterprise.colaberry.ai`**, and the
+public host is `www.refactored.ai`. Saved to memory, including the inverse trap: a Host header
+matching no `server_name` still returns 200 from the default block.
+
+The 5 backend errors in the window were unrelated `intel-card-content`
+`IncompleteGeneration` noise from an AI content pipeline.
+
+---
+
+## The table is no longer empty, and it changes what this card reports
+
+`enterprise_intakes` now holds **1 row**: *Acme Test Logistics*, blank service field, status
+`interviewed`, created 2026-11-21 15:40Z. `enterprise_deal_values` still holds 0.
+
+So the stream status flips `measured_zero` → `live`, and the headline moves from "no inquiries
+yet" to "no signed deal yet". Both honest, different sentences. The blank service field
+exercises the path built for it: the row renders with a *plan not recorded* flag rather than
+being defaulted into Plan A.
+
+### The gap this exposes, raised rather than built
+
+That row looks like a **test record**. The government stream already solved this:
+`suspectReasons()` flags a test row, a duplicate title or a missing delivery project, and the
+pricing panel shows the flag so whoever is pricing can see which rows **not** to price. The
+enterprise roster has no equivalent, so a test inquiry counts as a real one in a funnel on a
+board Ram reads.
+
+Not fixed here: flagging logic is new scope rather than part of the write path. Logged as the
+recommended next piece per the scope-lock rule.
+
 ## Commits
 
 - `8646de548` — R23 Phase 3: the write path
