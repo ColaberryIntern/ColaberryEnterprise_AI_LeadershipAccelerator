@@ -1,6 +1,6 @@
 import React from 'react';
 import { badgeLevel, buttonSub, openFloors, roomName, roomsText, type HqFloor, opensInPlace } from './hqModel';
-import HqRoomLink from './HqRoomLink';
+import HqRoomLink, { roomBridgeBlockedReason } from './HqRoomLink';
 import type { HqState } from './useHq';
 import { HqPeople, type HqPerson } from './HqPeople';
 import type { HqPlaced } from './hqModel';
@@ -82,11 +82,14 @@ export function HqFloorScene({ s, f, people, agents = [] }: { s: HqState; f: HqF
       <div className="offices">
         {f.rooms.map((r) => {
           const here = hq.isStaff ? people.byRoom.get(r.path) ?? [] : [];
+          // AF12.15: the plate agrees with the door. `.office.is-disabled` already greyed this one;
+          // only the lettering still promised to open.
+          const blocked = roomBridgeBlockedReason(r);
           const inner = (<>
             {r.external && r.open && <span className="ext">↗</span>}
             {/* C103 (Ali, 2026-10-31): no /admin address on the door; it pushed the OPEN plates out of line */}
             <span className="gl"><i className={`ri-${r.icon}`} /><b title={roomName(r, hq.isStaff)}>{roomName(r, hq.isStaff)}</b></span>
-            <span className="pl">{r.open ? (r.own ? 'OPEN →' : 'OPEN ↗') : '🔒 NO ACCESS'}</span><span className="kn" />
+            <span className="pl">{!r.open ? '🔒 NO ACCESS' : blocked ? '🔒 VIEWING AS' : r.own ? 'OPEN →' : 'OPEN ↗'}</span><span className="kn" />
             {here.length > 0 && <span className="who"><HqPeople people={here} label={`At ${r.label}`} size="sm" /></span>}
           </>);
           return r.open ? (

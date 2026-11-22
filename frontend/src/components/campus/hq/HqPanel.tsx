@@ -1,6 +1,6 @@
 import React from 'react';
 import { badgeLevel, floorStatus, openFloors, roomName, roomsText, type HqFloor, type HqPlaced } from './hqModel';
-import HqRoomLink from './HqRoomLink';
+import HqRoomLink, { roomBridgeBlockedReason } from './HqRoomLink';
 import type { HqState } from './useHq';
 import { HqPeople, type HqPerson } from './HqPeople';
 import type { StaffDesk } from '../campusPeopleApi';
@@ -61,9 +61,12 @@ export function HqPanel({ s, who, face, placed, agents = [] }: { s: HqState; who
         <div className="sec">{isCareerPrepFloor(f) ? <>Doors on this floor <small>{doorsText(f.rooms.length)}</small></> : <>Rooms on this floor <small>{f.openCount} open</small></>}</div>
         <div className="cm-hq-rlist">
           {f.rooms.map((r) => {
+            // AF12.15: a room the badge opens can still be withheld by view-as, and the chip has to
+            // say so. Badge lock and view-as block are different faults with different fixes.
+            const blocked = roomBridgeBlockedReason(r);
             const body = (<><i className={`ic ri-${r.icon}`} /><span className="t"><b>{roomName(r, hq.isStaff)}</b><code>{r.path.replace('https://', '')}</code></span>
               <HqPeople people={placed.byRoom.get(r.path) ?? []} label={`At ${r.label}`} size="sm" />
-              <span className="go">{r.open ? (r.external ? 'Open ↗' : r.own ? 'Open →' : 'Open in admin ↗') : '🔒'}</span></>);
+              <span className="go">{!r.open ? '🔒' : blocked ? '🔒 Viewing as' : r.external ? 'Open ↗' : r.own ? 'Open →' : 'Open in admin ↗'}</span></>);
             return r.open
               ? <HqRoomLink key={r.path} room={r} className="cm-hq-rrow" testId="cm-hq-rrow">{body}</HqRoomLink>
               : <button key={r.path} type="button" className="cm-hq-rrow lock" aria-disabled="true" onClick={() => s.lockedRoom(r)}>{body}</button>;

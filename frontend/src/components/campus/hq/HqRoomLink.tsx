@@ -1,6 +1,39 @@
 import React from 'react';
 import AdminLink from '../AdminLink';
 import { roomHref, opensInPlace, type HqRoom } from './hqModel';
+import { mgmtBridgeBlockedReason } from '../../../pages/portal/mgmtBridgeGate';
+
+/**
+ * Whether this room's link goes through the Management Portal bridge: the one shape of the three
+ * below that can substitute an identity, and so the only one view-as withholds.
+ *
+ * Exported because the row's own "Open in admin ↗" chip has to agree with it, and because
+ * the component reads it too, so the chip and the link cannot disagree.
+ */
+export const roomGoesThroughBridge = (room: HqRoom): boolean => !opensInPlace(room) && !room.external;
+
+/**
+ * Why this room cannot be opened right now, or null when it can.
+ *
+ * ## AF12.15, reported by Ali on 2026-11-21 from his own view-as screenshot
+ *
+ * The refusal above was complete and the row was correctly dead: `aria-disabled`, the reason on
+ * `title`, the reason in the accessible name, and `.is-disabled` greying it in `hq.css`. But
+ * `AdminLink` renders the CALLER'S children unchanged, and those children end in a chip that
+ * still read "Open in admin ↗". So a blocked room announced an action it would not perform,
+ * next to badge-locked rooms that honestly showed a padlock.
+ *
+ * That is not merely cosmetic: the two states have different causes and different fixes. A badge
+ * lock means ask an admin for the section; a view-as block means leave view-as. A room that shows
+ * neither, while promising to open, sends the viewer to look for a fault that isn't there.
+ *
+ * Returning the reason rather than a boolean keeps the sentence in one place (mgmtBridgeGate),
+ * and returning null for the non-bridge shapes keeps view-as itself working: a member's own
+ * cockpit and a Career Prep door open in the SAME tab, which is the whole point of view-as.
+ */
+export const roomBridgeBlockedReason = (room: HqRoom): string | null => (
+  roomGoesThroughBridge(room) ? mgmtBridgeBlockedReason() : null
+);
 
 /**
  * AF2.7b — the ONE anchor every campus HQ room is drawn with, so the view-as rule reaches the
@@ -46,7 +79,9 @@ export default function HqRoomLink({ room, className, testId, ariaLabel, childre
   const inPlace = opensInPlace(room);
   const href = roomHref(room);
   // Not through the bridge, so there is no identity to substitute and nothing to withhold.
-  if (inPlace || room.external) {
+  // Asked via `roomGoesThroughBridge` rather than re-testing the two shapes here, so the chip
+  // the caller draws and the link this returns can never disagree about what is blocked.
+  if (!roomGoesThroughBridge(room)) {
     return (
       <a
         className={className}
