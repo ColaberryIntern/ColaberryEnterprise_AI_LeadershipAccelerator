@@ -108,7 +108,7 @@ async function main() {
     }
     let unpaid = 0;
     for (const r of canceled) {
-      const note = `Marked not-paid ${TODAY}: free-access (comp) grant was canceled and no payment exists; access unchanged`;
+      const note = `Marked not-paid ${TODAY}: comp (complimentary access) grant was canceled and no payment exists; access unchanged`;
       const u = await db.query(
         `UPDATE enrollments SET payment_status = 'pending', notes = ${appendNote}
          WHERE id = $1 AND payment_status = 'paid' AND COALESCE(amount_paid, 0) = 0`,
