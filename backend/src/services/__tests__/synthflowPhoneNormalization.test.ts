@@ -3,6 +3,8 @@ jest.mock('../../config/env', () => ({
     databaseUrl: 'postgres://user:pass@localhost:5432/test',
     nodeEnv: 'test',
     enableVoiceCalls: true,
+    // Agent comms tool: these suites exercise the dial path itself, so every path is allowed here.
+    voiceCallPaths: 'open_house,interest,callback,welcome,project_discovery,internship_interview,ai-flotation,enterprise-intake,cpn,colaberry-internship,agent-tool,alert,admissions,test',
     synthflowApiKey: 'test-key',
     synthflowAiFlotationAgentId: 'agent-flotation',
     synthflowInternshipAgentId: '',

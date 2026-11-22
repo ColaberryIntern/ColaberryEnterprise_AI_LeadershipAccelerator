@@ -113,7 +113,7 @@ export const ENTERPRISE_BRAND: CallBrand = {
   origin: 'the Colaberry Enterprise website, where they asked for a demo pilot',
   blurb: 'Colaberry builds, guides and trains companies into AI: it finds the process where AI pays back, proves it with a demo pilot on that process, then keeps going department by department. Every pilot starts from understanding the work, which is what this call is for.',
   pace: 'Aim to finish in under 10 minutes. By about 8 minutes, confirm the one or two things you would otherwise have to guess and move to the ending. Never rush them mid-answer.',
-  closing: 'Then tell them: our team will research their company and come to the first meeting with options for their pilot, so that meeting starts with options rather than questions. Someone from Colaberry will email them to set it up.',
+  closing: 'Then tell them: our team will research their company and come to the meeting with options for their pilot, ranked by what each could return, so that meeting starts with options rather than questions. If they already booked their meeting with Ali on the website, that is when they will see them; if not, they can book it on the same page.',
 };
 
 /**

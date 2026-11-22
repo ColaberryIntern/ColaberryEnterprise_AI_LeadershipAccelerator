@@ -4,6 +4,7 @@ import {
   type AgentEmailInbox, type AgentEmailDraft,
 } from '../../../services/agentEmailApi';
 import AgentEmailExplorerPreview from './AgentEmailExplorerPreview';
+import { CallsSection, IdentityLine, InboundSection, PendingRepliesSection } from './AgentEmailSections';
 import { showsExplorerPreview } from './explorerPreviewAgents';
 
 /**
@@ -29,6 +30,11 @@ import { showsExplorerPreview } from './explorerPreviewAgents';
  *
  * The inbound panel renders its `reason` when it has one. An empty list would read as "nobody has
  * replied"; the truth today is "she has no address to be replied to". Opposite actions.
+ *
+ * ── AGENT COMMS (2026-11-22): replies and calls live in AgentEmailSections.tsx ──
+ *
+ * Once an agent has an address, mail sent to it and the replies she drafts appear here. Approving
+ * a REPLY sends it (the opposite of the drafts above), so that panel says so on its own button.
  */
 
 const REASON_LABEL: Record<string, string> = {
@@ -105,10 +111,17 @@ export default function AgentEmailTab({ agentId }: { agentId: string }) {
 
   return (
     <div>
+      <IdentityLine identity={inbox.identity} />
+
       <div className="alert alert-info py-2 small" role="note">
-        <strong>Approving does not send.</strong> It records that a human said yes. Sending is a
-        separate step and is not switched on yet.
+        <strong>Approving does not send.</strong> For the drafts below, it records that a human said
+        yes; sending them is a separate step and is not switched on yet. Replies to people who wrote
+        to {inbox.agentName} are different: approving one sends it.
       </div>
+
+      {(inbox.pendingReplies?.items.length ?? 0) > 0 && (
+        <PendingRepliesSection items={inbox.pendingReplies?.items ?? []} agentName={inbox.agentName} onDecided={() => { void load(); }} />
+      )}
 
       {/* The UPSTREAM of this queue, for the agents whose journey produces it. It sits above the
           drafts deliberately: the draft queue is structurally empty today, and an empty queue with
@@ -137,20 +150,9 @@ export default function AgentEmailTab({ agentId }: { agentId: string }) {
         />
       )}
 
-      <div className="card border-0 shadow-sm mb-4">
-        <div className="card-header bg-white fw-semibold">Replies</div>
-        <div className="card-body">
-          {inbox.inbound.reason === 'no_agent_address' ? (
-            <p className="text-muted mb-0 small">
-              This agent has no email address yet, so there is nothing for anyone to reply to.
-              This is not &ldquo;no replies&rdquo; &mdash; the mailbox does not exist. Replies will
-              appear here once an address is configured for her.
-            </p>
-          ) : (
-            <p className="text-muted mb-0 small">No replies yet.</p>
-          )}
-        </div>
-      </div>
+      <InboundSection inbound={inbox.inbound} />
+
+      <CallsSection calls={inbox.calls ?? []} />
 
       <div className="card border-0 shadow-sm">
         <div className="card-header bg-white fw-semibold">Sent ({inbox.sent.length})</div>

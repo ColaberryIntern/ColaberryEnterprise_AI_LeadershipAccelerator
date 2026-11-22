@@ -178,6 +178,16 @@ describe('the grant, which nothing else in the codebase enforces', () => {
     findOne.mockResolvedValue(agentRow({ tools_granted: ['retrieve_knowledge', AGENT_EMAIL_TOOL] }));
     expect((await readAgentGate(REQ.agentName)).usable).toBe(true);
   });
+
+  it('agent comms: the same gate checks the named tool; each grant opens only its own tool', async () => {
+    findOne.mockResolvedValue(agentRow({ tools_granted: [AGENT_EMAIL_TOOL] }));
+    expect((await readAgentGate(REQ.agentName, 'place_ai_call')).reason).toBe('tool_not_granted');
+    findOne.mockResolvedValue(agentRow({ tools_granted: ['place_ai_call'] }));
+    expect((await readAgentGate(REQ.agentName, 'place_ai_call')).usable).toBe(true);
+    expect((await readAgentGate(REQ.agentName)).reason).toBe('tool_not_granted');
+    findOne.mockResolvedValue(agentRow({ tools_granted: ['place_ai_call'], enabled: false }));
+    expect((await readAgentGate(REQ.agentName, 'place_ai_call')).reason).toBe('agent_disabled');
+  });
 });
 
 describe('an agent that cannot be read or used', () => {

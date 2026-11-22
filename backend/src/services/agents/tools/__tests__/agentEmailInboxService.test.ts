@@ -7,6 +7,10 @@ jest.mock('../../../../config/database', () => ({
 // `agentEmailTool`, which reaches the models and the safety service. Nothing here is asserted.
 jest.mock('../../../../models', () => ({ AiAgent: { findOne: jest.fn() } }));
 jest.mock('../../../communicationSafetyService', () => ({ evaluateSend: jest.fn() }));
+// T11: the inbox reads the agent's email identity first. Null (no address) by default, which keeps
+// the read queries in drafts, sent, calls order; the identity cases set it.
+const mockIdentity = jest.fn();
+jest.mock('../../email/agentEmailIdentity', () => ({ resolveAgentEmailIdentity: (...a: unknown[]) => mockIdentity(...a) }));
 
 import {
   getAgentEmailInbox, approveAgentDraft, discardAgentDraft, AGENT_APPROVED_STATUS,
@@ -56,6 +60,7 @@ function sqlOf(n: number): string {
 
 beforeEach(() => {
   query.mockReset();
+  mockIdentity.mockReset().mockResolvedValue(null);
   jest.spyOn(console, 'error').mockImplementation(() => {});
 });
 
@@ -200,5 +205,71 @@ describe('discarding', () => {
   it('cannot revive an already-decided draft', async () => {
     query.mockResolvedValue([[], 0]);
     expect((await discardAgentDraft('draft-1', 'ali@colaberry.com')).ok).toBe(false);
+  });
+});
+
+const MAYA_ID = { agentName: 'Maya', slug: 'maya', displayName: 'Maya', fromAddress: 'maya@colaberry.com', fromHeader: '"Maya" <maya@colaberry.com>', replyTo: 'maya@reply.colaberry.ai' };
+
+describe('T11 an agent WITH an address: sent, inbound, pending replies, calls', () => {
+  /** Answer each read by what it queries, so the test does not depend on Promise.all ordering. */
+  function byTable(rows: { sent?: unknown[]; inbound?: unknown[]; pending?: unknown[]; calls?: unknown[] }) {
+    query.mockImplementation(async (sql: string) => {
+      if (/maya_outbound_approvals/.test(sql)) return rows.pending ?? [];
+      if (/direction = 'inbound'/.test(sql)) return rows.inbound ?? [];
+      if (/channel = 'voice'/.test(sql)) return rows.calls ?? [];
+      if (/direction = 'outbound'/.test(sql)) return rows.sent ?? [];
+      return [];
+    });
+  }
+
+  it('sent is outbound EMAIL only, dated by created_at (there is no sent_at column), and non-empty with data', async () => {
+    mockIdentity.mockResolvedValue(MAYA_ID);
+    byTable({ sent: [{ id: 's1', to_address: 'pat@acme.com', subject: 'Re: pilot', status: 'sent', sent_at: '2026-11-22T15:00:00.000Z', error_message: null }] });
+    const inbox = await getAgentEmailInbox('Maya');
+    expect(inbox.sent).toEqual([{ id: 's1', toAddress: 'pat@acme.com', subject: 'Re: pilot', status: 'sent', sentAt: '2026-11-22T15:00:00.000Z', errorMessage: null }]);
+    const sql = query.mock.calls.map((c) => String(c[0])).find((q) => /direction = 'outbound'/.test(q))!;
+    expect(sql).toMatch(/created_at AS sent_at/);
+    expect(sql).toMatch(/channel = 'email'/);
+  });
+
+  it('inbound is real once she has an address, with what happened to each message', async () => {
+    mockIdentity.mockResolvedValue(MAYA_ID);
+    byTable({ inbound: [{ id: 'i1', from_address: 'pat@acme.com', subject: 'Question', preview: 'How long?', lead_id: null, created_at: '2026-11-22T14:00:00.000Z', metadata: { agent_name: 'Maya', draft_outcome: 'queued' } }] });
+    const inbox = await getAgentEmailInbox('Maya');
+    expect(inbox.identity).toEqual({ fromHeader: '"Maya" <maya@colaberry.com>', replyTo: 'maya@reply.colaberry.ai' });
+    expect(inbox.inbound).toEqual({ reason: null, items: [{ id: 'i1', fromAddress: 'pat@acme.com', subject: 'Question', preview: 'How long?', leadId: null, receivedAt: '2026-11-22T14:00:00.000Z', draftOutcome: 'queued', draftReason: null }] });
+  });
+
+  it('pending replies are scoped to THIS agent (agent_reply:<slug>:, plus Maya\'s older maya_reply:)', async () => {
+    mockIdentity.mockResolvedValue(MAYA_ID);
+    byTable({ pending: [{ id: 'p1', recipient_address: 'pat@acme.com', subject: 'Re: Question', body: '<p>Hi</p>', status: 'pending_approval', created_at: '2026-11-22T14:01:00.000Z', expires_at: null }] });
+    const inbox = await getAgentEmailInbox('Maya');
+    expect(inbox.pendingReplies.items[0]).toMatchObject({ id: 'p1', toAddress: 'pat@acme.com', status: 'pending_approval' });
+    const call = query.mock.calls.find((c) => /maya_outbound_approvals/.test(String(c[0])))!;
+    expect((call[1] as { bind: Record<string, unknown> }).bind).toEqual({ own: 'agent_reply:maya:', legacy: 'maya_reply:' });
+  });
+
+  it('calls show the summary and only the last four digits; a reservation reads as dialing', async () => {
+    mockIdentity.mockResolvedValue(MAYA_ID);
+    byTable({ calls: [{ id: 'c1', lead_id: 42, to_address: '+12145550142', status: 'reserving', created_at: '2026-11-22T16:00:00.000Z', metadata: { purpose: 'Pilot timeline', summary: 'Pat asked about timing.', summary_state: 'summarized', outcome: 'completed' } }] });
+    const [call] = (await getAgentEmailInbox('Maya')).calls;
+    expect(call).toEqual({ id: 'c1', leadId: 42, phoneLast4: '0142', status: 'dialing', purpose: 'Pilot timeline', outcome: 'completed', summary: 'Pat asked about timing.', summaryState: 'summarized', createdAt: '2026-11-22T16:00:00.000Z' });
+    expect(JSON.stringify(call)).not.toContain('2145550142');
+  });
+
+  it('an identity READ FAILURE is reported as unavailable, never as "she has no address"', async () => {
+    mockIdentity.mockRejectedValue(new Error('db down'));
+    query.mockResolvedValue([]);
+    const inbox = await getAgentEmailInbox('Maya');
+    expect(inbox.inbound.reason).toBe('identity_unavailable');
+    expect(inbox.pendingReplies.reason).toBe('identity_unavailable');
+  });
+
+  it('an agent with no address: inbound and pending replies say why, and are never queried', async () => {
+    query.mockResolvedValue([]);
+    const inbox = await getAgentEmailInbox(AGENT);
+    expect(inbox.identity).toBeNull();
+    expect(inbox.pendingReplies).toEqual({ items: [], reason: 'no_agent_address' });
+    expect(query.mock.calls.some((c) => /maya_outbound_approvals|direction = 'inbound'/.test(String(c[0])))).toBe(false);
   });
 });

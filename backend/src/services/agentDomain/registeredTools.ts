@@ -46,7 +46,7 @@ import { MAYA_TOOL_GOVERNANCE } from '../maya/mayaToolGovernance';
  * everything that asks "is this a real tool". `registeredTools.test.ts` reads that file and
  * asserts the two agree, so the restatement cannot drift.
  */
-export const HANDLER_BACKED_TOOLS: ReadonlyArray<string> = ['send_email'];
+export const HANDLER_BACKED_TOOLS: ReadonlyArray<string> = ['send_email', 'place_ai_call'];
 
 type FunctionTool = { type: string; function?: { name?: string } };
 

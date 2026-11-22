@@ -58,6 +58,13 @@ describe('the restatement cannot drift from the source that defines it', () => {
     expect(HANDLER_BACKED_TOOLS).toContain(match![1]);
   });
 
+  it('place_ai_call is still what AGENT_CALL_TOOL is set to (agent comms, 2026-11-22)', () => {
+    const src = fs.readFileSync(path.join(BACKEND_SRC, 'services', 'agents', 'tools', 'agentCallTool.ts'), 'utf8');
+    const match = /AGENT_CALL_TOOL\s*=\s*'([^']+)'/.exec(src);
+    expect(match).not.toBeNull();
+    expect(HANDLER_BACKED_TOOLS).toContain(match![1]);
+  });
+
   it('every handler-backed name is one agentEmailTool or a tool module actually defines', () => {
     // If a later ticket adds a name here, this fails until that name is traceable to source.
     // A registered-tool list that can be extended by typing into it is not a registry.

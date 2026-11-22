@@ -12,6 +12,11 @@ const mockIntakeCreate = jest.fn();
 const mockIntakeFindOne = jest.fn();
 
 jest.mock('../../../config/env', () => ({ env: mockEnv }));
+// The real resolveAgentId lives in synthflowService, whose import graph opens the database. The rule
+// it applies to the intake (own agent, else the shell) is pinned in synthflowAgentResolution.test.ts.
+jest.mock('../../synthflowService', () => ({
+  resolveAgentId: () => (mockEnv as any).synthflowEnterpriseIntakeAgentId || (mockEnv as any).synthflowAiFlotationAgentId || '',
+}));
 jest.mock('../../../models/EnterpriseIntake', () => ({
   __esModule: true,
   default: {
@@ -96,6 +101,8 @@ beforeEach(() => {
     enableVoiceCalls: true,
     synthflowApiKey: 'key',
     synthflowEnterpriseIntakeAgentId: 'agent-enterprise',
+    synthflowAiFlotationAgentId: '',
+    voiceCallPaths: 'enterprise-intake',
   });
   mockCreateLead.mockResolvedValue({ lead: { id: 7 } });
   mockIntakeCreate.mockImplementation(async (r: any) => ({ ...r, id: 'tok-1' }));
@@ -156,6 +163,17 @@ describe('the form arrives', () => {
     expect(() => intakeFormSchema.parse({ ...FORM, phone: '' })).toThrow();
     expect(() => intakeFormSchema.parse({ ...FORM, phone: '555 0100' })).toThrow();
     expect(intakeFormSchema.parse(FORM).phone).toBe('(214) 555-0100');
+  });
+
+  it('agent comms: offers no call while the intake path is not on VOICE_CALL_PATHS', async () => {
+    mockEnv.voiceCallPaths = 'agent-tool';
+    expect((await createEnterpriseIntake(FORM, { ipAddress: null, userAgent: null })).callAvailable).toBe(false);
+  });
+
+  it('agent comms: with no agent of its own, borrows the shell and offers the call', async () => {
+    mockEnv.synthflowEnterpriseIntakeAgentId = '';
+    mockEnv.synthflowAiFlotationAgentId = 'agent-flotation';
+    expect((await createEnterpriseIntake(FORM, { ipAddress: null, userAgent: null })).callAvailable).toBe(true);
   });
 
   it('offers no call while the Enterprise agent is not configured', async () => {

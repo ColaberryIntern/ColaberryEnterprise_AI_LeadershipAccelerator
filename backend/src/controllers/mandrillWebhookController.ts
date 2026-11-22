@@ -15,6 +15,7 @@ import { recordReplyClassification } from '../services/growthJourney/replyClassi
 import { recordReplyHandoff } from '../services/growthJourney/replyHandoffHook';
 import { redactForLogs } from '../utils/piiRedaction';
 import { sendInboundAutoReply } from '../services/inbound/inboundAutoReply';
+import { agentStampFor, defaultRouterDeps, draftForAgentAddressedLead, routeUnknownSenderToAgent } from '../services/inbound/agentRecipientRouter';
 import { mirrorToGhlInBackground } from '../services/ghlMirrorService';
 import { recordFollowUpEngagement } from '../services/placement/followUpTracking';
 
@@ -334,6 +335,9 @@ export async function handleMandrillInbound(req: Request, res: Response): Promis
         continue;
       }
 
+      // Agent comms (2026-11-22): mail to an agent from someone with no Lead row is the agent's to answer.
+      if ((await routeUnknownSenderToAgent(msg, fromEmail, subject, body, defaultRouterDeps())).handled) { processed++; continue; }
+
       // Find lead by email
       const lead = await Lead.findOne({ where: { email: fromEmail } });
       if (!lead) {
@@ -412,7 +416,7 @@ export async function handleMandrillInbound(req: Request, res: Response): Promis
         subject,
         body,
         provider: 'mandrill',
-        metadata: { in_reply_to: inReplyTo || null },
+        metadata: { in_reply_to: inReplyTo || null, ...(await agentStampFor(msg, defaultRouterDeps())) },
       }).catch((err) => console.warn('[MandrillInbound] Comm log failed:', err.message));
 
       // Check if lead has an active simulation — resume it with the reply
@@ -538,6 +542,8 @@ export async function handleMandrillInbound(req: Request, res: Response): Promis
       } catch (mayaErr: any) {
         console.warn(`[MandrillInbound] Maya reply draft failed for lead ${lead.id}: ${mayaErr?.message}`);
       }
+      // Agent comms: a lead-matched message addressed to an agent that Maya's campaign drafter did not take is drafted by that agent.
+      if (!explorerHandled && (await draftForAgentAddressedLead(msg, lead as { id: number; name?: string | null }, fromEmail, subject, body, defaultRouterDeps())).handled) { processed++; continue; }
 
       // Auto-reply: generate an AI response and send it back
       try {

@@ -14,7 +14,7 @@
  *  3. **It routes to the alternative that fits the reason.** A bad number needs a correct number,
  *     not a callback to the same bad number. A platform-wide stop needs no outbound route at all.
  *
- * ── THERE ARE SEVEN SKIP REASONS, NOT SIX ───────────────────────────────────
+ * ── THERE ARE EIGHT SKIP REASONS (path_not_allowed added 2026-11-22) ──────────
  *
  * An earlier version of this table named six and a reviewer found the seventh: `invalid_phone`
  * (`synthflowService.ts:222`), raised after the number is normalised. The generic guard in the
@@ -34,6 +34,7 @@ export const VOICE_SKIP_REASONS = [
   'no_api_key',
   'no_agent_id',
   'no_prompt',
+  'path_not_allowed',
 ] as const;
 
 export type VoiceSkipReason = typeof VOICE_SKIP_REASONS[number];
@@ -54,6 +55,9 @@ const SUMMARIES: Readonly<Record<VoiceSkipReason, string>> = Object.freeze({
   no_prompt:
     'The call could not be set up safely, so no call was placed. Offer to arrange a callback '
     + 'with schedule_callback.',
+  path_not_allowed:
+    'Calling is not switched on for this kind of call, so no call was placed. Do not say a call is '
+    + 'coming. Offer to arrange a callback with schedule_callback, or the booking calendar.',
   no_phone:
     'No phone number reached the calling system, so no call was placed. Ask for their phone '
     + 'number before trying again.',
@@ -66,6 +70,11 @@ const SUMMARIES: Readonly<Record<VoiceSkipReason, string>> = Object.freeze({
 export const VOICE_SKIP_SUMMARY_FALLBACK =
   'No call was placed. Do not say a call is coming. Offer to arrange a callback with '
   + 'schedule_callback instead.';
+
+/** Maya's voice capability is not `live` (shadow or review): nothing was dialed. */
+export const VOICE_NOT_LIVE_SUMMARY =
+  'No call was placed: calls from this chat are switched off. Do not say a call is coming. '
+  + 'Offer to arrange a callback with schedule_callback, or the booking calendar, instead.';
 
 /** Always answers. An unknown reason gets the fallback rather than an empty string. */
 export function voiceSkipSummary(reason: string | null | undefined): string {
