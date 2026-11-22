@@ -110,6 +110,16 @@ function sessionsTable(sessions) {
     <p class="muted">${esc(M.ATTEND_FLOOR)} Walk-ins came without registering for that session. "Took part" counts everyone who did something in the room, walk-ins and members included. "Paid after" = registrants who paid to enroll after that Open House started. Follow-ups start with the 3 Dec Open House.</p>`;
 }
 
+/** OH1y: every payer this window, by where they came from. Counts only. */
+function payersPanel(p, prevP) {
+  if (!p) return '';
+  if (!p.total) return `<p class="muted">Nobody paid to enroll in this window.${prevP && prevP.total ? ` The week before: ${prevP.total}.` : ''}</p>`;
+  const tr = p.by_origin.map((o) => `<tr><td>${esc(I.ORIGIN[o.origin] || o.origin)}</td><td class="num">${o.n}</td><td class="num">${o.came}</td></tr>`).join('');
+  return `<p><b>${p.total}</b> people paid to enroll (${p.monthly} monthly, ${p.annual} annual)${prevP ? `; the week before, ${prevP.total}` : ''}. ${p.oh_registered} had registered for an Open House; ${p.came_before_paying} came to one before paying.</p>
+    <table class="tbl sm"><thead><tr><th>Where they came from</th><th>Paid</th><th>Came to an Open House first</th></tr></thead><tbody>${tr}</tbody></table>
+    <p class="muted">Paid = a PaySimple payment on a monthly or annual plan, first started in this window; comp plans are not counted. "From an ad sign-up" is the funnel above; every other row came in another way.</p>`;
+}
+
 /** Plain names for the messages the platform sends on its own (not campaign steps). */
 const MESSAGE_NAMES = {
   open_house_welcome: 'Welcome email, right after sign-up',
@@ -151,4 +161,4 @@ function shotsPanel(shots) {
   return `<section><h2>📸 What the visitor sees</h2><p class="lede">Captured on a phone-sized screen, because most visitors are on a phone.</p><div class="shots">${shots.map((s) => `<figure><img src="${s.src}" alt="${esc(s.title)}"/><figcaption><b>${esc(s.title)}</b><br/>${esc(s.caption)}</figcaption></figure>`).join('')}</div></section>`;
 }
 
-module.exports = { kpiTiles, funnelTable, forkCards, mermaidSankey, mermaidTree, emailPanel, sessionsTable, commsPanel, messageLabel, shotsPanel, MERMAID, PILL, STATUS, I, X, M };
+module.exports = { kpiTiles, funnelTable, forkCards, mermaidSankey, mermaidTree, emailPanel, sessionsTable, payersPanel, commsPanel, messageLabel, shotsPanel, MERMAID, PILL, STATUS, I, X, M };

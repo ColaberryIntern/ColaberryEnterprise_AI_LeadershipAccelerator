@@ -5,6 +5,12 @@
 'use strict';
 const { pct, grade, delta, funnel, ATTEND_FLOOR } = require('./model');
 
+/** Where a payer came from, in words (collect.sql payers.origin). Exported for the report and the email. */
+const ORIGIN = {
+  ad_signup: 'Ad sign-up', ad_visit: 'Visited the ad page, did not sign up', oh_other_door: 'Open House registrant, another door',
+  winback: 'Win-back or alumni campaign', earlier_oh_lead: 'Earlier Open House lead (before the ads)', other: 'Somewhere else',
+};
+
 function kpis(cur, prev, targets) {
   const j = cur.journey, pj = prev && prev.journey;
   const tile = (icon, label, value, sub, g, prevValue, unit) => ({
@@ -27,10 +33,8 @@ function kpis(cur, prev, targets) {
       return tile('🎤', 'Came to the Open House', j.attended, j.oh_held ? `${g.pct}% of ${j.oh_held} whose session happened (a floor)` : 'no Open House has happened yet',
         g, pj && pj.attended);
     })()]),
-    ...(j.paid_held === undefined ? [] : [(() => {
-      const g = grade('paid', j.paid_held, j.oh_held, targets);
-      return tile('💳', 'Paid to enroll', j.paid_held, j.oh_held ? `${g.pct}% of ${j.oh_held} whose Open House happened` : 'no Open House has happened yet', g, pj && pj.paid_held);
-    })()]),
+    ...(cur.payers === undefined ? [] : [tile('💳', 'Paid to enroll, every source', cur.payers.total,
+      `${j.paid ?? 0} of them came from the ads`, null, prev && prev.payers && prev.payers.total)]),
   ];
 }
 
@@ -46,6 +50,10 @@ function findings(cur, targets) {
   }
   const j = cur.journey;
   out.push(...attendanceFindings(j, targets));
+  if (cur.payers && cur.payers.total) {
+    const p = cur.payers, top = p.by_origin.map((o) => `${ORIGIN[o.origin] || o.origin}: ${o.n}`).join('; ');
+    out.push({ tone: 'good', icon: '💰', text: `${p.total} people paid to enroll this week (${p.monthly} monthly, ${p.annual} annual): ${top}. ${p.came_before_paying} had come to an Open House before paying.` });
+  }
   if (j.entered > 0 && j.played === 0) {
     out.push({ tone: 'bad', icon: '⏸️', text: `${j.entered} people reached the welcome video and none pressed play. The step between “in the account” and “watching” is the one to fix first.` });
   }
@@ -86,11 +94,11 @@ function attendanceFindings(j, targets) {
   if (j.interacted !== undefined && j.attended > 0) {
     out.push({ tone: 'info', icon: '🙋', text: `${j.interacted} of the ${j.attended} who came took part: answered a poll, asked a question or set a status (${pct(j.interacted, j.attended)}%).` });
   }
-  if (j.paid_held !== undefined) {
-    const started = Math.max(0, (j.checkout_held || 0) - j.paid_held);
-    out.push({ tone: j.paid_held ? 'good' : 'warn', icon: '💳', text: j.paid_held
-      ? `${j.paid_held} of ${j.oh_held} paid to enroll after their Open House (${pct(j.paid_held, j.oh_held)}%): ${j.paid_interacted} took part, ${Math.max(0, j.paid_attended - j.paid_interacted)} came and watched, ${Math.max(0, j.paid_held - j.paid_attended)} never came.${started ? ` ${started} more started checkout and did not pay.` : ''}`
-      : `Nobody whose Open House has happened has paid to enroll yet (0 of ${j.oh_held}).${started ? ` ${started} started checkout and did not pay.` : ''}` });
+  if (j.paid !== undefined) {
+    const started = Math.max(0, (j.checkout ?? j.checkout_held ?? 0) - j.paid);
+    out.push({ tone: j.paid ? 'good' : 'warn', icon: '💳', text: j.paid
+      ? `${j.paid} of ${j.signups} ad sign-ups paid to enroll (${pct(j.paid, j.signups)}%): ${j.paid_interacted} took part at the Open House, ${Math.max(0, j.paid_attended - j.paid_interacted)} came and watched, ${Math.max(0, j.paid - j.paid_attended)} paid without coming.${started ? ` ${started} more started checkout and did not pay.` : ''}`
+      : `No ad sign-up has paid to enroll yet (0 of ${j.signups}).${started ? ` ${started} started checkout and did not pay.` : ''}` });
   }
   const notWatched = j.oh_held - j.held_watched, attNotWatched = j.attended - j.attended_watched;
   if (j.held_watched >= targets.minSample && notWatched >= targets.minSample) {
@@ -118,4 +126,4 @@ function blindSpots(snap) {
   return list;
 }
 
-module.exports = { kpis, findings, blindSpots };
+module.exports = { kpis, findings, blindSpots, ORIGIN };
