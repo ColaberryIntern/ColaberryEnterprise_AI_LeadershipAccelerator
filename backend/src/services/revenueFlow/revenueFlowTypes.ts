@@ -145,6 +145,14 @@ export interface EnterpriseDeal {
    * that pricing a proposal-stage deal records a forecast and does not touch revenue.
    */
   signed: boolean;
+  /**
+   * Why this row may not be a real inquiry, derived from the row itself. Empty when it is clean.
+   *
+   * On the same footing as `FlaggedBid.flags`: the panel shows these BEFORE the save, because
+   * the person who can tell a test row from a real one is the person about to price it, and
+   * nothing downstream can tell them apart once a value exists. See `enterpriseSuspect`.
+   */
+  flags: string[];
   /** The live value, or null when nobody has recorded one. */
   priced: {
     cents: number;

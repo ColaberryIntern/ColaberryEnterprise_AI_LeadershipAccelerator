@@ -63,6 +63,15 @@
  *   summed. A twelve-month build and a one-week training engagement are both "deal value",
  *   and adding them into one number beside annualized membership revenue would invite exactly
  *   the comparison that is wrong.
+ *
+ * ── PHASE 4: THE FIRST ROW TO ARRIVE WAS A TEST ROW ──────────────────────────────────────
+ *
+ * Within hours of the Phase 3 deploy the table held "Acme Test Logistics". The stream
+ * correctly flipped to `live`, which meant a row somebody typed to check the form counted as
+ * a real enterprise inquiry. `enterpriseSuspect` now derives flags from the row itself, this
+ * module reports the flagged total beside the funnel and emits an event per reason, and the
+ * pricing panel shows the reasons before a save. Nothing is filtered out of a count; that
+ * module's header explains at length why flagging is the only safe answer here.
  */
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../../config/database';
@@ -71,6 +80,7 @@ import { ENTERPRISE_PLANS, EnterprisePlanKey, planOf } from './enterprisePlans';
 import {
   DealValue, annualizedCents, getLiveDealValues, monthlyCents,
 } from './enterpriseDealValueService';
+import { countCompanies, suspectReasons } from './enterpriseSuspect';
 import {
   EnterpriseDeal, FlowEvent, FunnelStage, RevenueStream, formatCents, money, noMoney,
 } from './revenueFlowTypes';
@@ -84,6 +94,13 @@ export interface EnterpriseFlow {
 interface IntakeRow {
   id: string;
   company: string | null;
+  /** Read only so `enterpriseSuspect` can tell a test row from a prospect. Never displayed. */
+  full_name: string | null;
+  /**
+   * Likewise. The domain is the single most reliable signal that a row is one of ours, and it
+   * is never put on the page or into an event label: a flag says what it implies in words.
+   */
+  email: string | null;
   service: string | null;
   status: string | null;
   created_at: string | null;
@@ -231,6 +248,8 @@ export async function buildEnterpriseFlow(windowStart: Date): Promise<Enterprise
   const rows = await sequelize.query<IntakeRow>(
     `SELECT id::text,
             company,
+            full_name,
+            email,
             service,
             status::text,
             created_at::text,
@@ -250,6 +269,19 @@ export async function buildEnterpriseFlow(windowStart: Date): Promise<Enterprise
   const valueByIntake = new Map<string, DealValue>(
     liveValues.map((v) => [v.enterpriseIntakeId, v]),
   );
+
+  // ── WHICH ROWS ARE NOT REAL INQUIRIES (Phase 4) ───────────────────────────────────────
+  // Derived ONCE, here, and read by the roster, the events, the funnel row and the caveat.
+  //
+  // This module already learned that lesson the expensive way: a duplicated `signedRows`
+  // predicate drifted under mutation testing without failing a test (see the funnel comment
+  // below). A flag that showed on the pricing panel but was computed differently for the
+  // count Ram reads would be the same bug wearing a different hat.
+  const companyCounts = countCompanies(rows);
+  const flagsByIntake = new Map<string, string[]>(
+    rows.map((r) => [r.id, suspectReasons(r, companyCounts)]),
+  );
+  const flaggedCount = rows.filter((r) => (flagsByIntake.get(r.id) ?? []).length > 0).length;
 
   // ── THE FUNNEL ────────────────────────────────────────────────────────────────────────
   // Cumulative reach: a signed prospect is also an interviewed one. Counting each stage
@@ -351,6 +383,27 @@ export async function buildEnterpriseFlow(windowStart: Date): Promise<Enterprise
     + 'plans so the gap is visible rather than quietly excluded.',
   ));
 
+  // The flagged count, reported BESIDE the funnel and never subtracted from it.
+  //
+  // Shown even at zero, deliberately. A zero here means the check ran and found nothing,
+  // which is the distinction this whole module is built on. An absent row would leave a
+  // reader unable to tell a clean funnel from one nobody checked.
+  funnel.push(stage(
+    'rows_flagged', 'Flagged as not a real inquiry', flaggedCount,
+    `${flaggedCount} of ${rows.length} intake row(s) carry at least one flag derived from the `
+    + 'row itself: a test row, an address at one of our own domains, a throwaway domain, no '
+    + 'company name, or a duplicate. These rows are still counted in every stage above, '
+    + 'because a guess that removed them would eventually remove a real company whose name '
+    + 'happens to contain "Test". The flag is what keeps them out of the money: the headline '
+    + 'sums only deals a named person priced, and the pricing form shows these reasons before '
+    + 'the save.',
+    // `undefined` keeps the default "not money" value; the classification is passed so this
+    // stage wears the same warn colour as the events it summarizes. A stage and its own
+    // events disagreeing visually is the thing `FunnelStage.classification` exists to stop.
+    undefined,
+    'enterprise_suspect',
+  ));
+
   // ── THE DEALS THEMSELVES, so the page can offer the price control next to the gap ─────
   //
   // Phase 3. Until this existed there was no write path at all: the table shipped in Phase 2
@@ -377,6 +430,7 @@ export async function buildEnterpriseFlow(windowStart: Date): Promise<Enterprise
         shape: plan?.shape ?? null,
         stage: stageKeyOf(r),
         signed: signedIds.has(r.id),
+        flags: flagsByIntake.get(r.id) ?? [],
         priced: v
           ? {
             cents: v.dealValueCents,
@@ -394,6 +448,20 @@ export async function buildEnterpriseFlow(windowStart: Date): Promise<Enterprise
     .sort((a, b) => {
       if ((a.priced === null) !== (b.priced === null)) return a.priced === null ? -1 : 1;
       if (a.signed !== b.signed) return a.signed ? -1 : 1;
+      // Flagged rows sink WITHIN their group, which is the opposite of the government
+      // panel's tiebreak, and the difference is deliberate rather than an oversight.
+      //
+      // `govBidFlow` sorts flagged bids UP, reasoning that a reader wants to see the rows not
+      // to price. That holds there because unpriced-first is its only ordering key, so every
+      // unpriced row is already at the top and the flag only orders within that block. Here
+      // the primary keys are stronger: a SIGNED unpriced deal is the row genuinely
+      // suppressing the headline. Promoting a test row would make it compete with that deal
+      // for the first thing a reader's eye lands on, and the test row is the one row on the
+      // panel that needs no action at all. It is still visible, still flagged on its own row,
+      // and still counted in the funnel line above.
+      const aFlagged = a.flags.length > 0;
+      const bFlagged = b.flags.length > 0;
+      if (aFlagged !== bFlagged) return aFlagged ? 1 : -1;
       return a.company.localeCompare(b.company);
     });
 
@@ -432,6 +500,14 @@ export async function buildEnterpriseFlow(windowStart: Date): Promise<Enterprise
     const priced = valueByIntake.get(r.id) ?? null;
 
     push(r.created_at, 'enterprise_inquiry', `${who} enquired${planSuffix}`, r.id);
+
+    // One event per reason, dated when the row arrived, so a reader scanning the timeline
+    // sees the cleanup as work rather than finding a mystery inquiry that never progressed.
+    // A colon rather than a dash: these labels are rendered copy, and the frontend typography
+    // ratchet exists because an em dash in rendered copy is a defect in this repo.
+    for (const reason of flagsByIntake.get(r.id) ?? []) {
+      push(r.created_at, 'enterprise_suspect', `${who}: ${reason}`, r.id);
+    }
     push(r.interviewed_at, 'enterprise_interviewed', `${who} completed the intake interview`, r.id);
     push(r.proposal_sent_at, 'enterprise_proposal_sent', `Proposal sent to ${who}`, r.id);
 
@@ -488,6 +564,26 @@ export async function buildEnterpriseFlow(windowStart: Date): Promise<Enterprise
       + 'three plans, because the intake form does not yet constrain its service field to '
       + 'them.',
     );
+  }
+  if (flaggedCount > 0) {
+    caveatParts.push(
+      `${flaggedCount} of ${rows.length} enterprise inquiry(ies) carry a flag and may not be `
+      + 'real inquiries: a test row, an address at one of our own domains, a throwaway domain, '
+      + 'a missing company name, or a duplicate. They are still counted in every funnel stage, '
+      + 'because removing them on a guess would eventually remove a real company. What keeps '
+      + 'them out of the money is the pricing gate: no figure reaches a total until a named '
+      + 'person records one, and the form shows these reasons first.',
+    );
+    // Said separately because "1 of 1" is the easiest thing on this page to skim past, and it
+    // means something much stronger than "some rows need cleaning": the stream reads as live
+    // while holding no inquiry anybody can act on. A reader comparing streams needs that.
+    if (flaggedCount === rows.length) {
+      caveatParts.push(
+        'EVERY row in this table is flagged, so the enterprise site has not produced a single '
+        + 'unflagged inquiry yet. The stream reads as live because the table is not empty, '
+        + 'which is a fact about the table rather than about demand.',
+      );
+    }
   }
   if (unpricedSigned > 0) {
     caveatParts.push(

@@ -51,6 +51,11 @@ function intake(over: Partial<Record<string, unknown>> = {}) {
   return {
     id: 'i1',
     company: 'Acme Industrial',
+    // Phase 4 reads these for the suspect flags. The defaults are deliberately CLEAN, so a
+    // test that says nothing about flags gets a row with none: the alternative is every
+    // existing assertion in this file silently acquiring a 'no contact email' flag.
+    full_name: 'Dana Reyes',
+    email: 'dana.reyes@acme-industrial.com',
     service: '',
     status: 'form',
     created_at: '2026-11-01T10:00:00Z',
@@ -276,7 +281,10 @@ describe('enterprise site stream: a VALUED signed deal prints a real figure', ()
 describe('enterprise site stream: the registry declares value-carrying honestly', () => {
   it('exactly the three money classifications carry a value, and no others', async () => {
     const enterprise = CLASSIFICATIONS.filter((c) => c.stream === 'enterprise_site');
-    expect(enterprise.length).toBe(7);
+    // 8 since Phase 4 added `enterprise_suspect`. The literal is the point of the assertion:
+    // it failed the moment that key landed, which is how a new classification is forced to
+    // declare whether it carries money instead of inheriting an answer.
+    expect(enterprise.length).toBe(8);
 
     const carry = enterprise.filter((c) => c.carriesValue).map((c) => c.key).sort();
     expect(carry).toEqual(['enterprise_priced', 'enterprise_repriced', 'enterprise_signed']);
@@ -284,7 +292,7 @@ describe('enterprise site stream: the registry declares value-carrying honestly'
     // An inquiry, an interview, a sent proposal and a loss are not money, and no table will
     // make them so. These stay false permanently rather than as a staging state.
     for (const key of ['enterprise_inquiry', 'enterprise_interviewed',
-      'enterprise_proposal_sent', 'enterprise_lost']) {
+      'enterprise_proposal_sent', 'enterprise_lost', 'enterprise_suspect']) {
       expect(classificationFor(key).carriesValue).toBe(false);
     }
   });
@@ -555,5 +563,150 @@ describe('the deal roster behind the pricing control', () => {
     const flow = await buildEnterpriseFlow(WINDOW_START);
     expect(flow.stream.deals).toEqual([]);
     expect(flow.stream.status).toBe('measured_zero');
+  });
+});
+
+/**
+ * Phase 4 — a test row is counted and flagged, never silently dropped.
+ *
+ * The distinction these tests defend is the whole design. A row that looks like a test row
+ * still appears in every funnel stage, because a heuristic with the power to delete rows would
+ * eventually delete a real company called "Test Valve". What the flag buys is that a person
+ * about to price it, and a person reading the funnel, can both see which rows are suspect.
+ *
+ * So there are two assertions here that look like they are testing nothing, and are the most
+ * important ones in the block: the flagged row is still in `inquired`, and the headline is
+ * unchanged by flagging.
+ */
+describe('enterprise site stream: rows that may not be real inquiries', () => {
+  beforeEach(() => mockLiveValues.mockResolvedValue([]));
+
+  it('flags nothing, and says so at zero, when every row is clean', async () => {
+    withRows([intake({ id: 'a' }), intake({ id: 'b', company: 'Northside Glass' })]);
+    const flow = await buildEnterpriseFlow(WINDOW_START);
+
+    expect((flow.stream.deals ?? []).map((d) => d.flags)).toEqual([[], []]);
+    // Present at zero deliberately: an absent row would leave a reader unable to tell a clean
+    // funnel from one nobody checked.
+    expect(stage(flow, 'rows_flagged').count).toBe(0);
+    expect(flow.events.filter((e) => e.classification === 'enterprise_suspect')).toEqual([]);
+    expect(flow.stream.caveat ?? '').not.toContain('may not be real inquiries');
+  });
+
+  it('flags the row that actually arrived in production', async () => {
+    withRows([intake({ id: 'acme', company: 'Acme Test Logistics' })]);
+    const flow = await buildEnterpriseFlow(WINDOW_START);
+    expect(flow.stream.deals![0].flags).toContain('looks like a test row (company name)');
+    expect(stage(flow, 'rows_flagged').count).toBe(1);
+  });
+
+  it('STILL COUNTS a flagged row in the funnel, because flagging is not filtering', async () => {
+    withRows([
+      intake({ id: 'real', company: 'Northside Glass' }),
+      intake({ id: 'fake', company: 'Acme Test Logistics' }),
+    ]);
+    const flow = await buildEnterpriseFlow(WINDOW_START);
+    // 2, not 1. Subtracting flagged rows from the funnel would make the count depend on a
+    // guess about company names, and a row missing from a funnel leaves no trace at all.
+    expect(stage(flow, 'inquired').count).toBe(2);
+    expect(stage(flow, 'rows_flagged').count).toBe(1);
+  });
+
+  it('does not let a flag change the headline, which is gated on pricing instead', async () => {
+    withRows([intake({ id: 'fake', company: 'Test Co', signed_at: '2026-11-08T10:00:00Z' })]);
+    const flow = await buildEnterpriseFlow(WINDOW_START);
+    // A flagged SIGNED deal with no value reports as signed-and-unvalued, exactly as a clean
+    // one would. The flag informs the person pricing it; it does not price it for them, and
+    // it must not quietly withhold a win either.
+    expect(flow.stream.headline.cents).toBeNull();
+    expect(flow.stream.headline.display).toBe('1 signed, none valued');
+  });
+
+  it('emits one timeline event per reason, dated when the row arrived', async () => {
+    withRows([intake({
+      id: 'bad', company: 'Test Co', email: 'ali@colaberry.com',
+      created_at: '2026-11-03T10:00:00Z',
+    })]);
+    const flow = await buildEnterpriseFlow(WINDOW_START);
+    const suspect = flow.events.filter((e) => e.classification === 'enterprise_suspect');
+    expect(suspect).toHaveLength(2);
+    expect(suspect.map((e) => e.at)).toEqual(['2026-11-03', '2026-11-03']);
+    expect(suspect[0].label).toBe('Test Co: looks like a test row (company name)');
+    // Not money, and the registry says so. A suspect event carrying a figure would be
+    // rejected at the service boundary rather than rendered.
+    for (const e of suspect) expect(e.valueCents).toBeNull();
+  });
+
+  it('keeps an em dash out of the event label, which is rendered copy', async () => {
+    withRows([intake({ id: 'bad', company: 'Test Co' })]);
+    const flow = await buildEnterpriseFlow(WINDOW_START);
+    // The government stream's equivalent label uses an em dash. These strings reach the
+    // screen, and an em dash in rendered copy is a defect this repo has a CI ratchet for.
+    for (const e of flow.events) {
+      expect(e.label).not.toMatch(/[–—]/);
+    }
+  });
+
+  it('bounds suspect events by the window, like every other event on this stream', async () => {
+    withRows([intake({ id: 'old', company: 'Test Co', created_at: '2026-01-04T10:00:00Z' })]);
+    const flow = await buildEnterpriseFlow(WINDOW_START);
+    expect(flow.events.filter((e) => e.classification === 'enterprise_suspect')).toEqual([]);
+    // The FUNNEL is not windowed, so the row is still counted and still flagged. The timeline
+    // and the funnel answer different questions.
+    expect(stage(flow, 'rows_flagged').count).toBe(1);
+  });
+
+  it('names the gap in the caveat, with the count', async () => {
+    withRows([
+      intake({ id: 'real', company: 'Northside Glass' }),
+      intake({ id: 'fake', company: 'Acme Test Logistics' }),
+    ]);
+    const flow = await buildEnterpriseFlow(WINDOW_START);
+    expect(flow.stream.caveat).toContain('1 of 2 enterprise inquiry(ies) carry a flag');
+    expect(flow.stream.caveat).not.toContain('EVERY row in this table is flagged');
+  });
+
+  it('says so loudly when EVERY row is flagged, because "1 of 1" reads as nothing', async () => {
+    withRows([intake({ id: 'fake', company: 'Acme Test Logistics' })]);
+    const flow = await buildEnterpriseFlow(WINDOW_START);
+    expect(flow.stream.caveat).toContain('EVERY row in this table is flagged');
+    // Still `live`: the table genuinely holds a row. The caveat is what stops that reading as
+    // demand, rather than the status lying about what is in the table.
+    expect(flow.stream.status).toBe('live');
+  });
+
+  it('sinks a flagged row BELOW a clean one inside the same group', async () => {
+    withRows([
+      intake({ id: 'fake', company: 'A Test Co' }),
+      intake({ id: 'real', company: 'Z Northside Glass' }),
+    ]);
+    const flow = await buildEnterpriseFlow(WINDOW_START);
+    // Alphabetically 'A Test Co' sorts first, so this also proves the flag beats the name
+    // tiebreak rather than coinciding with it.
+    expect((flow.stream.deals ?? []).map((d) => d.enterpriseIntakeId)).toEqual(['real', 'fake']);
+  });
+
+  it('does NOT let the flag outrank signed, which is the key that matters for money', async () => {
+    withRows([
+      intake({ id: 'clean-open', company: 'A Clean Open', proposal_sent_at: '2026-11-08T10:00:00Z' }),
+      intake({ id: 'flagged-signed', company: 'Z Test Co', signed_at: '2026-11-09T10:00:00Z' }),
+    ]);
+    const flow = await buildEnterpriseFlow(WINDOW_START);
+    // The signed row is flagged AND it still comes first, because a signed deal with no value
+    // is the row actually suppressing the headline. Demotion happens only WITHIN a group.
+    expect((flow.stream.deals ?? []).map((d) => d.enterpriseIntakeId))
+      .toEqual(['flagged-signed', 'clean-open']);
+  });
+
+  it('flags both halves of a duplicate company, end to end', async () => {
+    withRows([
+      intake({ id: 'one', company: 'Western Valve', email: 'a@western-valve.com' }),
+      intake({ id: 'two', company: 'western valve', email: 'b@western-valve.com' }),
+    ]);
+    const flow = await buildEnterpriseFlow(WINDOW_START);
+    for (const d of flow.stream.deals ?? []) {
+      expect(d.flags).toContain('duplicate company name');
+    }
+    expect(stage(flow, 'rows_flagged').count).toBe(2);
   });
 });

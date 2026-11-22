@@ -51,6 +51,8 @@ export interface EnterpriseDealRow {
   shape: string | null;
   stage: string;
   signed: boolean;
+  /** Why this row may not be a real inquiry. Empty when it is clean. */
+  flags: string[];
   priced: {
     cents: number;
     display: string;
@@ -152,6 +154,24 @@ export function dealValuePayload(args: {
   };
 }
 
+/**
+ * The warning a flagged row shows before anybody prices it, or null when the row is clean.
+ *
+ * Exported and pure for the same reason the three functions above are: it renders only inside
+ * an opened form, which no test in this repo can reach without `@testing-library/react`, and
+ * adding that dependency is an escalation-tier decision rather than a step in a feature. The
+ * precedent panel's equivalent warning is asserted by nothing at all.
+ *
+ * It is also the last thing standing between a test row and a revenue total, which is a poor
+ * thing to leave untested on the grounds that it lives behind a click.
+ */
+export function flagWarning(flags: string[]): string | null {
+  if (flags.length === 0) return null;
+  return `This row is flagged: ${flags.join('; ')}. Recording a value here puts this company `
+    + 'into the enterprise pipeline, so price it only if it is a real deal. Nothing else '
+    + 'downstream can tell a test row from a real one once a value exists.';
+}
+
 /** How far a prospect got, in words. Keys match the backend's own funnel stage keys. */
 const STAGE_LABEL: Record<string, string> = {
   inquired: 'filled out the form',
@@ -233,6 +253,7 @@ export default function DealPricingPanel({
   }
 
   const unpricedSigned = deals.filter((d) => d.signed && !d.priced).length;
+  const flaggedRows = deals.filter((d) => d.flags.length > 0).length;
 
   return (
     <div className="card border-0 shadow-sm mb-4" data-testid={testId}>
@@ -244,6 +265,16 @@ export default function DealPricingPanel({
           {unpricedSigned > 0
             ? `${unpricedSigned} signed deal(s) carry no value, so they are absent from it.`
             : 'Every signed deal that exists is valued.'}
+          {/* Said at the top as well as on the row. Someone who opens this panel to price one
+              deal should not have to scroll the list to learn that some of it is not real. */}
+          {flaggedRows > 0 && (
+            <span data-testid={`${testId}-flagged-count`}>
+              {' '}
+              {flaggedRows} of {deals.length} row(s) are flagged as possibly not real
+              inquiries, marked below. They still count in the funnel; the flag is what keeps
+              them out of the money.
+            </span>
+          )}
         </div>
 
         {/* A missing table and an empty one are different answers, and the panel says which. */}
@@ -330,7 +361,29 @@ export default function DealPricingPanel({
                     <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                       {STAGE_LABEL[deal.stage] ?? deal.stage}
                     </span>
+                    {/* On the row itself, not only inside the form. Someone reading the list
+                        to decide what to work on needs this before they click anything. */}
+                    {deal.flags.length > 0 && (
+                      <span
+                        style={{
+                          fontSize: 11, padding: '2px 8px', borderRadius: 10,
+                          background: paintFor('warn').bg, color: paintFor('warn').fg,
+                          border: `1px solid ${paintFor('warn').fg}`,
+                        }}
+                        data-testid={`${testId}-flagged`}
+                      >
+                        <span aria-hidden="true">⚑</span> may not be a real inquiry
+                      </span>
+                    )}
                   </div>
+                  {deal.flags.length > 0 && (
+                    <div
+                      style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}
+                      data-testid={`${testId}-flag-reasons`}
+                    >
+                      {deal.flags.join('; ')}
+                    </div>
+                  )}
                   {deal.priced && (
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
                       {deal.priced.valueBasis}
@@ -357,6 +410,22 @@ export default function DealPricingPanel({
                   className="mt-3 p-3"
                   style={{ background: 'var(--surface-subtle)', borderRadius: 6 }}
                 >
+                  {/* Above the headline note deliberately: "should this be priced at all" is
+                      a question that comes before "where does the number land". */}
+                  {flagWarning(deal.flags) && (
+                    <div
+                      className="mb-2 p-2"
+                      style={{
+                        fontSize: 11,
+                        background: paintFor('warn').bg,
+                        borderLeft: `3px solid ${paintFor('warn').fg}`,
+                      }}
+                      data-testid={`${testId}-flag-warning`}
+                    >
+                      {flagWarning(deal.flags)}
+                    </div>
+                  )}
+
                   {/* Whether this figure reaches the headline. See the module header. */}
                   <div
                     className="mb-2 p-2"

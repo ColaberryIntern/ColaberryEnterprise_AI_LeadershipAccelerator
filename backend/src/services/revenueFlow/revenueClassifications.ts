@@ -532,6 +532,21 @@ const ENTERPRISE: readonly ClassificationDefinition[] = [
       'The intake was closed as lost, with a recorded reason. Counted apart from the funnel '
       + 'because it is an exit from it, not a stage of it.',
   },
+  {
+    key: 'enterprise_suspect',
+    label: 'Row needs cleaning',
+    stream: 'enterprise_site',
+    tone: 'warn',
+    glyph: '⚑',
+    direction: 'none',
+    carriesValue: false,
+    means:
+      'The row itself is not a real inquiry: a test row, an address at one of our own '
+      + 'domains, a throwaway domain, a missing company name, or a duplicate. The first one '
+      + 'arrived within hours of the Phase 3 deploy on 2026-11-21, which is why this is '
+      + 'computed rather than assumed absent. The row is still counted in the funnel and '
+      + 'flagged, never silently dropped from it.',
+  },
 ];
 
 export const CLASSIFICATIONS: readonly ClassificationDefinition[] = [
