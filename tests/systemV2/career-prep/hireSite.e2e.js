@@ -25,7 +25,9 @@
  *   HS8 (CP10.2) the portal fits a phone (390 wide): no horizontal scroll, every action at least 44px tall
  *   HS9 (CP10.2) a spent or unknown sign-in link shows the plain message, leaves the address bar, asks for no data
  *   HS10 (CP10.2) Escape, Close and the backdrop do nothing while a Send is in flight; the answer lands in the form
- *   (HS6 to HS10 live in clientPortal.checks.js; HS8 also measures the Make an offer dialog at 390)
+ *   HS11 (CP10.3) Schedule a follow-up: a long dash is refused before saving; one save at 9:00 AM Central; the table shows it
+ *   HS12 (CP10.3) the offer's follow-up box schedules the Offer reminder once, tied to the offer, only if no reply
+ *   (HS6 to HS12 live in clientPortal.checks.js; HS8 also measures the Make an offer dialog at 390)
  *   HSX zero console errors in these flows
  *
  * Env: HIRE_DIR (default apps/hire-refactored-public/dist), HIRE_PORT (default 3171), PW_CHANNEL (default msedge),

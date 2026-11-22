@@ -5,7 +5,8 @@
  * Sign-in: the emailed link /client/?t=<token> is redeemed AT ONCE and the token is removed from the address bar
  * (history.replaceState) before anything else loads; the session it gives is kept in this tab only (sessionStorage),
  * never in an address. Without a session the page asks for a work email (one message whatever the address).
- * Signed in: Candidates (cards), Interviews, Offers and fees, and Make an offer with the live fee estimate; Send stays
+ * Signed in: Candidates (cards), Interviews, Offers and fees, Follow-ups (the table, Cancel while still scheduled;
+ * Schedule a follow-up is client-followups.js), and Make an offer with the live fee estimate; Send stays
  * disabled until the agreement box is ticked. One key per draft offer: a retry of an unchanged draft is stored once;
  * any edit makes a new draft. Every value rendered is escaped; links are used only when they match our own shapes.
  */
@@ -62,13 +63,14 @@
 
   function load() {
     main.innerHTML = '<p class="lede">Loading your candidates...</p>';
-    return Promise.all([call('GET', '/candidates'), call('GET', '/interviews'), call('GET', '/offers')]).then(function (rs) {
+    return Promise.all([call('GET', '/candidates'), call('GET', '/interviews'), call('GET', '/offers'), call('GET', '/follow-ups')]).then(function (rs) {
       var st = rs.map(function (r) { return M.dataState(r.status, r.body); });
       if (st.some(function (x) { return x.kind === 'signed_out'; })) { signedOut(M.TEXT.signedOut); return; }
-      var bad = st.filter(function (x) { return x.kind !== 'ok'; })[0];
+      var bad = st.slice(0, 3).filter(function (x) { return x.kind !== 'ok'; })[0];
       if (bad) { main.innerHTML = '<p class="notice" role="alert">' + esc(bad.message) + '</p><div class="acts start"><button type="button" class="btn btn-ghost" data-act="reload">Try again</button></div>'; return; }
+      var fu = st[3].kind === 'ok' ? st[3].body : null; // Follow-ups failing to load never hides the rest; its page says so
       S.data = { candidates: st[0].body.candidates, profilesUnavailable: st[0].body.profilesUnavailable === true, feeRateBp: st[0].body.feeRateBp,
-        interviews: st[1].body.interviews, offers: st[2].body.offers };
+        interviews: st[1].body.interviews, offers: st[2].body.offers, followUps: fu ? fu.followUps : null, mailOn: fu ? fu.mailOn === true : null };
       render();
     });
   }
@@ -86,7 +88,7 @@
       + '<div class="li"><span class="label">Best answer</span><span class="small grow faint" data-testid="cand-best">' + esc(k.bestAnswer) + '</span></div>'
       + '<div class="cp-acts">' + resume + '<button type="button" class="btn btn-ghost btn-sm" data-testid="act-book" data-act="book">Book an interview</button>'
       + '<button type="button" class="btn btn-primary btn-sm" data-testid="act-offer" data-act="offer" data-id="' + esc(k.id) + '">Make an offer</button>'
-      + '<button type="button" class="btn btn-ghost btn-sm" data-testid="act-followup" data-act="followup">Schedule a follow-up</button></div><p class="faint small">' + esc(k.putForward) + '</p></article>';
+      + '<button type="button" class="btn btn-ghost btn-sm" data-testid="act-followup" data-act="followup" data-id="' + esc(k.id) + '">Schedule a follow-up</button></div><p class="faint small">' + esc(k.putForward) + '</p></article>';
   }
   function candidatesHtml() {
     var d = S.data;
@@ -115,13 +117,27 @@
       + '</tbody></table><div class="callout" data-testid="fee-callout">' + esc(V.feeCallout(d.feeRateBp)) + '</div></div>';
   }
 
+  function followUpsHtml() {
+    var d = S.data; var F = window.HireFollowUpModel;
+    if (d.followUps === null) return '<p class="notice" role="alert" data-testid="followups-failed">' + esc(F.TEXT.loadFailed) + '</p>';
+    var rows = d.followUps.map(F.row);
+    return (d.mailOn === false ? '<p class="callout" data-testid="mail-off">' + esc(F.TEXT.mailOff) + '</p>' : '')
+      + '<div class="card cp-tablewrap"><table class="tbl" data-testid="followups-table"><thead><tr><th>To</th><th>Subject</th><th>When · Central</th><th>Status</th><th>Tracking</th><th><span class="sr-only">Action</span></th></tr></thead><tbody>'
+      + (rows.length ? rows.map(function (r) {
+        return '<tr data-testid="followup-row"><td><b>' + esc(r.to) + '</b></td><td>' + esc(r.subject) + '</td><td class="small">' + esc(r.when) + '</td><td><span class="pill ' + esc(r.status.tone) + '">' + esc(r.status.text)
+          + '</span></td><td class="small">' + esc(r.tracking) + '</td><td>' + (r.canCancel ? '<button type="button" class="btn btn-ghost btn-sm" data-act="fu-cancel" data-id="' + esc(r.id) + '">Cancel</button>' : '') + '</td></tr>';
+      }).join('') : '<tr><td colspan="6" class="faint">' + esc(F.TEXT.none) + '</td></tr>')
+      + '</tbody></table><p class="faint small">Sent by Refactored.ai in your name at ' + esc(S.session ? S.session.clientName : 'your company') + '. Replies come to you.</p></div>';
+  }
+
   var VIEWS = { candidates: ['Candidates', 'The people Refactored.ai has put forward for your roles.', candidatesHtml], interviews: ['Interviews', 'Booked and held in the Refactored room.', interviewsHtml],
-    offers: ['Offers and fees', 'Every offer, its first-year salary and the placement fee.', offersHtml] };
+    offers: ['Offers and fees', 'Every offer, its first-year salary and the placement fee.', offersHtml], followups: ['Follow-ups', 'Emails to candidates, scheduled and tracked.', followUpsHtml] };
   function render() {
     doc.getElementById('who').textContent = S.session ? S.session.clientName : '';
     var v = VIEWS[S.view];
     main.innerHTML = '<nav class="cp-tabs" aria-label="Portal pages">' + Object.keys(VIEWS).map(function (k) { return '<button type="button" data-view="' + k + '" aria-pressed="' + (k === S.view) + '">' + esc(VIEWS[k][0]) + '</button>'; }).join('') + '</nav>'
-      + '<div class="cp-title"><div><h1 tabindex="-1">' + esc(v[0]) + '</h1><p class="lede">' + esc(v[1]) + '</p></div>' + (S.view === 'offers' && S.data.candidates.length ? '<button type="button" class="btn btn-primary" data-act="offer">Make an offer</button>' : '') + '</div>'
+      + '<div class="cp-title"><div><h1 tabindex="-1">' + esc(v[0]) + '</h1><p class="lede">' + esc(v[1]) + '</p></div>' + (S.view === 'offers' && S.data.candidates.length ? '<button type="button" class="btn btn-primary" data-act="offer">Make an offer</button>' : '')
+      + (S.view === 'followups' && S.data.candidates.length ? '<button type="button" class="btn btn-primary" data-act="followup">Schedule a follow-up</button>' : '') + '</div>'
       + (S.notice ? '<p class="callout" role="status" data-testid="notice">' + esc(S.notice) + '</p>' : '') + v[2]();
   }
 
@@ -133,7 +149,8 @@
     var act = t.getAttribute('data-act');
     if (act === 'reload') load();
     else if (act === 'book') { S.notice = M.TEXT.bookOff; render(); }
-    else if (act === 'followup') { S.notice = M.TEXT.followUpsOff; render(); }
+    else if (act === 'followup') window.HireClientFollowUps.open(t.getAttribute('data-id'));
+    else if (act === 'fu-cancel') window.HireClientFollowUps.cancel(t.getAttribute('data-id'));
     else if (act === 'offer') window.HireClientOffer.open(t.getAttribute('data-id'));
   });
   window.HireClientPortal = { state: S, call: call, render: render, load: load, signedOut: signedOut, newKey: newKey };

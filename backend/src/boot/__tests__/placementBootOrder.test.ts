@@ -3,6 +3,11 @@ jest.mock('../../db/ensurePlacementSchema', () => ({ ensurePlacementSchema: (...
 const mockEnsureClients = jest.fn();
 jest.mock('../../db/ensureHireClientSchema', () => ({ ensureHireClientSchema: (...a: unknown[]) => mockEnsureClients(...a) }));
 jest.mock('../../routes/hireClientRoutes', () => { const { Router: R } = jest.requireActual('express'); return { __esModule: true, default: R() }; });
+const mockEnsureFollowUps = jest.fn();
+jest.mock('../../db/ensureEmployerFollowUpSchema', () => ({ ensureEmployerFollowUpSchema: (...a: unknown[]) => mockEnsureFollowUps(...a) }));
+jest.mock('../../routes/hireClientFollowUpRoutes', () => { const { Router: R } = jest.requireActual('express'); return { __esModule: true, default: R() }; });
+const mockStartFollowUps = jest.fn();
+jest.mock('../../services/placement/followUpScheduler', () => ({ startFollowUpScheduler: mockStartFollowUps }));
 // The real routers import the app config; the wiring under test only needs something mountable.
 jest.mock('../../routes/careerPrepInboxRoutes', () => { const { Router: R } = jest.requireActual('express'); return { __esModule: true, default: R() }; });
 jest.mock('../../routes/careerPrepPlacementInterviewsRoutes', () => { const { Router: R } = jest.requireActual('express'); return { __esModule: true, default: R() }; });
@@ -69,7 +74,8 @@ describe('placementBoot', () => {
       require('../../routes/careerPrepPlacementInterviewsRoutes').default, // T20: the learner's placement interviews
       require('../../routes/placementRoomRoutes').roomRouters.candidate, require('../../routes/placementRoomRoutes').roomRouters.employer, // T22: the two rooms
       require('../../routes/placementReplayRoutes').replayRouters.candidate, require('../../routes/placementReplayRoutes').replayRouters.public, // T24: the replay
-      require('../../routes/hireClientRoutes').default]); // T26: the employer portal API
+      require('../../routes/hireClientRoutes').default, // T26: the employer portal API
+      require('../../routes/hireClientFollowUpRoutes').default]); // T28: the employer's follow-ups
   });
 
   it('T12: registers the signed inbox events router as an INTEGRATION router (mounted before the JSON parser)', () => {
@@ -79,7 +85,8 @@ describe('placementBoot', () => {
   });
 
   it('T11: registers the daily forwarding test + broken alerts as a scheduler', () => {
-    expect(saved.s.map((s) => s.name)).toEqual(['inbox-tests', 'inbox-backfill', 'inbox-replay', 'booking-link-sweep', 'booking-confirm-sweep', 'booking-scheduler', 'zoom-scope-preflight', 'replay-job']);
+    expect(saved.s.map((s) => s.name)).toEqual(['inbox-tests', 'inbox-backfill', 'inbox-replay', 'booking-link-sweep', 'booking-confirm-sweep', 'booking-scheduler', 'zoom-scope-preflight', 'replay-job', 'follow-up-scheduler']);
+    expect(saved.s[8].start).toBe(mockStartFollowUps); // T28: employers' follow-ups
     expect(saved.s[7].start).toBe(mockStartReplayJob); // T24: the replay job
     expect(saved.s[3].start).toBe(mockStartSweep); // T16: retries owed booking-link replies
     expect(saved.s[4].start).toBe(mockStartConfirmSweep); // T18: finishes a booking's room and invites
@@ -112,10 +119,11 @@ describe('placementBoot', () => {
     const order: string[] = [];
     mockEnsure.mockReset().mockImplementation(async () => { order.push('schema'); });
     mockEnsureClients.mockReset().mockImplementation(async () => { order.push('client schema'); }); // T26: after the placement tables
+    mockEnsureFollowUps.mockReset().mockImplementation(async () => { order.push('follow-up schema'); }); // T28: after the employer tables
     jest.spyOn(console, 'warn').mockImplementation(() => undefined);
     SCHEDULERS.push({ name: 'bad', start: () => { throw new Error('boom'); } }, { name: 'good', start: () => { order.push('good'); } });
     await startPlacement();
-    expect(order).toEqual(['schema', 'client schema', 'good']);
+    expect(order).toEqual(['schema', 'client schema', 'follow-up schema', 'good']);
     expect(String((console.warn as jest.Mock).mock.calls[0][0])).toContain('placement_scheduler_start_failed');
   });
 });

@@ -41,7 +41,7 @@ async function clientPage(browser, base, opts = {}) {
   const ctx = await browser.newContext({ viewport: opts.viewport || { width: 1440, height: 900 }, timezoneId: 'America/New_York' });
   const page = await ctx.newPage();
   page.setDefaultTimeout(8000);
-  const errors = []; const posts = []; const redeems = []; const sent = [];
+  const errors = []; const posts = []; const redeems = []; const sent = []; const fuPosts = []; const fus = [];
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   page.on('pageerror', (e) => errors.push(String(e)));
   await page.route(/^https:\/\/enterprise\.colaberry\.ai\/.*/, async (route) => {
@@ -65,10 +65,21 @@ async function clientPage(browser, base, opts = {}) {
       if (!replay) sent.unshift(row);
       return json(replay ? 200 : 201, { offer: row, replay });
     }
+    // CP10.3: the follow-ups (routes/hireClientFollowUpRoutes.ts shapes); employer email is off unless opts.mailOn.
+    if (p === '/follow-ups' && req.method() === 'GET') return json(200, { followUps: fus, mailOn: opts.mailOn === true });
+    if (p === '/follow-ups' && req.method() === 'POST') {
+      const b = req.postDataJSON(); fuPosts.push(b);
+      await new Promise((r) => setTimeout(r, 300));
+      const replay = fus.some((f) => f.id === b.id);
+      const row = { id: b.id, enrollmentId: b.enrollmentId, candidateName: b.enrollmentId === ANN ? 'Ann Lee' : 'Priya Nair', subject: b.subject, template: b.template,
+        sendOn: b.sendOn || new Date().toISOString(), onlyIf: b.onlyIf, status: 'scheduled', reason: null, retrying: false, sentAt: null, opens: 0, clicks: { link: 0, other: 0 } };
+      if (!replay) fus.unshift(row);
+      return json(replay ? 200 : 201, { followUp: row, replay, mailOn: opts.mailOn === true });
+    }
     return route.abort();
   });
   await page.goto(`${base}/client/${opts.link === false ? '' : `?t=${opts.token || LINK_TOKEN}`}`);
-  return { ctx, page, errors, posts, redeems };
+  return { ctx, page, errors, posts, redeems, fuPosts, fus };
 }
 
 const save = async (page, name) => { fs.mkdirSync(SHOTS, { recursive: true }); await page.waitForTimeout(250); await page.screenshot({ path: path.join(SHOTS, `${name}.png`), fullPage: true }); };

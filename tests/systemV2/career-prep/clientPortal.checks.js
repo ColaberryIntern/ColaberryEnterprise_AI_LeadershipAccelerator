@@ -1,5 +1,5 @@
 /**
- * Career Prep v27, CP10.2: the employer portal checks (HS6 to HS10), run by hireSite.e2e.js against the built hire site
+ * Career Prep v27, CP10.2: the employer portal checks (HS6 to HS12; HS11 and HS12 are CP10.3 follow-ups), run by hireSite.e2e.js against the built hire site
  * with the portal API answered by fakeClient.js. Split out of hireSite.e2e.js to keep each file under the size ceiling.
  */
 const fs = require('fs');
@@ -27,6 +27,65 @@ async function runClient(browser, all, base) {
   await runClientPhone(browser, all, base);
   await runBadLink(browser, all, base);
   await runCloseWhileSending(browser, all, base);
+  await runFollowUp(browser, all, base);
+  await runOfferFollowUp(browser, all, base);
+}
+
+/** HS11 (CP10.3): Schedule a follow-up from a card: a long dash is refused before saving; one save; the table shows it. */
+async function runFollowUp(browser, all, base) {
+  const name = 'HS11 follow-up: a long dash is refused with the message; Schedule it saves once at 9:00 AM Central; the table shows it held-aware';
+  const c = await clientPage(browser, base);
+  try {
+    await c.page.waitForSelector(T('cand-card'));
+    await c.page.click(`${T('cand-card')} ${T('act-followup')}`);
+    await c.page.waitForSelector(T('followup-form'));
+    await c.page.fill(T('fu-body'), `Hi {first} ${String.fromCharCode(0x2014)} just checking in.`);
+    const dash = await c.page.evaluate(() => ({ why: document.querySelector('[data-testid="fu-why"]').textContent, save: document.querySelector('[data-testid="fu-save"]').disabled }));
+    await c.page.fill(T('fu-body'), 'Hi {first}, just checking in on our offer.\n\nMeridian Freight');
+    await c.page.fill(T('fu-date'), '2026-12-01');
+    await c.page.locator(T('fu-save')).dblclick();
+    await c.page.waitForSelector(T('followups-table'));
+    const s = await c.page.evaluate(() => ({ notice: document.querySelector('[data-testid="notice"]')?.textContent || '', rows: document.querySelectorAll('[data-testid="followup-row"]').length,
+      row: document.querySelector('[data-testid="followup-row"]')?.textContent || '', off: !!document.querySelector('[data-testid="mail-off"]') }));
+    const b = c.fuPosts[0] || {};
+    await save(c.page, 'client-followups-1440');
+    // The dialog on a phone (390): nothing wider than the dialog or the screen, every control at least 44px.
+    const ph = await clientPage(browser, base, { viewport: { width: 390, height: 844 } });
+    let d = { inner: 1, spill: 1, minH: 0 };
+    try {
+      await ph.page.waitForSelector(T('cand-card'));
+      await ph.page.click(`${T('cand-card')} ${T('act-followup')}`);
+      await ph.page.waitForSelector(T('followup-form'));
+      d = await ph.page.evaluate(() => { const dlg = document.querySelector('.cp-dialog'); const box = dlg.getBoundingClientRect();
+        return { inner: dlg.scrollWidth - dlg.clientWidth, spill: Math.round(Math.max(...[...dlg.querySelectorAll('*')].map((x) => x.getBoundingClientRect().right)) - Math.min(box.right, window.innerWidth)),
+          minH: Math.min(...[...dlg.querySelectorAll('button, input, select')].map((x) => x.getBoundingClientRect().height)) }; });
+      await save(ph.page, 'client-followup-390');
+    } finally { all.push(...ph.errors); await ph.ctx.close(); }
+    check(name, /long dash/.test(dash.why) && dash.save === true && c.fuPosts.length === 1 && b.sendOn === '2026-12-01T15:00:00.000Z' && b.enrollmentId && b.onlyIf === 'no_reply'
+      && !('attachments' in b) && s.rows === 1 && /Ann Lee/.test(s.row) && /Scheduled/i.test(s.row) && /scheduled for/.test(s.notice) && !/switched off/.test(s.notice) && s.off && d.inner <= 0 && d.spill <= 0 && d.minH >= 44,
+    `phone dialog overflow ${d.inner}px, spill ${d.spill}px, smallest control ${Math.round(d.minH)}px, dash "${dash.why.slice(0, 40)}", save disabled ${dash.save}, ${c.fuPosts.length} request(s), sendOn ${b.sendOn}, rows ${s.rows}, banner ${s.off}, notice "${s.notice.slice(0, 60)}"`);
+  } catch (e) { check(name, false, String(e.message).split('\n')[0].slice(0, 160)); }
+  all.push(...c.errors); await c.ctx.close();
+}
+
+/** HS12 (CP10.3): the offer dialog's follow-up box (on by default) schedules the Offer reminder once, tied to the offer. */
+async function runOfferFollowUp(browser, all, base) {
+  const name = 'HS12 the offer\'s follow-up box schedules the Offer reminder once (9:00 AM Central, only if no reply)';
+  const c = await clientPage(browser, base, { mailOn: true });
+  try {
+    await c.page.waitForSelector(T('cand-card'));
+    await c.page.click(`${T('cand-card')} ${T('act-offer')}`);
+    await c.page.fill(T('offer-salary'), '105000');
+    await c.page.check(T('offer-agree'));
+    await c.page.locator(T('offer-send')).dblclick();
+    await c.page.waitForFunction(() => /follow-up/i.test(document.querySelector('[data-testid="notice"]')?.textContent || ''));
+    const notice = await c.page.locator(T('notice')).textContent();
+    const b = c.fuPosts[0] || {};
+    check(name, c.posts.length === 1 && c.fuPosts.length === 1 && b.template === 'offer_reminder' && b.onlyIf === 'no_reply' && b.offerId === '88888888-0000-4000-8000-000000000008'
+      && /T1[45]:00:00\.000Z$/.test(b.sendOn || '') /* 9:00 AM Central: 15:00Z in standard time, 14:00Z in daylight time */ &&/Offer sent\. Follow-up to Ann Lee scheduled for/.test(notice) && !/switched off/.test(notice),
+    `${c.posts.length} offer(s), ${c.fuPosts.length} follow-up(s), template ${b.template}, sendOn ${b.sendOn}, notice "${(notice || '').slice(0, 80)}"`);
+  } catch (e) { check(name, false, String(e.message).split('\n')[0].slice(0, 160)); }
+  all.push(...c.errors); await c.ctx.close();
 }
 
 async function runBadLink(browser, all, base) {

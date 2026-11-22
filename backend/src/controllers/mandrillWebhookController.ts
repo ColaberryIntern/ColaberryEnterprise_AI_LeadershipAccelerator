@@ -16,6 +16,7 @@ import { recordReplyHandoff } from '../services/growthJourney/replyHandoffHook';
 import { redactForLogs } from '../utils/piiRedaction';
 import { sendInboundAutoReply } from '../services/inbound/inboundAutoReply';
 import { mirrorToGhlInBackground } from '../services/ghlMirrorService';
+import { recordFollowUpEngagement } from '../services/placement/followUpTracking';
 
 /** Map Mandrill event types to our outcome types */
 function mapMandrillEvent(eventType: string): OutcomeType | null {
@@ -130,6 +131,7 @@ export async function handleMandrillWebhook(req: Request, res: Response): Promis
       if (!scheduledEmailId) {
         // Log what we're skipping for debugging
         if (event.event === 'open' || event.event === 'click') {
+          await recordFollowUpEngagement(event); // CP10.3: an employer follow-up's open or click (never throws; ignores other mail)
           console.log(`[MandrillWebhook] Skipping ${event.event} for ${redactForLogs(event.msg?.email) || 'unknown'} — no scheduled_email_id in metadata: ${JSON.stringify(event.msg?.metadata || {})}`);
         }
         skipped++;

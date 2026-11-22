@@ -9,6 +9,9 @@ import { roomGuideRouter } from '../routes/placementRoomGuideRoutes';
 import { replayRouters } from '../routes/placementReplayRoutes';
 import hireClientRoutes from '../routes/hireClientRoutes';
 import { ensureHireClientSchema } from '../db/ensureHireClientSchema';
+import hireClientFollowUpRoutes from '../routes/hireClientFollowUpRoutes';
+import { ensureEmployerFollowUpSchema } from '../db/ensureEmployerFollowUpSchema';
+import { startFollowUpScheduler } from '../services/placement/followUpScheduler';
 import { startReplayJob } from '../services/placement/replayJob';
 import { startInboxTestCron } from '../services/placement/inboxTestJob';
 import { startInboxBackfill } from '../services/placement/inboxBackfill';
@@ -47,6 +50,7 @@ export const PUBLIC_ROUTERS: Router[] = [
   replayRouters.candidate, // CP9.2: the candidate's replay and feedback (participant + Career Prep gated; own only)
   replayRouters.public, // CP9.2: the employer's replay (signed room link) and the one-hour signed recording stream
   hireClientRoutes, // CP10.2: the employer portal API (switch hire_client_portal_enabled; magic-link session, scoped to its client)
+  hireClientFollowUpRoutes, // CP10.3: the employer's follow-ups (the same guard; scoped to its client)
 ];
 export const SCHEDULERS: Array<{ name: string; start: () => void }> = [
   { name: 'inbox-tests', start: startInboxTestCron }, // CP6.1c: daily forwarding test + broken alerts (switch-gated per pass)
@@ -59,6 +63,7 @@ export const SCHEDULERS: Array<{ name: string; start: () => void }> = [
   { name: 'zoom-scope-preflight', start: () => { runScopePreflight().catch((err: unknown) => console.warn(JSON.stringify({ timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
     event: 'placement_zoom_scope_preflight_failed', outcome: 'failure', error_class: (err as Error)?.name ?? 'UpstreamUnavailable', context: {} }))); } },
   { name: 'replay-job', start: startReplayJob }, // CP9.2: every 15 min, held + fully consented interviews get one replay (capped retries)
+  { name: 'follow-up-scheduler', start: startFollowUpScheduler }, // CP10.3: every 5 min, employers' follow-ups when due (switch-gated per pass and per send)
 ];
 
 export function mountPlacementIntegrations(app: Express): void {
@@ -72,6 +77,7 @@ export function mountPlacementPublic(app: Express): void {
 export async function startPlacement(): Promise<void> {
   await ensurePlacementSchema();
   await ensureHireClientSchema(); // CP10.2: employer accounts (its own file: ensurePlacementSchema.ts is at its size limit)
+  await ensureEmployerFollowUpSchema(); // CP10.3: employer follow-ups (after the employer tables they reference)
   for (const s of SCHEDULERS) {
     try { s.start(); } catch (err) {
       console.warn(JSON.stringify({ timestamp: new Date().toISOString(), level: 'warn', service: 'backend', event: 'placement_scheduler_start_failed',

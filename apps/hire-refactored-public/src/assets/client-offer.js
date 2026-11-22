@@ -5,7 +5,8 @@
  *
  * Yearly salary or hourly rate (hours a week default 40), start date and respond-by date (5:00 PM Central that day),
  * the live calculation by the server's formula and rate, the agreement box (Send stays disabled until it is ticked),
- * and the follow-up box, on by default. One key per draft: any edit makes a new key; a retry of an unchanged draft
+ * and the follow-up box, on by default (ticked: once the offer is sent, the Offer reminder is scheduled for 9:00 AM
+ * Central 3 days later, only if they have not replied; client-followups.js afterOffer). One key per draft: any edit makes a new key; a retry of an unchanged draft
  * after a failure reuses it, so the server stores one offer. Send is disabled while one is in flight.
  */
 (function () {
@@ -70,12 +71,14 @@
     var msg = doc.getElementById('of-msg'); msg.textContent = S.formMsg; msg.hidden = !S.formMsg;
   }
 
+  /** A new draft: a new key for the offer and one for its follow-up (a retry of the same draft reuses both). */
+  function rekey() { S.key = P.newKey(); S.fkey = P.newKey(); }
   function open(id) {
     var d = S.data; var c = d.candidates.filter(function (x) { return x.enrollmentId === id; })[0] || d.candidates[0];
     if (!c) return;
     opener = doc.activeElement;
     S.form = { enrollmentId: c.enrollmentId, role: V.roleOf(c, d.interviews, d.offers), basis: 'yearly', salary: '', rate: '', hours: String(M.DEFAULT_HOURS), startDate: '', respondBy: '', agreed: false, followUp: true };
-    S.key = P.newKey(); S.formMsg = ''; S.busy = false;
+    rekey(); S.formMsg = ''; S.busy = false;
     box.innerHTML = formHtml(); box.hidden = false; doc.body.classList.add('cp-locked');
     sync();
     doc.getElementById('of-h').focus();
@@ -94,7 +97,13 @@
     P.call('POST', '/offers', M.offerBody(S.form, S.key)).then(function (r) {
       S.busy = false;
       var st = M.offerState(r.status, r.body);
-      if (st.kind === 'sent') { close(true); S.view = 'offers'; S.notice = st.message + (follow ? ' ' + M.TEXT.followUpsOff : ''); P.load(); return; }
+      if (st.kind === 'sent') {
+        close(true); S.view = 'offers'; S.notice = st.message;
+        // The follow-up box: the Offer reminder, keyed with this draft, so a repeated Send schedules it once.
+        if (!follow) { P.load(); return; }
+        window.HireClientFollowUps.afterOffer(st.offer, S.fkey).then(function (m) { S.notice = st.message + ' ' + m; P.load(); });
+        return;
+      }
       if (st.kind === 'signed_out') { close(true); P.signedOut(st.message); return; }
       // Belt and braces: if the form is somehow gone, the outcome goes to the page notice, never nowhere.
       if (!S.form || box.hidden) { S.notice = M.TEXT.notSent + ' ' + st.message; P.render(); return; }
@@ -106,7 +115,7 @@
     var k = e.target.getAttribute && e.target.getAttribute('data-of');
     if (!k || !S.form) return;
     S.form[k] = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
-    if (k !== 'agreed' && k !== 'followUp') S.key = P.newKey(); // a changed offer is a new draft
+    if (k !== 'agreed' && k !== 'followUp') rekey(); // a changed offer is a new draft
     S.formMsg = ''; sync();
   });
   box.addEventListener('click', function (e) {
@@ -114,7 +123,7 @@
     if (e.target === box) { close(); return; }
     if (!b) return;
     if (b.hasAttribute('data-basis')) {
-      S.form.basis = b.getAttribute('data-basis'); S.key = P.newKey();
+      S.form.basis = b.getAttribute('data-basis'); rekey();
       box.querySelectorAll('[data-basis]').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
       doc.getElementById('pay').innerHTML = payHtml(); sync(); return;
     }
@@ -122,5 +131,7 @@
     else if (b.getAttribute('data-act') === 'send') send();
   });
   doc.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !box.hidden) close(); });
-  window.HireClientOffer = { open: open, close: close };
+  /** Where focus returns when the shared dialog closes (the follow-up dialog uses this box too). */
+  function remember(el) { opener = el; }
+  window.HireClientOffer = { open: open, close: close, remember: remember };
 }());

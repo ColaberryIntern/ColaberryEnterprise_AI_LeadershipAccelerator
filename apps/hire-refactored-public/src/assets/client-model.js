@@ -40,7 +40,6 @@
     projectsFailed: 'Could not load just now',
     resumeNone: 'No reviewed Hire profile yet',
     bestAnswer: 'Not shared yet',
-    followUpsOff: 'Follow-up emails are not switched on yet, so none was scheduled.',
     bookOff: 'Booking from the portal is not switched on yet. Your Refactored.ai contact can set up the interview for you.',
     sent: 'Offer sent.',
     notSent: 'The offer was not sent.',
@@ -117,10 +116,13 @@
   }
 
   /** 5:00 PM Central on a "YYYY-MM-DD" date, as an ISO instant (daylight saving handled by the zone itself). */
-  function centralFivePm(ymd) {
+  function centralFivePm(ymd) { return centralAt(ymd, '17:00'); }
+  /** A Central wall-clock time ("YYYY-MM-DD", "HH:MM", 24-hour) as an ISO instant; null for anything else. */
+  function centralAt(ymd, hm) {
     var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd || ''));
-    if (!m) return null;
-    var want = Date.UTC(+m[1], +m[2] - 1, +m[3], 17, 0);
+    var t = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(String(hm || ''));
+    if (!m || !t) return null;
+    var want = Date.UTC(+m[1], +m[2] - 1, +m[3], +t[1], +t[2]);
     var guess = want + 6 * 3600000;
     for (var i = 0; i < 2; i += 1) {
       var f = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
@@ -162,5 +164,5 @@
 
   return { TEXT: TEXT, WEEKS: WEEKS, DEFAULT_HOURS: DEFAULT_HOURS, SESSION_KEY: SESSION_KEY, AGREEMENT_VERSION: AGREEMENT_VERSION, PROFILE: PROFILE, ROOM: ROOM,
     agreementText: agreementText, tokenFromQuery: tokenFromQuery, readSession: readSession, makeSession: makeSession, dataState: dataState, money: money, pct: pct,
-    cents: cents, pay: pay, payBlank: payBlank, estimate: estimate, centralFivePm: centralFivePm, sendState: sendState, offerBody: offerBody, offerState: offerState };
+    cents: cents, pay: pay, payBlank: payBlank, estimate: estimate, centralFivePm: centralFivePm, centralAt: centralAt, sendState: sendState, offerBody: offerBody, offerState: offerState };
 }));
