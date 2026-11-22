@@ -4,12 +4,14 @@ import careerPrepInboxRoutes from '../routes/careerPrepInboxRoutes';
 import careerPrepPlacementInterviewsRoutes from '../routes/careerPrepPlacementInterviewsRoutes';
 import integrationsInboxRoutes from '../routes/integrationsInboxRoutes';
 import { bookingRouters } from '../routes/publicBookingRoutes';
+import { roomRouters } from '../routes/placementRoomRoutes';
 import { startInboxTestCron } from '../services/placement/inboxTestJob';
 import { startInboxBackfill } from '../services/placement/inboxBackfill';
 import { startInboxReplay } from '../services/placement/inboxEvents';
 import { startBookingLinkSweep } from '../services/placement/bookingLinkSweep';
 import { startBookingConfirmSweep } from '../services/placement/bookingConfirmSweep';
 import { startBookingScheduler } from '../services/placement/bookingScheduler';
+import { runScopePreflight } from '../services/placement/zoomScopePreflight';
 
 /**
  * Career Prep v27, Releases 2 and 3: everything the getting-hired pipeline mounts and starts, in ONE place, so
@@ -34,6 +36,8 @@ export const PUBLIC_ROUTERS: Router[] = [
   careerPrepInboxRoutes, // CP6.1: the student's job-search inbox (participant + Career Prep gated per route)
   bookingRouters.view, // CP8.2: the public booking page's data (the token is the key; no login; 60/min per link)
   careerPrepPlacementInterviewsRoutes, // CP8.3: the learner's own placement interviews for the Interviews sheet (participant + Career Prep gated)
+  roomRouters.candidate, // CP9.1: the candidate's interview room (participant + Career Prep gated; own only)
+  roomRouters.employer, // CP9.1: the employer's interview room (the signed link from the booking email; per-link limits)
 ];
 export const SCHEDULERS: Array<{ name: string; start: () => void }> = [
   { name: 'inbox-tests', start: startInboxTestCron }, // CP6.1c: daily forwarding test + broken alerts (switch-gated per pass)
@@ -42,6 +46,9 @@ export const SCHEDULERS: Array<{ name: string; start: () => void }> = [
   { name: 'booking-link-sweep', start: startBookingLinkSweep }, // CP8.1b: retries owed booking-link replies (switch-gated, capped)
   { name: 'booking-confirm-sweep', start: startBookingConfirmSweep }, // CP8.2b: finishes a booking's room + invites (capped)
   { name: 'booking-scheduler', start: startBookingScheduler }, // CP8.2c: 24 h and 1 h reminders, the 24 h unbooked nudge (capped)
+  // CP9.1 (E6): once at boot, read the Zoom token's granted scopes and log whether recording can be turned on (changes nothing)
+  { name: 'zoom-scope-preflight', start: () => { runScopePreflight().catch((err: unknown) => console.warn(JSON.stringify({ timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
+    event: 'placement_zoom_scope_preflight_failed', outcome: 'failure', error_class: (err as Error)?.name ?? 'UpstreamUnavailable', context: {} }))); } },
 ];
 
 export function mountPlacementIntegrations(app: Express): void {

@@ -2,7 +2,7 @@ import { sequelize } from '../../config/database';
 import { env } from '../../config/env';
 import { guardedSendMail, resolveEmailRecipient } from '../emailService';
 import { sendOnce } from '../email/idempotentSend';
-import { getMeetingProvider } from '../communityRooms/meetingProvider';
+import { roomProvider } from './roomProvider';
 import { buildInterviewIcs } from '../hire/hireInterviewIcs';
 import { careerPrepEnabled } from '../careerPrep/careerPrepFlag';
 import { linkPlacementInterview } from '../careerPrep/placementLink';
@@ -16,10 +16,10 @@ import { employerBookedEmail, learnerBookedEmail, type ConfirmFacts, type Confir
  * Career Prep v27, CP8.2b (kit F4 step 3): the work AFTER an employer's booking COMMITS (the route starts it once the
  * confirm transaction is done; never inside it, so a slow provider can neither hold the row lock nor undo a booking).
  *
- *   room      ONE meeting per booked time: getMeetingProvider() with requestId `placement-interview-<id>-<start ISO>` (the
- *             Zoom adapter's idempotency ledger) and autoRecording 'none' (recording starts only after everyone consents,
- *             T22). The provider's id and join link are stored on the interview, WHERE none is stored yet and the booking
- *             still stands; the join link is NEVER put in any message.
+ *   room      ONE meeting per booked time: roomProvider.create (always recording off; requestId
+ *             `placement-interview-<id>-<start ISO>`, the Zoom adapter's idempotency ledger). Recording starts only after
+ *             everyone consents (roomService.applyConsent). The provider's id, join link and recording read-back are stored
+ *             on the interview, WHERE none is stored yet and the booking still stands; the join link is NEVER put in any message.
  *   learner   one email to the PERSONAL address with an .ics, when the learner is on the Career Prep allow-list (only
  *             Ali at ship). In the app, the booked interview is the notice: it is linked first as the learner's prep row
  *             (careerPrep/interviews.linkPlacementInterview, one row per interview), so the Interviews sheet, the campus
@@ -80,17 +80,15 @@ async function ensureRoom(r: Row, start: Date, minutes: number): Promise<boolean
   if (r.room_provider_id) return true;
   try {
     const made = await Promise.race([
-      getMeetingProvider().createMeeting({
-        title: `Interview: ${r.company?.trim() || 'employer'} and a Refactored candidate`, description: 'Booked on hire.refactored.ai',
-        startAt: start, endAt: new Date(start.getTime() + minutes * 60_000), requestId: `placement-interview-${r.id}-${start.toISOString()}`, autoRecording: 'none',
-      }),
+      roomProvider.create({ interviewId: r.id, startsAt: start, minutes, company: r.company }),
       new Promise<never>((_, reject) => setTimeout(() => reject(Object.assign(new Error('room timed out'), { name: 'TimeoutError' })), ROOM_TIMEOUT_MS)),
     ]);
-    if (!made.providerEventId || !made.joinUrl) throw Object.assign(new Error('provider returned no meeting'), { name: 'ContractViolation' });
+    // the read-back after create (CP9.1): what Zoom stored for THIS meeting's recording, or NULL = cannot tell
     await sequelize.query(
-      `UPDATE placement_interviews SET room_provider_id = :pid, room_url = :url, updated_at = NOW()
+      `UPDATE placement_interviews SET room_provider_id = :pid, room_url = :url, readback_meeting_id = :pid, readback_recording = :seen,
+          readback_at = NOW(), updated_at = NOW()
         WHERE id = :id AND room_provider_id IS NULL AND state = 'booked' AND starts_at = :start`,
-      { replacements: { pid: made.providerEventId, url: made.joinUrl, id: r.id, start } });
+      { replacements: { pid: made.providerEventId, url: made.joinUrl, seen: made.recording, id: r.id, start } });
     return true;
   } catch (err) {
     log('error', 'placement_room_create_failed', { interview_id: r.id }, errClass(err));

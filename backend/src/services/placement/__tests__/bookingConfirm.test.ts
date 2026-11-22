@@ -12,7 +12,7 @@ type Iv = { id: string; enrollment_id: string; state: string; company: string | 
   starts_at: Date | null; minutes: number | null; interviewer_emails: string[]; booker_tz: string | null; room_provider_id: string | null; room_url: string | null;
   confirm_attempts: number; confirm_last_attempt_at: Date | null; confirm_done_at: Date | null; updated_at: Date;
   full_name: string | null; personal_email: string | null; job_address: string | null };
-type R = { id?: string; now?: Date; lease?: Date; start?: Date; pid?: string; url?: string; event?: string; payload?: string; src?: string; e?: string; company?: string; role?: string; type?: string };
+type R = { id?: string; now?: Date; lease?: Date; start?: Date; pid?: string; url?: string; seen?: string | null; event?: string; payload?: string; src?: string; e?: string; company?: string; role?: string; type?: string };
 // clock: the DATABASE clock (what NOW() answers); tests move it with at(), which also returns the caller's matching now.
 const db = { iv: [] as Iv[], events: [] as Array<{ event: string; src: string; payload: string }>, sql: [] as string[], clock: new Date(0), prep: prepStore() };
 const byId = (id: unknown) => db.iv.find((x) => x.id === id) as Iv;
@@ -37,7 +37,8 @@ function answer(sql: string, r: R): [unknown[], number] {
   if (sql.includes('SET room_provider_id = :pid')) {
     const i = byId(r.id);
     if (!/room_provider_id IS NULL AND state = 'booked' AND starts_at = :start/.test(sql) || i.room_provider_id || i.state !== 'booked' || !same(i.starts_at, r.start)) return [[], 0];
-    Object.assign(i, { room_provider_id: r.pid, room_url: r.url });
+    Object.assign(i, { room_provider_id: r.pid, room_url: r.url },
+      /readback_meeting_id = :pid, readback_recording = :seen/.test(sql) ? { readback_meeting_id: r.pid, readback_recording: r.seen ?? null } : {});
     return [[], 1];
   }
   if (sql.includes('SET confirm_done_at = :now')) {
@@ -130,6 +131,15 @@ describe('finishBooking: room and invites after the commit', () => {
     expect(sent().map((m) => [m.to, m.subject])).toEqual([['ann.personal@mail.example', LEARNER_SUBJECT], ['pat@acme.example', EMPLOYER_SUBJECT], ['kim@acme.example', EMPLOYER_SUBJECT]]);
     expect(sent().slice(1).every((m) => m.replyTo === 'ann.jobs@mail.example')).toBe(true);
     expect(db.events.map((e) => e.src)).toEqual(['booking_confirm_done:iv-1:2026-11-23T15:00:00.000Z']);
+  });
+  it('CP9.1: the read-back after create is stored for THAT meeting: what Zoom stored, or NULL (cannot tell) on a replayed create', async () => {
+    mockCreate.mockResolvedValueOnce({ providerEventId: 'zm-1', joinUrl: SENTINEL_PROVIDER_URL, storedSettings: { auto_recording: 'none' } });
+    await finishBooking('iv-1', { now: NOW, read: ON, learnerAllowed: allowed });
+    expect(db.iv[0]).toMatchObject({ readback_meeting_id: 'zm-1', readback_recording: 'off' });
+    db.iv.push(iv({ id: 'iv-2' }));
+    mockCreate.mockResolvedValueOnce({ providerEventId: 'zm-2', joinUrl: SENTINEL_PROVIDER_URL, storedSettings: null });
+    await finishBooking('iv-2', { now: NOW, read: ON, learnerAllowed: allowed });
+    expect(db.iv[1]).toMatchObject({ room_provider_id: 'zm-2', readback_meeting_id: 'zm-2', readback_recording: null });
   });
   it('NO message or .ics carries the provider link; each carries its consent-room page (learner portal, employer signed page)', async () => {
     await finishBooking('iv-1', { now: NOW, read: ON, learnerAllowed: allowed });

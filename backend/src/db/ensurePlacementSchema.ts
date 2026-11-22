@@ -38,8 +38,16 @@ import { sequelize } from '../config/database';
  *   placement_review_items (CP8.1, F9 queue) what a human must look at: a low-confidence (< 0.70) interview email that
  *                        made no interview, an email for no known learner, an update matching no interview, or an
  *                        update matching more than one (ambiguous: nothing is changed until a person picks), or a
- *                        booking link sent 24 hours ago and still not booked (not_booked, CP8.2c). UNIQUE
+ *                        booking link sent 24 hours ago and still not booked (not_booked, CP8.2c), or a meeting whose
+ *                        recording read-back does not match everyone's consent (recording_mismatch, CP9.1). UNIQUE
  *                        (kind, source_event_id).
+ *   placement_interviews recording columns (CP9.1, roomService.ts): recording_consent (declined / pending / on /
+ *                        unavailable / failed) and recording_meeting_id = the meeting that state was applied to, so a
+ *                        rebook (a new meeting, recording off) never inherits it; readback_meeting_id / _recording /
+ *                        _at = what Zoom last said about THAT meeting's recording ('on' / 'off'; NULL = cannot tell).
+ *   interview_consents   (CP9.1) one decision per party per interview (UNIQUE (interview_id, party_ref)); the first
+ *                        decision stands, so a double click or a replay records nothing new.
+ *   interview_notes      (CP9.1) the employer's private notes on an interview (written by the room page, T23).
  */
 export const PLACEMENT_STATEMENTS: readonly string[] = [
   `CREATE TABLE IF NOT EXISTS job_search_inboxes (
@@ -116,7 +124,12 @@ export const PLACEMENT_STATEMENTS: readonly string[] = [
      minutes SMALLINT CHECK (minutes IS NULL OR (minutes > 0 AND minutes <= 480)),
      room_provider_id VARCHAR(128),
      room_url TEXT,
-     recording_consent VARCHAR(20),
+     recording_consent VARCHAR(20) CHECK (recording_consent IS NULL OR recording_consent IN ('declined','pending','on','unavailable','failed')),
+     recording_meeting_id VARCHAR(128),
+     recording_changed_at TIMESTAMPTZ,
+     readback_meeting_id VARCHAR(128),
+     readback_recording VARCHAR(3) CHECK (readback_recording IS NULL OR readback_recording IN ('on','off')),
+     readback_at TIMESTAMPTZ,
      interviewer_emails TEXT[] NOT NULL DEFAULT '{}',
      booker_tz VARCHAR(64),
      confirm_attempts SMALLINT NOT NULL DEFAULT 0 CHECK (confirm_attempts >= 0),
@@ -148,7 +161,7 @@ export const PLACEMENT_STATEMENTS: readonly string[] = [
   'CREATE INDEX IF NOT EXISTS idx_placement_events_subject ON placement_events (subject_type, subject_id, created_at)',
   `CREATE TABLE IF NOT EXISTS placement_review_items (
      id BIGSERIAL PRIMARY KEY,
-     kind VARCHAR(40) NOT NULL CHECK (kind IN ('low_confidence','unmatched_learner','unmatched_update','ambiguous_update','not_booked')),
+     kind VARCHAR(40) NOT NULL CHECK (kind IN ('low_confidence','unmatched_learner','unmatched_update','ambiguous_update','not_booked','recording_mismatch')),
      source_event_id VARCHAR(300) NOT NULL,
      enrollment_id UUID REFERENCES enrollments(id) ON DELETE CASCADE,
      interview_id UUID REFERENCES placement_interviews(id) ON DELETE CASCADE,
@@ -159,10 +172,29 @@ export const PLACEMENT_STATEMENTS: readonly string[] = [
      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
      CONSTRAINT uq_placement_review_items_source UNIQUE (kind, source_event_id)
    )`,
+  `CREATE TABLE IF NOT EXISTS interview_consents (
+     id BIGSERIAL PRIMARY KEY,
+     interview_id UUID NOT NULL REFERENCES placement_interviews(id) ON DELETE CASCADE,
+     party VARCHAR(20) NOT NULL CHECK (party IN ('candidate','employer')),
+     party_ref VARCHAR(80) NOT NULL,
+     decision VARCHAR(10) NOT NULL CHECK (decision IN ('consent','decline')),
+     decided_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     CONSTRAINT uq_interview_consents_party UNIQUE (interview_id, party_ref)
+   )`,
+  `CREATE TABLE IF NOT EXISTS interview_notes (
+     id BIGSERIAL PRIMARY KEY,
+     interview_id UUID NOT NULL REFERENCES placement_interviews(id) ON DELETE CASCADE,
+     body TEXT NOT NULL CHECK (char_length(body) <= 5000),
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
+  'CREATE INDEX IF NOT EXISTS idx_interview_notes_interview ON interview_notes (interview_id, created_at)',
 ];
 
 /** Run by hand to roll the placement tables back. Never run at boot. Dependents first. */
 export const PLACEMENT_SCHEMA_ROLLBACK: readonly string[] = [
+  'DROP TABLE IF EXISTS interview_notes',
+  'DROP TABLE IF EXISTS interview_consents',
   'DROP TABLE IF EXISTS placement_review_items',
   'DROP TABLE IF EXISTS placement_events',
   'DROP TABLE IF EXISTS placement_interviews',

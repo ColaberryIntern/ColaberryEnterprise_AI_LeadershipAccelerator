@@ -29,11 +29,21 @@ export function candidateRoomUrl(interviewId: string, base: string = env.fronten
   return `${String(base).replace(/\/$/, '')}/portal/career/interview/${encodeURIComponent(interviewId)}`;
 }
 
-export function verifyRoomLink(input: { i: string; e: string; t: string; now: Date; secret?: string }): boolean {
-  if (!input.i || !/^\d{1,15}$/.test(input.e) || !/^[A-Za-z0-9_-]{43}$/.test(input.t)) return false;
+export type RoomLinkCheck = 'ok' | 'expired' | 'invalid';
+
+/**
+ * 'invalid' for anything not signed by us for exactly this interview and end time (checked FIRST, so an unsigned link
+ * can never learn whether it would have expired); 'expired' for a genuine link past the end + 2 hours; else 'ok'.
+ */
+export function checkRoomLink(input: { i: string; e: string; t: string; now: Date; secret?: string }): RoomLinkCheck {
+  if (!input.i || !/^\d{1,15}$/.test(input.e) || !/^[A-Za-z0-9_-]{43}$/.test(input.t)) return 'invalid';
   const endMs = Number(input.e);
-  if (input.now.getTime() > endMs + ROOM_LINK_GRACE_MS) return false;
   const want = Buffer.from(sign(input.i, endMs, input.secret));
   const got = Buffer.from(input.t);
-  return want.length === got.length && timingSafeEqual(want, got);
+  if (!(want.length === got.length && timingSafeEqual(want, got))) return 'invalid';
+  return input.now.getTime() > endMs + ROOM_LINK_GRACE_MS ? 'expired' : 'ok';
+}
+
+export function verifyRoomLink(input: { i: string; e: string; t: string; now: Date; secret?: string }): boolean {
+  return checkRoomLink(input) === 'ok';
 }

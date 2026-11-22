@@ -37,11 +37,24 @@ describe('ensurePlacementSchema (statements)', () => {
   it('CP8.1b: a partial index serves the booking-link sweep (only interviews still owed a reply)', () => {
     expect(PLACEMENT_STATEMENTS).toContain("CREATE INDEX IF NOT EXISTS idx_placement_interviews_owed_link ON placement_interviews (created_at) WHERE state = 'new' AND booking_link_sent_at IS NULL");
   });
+  it('CP9.1: one decision per party per interview; recording state and read-back are bounded; the mismatch review kind exists', () => {
+    const consents = PLACEMENT_STATEMENTS.find((s) => s.includes('CREATE TABLE IF NOT EXISTS interview_consents')) as string;
+    expect(consents).toMatch(/CONSTRAINT uq_interview_consents_party UNIQUE \(interview_id, party_ref\)/);
+    expect(consents).toMatch(/decision IN \('consent','decline'\)/);
+    const iv = PLACEMENT_STATEMENTS.find((s) => s.includes('CREATE TABLE IF NOT EXISTS placement_interviews')) as string;
+    expect(iv).toMatch(/recording_consent IN \('declined','pending','on','unavailable','failed'\)/);
+    expect(iv).toMatch(/readback_recording IN \('on','off'\)/);
+    expect(iv).toMatch(/recording_meeting_id VARCHAR\(128\)/);
+    expect(PLACEMENT_STATEMENTS.find((s) => s.includes('placement_review_items ('))).toMatch(/'recording_mismatch'/);
+    expect(PLACEMENT_STATEMENTS.find((s) => s.includes('CREATE TABLE IF NOT EXISTS interview_notes'))).toMatch(/char_length\(body\) <= 5000/);
+  });
   it('has a rollback that drops every table it creates, dependents first, never run at boot', () => {
     const made = tables(PLACEMENT_STATEMENTS, /CREATE TABLE IF NOT EXISTS (\w+)/);
     const dropped = tables(PLACEMENT_SCHEMA_ROLLBACK, /DROP TABLE IF EXISTS (\w+)/);
     expect([...dropped].sort()).toEqual([...made].sort());
     expect(dropped.indexOf('inbox_received')).toBeLessThan(dropped.indexOf('job_search_inboxes'));
+    expect(dropped.indexOf('interview_consents')).toBeLessThan(dropped.indexOf('placement_interviews'));
+    expect(dropped.indexOf('interview_notes')).toBeLessThan(dropped.indexOf('placement_interviews'));
   });
   it('keeps booting when one statement fails, and says so', async () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);

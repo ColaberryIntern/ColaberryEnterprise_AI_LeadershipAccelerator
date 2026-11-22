@@ -5,6 +5,9 @@ jest.mock('../../routes/careerPrepInboxRoutes', () => { const { Router: R } = je
 jest.mock('../../routes/careerPrepPlacementInterviewsRoutes', () => { const { Router: R } = jest.requireActual('express'); return { __esModule: true, default: R() }; });
 jest.mock('../../routes/integrationsInboxRoutes', () => { const { Router: R } = jest.requireActual('express'); return { __esModule: true, default: R() }; });
 jest.mock('../../routes/publicBookingRoutes', () => { const { Router: R } = jest.requireActual('express'); return { bookingRouters: { view: R(), confirm: R() } }; });
+jest.mock('../../routes/placementRoomRoutes', () => { const { Router: R } = jest.requireActual('express'); return { roomRouters: { candidate: R(), employer: R() } }; });
+const mockPreflight = jest.fn();
+jest.mock('../../services/placement/zoomScopePreflight', () => ({ runScopePreflight: (...a: unknown[]) => mockPreflight(...a) }));
 const mockStartInboxTests = jest.fn();
 jest.mock('../../services/placement/inboxTestJob', () => ({ startInboxTestCron: mockStartInboxTests }));
 const mockStartBackfill = jest.fn();
@@ -56,7 +59,8 @@ describe('placementBoot', () => {
   it('registers the CP6.1 inbox routes as a public (participant-gated) router', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     expect(saved.p).toEqual([require('../../routes/careerPrepInboxRoutes').default, require('../../routes/publicBookingRoutes').bookingRouters.view, // T17: the booking page's data
-      require('../../routes/careerPrepPlacementInterviewsRoutes').default]); // T20: the learner's placement interviews
+      require('../../routes/careerPrepPlacementInterviewsRoutes').default, // T20: the learner's placement interviews
+      require('../../routes/placementRoomRoutes').roomRouters.candidate, require('../../routes/placementRoomRoutes').roomRouters.employer]); // T22: the two rooms
   });
 
   it('T12: registers the signed inbox events router as an INTEGRATION router (mounted before the JSON parser)', () => {
@@ -65,13 +69,22 @@ describe('placementBoot', () => {
   });
 
   it('T11: registers the daily forwarding test + broken alerts as a scheduler', () => {
-    expect(saved.s.map((s) => s.name)).toEqual(['inbox-tests', 'inbox-backfill', 'inbox-replay', 'booking-link-sweep', 'booking-confirm-sweep', 'booking-scheduler']);
+    expect(saved.s.map((s) => s.name)).toEqual(['inbox-tests', 'inbox-backfill', 'inbox-replay', 'booking-link-sweep', 'booking-confirm-sweep', 'booking-scheduler', 'zoom-scope-preflight']);
     expect(saved.s[3].start).toBe(mockStartSweep); // T16: retries owed booking-link replies
     expect(saved.s[4].start).toBe(mockStartConfirmSweep); // T18: finishes a booking's room and invites
     expect(saved.s[5].start).toBe(mockStartScheduler); // T19: reminders and the unbooked nudge
     expect(saved.s[2].start).toBe(mockStartReplay); // T15: one boot pass over unprocessed stored events
     expect(saved.s[0].start).toBe(mockStartInboxTests);
     expect(saved.s[1].start).toBe(mockStartBackfill); // T13: it registers nothing while unconfigured (inboxBackfill.test.ts)
+  });
+
+  it('T22: the boot scope preflight runs once, and a failure in it is logged, never thrown', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    mockPreflight.mockReset().mockRejectedValueOnce(Object.assign(new Error('x'), { name: 'TimeoutError' }));
+    expect(() => saved.s[6].start()).not.toThrow();
+    await new Promise((r) => setImmediate(r));
+    expect(mockPreflight).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0]?.[0])).toContain('placement_zoom_scope_preflight_failed');
   });
 
   it('mounts every registered router, in order', () => {

@@ -110,6 +110,10 @@ describe('an existing Zoom link is never replaced', () => {
       // What it CAN do is move a room onto a different host, so the test below pins
       // that it may only do so while the room has no link.
       'services/zoom/enterableRoomMint.ts',
+      // Career Prep CP9.1 (2026-11-21): the interview room's adapter. Plumbing, not a seventh
+      // creator: it holds no row and cannot see whether a meeting exists; its only caller is
+      // placement/bookingConfirm.ts, whose guard and bounded store are asserted in this file.
+      'services/placement/roomProvider.ts',
     ];
     const unexpected = creators
       .filter((f) => !PLUMBING.includes(f))
@@ -118,6 +122,14 @@ describe('an existing Zoom link is never replaced', () => {
     // If this fails: a new path creates Zoom meetings. Decide what it does when a
     // link already exists, then add it to KNOWN_CREATORS with its guard.
     expect(unexpected).toEqual([]);
+  });
+
+  /** CP9.1: the room adapter counts as plumbing only while bookingConfirm (with its guard) is its one creator. */
+  it('only placement/bookingConfirm.ts creates through the interview room adapter', () => {
+    const callers = allSourceFiles(SRC)
+      .filter((f) => /roomProvider\.create\s*\(/.test(fs.readFileSync(f, 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '')))
+      .map((f) => path.relative(SRC, f).split(path.sep).join('/'));
+    expect(callers).toEqual(['services/placement/bookingConfirm.ts']);
   });
 
   /** The placement store is bounded in the SQL too: a concurrent run can never overwrite a stored meeting. */
