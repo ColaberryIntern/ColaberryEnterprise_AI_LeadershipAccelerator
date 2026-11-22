@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Sunday, November 22, 2026 at 12:11 PM</div>
-    <div><span class="sid">CC-20261120-e2fc</span><span class="count">11 changes</span></div>
+    <div class="meta">Generated Sunday, November 22, 2026 at 1:18 PM</div>
+    <div><span class="sid">CC-20261120-e2fc</span><span class="count">12 changes</span></div>
   </header>
   <main>
     
@@ -212,6 +212,21 @@
           <div class="row"><span class="k">What changed</span><span class="v">these are the v5c rebuild&#39;s plan-data findings, each checked against v5&#39;s plan.json.</span></div>
           <div class="row"><span class="k">Verification</span><span class="v ver">`planDataFindings.test.ts` 9/9 (holiday case mutation-checked); 367 suites / 5,453 tests pass; tsc clean.</span></div>
           
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">12</span>
+          <h2>#4313 deployed: plan-data fixes live</h2>
+          <span class="badge">2026-11-22</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">deployed 0f1eb2bfb (registry mode, marker `offHoliday` in `buildSchedule.js`). An earlier image build was cancelled by a later merge; the deployed image contains #4313. No code change in this entry. BC L12.11 closed.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">run inside the live backend: outline buttons come out as &quot;It starts when something arrives.&quot; and &quot;When it isn&#39;t sure, it should flag it for me.&quot;; the release story prompt carries the no-invented-API rule; 10,400 due dates across 400 publish days, 0 on a holiday. Home 200.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">no new ShiftFill run yet, so the fixes have not been seen on a fresh plan end to end.</span></div>
           
         </div>
       </article>
