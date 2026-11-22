@@ -89,11 +89,11 @@ describe('CH10.4 the breaker in the status, and clearing it early', () => {
   });
   it('200 for an organizer with a confirm: cleared, with an activity row naming who', async () => {
     const was = new Date('2026-12-03T18:00:00Z');
-    mockState.clearBreaker.mockResolvedValue(was);
+    mockState.clearBreaker.mockResolvedValue({ was, released: 2 });
     const res = await request(app).post(CLEAR).set(as(JACKIE)).send({ confirm: true });
-    expect([res.status, res.body]).toEqual([200, { cleared: true }]);
-    expect(mockLogActivity).toHaveBeenCalledWith({ id: 'u-jackie', label: 'jackie@colaberry.com' }, 'whatsapp.breaker_cleared', 'settings', null, { was_until: was.toISOString() });
-    mockState.clearBreaker.mockResolvedValue(null);
-    expect((await request(app).post(CLEAR).set(as({ role: 'super_admin', sub: 'u-ali', email: 'ali@colaberry.com' })).send({ confirm: true })).body).toEqual({ cleared: false });
+    expect([res.status, res.body]).toEqual([200, { cleared: true, released: 2 }]);
+    expect(mockLogActivity).toHaveBeenCalledWith({ id: 'u-jackie', label: 'jackie@colaberry.com' }, 'whatsapp.breaker_cleared', 'settings', null, { was_until: was.toISOString(), released: 2 });
+    mockState.clearBreaker.mockResolvedValue({ was: null, released: 0 });
+    expect((await request(app).post(CLEAR).set(as({ role: 'super_admin', sub: 'u-ali', email: 'ali@colaberry.com' })).send({ confirm: true })).body).toEqual({ cleared: false, released: 0 });
   });
 });

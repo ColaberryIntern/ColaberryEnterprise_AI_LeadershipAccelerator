@@ -79,7 +79,7 @@ describeIfDb('CH10.4 WhatsApp claim and sending state, on a scratch Postgres', (
     expect(await repo.claimDue(at(30_000), 25)).toEqual([]); // paced
     await state.openBreaker(at(30_000), 'rate_limited');
     expect(await repo.claimDue(at(63_000), 25)).toEqual([]); // breaker
-    expect(await state.clearBreaker()).toEqual(at(30_000 + 48 * 3600_000));
+    expect((await state.clearBreaker()).was).toEqual(at(30_000 + 48 * 3600_000));
     expect((await repo.claimDue(at(63_000), 25)).map((c) => c.id)).toEqual([wa[1]]);
   });
 
@@ -91,6 +91,20 @@ describeIfDb('CH10.4 WhatsApp claim and sending state, on a scratch Postgres', (
     expect(await repo.claimDue(at(48 * 3600_000 - 1000), 25)).toEqual([]);
     expect((await repo.claimDue(at(48 * 3600_000 + 1000), 25)).map((c) => c.id)).toEqual([w]);
     expect((await state.read()).breaker_until).toEqual(until); // still recorded: it simply no longer applies
+  });
+
+  it('Resume early (clearing the breaker) releases the WhatsApp deliveries it held; nothing else is touched', async () => {
+    const [held, other] = await pending('whatsapp', 2);
+    const [inApp] = await pending('in_app', 1);
+    const until = await state.openBreaker(T0, 'rate_limited');
+    await q("UPDATE comms_hub_deliveries SET next_attempt_at = $2, error = 'held: whatsapp_paused_by_whatsapp' WHERE id = $1 RETURNING id", [held, until]);
+    await q("UPDATE comms_hub_deliveries SET next_attempt_at = $2, error = 'held: whatsapp_window' WHERE id = $1 RETURNING id", [other, at(3600_000)]);
+    await q("UPDATE comms_hub_deliveries SET next_attempt_at = $2, error = 'held: quiet_hours' WHERE id = $1 RETURNING id", [inApp, at(7200_000)]);
+    expect(await state.clearBreaker()).toEqual({ was: until, released: 1 });
+    const rows = await q<{ id: string; due: boolean }>('SELECT id, next_attempt_at <= now() AS due FROM comms_hub_deliveries WHERE id = ANY($1::uuid[])', [[held, other, inApp]]);
+    expect(Object.fromEntries(rows.map((r) => [r.id, r.due]))).toEqual({ [held]: true, [other]: false, [inApp]: false });
+    expect((await state.read()).breaker_until).toBeNull();
+    expect((await state.clearBreaker()).released).toBe(0);
   });
 
   it('two claims at once never take two WhatsApp deliveries', async () => {

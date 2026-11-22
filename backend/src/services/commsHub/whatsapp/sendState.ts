@@ -24,8 +24,8 @@ export interface SendStateStore {
   reserve(now: Date, nextAt: Date): Promise<void>;
   /** Open the breaker for 48 hours; returns its end. */
   openBreaker(now: Date, reason: string): Promise<Date>;
-  /** Close the breaker early (a person chose to). Returns the end it had, or null when it was closed. */
-  clearBreaker(): Promise<Date | null>;
+  /** Close the breaker early (a person chose to) and release the deliveries it held. Returns its old end (or null) and how many were released. */
+  clearBreaker(): Promise<{ was: Date | null; released: number }>;
   /** True the first time `key` is claimed for an alert; false when it was already alerted. */
   claimAlert(key: string): Promise<boolean>;
   /** WhatsApp refused this group (403): it cannot be sent to and is switched off. */
@@ -66,13 +66,24 @@ export const sendStateStore: SendStateStore = {
     return until;
   },
   async clearBreaker() {
-    const rows = await sequelize.query<{ was: Date | null }>(
-      `UPDATE comms_hub_settings s SET whatsapp_breaker_until = NULL, whatsapp_breaker_reason = NULL
-         FROM (SELECT whatsapp_breaker_until AS was FROM comms_hub_settings WHERE id = 1) old
-        WHERE s.id = 1 RETURNING old.was`,
-      { type: QueryTypes.SELECT },
-    );
-    return rows[0]?.was ? new Date(rows[0].was) : null;
+    // One transaction: close the breaker AND release every WhatsApp delivery it was holding (their
+    // next try was set to the breaker's end), so "Resume early" really resumes. Each is then claimed
+    // one at a time under the normal pacing.
+    return sequelize.transaction(async (t) => {
+      const rows = await sequelize.query<{ was: Date | null }>(
+        `UPDATE comms_hub_settings s SET whatsapp_breaker_until = NULL, whatsapp_breaker_reason = NULL
+           FROM (SELECT whatsapp_breaker_until AS was FROM comms_hub_settings WHERE id = 1) old
+          WHERE s.id = 1 RETURNING old.was`,
+        { type: QueryTypes.SELECT, transaction: t },
+      );
+      const released = await sequelize.query<{ id: string }>(
+        `UPDATE comms_hub_deliveries SET next_attempt_at = now(), updated_at = now()
+          WHERE channel = 'whatsapp' AND status = 'pending' AND error LIKE 'held: whatsapp_paused_by_whatsapp%'
+            AND next_attempt_at > now() RETURNING id`,
+        { type: QueryTypes.SELECT, transaction: t },
+      );
+      return { was: rows[0]?.was ? new Date(rows[0].was) : null, released: released.length };
+    });
   },
   async claimAlert(key) {
     const rows = await sequelize.query<{ id: number }>(

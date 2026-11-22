@@ -124,10 +124,10 @@ async function main() {
     }
     check('an Eventbrite event is managed in the hub, so the pages have content', !!hubEventId);
     // CH10.6: with the backend on the local fake Whapi, give the WhatsApp card its groups and a pause banner.
-    const waStatus = await (await fetch(`${api}/api/admin/comms-hub/whatsapp/status`, { headers: { authorization: `Bearer ${token}` } })).json().catch(() => ({}));
+    const waStatus = await (await fetch(`${api}/api/admin/comms-hub/whatsapp/status`, { headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(30_000) })).json().catch(() => ({}));
     waConnected = waStatus.state === 'connected';
     if (waConnected) {
-      await fetch(`${api}/api/admin/comms-hub/whatsapp/groups/sync`, { method: 'POST', headers: { authorization: `Bearer ${token}` } });
+      await fetch(`${api}/api/admin/comms-hub/whatsapp/groups/sync`, { method: 'POST', headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(30_000) });
       await db.query("UPDATE comms_hub_settings SET whatsapp_breaker_until = now() + interval '1 hour', whatsapp_breaker_reason = 'a11y' WHERE id = 1");
     }
     console.log(`  note  WhatsApp: ${waConnected ? 'connected to the local fake, card measured with groups and a pause' : 'not connected, card measured in its off state'}`);

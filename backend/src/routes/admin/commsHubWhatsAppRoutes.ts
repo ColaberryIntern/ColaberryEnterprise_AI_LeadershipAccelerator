@@ -127,14 +127,14 @@ router.put('/api/admin/comms-hub/whatsapp/groups/:id', requireSection('comms_hub
  * an explicit confirm, and leaves an activity row naming who did it.
  */
 const ClearBody = z.object({ confirm: z.literal(true) }).strict();
-const ClearAnswer = z.object({ cleared: z.boolean() }).strict();
+const ClearAnswer = z.object({ cleared: z.boolean(), released: z.number().int().nonnegative() }).strict();
 router.post('/api/admin/comms-hub/whatsapp/breaker/clear', requireSection('comms_hub'), async (req: Request, res: Response) => {
   if (!mayClearBreaker(req)) { res.status(403).json({ error: 'Only an owner, admin or community organizer can resume WhatsApp early.', error_class: 'Forbidden' }); return; }
   if (!ClearBody.safeParse(req.body).success) { res.status(400).json({ error: 'Send { "confirm": true } to resume WhatsApp sends.', error_class: 'ValidationError' }); return; }
   try {
-    const was = await sendStateStore.clearBreaker();
-    await logActivity(actorOf(req), 'whatsapp.breaker_cleared', 'settings', null, { was_until: was ? was.toISOString() : null });
-    sendValidated(res, ClearAnswer, { cleared: was !== null }, 'comms_hub_whatsapp_breaker_clear');
+    const { was, released } = await sendStateStore.clearBreaker();
+    await logActivity(actorOf(req), 'whatsapp.breaker_cleared', 'settings', null, { was_until: was ? was.toISOString() : null, released });
+    sendValidated(res, ClearAnswer, { cleared: was !== null, released }, 'comms_hub_whatsapp_breaker_clear');
   } catch (err) {
     logFailure('comms_hub_whatsapp_breaker_clear_failed', err);
     res.status(500).json({ error: 'WhatsApp could not be resumed.', error_class: 'BreakerClearFailed' });
