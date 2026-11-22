@@ -98,6 +98,17 @@ it('a WhatsApp group chosen without WhatsApp text yet says how to get it; too lo
   expect(container.querySelector('[data-testid="ch-wa-count"]')!.textContent).toBe('1,001 of 1,000 characters. Too long for WhatsApp.');
 });
 
+it('"You are approving" names the WhatsApp group; with only a WhatsApp group it never says "No recipients yet"', async () => {
+  const summary = (): string[] => Array.from(container.querySelectorAll('.ch-compose-summary li')).map((l) => l.textContent ?? '');
+  m(api.getMessage).mockResolvedValue(msg());
+  await render();
+  expect(summary()).toEqual(['1 community post with banner to 1 feed', '1 WhatsApp message with banner to Comms Hub test group', 'As soon as it is approved']);
+  act(() => { root.unmount(); }); container.remove();
+  m(api.getMessage).mockResolvedValue(msg({ destinations: [GROUP as never], include: { thumbnail: false, join_link: true, registration_link: true } }));
+  await render();
+  expect(summary()).toEqual(['1 WhatsApp message to Comms Hub test group', 'As soon as it is approved']);
+});
+
 it('no WhatsApp text and no WhatsApp group: no WhatsApp tab; recipients read "WhatsApp group:"', async () => {
   m(api.getMessage).mockResolvedValue(msg({ drafts: { community_post: draft('community_post', 'Post.'), in_app: draft('in_app', 'x') }, destinations: [FEED as never] }));
   await render();
