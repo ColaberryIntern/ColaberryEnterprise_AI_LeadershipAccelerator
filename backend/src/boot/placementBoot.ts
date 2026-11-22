@@ -6,6 +6,8 @@ import integrationsInboxRoutes from '../routes/integrationsInboxRoutes';
 import { bookingRouters } from '../routes/publicBookingRoutes';
 import { roomRouters } from '../routes/placementRoomRoutes';
 import { roomGuideRouter } from '../routes/placementRoomGuideRoutes';
+import { replayRouters } from '../routes/placementReplayRoutes';
+import { startReplayJob } from '../services/placement/replayJob';
 import { startInboxTestCron } from '../services/placement/inboxTestJob';
 import { startInboxBackfill } from '../services/placement/inboxBackfill';
 import { startInboxReplay } from '../services/placement/inboxEvents';
@@ -40,6 +42,8 @@ export const PUBLIC_ROUTERS: Router[] = [
   careerPrepPlacementInterviewsRoutes, // CP8.3: the learner's own placement interviews for the Interviews sheet (participant + Career Prep gated)
   roomRouters.candidate, // CP9.1: the candidate's interview room (participant + Career Prep gated; own only)
   roomRouters.employer, // CP9.1: the employer's interview room (the signed link from the booking email; per-link limits)
+  replayRouters.candidate, // CP9.2: the candidate's replay and feedback (participant + Career Prep gated; own only)
+  replayRouters.public, // CP9.2: the employer's replay (signed room link) and the one-hour signed recording stream
 ];
 export const SCHEDULERS: Array<{ name: string; start: () => void }> = [
   { name: 'inbox-tests', start: startInboxTestCron }, // CP6.1c: daily forwarding test + broken alerts (switch-gated per pass)
@@ -51,6 +55,7 @@ export const SCHEDULERS: Array<{ name: string; start: () => void }> = [
   // CP9.1 (E6): once at boot, read the Zoom token's granted scopes and log whether recording can be turned on (changes nothing)
   { name: 'zoom-scope-preflight', start: () => { runScopePreflight().catch((err: unknown) => console.warn(JSON.stringify({ timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
     event: 'placement_zoom_scope_preflight_failed', outcome: 'failure', error_class: (err as Error)?.name ?? 'UpstreamUnavailable', context: {} }))); } },
+  { name: 'replay-job', start: startReplayJob }, // CP9.2: every 15 min, held + fully consented interviews get one replay (capped retries)
 ];
 
 export function mountPlacementIntegrations(app: Express): void {

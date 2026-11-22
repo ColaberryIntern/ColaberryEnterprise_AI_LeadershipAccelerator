@@ -8,7 +8,9 @@ import { foldLine, interviewIcs } from '../../logic/interviewIcs';
 
 /** CP8.3 (kit F4): the #interviews sheet shows only what the server says; a failed load is an alert, never an empty list. */
 const mockFetch = jest.fn();
-jest.mock('../../interviewsApi', () => ({ fetchPlacementInterviewsApi: (...a: unknown[]) => mockFetch(...a) }));
+const mockReplay = jest.fn();
+jest.mock('../../interviewsApi', () => ({ fetchPlacementInterviewsApi: (...a: unknown[]) => mockFetch(...a), fetchReplayApi: (...a: unknown[]) => mockReplay(...a),
+  replayMediaUrl: (p: string) => `https://api.example${p}` }));
 
 const START = '2026-11-23T15:00:00.000Z'; // Mon 9:00 AM CST
 const booked: PlacementInterview = { id: 'iv-1', company: 'Acme', role: 'Data Analyst', state: 'booked', stateLabel: 'Booked', startsAt: START, minutes: 45,
@@ -31,7 +33,7 @@ async function mount(now: number, children?: React.ReactNode): Promise<HTMLDivEl
 const q = (h: HTMLElement, id: string) => h.querySelector(`[data-testid="${id}"]`);
 const click = (el: Element | null) => act(() => { (el as HTMLElement).click(); });
 afterEach(() => { if (root) { const r = root; act(() => r.unmount()); } host?.remove(); host = null; root = null; });
-beforeEach(() => { mockFetch.mockReset(); });
+beforeEach(() => { mockFetch.mockReset(); mockReplay.mockReset(); });
 
 describe('the #interviews sheet (CP8.3)', () => {
   it('the four KPIs and the next interview in Central; Join waits until 10 minutes before', async () => {
@@ -90,6 +92,42 @@ describe('the #interviews sheet (CP8.3)', () => {
     expect(q(h, 'cp-ivs-failed')?.getAttribute('role')).toBe('alert');
     expect(q(h, 'cp-ivs-empty')).toBeNull();
     expect(q(h, 'cp-ivs-kpis')).toBeNull();
+  });
+  it('CP9.2: once a replay is scored the KPI reads "Held and scored", the row shows the score, the drawer the replay', async () => {
+    const held: PlacementInterview = { ...waiting, id: 'iv-3', company: 'Gamma', state: 'done', stateLabel: 'Held', startsAt: START,
+      replay: { status: 'scored', note: 'Scored from the audio and the words only, never the video.', score: 81 } };
+    const unrecorded: PlacementInterview = { ...held, id: 'iv-4', replay: { status: 'not_recorded', note: 'Not recorded: someone chose not to be recorded, so there is no replay.', score: null } };
+    mockReplay.mockResolvedValue({ interviewId: 'iv-3', company: 'Gamma', role: null, startsAt: START, status: 'scored', note: 'x', score: 81,
+      recording: '/api/public/replays/iv-3/recording?x=1&t=sig', questions: [{ n: 1, question: 'Tell me about a pipeline.', answer: 'I built one.', at: 67, seconds: 20,
+        pace: { score: 100, value: '117 wpm', target: '100 to 165 wpm' }, fillers: { score: 90, value: '1 (2%)', target: 'under 3% of words' }, content: { score: 50, covered: 1, of: 2 } }] });
+    mockFetch.mockResolvedValue({ kpis: { upcoming: 0, waiting: 0, recruiter: 0, held: 2, scored: 1 }, interviews: [held, unrecorded] });
+    const h = await mount(Date.parse('2026-11-24T12:00:00Z'));
+    expect(q(h, 'cp-ivs-kpis')?.textContent).toContain('Held and scored');
+    expect(q(h, 'cp-ivs-kpi-scored')?.textContent).toBe('1 scored');
+    expect(q(h, 'cp-ivs-score-iv-3')?.textContent).toBe(' Score 81');
+    expect(q(h, 'cp-ivs-score-iv-4')).toBeNull();
+    click(q(h, 'cp-ivs-history-iv-3'));
+    await flush();
+    expect(mockReplay).toHaveBeenCalledWith('iv-3');
+    expect(q(h, 'cp-ivs-replay')?.textContent).toContain('Replay: score 81');
+    expect(q(h, 'cp-ivs-replay-video')?.getAttribute('src')).toBe('https://api.example/api/public/replays/iv-3/recording?x=1&t=sig');
+    expect(q(h, 'cp-ivs-q-1')?.textContent).toContain('Question 1: Tell me about a pipeline.');
+    expect(q(h, 'cp-ivs-q-1')?.textContent).toContain('At 1:07, 20 seconds. You said: I built one.');
+    expect(q(h, 'cp-ivs-q-1')?.textContent).toContain('Covered the question 50: 1 of 2 key words');
+    click(q(h, 'cp-ivs-history-iv-4'));
+    expect(q(h, 'cp-ivs-replay-note')?.textContent).toBe('Not recorded: someone chose not to be recorded, so there is no replay.');
+    expect(mockReplay).toHaveBeenCalledTimes(1); // nothing to load for an unrecorded interview
+  });
+  it('CP9.2: no replay scored yet keeps the KPI "Held"; a failed replay load is an alert', async () => {
+    const held: PlacementInterview = { ...waiting, id: 'iv-3', state: 'done', stateLabel: 'Held', replay: { status: 'no_score', note: 'Recorded, but nothing was scored.', score: null } };
+    mockFetch.mockResolvedValue({ kpis: { upcoming: 0, waiting: 0, recruiter: 0, held: 1, scored: 0 }, interviews: [held] });
+    mockReplay.mockRejectedValue(new Error('offline'));
+    const h = await mount(Date.parse('2026-11-24T12:00:00Z'));
+    expect(q(h, 'cp-ivs-kpis')?.textContent).not.toContain('scored');
+    click(q(h, 'cp-ivs-history-iv-3'));
+    await flush();
+    expect(q(h, 'cp-ivs-replay-failed')?.getAttribute('role')).toBe('alert');
+    expect(q(h, 'cp-ivs-replay-video')).toBeNull();
   });
   it('a booked interview that is over is not "next"; nothing to join for one not booked', async () => {
     mockFetch.mockResolvedValue(DATA);

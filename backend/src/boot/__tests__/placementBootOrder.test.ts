@@ -7,6 +7,9 @@ jest.mock('../../routes/integrationsInboxRoutes', () => { const { Router: R } = 
 jest.mock('../../routes/publicBookingRoutes', () => { const { Router: R } = jest.requireActual('express'); return { bookingRouters: { view: R(), confirm: R() } }; });
 jest.mock('../../routes/placementRoomRoutes', () => { const { Router: R } = jest.requireActual('express'); return { roomRouters: { candidate: R(), employer: R() } }; });
 jest.mock('../../routes/placementRoomGuideRoutes', () => { const { Router: R } = jest.requireActual('express'); return { roomGuideRouter: R() }; });
+jest.mock('../../routes/placementReplayRoutes', () => { const { Router: R } = jest.requireActual('express'); return { replayRouters: { candidate: R(), public: R() } }; });
+const mockStartReplayJob = jest.fn();
+jest.mock('../../services/placement/replayJob', () => ({ startReplayJob: mockStartReplayJob }));
 const mockPreflight = jest.fn();
 jest.mock('../../services/placement/zoomScopePreflight', () => ({ runScopePreflight: (...a: unknown[]) => mockPreflight(...a) }));
 const mockStartInboxTests = jest.fn();
@@ -61,7 +64,8 @@ describe('placementBoot', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     expect(saved.p).toEqual([require('../../routes/careerPrepInboxRoutes').default, require('../../routes/publicBookingRoutes').bookingRouters.view, // T17: the booking page's data
       require('../../routes/careerPrepPlacementInterviewsRoutes').default, // T20: the learner's placement interviews
-      require('../../routes/placementRoomRoutes').roomRouters.candidate, require('../../routes/placementRoomRoutes').roomRouters.employer]); // T22: the two rooms
+      require('../../routes/placementRoomRoutes').roomRouters.candidate, require('../../routes/placementRoomRoutes').roomRouters.employer, // T22: the two rooms
+      require('../../routes/placementReplayRoutes').replayRouters.candidate, require('../../routes/placementReplayRoutes').replayRouters.public]); // T24: the replay
   });
 
   it('T12: registers the signed inbox events router as an INTEGRATION router (mounted before the JSON parser)', () => {
@@ -71,7 +75,8 @@ describe('placementBoot', () => {
   });
 
   it('T11: registers the daily forwarding test + broken alerts as a scheduler', () => {
-    expect(saved.s.map((s) => s.name)).toEqual(['inbox-tests', 'inbox-backfill', 'inbox-replay', 'booking-link-sweep', 'booking-confirm-sweep', 'booking-scheduler', 'zoom-scope-preflight']);
+    expect(saved.s.map((s) => s.name)).toEqual(['inbox-tests', 'inbox-backfill', 'inbox-replay', 'booking-link-sweep', 'booking-confirm-sweep', 'booking-scheduler', 'zoom-scope-preflight', 'replay-job']);
+    expect(saved.s[7].start).toBe(mockStartReplayJob); // T24: the replay job
     expect(saved.s[3].start).toBe(mockStartSweep); // T16: retries owed booking-link replies
     expect(saved.s[4].start).toBe(mockStartConfirmSweep); // T18: finishes a booking's room and invites
     expect(saved.s[5].start).toBe(mockStartScheduler); // T19: reminders and the unbooked nudge

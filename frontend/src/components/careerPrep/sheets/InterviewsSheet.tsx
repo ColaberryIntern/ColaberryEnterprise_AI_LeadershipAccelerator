@@ -16,6 +16,8 @@ import './careerPrepSheets.css';
  */
 const PILL: Record<PlacementState, string> = { booked: 'ok', done: 'info', review: 'warn', new: 'info', awaiting: 'info', cancelled: 'bad' };
 const KPIS = [['upcoming', 'Upcoming'], ['waiting', 'Waiting on employer'], ['recruiter', 'With your recruiter'], ['held', 'Held']] as const;
+/** CP9.2: "Held" becomes "Held and scored" once a replay is scored (the value stays the count held; the scored count beside it). */
+export const heldLabel = (k: PlacementInterviews['kpis']): string => ((k.scored ?? 0) > 0 ? 'Held and scored' : 'Held');
 export const AVAILABILITY_LINK = '/portal/portfolio?tab=hire&section=times';
 
 export function joinIsOpen(i: PlacementInterview, now: number): boolean {
@@ -53,7 +55,8 @@ function Table({ list, onHistory, buttons }: { list: PlacementInterview[]; onHis
         <tr key={i.id} data-testid={`cp-ivs-row-${i.id}`}>
           <td data-label="When">{i.startsAt ? centralTime(i.startsAt) : 'Not booked yet'}</td>
           <td data-label="Company">{interviewName(i)}</td>
-          <td data-label="State"><span className={`cp-pill ${PILL[i.state]}`}>{i.stateLabel}</span></td>
+          <td data-label="State"><span className={`cp-pill ${PILL[i.state]}`}>{i.stateLabel}</span>
+            {typeof i.replay?.score === 'number' && <span className="cp-ivs-score" data-testid={`cp-ivs-score-${i.id}`}> Score {i.replay.score}</span>}</td>
           <td data-label="Read as">{readAsText(i)}</td>
           <td data-label="History"><button type="button" className="cp-ghost sm" ref={(el) => { buttons.current[i.id] = el; }} onClick={() => onHistory(i.id)}
             aria-label={`History: ${interviewName(i)}`} data-testid={`cp-ivs-history-${i.id}`}>History</button></td>
@@ -98,7 +101,8 @@ export function InterviewsSheet({ now: fixed, children }: { now?: number; childr
         : !data ? <p className="cp-muted" aria-live="polite">Loading...</p> : (
           <>
             <dl className="cp-ivs-kpis" data-testid="cp-ivs-kpis">{KPIS.map(([key, label]) => (
-              <div key={key}><dt>{label}</dt><dd data-testid={`cp-ivs-kpi-${key}`}>{data.kpis[key]}</dd></div>
+              <div key={key}><dt>{key === 'held' ? heldLabel(data.kpis) : label}</dt><dd data-testid={`cp-ivs-kpi-${key}`}>{data.kpis[key]}</dd>
+                {key === 'held' && (data.kpis.scored ?? 0) > 0 && <small className="cp-muted" data-testid="cp-ivs-kpi-scored">{data.kpis.scored} scored</small>}</div>
             ))}</dl>
             {next && <NextCard i={next} now={now} />}
             <h3>Every interview</h3>

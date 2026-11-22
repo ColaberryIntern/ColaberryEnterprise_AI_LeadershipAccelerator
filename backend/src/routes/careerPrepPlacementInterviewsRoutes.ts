@@ -22,9 +22,12 @@ const View = z.object({
   startsAt: iso.nullable(), minutes: z.number().int().positive(), readAs: z.string().nullable(), confidence: z.number().min(0).max(1).nullable(),
   roomPage: z.string().regex(/^\/portal\/career\/interview\/[^/?#]+$/).nullable(), joinOpensAt: iso.nullable(), joinClosesAt: iso.nullable(),
   prepId: z.string().nullable(), history: z.array(z.object({ at: iso, label: z.string() }).strict()),
+  replay: z.object({ status: z.enum(['not_held', 'not_recorded', 'waiting', 'scored', 'no_score', 'unavailable']), note: z.string(),
+    score: z.number().int().min(0).max(100).nullable() }).strict().nullable(),
 }).strict();
+const count = z.number().int().min(0);
 export const PlacementInterviewsResponse = z.object({
-  kpis: z.object({ upcoming: z.number().int().min(0), waiting: z.number().int().min(0), recruiter: z.number().int().min(0), held: z.number().int().min(0) }).strict(),
+  kpis: z.object({ upcoming: count, waiting: count, recruiter: count, held: count, scored: count }).strict(),
   interviews: z.array(View),
 }).strict();
 const NoQuery = z.object({}).strict();

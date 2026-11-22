@@ -36,6 +36,15 @@
 .cp-room .cp-ivs-history-list{margin:8px 0 0;padding-left:1.2rem}
 .cp-room .cp-ivs-history time{font-family:var(--cp-mono);font-size:.82rem;color:var(--fg-muted)}
 .cp-room .cp-ivs-how{margin:0;padding-left:1.2rem;display:flex;flex-direction:column;gap:4px}
+/* CP9.2: the replay inside the History drawer. */
+.cp-room .cp-ivs-score{font:600 .82rem var(--cp-mono);color:var(--fg);white-space:nowrap}
+.cp-room .cp-ivs-replay{margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+.cp-room .cp-ivs-replay h5{margin:0 0 4px;font-size:.92rem}
+.cp-room .cp-ivs-video{display:block;width:100%;max-width:640px;margin:8px 0;border-radius:8px;background:#000}
+.cp-room .cp-ivs-qcards{margin:8px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+.cp-room .cp-ivs-qcard{padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg-elevated);overflow-wrap:anywhere}
+.cp-room .cp-ivs-qcard p{margin:0 0 4px}
+.cp-room .cp-ivs-parts{margin:4px 0 0;padding-left:1.1rem}
 @media (max-width:600px){
   .cp-room .cp-ivs-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
   .cp-room .cp-inbox-table thead{display:none}

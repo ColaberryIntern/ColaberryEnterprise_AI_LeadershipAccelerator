@@ -16,7 +16,11 @@ import { SENTINEL_PROVIDER_URL, expectNoRoomUrl } from '../../services/placement
 type Iv = Record<string, unknown> & { id: string; enrollment_id: string; state: string; created_at: Date; starts_at: Date | null };
 type Ev = { subject_type: string; subject_id: string; event: string; from_state: string | null; to_state: string | null; created_at: Date; id: number };
 const db = { iv: [] as Iv[], prep: [] as Array<{ id: string; placement_interview_id: string; enrollment_id: string; starts_at: Date }>, events: [] as Ev[], sql: [] as string[], fail: false };
-const COLS = ['id', 'company', 'position', 'type', 'sub_type', 'confidence', 'state', 'starts_at', 'minutes', 'room_url', 'room_provider_id', 'enrollment_id'];
+const COLS = ['id', 'company', 'position', 'type', 'sub_type', 'confidence', 'state', 'starts_at', 'minutes', 'room_url', 'room_provider_id', 'enrollment_id', 'recording_consent'];
+// T24 (CP9.2): the replay columns, each returned only when the statement names it (the fixture's values stand in for
+// the consent rule and the interview_replays join, which replayStore's integration test runs on Postgres).
+const REPLAY_COLS: Array<[RegExp, string]> = [[/AS rec_current\b/, 'rec_current'], [/AS consented\b/, 'consented'], [/r\.status AS r_status/, 'r_status'],
+  [/r\.reason AS r_reason/, 'r_reason'], [/r\.scores->>'score' AS r_score/, 'r_score']];
 function answer(sql: string, r: Record<string, unknown>): [unknown[], number] {
   db.sql.push(sql);
   if (db.fail) throw Object.assign(new Error('db down'), { name: 'SequelizeConnectionError' });
@@ -26,7 +30,8 @@ function answer(sql: string, r: Record<string, unknown>): [unknown[], number] {
       && (!/c\.enrollment_id = i\.enrollment_id/.test(sql) || c.enrollment_id === i.enrollment_id)
       && (!/c\.starts_at = i\.starts_at/.test(sql) || (!!i.starts_at && c.starts_at.getTime() === i.starts_at.getTime())));
     const rows = [...mine].sort((a, b) => b.created_at.getTime() - a.created_at.getTime())
-      .map((i) => ({ ...Object.fromEntries(COLS.filter((k) => new RegExp(`\\bi\\.${k}\\b`).test(sql)).map((k) => [k, i[k] ?? null])), ...(/c\.id AS prep_id/.test(sql) ? { prep_id: join(i)?.id ?? null } : {}) }));
+      .map((i) => ({ ...Object.fromEntries(COLS.filter((k) => new RegExp(`\\bi\\.${k}\\b`).test(sql)).map((k) => [k, i[k] ?? null])), ...(/c\.id AS prep_id/.test(sql) ? { prep_id: join(i)?.id ?? null } : {}),
+        ...Object.fromEntries(REPLAY_COLS.filter(([re]) => re.test(sql)).map(([, k]) => [k, i[k] ?? null])) }));
     return [rows.slice(0, Number(/LIMIT (\d+)/.exec(sql)?.[1] ?? Infinity)), 0];
   }
   if (sql.includes('FROM placement_events')) {
@@ -86,7 +91,9 @@ beforeEach(() => {
     iv('iv-1'),
     iv('iv-2', { state: 'awaiting', starts_at: null, company: 'Beta', type: null, sub_type: 'Phone Screen', confidence: '0.96', room_url: null, room_provider_id: null, created_at: new Date(NOW - 1 * H) }),
     iv('iv-3', { state: 'review', starts_at: null, company: null, position: null, type: null, sub_type: null, confidence: '0.81', room_url: null, room_provider_id: null, created_at: new Date(NOW - 2 * H) }),
-    iv('iv-4', { state: 'done', starts_at: new Date(NOW - 72 * H), created_at: new Date(NOW - 100 * H) }),
+    iv('iv-4', { state: 'done', starts_at: new Date(NOW - 72 * H), created_at: new Date(NOW - 100 * H),
+      recording_consent: 'on', rec_current: true, consented: true, r_status: 'scored', r_reason: null, r_score: '74' }),
+    iv('iv-6', { state: 'done', starts_at: new Date(NOW - 96 * H), created_at: new Date(NOW - 120 * H), recording_consent: 'declined', rec_current: false, consented: false }),
     iv('iv-5', { state: 'cancelled', created_at: new Date(NOW - 3 * H) }),
     iv('iv-bob', { enrollment_id: 'enr-bob', company: 'Bob Corp' }),
   ];
@@ -118,17 +125,24 @@ describe('GET /interviews/placement: what the sheet gets', () => {
     const res = await request(app()).get(URL).set('Authorization', token('enr-ann'));
     expect(res.status).toBe(200);
     expectNoRoomUrl(res.body);
-    expect(db.sql.join('\n')).not.toMatch(/room_url|room_provider_id/);
-    expect(res.body.kpis).toEqual({ upcoming: 1, waiting: 1, recruiter: 1, held: 1 });
-    expect(res.body.interviews.map((i: { id: string }) => i.id)).toEqual(['iv-1', 'iv-2', 'iv-3', 'iv-5', 'iv-4']);
-    const [booked, waiting, recruiter, cancelled, held] = res.body.interviews;
+    // T24: the statement may COMPARE the meeting id (is the recording state for the meeting the interview was held in?),
+    // but it never reads the link and never selects the meeting id as a column.
+    expect(db.sql.join('\n')).not.toMatch(/room_url/);
+    expect(db.sql.join('\n')).not.toMatch(/(?:SELECT|,)\s*i\.room_provider_id\s*(?:,|FROM\b|AS\b)/);
+    expect(res.body.kpis).toEqual({ upcoming: 1, waiting: 1, recruiter: 1, held: 2, scored: 1 });
+    expect(res.body.interviews.map((i: { id: string }) => i.id)).toEqual(['iv-1', 'iv-2', 'iv-3', 'iv-5', 'iv-4', 'iv-6']);
+    const [booked, waiting, recruiter, cancelled, held, unrecorded] = res.body.interviews;
     expect(booked).toMatchObject({ company: 'Acme', role: 'Data Analyst', state: 'booked', stateLabel: 'Booked', startsAt: START.toISOString(), minutes: 45,
       readAs: 'Technical', confidence: 0.97, roomPage: '/portal/career/interview/iv-1', prepId: 'prep-1',
       joinOpensAt: new Date(START.getTime() - 10 * 60_000).toISOString(), joinClosesAt: new Date(START.getTime() + 45 * 60_000).toISOString() });
     expect(waiting).toMatchObject({ stateLabel: 'Waiting on employer', readAs: 'Phone Screen', roomPage: null, joinOpensAt: null, prepId: null });
     expect(recruiter).toMatchObject({ company: null, role: null, stateLabel: 'With your recruiter', readAs: null, confidence: 0.81 });
     expect(cancelled).toMatchObject({ stateLabel: 'Cancelled', roomPage: null, prepId: null }); // its old prep row is not offered as an anchor
-    expect(held).toMatchObject({ stateLabel: 'Held', roomPage: null });
+    expect(held).toMatchObject({ stateLabel: 'Held', roomPage: null,
+      replay: { status: 'scored', note: 'Scored from the audio and the words only, never the video.', score: 74 } });
+    // T24: an unrecorded interview says why there is no replay, and has no score.
+    expect(unrecorded.replay).toEqual({ status: 'not_recorded', note: 'Not recorded: someone chose not to be recorded, so there is no replay.', score: null });
+    expect(booked.replay).toBeNull();
     expect(JSON.stringify(res.body)).not.toContain('Bob Corp');
   });
   it('history: state changes in plain words, oldest first, in Central-ready ISO; bookkeeping rows are left out', async () => {
@@ -144,7 +158,7 @@ describe('GET /interviews/placement: what the sheet gets', () => {
   });
   it('nothing found yet: zero KPIs and an empty list (no history read); a database error is an honest 500', async () => {
     const empty = await request(app()).get(URL).set('Authorization', token('enr-new'));
-    expect(empty.body).toEqual({ kpis: { upcoming: 0, waiting: 0, recruiter: 0, held: 0 }, interviews: [] });
+    expect(empty.body).toEqual({ kpis: { upcoming: 0, waiting: 0, recruiter: 0, held: 0, scored: 0 }, interviews: [] });
     expect(db.sql.some((s) => s.includes('FROM placement_events'))).toBe(false);
     db.fail = true;
     const res = await request(app()).get(URL).set('Authorization', token());

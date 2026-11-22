@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import type { PlacementInterview } from '../interviewsApi';
+import { InterviewReplay } from './InterviewReplay';
 
 /**
  * Career Prep v27, CP8.3: one interview's history, opened from its row in the Interviews sheet. Every line is a state
@@ -27,6 +28,7 @@ export function InterviewHistory({ interview, onClose }: { interview: PlacementI
           <li key={`${h.at}-${k}`}><time dateTime={h.at}>{centralTime(h.at)} Central</time> {h.label}</li>
         ))}</ol>
       ) : <p className="cp-muted">Nothing recorded for this interview yet.</p>}
+      {interview.replay && <InterviewReplay interviewId={interview.id} summary={interview.replay} />}
     </section>
   );
 }

@@ -47,6 +47,11 @@ describe('ensurePlacementSchema (statements)', () => {
     expect(iv).toMatch(/recording_meeting_id VARCHAR\(128\)/);
     expect(PLACEMENT_STATEMENTS.find((s) => s.includes('placement_review_items ('))).toMatch(/'recording_mismatch'/);
     expect(PLACEMENT_STATEMENTS.find((s) => s.includes('CREATE TABLE IF NOT EXISTS interview_notes'))).toMatch(/char_length\(body\) <= 5000/);
+    // T24 (CP9.2): at most one replay per interview, four states, the retries counted.
+    const rp = PLACEMENT_STATEMENTS.find((s) => s.includes('CREATE TABLE IF NOT EXISTS interview_replays')) as string;
+    expect(rp).toMatch(/interview_id UUID NOT NULL UNIQUE REFERENCES placement_interviews\(id\)/);
+    expect(rp).toMatch(/status IN \('waiting','scored','no_score','unavailable'\)/);
+    expect(rp).toMatch(/attempts SMALLINT NOT NULL DEFAULT 0 CHECK \(attempts >= 0\)/);
   });
   it('has a rollback that drops every table it creates, dependents first, never run at boot', () => {
     const made = tables(PLACEMENT_STATEMENTS, /CREATE TABLE IF NOT EXISTS (\w+)/);
@@ -55,6 +60,7 @@ describe('ensurePlacementSchema (statements)', () => {
     expect(dropped.indexOf('inbox_received')).toBeLessThan(dropped.indexOf('job_search_inboxes'));
     expect(dropped.indexOf('interview_consents')).toBeLessThan(dropped.indexOf('placement_interviews'));
     expect(dropped.indexOf('interview_notes')).toBeLessThan(dropped.indexOf('placement_interviews'));
+    expect(dropped.indexOf('interview_replays')).toBeLessThan(dropped.indexOf('placement_interviews'));
   });
   it('keeps booting when one statement fails, and says so', async () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);

@@ -50,6 +50,11 @@ import { sequelize } from '../config/database';
  *   interview_notes      (CP9.1) the employer's private notes on an interview (written by the room page through
  *                        roomGuide.ts). client_key is the page's key for one Save, UNIQUE per interview, so a double
  *                        click or a retried request stores one note.
+ *   interview_replays    (CP9.2, services/placement/replayJob.ts) at most ONE per interview (interview_id UNIQUE): the
+ *                        replay of a held, fully consented, recorded interview. status waiting (Zoom still preparing;
+ *                        attempts / last_attempt_at bound the retries), scored, no_score (recorded, nothing scored, reason
+ *                        says why) or unavailable (reason says why). turns / scores = the candidate's feedback (served to
+ *                        the candidate only); recording = where Zoom keeps the file (server side only, never served).
  */
 export const PLACEMENT_STATEMENTS: readonly string[] = [
   `CREATE TABLE IF NOT EXISTS job_search_inboxes (
@@ -193,10 +198,26 @@ export const PLACEMENT_STATEMENTS: readonly string[] = [
      CONSTRAINT uq_interview_notes_key UNIQUE (interview_id, client_key)
    )`,
   'CREATE INDEX IF NOT EXISTS idx_interview_notes_interview ON interview_notes (interview_id, created_at)',
+  `CREATE TABLE IF NOT EXISTS interview_replays (
+     id BIGSERIAL PRIMARY KEY,
+     interview_id UUID NOT NULL UNIQUE REFERENCES placement_interviews(id) ON DELETE CASCADE,
+     enrollment_id UUID NOT NULL REFERENCES enrollments(id) ON DELETE CASCADE,
+     meeting_id VARCHAR(128) NOT NULL,
+     status VARCHAR(12) NOT NULL CHECK (status IN ('waiting','scored','no_score','unavailable')),
+     reason VARCHAR(200),
+     turns JSONB NOT NULL DEFAULT '[]'::jsonb,
+     scores JSONB NOT NULL DEFAULT '{}'::jsonb,
+     recording JSONB,
+     attempts SMALLINT NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+     last_attempt_at TIMESTAMPTZ,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
 ];
 
 /** Run by hand to roll the placement tables back. Never run at boot. Dependents first. */
 export const PLACEMENT_SCHEMA_ROLLBACK: readonly string[] = [
+  'DROP TABLE IF EXISTS interview_replays',
   'DROP TABLE IF EXISTS interview_notes',
   'DROP TABLE IF EXISTS interview_consents',
   'DROP TABLE IF EXISTS placement_review_items',

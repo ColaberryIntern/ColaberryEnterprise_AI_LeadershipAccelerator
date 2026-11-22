@@ -13,6 +13,7 @@
  * bookingConfirm links) leads the summary and the anchors, and GET /interviews/placement lists it, in the server's shapes.
  */
 const { roomRoute } = require('./fakeRoom');
+const { heldInterview, replayRoute, placementKpis } = require('./fakeReplay');
 
 const DAY = 86_400_000;
 const CT = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit' });
@@ -38,7 +39,8 @@ function makeState(now, opts = {}) {
   return {
     empty,
     interviews: opts.placement ? [north, acme, globex] : [acme, globex],
-    placement: opts.placement ? [placementBooked(north)] : [],
+    // CP9.2: `{ held: true }` adds a held interview with a scored replay (fakeReplay.js).
+    placement: [...(opts.placement ? [placementBooked(north)] : []), ...(opts.held ? [heldInterview(now)] : [])],
     // CP9.1: the candidate room (fakeRoom.js): no decision yet, and every decision the page sent.
     roomDecision: null,
     roomDecisions: [],
@@ -171,7 +173,7 @@ function route(state, method, path, query, body) {
   if (path === `${P}/inbox` && method === 'PUT') { state.inbox = { ...state.inbox, address: String(body.address || '').trim().toLowerCase().replace(/@googlemail\.com$/, '@gmail.com'), health: 'setup', healthLabel: 'Not set up yet', steps: { create: true, added: true, forwarding: false, tested: false } }; return { inbox: state.inbox }; }
   if (path === `${P}/inbox`) return { inbox: state.inbox };
   if (path === `${P}/inbox/received`) return { items: [] };
-  if (path === `${P}/interviews/placement`) return { kpis: { upcoming: state.placement.length, waiting: 0, recruiter: 0, held: 0 }, interviews: state.placement };
+  if (path === `${P}/interviews/placement`) return { kpis: placementKpis(state.placement), interviews: state.placement };
   if (path === `${P}/read-aloud/line`) return { line: { id: 'ra-02', text: 'The problem was simple to describe and hard to solve, so I started by talking to the people who lived with it.' } };
   const line = /name="lineId"\r?\n\r?\n([^\r\n]+)/.exec((body && body.raw) || '');
   if (attempt && method === 'POST' && line) {
@@ -246,7 +248,7 @@ async function installFakeApi(page, now = Date.now(), opts = {}) {
     // A multipart upload is not JSON: keep its raw text so the read-aloud fixture can see the lineId field (CP5.8).
     try { body = req.postDataJSON() || {}; } catch { body = { raw: req.postData() || '' }; }
     if (state.planDelayMs && req.method() === 'POST' && url.pathname === '/api/portal/career-prep/plans') await new Promise((ok) => setTimeout(ok, state.planDelayMs));
-    const room = roomRoute(state, req.method(), url.pathname, body);
+    const room = roomRoute(state, req.method(), url.pathname, body) || replayRoute(state, req.method(), url.pathname);
     if (room) { sent.push({ path: url.pathname, payload: room.body }); await r.fulfill({ status: room.status, contentType: 'application/json', body: JSON.stringify(room.body) }); return; }
     const out = route(state, req.method(), url.pathname, url.searchParams, body);
     const payload = out === null ? {} : out;

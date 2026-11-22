@@ -1,6 +1,8 @@
 import { sequelize } from '../../config/database';
 import { candidateRoomUrl } from './roomLink';
 import { isInterviewState, type InterviewState } from './interviewStates';
+import { CONSENTED } from './replayStore';
+import { summarize as replaySummary, type ReplaySummary } from './replayView';
 
 /**
  * Career Prep v27, CP8.3 (kit F4): what the learner's Interviews sheet shows about the interviews the job-search inbox
@@ -8,7 +10,10 @@ import { isInterviewState, type InterviewState } from './interviewStates';
  * NEVER read here (the statement does not select room_url or room_provider_id): "Join" is the consent-room PAGE
  * (`/portal/career/interview/<id>`, roomLink.candidateRoomUrl), and only for a booked interview.
  *
- *   kpis        Upcoming (booked, not over), Waiting on employer (new, awaiting), With your recruiter (review), Held (done)
+ *   kpis        Upcoming (booked, not over), Waiting on employer (new, awaiting), With your recruiter (review), Held (done),
+ *               scored (held interviews whose replay was scored, CP9.2; the sheet says "Held and scored" once it is > 0)
+ *   replay      for a held interview: its replay state, the plain words (why there is none, or still preparing) and
+ *               the score when scored (replayView.summarize). null for an interview not held yet.
  *   history     state changes from placement_events, in plain words; internal bookkeeping rows are left out
  *   prepId      the learner's prep row for a booked (or held) interview at the same time, so "Continue prep" opens the
  *               room anchored on it (absent otherwise: the room would not offer it as an anchor)
@@ -23,8 +28,9 @@ export interface PlacementInterviewView {
   id: string; company: string | null; role: string | null; state: InterviewState; stateLabel: string;
   startsAt: string | null; minutes: number; readAs: string | null; confidence: number | null;
   roomPage: string | null; joinOpensAt: string | null; joinClosesAt: string | null; prepId: string | null; history: HistoryItem[];
+  replay: ReplaySummary | null;
 }
-export interface PlacementInterviews { kpis: { upcoming: number; waiting: number; recruiter: number; held: number }; interviews: PlacementInterviewView[] }
+export interface PlacementInterviews { kpis: { upcoming: number; waiting: number; recruiter: number; held: number; scored: number }; interviews: PlacementInterviewView[] }
 
 export const STATE_LABEL: Record<InterviewState, string> = {
   new: 'Waiting on employer', awaiting: 'Waiting on employer', review: 'With your recruiter', booked: 'Booked', done: 'Held', cancelled: 'Cancelled',
@@ -44,7 +50,8 @@ export function historyLabel(event: string, from: string | null, to: string | nu
 }
 
 type Row = { id: string; company: string | null; position: string | null; type: string | null; sub_type: string | null; confidence: string | number | null;
-  state: string; starts_at: Date | string | null; minutes: number | null; prep_id: string | null };
+  state: string; starts_at: Date | string | null; minutes: number | null; prep_id: string | null;
+  recording_consent?: string | null; rec_current?: boolean; consented?: boolean; r_status?: string | null; r_reason?: string | null; r_score?: string | number | null };
 type Ev = { subject_id: string; event: string; from_state: string | null; to_state: string | null; created_at: Date | string };
 
 const iso = (d: Date | string) => new Date(d).toISOString();
@@ -67,7 +74,14 @@ export function toView(r: Row, events: Ev[]): PlacementInterviewView | null {
     history: events.filter((e) => String(e.subject_id) === String(r.id))
       .map((e) => ({ at: iso(e.created_at), label: historyLabel(e.event, e.from_state, e.to_state) }))
       .filter((h): h is HistoryItem => h.label !== null),
+    replay: r.state === 'done' ? replayOf(r) : null,
   };
+}
+
+function replayOf(r: Row): ReplaySummary {
+  const score = r.r_score === null || r.r_score === undefined ? null : Number(r.r_score);
+  return replaySummary({ state: r.state, recording_consent: r.recording_consent ?? null, rec_current: !!r.rec_current, consented: !!r.consented,
+    r_status: (r.r_status ?? null) as never, r_reason: r.r_reason ?? null }, score !== null && Number.isFinite(score) ? score : null);
 }
 
 /** Upcoming booked interviews first (soonest first), then every other one, newest first (the statement's order). */
@@ -78,16 +92,20 @@ export function summarize(views: PlacementInterviewView[], now: Date): Placement
   const rest = views.filter((v) => !upcoming.includes(v));
   return {
     kpis: { upcoming: upcoming.length, waiting: views.filter((v) => v.state === 'new' || v.state === 'awaiting').length,
-      recruiter: views.filter((v) => v.state === 'review').length, held: views.filter((v) => v.state === 'done').length },
+      recruiter: views.filter((v) => v.state === 'review').length, held: views.filter((v) => v.state === 'done').length,
+      scored: views.filter((v) => v.replay?.status === 'scored').length },
     interviews: [...upcoming, ...rest],
   };
 }
 
 export async function listPlacementInterviews(enrollmentId: string, now = new Date()): Promise<PlacementInterviews> {
   const [rows] = await sequelize.query(
-    `SELECT i.id, i.company, i.position, i.type, i.sub_type, i.confidence, i.state, i.starts_at, i.minutes, c.id AS prep_id
+    `SELECT i.id, i.company, i.position, i.type, i.sub_type, i.confidence, i.state, i.starts_at, i.minutes, c.id AS prep_id, i.recording_consent,
+            (i.recording_meeting_id IS NOT NULL AND i.recording_meeting_id = i.room_provider_id) AS rec_current, (${CONSENTED}) AS consented,
+            r.status AS r_status, r.reason AS r_reason, r.scores->>'score' AS r_score
        FROM placement_interviews i
        LEFT JOIN career_interviews c ON c.placement_interview_id = i.id AND c.enrollment_id = i.enrollment_id AND c.starts_at = i.starts_at
+       LEFT JOIN interview_replays r ON r.interview_id = i.id
       WHERE i.enrollment_id = :e ORDER BY i.created_at DESC, i.id LIMIT ${MAX_INTERVIEWS}`,
     { replacements: { e: enrollmentId } });
   const list = rows as Row[];

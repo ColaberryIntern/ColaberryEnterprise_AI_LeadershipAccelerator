@@ -2,7 +2,9 @@ import { getMeetingProvider } from '../communityRooms/meetingProvider';
 import { zoomApiRequest } from '../zoom/zoomApiClient';
 import type { ZoomStoredSettings } from '../zoom/zoomMeetingSettings';
 import type { UpdateZoomMeetingInput } from '../zoomService';
+import type { Readable } from 'stream';
 import { checkRecordingScopes, type ScopeCheck } from './zoomScopePreflight';
+import { fetchRecordingFile, fetchTranscript, streamStoredRecording, type ReplayTranscript, type StoredRecording } from './replayFiles';
 
 /**
  * Career Prep v27, CP9.1: the interview room's meeting, behind one small interface (kit F5). An adapter over the shared
@@ -18,7 +20,8 @@ import { checkRecordingScopes, type ScopeCheck } from './zoomScopePreflight';
  *                  cannot read (an error, a missing field) is null = cannot tell, which roomService treats as unsafe.
  *   joinUrl        the provider's current join link for a meeting (the room routes hand out the STORED one).
  *   canSetRecording  the Zoom scope preflight (zoomScopePreflight.ts): both the update and the read scope.
- * The transcript arrives with the replay (CP9.2, T24, through zoomTranscripts.ts).
+ *   transcript / recordingFile / streamRecording  the replay (CP9.2): replayFiles.ts, through zoomTranscripts.ts and
+ *                  zoomService's recording match and stream (audio and words are scored; the video is only played back).
  * zoomService is loaded only when a recording change is made: it pulls in the app's models, and the booking path
  * (bookingConfirm.ts) must not load them just to create a room.
  */
@@ -34,6 +37,9 @@ export interface RoomProvider {
   recording(meetingId: string): Promise<RecordingSeen>;
   joinUrl(meetingId: string): Promise<string | null>;
   canSetRecording(): Promise<ScopeCheck>;
+  transcript(meetingId: string): Promise<ReplayTranscript | null>;
+  recordingFile(meetingId: string, startsAt: Date): Promise<StoredRecording | null>;
+  streamRecording(rec: StoredRecording): Promise<Readable>;
 }
 
 /** Pure: Zoom's auto_recording ('none' / 'local' / 'cloud') as on / off; anything else is cannot tell. */
@@ -71,4 +77,7 @@ export const roomProvider: RoomProvider = {
   },
   joinUrl: (meetingId) => getMeetingProvider().getJoinUrl(meetingId),
   canSetRecording: () => checkRecordingScopes(),
+  transcript: (meetingId) => fetchTranscript(meetingId),
+  recordingFile: (meetingId, startsAt) => fetchRecordingFile(meetingId, startsAt),
+  streamRecording: (rec) => streamStoredRecording(rec),
 };
