@@ -15,7 +15,7 @@ import fs from 'fs';
 import path from 'path';
 
 /* eslint-disable @typescript-eslint/no-var-requires */
-const { pickFive } = require('../pressingFive');
+const { pickFive, timing, scoreTask, WEIGHTS } = require('../pressingFive');
 
 const DOC = path.resolve(__dirname, '../../../../../../docs/project-lifecycle/morning-five-schedule.md');
 const SRC = path.resolve(__dirname, '../pressingFive.js');
@@ -89,20 +89,86 @@ describe('the weights the document publishes are the weights the code uses', () 
     expect(d).toContain('**-25**');
   });
 
-  it('the timing table in the document matches the bands in the code', () => {
-    const s = src();
-    // Each band, by the points it awards. A retune changes one of these numbers and this fails.
-    for (const pts of [25, 40, 50, 45, 35, 20, 8]) {
-      expect(s).toContain(`pts: ${pts}`);
-    }
-    const d = doc();
-    for (const row of ['| 50 |', '| 45 |', '| 40 |', '| 35 |', '| 25 |', '| 20 |', '| 8 |']) {
-      expect(d).toContain(row);
-    }
+  it('and each modifier is APPLIED, not merely declared', () => {
+    /*
+     * The weights test above reads the constant. This one reads the behavior, because a constant
+     * can be right while the branch that adds it is gone. The source-grep version of the timing
+     * table had exactly that hole and a verifier walked through it, so the same class is closed
+     * here before anyone finds it.
+     *
+     * `scoreTask` sums the timing points and every modifier that applies. A task due today
+     * scores 45 on timing alone, so each modifier is readable as the delta from that.
+     */
+    const TODAY = '2026-11-21';
+    const base = { id: 'P1/t', title: 'a task', projectId: 'P1', list: 'Build', dueOn: TODAY, cat: 'internal', generated: false };
+    const score = (over: Record<string, unknown>) => scoreTask({ ...base, ...over }, TODAY).score;
+
+    const plain = score({});
+    expect(plain).toBe(45);
+
+    // A decision only Ali can make. `isDecision` reads the title, so the title carries it.
+    expect(score({ title: 'Decide whether to renew' }) - plain).toBe(WEIGHTS.decision);
+    // The ticket says a person has to do it.
+    expect(score({ humanOnly: true }) - plain).toBe(WEIGHTS.person);
+    // An approval-gate list.
+    expect(score({ list: 'Approval gate' }) - plain).toBe(WEIGHTS.gate);
+    // Machine-generated scaffolding, which is a PENALTY and therefore a negative delta.
+    expect(score({ generated: true }) - plain).toBe(WEIGHTS.generated);
+    expect(WEIGHTS.generated).toBeLessThan(0);
+  });
+
+  /**
+   * Each band BOUND to its points, by calling `timing` rather than by grepping the source.
+   *
+   * ## Why this replaced a source grep
+   *
+   * The first version asserted only that each `pts: N` string appeared SOMEWHERE in
+   * `pressingFive.js`. A verifier swapped the points of the `late >= 1` and `late >= 8` bands,
+   * so the curve peaked at 8 to 21 days instead of 1 to 7, and all 24 tests passed: both numbers
+   * were still present in the file, and nothing bound either to a band. The document's central
+   * argument, that the curve peaks at 1 to 7 days overdue because something a week late is
+   * rescuable, was false and nothing failed.
+   *
+   * `timing` takes days LATE, so a negative value is days until due. Each row below names a day
+   * count inside the band, the points the band awards, and the document row that publishes it.
+   */
+  const BANDS: ReadonlyArray<{ late: number | null; pts: number; row: string }> = [
+    { late: 3, pts: 50, row: '| 1 to 7 days overdue | 50 |' },
+    { late: 0, pts: 45, row: '| due today | 45 |' },
+    { late: 14, pts: 40, row: '| 8 to 21 days overdue | 40 |' },
+    { late: -2, pts: 35, row: '| due within 3 days | 35 |' },
+    { late: 40, pts: 25, row: '| 22 to 60 days overdue | 25 |' },
+    { late: -6, pts: 20, row: '| due within 7 days | 20 |' },
+    { late: -12, pts: 8, row: '| due within 14 days | 8 |' },
+    { late: null, pts: 0, row: '| no due date, over 60 days late, or further out | 0 (disqualified) |' },
+  ];
+
+  it.each(BANDS)('timing($late) awards $pts, and the document publishes that row', ({ late, pts, row }) => {
+    expect(timing(late).pts).toBe(pts);
+    expect(doc()).toContain(row);
+  });
+
+  it('the bands are STRICTLY ORDERED the way the document argues they are', () => {
+    /*
+     * The argument the document makes is about SHAPE, not about seven independent numbers: the
+     * curve peaks at 1 to 7 days overdue rather than at the most overdue item. Asserted as the
+     * ordering, so a retune that preserved every number while reordering the bands would fail.
+     */
+    const pts = (late: number | null) => timing(late).pts;
+    expect(pts(3)).toBeGreaterThan(pts(0));      // a week late beats due today
+    expect(pts(0)).toBeGreaterThan(pts(14));     // due today beats a fortnight late
+    expect(pts(14)).toBeGreaterThan(pts(40));    // and the curve keeps falling as it ages
+    expect(pts(40)).toBeGreaterThan(pts(61));    // past the dormant line it is disqualified
+    expect(pts(61)).toBe(0);
+    // The peak is where the document says it is, not merely high.
+    const peak = Math.max(...[-12, -6, -2, 0, 3, 14, 40, 61].map(pts));
+    expect(pts(3)).toBe(peak);
   });
 
   it('the dormant line is 60 days in the code and 60 in the document', () => {
-    expect(src()).toContain('late > 60');
+    // Bracketed, so moving the line in either direction fails rather than only widening it.
+    expect(timing(60).pts).toBeGreaterThan(0);
+    expect(timing(61).pts).toBe(0);
     expect(doc()).toContain('60 days');
   });
 });

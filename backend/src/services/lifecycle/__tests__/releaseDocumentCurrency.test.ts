@@ -85,27 +85,45 @@ describe(`${PACKET} is current, and says so in a way that can go stale loudly`, 
     }
   });
 
-  it('the declared head SHA is a real commit in this history, when history is available', () => {
+  it('the declared head SHA resolves to a real commit wherever the object is present', () => {
     /*
-     * Conditional on purpose, and the condition is a measured CI fact rather than a convenience:
-     * `ci.yml` sets no `fetch-depth`, so the CI checkout is shallow and `cat-file` on any commit
-     * but HEAD fails there. Locally and in any full clone this runs and is the assertion that
-     * stops the packet naming a SHA that resolves to nothing.
+     * CORRECTED after a verifier measured it. The first version gated on
+     * `git rev-parse --is-shallow-repository`, reasoning that `ci.yml` sets no `fetch-depth` so
+     * the CI checkout is shallow. The CI half is true. The conclusion was not: THIS WORKTREE IS
+     * ALSO SHALLOW (29 grafted tips), so the assertions ran in no environment at all, while the
+     * test comment said "locally and in any full clone this runs" and the release packet told
+     * its reader a test proved the SHA resolvable. A check that executes nowhere, described as
+     * if it executed, is a smaller copy of the exact defect T13 exists to prevent.
+     *
+     * The gate is now the thing actually being asked: IS THE OBJECT PRESENT. `cat-file -e`
+     * answers that in one call, and in this shallow worktree the answer is yes, so the
+     * assertions below run here. A clone deep enough to hold the object checks it; one that is
+     * not says so out loud rather than passing in silence.
      */
-    const git = (args: string[]): string =>
-      execFileSync('git', args, { cwd: DOCS, encoding: 'utf8' }).trim();
+    const git = (args: string[]): { ok: boolean; out: string } => {
+      try {
+        return { ok: true, out: execFileSync('git', args, { cwd: DOCS, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() };
+      } catch {
+        return { ok: false, out: '' };
+      }
+    };
 
-    let shallow = 'true';
-    try {
-      shallow = git(['rev-parse', '--is-shallow-repository']);
-    } catch {
-      return; // not a git checkout at all
+    if (!git(['rev-parse', '--git-dir']).ok) return; // not a git checkout at all
+
+    const present = git(['cat-file', '-e', `${PACKET_HEAD_SHA}^{commit}`]).ok;
+    if (!present) {
+      /*
+       * Not a silent skip. The one fact worth knowing in this case is WHY the object is absent,
+       * and the only benign reason is a shallow clone that never fetched it. Anything else means
+       * the packet names a SHA this repository has never held.
+       */
+      expect(git(['rev-parse', '--is-shallow-repository']).out).toBe('true');
+      return;
     }
-    if (shallow !== 'false') return;
 
-    expect(git(['cat-file', '-t', PACKET_HEAD_SHA])).toBe('commit');
+    expect(git(['cat-file', '-t', PACKET_HEAD_SHA]).out).toBe('commit');
     // An ancestor of HEAD, so the packet cannot name a commit from some other branch.
-    expect(() => git(['merge-base', '--is-ancestor', PACKET_HEAD_SHA, 'HEAD'])).not.toThrow();
+    expect(git(['merge-base', '--is-ancestor', PACKET_HEAD_SHA, 'HEAD']).ok).toBe(true);
   });
 
   it('still says it cannot close, because L7.6 is still its open input', () => {

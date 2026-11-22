@@ -20,7 +20,7 @@ const RECORDS: ReadonlyArray<[string, string, readonly string[]]> = [
     'L9.7',
     'decision-l97-lc10-lc11-rescoped.md',
     // The distinction the whole record exists to preserve: withdrawn is not satisfied.
-    ['LC-10', 'LC-11', 'withdrawn', 'not satisfied', 'approved_by_role'],
+    ['LC-10', 'LC-11', 'withdrawn', 'not satisfied', 'selected_design_ref'],
   ],
   [
     'L11.7',
@@ -79,18 +79,120 @@ describe('the L9.7 record keeps the distinction its whole purpose rests on', () 
     expect(t).toMatch(/withdrawn/i);
   });
 
-  it('names the specific limb that is unbuilt, not just that something is missing', () => {
-    // "No role is compared at approval time" is checkable in one grep. "Not fully implemented"
-    // is not, and is what this record would decay into.
-    const t = text();
-    expect(t).toContain('no role is compared at approval time');
-    expect(t).toContain('RECORDING, not by ENFORCEMENT');
-  });
-
   it('rejects the three easier alternatives in writing, so the ruling is a choice not a default', () => {
     const t = text();
     expect(t).toContain('Mark them satisfied');
     expect(t).toContain('Hold the phase open');
     expect(t).toContain('Leave them silently open');
+  });
+});
+/**
+ * THE RECORD'S CLAIMS ABOUT CODE, BOUND TO THE CODE.
+ *
+ * ## Why this block exists
+ *
+ * The first version of the L9.7 record asserted *"no role is compared at approval time"* and
+ * offered a `git grep` as proof. The claim was FALSE at the commit that wrote it: the role limb
+ * was closed on `main` in `d70d72ee3` on 2026-11-03, and `lifecycleStatus.ts` calls
+ * `assertApproverRole` with no flag. A verifier ran the grep the record invited and it disproved
+ * the record.
+ *
+ * The claim was true when Phase 7 recorded it. The record quoted Phase 7 rather than the code,
+ * and the test that was supposed to protect the claim was `expect(t).toContain('no role is
+ * compared at approval time')` -- a document-wide check on a SENTENCE, which pins the wording in
+ * place and says nothing at all about whether the wording is true. A mutation deleting the
+ * sentence was caught; the sentence being false was invisible. That is the run's recurring defect
+ * in its worst form: a test enforcing a false statement about the codebase.
+ *
+ * ## So every code claim here is checked in BOTH directions
+ *
+ * For each limb: what the CODE does, and what the RECORD says about it. If somebody changes the
+ * code, these fail and name the document to update, which is the only arrangement under which a
+ * document quoting code is safe to keep.
+ */
+describe('the L9.7 record agrees with the code it describes', () => {
+  const record = () => fs.readFileSync(path.join(DIR, 'decision-l97-lc10-lc11-rescoped.md'), 'utf8');
+  /** A sibling module of this suite's directory: `__tests__/..` is `services/lifecycle`. */
+  const src = (name: string) => fs.readFileSync(path.resolve(__dirname, '..', name), 'utf8');
+
+  it('does NOT carry the retracted claim, in any of its wordings', () => {
+    const t = record();
+    for (const retracted of [
+      'no role is compared at approval time',
+      'RECORDING, not by ENFORCEMENT',
+      'One of two blockers cleared is not a row',
+    ]) {
+      expect(t).not.toContain(retracted);
+    }
+  });
+
+  it('and says plainly that it was corrected, rather than editing the error away', () => {
+    // A record that quietly drops a false claim teaches nobody. The retraction is the artifact.
+    const t = record();
+    expect(t).toContain('Corrected 2026-11-22');
+    expect(t).toContain('That claim was false when this record was written');
+    expect(t).toContain('d70d72ee3');
+  });
+
+  it('THE ROLE LIMB IS ENFORCED IN CODE, and the record says so', () => {
+    /*
+     * The enforcement call site, read from the file. If somebody removes it, this fails and the
+     * record's statement that the limb is closed becomes the thing to revisit -- which is the
+     * inverse of what happened last time, when the code moved and the document did not.
+     */
+    const status = src('lifecycleStatus.ts');
+    expect(status).toContain('assertApproverRole(input.admin.role)');
+
+    const policy = src('approverRolePolicy.ts');
+    expect(policy).toContain('export function assertApproverRole');
+    expect(policy).toContain("BLUEPRINT_APPROVER_ROLES: readonly string[] = ['super_admin']");
+    // No flag. A gate behind a flag that defaults off is not enforcement, and the record would
+    // have to say so.
+    expect(policy).not.toContain('FLAGS.');
+
+    expect(record()).toContain('assertApproverRole');
+    expect(record()).toContain('closed on `main` in commit `d70d72ee3`');
+  });
+
+  it('THE DESIGN LIMB IS NOT BOUND IN CODE, which is what now withholds the row', () => {
+    /*
+     * Three facts, each one line, each the reason the record gives. If any of them stops being
+     * true the limb is arguably closed and this record needs re-ruling, so each is asserted
+     * rather than described.
+     */
+    // 1. Caller-supplied and nullable.
+    expect(src('blueprintApproval.ts'))
+      .toContain('selected_design_ref: input.selectedDesignRef ?? null');
+
+    // 2. Nothing to compare it against: the design-decision model has no non-test reader. Read
+    //    as an absence, which is the only way to assert "nothing reads this".
+    const readers = ['blueprintApproval.ts', 'lifecycleStatus.ts', 'lifecyclePrerequisites.ts']
+      .filter((p) => src(p).includes('BlueprintDesignDecision'));
+    expect(readers).toEqual([]);
+
+    // 3. The approval boundary does not re-check the design-selection gate. Prerequisites are
+    //    not cumulative, and only `planning` spreads another stage's predicate.
+    const prereq = src('lifecyclePrerequisites.ts');
+    expect(prereq).toContain('design_variant_not_selected');
+    const approvedBlock = prereq.slice(
+      prereq.indexOf('  blueprint_approved: (e) => {'),
+      prereq.indexOf('  planning: (e) => ['),
+    );
+    expect(approvedBlock.length).toBeGreaterThan(200);
+    expect(approvedBlock).not.toContain('design_ready');
+    expect(approvedBlock).not.toContain('selectedDesignRef');
+
+    // And the record states all three rather than asserting the conclusion alone.
+    const t = record();
+    expect(t).toContain('selected_design_ref: input.selectedDesignRef ?? null');
+    expect(t).toContain('no non-test reader');
+    expect(t).toContain('not re-checked at the approval boundary');
+  });
+
+  it('the `planning` predicate DOES spread another stage, so fact 3 is discriminating', () => {
+    // The control. Without it, `not.toContain('design_ready')` could be passing because no
+    // predicate in this file ever spreads another, making the observation vacuous.
+    expect(src('lifecyclePrerequisites.ts'))
+      .toContain('...PREREQUISITES.blueprint_approved(e)');
   });
 });

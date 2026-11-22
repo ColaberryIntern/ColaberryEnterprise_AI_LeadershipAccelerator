@@ -1,4 +1,4 @@
-# L11.7 — the pre-existing stories are not swept
+# L11.7: the pre-existing stories are not swept
 
 Ticket L11.7 · Basecamp `10516239480` · Decided 2026-11-21 · Session `CC-20261120-k4d9`
 
@@ -17,7 +17,7 @@ A sweep sounds like tidying and behaves like a migration.
 
 **It changes what a student is being graded on, mid-build.** Every one of those stories is on a
 board somebody is working from. Adding an artifact contract to a story in flight changes the
-acceptance criteria under the person building it, which is the same defect this programme has
+acceptance criteria under the person building it, which is the same defect this program has
 already paid for twice: in AF3.9, where a task could be built and pushed and then never verified
 because the verifier had no spec for it, and in the Command Center id, where nineteen of twenty
 live builds sat three versions behind because a board row and its criteria were written in two
@@ -25,7 +25,7 @@ places.
 
 **The blast radius is every live board at once.** Four boards, around 200 rows, each one a
 student's visible work queue. There is no staged rollout of a sweep: either the rows change or
-they do not. That is the opposite of how every other change in this programme has shipped, which
+they do not. That is the opposite of how every other change in this program has shipped, which
 is behind a per-enrollment flag with the default off.
 
 **The benefit is retrospective and small.** An artifact contract makes a story's output provable.

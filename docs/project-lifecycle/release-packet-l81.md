@@ -46,8 +46,11 @@ That is the commit to roll back *to* if either merge turns out badly. Record the
 **Read that value as of packet time, not as of merge time.** A branch head moves with every
 further commit, so the authoritative value is always
 `gh pr view <n> --json headRefOid --jq .data`, exactly as the two rows above were read. The SHA
-recorded here is the head this packet was written against; a test asserts it is a real commit in
-this branch's history, so it cannot become a number that resolves to nothing.
+recorded here is the head this packet was written against, pinned to an exact 40-hex literal by a
+test, which additionally resolves it against the object database wherever the object is present.
+That last part is conditional for an honest reason: a shallow clone does not hold the object, and
+this worktree is itself shallow, so the test says which of the two it did rather than reporting a
+proof it could not run.
 
 **Prior SHA, the rollback target for this release.** `origin/main` immediately before the merge,
 which is the value to read on the day rather than one to copy from here. The rule from the draft
