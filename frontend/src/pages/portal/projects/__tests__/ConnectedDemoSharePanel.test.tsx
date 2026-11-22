@@ -96,6 +96,17 @@ describe('published', () => {
     expect(container.textContent).toContain('5 moments');
   });
 
+  it('copies an ABSOLUTE link, because a relative one is useless to whoever it is pasted to', async () => {
+    const writeText = jest.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    api.getConnectedDemoShare.mockResolvedValue(PUBLISHED);
+    await render();
+    await act(async () => { buttonSaying('copy link')!.click(); });
+    expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/api/public/demo/tok-abc`);
+    // Not the bare path: that is the mutation an independent verifier left in place unnoticed.
+    expect(writeText).not.toHaveBeenCalledWith('/api/public/demo/tok-abc');
+  });
+
   it('offers Unpublish, and says the demo survives it', async () => {
     api.getConnectedDemoShare.mockResolvedValue(PUBLISHED);
     await render();
@@ -174,6 +185,44 @@ describe('no demo yet', () => {
     // Parsed, not raw text: the backend contract takes a document, not a string.
     expect(api.setConnectedDemoShare).toHaveBeenCalledWith(PROJECT, true, model);
     expect(links()[0].getAttribute('href')).toBe('/api/public/demo/tok-abc');
+  });
+
+  it('refuses a file too large to be a data model, before any upload is attempted', async () => {
+    /*
+     * The guard is a kindness, not a security control: the server would refuse it anyway. What
+     * it buys is that nobody waits on a megabytes-long upload that was never going to be
+     * accepted. Pinned because an independent verifier turned the condition into `if (false)`
+     * and every test stayed green.
+     */
+    api.getConnectedDemoShare.mockResolvedValue(NOTHING);
+    await render();
+    const big = new File(['x'.repeat(10)], 'huge.json', { type: 'application/json' });
+    Object.defineProperty(big, 'size', { value: 2_000_000 });
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    Object.defineProperty(input, 'files', { value: [big] });
+    await act(async () => {
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(container.textContent).toContain('too large to be a data model');
+    expect(buttonSaying('build and publish')!.disabled).toBe(true);
+    expect(api.setConnectedDemoShare).not.toHaveBeenCalled();
+  });
+
+  it('accepts a file just under the ceiling, so the guard is a bound and not a wall', async () => {
+    // The other direction. A guard that refused everything would satisfy the case above.
+    api.getConnectedDemoShare.mockResolvedValue(NOTHING);
+    await render();
+    const ok = new File([JSON.stringify({ app_name: 'x' })], 'data-model.json', { type: 'application/json' });
+    Object.defineProperty(ok, 'size', { value: 999_999 });
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    Object.defineProperty(input, 'files', { value: [ok] });
+    await act(async () => {
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(container.textContent).not.toContain('too large');
+    expect(buttonSaying('build and publish')!.disabled).toBe(false);
   });
 
   it('refuses a file that is not JSON, says so, and leaves the button disabled', async () => {

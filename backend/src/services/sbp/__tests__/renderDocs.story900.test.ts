@@ -99,6 +99,38 @@ describe('WITH the flag, the demo is rendered whole', () => {
     expect(progress).toContain(CONNECTED_DEMO_STORY_ID);
   });
 
+  /**
+   * The story doc has to TELL the student the public link exists.
+   *
+   * The platform can mint a link nobody knows about. An independent verifier deleted the step-4
+   * bullet that points at the portal panel and 2,279 tests stayed green, which meant the only
+   * instruction connecting a finished demo to a shareable link was unprotected. A student who
+   * finishes this story and is never told has a demo that opens on their own machine and nothing
+   * to send anybody, which is the outcome the whole task exists to prevent.
+   */
+  it('step 4 tells the student how to get the public link, and names the file the panel asks for', () => {
+    const doc = renderDocs(pilot, { ...CTX, connectedDemo: true })
+      .find((f) => f.path === `docs/stories/${CONNECTED_DEMO_STORY_ID}.md`)!.content;
+    const stepFour = doc.slice(doc.indexOf('## Step 4'), doc.indexOf('## Step 5'));
+    expect(stepFour.length).toBeGreaterThan(100);
+    // The surface, by the name the student sees on it.
+    expect(stepFour).toContain('Your demo link');
+    // The file the panel asks them to pick. Naming it here is what makes the instruction usable.
+    expect(stepFour).toContain('command-center/data-model.json');
+    // And that the link is public, which is the part that makes it worth doing.
+    expect(stepFour).toMatch(/anybody can open|anyone can open/);
+  });
+
+  it('step 4 still carries the LOCAL demo link, which is the per-project Command Center half', () => {
+    // Ali's decision 6: the demo link reaches the project Command Center through this step, not
+    // by editing commandCenterStory.ts. Both halves are asserted so neither can quietly vanish.
+    const doc = renderDocs(pilot, { ...CTX, connectedDemo: true })
+      .find((f) => f.path === `docs/stories/${CONNECTED_DEMO_STORY_ID}.md`)!.content;
+    const stepFour = doc.slice(doc.indexOf('## Step 4'), doc.indexOf('## Step 5'));
+    expect(stepFour).toContain('Command Center');
+    expect(stepFour).toContain('demo/index.html');
+  });
+
   it('every kit path is one renderDocs is allowed to write', () => {
     // renderDocs throws on a path outside PATH_ALLOWLIST, so reaching this line at all proves
     // it; asserting the prefix says WHY it is allowed.

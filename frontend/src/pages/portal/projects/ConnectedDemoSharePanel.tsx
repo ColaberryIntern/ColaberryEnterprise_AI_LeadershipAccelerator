@@ -135,9 +135,14 @@ export default function ConnectedDemoSharePanel({ projectId, hasConnectedDemoSto
   };
 
   const copy = (url: string): void => {
+    // Best effort. A clipboard that refuses - an insecure context, a denied permission - must not
+    // throw into the render tree, and the link beside the button still works. `setCopied(false)`
+    // rather than a cast into the boolean state: an earlier version wrote
+    // `setCopied(null as unknown as boolean)`, which is an escape hatch with nothing to say for
+    // itself and the same observable behavior.
     navigator.clipboard?.writeText(absolute(url))
       .then(() => setCopied(true))
-      .catch(() => setCopied(null as unknown as boolean));
+      .catch(() => setCopied(false));
   };
 
   const published = !!state?.enabled && !!state?.url;

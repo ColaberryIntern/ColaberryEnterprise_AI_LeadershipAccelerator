@@ -86,6 +86,18 @@ describe('what the panel shows per state', () => {
     expect(container.textContent).toContain('Dispatch console');
   });
 
+  it('copies an ABSOLUTE link, because a relative one is useless to whoever it is pasted to', async () => {
+    const writeText = jest.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    api.listProjectDemoLinks.mockResolvedValue(directory({ rows: [PUBLISHED], counts: { published: 1, generated: 0, none: 0 } }));
+    await render();
+    const copy = Array.from(container.querySelectorAll('button'))
+      .find((b) => (b.textContent || '').toLowerCase().includes('copy link')) as HTMLButtonElement;
+    await act(async () => { copy.click(); });
+    expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/api/public/demo/tok-abc`);
+    expect(writeText).not.toHaveBeenCalledWith('/api/public/demo/tok-abc');
+  });
+
   it('renders NO anchor for a demo that is built but not published', async () => {
     // The trap. The token exists in the database and the public route refuses it, so a link here
     // would send a staff member to a 404 and produce a bug report about a feature working
