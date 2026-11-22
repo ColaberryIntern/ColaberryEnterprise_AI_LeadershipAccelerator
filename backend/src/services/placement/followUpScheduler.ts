@@ -18,13 +18,16 @@ import * as store from './followUpStore';
  * cancels it; the candidate still put forward to the client and the sender still a member, else cancelled; the stored
  * message re-checked and the merged one too (followUpRules.ts), else failed and never sent.
  * ONCE: sendOnce keyed (candidate address, subject, `employer_follow_up:<id>`), the id being the idempotency key the page
- * made. A row left `sending` by a pass that died is claimed again after STALE_MS; if the first try did reach Mandrill,
- * sendOnce answers already_sent and no second email goes.
+ * made. A row left `sending` by a pass that died is claimed again after STALE_MS only by a pass that finds the switch
+ * ON (a fresh claim; with the switch off it is held, never resumed after an off-to-on flip); if the first try did reach
+ * Mandrill, sendOnce answers already_sent and no second email goes.
  * FAILURE: each try counts (attempts). A failed try waits 5, then 15, then 45 minutes (followUpRules.RETRY_DELAYS_MIN);
  * after MAX_TRIES it is `failed` with the error class. A row that throws mid-pass is logged and left `sending`, so the
  * stale claim picks it up (still capped by MAX_TRIES). The mail transport's own socket timeouts bound each send.
  * SENT AS "<person> at <company> via Refactored.ai" from our address, Reply-To the employer member, plain text only, with
- * Mandrill metadata follow_up_id so opens and clicks come back to followUpTracking.ts. Test mode: the recipient redirect.
+ * Mandrill metadata follow_up_id so clicks come back to followUpTracking.ts. Click tracking only (X-MC-Track
+ * clicks_textonly): Mandrill's open pixel needs HTML, so opens of plain-text mail cannot be measured and are never
+ * claimed. Test mode: the recipient redirect.
  */
 export const BATCH = 20;
 export const STALE_MS = 15 * 60_000;
@@ -44,7 +47,7 @@ async function deliver(id: string, c: store.SendContext, text: string): Promise<
   const routed = await resolveEmailRecipient(to, c.subject);
   const info = await guardedSendMail({ from: `"${fromName(c.display_name, c.company)}" <${env.emailFrom}>`, to: routed.to, replyTo: String(c.member_email),
     subject: routed.subject, text,
-    headers: { 'X-MC-Tags': 'employer-follow-up', 'X-MC-Metadata': JSON.stringify({ follow_up_id: id }), 'X-MC-Track': 'opens,clicks_textonly' } });
+    headers: { 'X-MC-Tags': 'employer-follow-up', 'X-MC-Metadata': JSON.stringify({ follow_up_id: id }), 'X-MC-Track': 'clicks_textonly' } });
   return info?.messageId ? { ok: true, messageId: String(info.messageId) } : { ok: false, errorClass: 'SendBlocked', error: 'blocked by kill switch or dev guard' };
 }
 
@@ -86,7 +89,7 @@ export async function sendClaimed(id: string, attempt: number, now: Date, read?:
 export async function runFollowUpPass(now = new Date(), read?: Read): Promise<Record<Outcome, number>> {
   const out: Record<Outcome, number> = { sent: 0, retry: 0, failed: 0, cancelled: 0, held: 0, gone: 0 };
   if (!(await isSwitchOn(SWITCHES.employerMail, read))) {
-    out.held = (await store.holdDue(now, BATCH)).length;
+    out.held = (await store.holdDue(now, new Date(now.getTime() - STALE_MS), BATCH)).length;
     if (out.held) log('info', 'employer_follow_up_held', { held: out.held, reason: 'held: employer email is switched off' });
     return out;
   }

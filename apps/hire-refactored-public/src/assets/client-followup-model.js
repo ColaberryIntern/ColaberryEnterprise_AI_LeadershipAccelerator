@@ -4,8 +4,8 @@
  * services/placement/followUpRules.ts, and is the authority), the request body, what an answer means, and the words
  * each Follow-ups row shows. client-followups.js and client-portal.js render it; node's runner tests it.
  *
- * HONEST: a follow-up is only "Sent" when the server says so; a held or cancelled one says why. Opens are counted only
- * when the candidate's mail app reports them (the email is plain text), so the page never claims more than that.
+ * HONEST: a follow-up is only "Sent" when the server says so; a held or cancelled one says why. The email is plain
+ * text, and opens of plain-text mail cannot be measured, so the page shows clicks only and says opens are not tracked.
  */
 (function (root, factory) {
   var node = typeof module === 'object' && module.exports;
@@ -18,6 +18,8 @@
   var URLS = /\bhttps?:\/\/[^\s<>"']+|\bwww\.[^\s<>"']+/gi;
   var SAFE_LINK = /^https:\/\/[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?::\d{2,5})?(?:[/?#][^\s<>"'`]*)?$/;
   var BOOKING = '{booking link}';
+  var HTTPS = new RegExp('^https://', 'i');
+  var FIELD = new RegExp('\\{[^{}\\n]{0,40}\\}', 'g'); // anything in braces (a merge field)
   var ORDER = ['thank_you', 'next_steps', 'offer_reminder', 'custom'];
   var TEMPLATES = {
     thank_you: { label: 'Thank you', subject: 'Thank you for your time', body: 'Hi {first},\n\nThanks for your time today. We enjoyed talking with you and will be in touch soon.' },
@@ -35,7 +37,9 @@
     unusedLink: 'Put {booking link} in the message where the link should go, or clear the booking link.',
     badLink: 'The booking link must be a full https:// address.',
     when: 'Pick the day and time to send it.',
-    checks: 'Checked before sending: no long dashes, no attachments, one link at most. Clicks on the link show in Follow-ups; opens show only when the candidate\'s mail app reports them.',
+    checks: 'Checked before sending: no long dashes, no attachments, one https:// link at most. Clicks on the link show in Follow-ups. Opens cannot be tracked for plain-text email, so they are not shown.',
+    httpsOnly: 'Links in the message must start with https://.',
+    noOpens: 'Opens cannot be tracked for plain-text email.',
     mailOff: 'Employer email is switched off right now, so follow-ups that come due are held, not sent.',
     none: 'No follow-ups yet.',
     loadFailed: 'Could not load your follow-ups just now. Your offers and candidates are fine; try again in a moment.',
@@ -68,10 +72,12 @@
     if (DASH.test(subject)) return TEXT.dashSubject;
     if (!body.trim()) return TEXT.bodyBlank;
     if (DASH.test(body)) return TEXT.dashBody;
-    var field = (body.match(/\{[^{}\n]{0,40}\}/g) || []).filter(function (f) { return f !== '{first}' && f !== BOOKING; })[0];
+    var field = (body.match(FIELD) || []).filter(function (f) { return f !== '{first}' && f !== BOOKING; })[0];
     if (field) return 'Only {first} and {booking link} can be filled in for you. Remove ' + field + '.';
     var uses = body.split(BOOKING).length - 1;
-    if ((body.match(URLS) || []).length + uses > 1) return TEXT.oneLink;
+    var typed = body.match(URLS) || [];
+    if (typed.length + uses > 1) return TEXT.oneLink;
+    if (typed.some(function (u) { return !HTTPS.test(u) || DASH.test(u); })) return TEXT.httpsOnly;
     if (uses && !link) return TEXT.needLink;
     if (link && !uses) return TEXT.unusedLink;
     if (link && (link.length > 500 || !SAFE_LINK.test(link) || DASH.test(link))) return TEXT.badLink;
@@ -121,7 +127,9 @@
   function row(f) {
     var s = STATUS[f.status] || [f.status, 'p-mute'];
     var gone = f.sentAt && ['sent', 'opened', 'clicked', 'replied'].indexOf(f.status) >= 0;
-    var tracking = gone ? ['Opened ' + f.opens, f.clicks.link ? 'clicked the link ' + f.clicks.link : '', f.clicks.other ? 'other links ' + f.clicks.other : ''].filter(Boolean).join(' · ')
+    // Clicks only: the mail is plain text, and opens of plain-text mail cannot be measured, so no open count is shown.
+    var clicks = [f.clicks.link ? 'Clicked the link ' + f.clicks.link : '', f.clicks.other ? 'other links ' + f.clicks.other : ''].filter(Boolean).join(' · ');
+    var tracking = gone ? (clicks || 'No clicks yet') + '. ' + TEXT.noOpens
       : REASON[f.reason] || (f.status === 'failed' ? 'Not sent after 4 tries.' : f.retrying ? 'Trying again after a delivery problem.' : '');
     return { id: f.id, to: f.candidateName, subject: f.subject, when: gone ? 'Sent ' + V.central(f.sentAt) : V.central(f.sendOn),
       status: { text: s[0], tone: s[1] }, tracking: tracking, canCancel: f.status === 'scheduled' };

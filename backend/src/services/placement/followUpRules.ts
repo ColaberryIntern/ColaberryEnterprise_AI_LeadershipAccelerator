@@ -24,6 +24,7 @@ export const BOOKING_FIELD = '{booking link}';
 export const FIRST_FIELD = '{first}';
 
 const DASH = new RegExp('[\\u2013\\u2014]');
+const HTTPS = new RegExp('^https://', 'i');
 const URL_IN_TEXT = /\bhttps?:\/\/[^\s<>"']+|\bwww\.[^\s<>"']+/gi;
 const SAFE_LINK = /^https:\/\/[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?::\d{2,5})?(?:[/?#][^\s<>"'`]*)?$/;
 
@@ -36,6 +37,7 @@ export const TEXT = {
   bodyBlank: 'Write the message.',
   bodyLong: `The message can be at most ${MAX_BODY} characters.`,
   oneLink: 'A follow-up can carry at most one link.',
+  httpsOnly: 'Links in the message must start with https://.',
   attachments: 'Attachments cannot be sent with a follow-up.',
   needLink: 'Add your booking link, or take {booking link} out of the message.',
   unusedLink: 'Put {booking link} in the message where the link should go, or clear the booking link.',
@@ -75,7 +77,9 @@ export function draftProblem(d: FollowUpDraft): string | null {
   const field = unknownField(body);
   if (field) return `Only {first} and {booking link} can be filled in for you. Remove ${field}.`;
   const uses = count(body, BOOKING_FIELD);
-  if ((body.match(URL_IN_TEXT) ?? []).length + uses > 1) return TEXT.oneLink;
+  const typed = body.match(URL_IN_TEXT) ?? [];
+  if (typed.length + uses > 1) return TEXT.oneLink;
+  if (typed.some((u) => !HTTPS.test(u) || DASH.test(u))) return TEXT.httpsOnly;
   if (uses && !link) return TEXT.needLink;
   if (link && !uses) return TEXT.unusedLink;
   if (link && (link.length > MAX_LINK || !SAFE_LINK.test(link) || DASH.test(link))) return TEXT.badLink;

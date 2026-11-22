@@ -91,9 +91,15 @@ describeIfDb('employer follow-ups against Postgres', () => {
 
   it('held: due rows only, never a later one', async () => {
     const due = await add(); const later = await add({ sendOn: new Date(Date.now() + 3_600_000) });
-    expect(await store.holdDue(new Date(), 20)).toContain(due);
+    const stuck = await add(); const fresh = await add();
+    await sequelize.query(`UPDATE employer_follow_ups SET status = 'sending', last_attempt_at = NOW() - INTERVAL '20 minutes' WHERE id = '${stuck}'`);
+    await sequelize.query(`UPDATE employer_follow_ups SET status = 'sending', last_attempt_at = NOW() WHERE id = '${fresh}'`);
+    const held = await store.holdDue(new Date(), new Date(Date.now() - 15 * 60_000), 50);
+    expect(held).toEqual(expect.arrayContaining([due, stuck]));
     expect((await status(later)).status).toBe('scheduled');
+    expect((await status(fresh)).status).toBe('sending'); // in flight right now: not touched
     expect(await status(due)).toMatchObject({ status: 'held', status_reason: 'employer_mail_off' });
+    expect((await status(stuck)).status).toBe('held'); // a stale send is never resumed after an off-to-on flip
   });
 
   it('send context: the address now, the sender, put forward, and a reply after scheduling', async () => {

@@ -12,7 +12,8 @@ type Row = {
 const mockRows = new Map<string, Row>();
 const mockCalls = { claimLimit: [] as number[], throwFinishOnce: false, throwContextFor: '' };
 jest.mock('../followUpStore', () => ({
-  holdDue: async (now: Date, limit: number) => [...mockRows.values()].filter((r) => r.status === 'scheduled' && r.send_on <= now).slice(0, limit)
+  holdDue: async (now: Date, stale: Date, limit: number) => [...mockRows.values()].filter((r) => (r.status === 'scheduled' && r.send_on <= now)
+    || (r.status === 'sending' && r.last_attempt_at !== null && r.last_attempt_at < stale)).slice(0, limit)
     .map((r) => { r.status = 'held'; r.status_reason = 'employer_mail_off'; return r.id; }),
   claimDue: async (now: Date, stale: Date, limit: number) => {
     mockCalls.claimLimit.push(limit);
@@ -88,6 +89,19 @@ describe('the dark switch', () => {
     expect(mockMail).not.toHaveBeenCalled();
     expect(due.status).toBe('held');
   });
+  it('a row left `sending` by a pass that died is never resumed after an off-to-on flip: held while off, nothing sent after', async () => {
+    const r = seed();
+    mockCalls.throwContextFor = ID; // the pass dies after claiming it (claimed while on), before any send
+    await runFollowUpPass(NOW, on);
+    expect([r.status, r.attempts]).toEqual(['sending', 1]);
+    mockCalls.throwContextFor = '';
+    await runFollowUpPass(at(5 * 60_000), off); // not stale yet: left alone
+    expect(r.status).toBe('sending');
+    expect((await runFollowUpPass(at(STALE_MS + 60_000), off)).held).toBe(1);
+    expect([r.status, r.status_reason]).toEqual(['held', 'employer_mail_off']);
+    await runFollowUpPass(at(STALE_MS + 10 * 60_000), on);
+    expect(mockMail).not.toHaveBeenCalled(); expect(mockSendOnce).not.toHaveBeenCalled();
+  });
   it('re-read at send time: on for the pass, off for the send, Then held with zero transport calls', async () => {
     const r = seed();
     let n = 0;
@@ -106,7 +120,7 @@ describe('sending', () => {
       subject: 'Next steps', text: 'Hi Ann,\n\nPick a time here: https://cal.example/dana\n\nDana' });
     expect(m.html).toBeUndefined(); expect(m.attachments).toBeUndefined();
     expect(JSON.parse(m.headers['X-MC-Metadata'])).toEqual({ follow_up_id: ID });
-    expect(m.headers['X-MC-Track']).toBe('opens,clicks_textonly');
+    expect(m.headers['X-MC-Track']).toBe('clicks_textonly'); // plain text: opens cannot be measured, so none are asked for
     expect(mockSendOnce.mock.calls[0][0]).toEqual({ recipient: 'ann@learner.example', subject: 'Next steps', businessEventId: `employer_follow_up:${ID}` });
     expect([r.status, r.link, r.mandrill_id, r.sent_at]).toEqual(['sent', 'https://cal.example/dana', '<m1@mandrill>', NOW]);
     await runFollowUpPass(at(600_000), on);

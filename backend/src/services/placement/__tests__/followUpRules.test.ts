@@ -19,6 +19,11 @@ describe('draftProblem: what may be saved', () => {
     expect(draftProblem({ ...ok, body: 'Pick: {booking link} or https://a.example', bookingLink: 'https://cal.example/dana' })).toBe(TEXT.oneLink);
     expect(draftProblem({ ...ok, body: '{booking link} {booking link}', bookingLink: 'https://cal.example/dana' })).toBe(TEXT.oneLink);
   });
+  it('a link typed into the message must be https://', () => {
+    expect(draftProblem({ ...ok, body: 'See http://a.example/x' })).toBe(TEXT.httpsOnly);
+    expect(draftProblem({ ...ok, body: 'See www.a.example' })).toBe(TEXT.httpsOnly);
+    expect(draftProblem({ ...ok, body: 'See https://a.example/x' })).toBeNull();
+  });
   it('{booking link} needs an https link, and a link needs {booking link}', () => {
     expect(draftProblem({ ...ok, body: 'Pick a time: {booking link}' })).toBe(TEXT.needLink);
     expect(draftProblem({ ...ok, body: 'Pick a time: {booking link}', bookingLink: 'https://cal.example/dana' })).toBeNull();

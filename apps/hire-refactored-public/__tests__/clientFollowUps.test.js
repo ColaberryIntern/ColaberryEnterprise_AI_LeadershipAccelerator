@@ -85,9 +85,20 @@ describe('the request', () => {
 describe('the Follow-ups rows', () => {
   test('scheduled: the send time and Cancel; sent: when it went, opens and clicks', () => {
     assert.deepEqual([F.row(fu()).status.text, F.row(fu()).canCancel], ['Scheduled', true]);
-    const r = F.row(fu({ status: 'clicked', sentAt: '2026-11-25T15:01:00.000Z', opens: 3, clicks: { link: 1, other: 0 } }));
-    assert.deepEqual([r.status.text, r.tracking, r.canCancel], ['Clicked', 'Opened 3 · clicked the link 1', false]);
+    const r = F.row(fu({ status: 'clicked', sentAt: '2026-11-25T15:01:00.000Z', opens: 0, clicks: { link: 1, other: 0 } }));
+    assert.deepEqual([r.status.text, r.tracking, r.canCancel], ['Clicked', 'Clicked the link 1. Opens cannot be tracked for plain-text email.', false]);
     assert.match(r.when, /^Sent /);
+  });
+  test('a sent row never shows an open count it cannot measure (no "Opened 0")', () => {
+    const r = F.row(fu({ status: 'sent', sentAt: '2026-11-25T15:01:00.000Z', opens: 0 }));
+    assert.equal(r.tracking, 'No clicks yet. Opens cannot be tracked for plain-text email.');
+    assert.doesNotMatch(r.tracking, /Opened \d/);
+    assert.doesNotMatch(F.TEXT.checks, /opens show/i);
+  });
+  test('a link typed into the message must be https://', () => {
+    assert.equal(F.problem(form({ body: 'See http://a.example/x' })), F.TEXT.httpsOnly);
+    assert.equal(F.problem(form({ body: 'See www.a.example' })), F.TEXT.httpsOnly);
+    assert.equal(F.problem(form({ body: 'See https://a.example/x' })), '');
   });
   test('held, cancelled and not sent say why, honestly', () => {
     assert.equal(F.row(fu({ status: 'held', reason: 'employer_mail_off' })).tracking, 'Held: employer email is switched off, so it was not sent.');

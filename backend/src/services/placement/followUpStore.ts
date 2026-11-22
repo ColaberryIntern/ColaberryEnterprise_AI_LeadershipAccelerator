@@ -51,11 +51,17 @@ export async function cancelFollowUp(clientId: string, id: string): Promise<bool
     WHERE id = :id AND client_id = :clientId AND status = 'scheduled' RETURNING id`, { id, clientId })).length === 1;
 }
 
-/** Employer email switched off: every due row (at most `limit`) is held, never sent later behind anyone's back. */
-export async function holdDue(now: Date, limit: number): Promise<string[]> {
+/**
+ * Employer email switched off: every due row (at most `limit`) is held, never sent later behind anyone's back. That
+ * includes a row left `sending` since before `staleBefore` (a pass that died): it is never resumed after an off-to-on
+ * flip; only a row claimed while the switch is on can be sent.
+ */
+export async function holdDue(now: Date, staleBefore: Date, limit: number): Promise<string[]> {
   return (await q<{ id: string }>(`UPDATE employer_follow_ups SET status = 'held', status_reason = 'employer_mail_off', updated_at = NOW()
-    WHERE id IN (SELECT id FROM employer_follow_ups WHERE status = 'scheduled' AND send_on <= :now ORDER BY send_on LIMIT ${limit} FOR UPDATE SKIP LOCKED)
-    RETURNING id`, { now })).map((r) => String(r.id));
+    WHERE id IN (SELECT id FROM employer_follow_ups
+      WHERE (status = 'scheduled' AND send_on <= :now) OR (status = 'sending' AND last_attempt_at < :staleBefore)
+      ORDER BY send_on LIMIT ${limit} FOR UPDATE SKIP LOCKED)
+    RETURNING id`, { now, staleBefore })).map((r) => String(r.id));
 }
 
 /**
