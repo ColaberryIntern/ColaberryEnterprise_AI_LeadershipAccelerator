@@ -9,6 +9,7 @@ const path = require('path');
 const LIB = path.join(__dirname, '..', '..', '..', '..', 'backend', 'src', 'scripts', 'lib');
 const K = require(path.join(LIB, 'emailLayoutKit'));
 const { SIG_HTML, SIG_TEXT } = require(path.join(LIB, 'internDeliveryEmailSend'));
+const { messageLabel } = require('./page');
 
 const { C, esc } = K;
 const TONE = { good: [C.okSoft, C.ok], bad: [C.actionSoft, C.action], warn: [C.warnSoft, C.warn], ok: [C.warnSoft, C.warn], info: [C.infoSoft, C.info], low: [C.lineSoft, C.ink2], none: [C.lineSoft, C.ink2] };
@@ -69,6 +70,20 @@ function storyCard(story) {
     <div style="font-size:12px;color:${C.ink2}">The full timeline of decisions, changes of direction and corrections is in the attached report.</div>${K.sectionClose()}`;
 }
 
+/** OH1y: every message the week's sign-ups received, one line each (subjects stay in the attached report). */
+const CH = { email: 'Email', sms: 'Text', voice: 'Call' };
+function commsLines(c) {
+  if (!c || !c.messages.length) return [];
+  return c.messages.map((m) => `${m.first_ct === m.last_ct ? m.first_ct : `${m.first_ct} to ${m.last_ct}`} · ${CH[m.channel] || m.channel} · ${messageLabel(m)} · ${m.people} people${m.not_sent ? ` (${m.not_sent} not sent)` : ''}`);
+}
+function commsCard(c) {
+  const lines = commsLines(c);
+  if (!lines.length) return '';
+  const q = (c.queued || []).map((x) => `<div style="font-size:12.5px;margin:0 0 4px 0;color:${C.ink2}">Next: ${esc(x.next_ct)} CT · ${esc(CH[x.channel] || x.channel)} · ${esc(x.source)} · ${x.people} people</div>`).join('');
+  return `${K.sectionOpen('Every message they received')}${K.hTitle(`${c.reached} of ${c.people} sign-ups got at least one`, `A median of ${c.median_per_person ?? 0} each. Subjects and what did not send are in the attached report.`)}
+    ${lines.map((l) => `<div style="font-size:12.5px;margin:0 0 5px 0">${esc(l)}</div>`).join('')}${q ? `<div style="font-size:13px;font-weight:700;margin:10px 0 4px 0">Still to go out</div>${q}` : ''}${K.sectionClose()}`;
+}
+
 function renderEmail(view) {
   const { cur, rec, weekOf } = view;
   const j = cur.journey;
@@ -80,7 +95,8 @@ function renderEmail(view) {
   const attached = `${K.sectionOpen('Attached')}<div style="font-size:13px;line-height:1.6">
     <b>OPEN_HOUSE_WEEKLY_REPORT.html</b>: the full report with the guided tour, the flow of every person, every fork, the hypothesis board and the decision timeline. Open it in a browser.<br/>
     <b>ONE_MOVE_PROMPT.md</b>: the detailed prompt that makes the starred move and records it in the story, so next week's report grades it.</div>${K.sectionClose()}`;
-  const body = [hero, starCard(rec), topTenCard(view.top10), overviewCard(view.overview), storyCard(view.story), attached].join('\n')
+  const comms = view.snap && view.snap.comms;
+  const body = [hero, starCard(rec), topTenCard(view.top10), overviewCard(view.overview), commsCard(comms), storyCard(view.story), attached].join('\n')
     + `\n<tr><td style="padding:0 16px 8px 16px">${SIG_HTML}</td></tr>`;
   const html = K.shell({ title: subject, preheaderText: rec.star ? `The one move: ${rec.star.title}` : 'No move this week', banner: 'OPEN HOUSE FUNNEL · WEEKLY REPORT', body });
 
@@ -89,6 +105,7 @@ function renderEmail(view) {
     '***** THE ONE MOVE *****', rec.star ? rec.star.title : 'None this week', ...(rec.star ? rec.star.how.map((h, i) => `${i + 1}. ${h}`) : []), '',
     'THE 10 NUMBERS THAT MATTER MOST', ...view.top10.map((f) => `${f.rank}. ${f.text}${f.why ? ` (${f.why})` : ''}`), '',
     'EVERY STEP AGAINST ITS TARGET', ...view.overview.map((r) => `- ${r.label}: ${r.d ? `${r.pct}% (${r.n}/${r.d})` : 'n/a'}, target ${r.target}%`), '',
+    ...(commsLines(comms).length ? ['EVERY MESSAGE THEY RECEIVED', ...commsLines(comms).map((l) => `- ${l}`), ''] : []),
     'HYPOTHESES', ...view.story.hypotheses.map((h) => `- ${h.title}: ${h.grade.label || VERDICT[h.grade.status]}`), '',
     'Attached: OPEN_HOUSE_WEEKLY_REPORT.html (open in a browser) and ONE_MOVE_PROMPT.md (say "make the Open House move" in inbox zero).',
     '', SIG_TEXT].join('\n');

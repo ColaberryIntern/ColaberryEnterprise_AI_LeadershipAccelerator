@@ -158,6 +158,19 @@ test('messages: every one listed in order with plain names; a one-person subject
   assert.doesNotMatch(buildHtml(snap(full()), targets, [], []), /sec-comms/, 'no comms block, no section');
 });
 
+test('email: lists every message in the body, plain text too, without per-person subjects', () => {
+  const { buildView } = require('../lib/view');
+  const { renderEmail } = require('../lib/emailRender');
+  const e = renderEmail(buildView(snap(full(), { comms: COMMS }), targets, []));
+  assert.match(e.text, /EVERY MESSAGE THEY RECEIVED\n- 2026-11-15 to 2026-11-22 · Email · Welcome email, right after sign-up · 125 people/);
+  assert.match(e.text, /Text · Open House Countdown \(Maya\), step 4 · 39 people \(2 not sent\)/);
+  assert.match(e.html, /131 of 139 sign-ups got at least one/);
+  assert.match(e.html, /Still to go out/);
+  assert.doesNotMatch(e.html + e.text, /Victoria/);
+  const none = renderEmail(buildView(snap(full()), targets, []));
+  assert.doesNotMatch(none.text, /EVERY MESSAGE/);
+});
+
 test('collect.sql: interaction, payment and messages come from the tables that hold them', () => {
   const sql = fs.readFileSync(path.join(__dirname, '..', 'collect.sql'), 'utf8');
   assert.match(sql, /CREATE TEMP TABLE oh_did/);

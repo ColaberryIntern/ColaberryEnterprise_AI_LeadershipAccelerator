@@ -94,7 +94,7 @@ node scripts/reports/open-house-weekly/render.js docs/reports/open-house-weekly/
 node --test scripts/reports/open-house-weekly/__tests__
 ```
 
-There are 44 tests (`attendance.test.js` holds the OH1y ones). They cover:
+There are 45 tests (`attendance.test.js` holds the OH1y ones). They cover:
 
 - grading: thresholds, the boundary value, small samples, and lower-is-better;
 - funnel math: what each step is measured against;
