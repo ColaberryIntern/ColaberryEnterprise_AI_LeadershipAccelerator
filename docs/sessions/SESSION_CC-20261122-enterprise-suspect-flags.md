@@ -193,6 +193,8 @@ No eslint config exists anywhere in this worktree and `frontend/package.json` ha
 The W28 intake form does not constrain its service field to the three plans. The production row
 is the proof, arriving blank. That is a change to W28's own form and is not made here.
 
+**Taken on R23 the same day, at Ali's instruction ("take it on R23"). See Phase 5 below.**
+
 ---
 
 ## Deployed and production-verified
@@ -282,3 +284,150 @@ A `cat >> file` with no stdin hung for the full two-minute timeout and left an e
 `.append_marker` file behind in the tests directory. My own slip, caught because I staged with
 explicit paths and `git status` showed the stray `??` entry. Explicit staging is what surfaced
 it; `git add -A` would have committed it.
+
+---
+
+# Phase 5: the W28 form records which plan they chose
+
+Ali, after the Phase 4 deploy report: **"take it on R23"**. So this is the same ticket, not a
+new one.
+
+PR: https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/4331
+
+## What was actually wrong
+
+The gap was not in the reporting. It was three separate holes in one form field.
+
+1. **Optional.** The legend said so, and `validate()` never checked it. A skipped answer is
+   indistinguishable on the board from a question nobody asked, and the live production row is
+   exactly that case.
+2. **It posted the display word, not the plan key.** This is the one worth remembering, because
+   it *looked* like it worked: `Build` lowercases to the key `build`, so three of the four chips
+   round-tripped by coincidence. The fourth did not. `Not sure yet` matched no plan, so a
+   prospect who answered honestly was counted in the same number as rows nobody had ever asked.
+3. **The schema took any 50 characters.** Nothing stated the allowed set, so no test could fail
+   if the form drifted.
+
+## The decision that mattered: normalize, never reject
+
+The obvious reading of "constrain the field to the three plans" is `z.enum([...])` answering
+400 to anything else. **That would lose real leads, and not hypothetically.**
+
+Today's form posts `Build`. People leave forms open in tabs for hours. A strict enum shipped at
+time T answers 400 to every submission from a page loaded before T, so the cost of the stricter
+contract is paid by whichever prospects happened to be mid-form during the deploy. On a
+lead-capture surface a dropped submission is unrecoverable: **nobody writes in to say their form
+failed.**
+
+So the contract is enforced where enforcement is safe (the form submits a canonical value, and
+a test fails if it stops) and lenient at the boundary, where strictness would destroy the thing
+being measured. Unmatched text is kept verbatim and capped at the column width rather than
+blanked, because blanking would throw away a buyer's own words *and* make a failed match
+identical to an unanswered question.
+
+This is the same shape as Phase 4's flag-never-filter decision, and for the same underlying
+reason: the destructive option is the one that leaves no trace.
+
+## Five buckets where there were four
+
+`Not sure yet` is now its own funnel stage, and `Plan not recorded` holds only our own gap.
+Before this, one number meant three unrelated things: they had not decided, nobody asked, or
+the text was unreadable. The first is the prospect's honest position on first contact, the
+second is a defect on our side, and the third is something a human should go and read. Reporting
+them as one number made the board look complete while hiding which of them anyone could act on.
+
+The roster and the timeline make the same split. A `not sure` deal carries the words as its
+label while its plan key and engagement shape stay **null** — the honest pair: they answered,
+and the answer does not say whether this is a retainer or a total. So the pricing form opens on
+one total figure, which is `initialMode`'s null default and the safe one.
+
+### The ordering trap
+
+`not sure, maybe training` contains "training". Running `planOf` first files that person under
+Train, which is the exact opposite of what they said. So the not-sure phrases are checked
+**before** the plan phrases, and a test pins it. An explicit disclaimer outranks a plan name
+appearing later in the same sentence.
+
+## Why the breakdown moved out
+
+`enterpriseFlow.ts` was 628 lines, past the 500-line hard ceiling, and CLAUDE.md is explicit
+that the next change to such a file splits it before adding code. Second time this rule has
+paid for itself on this stream: the extracted `enterprisePlanFunnel` is pure, so the whole
+breakdown is testable as a partition of the rows without a mocked query. Inside the flow
+builder, every one of those cases would have needed one. `enterpriseSuspect` came out of the
+same file in Phase 4 for the same reason.
+
+It returns stage **descriptors**, not `FunnelStage`, deliberately. Rebuilding a FunnelStage
+there would copy the "this counts people, not dollars" default into a second file free to
+disagree with the first; importing the builder back out of `enterpriseFlow` would make the two
+circular. So it returns what only it knows and the flow maps them through the one builder.
+
+## Mutation testing: 6 of 6 killed
+
+Run against the committed tree, each reverted after.
+
+| Mutation | Result |
+|---|---|
+| Drop the not-sure check so a plan word later in the sentence wins | KILLED `enterprisePlans` |
+| Count a recorded "not sure" as our own missing answer | KILLED `enterprisePlanFunnel` + `enterpriseFlow` |
+| Make the timeline call their undecided our missing answer | KILLED `enterpriseFlow` |
+| Stop canonicalizing at the contract boundary | KILLED `enterpriseIntake` |
+| Form posts the display word again (the old coincidence) | KILLED `enterprisePlansMatchTheSite` |
+| Make the service question optional again | KILLED `enterprisePlansMatchTheSite` |
+
+One note on reading mutation output honestly: the timeline mutation's own "expect 0 occurrences
+left" line printed **1**, which looks like the mutation failed to apply. It had applied; the
+remaining occurrence was the phrase inside a comment I had written two lines above the code.
+The verdict stands on the suite failing, not on the grep count, and the grep expectation was
+simply wrong.
+
+## The drift guard is the load-bearing test
+
+`enterprisePlansMatchTheSite.test.ts` already read `frontend/src/config/v2Pricing.ts` to stop
+the backend's plan keys drifting from the pricing page. It now also reads
+`frontend/src/pages/publicV2/demoPilotModel.ts` and fails if the form's four values stop
+matching `SERVICE_ANSWERS`, if a plan key moves out of the first three, or if the required
+check is removed.
+
+Without it this design is unsafe. Someone restoring the display words breaks revenue
+attribution **silently**: the funnel keeps rendering, the stages keep adding up, and the new
+answers quietly pile into "Plan not recorded".
+
+## Assumptions logged
+
+Both reversible, local blast radius, no governance boundary, so taken rather than escalated.
+
+- **The service question is now required.** It costs one click on a chip already on screen and
+  commits the buyer to nothing, because the last choice says they have not decided. Requiring
+  an answer is not requiring a decision, and it is the only thing that ends the blank case.
+- **`interest_area` keeps receiving the display words.** It is read by the growth-journey
+  classifier, the AI message service and the acquisition panels, all written against the words.
+  Canonicalizing the intake row is the point of this phase; silently changing what a dozen
+  downstream readers see is not. One stored value, one rendering of it.
+
+## Gates
+
+- Backend: **36 suites, 649 passed, 5 skipped** across `revenueFlow`, `enterpriseIntake`, and
+  both tree-wide copy ratchets, which run because this touches `frontend/src`.
+- Frontend: **2 suites, 43 passed**.
+- The ratchets were re-run *after* rebasing onto current main, because someone else's
+  typography baseline had landed there and that baseline is exact in both directions.
+- Branched off `origin/main`, which was **65 commits ahead** of the Phase 4 branch. Checked
+  first that none of those commits touched the files in this change; only the typography
+  baseline overlapped, and this change does not touch it.
+
+### Local `tsc` is still a confirmed false clean
+
+Third time measured on this stream. Planted `const __control: number = "definitely not a
+number"`, grep-confirmed present, and `tsc --noEmit` **never reported it**. It reports 267
+errors, every one of them inside the junctioned `node_modules` (`zod/v4/*.d.cts` 258,
+`@types/d3-dispatch` 9), and the TS1139/TS1005 parse errors abort it before it reaches repo
+source. **CI is the only type authority here and no local pass is claimed.**
+
+## Not verified
+
+- The rendered page. The radio values and the removal of "optional" are asserted in the static
+  markup; nobody has loaded `/demo-pilot` in a browser.
+- An end-to-end submission through the new contract against a real database.
+- Whether a real prospect now picks a plan, which is the only thing that will actually move
+  `plan_unattributed` off its current count.
