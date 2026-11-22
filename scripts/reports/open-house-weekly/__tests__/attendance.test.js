@@ -144,7 +144,7 @@ test('findings: ad sign-ups who paid, took part, and every payer from every sour
   const f = I.findings(w, targets).map((x) => x.text);
   assert.ok(f.some((t) => /3 of the 4 who came took part/.test(t)));
   assert.ok(f.some((t) => /1 of 139 ad sign-ups paid to enroll \(0\.7%\): 1 took part at the Open House, 0 came and watched, 0 paid without coming\. 1 more started checkout and did not pay\./.test(t)));
-  assert.ok(f.some((t) => /6 people paid to enroll this week \(4 monthly, 2 annual\): 3 earlier Open House leads \(before the ads\), 2 from a win-back or alumni campaign, 1 Open House registrants from another door\. 0 had come to an Open House before paying\./.test(t)));
+  assert.ok(f.some((t) => /6 people paid to enroll this week \(4 monthly, 2 annual\): Earlier Open House lead \(before the ads\): 3; Win-back or alumni campaign: 2; Open House registrant, another door: 1\. 0 had come to an Open House before paying\./.test(t)));
   const none = I.findings(full({ paid: 0, paid_attended: 0, paid_interacted: 0, checkout: 1 }), targets).map((x) => x.text);
   assert.ok(none.some((t) => /No ad sign-up has paid to enroll yet \(0 of 139\)\. 1 started checkout/.test(t)));
   const tile = I.kpis(w, null, targets).find((t) => t.label === 'Paid to enroll, every source');
@@ -158,11 +158,11 @@ test('who paid: the report and the email show every payer, and "too few to judge
   const html = buildHtml(snap(w), targets, [], []);
   assert.match(html, /id="sec-paid"/);
   assert.match(html, /<b>6<\/b> people paid to enroll \(4 monthly, 2 annual\)/);
-  assert.match(html, /<td>earlier Open House leads \(before the ads\)<\/td><td class="num">3<\/td>/);
+  assert.match(html, /<td>Earlier Open House lead \(before the ads\)<\/td><td class="num">3<\/td>/);
   const { buildView } = require('../lib/view');
   const { renderEmail } = require('../lib/emailRender');
   const e = renderEmail(buildView(snap(w), targets, []));
-  assert.match(e.text, /WHO PAID THIS WEEK\n- 6 paid to enroll \(4 monthly, 2 annual\); 0 came to an Open House first\.\n- 3 earlier Open House leads/);
+  assert.match(e.text, /WHO PAID THIS WEEK\n- 6 paid to enroll \(4 monthly, 2 annual\); 0 came to an Open House first\.\n- Earlier Open House lead \(before the ads\): 3\n- Win-back or alumni campaign: 2/);
   assert.match(e.text, /- Took part at the Open House: too few to judge \(3\/4\), target 60%/);
   assert.doesNotMatch(e.text, /Took part at the Open House: 75%/);
   const nobody = full(); nobody.payers = { total: 0, monthly: 0, annual: 0, oh_registered: 0, came_before_paying: 0, by_origin: [] };

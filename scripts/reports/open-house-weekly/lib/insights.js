@@ -7,8 +7,8 @@ const { pct, grade, delta, funnel, ATTEND_FLOOR } = require('./model');
 
 /** Where a payer came from, in words (collect.sql payers.origin). Exported for the report and the email. */
 const ORIGIN = {
-  ad_signup: 'from an ad sign-up', ad_visit: 'visited the ad page without signing up', oh_other_door: 'Open House registrants from another door',
-  winback: 'from a win-back or alumni campaign', earlier_oh_lead: 'earlier Open House leads (before the ads)', other: 'from elsewhere',
+  ad_signup: 'Ad sign-up', ad_visit: 'Visited the ad page, did not sign up', oh_other_door: 'Open House registrant, another door',
+  winback: 'Win-back or alumni campaign', earlier_oh_lead: 'Earlier Open House lead (before the ads)', other: 'Somewhere else',
 };
 
 function kpis(cur, prev, targets) {
@@ -51,7 +51,7 @@ function findings(cur, targets) {
   const j = cur.journey;
   out.push(...attendanceFindings(j, targets));
   if (cur.payers && cur.payers.total) {
-    const p = cur.payers, top = p.by_origin.map((o) => `${o.n} ${ORIGIN[o.origin] || o.origin}`).join(', ');
+    const p = cur.payers, top = p.by_origin.map((o) => `${ORIGIN[o.origin] || o.origin}: ${o.n}`).join('; ');
     out.push({ tone: 'good', icon: '💰', text: `${p.total} people paid to enroll this week (${p.monthly} monthly, ${p.annual} annual): ${top}. ${p.came_before_paying} had come to an Open House before paying.` });
   }
   if (j.entered > 0 && j.played === 0) {

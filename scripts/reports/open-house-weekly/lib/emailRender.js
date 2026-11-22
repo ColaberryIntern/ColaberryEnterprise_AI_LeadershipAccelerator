@@ -56,7 +56,7 @@ function payerLines(p) {
   if (!p) return [];
   if (!p.total) return ['Nobody paid to enroll this week.'];
   return [`${p.total} paid to enroll (${p.monthly} monthly, ${p.annual} annual); ${p.came_before_paying} came to an Open House first.`,
-    ...p.by_origin.map((o) => `${o.n} ${ORIGIN[o.origin] || o.origin}`)];
+    ...p.by_origin.map((o) => `${ORIGIN[o.origin] || o.origin}: ${o.n}`)];
 }
 
 /** Summary overview: a bullet row per step (bar = this week, number = vs target), table-based for Outlook. */
