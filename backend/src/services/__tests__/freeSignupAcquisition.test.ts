@@ -1,4 +1,6 @@
 import { portalFreeSignupSchema } from '../../schemas/enrollmentSchema';
+// Constants only: no models, no database handle, safe above the jest.mock calls.
+import { EXPLORER_SIGNUP_TAGS } from '../leads/explorerSignupTag';
 
 const findOrCreate = jest.fn();
 const findAll = jest.fn();
@@ -424,7 +426,14 @@ describe('the new lead reaches the CRM', () => {
     expect(syncNewLeadToGhl).toHaveBeenCalledTimes(1);
     // The LEAD, not the enrollment and not an email: routing resolves the
     // destination account from the lead's source.
-    expect(syncNewLeadToGhl).toHaveBeenCalledWith({ id: 'lead-1' });
+    //
+    // AND the Explorer sign-up tag, which must reach the sync from this door so it
+    // can ride the GHL create payload. GHL's "Contact Created" workflow reads tags
+    // at trigger time and routes new contacts with a phone number into outbound AI
+    // calling, so a tag that arrives in a later request is one that workflow never
+    // sees. Pinned here, at the door, because the tag being passed is what the
+    // whole suppression depends on. See `leads/explorerSignupTag.ts`.
+    expect(syncNewLeadToGhl).toHaveBeenCalledWith({ id: 'lead-1' }, EXPLORER_SIGNUP_TAGS);
   });
 
   it('still creates the account when the CRM sync rejects', async () => {
@@ -448,6 +457,11 @@ describe('the new lead reaches the CRM', () => {
 
     await createFreeAccount({ full_name: 'Maya', email: 'maya@example.com', programme: 'learner', acquisition });
 
-    expect(syncNewLeadToGhl).toHaveBeenCalledWith({ id: 'lead-existing' });
+    // A returning guest carries the Explorer tag too, and this is the case that
+    // matters most. Their GoHighLevel contact already exists, so the create branch
+    // never runs for them and the tag reaches them through the follow-up path
+    // instead. They are also who an outbound dialer is most likely to call again,
+    // having been in the system longest.
+    expect(syncNewLeadToGhl).toHaveBeenCalledWith({ id: 'lead-existing' }, EXPLORER_SIGNUP_TAGS);
   });
 });

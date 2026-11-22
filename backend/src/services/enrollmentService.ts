@@ -3,6 +3,9 @@ import { AppError } from '../utils/AppError';
 import { CreateInvoiceInput, CreateInvoiceRequestInput } from '../schemas/enrollmentSchema';
 import { pickBestEnrollment } from './participantService';
 import { bridgeExplorerProfileAtRegistration } from './explorerGrowth/explorerProfileAtRegistration';
+// Constants only, no models and no database handle, so this is safe as a top-level
+// import in a file whose GHL import is deliberately dynamic.
+import { EXPLORER_SIGNUP_TAGS } from './leads/explorerSignupTag';
 import {
   enrollInPaymentCampaignIfUnpaid,
   exitPaymentCampaign,
@@ -16,7 +19,10 @@ import { resolvePaidBatchPlacement } from './batch/batchPlacementService';
 // have a DATABASE_URL - including this service's own unit tests.
 async function pushLeadToGhl(lead: unknown): Promise<void> {
   const { syncNewLeadToGhl } = await import('./ghlService');
-  await syncNewLeadToGhl(lead as never);
+  // Called from exactly one place, `createExplorerEnrollment`, so every contact
+  // this pushes is an Explorer sign-up and carries the tag that keeps Cora's
+  // outbound dialer off them. See `leads/explorerSignupTag.ts`.
+  await syncNewLeadToGhl(lead as never, EXPLORER_SIGNUP_TAGS);
 }
 
 

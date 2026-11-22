@@ -1,6 +1,7 @@
 import { getSetting, getTestOverrides } from './settingsService';
 import { resolveGhlAccountForSource } from './leads/ghlAccountRouting';
 import { provenanceTagsFor } from './leads/ghlProvenanceTags';
+import { tagsNeedingTheirOwnRequest } from './leads/explorerSignupTag';
 import { isSyntheticContactEmail } from './leads/syntheticContacts';
 import { logActivity } from './activityService';
 import Lead from '../models/Lead';
@@ -173,7 +174,16 @@ export async function findContactByPhone(phone: string, apiKey?: string): Promis
 export async function createContact(
   lead: { name: string; email: string; phone?: string; company?: string; title?: string },
   interestGroup?: string,
-  apiKey?: string
+  apiKey?: string,
+  /**
+   * Tags to put on the CREATE payload itself, so the contact carries them the
+   * instant it exists rather than after a follow-up request.
+   *
+   * This matters because GHL's "Contact Created" workflow reads tags at trigger
+   * time. A tag applied one request later is a tag that workflow never sees.
+   * See `leads/explorerSignupTag.ts` for the case this was built for.
+   */
+  createTags?: readonly string[]
 ): Promise<{ success: boolean; contactId?: string; error?: string }> {
   const nameParts = (lead.name || '').trim().split(/\s+/);
   const firstName = nameParts[0] || '';
@@ -187,8 +197,21 @@ export async function createContact(
   if (firstName) payload.firstName = firstName;
   if (lastName) payload.lastName = lastName;
   if (lead.company) payload.companyName = lead.company;
+  /**
+   * Tags on the create payload: the interest group when there is one, plus any
+   * caller-supplied classification tags.
+   *
+   * `customField` stays tied to `interestGroup` ALONE and is not written for
+   * `createTags`. A GHL custom field has to exist in the destination sub-account
+   * before anything can be written to it, and writing to one that does not exist
+   * fails quietly — so a classification tag must never drag a custom field write
+   * along behind it.
+   */
+  const createPayloadTags = [...(interestGroup ? [interestGroup] : []), ...(createTags ?? [])];
+  if (createPayloadTags.length > 0) {
+    payload.tags = Array.from(new Set(createPayloadTags));
+  }
   if (interestGroup) {
-    payload.tags = [interestGroup];
     payload.customField = { interestgroup: interestGroup };
   }
 
@@ -278,7 +301,14 @@ export async function syncLeadToGhl(
   lead: InstanceType<typeof Lead>,
   interestGroup?: string,
   force = false,
-  bypassEnabledCheck = false
+  bypassEnabledCheck = false,
+  /**
+   * Classification tags for this sync. On a contact we CREATE they ride the
+   * create payload (no gap); on a contact we MATCHED they are applied with the
+   * provenance tags below, because a returning person's contact already exists
+   * and there is no create call to attach them to.
+   */
+  createTags?: readonly string[]
 ): Promise<SyncResult> {
   const enabled = await getSetting('ghl_enabled');
   if (!enabled && !bypassEnabledCheck) return { contactId: null, isTestMode: false };
@@ -434,7 +464,8 @@ export async function syncLeadToGhl(
           title: isTestMode ? '' : (lead.title || ''),
         },
         interestGroup,
-        apiKey
+        apiKey,
+        createTags
       );
 
       if (!createResult.success) {
@@ -465,7 +496,11 @@ export async function syncLeadToGhl(
        * Best effort per tag: a tag that will not apply must not cost the person their sync,
        * which is already linked by this point.
        */
-      for (const tag of provenanceTagsFor(lead)) {
+      // Classification tags land here only when the contact already existed; a
+      // contact we just created carries them on its create payload. The rule and
+      // the reason it matters live in `tagsNeedingTheirOwnRequest`, where they can
+      // be tested without standing up routing, settings and two contact lookups.
+      for (const tag of tagsNeedingTheirOwnRequest(provenanceTagsFor(lead), createTags, isNewContact)) {
         // eslint-disable-next-line no-await-in-loop -- GHL v1 has no bulk tag endpoint
         await addContactTag(contactId, tag, apiKey).catch((e: unknown) =>
           console.error('[GHL] tag not applied', {
@@ -558,12 +593,30 @@ export async function bulkSyncCampaignLeads(
 /*  Fire-and-forget: sync newly created lead to GHL                    */
 /* ------------------------------------------------------------------ */
 
-export async function syncNewLeadToGhl(lead: InstanceType<typeof Lead>): Promise<void> {
+export async function syncNewLeadToGhl(
+  lead: InstanceType<typeof Lead>,
+  /**
+   * Classification tags for this contact, for callers that know something about
+   * the person the lead row does not say.
+   *
+   * Optional, and absent for seven of the nine call sites. The Explorer sign-up
+   * doors pass `EXPLORER_SIGNUP_TAGS`; an Apollo import, a CSV import or an
+   * admin-created lead pass nothing and behave exactly as before.
+   *
+   * It is a parameter rather than something derived from `lead.source` on
+   * purpose. Both sign-up doors use `Lead.findOrCreate` with `source` inside
+   * `defaults`, so a person who already existed as an `apollo` or `ccpp_winback`
+   * lead keeps that old source when they sign up for the free class. Deriving
+   * from `source` would therefore miss precisely the returning people this tag
+   * most needs to protect.
+   */
+  createTags?: readonly string[]
+): Promise<void> {
   try {
     const enabled = await getSetting('ghl_enabled');
     if (!enabled) return;
 
-    const result = await syncLeadToGhl(lead);
+    const result = await syncLeadToGhl(lead, undefined, false, false, createTags);
     if (result.contactId && !result.isTestMode && !lead.ghl_contact_id) {
       await lead.update({ ghl_contact_id: result.contactId });
     }
