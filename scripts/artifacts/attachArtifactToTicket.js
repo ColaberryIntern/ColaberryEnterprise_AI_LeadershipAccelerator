@@ -38,6 +38,11 @@ const ALI_PERSON_ID = 17454835;
  *  refreshed. Off by default so an accidental re-run stays a no-op. Trash the superseded vault
  *  upload first, or the folder keeps serving the old bytes under the same name. */
 const ALLOW_REPOST = process.env.ALLOW_REPOST === '1';
+/** Every Basecamp call is bounded (loop T33, carried from T05): a hung connection rejects with a TimeoutError instead of
+ *  holding the run (and the prod container exec) open forever. No retry here: a failed post is re-run by hand, and the
+ *  filename check above makes a re-run a no-op for what already landed. */
+const TIMEOUT_MS = Number(process.env.BC_TIMEOUT_MS || 30000);
+const timedFetch = (url, opts, ms = TIMEOUT_MS) => fetch(url, { ...opts, signal: AbortSignal.timeout(ms) });
 
 let TOKEN = null;
 async function tok() {
@@ -49,7 +54,7 @@ async function tok() {
 
 async function api(method, p, body) {
   if (DRY && method !== 'GET') { console.log(`  [DRY] ${method} ${p.split('?')[0]}`); return { id: 'DRY' }; }
-  const r = await fetch(API + p, {
+  const r = await timedFetch(API + p, {
     method,
     headers: {
       Authorization: `Bearer ${await tok()}`, 'User-Agent': UA, 'Content-Type': 'application/json',
@@ -92,7 +97,7 @@ async function listAll(p) {
 async function uploadBlob(filePath, filename) {
   if (DRY) { console.log(`  [DRY] upload ${filename}`); return 'DRY-SGID'; }
   const buf = fs.readFileSync(filePath);
-  const r = await fetch(`${API.replace(`/${ACCOUNT}`, `/${ACCOUNT}`)}/attachments.json`
+  const r = await timedFetch(`${API.replace(`/${ACCOUNT}`, `/${ACCOUNT}`)}/attachments.json`
     + `?name=${encodeURIComponent(filename)}`, {
     method: 'POST',
     headers: {
@@ -274,4 +279,4 @@ async function main() {
 // Run only as a script; `require` (the tests) gets the resolvers without touching Basecamp.
 if (require.main === module) main().catch((e) => { console.error('FAILED: ' + e.message); process.exit(1); });
 
-module.exports = { listTicketTodos, resolveTicket, assertActingAsAli, ALI_PERSON_ID };
+module.exports = { listTicketTodos, resolveTicket, assertActingAsAli, ALI_PERSON_ID, timedFetch, TIMEOUT_MS };
