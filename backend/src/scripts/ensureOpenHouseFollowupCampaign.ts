@@ -7,7 +7,7 @@
  *   ... --preview <out.html>            # both emails as they will read, for Ali's copy review
  *   ... --session <sessionId>           # read-only: who would get which email for that Open House
  *   ... --replay <sessionId> <url> --apply   # sets the recording link the "missed" email carries
- *   ... --book <sessionId>              # books that session's follow-ups now (only if the campaign is active)
+ *   ... --book <sessionId> [--start YYYY-MM-DD] [--apply]   # dry run unless --apply; --start = day 0 at 10:00 AM CT that date
  *   ... --upgrade-rebuild [--apply]     # OH1w: tag Ali's rebuilt steps attended/missed, replace placeholders, add the hard rules
  *   ... --add-steps [--apply]           # OH1z: append reserve-your-seat (day 3), invite (day 5), last call (day 7)
  *
@@ -20,7 +20,8 @@ import * as fs from 'fs';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import { findOpenHouseCountdownCampaign, EVENT_REMINDER_CATEGORY } from '../services/openHouseCountdown';
-import { OPEN_HOUSE_FOLLOWUP_KEY, FOLLOWUP_PEOPLE_SQL, findFollowupCampaign, bookOpenHouseFollowups } from '../services/openHouseFollowup';
+import { OPEN_HOUSE_FOLLOWUP_KEY, FOLLOWUP_PEOPLE_SQL, FOLLOWUP_SEND_CLOCK, findFollowupCampaign, bookOpenHouseFollowups } from '../services/openHouseFollowup';
+import { classInstant } from '../services/centralDate';
 import { followupCopy, screenFollowupCopy } from '../services/openHouseFollowupCopy';
 
 const NAME = 'Open House Follow-up (Maya)';
@@ -161,8 +162,17 @@ async function main(): Promise<void> {
     return;
   }
 
+  // --book <sessionId> [--start YYYY-MM-DD] [--apply]: dry run unless --apply (OH1z). --start sets
+  // day 0 to 10:00 AM Central that date, for an Open House whose morning-after has passed.
   const book = arg('--book');
-  if (book) { console.log(JSON.stringify(await bookOpenHouseFollowups(book))); return; }
+  if (book) {
+    const start = arg('--start');
+    if (start !== null && !/^\d{4}-\d{2}-\d{2}$/.test(start)) throw new Error('--start must be YYYY-MM-DD');
+    const startAt = start ? classInstant(start, FOLLOWUP_SEND_CLOCK) : undefined;
+    const r = await bookOpenHouseFollowups(book, { startAt, dryRun: !apply });
+    log(`book${apply ? '' : ' (dry run)'}: ${JSON.stringify(r)}${startAt ? ` day 0 = ${startAt.toISOString()}` : ''}`);
+    return;
+  }
 
   // OH1z: append the enroll / last call / invite steps. Dry run by default; --apply saves.
   if (has('--add-steps')) {
