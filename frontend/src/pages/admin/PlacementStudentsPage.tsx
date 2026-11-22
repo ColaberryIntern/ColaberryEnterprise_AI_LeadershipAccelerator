@@ -15,7 +15,12 @@ const PlacementStudentsPage: React.FC = () => {
   const [open, setOpen] = useState<{ id: string; name: string; data: StaffDashboard | null } | null>(null);
 
   useEffect(() => {
-    fetchPrepStudents().then(setRows).catch((e) => {
+    fetchPrepStudents().then((list) => {
+      setRows(list);
+      // CP11.1b: the interview desk's "Prep" link opens this page on one learner (?student=<enrollment id>).
+      const wanted = new URLSearchParams(window.location.search).get('student');
+      if (wanted) view(list.find((r) => r.enrollmentId === wanted) ?? { enrollmentId: wanted, name: '', lastObserved: '', observations: 0 });
+    }).catch((e) => {
       setError(e?.response?.status === 403 ? 'You do not have access to Placement.' : 'Could not load students. Try again.');
     });
   }, []);

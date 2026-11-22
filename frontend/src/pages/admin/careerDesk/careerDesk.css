@@ -1,0 +1,91 @@
+/* Career Prep v27, CP11.1b: the staff interview desk. Palette, type and spacing ported from the kit's staff pages
+   (.loop-architect/runs/20261116-career-prep-v27/kit/design/refactored-career-center.html, light theme). Scoped to .cdesk so
+   nothing leaks into the rest of the admin app. Text colors meet WCAG AA on their backgrounds. */
+.cdesk{
+  --bg:#F7FAFC;--bg-elevated:#FFFFFF;--bg-sunk:#EDF3F8;--fg:#16222C;--fg-muted:#4E6172;--fg-faint:#5F7282;--accent:#1F76B4;--accent-contrast:#FFFFFF;
+  --accent-soft:#DDEEF9;--accent-hover:#185F92;--line:#D5E0E8;--line-strong:#B9CAD8;--ok:#1B7A4B;--ok-soft:#DCF2E6;--warn:#8A5806;--warn-soft:#FBEED2;
+  --bad:#A82C2C;--bad-soft:#F8E0E0;--mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;--sans:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  color-scheme:light;background:var(--bg);color:var(--fg);font:15px/1.55 var(--sans);padding:24px;min-height:100%;max-width:100%;overflow-x:hidden
+}
+.cdesk *,.cdesk *::before,.cdesk *::after{box-sizing:border-box}
+.cdesk h1,.cdesk h2,.cdesk h3{color:var(--fg);font-family:var(--mono);font-weight:600;letter-spacing:-.02em;margin:0}
+.cdesk .cdesk-h1{font-size:2rem;line-height:1.15;margin:.3rem 0 .2rem}
+.cdesk .cdesk-h3{font-size:1.1rem;margin:.35rem 0 .4rem}
+.cdesk .cdesk-lead{color:var(--fg-muted);margin:0 0 1rem}
+.cdesk .cdesk-eyebrow{font:500 .72rem var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+.cdesk .cdesk-eyebrow.cdesk-faint{color:var(--fg-faint)}
+.cdesk .cdesk-small{font-size:.86rem}
+.cdesk .cdesk-muted{color:var(--fg-muted)}
+.cdesk .cdesk-faint{color:var(--fg-faint)}
+.cdesk .cdesk-ok{color:var(--ok)}
+.cdesk .cdesk-strong{font-weight:600;margin:.5rem 0 .2rem}
+.cdesk .cdesk-mono{font-family:var(--mono);word-break:break-all}
+.cdesk p{margin:0 0 .4rem}
+.cdesk a.cdesk-link{color:var(--accent);font-weight:600;font-size:.86rem;text-decoration:underline;text-underline-offset:2px}
+.cdesk a:focus-visible,.cdesk button:focus-visible,.cdesk select:focus-visible,.cdesk input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.cdesk .cdesk-head{margin-bottom:.6rem}
+.cdesk .cdesk-overview{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem 1.25rem;margin:0 0 1rem;font-size:.86rem;color:var(--fg-muted)}
+.cdesk .cdesk-overview .cdesk-callout{flex-basis:100%}
+.cdesk .cdesk-tabs{display:flex;flex-wrap:wrap;border-bottom:1px solid var(--line);margin-bottom:1rem}
+.cdesk .cdesk-tabs a{display:inline-flex;align-items:center;min-height:44px;padding:.5rem .9rem;color:var(--fg-muted);text-decoration:none;border-bottom:2px solid transparent;margin-bottom:-1px}
+.cdesk .cdesk-tabs a:hover{color:var(--fg)}
+.cdesk .cdesk-tabs a[aria-current="page"]{color:var(--fg);border-color:var(--accent);font-weight:600}
+.cdesk .cdesk-card{background:var(--bg-elevated);border:1px solid var(--line);border-radius:4px;padding:1rem 1.5rem;min-width:0}
+.cdesk .cdesk-card.cdesk-acc{border-left:3px solid var(--accent)}
+.cdesk .cdesk-stackgap{display:flex;flex-direction:column;gap:1rem}
+.cdesk .cdesk-split{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:1rem;align-items:start}
+.cdesk .cdesk-g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem}
+.cdesk .cdesk-kpi-v{font:600 1.9rem var(--mono);line-height:1.1;margin:.2rem 0}
+.cdesk .cdesk-foot{margin:.6rem 0 0}
+.cdesk .cdesk-pill{display:inline-block;font:600 .66rem var(--mono);letter-spacing:.09em;text-transform:uppercase;padding:.2em .6em;border-radius:999px;border:1px solid currentColor;white-space:nowrap;vertical-align:middle}
+.cdesk .cdesk-p-ok{color:var(--ok);background:var(--ok-soft)}.cdesk .cdesk-p-warn{color:var(--warn);background:var(--warn-soft)}
+.cdesk .cdesk-p-bad{color:var(--bad);background:var(--bad-soft)}.cdesk .cdesk-p-info{color:var(--accent);background:var(--accent-soft)}.cdesk .cdesk-p-mute{color:var(--fg-muted);background:var(--bg-sunk)}
+.cdesk .cdesk-tbl{width:100%;border-collapse:collapse;font-size:.88rem}
+.cdesk .cdesk-tbl th{text-align:left;font:500 .68rem var(--mono);letter-spacing:.11em;text-transform:uppercase;color:var(--fg-faint);padding:.55rem .5rem;border-bottom:1px solid var(--line-strong);white-space:nowrap}
+.cdesk .cdesk-tbl td{padding:.65rem .5rem;border-bottom:1px solid var(--line);vertical-align:top}
+.cdesk .cdesk-tbl tr.cdesk-click{cursor:pointer}.cdesk .cdesk-tbl tr.cdesk-click:hover td{background:var(--bg-sunk)}.cdesk .cdesk-tbl tr.is-sel td{background:var(--accent-soft)}
+.cdesk .cdesk-num{font-family:var(--mono);text-align:right;white-space:nowrap}
+.cdesk .cdesk-rowbtn{background:none;border:0;padding:0;font:inherit;font-weight:600;color:var(--fg);text-align:left;cursor:pointer;text-decoration:underline;text-decoration-color:var(--line-strong);text-underline-offset:3px}
+.cdesk .cdesk-rowactions{display:flex;flex-wrap:wrap;gap:.4rem;justify-content:flex-end}
+.cdesk .cdesk-btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:.45rem .95rem;border:1px solid transparent;border-radius:4px;font:600 .92rem var(--sans);background:none;cursor:pointer;text-align:center}
+.cdesk .cdesk-btn.cdesk-sm{min-height:36px;padding:.25rem .7rem;font-size:.84rem}
+.cdesk .cdesk-primary{background:var(--accent);color:var(--accent-contrast)}.cdesk .cdesk-primary:hover{background:var(--accent-hover)}
+.cdesk .cdesk-ghost{border-color:var(--line-strong);color:var(--fg)}.cdesk .cdesk-ghost:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.cdesk .cdesk-btn:disabled{opacity:.5;cursor:not-allowed}
+.cdesk .cdesk-actions{display:grid;gap:.6rem;margin-top:.8rem}
+.cdesk .cdesk-field{display:flex;flex-direction:column;gap:.25rem;margin:.6rem 0 0;min-width:0}
+.cdesk .cdesk-field label{font-size:.84rem;font-weight:600;color:var(--fg-muted)}
+.cdesk .cdesk-field input,.cdesk .cdesk-field select,.cdesk .cdesk-select-sm{background:var(--bg-sunk);border:1px solid var(--line-strong);border-radius:4px;padding:.45rem .6rem;min-height:40px;color:var(--fg);font:inherit;max-width:100%}
+.cdesk .cdesk-select-sm{min-height:36px;margin-top:.3rem;font-size:.84rem}
+.cdesk .cdesk-callout{border:1px solid var(--line);border-left:3px solid var(--accent);background:var(--accent-soft);padding:.7rem .9rem;border-radius:4px;font-size:.88rem;margin:0}
+.cdesk .cdesk-callout.cdesk-warnline{border-left-color:var(--warn);background:var(--warn-soft);color:var(--fg)}
+.cdesk .cdesk-callout code{font-family:var(--mono);color:var(--fg);background:var(--bg-elevated);padding:0 .3rem;border-radius:3px}
+.cdesk .cdesk-error{display:flex;flex-wrap:wrap;align-items:center;gap:.75rem;border:1px solid var(--bad);background:var(--bad-soft);color:var(--bad);padding:.7rem .9rem;border-radius:4px;margin-bottom:1rem}
+.cdesk .cdesk-answer-slot:empty{display:none}
+.cdesk .cdesk-answer{display:flex;flex-direction:column;gap:.15rem;margin:0;padding:.7rem .9rem;border-radius:4px;border:1px solid var(--line);border-left:3px solid var(--ok);background:var(--bg-elevated)}
+.cdesk .cdesk-answer.is-bad{border-left-color:var(--bad);color:var(--bad)}
+.cdesk .cdesk-audit{font-size:.8rem;color:var(--fg-muted);font-family:var(--mono)}
+.cdesk .cdesk-related ul{margin:.2rem 0 0;padding-left:1.1rem;font-size:.86rem}
+.cdesk .cdesk-held{list-style:none;margin:.4rem 0 0;padding:0}
+.cdesk .cdesk-held-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.6rem;padding:.7rem 0;border-top:1px solid var(--line)}
+.cdesk .cdesk-field-inline{margin:0;flex:1 1 220px}
+.cdesk .cdesk-pf-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr) auto;gap:.8rem;align-items:end;padding:.7rem 0;border-top:1px solid var(--line)}
+.cdesk .cdesk-pf-row .cdesk-field{margin:0}
+@media (max-width:1100px){.cdesk .cdesk-split{grid-template-columns:minmax(0,1fr)}}
+/* Phones: every desk table becomes a stack of cards (one row = one card, each cell labeled), so nothing scrolls sideways. */
+@media (max-width:760px){
+  .cdesk{padding:16px}
+  .cdesk .cdesk-h1{font-size:1.6rem}
+  .cdesk .cdesk-card{padding:.9rem 1rem}
+  .cdesk .cdesk-g3,.cdesk .cdesk-pf-row{grid-template-columns:minmax(0,1fr)}
+  .cdesk .cdesk-tabs a{padding:.5rem .6rem}
+  .cdesk .cdesk-stack thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  .cdesk .cdesk-stack,.cdesk .cdesk-stack tbody,.cdesk .cdesk-stack tr,.cdesk .cdesk-stack td{display:block;width:100%}
+  .cdesk .cdesk-stack tr{border-bottom:1px solid var(--line-strong);padding:.4rem 0}
+  .cdesk .cdesk-stack td{border:0;padding:.3rem 0;text-align:left}
+  .cdesk .cdesk-stack td::before{content:attr(data-label);display:block;font:500 .66rem var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--fg-faint)}
+  .cdesk .cdesk-stack .cdesk-num{text-align:left}
+  .cdesk .cdesk-rowactions{justify-content:flex-start}
+  .cdesk .cdesk-btn.cdesk-sm,.cdesk .cdesk-select-sm,.cdesk .cdesk-field input,.cdesk .cdesk-field select{min-height:44px}
+  .cdesk .cdesk-rowbtn{display:inline-flex;align-items:center;min-height:44px}
+}
