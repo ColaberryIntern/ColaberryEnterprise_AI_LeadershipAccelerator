@@ -7,6 +7,8 @@ import { bookingRouters } from '../routes/publicBookingRoutes';
 import { roomRouters } from '../routes/placementRoomRoutes';
 import { roomGuideRouter } from '../routes/placementRoomGuideRoutes';
 import { replayRouters } from '../routes/placementReplayRoutes';
+import hireClientRoutes from '../routes/hireClientRoutes';
+import { ensureHireClientSchema } from '../db/ensureHireClientSchema';
 import { startReplayJob } from '../services/placement/replayJob';
 import { startInboxTestCron } from '../services/placement/inboxTestJob';
 import { startInboxBackfill } from '../services/placement/inboxBackfill';
@@ -44,6 +46,7 @@ export const PUBLIC_ROUTERS: Router[] = [
   roomRouters.employer, // CP9.1: the employer's interview room (the signed link from the booking email; per-link limits)
   replayRouters.candidate, // CP9.2: the candidate's replay and feedback (participant + Career Prep gated; own only)
   replayRouters.public, // CP9.2: the employer's replay (signed room link) and the one-hour signed recording stream
+  hireClientRoutes, // CP10.2: the employer portal API (switch hire_client_portal_enabled; magic-link session, scoped to its client)
 ];
 export const SCHEDULERS: Array<{ name: string; start: () => void }> = [
   { name: 'inbox-tests', start: startInboxTestCron }, // CP6.1c: daily forwarding test + broken alerts (switch-gated per pass)
@@ -68,6 +71,7 @@ export function mountPlacementPublic(app: Express): void {
 
 export async function startPlacement(): Promise<void> {
   await ensurePlacementSchema();
+  await ensureHireClientSchema(); // CP10.2: employer accounts (its own file: ensurePlacementSchema.ts is at its size limit)
   for (const s of SCHEDULERS) {
     try { s.start(); } catch (err) {
       console.warn(JSON.stringify({ timestamp: new Date().toISOString(), level: 'warn', service: 'backend', event: 'placement_scheduler_start_failed',

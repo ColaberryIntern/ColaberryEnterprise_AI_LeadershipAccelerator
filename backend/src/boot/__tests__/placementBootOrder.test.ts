@@ -1,5 +1,8 @@
 const mockEnsure = jest.fn();
 jest.mock('../../db/ensurePlacementSchema', () => ({ ensurePlacementSchema: (...a: unknown[]) => mockEnsure(...a) }));
+const mockEnsureClients = jest.fn();
+jest.mock('../../db/ensureHireClientSchema', () => ({ ensureHireClientSchema: (...a: unknown[]) => mockEnsureClients(...a) }));
+jest.mock('../../routes/hireClientRoutes', () => { const { Router: R } = jest.requireActual('express'); return { __esModule: true, default: R() }; });
 // The real routers import the app config; the wiring under test only needs something mountable.
 jest.mock('../../routes/careerPrepInboxRoutes', () => { const { Router: R } = jest.requireActual('express'); return { __esModule: true, default: R() }; });
 jest.mock('../../routes/careerPrepPlacementInterviewsRoutes', () => { const { Router: R } = jest.requireActual('express'); return { __esModule: true, default: R() }; });
@@ -65,7 +68,8 @@ describe('placementBoot', () => {
     expect(saved.p).toEqual([require('../../routes/careerPrepInboxRoutes').default, require('../../routes/publicBookingRoutes').bookingRouters.view, // T17: the booking page's data
       require('../../routes/careerPrepPlacementInterviewsRoutes').default, // T20: the learner's placement interviews
       require('../../routes/placementRoomRoutes').roomRouters.candidate, require('../../routes/placementRoomRoutes').roomRouters.employer, // T22: the two rooms
-      require('../../routes/placementReplayRoutes').replayRouters.candidate, require('../../routes/placementReplayRoutes').replayRouters.public]); // T24: the replay
+      require('../../routes/placementReplayRoutes').replayRouters.candidate, require('../../routes/placementReplayRoutes').replayRouters.public, // T24: the replay
+      require('../../routes/hireClientRoutes').default]); // T26: the employer portal API
   });
 
   it('T12: registers the signed inbox events router as an INTEGRATION router (mounted before the JSON parser)', () => {
@@ -107,10 +111,11 @@ describe('placementBoot', () => {
   it('starts the schema first, then every scheduler; one failing scheduler does not stop the others', async () => {
     const order: string[] = [];
     mockEnsure.mockReset().mockImplementation(async () => { order.push('schema'); });
+    mockEnsureClients.mockReset().mockImplementation(async () => { order.push('client schema'); }); // T26: after the placement tables
     jest.spyOn(console, 'warn').mockImplementation(() => undefined);
     SCHEDULERS.push({ name: 'bad', start: () => { throw new Error('boom'); } }, { name: 'good', start: () => { order.push('good'); } });
     await startPlacement();
-    expect(order).toEqual(['schema', 'good']);
+    expect(order).toEqual(['schema', 'client schema', 'good']);
     expect(String((console.warn as jest.Mock).mock.calls[0][0])).toContain('placement_scheduler_start_failed');
   });
 });

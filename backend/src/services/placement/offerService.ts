@@ -55,15 +55,20 @@ function prepare(input: OfferInput, rate: number): { ok: true; row: Omit<store.N
   const by = typeof input.agreedBy === 'string' ? input.agreedBy.trim() : '';
   const ver = typeof input.agreementTextVersion === 'string' ? input.agreementTextVersion.trim() : '';
   if (!by || by.length > 120 || !ver || ver.length > 40) return { ok: false, reason: 'The offer must record who agreed to the fee and which agreement text they saw.' };
-  if (!input.company.trim() || !input.role.trim()) return { ok: false, reason: 'An offer needs a company and a role.' };
+  const company = input.company.trim(); const role = input.role.trim(); const createdBy = input.createdBy.trim();
+  if (!company || !role || !createdBy) return { ok: false, reason: 'An offer needs a company, a role and a sender.' };
+  // Refused, never cut short: a silently shortened name would be stored as if the employer had typed it.
+  if (company.length > 200) return { ok: false, reason: 'The company can be at most 200 characters.' };
+  if (role.length > 200) return { ok: false, reason: 'The role can be at most 200 characters.' };
+  if (createdBy.length > 120) return { ok: false, reason: 'The sender can be at most 120 characters.' };
   const f = computeFee(input.pay, rate);
   if (!f.ok) return f;
   const p = input.pay;
   return { ok: true, row: { enrollmentId: input.enrollmentId, interviewId: input.interviewId ?? null, clientId: input.clientId ?? null,
-    company: input.company.trim().slice(0, 200), role: input.role.trim().slice(0, 200), payBasis: p.basis,
+    company, role, payBasis: p.basis,
     salaryCents: p.basis === 'yearly' ? p.salaryCents : null, hourlyRateCents: p.basis === 'hourly' ? p.rateCents : null,
     hoursPerWeek: p.basis === 'hourly' ? p.hoursPerWeek : null, firstYearCents: f.fee.firstYearCents, feeRateBp: f.fee.rateBp, feeCents: f.fee.feeCents,
-    startDate: input.startDate ?? null, respondBy: input.respondBy ?? null, agreedBy: by, agreementTextVersion: ver, createdBy: input.createdBy.slice(0, 120) } };
+    startDate: input.startDate ?? null, respondBy: input.respondBy ?? null, agreedBy: by, agreementTextVersion: ver, createdBy } };
 }
 
 /** Two requests with the same key at the same moment: the loser's insert hits client_key UNIQUE; answer the winner's row as a replay. */
@@ -98,7 +103,8 @@ export async function editOffer(groupId: string, input: OfferInput, clientKey: s
   if (!prep.ok) return { status: 'invalid', reason: prep.reason };
   return keyRace(clientKey, () => store.inTransaction(async (t) => {
     const cur = await store.lockCurrent(groupId, t);
-    if (!cur || cur.enrollment_id !== input.enrollmentId) return { status: 'not_found' as const };
+    // Scoped to the employer who made it (as withdrawOffer is): another client's group reads as not found.
+    if (!cur || cur.enrollment_id !== input.enrollmentId || (cur.client_id ?? null) !== (input.clientId ?? null)) return { status: 'not_found' as const };
     const again = await store.byClientKey(clientKey, t);
     if (again) return { status: 'ok' as const, offer: again, replay: true };
     if (!EDITABLE.includes(cur.status)) return { status: 'final' as const };

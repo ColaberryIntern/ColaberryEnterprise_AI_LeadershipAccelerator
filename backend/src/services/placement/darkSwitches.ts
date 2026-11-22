@@ -9,6 +9,7 @@ import { getSetting } from '../settingsService';
 export const SWITCHES = {
   employerMail: 'career_prep_employer_mail_enabled',
   inboxTests: 'career_prep_inbox_tests_enabled',
+  clientPortal: 'hire_client_portal_enabled', // CP10.2: employer sign-in and every /api/hire/client/* route
 } as const;
 
 export type Read = (key: string) => Promise<unknown>;

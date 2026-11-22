@@ -109,6 +109,20 @@ describe('edit = a new version', () => {
     expect(ok(await editOffer(v1.offer_group_id, input(), K(2))).replay).toBe(true);
     expect(mockDb.offers.filter((o) => !o.superseded_at)).toHaveLength(1);
   });
+  it('only the employer who made the offer can edit it: another client (or none) is not found and no version is added', async () => {
+    const g = ok(await createOffer(input(), K(1))).offer.offer_group_id;
+    expect(await editOffer(g, input({ clientId: 'cl-other' }), K(2))).toEqual({ status: 'not_found' });
+    expect(await editOffer(g, input({ clientId: null }), K(3))).toEqual({ status: 'not_found' });
+    expect(mockDb.offers).toHaveLength(1);
+    expect(ok(await editOffer(g, input(), K(4))).offer.version).toBe(2);
+  });
+  it('over-length company, role or createdBy is refused with a reason, never cut short', async () => {
+    expect(await createOffer(input({ company: 'c'.repeat(201) }), K(1))).toEqual({ status: 'invalid', reason: 'The company can be at most 200 characters.' });
+    expect(await createOffer(input({ role: 'r'.repeat(201) }), K(2))).toEqual({ status: 'invalid', reason: 'The role can be at most 200 characters.' });
+    expect(await createOffer(input({ createdBy: 'b'.repeat(121) }), K(3))).toEqual({ status: 'invalid', reason: 'The sender can be at most 120 characters.' });
+    expect(mockDb.offers).toHaveLength(0);
+    expect(ok(await createOffer(input({ company: 'c'.repeat(200), role: 'r'.repeat(200), createdBy: 'b'.repeat(120) }), K(4))).offer.company).toHaveLength(200);
+  });
   it('an accepted, declined or withdrawn offer is final; another learner\'s group is not found', async () => {
     const g = ok(await createOffer(input(), K(1))).offer.offer_group_id;
     expect(await editOffer(g, input({ enrollmentId: 'enr-bob' }), K(2))).toEqual({ status: 'not_found' });
