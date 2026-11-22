@@ -363,15 +363,121 @@ describe('enterprise site stream: the three plans', () => {
     expect(stage(flow, 'plan_guide').count).toBe(1);
     // The blank and the unreadable are both unattributed, and counted apart in the words.
     expect(stage(flow, 'plan_unattributed').count).toBe(2);
-    expect(stage(flow, 'plan_unattributed').definition).toMatch(/1 inquiry\(ies\) left the service field empty/);
-    expect(stage(flow, 'plan_unattributed').definition).toMatch(/1 carried text matching none/);
-    expect(flow.stream.caveat).toMatch(/cannot be attributed to one of the three plans/i);
+    expect(stage(flow, 'plan_unattributed').definition).toMatch(/1 inquiry\(ies\) carry no service answer/);
+    expect(stage(flow, 'plan_unattributed').definition).toMatch(/1 carry text matching none/);
+    // Phase 5 words the two apart in the caveat as well, because they call for different
+    // actions: one is a row older than the form rule, the other is text to go and read.
+    expect(flow.stream.caveat).toMatch(/carry no service answer at all/i);
+    expect(flow.stream.caveat).toMatch(/matching none of the three plans and no "not sure"/i);
   });
 
   it('the plan stages are not cumulative, and say so', async () => {
     withRows([intake({ id: 'a', service: 'build' })]);
     const flow = await buildEnterpriseFlow(WINDOW_START);
     expect(stage(flow, 'plan_build').definition).toMatch(/not cumulative reach/i);
+  });
+});
+
+/**
+ * R23 Phase 5 — "they had not decided" is an answer, and the board must not file it under
+ * our own missing data.
+ *
+ * The form now requires one of the three plans or "Not sure yet" and submits the plan key.
+ * The reason that needed reporting changes here as well as on the form: before it, a
+ * prospect who chose "Not sure yet" was counted as unreadable text, in the same number as
+ * rows where nobody had ever been asked. Those lead to different actions, so one number
+ * meaning both was a measurement defect, not a presentation one.
+ */
+describe('enterprise site stream: a recorded "not sure" is not a gap', () => {
+  it('counts "not sure" as its own stage and keeps it OUT of the unattributed row', async () => {
+    withRows([
+      intake({ id: 'a', service: 'not_sure' }),
+      intake({ id: 'b', service: 'Not sure yet' }),
+      intake({ id: 'c', service: '' }),
+    ]);
+    const flow = await buildEnterpriseFlow(WINDOW_START);
+
+    expect(stage(flow, 'plan_not_sure').count).toBe(2);
+    // The canonical key and the legacy display words land in the same bucket, which is what
+    // lets the form change what it posts without re-basing the history beside it.
+    expect(stage(flow, 'plan_unattributed').count).toBe(1);
+    expect(stage(flow, 'plan_not_sure').definition).toMatch(/recorded answer, not a gap/i);
+  });
+
+  it('shows the "not sure" stage at zero rather than omitting it', async () => {
+    // Same rule the flagged row follows: a zero is a measurement, and an absent row leaves a
+    // reader unable to tell a clean breakdown from one nobody computed.
+    withRows([intake({ id: 'a', service: 'build' })]);
+    const flow = await buildEnterpriseFlow(WINDOW_START);
+    expect(stage(flow, 'plan_not_sure').count).toBe(0);
+  });
+
+  it('says nothing in the caveat about a "not sure" answer, because it is not a caveat', async () => {
+    withRows([intake({ id: 'a', service: 'not_sure' })]);
+    const flow = await buildEnterpriseFlow(WINDOW_START);
+    expect(flow.stream.caveat ?? '').not.toMatch(/not sure/i);
+    expect(flow.stream.caveat ?? '').not.toMatch(/cannot be attributed/i);
+  });
+
+  it('every row lands in exactly one attribution bucket, so the breakdown cannot leak', async () => {
+    // The invariant that makes the five numbers readable as a partition of the rows. Without
+    // it a row could be counted twice, or vanish, and both read as a plausible funnel.
+    withRows([
+      intake({ id: 'a', service: 'build' }),
+      intake({ id: 'b', service: 'guide' }),
+      intake({ id: 'c', service: 'train' }),
+      intake({ id: 'd', service: 'not_sure' }),
+      intake({ id: 'e', service: '' }),
+      intake({ id: 'f', service: 'something nobody anticipated' }),
+      intake({ id: 'g', service: 'build' }),
+    ]);
+    const flow = await buildEnterpriseFlow(WINDOW_START);
+
+    const buckets = ['plan_build', 'plan_guide', 'plan_train', 'plan_not_sure', 'plan_unattributed'];
+    const total = buckets.reduce((sum, key) => sum + stage(flow, key).count, 0);
+    expect(total).toBe(7);
+    expect(stage(flow, 'inquired').count).toBe(7);
+  });
+
+  it('gives a "not sure" deal the words but no plan key and no engagement shape', async () => {
+    // The honest pair. They answered, and the answer does not say whether this is a retainer
+    // or a total, so the pricing form must not open on the retainer shape off the back of it.
+    withRows([intake({ id: 'a', company: 'Northside Glass', service: 'not_sure' })]);
+    const flow = await buildEnterpriseFlow(WINDOW_START);
+
+    const deal = (flow.stream.deals ?? [])[0];
+    expect(deal.planLabel).toBe('Not sure yet');
+    expect(deal.planKey).toBeNull();
+    expect(deal.shape).toBeNull();
+  });
+
+  it('never prints a buyer\'s unmatched words as if they were one of our plans', async () => {
+    // `serviceLabel` would echo the raw text; the roster deliberately does not use it here.
+    // A chip reading "whatever they typed" invites a reader to price an offer we do not sell.
+    withRows([intake({ id: 'a', service: 'something nobody anticipated' })]);
+    const flow = await buildEnterpriseFlow(WINDOW_START);
+
+    const deal = (flow.stream.deals ?? [])[0];
+    expect(deal.planLabel).toBeNull();
+    expect(deal.planKey).toBeNull();
+  });
+
+  it('separates THEIR undecided from OUR missing answer on the timeline', async () => {
+    withRows([
+      intake({ id: 'a', company: 'Northside Glass', service: 'not_sure' }),
+      intake({ id: 'b', company: 'Acme Industrial', service: '' }),
+    ]);
+    const flow = await buildEnterpriseFlow(WINDOW_START);
+
+    const labels = flow.events.filter((e) => e.classification === 'enterprise_inquiry').map((e) => e.label);
+    expect(labels).toContain('Northside Glass enquired (plan not chosen yet)');
+    expect(labels).toContain('Acme Industrial enquired (plan not recorded)');
+  });
+
+  it('labels a chosen plan on the timeline with the plan, not the key', async () => {
+    withRows([intake({ id: 'a', company: 'Northside Glass', service: 'build' })]);
+    const flow = await buildEnterpriseFlow(WINDOW_START);
+    expect(flow.events.map((e) => e.label)).toContain('Northside Glass enquired (A new build)');
   });
 });
 

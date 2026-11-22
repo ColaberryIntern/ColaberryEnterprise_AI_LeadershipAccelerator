@@ -28,6 +28,7 @@ import { runIntakeTurn, boundTurns } from '../delivery/projectIntake';
 import type { IntakeOutcome } from '../delivery/projectIntake';
 import { requestInstantCallback } from '../callbackRequestService';
 import { env } from '../../config/env';
+import { normalizeService, serviceLabel } from '../revenueFlow/enterprisePlans';
 import { ENTERPRISE_INTAKE_SOURCE } from './enterpriseIntakeSource';
 import { openClientListSoon, postInterviewSoon } from './enterpriseIntakeBasecamp';
 import { clientResearchBlock } from './enterpriseIntakeFiles';
@@ -46,7 +47,20 @@ export const intakeFormSchema = z.object({
   phone: requiredPhone,
   callConsent: z.boolean().optional().default(false),
   website: text(255),
-  service: text(50),
+  /**
+   * R23 Phase 5: canonicalized, not rejected.
+   *
+   * The form now submits one of `build`, `guide`, `train` or `not_sure`, and this is where
+   * that becomes the stored contract: `normalizeService` maps today's display words, a
+   * buyer's own "not sure" phrasing and any case or spacing onto those four, so the revenue
+   * funnel groups on a key instead of guessing from prose.
+   *
+   * It is deliberately NOT `z.enum([...])`. A strict enum here would answer 400 to every
+   * submission from a page loaded before the deploy, and on a lead form a dropped
+   * submission is unrecoverable because nobody writes in to say their form failed. See
+   * `normalizeService`'s header for the full argument.
+   */
+  service: text(50).transform(normalizeService),
   department: text(100),
   process: z.string().trim().min(1, 'Name one process').max(5000),
   peopleCount: figure(100000),
@@ -101,7 +115,9 @@ export function writtenBrief(i: {
   return [
     `Company: ${or(i.company)}${i.website ? ` (${i.website})` : ''}`,
     `My role: ${or(i.role)}`,
-    `Service considered: ${or(i.service)}`,
+    // The row stores a key; a person reading the brief gets the words. One value, one
+    // rendering of it, rather than a second stored field that can disagree with the first.
+    `Service considered: ${or(serviceLabel(i.service))}`,
     `Department: ${or(i.department)}`,
     '',
     'Process to start with:',
@@ -155,7 +171,11 @@ export async function createEnterpriseIntake(
     form_type: FORM_TYPE,
     consent_contact: true,
     phone_consent: row.call_consent,
-    interest_area: form.service,
+    // Words, not the key. `interest_area` is read by the growth-journey classifier, the AI
+    // message service and the acquisition panels, all of which were written against the
+    // display words this field has always carried. Canonicalizing the stored intake row is
+    // the point of this phase; silently changing what a dozen downstream readers see is not.
+    interest_area: serviceLabel(form.service),
     timeline: form.startTiming.slice(0, 50),
     utm_source: form.utmSource,
     utm_medium: form.utmMedium,

@@ -11,9 +11,15 @@
  * an options email, a proposal, then signed or lost. This module adds no part of that. It
  * reads `enterprise_intakes` and reports where each prospect has got to.
  *
- * Making the FORM record which of the three plans a prospect chose is a change to W28's own
- * form and is not done here (see `enterprisePlans.planOf`). Until that lands, the plan
- * breakdown reports what is genuinely known and names the gap.
+ * Making the FORM record which of the three plans a prospect chose WAS left open here, as a
+ * change belonging to W28's own form. Phase 5 (2026-11-22) made it: the form now requires
+ * one of the three plans or "Not sure yet" and submits the plan KEY, the intake schema
+ * canonicalizes whatever arrives, and the breakdown below reports "they had not decided"
+ * apart from "nobody recorded anything". See `enterprisePlanFunnel` and
+ * `enterprisePlans.normalizeService`.
+ *
+ * Rows taken BEFORE that still carry an empty or open-text service field and cannot be
+ * attributed after the fact, so the gap is reported rather than back-filled.
  *
  * ── THE TABLE IS EMPTY, AND THAT IS A NUMBER, NOT A BLANK ────────────────────────────────
  *
@@ -76,7 +82,13 @@
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../../config/database';
 import { TileStatus } from '../commercialization/commercializationTiles';
-import { ENTERPRISE_PLANS, EnterprisePlanKey, planOf } from './enterprisePlans';
+import {
+  ENTERPRISE_PLANS,
+  SERVICE_NOT_SURE,
+  SERVICE_NOT_SURE_LABEL,
+  attributionOf,
+} from './enterprisePlans';
+import { planBreakdown } from './enterprisePlanFunnel';
 import {
   DealValue, annualizedCents, getLiveDealValues, monthlyCents,
 } from './enterpriseDealValueService';
@@ -348,40 +360,13 @@ export async function buildEnterpriseFlow(windowStart: Date): Promise<Enterprise
   ];
 
   // ── THE PLAN BREAKDOWN ────────────────────────────────────────────────────────────────
-  // Reported as stages so it renders in the same grammar as the funnel, with its own
-  // definitions. These are NOT cumulative and each definition says so.
-  const byPlan = new Map<EnterprisePlanKey, number>();
-  let blank = 0;
-  let unrecognized = 0;
-  for (const r of rows) {
-    const key = planOf(r.service);
-    if (key) byPlan.set(key, (byPlan.get(key) ?? 0) + 1);
-    else if (!String(r.service ?? '').trim()) blank += 1;
-    else unrecognized += 1;
+  // Counted and worded by `enterprisePlanFunnel`, then mapped through this module's own
+  // stage builder, so every row on the board carries the same default "not money" figure
+  // and the same classification as the stages above it.
+  const plans = planBreakdown(rows);
+  for (const d of plans.stages) {
+    funnel.push(stage(d.key, d.label, d.count, d.definition));
   }
-
-  for (const plan of ENTERPRISE_PLANS) {
-    funnel.push(stage(
-      `plan_${plan.key}`, plan.label, byPlan.get(plan.key) ?? 0,
-      `${plan.means} Counts inquiries asking for this plan, not cumulative reach. Read off `
-      // "open-text" rather than the usual technical term for it: this string is COPY, and
-      // the TWC 807.172(d) ratchet over backend/src correctly cannot tell that term from
-      // advertising. It caught this on the first CI run. Same fix R16 made when
-      // membershipFlow's provenance tripped it.
-      + 'the open-text service field, so it undercounts rather than guesses.',
-    ));
-  }
-
-  // The honest gap, always shown, never folded into a plan. Blank and unrecognized are
-  // counted apart because they are different problems: one is a form that never asked, the
-  // other is an answer we could not read.
-  funnel.push(stage(
-    'plan_unattributed', 'Plan not recorded', blank + unrecognized,
-    `${blank} inquiry(ies) left the service field empty and ${unrecognized} carried text `
-    + 'matching none of the three plans. The W28 form does not yet constrain this field to '
-    + 'the three plans, which is a change to that form and not made here. Shown beside the '
-    + 'plans so the gap is visible rather than quietly excluded.',
-  ));
 
   // The flagged count, reported BESIDE the funnel and never subtracted from it.
   //
@@ -416,8 +401,15 @@ export async function buildEnterpriseFlow(windowStart: Date): Promise<Enterprise
   const signedIds = new Set(signedRows.map((r) => r.id));
   const deals: EnterpriseDeal[] = rows
     .map((r): EnterpriseDeal => {
-      const planKey = planOf(r.service);
-      const plan = planKey ? ENTERPRISE_PLANS.find((p) => p.key === planKey) ?? null : null;
+      // A row whose prospect chose "Not sure yet" carries that as its LABEL while its key
+      // and its shape stay null, which is the honest pair: they answered, and the answer
+      // does not tell the pricer whether this is a retainer or a total. The form then opens
+      // on one total figure, which is `initialMode`'s null default and the safe one.
+      // `unreadable` and `unrecorded` both label as null so the panel keeps saying "plan not
+      // recorded" rather than printing a buyer's unmatched words as if they were a plan.
+      const attribution = attributionOf(r.service);
+      const plan = ENTERPRISE_PLANS.find((p) => p.key === attribution) ?? null;
+      const planKey = plan?.key ?? null;
       const v = valueByIntake.get(r.id) ?? null;
       return {
         enterpriseIntakeId: r.id,
@@ -425,7 +417,8 @@ export async function buildEnterpriseFlow(windowStart: Date): Promise<Enterprise
         // cannot safely price, and the id alone is not a company.
         company: (r.company ?? '').trim() || '(company not recorded)',
         planKey,
-        planLabel: plan?.label ?? null,
+        planLabel:
+          plan?.label ?? (attribution === SERVICE_NOT_SURE ? SERVICE_NOT_SURE_LABEL : null),
         // The retainer default the form opens on. See EnterpriseDeal's header.
         shape: plan?.shape ?? null,
         stage: stageKeyOf(r),
@@ -493,10 +486,14 @@ export async function buildEnterpriseFlow(windowStart: Date): Promise<Enterprise
 
   for (const r of rows) {
     const who = r.company?.trim() || 'an unnamed company';
-    const plan = planOf(r.service);
+    const attribution = attributionOf(r.service);
+    const plan = ENTERPRISE_PLANS.find((p) => p.key === attribution) ?? null;
+    // Three readings, not two: the plan they chose, the fact that they chose none yet, or
+    // our own missing answer. "plan not chosen yet" is the prospect's position; "plan not
+    // recorded" is ours, and a reader scanning the timeline should not have to guess which.
     const planSuffix = plan
-      ? ` (${ENTERPRISE_PLANS.find((p) => p.key === plan)?.label})`
-      : ' (plan not recorded)';
+      ? ` (${plan.label})`
+      : attribution === SERVICE_NOT_SURE ? ' (plan not chosen yet)' : ' (plan not recorded)';
     const priced = valueByIntake.get(r.id) ?? null;
 
     push(r.created_at, 'enterprise_inquiry', `${who} enquired${planSuffix}`, r.id);
@@ -558,13 +555,10 @@ export async function buildEnterpriseFlow(windowStart: Date): Promise<Enterprise
       + 'than a plumbing one.',
     );
   }
-  if (blank + unrecognized > 0) {
-    caveatParts.push(
-      `${blank + unrecognized} enterprise inquiry(ies) cannot be attributed to one of the `
-      + 'three plans, because the intake form does not yet constrain its service field to '
-      + 'them.',
-    );
-  }
+  // One sentence per distinct attribution problem, worded where the counting happens. An
+  // empty list means every row is attributed, and nothing is added rather than a
+  // reassurance nobody asked for.
+  caveatParts.push(...plans.caveats);
   if (flaggedCount > 0) {
     caveatParts.push(
       `${flaggedCount} of ${rows.length} enterprise inquiry(ies) carry a flag and may not be `

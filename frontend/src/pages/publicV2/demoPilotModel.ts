@@ -10,7 +10,31 @@
 
 import { phoneProblem } from '../../utils/phone';
 
-export const SERVICES = ['Build', 'Guide', 'Train', 'Not sure yet'] as const;
+/**
+ * The service question's answers (R23 Phase 5).
+ *
+ * ── WHY THE VALUE AND THE LABEL ARE DIFFERENT THINGS ─────────────────────────────────────
+ *
+ * The label is what the buyer reads and is unchanged: Build, Guide, Train are the site's own
+ * verbs, from `config/v2Pricing.ts`'s SERVICE_SHAPES. The VALUE is what gets stored, and it
+ * is now the plan key the backend groups revenue by.
+ *
+ * Before this, the form posted the label. It happened to work for three of the four, because
+ * "Build" lowercases to the key "build", and it broke on the fourth: "Not sure yet" matched
+ * no plan, so a prospect who answered honestly was counted as unreadable text, beside rows
+ * where nobody had answered at all.
+ *
+ * A label can be rewritten for commercial reasons at any time. A key cannot, because every
+ * row already recorded against it must keep counting. Sending the key is what makes the copy
+ * free to change. `enterprisePlansMatchTheSite.test.ts` fails if these four values stop
+ * matching the backend's own, so this cannot drift unnoticed.
+ */
+export const SERVICE_CHOICES: readonly { value: string; label: string }[] = [
+  { value: 'build', label: 'Build' },
+  { value: 'guide', label: 'Guide' },
+  { value: 'train', label: 'Train' },
+  { value: 'not_sure', label: 'Not sure yet' },
+];
 
 export const DEPARTMENTS = [
   'Finance',
@@ -96,6 +120,16 @@ export function validate(f: PilotForm): Record<string, string> {
   else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email.trim())) e.email = 'That does not look like an email address';
   if (!f.company.trim()) e.company = 'Please tell us your company, so we can research it before we meet';
   if (!f.process.trim()) e.process = 'Name one process, even roughly';
+  // R23 Phase 5: an answer is required, and "Not sure yet" is one of the answers.
+  //
+  // It is required because optional made it skippable, and a skipped question is
+  // indistinguishable on the revenue board from a question nobody was asked. It costs the
+  // buyer one click on a chip already on screen, and it commits them to nothing: the last
+  // choice says they have not decided, which is a true and common thing to say on first
+  // contact. Requiring an answer is not the same as requiring a decision.
+  if (!SERVICE_CHOICES.some((c) => c.value === f.service)) {
+    e.service = 'Please pick one, or "Not sure yet"';
+  }
   // PH1: every public lead form requires a phone number, checked by the one shared rule.
   const phoneError = phoneProblem(f.phone);
   if (phoneError) e.phone = phoneError;

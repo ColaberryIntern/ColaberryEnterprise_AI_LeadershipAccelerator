@@ -171,3 +171,151 @@ export function planOf(service: string | null | undefined): EnterprisePlanKey | 
   }
   return null;
 }
+
+/* ── R23 PHASE 5: WHAT THE INTAKE FORM IS ALLOWED TO SAY ───────────────────────────────────
+ *
+ * Everything above this line reads the service field after the fact. Everything below it
+ * decides what may be written into the field in the first place, which is the gap the
+ * header of `enterpriseFlow` named and left open: "Making the FORM record which of the
+ * three plans a prospect chose is a change to W28's own form and is not done here."
+ *
+ * ── WHY THE WRITE SIDE SHARES THIS MODULE ────────────────────────────────────────────────
+ *
+ * `enterpriseIntakeService` (the W28 write path) now imports from here, so the form, the
+ * stored row and the funnel all take their vocabulary from one file. This module imports
+ * nothing, which is what makes that safe: it is a leaf, so being read from both the intake
+ * side and the revenue side cannot create a cycle.
+ *
+ * The alternative was a copy of the four allowed values in the intake schema. That is the
+ * drift `enterprisePlansMatchTheSite.test.ts` already exists to prevent between the backend
+ * and the pricing page, and there is no reason to open a third front.
+ */
+
+/**
+ * The answer a prospect gives when they will not pick a plan.
+ *
+ * It is a RECORDED ANSWER, not an absence, and the distinction is the whole point of this
+ * phase. Before it existed the form let someone skip the question, and the funnel could not
+ * tell "we never asked" from "they told us they did not know yet". Those call for different
+ * actions: the first is a defect on our side, the second is a real, common and perfectly
+ * reasonable thing for a buyer to say on first contact.
+ */
+export const SERVICE_NOT_SURE = 'not_sure';
+
+/**
+ * How that answer is WORDED, in one place.
+ *
+ * Three surfaces say it: the form's own chip, the funnel row, and the deal roster's plan
+ * chip. Three string literals would be three chances for the board to call the same answer
+ * something slightly different from what the buyer actually clicked, which is the drift
+ * `revenueFlowTypes` ships the classification registry in its payload to avoid.
+ */
+export const SERVICE_NOT_SURE_LABEL = 'Not sure yet';
+
+/** Every value the form may submit. The three plans, plus an honest "I do not know yet". */
+export type ServiceAnswer = EnterprisePlanKey | typeof SERVICE_NOT_SURE;
+
+export const SERVICE_ANSWERS: readonly ServiceAnswer[] = [
+  ...ENTERPRISE_PLAN_KEYS,
+  SERVICE_NOT_SURE,
+];
+
+/**
+ * Phrasings that mean "I have not decided", checked BEFORE the plan phrases.
+ *
+ * Order is load bearing. "not sure, maybe training" contains "training", so running
+ * `planOf` first would file that person under Train, which is precisely the opposite of
+ * what they said. An explicit disclaimer outranks a plan name appearing later in the same
+ * sentence.
+ */
+const NOT_SURE_PHRASES: readonly string[] = [
+  'not sure', 'unsure', 'not decided', 'undecided', 'no idea',
+  'do not know', "don't know", 'dont know', 'not yet sure',
+];
+
+/**
+ * Canonicalize whatever arrived in `service` into one stored value.
+ *
+ * ── WHY THIS NORMALIZES AND DOES NOT REJECT ──────────────────────────────────────────────
+ *
+ * The obvious reading of "constrain the field to the three plans" is a Zod enum that answers
+ * 400 to anything else. That would lose real leads, and not in a hypothetical way.
+ *
+ * Today's form posts the display words `Build`, `Guide`, `Train` and `Not sure yet`. People
+ * leave a form open in a tab for hours. A strict enum shipped at time T answers 400 to every
+ * submission from a page loaded before T, so the cost of the stricter contract is paid by
+ * whichever prospects happened to be mid-form during the deploy. On a lead-capture surface a
+ * dropped submission is unrecoverable: nobody emails to say their form failed.
+ *
+ * So the contract is stated and enforced where it is safe to enforce it (the form submits a
+ * canonical value; a test fails if it stops doing so) and is LENIENT at the boundary, where
+ * strictness would destroy the thing being measured.
+ *
+ * Unreadable input is kept verbatim rather than blanked, capped at the column's 50
+ * characters. Blanking it would throw away a buyer's own words and, worse, would make a
+ * failed normalization indistinguishable from a question nobody answered. `attributionOf`
+ * reports it as its own bucket instead.
+ */
+export function normalizeService(raw: string | null | undefined): string {
+  const trimmed = String(raw ?? '').trim();
+  if (!trimmed) return '';
+
+  const lower = trimmed.toLowerCase();
+
+  // An already-canonical value passes through untouched. Tried first and on its own, so a
+  // value this function produced is always a fixed point of it (normalize(normalize(x)) ===
+  // normalize(x)), which is what makes re-running the write path safe.
+  const canonical = SERVICE_ANSWERS.find((a) => a === lower);
+  if (canonical) return canonical;
+
+  if (NOT_SURE_PHRASES.some((p) => lower.includes(p))) return SERVICE_NOT_SURE;
+
+  const plan = planOf(trimmed);
+  if (plan) return plan;
+
+  return trimmed.slice(0, 50);
+}
+
+/**
+ * How a stored row should be COUNTED, which is a different question from what it says.
+ *
+ * Four outcomes where the funnel used to have two, because "cannot attribute this row" was
+ * hiding three unrelated situations:
+ *
+ *   - `not_sure`   they answered, and the answer was that they had not decided
+ *   - `unrecorded` the field is empty: for rows taken before this phase, nobody was required
+ *                  to answer, so this is our gap and not theirs
+ *   - `unreadable` text arrived that matches no plan and no disclaimer, so a human should
+ *                  look at it
+ *
+ * Reporting those three as one number is the kind of aggregation that makes a dashboard
+ * look complete while concealing which of them a reader could actually act on.
+ */
+export type ServiceAttribution = EnterprisePlanKey | 'not_sure' | 'unrecorded' | 'unreadable';
+
+export function attributionOf(service: string | null | undefined): ServiceAttribution {
+  const value = normalizeService(service);
+  if (!value) return 'unrecorded';
+  if (value === SERVICE_NOT_SURE) return SERVICE_NOT_SURE;
+  const plan = ENTERPRISE_PLAN_KEYS.find((k) => k === value);
+  return plan ?? 'unreadable';
+}
+
+/**
+ * What a HUMAN should see for a stored service value.
+ *
+ * The row stores a key so the funnel can group by something that survives a copy rewrite;
+ * a person reading the AI interview brief or a lead record should still see words. So the
+ * two are kept as one value and one rendering of it, rather than as two stored fields that
+ * can disagree.
+ *
+ * Returns '' for a blank so callers can apply their own wording for an unanswered
+ * question: `writtenBrief` already prints "not stated", and it should keep saying that
+ * rather than have a second phrase for the same state introduced here.
+ */
+export function serviceLabel(service: string | null | undefined): string {
+  const value = normalizeService(service);
+  if (!value) return '';
+  if (value === SERVICE_NOT_SURE) return SERVICE_NOT_SURE_LABEL;
+  return ENTERPRISE_PLANS.find((p) => p.key === value)?.label ?? value;
+}
