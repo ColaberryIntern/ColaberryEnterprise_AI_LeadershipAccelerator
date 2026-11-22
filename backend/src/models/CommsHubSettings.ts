@@ -15,6 +15,13 @@ export interface CommsHubSettingsAttributes {
   test_cohort_id?: string | null;
   updated_by?: string | null;
   updated_at?: Date;
+  /** CH10.4 WhatsApp sending state: the earliest next send, the Central day's count, and the breaker. */
+  whatsapp_next_send_at?: Date | null;
+  whatsapp_day?: string | null;
+  whatsapp_day_count?: number;
+  whatsapp_breaker_until?: Date | null;
+  whatsapp_breaker_reason?: string | null;
+  whatsapp_breaker_alerted_for?: string | null;
 }
 
 class CommsHubSettings extends Model<CommsHubSettingsAttributes> implements CommsHubSettingsAttributes {
@@ -25,6 +32,12 @@ class CommsHubSettings extends Model<CommsHubSettingsAttributes> implements Comm
   declare test_cohort_id: string | null;
   declare updated_by: string | null;
   declare updated_at: Date;
+  declare whatsapp_next_send_at: Date | null;
+  declare whatsapp_day: string | null;
+  declare whatsapp_day_count: number;
+  declare whatsapp_breaker_until: Date | null;
+  declare whatsapp_breaker_reason: string | null;
+  declare whatsapp_breaker_alerted_for: string | null;
 }
 
 CommsHubSettings.init(
@@ -36,6 +49,12 @@ CommsHubSettings.init(
     test_cohort_id: { type: DataTypes.UUID, allowNull: true },
     updated_by: { type: DataTypes.STRING(64), allowNull: true },
     updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
+    whatsapp_next_send_at: { type: DataTypes.DATE, allowNull: true },
+    whatsapp_day: { type: DataTypes.DATEONLY, allowNull: true },
+    whatsapp_day_count: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    whatsapp_breaker_until: { type: DataTypes.DATE, allowNull: true },
+    whatsapp_breaker_reason: { type: DataTypes.STRING(64), allowNull: true },
+    whatsapp_breaker_alerted_for: { type: DataTypes.STRING(128), allowNull: true },
   },
   { sequelize, tableName: 'comms_hub_settings', timestamps: true, createdAt: false, updatedAt: 'updated_at' },
 );

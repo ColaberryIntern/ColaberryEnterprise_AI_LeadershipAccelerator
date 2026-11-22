@@ -25,10 +25,12 @@ const CreateBody = z.object({
   include: z.object({ thumbnail: z.boolean(), join_link: z.boolean(), registration_link: z.boolean() }).partial().strict().optional(),
 }).strict();
 const RegenerateBody = z.object({ instruction: z.enum(['shorter', 'warmer', 'more_detail']) }).strict();
-const EditBody = z.object({ channel: z.enum(['community_post', 'in_app']), title: z.string().max(120).nullable().optional(), body: z.string().trim().min(1, 'Write something first.').max(2000) }).strict();
+const EditBody = z.object({ channel: z.enum(['community_post', 'in_app', 'whatsapp']), title: z.string().max(120).nullable().optional(), body: z.string().trim().min(1, 'Write something first.').max(2000) }).strict();
 const DestBody = z.object({
   destinations: z.array(z.object({
-    channel: z.enum(['community_post', 'in_app']), target_type: z.enum(['cohort_feed', 'in_app_audience']),
+    // CH9.6 event_registrants: the message's own managed Eventbrite event (setDestinations enforces it).
+    // CH10.3 whatsapp_group: an enabled, sendable group in the hub (setDestinations enforces it).
+    channel: z.enum(['community_post', 'in_app', 'whatsapp']), target_type: z.enum(['cohort_feed', 'in_app_audience', 'event_registrants', 'whatsapp_group']),
     target_id: z.string().min(1).max(64), label: z.string().max(255).nullable(),
   }).strict()).max(50),
 }).strict();
@@ -82,8 +84,12 @@ export async function getRoute(req: Request, res: Response): Promise<void> {
   try { res.json({ message: await messageView(p.data.id) }); } catch (err) { fail(res, err, 'comms_hub_message_read_failed'); }
 }
 
-export async function optionsRoute(_req: Request, res: Response): Promise<void> {
-  try { res.json({ destinations: await destinationOptions() }); } catch (err) { fail(res, err, 'comms_hub_destination_options_failed'); }
+/** CH9.6: `?event_id=` adds that event's registrants when it is a managed Eventbrite event. */
+const OptionsQuery = z.object({ event_id: z.string().uuid().optional() }).strict();
+export async function optionsRoute(req: Request, res: Response): Promise<void> {
+  const q = OptionsQuery.safeParse(req.query ?? {});
+  if (!q.success) { res.status(400).json({ error: 'event_id must be an event id.', error_class: 'ValidationError' }); return; }
+  try { res.json({ destinations: await destinationOptions(q.data.event_id ?? null) }); } catch (err) { fail(res, err, 'comms_hub_destination_options_failed'); }
 }
 
 const gate = requireSection('comms_hub');

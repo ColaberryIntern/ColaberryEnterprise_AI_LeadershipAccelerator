@@ -15,7 +15,8 @@ import { logActivity, type Actor } from '../activityLog';
 import { factsFor, fillFacts, type DraftFacts } from './draftFacts';
 import { replayLink } from './links';
 import { MessageRuleError, reconcileApproval } from './approvals';
-import { MESSAGE_DRAFT_SYSTEM, messageDraftUserPrompt, type DraftPromptInput } from './prompts/messageDraftPrompt';
+import { messageDraftSystem, messageDraftUserPrompt, type DraftPromptInput } from './prompts/messageDraftPrompt';
+import { readWhatsAppConfig } from '../channelConfig';
 
 /**
  * AI drafting for Compose (CH6.3): one message, one draft per channel (a community post, an in-app
@@ -33,8 +34,18 @@ export class DraftModelError extends Error {}
 const Reply = z.object({
   community_post: z.object({ body: z.string().trim().min(1).max(2000) }),
   in_app: z.object({ title: z.string().trim().min(1).max(120), body: z.string().trim().min(1).max(300) }),
+  // CH10.3: present only when the WhatsApp channel is switched on (and then required: ReplyWithWhatsApp).
+  whatsapp: z.object({ body: z.string().trim().min(1).max(1000) }).optional(),
 }).passthrough();
+const ReplyWithWhatsApp = Reply.extend({ whatsapp: z.object({ body: z.string().trim().min(1).max(1000) }) });
 export type DraftReply = z.infer<typeof Reply>;
+
+/**
+ * CH10.3: a WhatsApp draft is written whenever the WhatsApp channel is switched on (configured and
+ * allowed). Drafts are written before recipients are chosen, so this cannot depend on the destinations;
+ * approval demands a WhatsApp draft only when the message has a WhatsApp group (approvals.ts).
+ */
+export function whatsappDraftsOn(): boolean { return readWhatsAppConfig().notConfigured === null; }
 
 export interface MessageInput {
   eventId?: string | null;
@@ -48,7 +59,7 @@ export interface MessageInput {
 
 export const DEFAULT_INCLUDE: CommsHubInclude = { thumbnail: true, join_link: true, registration_link: true };
 
-export interface Recommendation { channel: CommsHubChannel; target_type: 'cohort_feed' | 'in_app_audience'; target_id: string; label: string; reason: string }
+export interface Recommendation { channel: CommsHubChannel; target_type: 'cohort_feed' | 'in_app_audience' | 'event_registrants'; target_id: string; label: string; reason: string }
 
 async function eventOr404(id: string, t?: Transaction): Promise<CommsHubEvent> {
   const e = await CommsHubEvent.findByPk(id, { transaction: t });
@@ -57,24 +68,26 @@ async function eventOr404(id: string, t?: Transaction): Promise<CommsHubEvent> {
 }
 
 async function askModel(input: DraftPromptInput): Promise<DraftReply> {
+  const withWhatsApp = whatsappDraftsOn();
   const result = await callLLMWithAudit({
     lessonId: COMMS_HUB_LLM_NAMESPACE,
     generationType: 'admin_structure',
     step: 'comms_hub_message_draft',
-    systemPrompt: MESSAGE_DRAFT_SYSTEM,
+    systemPrompt: messageDraftSystem(withWhatsApp),
     userPrompt: messageDraftUserPrompt(input),
     model: DRAFT_MODEL,
     temperature: 0.6,
-    maxTokens: 600,
+    maxTokens: withWhatsApp ? 900 : 600,
     responseFormat: { type: 'json_object' },
     // Every Generate / Shorter / Warmer is asked for a NEW draft; a cached answer would repeat the last one.
     force: true,
   });
   let parsed: unknown;
   try { parsed = JSON.parse(result.content); } catch { throw new DraftModelError('The AI reply was not readable. Try again.'); }
-  const r = Reply.safeParse(parsed);
+  const r = (withWhatsApp ? ReplyWithWhatsApp : Reply).safeParse(parsed);
   if (!r.success) throw new DraftModelError('The AI reply was missing a channel. Try again.');
-  return r.data;
+  // With WhatsApp off, a stray whatsapp field from the model is dropped, never written.
+  return withWhatsApp ? r.data : { ...r.data, whatsapp: undefined };
 }
 
 function promptAbout(e: CommsHubEvent | null, subject: string | null, include: CommsHubInclude = DEFAULT_INCLUDE): DraftPromptInput['about'] {
@@ -93,7 +106,9 @@ async function nextVersion(messageId: string, channel: CommsHubChannel, t: Trans
 async function writeDrafts(messageId: string, reply: DraftReply, facts: DraftFacts | null, author: string, instruction: string | null, t: Transaction): Promise<CommsHubDraft[]> {
   const post = await CommsHubDraft.create({ message_id: messageId, channel: 'community_post', version: await nextVersion(messageId, 'community_post', t), title: null, body: fillFacts(reply.community_post.body, facts), author, instruction }, { transaction: t });
   const inApp = await CommsHubDraft.create({ message_id: messageId, channel: 'in_app', version: await nextVersion(messageId, 'in_app', t), title: fillFacts(reply.in_app.title, facts), body: fillFacts(reply.in_app.body, facts), author, instruction }, { transaction: t });
-  return [post, inApp];
+  if (!reply.whatsapp) return [post, inApp];
+  const wa = await CommsHubDraft.create({ message_id: messageId, channel: 'whatsapp', version: await nextVersion(messageId, 'whatsapp', t), title: null, body: fillFacts(reply.whatsapp.body, facts), author, instruction }, { transaction: t });
+  return [post, inApp, wa];
 }
 
 /** The facts for a message's event and occurrence, or null for a subject-only message. */
@@ -114,7 +129,12 @@ export async function recommendDestinations(e: CommsHubEvent | null): Promise<Re
   const inApp: Recommendation[] = allMembers
     ? [{ channel: 'in_app', target_type: 'in_app_audience', target_id: 'all_members', label: 'Everyone in the program', reason: 'The event is for all members, so everyone gets the notification.' }]
     : cohorts.map((c) => ({ channel: 'in_app', target_type: 'in_app_audience', target_id: c.id, label: `${c.name} members`, reason: 'Only this cohort is invited, so only its members are notified.' }));
-  return [...feeds, ...inApp];
+  // CH9.6: an Eventbrite event managed in the hub also reaches the people who registered for it. Someone
+  // both registered and a member is notified once (the connector skips anyone this message already reached).
+  const registrants: Recommendation[] = e?.ccpp_event_id
+    ? [{ channel: 'in_app', target_type: 'event_registrants', target_id: e.id, label: `Registrants of ${e.title} (in-app)`, reason: 'These people registered for this event on Eventbrite or our site.' }]
+    : [];
+  return [...feeds, ...inApp, ...registrants];
 }
 
 /** Start a message from an event or a subject, with AI drafts (version 1) and the recommended recipients. */
@@ -183,10 +203,10 @@ export async function regenerateDrafts(messageId: string, instruction: 'shorter'
   if (!m) throw new MessageRuleError('That message was not found.', 404, 'not_found');
   if (m.status === 'sending' || m.status === 'sent' || m.status === 'cancelled') throw new MessageRuleError(`A ${m.status} message cannot be redrafted.`, 409, 'locked');
   const event = m.event_id ? await eventOr404(m.event_id) : null;
-  const [post, inApp] = await Promise.all([latest(m.id, 'community_post'), latest(m.id, 'in_app')]);
+  const [post, inApp, wa] = await Promise.all([latest(m.id, 'community_post'), latest(m.id, 'in_app'), latest(m.id, 'whatsapp')]);
   const reply = await askModel({
     about: promptAbout(event, m.subject, { ...DEFAULT_INCLUDE, ...(m.include ?? {}) }), kind: m.kind, tone: m.tone, notes: m.notes,
-    revise: { instruction, previous: { community_post: post?.body, in_app_title: inApp?.title ?? undefined, in_app_body: inApp?.body } },
+    revise: { instruction, previous: { community_post: post?.body, in_app_title: inApp?.title ?? undefined, in_app_body: inApp?.body, ...(wa ? { whatsapp: wa.body } : {}) } },
   });
   return sequelize.transaction(async (t) => {
     // Re-checked under the row lock: the model call takes seconds, and the message may have started sending meanwhile.

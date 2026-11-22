@@ -34,6 +34,23 @@ describe('CH1.1 the comms-hub prefix maps to its own section', () => {
     expect(pathToSection('/api/admin/comms-hub/events/abc/live/prepare')).toBe('comms_hub');
   });
 
+  it('CH9.1 Report a problem sits under the hub prefix (comms_hub), not Marketing (campaigns)', () => {
+    expect(pathToSection('/api/admin/comms-hub/bug-report')).toBe('comms_hub');
+    expect(pathToSection('/api/admin/marketing/bug-report')).toBe('campaigns');
+  });
+
+  it('CH9.1 the hub report path reaches the people the hub is for, by role, and nobody else', () => {
+    const p = '/api/admin/comms-hub/bug-report';
+    expect(gate({ role: 'admin', mgmt_role: 'community_organizer' }, p).passed).toBe(true);
+    expect(gate({ role: 'admin', mgmt_role: 'lead_intake', mgmt_extra_sections: ['agents', 'comms_hub'] }, p).passed).toBe(true);
+    // The trap this route avoids: neither of them reaches Marketing's report endpoint.
+    expect(gate({ role: 'admin', mgmt_role: 'community_organizer' }, '/api/admin/marketing/bug-report').status).toBe(403);
+    expect(gate({ role: 'admin', mgmt_role: 'lead_intake', mgmt_extra_sections: ['agents', 'comms_hub'] }, '/api/admin/marketing/bug-report').status).toBe(403);
+    for (const role of MGMT_ROLES.filter((r) => !roleCanAccessSection(r, 'comms_hub'))) {
+      expect(gate({ role: 'admin', mgmt_role: role }, p).status).toBe(403);
+    }
+  });
+
   it('is segment-bounded both ways: neighbours keep their sections and lookalikes are unmapped', () => {
     expect(pathToSection('/api/admin/communications/log')).toBe('campaigns');
     expect(pathToSection('/api/admin/community/members')).toBe('program');

@@ -14,6 +14,9 @@ const mockCreatePost = jest.fn();
 const mockCreateNotification = jest.fn();
 jest.mock('../../../communityService', () => ({ createPost: (...a: unknown[]) => mockCreatePost(...a) }));
 jest.mock('../../../communityNotificationService', () => ({ createNotification: (...a: unknown[]) => mockCreateNotification(...a) }));
+// CH9.6: who an event's registrants are is registrantAudience's job (its own tests); here, that the connector routes to it.
+const mockRegistrantIds = jest.fn();
+jest.mock('../../eventbrite/registrantAudience', () => ({ registrantEnrollmentIds: (...a: unknown[]) => mockRegistrantIds(...a) }));
 jest.mock('../../../../models/Cohort', () => ({
   __esModule: true,
   default: {
@@ -225,5 +228,43 @@ describe('in-app connector', () => {
     await expect(connectorFor('in_app').send(inApp('nope'))).rejects.toMatchObject({ reason: 'cohort_missing' });
     await expect(connectorFor('in_app').send(delivery({ destination: { target_type: 'in_app_audience', target_id: 'c-nov' }, draft: { title: ' ', body: '' } }))).rejects.toMatchObject({ reason: 'empty_body' });
     expect(mockCreateNotification).not.toHaveBeenCalled();
+  });
+});
+
+describe('CH9.6 in-app to an event\'s registrants', () => {
+  const toRegistrants = (o: Row = {}) => delivery({ destination: { target_type: 'event_registrants', target_id: 'hub-1' }, draft: { title: 'AI Open House', body: 'Starts in one hour.' }, ...o });
+
+  it('notifies the registrants who are on the platform, once each, as Colaberry Team', async () => {
+    mockRegistrantIds.mockResolvedValue(['e-ada', 'e-exp']);
+    const r = await connectorFor('in_app').send(toRegistrants());
+    expect(mockRegistrantIds).toHaveBeenCalledWith('hub-1');
+    expect(mockCreateNotification.mock.calls.map((c) => c[0]).sort()).toEqual(['e-ada', 'e-exp']);
+    expect(mockCreateNotification).toHaveBeenCalledWith('e-ada', 'enr-team', 'announcement', 'comms_hub', 'msg-1');
+    expect(r).toEqual({ provider_message_id: 'msg-1', reached: 2, already_done: false });
+  });
+
+  it('a retry, or a registrant who is also in the "everyone" audience of the same message, is notified once', async () => {
+    mockRegistrantIds.mockResolvedValue(['e-ada']);
+    await connectorFor('in_app').send(delivery({ destination: { target_type: 'in_app_audience', target_id: 'c-nov' }, draft: { title: 'x', body: 'y' } }));
+    const r = await connectorFor('in_app').send(toRegistrants());
+    expect(r).toEqual({ provider_message_id: 'msg-1', reached: 0, already_done: true });
+    expect(notifications.filter((n) => n.member_id === 'mem-e-ada')).toHaveLength(1);
+  });
+
+  it('Eventbrite unreadable at send time: the error reaches the worker, which retries, and nobody is notified', async () => {
+    mockRegistrantIds.mockRejectedValue(Object.assign(new Error('The Eventbrite registrant list is unavailable right now; this send will be retried.'), { name: 'UpstreamUnavailable' }));
+    const err = await connectorFor('in_app').send(toRegistrants()).catch((e: Error) => e);
+    expect(err).not.toBeInstanceOf(ConnectorPermanentError);
+    expect((err as Error).name).toBe('UpstreamUnavailable');
+    expect(mockCreateNotification).not.toHaveBeenCalled();
+  });
+
+  it('nobody on the platform among the registrants reaches no one, and is not an error', async () => {
+    mockRegistrantIds.mockResolvedValue([]);
+    expect(await connectorFor('in_app').send(toRegistrants())).toEqual({ provider_message_id: 'msg-1', reached: 0, already_done: false });
+  });
+
+  it('the community post connector still refuses registrants (in-app only)', async () => {
+    await expect(connectorFor('community_post').send(toRegistrants())).rejects.toBeInstanceOf(ConnectorPermanentError);
   });
 });

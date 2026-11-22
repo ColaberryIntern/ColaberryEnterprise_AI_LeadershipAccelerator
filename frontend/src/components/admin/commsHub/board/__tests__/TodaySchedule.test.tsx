@@ -90,10 +90,11 @@ beforeEach(() => {
     history: [
       row({ id: 'h1', status: 'partially_failed', title: 'Office Hours: starting soon', send_at: iso(-48 * HOUR), deliveries: { total: 3, sent: 2, failed: 1, pending: 0, cancelled: 0 }, failure: { reason: 'Some recipients did not receive it after every try.', missed: ['Alumni cohort'], attempts: 4 } }),
       row({ id: 'h2', status: 'failed', title: 'Office Hours: reminder', send_at: iso(-96 * HOUR), failure: { reason: 'Nothing was delivered after every try.', missed: ['All members'], attempts: 4 } }),
-      row({ id: 'h3', status: 'sent', title: 'Demo Tuesday: recording and thanks', send_at: iso(-120 * HOUR) }),
+      row({ id: 'h3', status: 'sent', title: 'Demo Tuesday: recording and thanks', send_at: iso(-120 * HOUR), notes: ['Already in the WhatsApp group, so it was not sent again.'] }),
     ],
   };
   (api.getCommsHubSummary as jest.Mock).mockResolvedValue(SUMMARY);
+  (api.getWhatsAppStatus as jest.Mock).mockResolvedValue({ configured: false, enabled: false, state: 'not_configured', number_last4: null, reason: 'WhatsApp is switched off for the hub.' });
   (api.getBoard as jest.Mock).mockImplementation(async (scope: string) => board[scope]);
   (api.listHubEvents as jest.Mock).mockResolvedValue(EVENTS);
   (api.getHubSettings as jest.Mock).mockResolvedValue(SETTINGS);
@@ -191,7 +192,7 @@ describe('Schedule & history', () => {
     expect(container.textContent).toContain('The event list did not load, so the event filter only offers Any event.');
   });
 
-  it('the filters narrow both lists; WhatsApp is not offered as a channel', async () => {
+  it('the filters narrow both lists; WhatsApp is a channel filter too (CH10.3)', async () => {
     await renderAt('/admin/comms-hub/schedule');
     await type(field('Status') as unknown as HTMLSelectElement, 'failed');
     await type(field('Channel') as unknown as HTMLSelectElement, 'in_app');
@@ -199,7 +200,7 @@ describe('Schedule & history', () => {
     const want = { status: ['failed'], channel: 'in_app', event_id: 'e2' };
     expect(api.getBoard).toHaveBeenCalledWith('schedule', want);
     expect(api.getBoard).toHaveBeenCalledWith('history', want);
-    expect(Array.from((field('Channel') as unknown as HTMLSelectElement).options).map((o) => o.textContent)).toEqual(['Any channel', 'Community feed', 'In-app notification']);
+    expect(Array.from((field('Channel') as unknown as HTMLSelectElement).options).map((o) => o.textContent)).toEqual(['Any channel', 'Community feed', 'In-app notification', 'WhatsApp']);
   });
 
   it('safety controls save quiet hours, alert recipients and the test cohort; a refused save shows why', async () => {
@@ -228,9 +229,12 @@ describe('Schedule & history', () => {
     expect((api.getActivity as jest.Mock).mock.calls.length).toBe(logLoads + 1);
   });
 
-  it('WhatsApp groups is a single coming-next note; the activity log reads as sentences', async () => {
+  it('the WhatsApp card says it is not connected (CH10.1); the activity log reads as sentences', async () => {
     await renderAt('/admin/comms-hub/schedule');
-    expect(container.textContent).toContain('WhatsApp: coming next.');
+    // CH10.4: a history row shows its plain-words note (here: an earlier try had already sent it).
+    expect(container.textContent).toContain('Already in the WhatsApp group, so it was not sent again.');
+    expect(container.querySelector('[data-testid="ch-whatsapp-card"]')?.textContent).toContain('Not connected');
+    expect(container.textContent).not.toContain('WhatsApp: coming next.');
     expect(container.querySelector('.ch-activity')?.textContent).toContain('Jackie approvedDemo Tuesday: reminder');
   });
 });

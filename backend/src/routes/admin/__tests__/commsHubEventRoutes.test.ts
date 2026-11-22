@@ -26,6 +26,8 @@ const VIEW = {
   repeat_rule: null, next_occurrence_at: '2026-12-02T00:00:00.000Z', upcoming_preview: ['2026-12-02T00:00:00.000Z'],
   join_url: null, registration_url: null, hosts: [], description: null,
   placement: { calendar: true, events_page: true, campus_rail: true }, thumbnail_id: null, broadcast_occurrence_id: null,
+  // CH9.5: an event made in the hub manages no Eventbrite event.
+  ccpp_event_id: null, ccpp_missing_since: null,
   created_at: '2026-11-20T00:00:00.000Z', updated_at: '2026-11-20T00:00:00.000Z',
 };
 

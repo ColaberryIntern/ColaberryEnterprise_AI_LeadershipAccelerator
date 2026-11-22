@@ -15,6 +15,7 @@ const makeRow = (o: Partial<Store> = {}): Store & { update: jest.Mock } => {
 
 jest.mock('../../../../config/env', () => ({ env: { frontendUrl: 'https://enterprise.colaberry.ai' } }));
 jest.mock('../../../../config/database', () => ({ sequelize: { transaction: jest.fn(async (cb: (t: unknown) => unknown) => cb(tx)), query: jest.fn() } }));
+jest.mock('../../../../models/CommsHubWhatsAppGroup', () => ({ __esModule: true, default: { findByPk: jest.fn(async () => null), findAll: jest.fn(async () => []) } }));
 jest.mock('../../../../models/CommsHubSettings', () => ({
   __esModule: true,
   default: { findByPk: jest.fn(async () => row), create: jest.fn(async () => { row = makeRow(); return row; }) },

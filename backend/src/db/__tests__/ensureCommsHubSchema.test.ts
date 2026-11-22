@@ -13,6 +13,8 @@ const TABLES = [
   'comms_hub_messages', 'comms_hub_drafts', 'comms_hub_destinations', 'comms_hub_approvals', 'comms_hub_deliveries',
   // CH7.5
   'comms_hub_alerts',
+  // CH10.2
+  'comms_hub_whatsapp_groups',
 ];
 
 function respond(opts: { presentTables: string[]; hasColumn: boolean; secondBoot: boolean }) {
@@ -68,7 +70,8 @@ describe('ensureCommsHubSchema()', () => {
     respond({ presentTables: TABLES.filter((t) => t !== 'comms_hub_activity'), hasColumn: false, secondBoot: false });
     const r = await ensureCommsHubSchema();
     expect(r.ok).toBe(false);
-    expect(r.missing).toEqual(['comms_hub_activity', 'community_events.hub_event_id']);
+    // CH9.5: the Eventbrite link column is checked too (the mock answers "absent" for every column query).
+    expect(r.missing).toEqual(['comms_hub_activity', 'community_events.hub_event_id', 'comms_hub_events.ccpp_event_id']);
     const logged = JSON.parse(error.mock.calls[0][0]);
     expect(logged).toMatchObject({ event: 'SchemaInvariantViolation', context: { area: 'comms_hub' } });
   });

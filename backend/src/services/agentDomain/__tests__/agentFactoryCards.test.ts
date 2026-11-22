@@ -14,6 +14,10 @@ function row(partial: Partial<ProvisionedDomainRow> & { domain_key: string; stud
     manager_email: 'mgr@colaberry.com',
     manager_can_reach: true,
     manager_blocker: null,
+    // AF12.16 widened the row with the builder's NAME, which the reader always selects, so the
+    // field is required rather than optional and this default has to supply it. Null is the
+    // honest default here: three of the ten domains have no builder at all.
+    intended_builder: null,
     intended_builder_state: 'verified_active',
     agent_id: null,
     agent_display_name: null,

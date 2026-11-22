@@ -134,4 +134,18 @@ describe('activity log', () => {
       ['Taiwo', 'edited an event', 'Demo Tuesday'],
     ]);
   });
+
+  it('CH9.1 and CH9.3: a problem report, and registrants viewed or downloaded, name the event from the detail and never a person', async () => {
+    msgs = [];
+    activity = [
+      { id: 'b1', created_at: NOW, actor_label: 'jackie@colaberry.com', action: 'registrants.exported', entity_type: 'eventbrite_event', entity_id: null, detail: { ccpp_event_id: '777', title: 'AI Open House', rows: 12 } },
+      { id: 'b2', created_at: NOW, actor_label: 'taiwo@colaberry.com', action: 'registrants.viewed', entity_type: 'eventbrite_event', entity_id: null, detail: { ccpp_event_id: '777', title: 'AI Open House', rows: 12 } },
+      { id: 'b3', created_at: NOW, actor_label: 'jackie@colaberry.com', action: 'bug.reported', entity_type: 'report', entity_id: null, detail: { summary: 'Stuck', route: '/admin/comms-hub' } },
+    ];
+    expect((await activityFeed(20)).map((r) => [r.who, r.did, r.about])).toEqual([
+      ['Jackie', 'downloaded the registrants of', 'AI Open House'],
+      ['Taiwo', 'viewed the registrants of', 'AI Open House'],
+      ['Jackie', 'reported a problem', null],
+    ]);
+  });
 });

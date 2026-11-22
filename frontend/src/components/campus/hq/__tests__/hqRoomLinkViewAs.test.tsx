@@ -5,7 +5,8 @@ import { act } from 'react-dom/test-utils';
 import { createRoot, type Root } from 'react-dom/client';
 import { HqFloorScene } from '../HqInside';
 import { HqPanel } from '../HqPanel';
-import { buildHq, PLACEMENT_SECTION, type HqFloor, type HqNav, type HqPlaced } from '../hqModel';
+import { buildHq, PLACEMENT_SECTION, type HqFloor, type HqNav, type HqPlaced, type HqRoom } from '../hqModel';
+import { roomBridgeBlockedReason, roomGoesThroughBridge } from '../HqRoomLink';
 import type { HqState } from '../useHq';
 import type { HqPerson } from '../HqPeople';
 import { VIEW_AS_TOKEN_KEY, PARTICIPANT_TOKEN_KEY } from '../../../../utils/participantToken';
@@ -138,6 +139,136 @@ describe('the controls', () => {
     // say (mgmtBridgeGate). Withholding it here would delete the Career Prep door instead.
     expect(a.hasAttribute('target')).toBe(false);
     expect(a.hasAttribute('rel')).toBe(false);
+  });
+});
+
+/**
+ * AF12.15 — what a withheld room SAYS, which the suite above deliberately did not assert.
+ *
+ * That suite's own header says why it stopped where it did: *"Assertions are on the ANCHOR, never
+ * on the label: the thing that must not exist is a clickable new-tab link."* That was right about
+ * the security half and it left a hole in the honesty half. Ali found it on 2026-11-21 in his own
+ * view-as screenshot: the row was dead and greyed, and its chip still said "Open in admin ↗",
+ * sitting beside badge-locked rooms that showed a padlock.
+ *
+ * So these assert the chip, and the controls below assert that the padlock did not spread: a badge
+ * lock must still read as a badge lock, and the same-tab rooms view-as exists to serve must still
+ * offer to open. A fix that locked the chip unconditionally would pass the first two and break the
+ * feature, which is the same shape of mistake the leaf suite's controls exist to catch.
+ */
+describe('AF12.15: what a withheld room says on its face', () => {
+  const chipEl = (h: HTMLElement, sel: string, inner: string): HTMLElement => {
+    const el = h.querySelector(sel) as HTMLElement;
+    expect(el).toBeTruthy();
+    return el.querySelector(inner) as HTMLElement;
+  };
+  const chip = (h: HTMLElement, sel: string, inner: string): string =>
+    (chipEl(h, sel, inner).textContent ?? '').trim();
+  /**
+   * The padlock is an icon component, never a new emoji: `house-style-emoji` in
+   * `bannedCopyRule.ts` forbids emoji in product copy and holds the frontend to a frozen
+   * per-file baseline, so the first attempt at this fix failed CI by adding one glyph to each
+   * of these two files. The badge-locked wording keeps its grandfathered emoji; the state this
+   * change introduces carries `ri-lock-line`, which is how the rest of the admin surface draws
+   * a lock.
+   */
+  const locked = (el: HTMLElement): boolean => !!el.querySelector('i.ri-lock-line[aria-hidden="true"]');
+
+  describe('during a read-only view-as session', () => {
+    beforeEach(viewingAsSomeoneElse);
+
+    it('the side-panel row shows a padlock and no longer offers to open', async () => {
+      const h = await mount(panel('Revenue'));
+      expect(chip(h, '[data-admin-blocked="view-as"]', '.go')).toBe('Viewing as');
+      expect(locked(chipEl(h, '[data-admin-blocked="view-as"]', '.go'))).toBe(true);
+      expect(h.querySelector('[data-admin-blocked="view-as"]')!.textContent).not.toContain('Open in admin');
+    });
+
+    it('the door plate shows a padlock and no longer reads OPEN', async () => {
+      const h = await mount(scene('Revenue'));
+      expect(chip(h, '[data-admin-blocked="view-as"]', '.pl')).toBe('VIEWING AS');
+      expect(locked(chipEl(h, '[data-admin-blocked="view-as"]', '.pl'))).toBe(true);
+      expect(h.querySelector('[data-admin-blocked="view-as"]')!.textContent).not.toContain('OPEN');
+    });
+
+    it('names view-as as the cause, not the badge, because the two have different fixes', async () => {
+      const h = await mount(panel('Revenue'));
+      // A badge lock is "ask an admin for the section"; this is "leave view-as". A bare padlock
+      // would send the viewer looking for a permission fault that does not exist.
+      expect(chip(h, '[data-admin-blocked="view-as"]', '.go')).not.toBe('🔒');
+      expect((h.querySelector('[data-admin-blocked="view-as"]') as HTMLElement).getAttribute('title'))
+        .toBe(MGMT_BRIDGE_BLOCKED_REASON);
+    });
+  });
+
+  describe('the controls', () => {
+    it('with no view-as session the row offers to open again', async () => {
+      const h = await mount(panel('Revenue'));
+      expect(chip(h, 'a[data-testid="cm-hq-rrow"]', '.go')).toBe('Open in admin ↗');
+    });
+
+    it('with no view-as session the plate reads OPEN again', async () => {
+      const h = await mount(scene('Revenue'));
+      expect(chip(h, 'a[data-testid="cm-hq-office"]', '.pl')).toBe('OPEN ↗');
+    });
+
+    /**
+     * The discrimination that matters: a room the BADGE does not open keeps its own wording even
+     * inside a view-as session, so the padlock never becomes a single word for two causes.
+     */
+    const noRevenue = buildHq((sec) => sec !== 'revenue', true, 'staff', nav);
+    const closedFloor = noRevenue.floors.find((f) => f.label === 'Revenue')!;
+    const closedState = (): HqState => ({
+      ...state(closedFloor),
+      hq: noRevenue,
+      floorOf: (num) => noRevenue.floors.find((x) => x.num === num) ?? null,
+    });
+
+    it('a badge-locked room still reads as a badge lock, view-as or not', async () => {
+      expect(closedFloor.rooms.every((r) => !r.open)).toBe(true); // the fixture is actually closed
+      for (const viewAs of [false, true]) {
+        localStorage.clear(); sessionStorage.clear();
+        if (viewAs) viewingAsSomeoneElse();
+        const h = await mount(<HqPanel s={closedState()} who={who} face="" placed={empty} />);
+        expect(chip(h, 'button.cm-hq-rrow.lock', '.go')).toBe('🔒');
+        expect(locked(chipEl(h, 'button.cm-hq-rrow.lock', '.go'))).toBe(false); // the grandfathered glyph, not the icon
+        expect(h.querySelector('[data-admin-blocked="view-as"]')).toBeNull();
+        if (root) { const r = root; await act(async () => { r.unmount(); }); root = null; }
+        host?.remove(); host = null;
+      }
+    });
+
+    it('a SAME-TAB room still offers to open during view-as, chip included', async () => {
+      viewingAsSomeoneElse();
+      const h = await mount(panel('Placement'));
+      // Not through the bridge, so nothing is withheld and nothing should claim to be.
+      expect(chip(h, 'a[data-testid="cm-hq-rrow"]', '.go')).toBe('Open in admin ↗');
+      expect(h.querySelector('[data-admin-blocked="view-as"]')).toBeNull();
+    });
+  });
+
+  /** The predicate both surfaces now share, asserted directly so its contract is pinned. */
+  describe('roomBridgeBlockedReason', () => {
+    const mk = (over: Partial<HqRoom>): HqRoom => ({
+      path: '/admin/revenue', label: 'Revenue', icon: 'x', section: 'revenue',
+      newTab: true, external: false, open: true, ...over,
+    });
+
+    it('is null for every room shape outside a view-as session', () => {
+      for (const r of [mk({}), mk({ external: true }), mk({ own: true }), mk({ inPlace: true })]) {
+        expect(roomBridgeBlockedReason(r)).toBeNull();
+      }
+    });
+
+    it('inside a view-as session blocks ONLY the bridged shape', () => {
+      viewingAsSomeoneElse();
+      expect(roomBridgeBlockedReason(mk({}))).toBe(MGMT_BRIDGE_BLOCKED_REASON);
+      expect(roomBridgeBlockedReason(mk({ external: true }))).toBeNull();
+      expect(roomBridgeBlockedReason(mk({ own: true }))).toBeNull();
+      expect(roomBridgeBlockedReason(mk({ inPlace: true }))).toBeNull();
+      expect(roomGoesThroughBridge(mk({}))).toBe(true);
+      expect(roomGoesThroughBridge(mk({ external: true }))).toBe(false);
+    });
   });
 });
 

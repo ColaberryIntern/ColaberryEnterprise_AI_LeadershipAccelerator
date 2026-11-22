@@ -98,3 +98,26 @@ describe('CH5.3 Watch live opens the stream in the portal player', () => {
     expect(links().some((t) => t.startsWith('Sign up'))).toBe(true);
   });
 });
+
+describe('CH9.5 an Eventbrite event managed in the hub, for a member who already registered', () => {
+  // The backend's mergeCards hands the hub card the registration and count of the Eventbrite card it replaced.
+  const managed = (o: Partial<OpenHouseView> = {}) => hubCard({
+    title: 'AI Open House', registration_url: 'https://www.eventbrite.com/e/ai-open-house-1992498063344',
+    image_url: 'https://img.evbuc.com/open-house.jpg', signup_count: 14, ...o,
+  });
+
+  it('a registered member sees "You are registered" and "You\'re going", and no Sign up', async () => {
+    await renderWith([managed({ is_registered: true })]);
+    expect(container.textContent).toContain('You are registered');
+    expect(container.querySelector('[data-testid^="evt-going-"]')).not.toBeNull();
+    expect(links().some((t) => t.startsWith('Sign up'))).toBe(false);
+    expect(container.textContent).toContain('14 signed up');
+  });
+
+  it('a member who has not registered still sees Sign up, to the Eventbrite page', async () => {
+    await renderWith([managed({ is_registered: false })]);
+    const signUp = Array.from(container.querySelectorAll('a')).find((a) => (a.textContent ?? '').trim().startsWith('Sign up'))!;
+    expect(signUp.getAttribute('href')).toBe('https://www.eventbrite.com/e/ai-open-house-1992498063344');
+    expect(container.textContent).not.toContain('You are registered');
+  });
+});

@@ -6,6 +6,7 @@ import { deliveryRepo } from './deliveryRepo';
 import { defaultConnector, runDeliveryTick, type WorkerDeps } from './deliveryWorker';
 import { alertRepo } from '../alerts/alertRepo';
 import { defaultAlertSenders, runFailureAlerts, type AlertDeps } from '../alerts/failureAlerts';
+import { syncAdoptedEventsIfDue } from '../eventbrite/adoption';
 
 /**
  * The Communications Hub worker's wiring (CH7.2): every minute, on the house scheduler (node-cron, as
@@ -44,6 +45,9 @@ export async function runCommsHubTick(deps: WorkerDeps = workerDeps, now: Date =
       }
     };
     await step('comms_hub_live_sync_failed', () => syncLiveEvents(now.getTime()));
+    // CH9.5: Eventbrite events managed in the hub re-read their title, times and link, at most every
+    // 15 minutes, BEFORE plan drafting and sending, so a moved date voids approvals first.
+    await step('comms_hub_eventbrite_sync_failed', () => syncAdoptedEventsIfDue(now));
     await step('comms_hub_plan_sync_failed', () => ensurePlansForUpcoming(WORKER_ACTOR, now));
     await step('comms_hub_send_tick_failed', () => runDeliveryTick(deps, now));
     // After the send tick, so a message that ended failed in this tick is alerted in this tick.

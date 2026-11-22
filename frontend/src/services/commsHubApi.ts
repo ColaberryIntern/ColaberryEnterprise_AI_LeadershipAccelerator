@@ -49,6 +49,10 @@ export interface HubEvent {
   placement: HubPlacement;
   thumbnail_id: string | null;
   broadcast_occurrence_id: string | null;
+  /** CH9.5: set when this hub event manages an Eventbrite event; its title, times and link come from Eventbrite. */
+  ccpp_event_id: string | null;
+  /** CH9.5: when it was found missing from Eventbrite's public list, or null. */
+  ccpp_missing_since: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -75,6 +79,67 @@ export type HubEventScope = 'upcoming' | 'past' | 'cancelled' | 'all';
 export async function listHubEvents(scope: HubEventScope = 'upcoming'): Promise<HubEvent[]> {
   const { data } = await api.get<{ events: HubEvent[] }>('/api/admin/comms-hub/events', { params: { scope } });
   return data.events;
+}
+
+/* Eventbrite events (CH9.2), read-only from the CCPP mirror: backend commsHubEventbriteRoutes.ts. */
+export type EventbriteWindow = 'upcoming' | 'past';
+export interface EventbriteEvent {
+  ccpp_event_id: string;
+  title: string;
+  /** CH9.5: copied into the hub event when it is managed there. */
+  description: string | null;
+  starts_at: string;
+  ends_at: string | null;
+  registration_url: string | null;
+  image_url: string | null;
+  /** People registered (Eventbrite plus our site), or null when unknown. */
+  registered: number | null;
+  eventbrite_status: string;
+  /** CH9.5: the hub event managing this Eventbrite event, or null. */
+  adopted_event_id: string | null;
+}
+
+/** CH9.5 "Manage in the hub": creates (201) or finds (200) the hub event for this Eventbrite event. */
+export async function adoptEventbriteEvent(ccppEventId: string): Promise<HubEvent> {
+  if (!/^\d{1,20}$/.test(ccppEventId)) throw new Error('Not an Eventbrite event id.');
+  const { data } = await api.post<{ event: HubEvent }>(`/api/admin/comms-hub/eventbrite-events/${ccppEventId}/adopt`);
+  return data.event;
+}
+/** 'unavailable' and 'not_configured' are never shown as "no events". */
+export interface EventbriteList { status: 'ok' | 'unavailable' | 'not_configured'; window: EventbriteWindow; events: EventbriteEvent[]; fetched_at: string }
+
+export async function listEventbriteEvents(window: EventbriteWindow = 'upcoming'): Promise<EventbriteList> {
+  const { data } = await api.get<EventbriteList>('/api/admin/comms-hub/eventbrite-events', { params: { window } });
+  return data;
+}
+
+/* Registrants (CH9.3). People's names and emails: no query string ever (a "Report a problem"
+   capture of a failed request keeps query strings), search happens on the loaded rows, and nothing
+   here logs a registrant to the console. */
+export interface Registrant { name: string; email: string; registered_at: string | null; sources: Array<'eventbrite' | 'site'>; has_account: boolean }
+export interface RegistrantList {
+  event: { ccpp_event_id: string; title: string; starts_at: string };
+  eventbrite: 'ok' | 'unavailable' | 'not_configured';
+  count: number;
+  rows: Registrant[];
+}
+
+export function registrantsPath(ccppEventId: string, csv = false): string {
+  if (!/^\d{1,20}$/.test(ccppEventId)) throw new Error('Not an Eventbrite event id.');
+  return `/api/admin/comms-hub/eventbrite-events/${ccppEventId}/registrants${csv ? '.csv' : ''}`;
+}
+
+export async function getRegistrants(ccppEventId: string): Promise<RegistrantList> {
+  const { data } = await api.get<RegistrantList>(registrantsPath(ccppEventId));
+  return data;
+}
+
+/** The CSV as a file, plus the filename the server chose. */
+export async function downloadRegistrantsCsv(ccppEventId: string): Promise<{ blob: Blob; filename: string }> {
+  const res = await api.get<Blob>(registrantsPath(ccppEventId, true), { responseType: 'blob' });
+  const disposition = String((res.headers as Record<string, unknown>)?.['content-disposition'] ?? '');
+  const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? `registrants-${ccppEventId}.csv`;
+  return { blob: res.data, filename };
 }
 
 export async function createHubEvent(input: HubEventInput): Promise<HubEvent> {
@@ -246,9 +311,10 @@ export async function savePromotionPlan(eventId: string, kinds: PlanKind[]): Pro
 /* Compose (CH6.5: backend/src/routes/admin/commsHubMessageRoutes.ts). */
 export type MessageKind = 'announcement' | 'reminder' | 'starting_soon' | 'recording_thanks' | 'time_change' | 'cancellation' | 'update' | 'other';
 export type Tone = 'friendly' | 'professional' | 'urgent';
-export type Channel = 'community_post' | 'in_app';
+export type Channel = 'community_post' | 'in_app' | 'whatsapp';
 export interface DraftView { id: string; channel: Channel; version: number; title: string | null; body: string; author: string; instruction: string | null; created_at: string }
-export interface DestinationView { id?: string; channel: Channel; target_type: 'cohort_feed' | 'in_app_audience'; target_id: string; label: string | null; has_delivery?: boolean; reason?: string }
+/** CH9.6 'event_registrants': target_id is the hub event id of a managed Eventbrite event (in-app only). */
+export interface DestinationView { id?: string; channel: Channel; target_type: 'cohort_feed' | 'in_app_audience' | 'event_registrants' | 'whatsapp_group'; target_id: string; label: string | null; has_delivery?: boolean; reason?: string }
 export interface MessageView {
   id: string; status: HubMessageStatus; kind: MessageKind; tone: Tone | null; notes: string | null; subject: string | null;
   include: { thumbnail?: boolean; join_link?: boolean; registration_link?: boolean }; send_at: string | null; created_by: string | null;
@@ -272,9 +338,25 @@ export async function setMessageDestinations(id: string, destinations: Destinati
 export async function setMessageSendTime(id: string, sendAt: string | null): Promise<MessageView> { return one(api.put(`${messages}/${id}/send-time`, { send_at: sendAt })); }
 export async function messageAction(id: string, action: 'submit' | 'approve' | 'undo' | 'cancel'): Promise<MessageView> { return one(api.post(`${messages}/${id}/${action}`)); }
 export async function rejectHubMessage(id: string, note: string | null): Promise<MessageView> { return one(api.post(`${messages}/${id}/reject`, { note })); }
-export async function getDestinationOptions(): Promise<DestinationView[]> {
-  const { data } = await api.get<{ destinations: DestinationView[] }>(`${messages}/destination-options`);
+/** CH9.6: with the message's event, a managed Eventbrite event's registrants are offered too. */
+export async function getDestinationOptions(eventId: string | null = null): Promise<DestinationView[]> {
+  const { data } = await api.get<{ destinations: DestinationView[] }>(`${messages}/destination-options`, eventId ? { params: { event_id: eventId } } : undefined);
   return data.destinations;
+}
+
+/** CH9.7: registered / watched live / watched the replay; each a number, or null with the reason it is not known. */
+export interface HubCount { value: number | null; reason: string | null }
+export interface HubEventCounts { registered: HubCount; watched_live: HubCount; watched_replay: HubCount }
+export async function getEventCounts(hubEventId: string): Promise<HubEventCounts> {
+  const { data } = await api.get<HubEventCounts>(`/api/admin/comms-hub/events/${encodeURIComponent(hubEventId)}/counts`);
+  return data;
+}
+
+/** CH9.6: how many of an event's registrants have platform accounts (counts only, never people). */
+export interface RegistrantReach { registrants: number; reachable: number; eventbrite: 'ok' | 'unavailable' | 'not_configured' }
+export async function getRegistrantReach(hubEventId: string): Promise<RegistrantReach> {
+  const { data } = await api.get<RegistrantReach>(`/api/admin/comms-hub/events/${encodeURIComponent(hubEventId)}/registrant-reach`);
+  return data;
 }
 /** The validator's problems from a refused submit/approve, or []. */
 export function apiProblems(err: unknown): string[] {
@@ -294,6 +376,8 @@ export interface BoardRow {
   approved_by: string | null;
   deliveries: { total: number; sent: number; failed: number; pending: number; cancelled: number };
   failure: { reason: string; missed: string[]; attempts: number } | null;
+  /** CH10.4: WhatsApp waits and already-sent notes, in plain words. Older servers may not send it. */
+  notes?: string[];
 }
 export interface BoardFilter { status?: HubMessageStatus[]; channel?: Channel | null; event_id?: string | null; limit?: number }
 export async function getBoard(scope: BoardScope, f: BoardFilter = {}): Promise<BoardRow[]> {
@@ -322,3 +406,31 @@ export async function getActivity(limit = 20): Promise<ActivityRow[]> {
 }
 /** Try the recipients that missed a partly sent or failed message again (CH7.2 route). */
 export async function retryHubMessage(id: string): Promise<MessageView> { return one(api.post(`${messages}/${id}/retry`)); }
+
+/** CH10.1: the WhatsApp channel's state. Never carries the token or the full number. */
+export type WhatsAppState = 'not_configured' | 'connected' | 'waiting_for_qr' | 'disconnected';
+export interface WhatsAppStatus { configured: boolean; enabled: boolean; state: WhatsAppState; number_last4: string | null; reason: string | null; paused_until?: string | null }
+export async function getWhatsAppStatus(): Promise<WhatsAppStatus> {
+  const { data } = await api.get<WhatsAppStatus>('/api/admin/comms-hub/whatsapp/status');
+  return data;
+}
+
+/** CH10.4: resume WhatsApp sends before the 48-hour pause ends (organizers only; asks for a confirm first). */
+export async function clearWhatsAppPause(): Promise<{ cleared: boolean }> {
+  return (await api.post<{ cleared: boolean }>('/api/admin/comms-hub/whatsapp/breaker/clear', { confirm: true })).data;
+}
+
+/** CH10.2: the number's WhatsApp groups. Every group starts switched off. */
+export interface WhatsAppGroup {
+  id: string; name: string; participants_count: number; enabled: boolean; sendable: boolean; cant_send_reason: string | null; last_synced_at: string;
+}
+export interface WhatsAppSyncResult { listed: number; added: number; left: number }
+export async function listWhatsAppGroups(): Promise<WhatsAppGroup[]> {
+  return (await api.get<{ groups: WhatsAppGroup[] }>('/api/admin/comms-hub/whatsapp/groups')).data.groups;
+}
+export async function syncWhatsAppGroups(): Promise<WhatsAppSyncResult> {
+  return (await api.post<WhatsAppSyncResult>('/api/admin/comms-hub/whatsapp/groups/sync')).data;
+}
+export async function setWhatsAppGroupEnabled(id: string, enabled: boolean): Promise<WhatsAppGroup> {
+  return (await api.put<{ group: WhatsAppGroup }>(`/api/admin/comms-hub/whatsapp/groups/${encodeURIComponent(id)}`, { enabled })).data.group;
+}

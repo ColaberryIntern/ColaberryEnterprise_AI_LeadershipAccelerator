@@ -6,7 +6,7 @@ import CommsHubDraft from '../../../models/CommsHubDraft';
 import CommsHubEvent from '../../../models/CommsHubEvent';
 import CommsHubMessage, { type CommsHubMessageStatus } from '../../../models/CommsHubMessage';
 import { PLAN_LABEL } from '../messages/promotionPlan';
-import { failureReason } from './failureReason';
+import { deliveryNotes, failureReason } from './failureReason';
 import { KIND_LABEL, personLabel } from './labels';
 
 /**
@@ -27,19 +27,21 @@ export const SCOPE_STATUSES: Record<BoardScope, CommsHubMessageStatus[]> = {
 const ON_APPROVAL: CommsHubMessageStatus[] = ['needs_approval', 'approved', 'sending'];
 const WEEK_MS = 7 * 24 * 3600 * 1000;
 
-export interface BoardFilter { scope: BoardScope; status?: string[] | null; channel?: 'community_post' | 'in_app' | null; event_id?: string | null; limit?: number }
+export interface BoardFilter { scope: BoardScope; status?: string[] | null; channel?: 'community_post' | 'in_app' | 'whatsapp' | null; event_id?: string | null; limit?: number }
 
 export interface BoardRow {
   id: string; status: CommsHubMessageStatus; kind: string; title: string;
   event: { id: string; title: string; thumbnail_id: string | null } | null;
   send_at: string | null; updated_at: string;
-  destinations: Array<{ channel: 'community_post' | 'in_app'; label: string | null }>;
+  destinations: Array<{ channel: 'community_post' | 'in_app' | 'whatsapp'; label: string | null }>;
   preview: string | null;
   include: { thumbnail: boolean; join_link: boolean; registration_link: boolean };
   approved_by: string | null;
   deliveries: { total: number; sent: number; failed: number; pending: number; cancelled: number };
   /** Plain words for a row that did not fully go out, and which recipients missed it. Never a raw provider error. */
   failure: { reason: string; missed: string[]; attempts: number } | null;
+  /** CH10.4: plain words about WhatsApp waits, or a send an earlier try had already made. */
+  notes: string[];
 }
 
 function windowWhere(scope: BoardScope, now: Date): WhereOptions {
@@ -115,6 +117,7 @@ export async function listBoard(f: BoardFilter, now: Date = new Date()): Promise
         missed: missed.map((d) => labelByDest.get(d.destination_id) ?? 'A recipient'),
         attempts: Math.max(0, ...mine.map((d) => d.attempt_count)),
       } : null,
+      notes: deliveryNotes(mine),
     };
   });
 }

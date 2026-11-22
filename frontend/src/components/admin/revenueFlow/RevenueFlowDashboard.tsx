@@ -8,6 +8,7 @@ import FlowTimeline, {
 } from './FlowTimeline';
 import FlowTableView from './FlowTableView';
 import BidPricingPanel, { FlaggedBid } from './BidPricingPanel';
+import DealPricingPanel, { EnterpriseDealRow } from './DealPricingPanel';
 import { TONE, paintFor, streamPaint } from './flowTokens';
 
 /**
@@ -70,6 +71,8 @@ interface Stream {
   drillDownKey: string | null;
   /** Populated only for the government stream; see FlaggedBid on the backend. */
   bids?: FlaggedBid[];
+  /** Populated only for the enterprise stream; see EnterpriseDeal on the backend. */
+  deals?: EnterpriseDealRow[];
 }
 
 interface Board {
@@ -157,6 +160,7 @@ export default function RevenueFlowDashboard() {
 
   const h = board.headline;
   const govBids = board.streams.find((s) => s.key === 'gov_pipeline')?.bids ?? [];
+  const enterprise = board.streams.find((s) => s.key === 'enterprise_site');
 
   return (
     <div data-testid="revenue-flow">
@@ -351,6 +355,22 @@ export default function RevenueFlowDashboard() {
       {/* ── THE CONTROL THAT MAKES THE PIPELINE REAL ─────────────────────────────────── */}
       {govBids.length > 0 && (
         <BidPricingPanel bids={govBids} onPriced={() => setReload((v) => v + 1)} />
+      )}
+
+      {/* ── THE SAME CONTROL FOR ENTERPRISE DEALS (R23 Phase 3) ──────────────────────────
+          Rendered whenever the enterprise stream is on the board, INCLUDING when it holds
+          no deals - unlike the government panel above, which hides itself when empty.
+
+          Deliberate: enterprise_intakes holds 0 rows in production, so a panel that hid
+          itself would be indistinguishable from the state this phase exists to end, where
+          there was no write path at all. Its empty state says why there is nothing to price
+          and what would make one appear. */}
+      {enterprise && (
+        <DealPricingPanel
+          deals={enterprise.deals ?? []}
+          unmeasurable={enterprise.status === 'unmeasurable'}
+          onPriced={() => setReload((v) => v + 1)}
+        />
       )}
 
       {/* ── EVERY DATED EVENT ────────────────────────────────────────────────────────── */}

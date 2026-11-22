@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Saturday, November 21, 2026 at 6:21 AM</div>
-    <div><span class="sid">CC-20261120-e2fc</span><span class="count">5 changes</span></div>
+    <div class="meta">Generated Saturday, November 21, 2026 at 5:54 PM</div>
+    <div><span class="sid">CC-20261120-e2fc</span><span class="count">9 changes</span></div>
   </header>
   <main>
     
@@ -127,6 +127,63 @@
           <div class="row"><span class="k">What changed</span><span class="v">new pure `storyOwners.ts`. `homeOrphanStories` gives a story the scoped roster missed to the best-fitting agent: 3 points per requirement it shares with the agent&#39;s stories, 1 per shared content word, 1 for the same release, ties to roster order. `attachGuardrails` then attaches that story&#39;s SAFE requirements (approval gate + autonomy cap, or hard rule). It only adds, and only lowers autonomy. `scopeAgents` homes orphans before rule 1, replacing &quot;keep the stale owner&quot;. `planDocument` and `commandCenterTabSections` apply `rosterWithEveryStoryOwned` at render, so existing plans (v5&#39;s STORY-003 -&gt; Gap Creator, which now enforces REQ-010) are fixed on their next sync. Runbook row added. BC L12.8 (https://app.basecamp.com/3945211/buckets/7463955/todos/10534806659).</span></div>
           <div class="row"><span class="k">Verification</span><span class="v ver">`storyOwners.test.ts` 10/10 on the v5 roster verbatim. `jest src/services/sbp src/services/factory` + runbook coverage: 307 suites / 4,192 tests pass. Backend tsc clean; `checkTestTypecheck` shows only the 3 known missing-package files.</span></div>
           
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">06</span>
+          <h2>#4277 deployed: v5&#39;s STORY-003 owned by Gap Creator on prod</h2>
+          <span class="badge">2026-11-21</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">deployed fd07e9d8a (registry mode, marker `homeOrphanStories` in `storyOwners.js`). No code change in this entry. BC L12.8 closed with a verification comment.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">home 200. v5&#39;s bundle, re-rendered on prod, has STORY-003 owned by Gap Creator, which carries REQ-010 as a hard rule. No story has an owner outside the roster, and &quot;AI Agent&quot; appears 0 times in the Story 000 brief. The other five agents are unchanged.</span></div>
+          
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">07</span>
+          <h2>Command Center workflow diagram: one arrow per agent pair, labels never overlap</h2>
+          <span class="badge">2026-11-21</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">the Story 000 agents tab (`commandCenterAgentsTab.ts`) lists hand-offs grouped by agent pair through the new `workflowArrows`, so v5&#39;s two Offer Sender -&gt; Summary Generator entries become one arrow with both labels. `fanOuts` names agents feeding 3+ as &quot;crowded spots&quot;. The diagram brief now requires one arrow per pair and labels that never overlap a label, arrow or node: receivers spread apart, labels near the receiving end, or a numbered key, checked at the narrowest width. `plan.json` and `derived.handoffs` are unchanged. Runbook row updated. BC L12.9 (https://app.basecamp.com/3945211/buckets/7463955/todos/10535183299).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`workflowDiagram.test.ts` 7/7 on v5&#39;s hand-offs verbatim. sbp + factory + runbook coverage: 308 suites / 4,204 tests pass. Backend tsc clean.</span></div>
+          
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">08</span>
+          <h2>#4298 deployed: workflow labels readable in a cold rebuild</h2>
+          <span class="badge">2026-11-21</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">deployed 756a5a58a (registry mode, marker `workflowArrows` in `commandCenterAgentsTab.js`). Two earlier image builds were cancelled by later merges; the deployed image contains #4298. No code change in this entry. BC L12.9 closed.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">home 200. The v5 Story 000 brief on prod groups Offer Sender -&gt; Summary Generator once with both labels and flags &quot;Crowded spots: Offer Sender feeds 3 agents&quot;. A cold rebuild from it (`ShiftFill-Command-Center-v5b.html`) drew numbered arrows 1-5 with a key and no overlapping label. 9 tabs, 0 console errors.</span></div>
+          
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">09</span>
+          <h2>Command Center agent cards: words never break mid-word, badges stay inside the card</h2>
+          <span class="badge">2026-11-21</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">the Story 000 agents tab (`commandCenterAgentsTab.ts`) adds a card readability rule: each label sits above its value or the value column gets at least half the card, no word breaks mid-word, badges and pills wrap inside the card, checked at the narrowest width. It fixes v5b&#39;s squeezed value column (&quot;Ranke / d&quot;, &quot;creati / on&quot;) and its overflowing autonomy badges. `plan.json` is unchanged. Runbook row updated. BC L12.10 (https://app.basecamp.com/3945211/buckets/7463955/todos/10535272313).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`workflowDiagram.test.ts` 8/8, including the new card case. sbp + factory + runbook coverage: 308 suites / 4,210 tests pass. Backend tsc is clean on our sources; the only output is third-party `@types/d3-dispatch` noise that main shows too.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">like the diagram fix, this is guidance to the page builder, so only a cold rebuild proves it.</span></div>
           
         </div>
       </article>

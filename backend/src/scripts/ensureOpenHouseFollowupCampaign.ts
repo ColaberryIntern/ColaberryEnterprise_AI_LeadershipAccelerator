@@ -8,6 +8,7 @@
  *   ... --session <sessionId>           # read-only: who would get which email for that Open House
  *   ... --replay <sessionId> <url> --apply   # sets the recording link the "missed" email carries
  *   ... --book <sessionId>              # books that session's follow-ups now (only if the campaign is active)
+ *   ... --upgrade-rebuild [--apply]     # OH1w: tag Ali's rebuilt steps attended/missed, replace placeholders, add the hard rules
  *
  * The campaign reuses the countdown campaign's sender (Maya), tenant, brand and send window, and
  * sends under the event_reminder category. Ali approves and activates it in Admin > Campaigns;
@@ -71,11 +72,13 @@ async function ensureCampaign(apply: boolean, log: (s: string) => void): Promise
   };
   const existing = await findFollowupCampaign();
   if (existing) {
-    log(`campaign: exists ${existing.id} (${existing.status}); settings refreshed, replay links and sign-offs kept`);
+    // OH1w: Ali edits this campaign in Admin > Campaigns, so a re-run never touches his
+    // description, prompt or steps (only --upgrade-rebuild does, and it shows what it changes).
+    log(`campaign: exists ${existing.id} (${existing.status}); settings refreshed (description, prompt, steps, replay links and sign-offs kept)`);
     if (apply) {
       await sequelize.query(
-        `UPDATE campaigns SET settings = COALESCE(settings, '{}'::jsonb) || CAST(:s AS jsonb), description = :d, updated_at = NOW() WHERE id = :id`,
-        { replacements: { s: JSON.stringify(settings), d: DESCRIPTION, id: existing.id } });
+        `UPDATE campaigns SET settings = COALESCE(settings, '{}'::jsonb) || CAST(:s AS jsonb), updated_at = NOW() WHERE id = :id`,
+        { replacements: { s: JSON.stringify(settings), id: existing.id } });
     }
     return;
   }
@@ -159,6 +162,29 @@ async function main(): Promise<void> {
 
   const book = arg('--book');
   if (book) { console.log(JSON.stringify(await bookOpenHouseFollowups(book))); return; }
+
+  if (has('--upgrade-rebuild')) {
+    const c = await findFollowupCampaign();
+    if (!c || !c.sequence_id) throw new Error('No follow-up campaign with a sequence');
+    const row = await one<{ prompt: string | null; steps: any[] }>(
+      `SELECT c.ai_system_prompt AS prompt, s.steps FROM campaigns c JOIN follow_up_sequences s ON s.id = c.sequence_id WHERE c.id = :id`, { id: c.id });
+    if (!row) throw new Error('Follow-up campaign or sequence vanished');
+    const { upgradeFollowupRebuild } = await import('../services/openHouseFollowupUpgrade');
+    const up = upgradeFollowupRebuild(row.steps || [], row.prompt);
+    if (!up.changes.length) { log('rebuild: already upgraded, nothing to change'); return; }
+    for (const ch of up.changes) log(`rebuild: ${ch}`);
+    up.steps.forEach((s, i) => log(`rebuild: step ${i + 1} [${s.audience}] "${s.subject}" (day ${s.delay_days}): ${s.ai_instructions}`));
+    if (apply) {
+      await sequelize.transaction(async (t) => {
+        await sequelize.query(`UPDATE follow_up_sequences SET steps = CAST(:steps AS jsonb), updated_at = NOW() WHERE id = :id`,
+          { replacements: { steps: JSON.stringify(up.steps), id: c.sequence_id }, transaction: t });
+        await sequelize.query(`UPDATE campaigns SET ai_system_prompt = :p, updated_at = NOW() WHERE id = :id`,
+          { replacements: { p: up.prompt, id: c.id }, transaction: t });
+      });
+      log('rebuild: steps and prompt saved');
+    }
+    return;
+  }
 
   await ensureCampaign(apply, log);
 }

@@ -6,7 +6,7 @@ import { sequelize } from '../config/database';
  * never an update. author is "ai" or the admin id; instruction records Shorter / Warmer / More detail.
  * Columns match ensureCommsHubSchema.ts exactly (modelParity test).
  */
-export type CommsHubChannel = 'community_post' | 'in_app';
+export type CommsHubChannel = 'community_post' | 'in_app' | 'whatsapp';
 
 export interface CommsHubDraftAttributes {
   id?: string;

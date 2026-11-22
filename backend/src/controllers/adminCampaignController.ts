@@ -446,7 +446,16 @@ export async function handleGetCampaignSettings(req: Request, res: Response, nex
 
 export async function handleUpdateCampaignSettings(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const settings = await updateCampaignSettings(req.params.id as string, req.body.settings || req.body);
+    const incoming = req.body.settings || req.body;
+    // OH1w: the membership settings are a contract; a malformed one is refused, never stored.
+    const { validateOnComplete } = await import('../services/campaignMembership');
+    const problems = validateOnComplete(incoming?.on_complete, req.params.id as string);
+    if (incoming?.takes_precedence !== undefined && typeof incoming.takes_precedence !== 'boolean') problems.push('takes_precedence must be true or false');
+    if (problems.length) {
+      res.status(400).json({ error: problems.join('; ') });
+      return;
+    }
+    const settings = await updateCampaignSettings(req.params.id as string, incoming);
     res.json({ settings });
   } catch (error: any) {
     if (error.message.includes('not found')) {

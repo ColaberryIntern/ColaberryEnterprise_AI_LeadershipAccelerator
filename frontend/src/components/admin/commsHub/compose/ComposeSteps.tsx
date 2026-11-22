@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import type { Channel, DestinationView, MessageKind, MessageView, Tone } from '../../../../services/commsHubApi';
 import type { Compose } from './useCompose';
+import RegistrantReachNote from './RegistrantReachNote';
+import WhatsAppPreview, { charCount, WHATSAPP_MAX_CHARS } from './WhatsAppPreview';
 import RichText from '../../../../pages/portal/community/RichText';
 import { centralLabel, centralToIso, isoToCentral } from './centralTime';
 
@@ -14,6 +16,10 @@ const STATUS_WORDS: Record<string, string> = {
   draft: 'Draft', needs_approval: 'Needs approval', approved: 'Approved', scheduled: 'Approved and scheduled', sending: 'Sending',
   sent: 'Sent', partially_failed: 'Partly sent', failed: 'Failed', cancelled: 'Cancelled',
 };
+
+const TAB_LABEL: Record<Channel, string> = { community_post: 'Community post', in_app: 'In-app notification', whatsapp: 'WhatsApp' };
+const EDIT_LABEL: Record<Channel, string> = { community_post: 'Edit the community post', in_app: 'Short text', whatsapp: 'Edit the WhatsApp message' };
+const RECIPIENT_PREFIX: Record<Channel, string> = { community_post: 'Community feed: ', in_app: 'In-app notification: ', whatsapp: 'WhatsApp group: ' };
 
 export function StepStart({ c }: { c: Compose }): React.ReactElement {
   const { form, setForm, events, busy, message } = c;
@@ -130,8 +136,10 @@ function Editor({ c, channel }: { c: Compose; channel: Channel }): React.ReactEl
   return (
     <div className="mt-2">
       {channel === 'in_app' && (<><label className="form-label" htmlFor="ch-e-title">Title</label><input id="ch-e-title" className="form-control mb-2" maxLength={120} value={title} disabled={locked} onChange={(e) => setTitle(e.target.value)} /></>)}
-      <label className="form-label" htmlFor={`ch-e-${channel}`}>{channel === 'in_app' ? 'Short text' : 'Edit the community post'}</label>
-      <textarea id={`ch-e-${channel}`} className="form-control" rows={channel === 'in_app' ? 2 : 4} maxLength={2000} value={body} disabled={locked} onChange={(e) => setBody(e.target.value)} />
+      <label className="form-label" htmlFor={`ch-e-${channel}`}>{EDIT_LABEL[channel]}</label>
+      <textarea id={`ch-e-${channel}`} className="form-control" rows={channel === 'in_app' ? 2 : 4} maxLength={channel === 'whatsapp' ? WHATSAPP_MAX_CHARS : 2000} value={body} disabled={locked} onChange={(e) => setBody(e.target.value)}
+        aria-describedby={channel === 'whatsapp' ? 'ch-e-whatsapp-count' : undefined} />
+      {channel === 'whatsapp' && <p id="ch-e-whatsapp-count" className="small text-muted mb-0">{charCount(body.length)}. Plain text only: no ** or # formatting, no emoji.</p>}
       <button type="button" className="btn btn-outline-secondary comms-hub-action mt-2" disabled={locked || !changed || !body.trim()} onClick={() => void c.edit(channel, { title: channel === 'in_app' ? title : null, body })}>{c.busy === 'edit' ? 'Saving...' : 'Save my changes'}</button>
     </div>
   );
@@ -140,6 +148,8 @@ function Editor({ c, channel }: { c: Compose; channel: Channel }): React.ReactEl
 export function StepCheck({ c }: { c: Compose }): React.ReactElement {
   const m = c.message!;
   const [tab, setTab] = useState<Channel>('community_post');
+  // CH10.3: the WhatsApp tab shows when the message has WhatsApp text or a WhatsApp group.
+  const tabs: Channel[] = m.drafts.whatsapp || m.destinations.some((d) => d.channel === 'whatsapp') ? ['community_post', 'in_app', 'whatsapp'] : ['community_post', 'in_app'];
   const post = m.drafts.community_post;
   const by = post ? (post.author === 'ai' ? 'written by AI' : 'edited by you') : '';
   const locked = ['sending', 'sent', 'cancelled'].includes(m.status) || c.busy !== null;
@@ -153,11 +163,15 @@ export function StepCheck({ c }: { c: Compose }): React.ReactElement {
         </div>
       )}
       <div className="ch-compose-tabs" role="tablist" aria-label="Channels">
-        {(['community_post', 'in_app'] as const).map((ch) => (
+        {tabs.map((ch, i) => (
           <button key={ch} type="button" role="tab" id={`ch-tab-${ch}`} aria-selected={tab === ch} aria-controls={`ch-panel-${ch}`} tabIndex={tab === ch ? 0 : -1}
             className={`ch-compose-tab${tab === ch ? ' active' : ''}`} onClick={() => setTab(ch)}
-            onKeyDown={(e) => { if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { const next = ch === 'community_post' ? 'in_app' : 'community_post'; setTab(next); document.getElementById(`ch-tab-${next}`)?.focus(); } }}>
-            {ch === 'community_post' ? 'Community post' : 'In-app notification'}
+            onKeyDown={(e) => {
+              if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+              const next = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+              setTab(next); document.getElementById(`ch-tab-${next}`)?.focus();
+            }}>
+            {TAB_LABEL[ch]}
           </button>
         ))}
       </div>
@@ -167,6 +181,11 @@ export function StepCheck({ c }: { c: Compose }): React.ReactElement {
       <div role="tabpanel" id="ch-panel-in_app" aria-labelledby="ch-tab-in_app" hidden={tab !== 'in_app'}>
         <h3 className="ch-prev-h">How it looks in the notification bell</h3><BellPreview m={m} /><Editor c={c} channel="in_app" />
       </div>
+      {tabs.includes('whatsapp') && (
+        <div role="tabpanel" id="ch-panel-whatsapp" aria-labelledby="ch-tab-whatsapp" hidden={tab !== 'whatsapp'}>
+          <h3 className="ch-prev-h">How it looks in a WhatsApp group</h3><WhatsAppPreview m={m} />{m.drafts.whatsapp && <Editor c={c} channel="whatsapp" />}
+        </div>
+      )}
       <div className="d-flex flex-wrap align-items-center gap-2 mt-3">
         <span className="ch-studio-hint">Ask AI to make it:</span>
         {([['shorter', 'Shorter'], ['warmer', 'Warmer'], ['more_detail', 'More detail']] as const).map(([v, l]) => (
@@ -177,7 +196,7 @@ export function StepCheck({ c }: { c: Compose }): React.ReactElement {
         <summary>See earlier drafts ({m.versions.length})</summary>
         <ol className="mb-0">
           {m.versions.map((v) => (
-            <li key={v.id}><strong>{v.channel === 'in_app' ? 'In-app' : 'Community post'} draft {v.version}</strong> ({v.author === 'ai' ? `AI${v.instruction && v.instruction !== 'edit' ? `, ${v.instruction.replace('_', ' ')}` : ''}` : 'your edit'}): {v.title ? `${v.title}: ` : ''}{v.body}</li>
+            <li key={v.id}><strong>{TAB_LABEL[v.channel]} draft {v.version}</strong> ({v.author === 'ai' ? `AI${v.instruction && v.instruction !== 'edit' ? `, ${v.instruction.replace('_', ' ')}` : ''}` : 'your edit'}): {v.title ? `${v.title}: ` : ''}{v.body}</li>
           ))}
         </ol>
       </details>
@@ -228,7 +247,9 @@ export function StepApprove({ c }: { c: Compose }): React.ReactElement {
           <div className="form-check" key={keyOf(d)}>
             <input className="form-check-input" type="checkbox" id={`ch-to-${keyOf(d)}`} checked={picked.has(keyOf(d))} disabled={!!d.has_delivery}
               onChange={() => setPicked((p) => { const n = new Set(p); if (n.has(keyOf(d))) n.delete(keyOf(d)); else n.add(keyOf(d)); return n; })} />
-            <label className="form-check-label" htmlFor={`ch-to-${keyOf(d)}`}>{d.channel === 'in_app' ? 'In-app notification: ' : 'Community feed: '}{d.label}{d.has_delivery ? ' (already sent)' : ''}</label>
+            <label className="form-check-label" htmlFor={`ch-to-${keyOf(d)}`}>{RECIPIENT_PREFIX[d.channel]}{d.label}{d.has_delivery ? ' (already sent)' : ''}</label>
+            {/* CH9.6: before approving, how many registrants this actually reaches. */}
+            {d.target_type === 'event_registrants' && <RegistrantReachNote hubEventId={d.target_id} />}
           </div>
         ))}
         {recipientsChanged && <button type="button" className="btn btn-outline-secondary comms-hub-action mt-1" onClick={() => void c.setRecipients(chosen)}>{c.busy === 'recipients' ? 'Saving...' : 'Save recipients'}</button>}

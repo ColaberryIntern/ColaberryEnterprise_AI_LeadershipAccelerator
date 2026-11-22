@@ -109,3 +109,66 @@ If the database has no `colaberry-training` media brand, a tenant and that brand
 - **Thumbnail previews read "Preview unavailable".** Previews are signed media URLs, and no media public base URL is configured locally. The thumbnail itself is made and used.
 - **A cohort-only event cannot be prepared for streaming** until that cohort has a batch room ("This cohort has no batch room to stream into."). The e2e opens its event to all members first.
 - **The draft check rejects relative dates.** The fake model's text had to drop "this week" before the hub would approve it. That is the check working.
+
+## Phase 2: Eventbrite events, registrants, and the phone-width checks (CH9.9)
+
+Two more scripts run on the same stack:
+- `commsHubEventbrite.e2e.js` covers the Eventbrite list, registrants and their CSV, Manage in the hub, messaging registrants (the worker notifies them), Report a problem, and /portal/events.
+- `commsHub.a11y.js` covers each hub tab and /portal/events at 390 px: overflow, axe, 44 px targets (the member Events page too), badge text, and Report a problem not covering Pause (Pause must be found).
+
+**Eventbrite without CCPP.** There is no CCPP database locally, so the hub reads a JSON file instead.
+1. Start the backend with `COMMS_HUB_EVENTBRITE_FIXTURE=<path to a writable .json>`. Add it to the environment in section 2.
+2. Give the scripts the same variable. Each one writes its own synthetic events and attendees (`@example.invalid`) into that file, then empties it at the end.
+3. Production ignores the variable whatever it says: the backend honors it only when `NODE_ENV` is not `production`, and a unit test pins that.
+
+```
+BASE_URL=http://localhost:3150 API_URL=http://127.0.0.1:3101 DATABASE_URL=postgres://chub@127.0.0.1:55452/chub_stack \
+JWT_SECRET=<the backend's> COMMS_HUB_EVENTBRITE_FIXTURE=<same path> node tests/systemV2/commsHubEventbrite.e2e.js
+# then, with the same variables:
+node tests/systemV2/commsHub.a11y.js
+```
+
+**What they create, and remove:**
+- a synthetic Eventbrite event;
+- a cohort;
+- one enrollment with a phone number and a community profile;
+- one of our own registrations;
+- the managed hub event and its messages and activity.
+
+All of it is deleted in a `finally`.
+- **The member.** Every row tied to the test member in any table is found by its `enrollment_id` column, not from a list, and deleted. The portal visit alone writes campus presence, room visits, student level and a community profile. Then the enrollment itself goes.
+- **What stays.** The backend's append-only logs keep their rows by design: `audit_logs`, `ai_events` and `content_generation_logs`.
+- **The proof.** The last check counts what is left. A before-and-after count of all 628 tables shows only those logs changed.
+
+**Known and expected:**
+- **The Eventbrite list is cached for two minutes.** The scripts wait until their event appears.
+- **The member must have a phone number.** Without one, the portal stops at "Add your phone number" (PortalPhoneGate) before any page.
+- **Report a problem answers 503 locally.** No recipients are configured. The e2e checks where the report went, not that mail was sent.
+- **One shared contrast issue, outside the hub, is reported but does not fail.** The admin shell's mobile header shows the brand red on white at 3.85:1. It is printed as a note, because it is shared by every admin page.
+
+## Phase 3: WhatsApp (CH10.6)
+
+WhatsApp is tested ONLY against the local fake, `tests/systemV2/lib/fakeWhapi.js`. It listens on 127.0.0.1 only and keeps a record of every message. Never point a local run at the real Whapi.Cloud or a real group (phase 3 hard stop).
+
+1. Start the fake: `FAKE_WHAPI_PORT=3299 node tests/systemV2/lib/fakeWhapi.js`.
+2. Start the backend with phase 2's env plus:
+   ```
+   COMMS_HUB_WHATSAPP_ENABLED=true WHAPI_TOKEN=fake-whapi-token WHAPI_BASE_URL=http://127.0.0.1:3299
+   COMMS_HUB_WHATSAPP_ALWAYS_OPEN=true   # test seam: skip the 8 AM to 8 PM window (ignored in production)
+   ```
+3. Restart `fakeOpenAI.js` after pulling. It answers the WhatsApp version when the prompt asks for one.
+4. Rebuild the frontend (`CI=true npx react-scripts build`) so `localServe` serves the WhatsApp card.
+5. Run the end-to-end test:
+   ```
+   BASE_URL=http://localhost:3150 API_URL=http://127.0.0.1:3101 WHAPI_FAKE_URL=http://127.0.0.1:3299      DATABASE_URL=... JWT_SECRET=... node tests/systemV2/commsHubWhatsApp.e2e.js
+   ```
+   It covers connected, sync, the refusal, opt-in, the draft, Compose, one send, the hang-after-send dedup, the 429 pause and resume, and a cleanup check.
+6. Run `commsHub.a11y.js` as before. With the backend on the fake, it also measures the WhatsApp card at 390 px with its groups and the pause banner.
+
+Fake controls:
+- `POST /__script {"path":"/messages/text","status":429}` and `{"hangAfterSend":true}`
+- `GET /__sent`
+- `POST /__reset`
+
+Stopping a background shell does NOT stop its node child on Windows. Check the port's owner (`Get-NetTCPConnection -LocalPort 3101`) and its command line before restarting.
+

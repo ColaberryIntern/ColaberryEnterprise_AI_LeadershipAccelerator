@@ -96,7 +96,7 @@ describe('GET /board and /activity', () => {
     await call('get', '/api/admin/comms-hub/board', { query: { scope: 'history', status: 'failed,partially_failed', channel: 'in_app' } });
     expect(mockBoard).toHaveBeenCalledWith({ scope: 'history', status: ['failed', 'partially_failed'], channel: 'in_app', event_id: null, limit: undefined });
   });
-  it.each([[{}], [{ scope: 'everything' }], [{ scope: 'schedule', event_id: 'nope' }], [{ scope: 'schedule', channel: 'whatsapp' }]])('a bad query %j is a 400', async (query) => {
+  it.each([[{}], [{ scope: 'everything' }], [{ scope: 'schedule', event_id: 'nope' }], [{ scope: 'schedule', channel: 'sms' }]])('a bad query %j is a 400', async (query) => {
     expect((await call('get', '/api/admin/comms-hub/board', { query: query as Record<string, string> })).statusCode).toBe(400);
   });
   it('activity defaults to 20 rows and refuses a bad limit', async () => {

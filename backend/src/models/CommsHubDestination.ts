@@ -6,12 +6,13 @@ import { sequelize } from '../config/database';
  * cohort id or the audience key; label is what the organizer saw when choosing it.
  * Columns match ensureCommsHubSchema.ts exactly (modelParity test).
  */
-export type CommsHubDestinationType = 'cohort_feed' | 'in_app_audience';
+// CH9.6 'event_registrants': target_id is the hub event id of a managed Eventbrite event (in-app only).
+export type CommsHubDestinationType = 'cohort_feed' | 'in_app_audience' | 'event_registrants' | 'whatsapp_group';
 
 export interface CommsHubDestinationAttributes {
   id?: string;
   message_id: string;
-  channel: 'community_post' | 'in_app';
+  channel: 'community_post' | 'in_app' | 'whatsapp';
   target_type: CommsHubDestinationType;
   target_id: string;
   label?: string | null;
@@ -21,7 +22,7 @@ export interface CommsHubDestinationAttributes {
 class CommsHubDestination extends Model<CommsHubDestinationAttributes> implements CommsHubDestinationAttributes {
   declare id: string;
   declare message_id: string;
-  declare channel: 'community_post' | 'in_app';
+  declare channel: 'community_post' | 'in_app' | 'whatsapp';
   declare target_type: CommsHubDestinationType;
   declare target_id: string;
   declare label: string | null;

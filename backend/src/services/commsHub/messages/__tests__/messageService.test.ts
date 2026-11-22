@@ -9,7 +9,9 @@ const withUpdate = (r: Row): Row => Object.assign(r, { update: jest.fn(async (p:
 
 jest.mock('../../../../config/database', () => ({ sequelize: { transaction: jest.fn(async (cb: (t: unknown) => unknown) => cb({ LOCK: { UPDATE: 'UPDATE' } })) } }));
 jest.mock('../../../../models/CommsHubMessage', () => ({ __esModule: true, default: { findByPk: jest.fn(async (id: string) => messages.get(id) ?? null) } }));
-jest.mock('../../../../models/CommsHubEvent', () => ({ __esModule: true, default: { findByPk: jest.fn(async () => ({ id: 'e1', title: 'Demo Tuesday', starts_at: new Date('2026-12-02T00:00:00Z'), ends_at: null, repeat_rule: null, join_url: null, registration_url: null, hosts: [], thumbnail_id: 't7' })) } }));
+// CH9.6: mockEventCcpp makes e1 an Eventbrite event managed in the hub (null: made in the hub).
+let mockEventCcpp: string | null = null;
+jest.mock('../../../../models/CommsHubEvent', () => ({ __esModule: true, default: { findByPk: jest.fn(async (id: string) => (id === 'e1' ? { id: 'e1', title: 'Demo Tuesday', starts_at: new Date('2026-12-02T00:00:00Z'), ends_at: null, repeat_rule: null, join_url: null, registration_url: null, hosts: [], thumbnail_id: 't7', ccpp_event_id: mockEventCcpp } : null)) } }));
 jest.mock('../../../../models/CommsHubDraft', () => ({ __esModule: true, default: { findAll: jest.fn(async () => [...drafts].sort((a, b) => b.version - a.version)) } }));
 jest.mock('../../../../models/CommsHubDestination', () => ({
   __esModule: true,
@@ -24,6 +26,7 @@ jest.mock('../../../../models/CommsHubDelivery', () => ({ __esModule: true, defa
 jest.mock('../../../../models/Cohort', () => ({ __esModule: true, default: { findAll: jest.fn(async () => [{ id: 'c1', name: 'November 2026' }, { id: 'ct', name: 'Hub test' }].slice(0, mockOpenCount)), findByPk: jest.fn(async (id: string) => (id === 'ct' ? { id: 'ct', name: 'Hub test' } : null)) } }));
 let mockOpenCount = 1;
 let mockTestCohort: string | null = null;
+jest.mock('../../../../models/CommsHubWhatsAppGroup', () => ({ __esModule: true, default: { findByPk: jest.fn(async () => null), findAll: jest.fn(async () => []) } }));
 jest.mock('../../../../models/CommsHubSettings', () => ({ __esModule: true, default: { findByPk: jest.fn(async () => ({ id: 1, test_cohort_id: mockTestCohort })) } }));
 jest.mock('../../activityLog', () => ({ logActivity: jest.fn(async () => undefined) }));
 const mockApprove = jest.fn(async () => undefined);
@@ -101,6 +104,35 @@ describe('CH6.5 recipients', () => {
     expect(withTest.map((o) => `${o.channel}:${o.target_id}`)).toEqual(['community_post:ct', 'in_app:ct', 'community_post:c1', 'in_app:all_members', 'in_app:c1']);
     expect(withTest[0].label).toBe('Test: Hub test feed');
     mockTestCohort = null; mockOpenCount = 1;
+  });
+});
+
+describe('CH9.6 recipients: an event\'s registrants', () => {
+  afterEach(() => { mockEventCcpp = null; });
+  const registrants = { channel: 'in_app' as const, target_type: 'event_registrants' as const, target_id: 'e1', label: 'Registrants of Demo Tuesday (in-app)' };
+
+  it('a message about a managed Eventbrite event is offered its registrants; a hub-made event, or no event, is not', async () => {
+    mockEventCcpp = '777';
+    expect((await destinationOptions('e1')).filter((o) => o.target_type === 'event_registrants')).toEqual([registrants]);
+    mockEventCcpp = null;
+    expect((await destinationOptions('e1')).some((o) => o.target_type === 'event_registrants')).toBe(false);
+    expect((await destinationOptions()).some((o) => o.target_type === 'event_registrants')).toBe(false);
+  });
+
+  it('choosing them is saved and re-checks the approval', async () => {
+    mockEventCcpp = '777';
+    await setDestinations('m1', [{ channel: 'community_post', target_type: 'cohort_feed', target_id: 'c1', label: 'x' }, registrants], JACKIE, NOW);
+    expect(dests.map((x) => `${x.target_type}:${x.target_id}`)).toEqual(['cohort_feed:c1', 'event_registrants:e1']);
+    expect(reconciled).toEqual(['destinations_changed']);
+  });
+
+  it('refused: by community post, for a hub-made event, or for a DIFFERENT event than the message is about', async () => {
+    mockEventCcpp = '777';
+    await expect(setDestinations('m1', [{ ...registrants, channel: 'community_post' as never }], JACKIE, NOW)).rejects.toMatchObject({ reason: 'bad_destination', status: 400 });
+    await expect(setDestinations('m1', [{ ...registrants, target_id: 'other-event' }], JACKIE, NOW)).rejects.toMatchObject({ reason: 'bad_destination' });
+    mockEventCcpp = null;
+    await expect(setDestinations('m1', [registrants], JACKIE, NOW)).rejects.toMatchObject({ reason: 'bad_destination' });
+    expect(dests).toHaveLength(1); // unchanged
   });
 });
 

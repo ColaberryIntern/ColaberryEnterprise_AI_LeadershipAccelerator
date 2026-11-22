@@ -450,9 +450,26 @@ export async function enrollInOpenHouseCountdown(email: string): Promise<'enroll
       { replacements: { email: (email || '').trim().toLowerCase() }, type: QueryTypes.SELECT },
     );
     if (!leads[0]) return 'no_lead';
-    await grantEventReminderPermission(campaign.id, Number(leads[0].id));
+    const leadId = Number(leads[0].id);
+    await grantEventReminderPermission(campaign.id, leadId);
     const { enrollLeadsInCampaign } = await import('./campaignService');
-    await enrollLeadsInCampaign(campaign.id, [Number(leads[0].id)]);
+    // OH1w: the Open House takes precedence (the countdown campaign is marked takes_precedence),
+    // so registering moves the person out of any other running campaign.
+    const [r] = await enrollLeadsInCampaign(campaign.id, [leadId], { supersede: true });
+    // A second registration: they already have a countdown row (finished after their first
+    // Open House), which enrollLeadsInCampaign reports as already_enrolled and schedules nothing
+    // for. Book this Open House's countdown directly. Idempotent: it skips anyone with pending
+    // countdown steps, and an active campaign only.
+    const removed = r?.status === 'already_enrolled' && (await sequelize.query(
+      `SELECT 1 FROM campaign_leads WHERE campaign_id = :c AND lead_id = :l AND status = 'removed' LIMIT 1`,
+      { replacements: { c: campaign.id, l: leadId }, type: QueryTypes.SELECT },
+    )).length > 0;
+    if (r?.status === 'already_enrolled' && campaign.status === 'active' && !removed) {
+      const { admitToCampaign } = await import('./campaignMembership');
+      await admitToCampaign(campaign.id, leadId, { supersede: true });
+      const { enrollLeadInSequence } = await import('./sequenceService');
+      await enrollLeadInSequence(leadId, campaign.sequence_id, campaign.id);
+    }
     return 'enrolled';
   } catch (err: any) {
     console.error('[OpenHouseCountdown] enrollment failed (sign-up unaffected):', err?.message);

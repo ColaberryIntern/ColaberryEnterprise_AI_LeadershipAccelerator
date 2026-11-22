@@ -79,6 +79,28 @@ export function isSubmissionInstructionRequirement(statement: string | null | un
   return SUBMISSION_RE.test(t) && !TECH_CAPABILITY_RE.test(t);
 }
 
+/** PURE: is this requirement a NON-TECHNICAL administrative clause the proposer does not answer with solution content —
+ *  the buyer's own EVALUATION process (a review panel, how proposals are scored/ranked), a PROCUREMENT/CONTRACTUAL
+ *  mechanic (entering a written agreement, negotiation, right to reject), or a residual SUBMISSION rule the narrower
+ *  submission-instruction test misses ("no late response / modification will be accepted", "no facsimile")? These
+ *  describe what the CITY does, not what the solution does, so they must not consume technical-response space or count
+ *  toward technical coverage (R2 export: REQ-013/014/015 review-panel scoring appeared as technical answers). The
+ *  PROPOSER_SOLUTION guard keeps a genuine proposer-facing narrative ask (REQ-010 "Describe ... the Proposer's
+ *  understanding of the project") in the technical response. NOT a submission-mechanics test — that is above. */
+const EVALUATION_RE = /\b(review\s+panel|evaluation\s+(?:committee|panel|team|factors?|criteri)|will\s+be\s+(?:reviewed|evaluated|scored|ranked)|average\s+of\s+all\s+(?:reviews|scores)|final\s+score|scoring\s+(?:method|criteri)|points?\s+(?:will\s+be|awarded|possible)|best\s+value)\b/i;
+const PROCUREMENT_RE = /\b(written\s+agreement|enter\s+into\s+(?:a|an)\s+(?:contract|agreement)|negotiat|city\s+(?:manager|attorney)|successful\s+proposer\s+will\s+be\s+required|no\s+guaranty|right\s+to\s+(?:reject|accept|waive)|sole\s+(?:discretion|and\s+absolute))\b/i;
+const RESIDUAL_SUBMISSION_RE = /\b(no\s+late|will\s+not\s+be\s+accepted|facsimile|telegraphic|modification,?\s+or\s+amendment|clarification\s+or\s+additional\s+information)\b/i;
+// Proposal packaging/format rules (which pieces to include, how to order and sign them) — the proposer follows them
+// but does not answer them with solution content.
+const FORMAT_RE = /\b(introductory\s+letter|following\s+elements|signed\s+by\s+an\s+authorized|organize[d]?\s+(?:their|the)?\s*proposals?\s+into|proposal\s+format|distinct\s+sections|(?:letter\s+)?(?:should\s+be\s+)?addressed\s+to)\b/i;
+const PROPOSER_SOLUTION_RE = /\b(describ|the\s+system\s+(?:shall|must|will|should)|our\s+(?:solution|approach|platform)|understanding\s+of\s+the\s+(?:proposed\s+)?project|approach\s+to|methodolog|workflow|architecture|propos(?:ed|al)\s+solution|technical\s+approach)\b/i;
+export function isNonTechnicalAdministrativeRequirement(statement: string | null | undefined): boolean {
+  const t = plain(statement);
+  if (!t) return false;
+  if (PROPOSER_SOLUTION_RE.test(t)) return false; // a genuine solution/narrative ask stays in the technical response
+  return EVALUATION_RE.test(t) || PROCUREMENT_RE.test(t) || RESIDUAL_SUBMISSION_RE.test(t) || FORMAT_RE.test(t);
+}
+
 /** PURE: is this section a SUBSTANTIVE answer (not just present / not just boilerplate)? A requirement is only
  *  "covered" when its answer clears a minimum informative length AND names something concrete. This is the fix for
  *  the headline defect: a bare `data-req` anchor, any-nonempty-text, or a generic "we comply" no longer counts. */

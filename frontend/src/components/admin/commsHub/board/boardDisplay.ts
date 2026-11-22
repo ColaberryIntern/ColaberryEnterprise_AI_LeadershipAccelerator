@@ -19,7 +19,7 @@ export const MESSAGE_STATUS: Record<HubMessageStatus, { label: string; icon: str
 };
 export const STATUS_ORDER = Object.keys(MESSAGE_STATUS) as HubMessageStatus[];
 
-export const CHANNEL_LABEL: Record<Channel, string> = { community_post: 'Community feed', in_app: 'In-app notification' };
+export const CHANNEL_LABEL: Record<Channel, string> = { community_post: 'Community feed', in_app: 'In-app notification', whatsapp: 'WhatsApp' };
 
 /** "Community feed (November cohort), in-app notification (All members)". */
 export function whereLabel(row: Pick<BoardRow, 'destinations'>): string {

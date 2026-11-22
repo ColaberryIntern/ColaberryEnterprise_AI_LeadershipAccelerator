@@ -58,6 +58,11 @@ const ROUTE_TO_SOURCE: Array<[RegExp, string]> = [
   [/^\/admin\/marketing\/performance/, 'frontend/src/pages/admin/marketing/AdminMarketingPerformancePage.tsx'],
   [/^\/admin\/marketing\/brands/, 'frontend/src/pages/admin/marketing/AdminBrandsPage.tsx'],
   [/^\/admin\/marketing\/?$/, 'frontend/src/pages/admin/marketing/AdminMarketingOverviewPage.tsx'],
+  // Communications Hub (CH9.1): one layout, four tabs as child routes.
+  [/^\/admin\/comms-hub\/events/, 'frontend/src/components/admin/commsHub/EventsTab.tsx'],
+  [/^\/admin\/comms-hub\/compose/, 'frontend/src/components/admin/commsHub/ComposeTab.tsx'],
+  [/^\/admin\/comms-hub\/schedule/, 'frontend/src/components/admin/commsHub/ScheduleTab.tsx'],
+  [/^\/admin\/comms-hub\/?$/, 'frontend/src/components/admin/commsHub/TodayTab.tsx'],
 ];
 
 export function likelySourceFile(routePath: string): string | null {
@@ -65,10 +70,15 @@ export function likelySourceFile(routePath: string): string | null {
   return hit ? hit[1] : null;
 }
 
-export function buildSubject(input: BugReportInput): string {
+/**
+ * `tag` is the stable bracketed prefix a mail check matches on. It defaults to Marketing's, so the
+ * Marketing and agent callers are unchanged; the Communications Hub passes 'Comms Hub bug' (CH9.1).
+ */
+export function buildSubject(input: BugReportInput, opts: { tag?: string } = {}): string {
   // The route is in the subject so a full inbox can be scanned without opening anything, and so
   // two reports about different screens never read as duplicates.
-  return `[Marketing bug] ${input.summary.trim().slice(0, 90)} — ${input.routePath}`;
+  const tag = opts.tag?.trim() || 'Marketing bug';
+  return `[${tag}] ${input.summary.trim().slice(0, 90)} — ${input.routePath}`;
 }
 
 function section(title: string, body: string): string {

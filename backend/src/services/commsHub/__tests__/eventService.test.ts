@@ -128,6 +128,21 @@ describe('CH2.2 update, duplicate, cancel', () => {
     expect(canonical(new Date('2026-12-01T00:00:00Z'))).toBe(canonical(new Date('2026-12-01T00:00:00.000Z')));
   });
 
+  it('CH9.5 an event managed from Eventbrite keeps Eventbrite\'s title, times and link whatever the edit says; hub fields still change', async () => {
+    const v = await createEvent(input({ registration_url: 'https://www.eventbrite.com/e/x-1992498063344' }), JACKIE);
+    const row = store.get(v.id)!;
+    await row.update({ ccpp_event_id: '1992498063344' });
+    const after = await updateEvent(v.id, input({
+      title: 'Renamed in the hub', start_time: '09:00', end_time: '10:00', registration_url: 'https://evil.test/x',
+      hosts: [{ name: 'Aleem' }], join_url: 'https://zoom.us/j/42',
+    }), JACKIE);
+    expect([after.title, after.central.start_time, after.central.end_time, after.registration_url])
+      .toEqual(['Demo Tuesday', '18:00', '19:00', 'https://www.eventbrite.com/e/x-1992498063344']);
+    expect([after.hosts, after.join_url, after.ccpp_event_id]).toEqual([[{ name: 'Aleem' }], 'https://zoom.us/j/42', '1992498063344']);
+    // A schedule change that never happened voids nothing.
+    expect((mockCascadeEdit.mock.calls.at(-1) as unknown[])[1]).toEqual(expect.not.arrayContaining(['starts_at', 'ends_at', 'registration_url']));
+  });
+
   it('a real edit re-syncs the calendar and records which fields changed', async () => {
     const v = await createEvent(input(), JACKIE);
     const after = await updateEvent(v.id, input({ start_time: '17:30', title: 'Demo Tuesday (moved)' }), JACKIE);
