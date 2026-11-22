@@ -1,6 +1,9 @@
 import { Lead } from '../models';
 import { signParticipantJwt } from './participantService';
 import { bridgeExplorerProfileAtRegistration } from './explorerGrowth/explorerProfileAtRegistration';
+// Constants only, no models and no database handle, so this is safe as a top-level
+// import in a file whose GHL import is deliberately dynamic.
+import { EXPLORER_SIGNUP_TAGS } from './leads/explorerSignupTag';
 import {
   resolveFreeAccount,
   normalizeIdentity,
@@ -287,7 +290,10 @@ async function captureGuestAsLead(
      * missing key withholds rather than misfiling.
      */
     const { syncNewLeadToGhl } = await import('./ghlService');
-    syncNewLeadToGhl(lead as never).catch((e: unknown) =>
+    // Tagged as an Explorer sign-up ON THE CREATE CALL, so the contact carries it
+    // before GHL's "Contact Created" workflow reads tags and routes the person
+    // into outbound AI calling. See `leads/explorerSignupTag.ts`.
+    syncNewLeadToGhl(lead as never, EXPLORER_SIGNUP_TAGS).catch((e: unknown) =>
       console.error('[freeSignup] GHL sync error', {
         error_class: e instanceof Error ? e.constructor.name : 'Unknown',
         message: e instanceof Error ? e.message : String(e),
