@@ -157,24 +157,37 @@ describe('the controls', () => {
  * feature, which is the same shape of mistake the leaf suite's controls exist to catch.
  */
 describe('AF12.15: what a withheld room says on its face', () => {
-  const chip = (h: HTMLElement, sel: string, inner: string): string => {
+  const chipEl = (h: HTMLElement, sel: string, inner: string): HTMLElement => {
     const el = h.querySelector(sel) as HTMLElement;
     expect(el).toBeTruthy();
-    return (el.querySelector(inner) as HTMLElement).textContent ?? '';
+    return el.querySelector(inner) as HTMLElement;
   };
+  const chip = (h: HTMLElement, sel: string, inner: string): string =>
+    (chipEl(h, sel, inner).textContent ?? '').trim();
+  /**
+   * The padlock is an icon component, never a new emoji: `house-style-emoji` in
+   * `bannedCopyRule.ts` forbids emoji in product copy and holds the frontend to a frozen
+   * per-file baseline, so the first attempt at this fix failed CI by adding one glyph to each
+   * of these two files. The badge-locked wording keeps its grandfathered emoji; the state this
+   * change introduces carries `ri-lock-line`, which is how the rest of the admin surface draws
+   * a lock.
+   */
+  const locked = (el: HTMLElement): boolean => !!el.querySelector('i.ri-lock-line[aria-hidden="true"]');
 
   describe('during a read-only view-as session', () => {
     beforeEach(viewingAsSomeoneElse);
 
     it('the side-panel row shows a padlock and no longer offers to open', async () => {
       const h = await mount(panel('Revenue'));
-      expect(chip(h, '[data-admin-blocked="view-as"]', '.go')).toBe('🔒 Viewing as');
+      expect(chip(h, '[data-admin-blocked="view-as"]', '.go')).toBe('Viewing as');
+      expect(locked(chipEl(h, '[data-admin-blocked="view-as"]', '.go'))).toBe(true);
       expect(h.querySelector('[data-admin-blocked="view-as"]')!.textContent).not.toContain('Open in admin');
     });
 
     it('the door plate shows a padlock and no longer reads OPEN', async () => {
       const h = await mount(scene('Revenue'));
-      expect(chip(h, '[data-admin-blocked="view-as"]', '.pl')).toBe('🔒 VIEWING AS');
+      expect(chip(h, '[data-admin-blocked="view-as"]', '.pl')).toBe('VIEWING AS');
+      expect(locked(chipEl(h, '[data-admin-blocked="view-as"]', '.pl'))).toBe(true);
       expect(h.querySelector('[data-admin-blocked="view-as"]')!.textContent).not.toContain('OPEN');
     });
 
@@ -218,6 +231,7 @@ describe('AF12.15: what a withheld room says on its face', () => {
         if (viewAs) viewingAsSomeoneElse();
         const h = await mount(<HqPanel s={closedState()} who={who} face="" placed={empty} />);
         expect(chip(h, 'button.cm-hq-rrow.lock', '.go')).toBe('🔒');
+        expect(locked(chipEl(h, 'button.cm-hq-rrow.lock', '.go'))).toBe(false); // the grandfathered glyph, not the icon
         expect(h.querySelector('[data-admin-blocked="view-as"]')).toBeNull();
         if (root) { const r = root; await act(async () => { r.unmount(); }); root = null; }
         host?.remove(); host = null;
