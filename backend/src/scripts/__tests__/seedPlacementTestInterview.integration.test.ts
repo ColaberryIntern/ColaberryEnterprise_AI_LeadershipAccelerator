@@ -58,9 +58,9 @@ describeIfDb('the test-records seed against Postgres', () => {
     // What testing leaves behind on the tagged client: an accepted offer + invoice record, a follow-up + event, a token, a prep row.
     const o = await offer(c, 'accepted');
     await sequelize.query("INSERT INTO placement_invoices (offer_id, enrollment_id, fee_cents) VALUES (:o, :e, 11000000)", { replacements: { o, e: E } });
-    const fid = (await rows<{ id: string }>(`INSERT INTO employer_follow_ups (client_id, enrollment_id, offer_id, subject, body, template, send_on, only_if, created_by)
-      VALUES (:c, :e, :o, 'Hi', 'Hello', 'thank_you', NOW(), 'always', 'x') RETURNING id`, { c, e: E, o }))[0].id;
-    await sequelize.query("INSERT INTO employer_follow_up_events (follow_up_id, kind) VALUES (:f, 'click')", { replacements: { f: fid } });
+    const fid = (await rows<{ id: string }>(`INSERT INTO employer_follow_ups (id, client_id, enrollment_id, offer_id, subject, body, template, send_on, only_if, created_by)
+      VALUES (gen_random_uuid(), :c, :e, :o, 'Hi', 'Hello', 'thank_you', NOW(), 'always', 'x') RETURNING id`, { c, e: E, o }))[0].id;
+    await sequelize.query("INSERT INTO employer_follow_up_events (event_key, follow_up_id, kind) VALUES (repeat('b', 64), :f, 'click')", { replacements: { f: fid } });
     await sequelize.query(`INSERT INTO hire_client_signin_tokens (email, token_hash, expires_at) VALUES ('ali+emp@example.com', repeat('a', 64), NOW())`);
     await sequelize.query("INSERT INTO career_interviews (placement_interview_id) VALUES (:iv)", { replacements: { iv } });
     // An UNTAGGED client with its own offer and invoice record.
