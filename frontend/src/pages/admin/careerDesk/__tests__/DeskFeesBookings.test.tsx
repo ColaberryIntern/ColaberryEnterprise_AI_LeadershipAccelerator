@@ -25,13 +25,13 @@ const placements: DeskPlacements = {
   feeRate: { rate: 1.1, label: '110%' },
   kpis: { openOffers: 1, accepted: 1, feesPending: '$115,500', fees: '$118,976', invoiced: '$0', paid: '$0' },
   offers: [
-    { offerId: 'o1', enrollmentId: E, learner: 'Ann Lee', client: 'Meridian Freight', company: 'Meridian Freight', role: 'AI Operations Associate', pay: '$52.00 an hour, 40 h a week',
+    { offerId: 'o1', enrollmentId: E, learner: 'Ann Lee', client: 'Northgate Logistics', company: 'Northgate Logistics', role: 'AI Operations Associate', pay: '$52.00 an hour, 40 h a week',
       firstYear: '$108,160', feeRate: '110%', fee: '$118,976', feeCents: 11_897_600, status: 'accepted', statusLabel: 'Accepted', startDate: '2026-12-07', sentAt: '2026-11-20T15:00:00.000Z',
       invoice: { id: '9', status: 'not_invoiced', statusLabel: 'Not invoiced' } },
     { offerId: 'o2', enrollmentId: E, learner: 'Ann Lee', client: null, company: 'Orbit Retail', role: 'Analyst', pay: '$105,000 a year', firstYear: '$105,000', feeRate: '110%',
       fee: '$115,500', feeCents: 11_550_000, status: 'sent', statusLabel: 'Sent', startDate: null, sentAt: '2026-11-21T15:00:00.000Z', invoice: null },
   ],
-  clients: [{ id: C, name: 'Meridian Freight', candidates: 1 }],
+  clients: [{ id: C, name: 'Northgate Logistics', candidates: 1 }],
 };
 const bookings: DeskBookings = { recording: null, bookings: [{ interviewId: 'b1', enrollmentId: E, learner: 'Ann Lee', company: 'Northwind', position: 'ML Engineer', type: null,
   typeLine: 'Interview, 30 min, with Pat Doe', interviewers: ['Pat Doe'], startsAt: '2026-11-24T20:00:00.000Z', startsLabel: 'Tue, Nov 24, 2:00 PM', minutes: 30, state: 'booked',

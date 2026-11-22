@@ -26,7 +26,7 @@ function makeDesk(now) {
         learner: 'Bo Kim', enrollmentId: E2, interviewId: IV, company: 'Harbor Insurance', position: 'Data Analyst', subject: null, confidence: 0.9, since: iso(1), needsContact: true,
         related: [], actions: [{ action: 'send_link', label: 'Send booking link' }, { action: 'not_interview', label: 'Not an interview' }] },
     ],
-    held: [{ interviewId: '44444444-1111-4111-8111-111111111111', learner: 'Ann Lee', enrollmentId: E1, company: 'Meridian Freight', position: 'AI Operations Associate',
+    held: [{ interviewId: '44444444-1111-4111-8111-111111111111', learner: 'Ann Lee', enrollmentId: E1, company: 'Northgate Logistics', position: 'AI Operations Associate',
       hasContact: true, heldAt: iso(26), heldLabel: 'Fri, Nov 20, 9:00 AM', action: { action: 'send_link', label: 'Send booking link' } }],
     inboxes: { testsSwitch: 'off', learners: [
       { enrollmentId: E1, learner: 'Ann Lee', address: 'ann.lee.careers@gmail.com', health: 'healthy', healthLabel: 'Healthy', lastForwardedAt: iso(1), lastForwardedLabel: 'Sun, Nov 22, 3:00 AM',
@@ -41,13 +41,13 @@ function makeDesk(now) {
     ] },
     placements: { feeRate: { rate: 1.1, label: '110%' }, kpis: { openOffers: 1, accepted: 1, feesPending: '$115,500', fees: '$118,976', invoiced: '$0', paid: '$0' },
       offers: [
-        { offerId: '66666666-1111-4111-8111-111111111111', enrollmentId: E1, learner: 'Ann Lee', client: 'Meridian Freight', company: 'Meridian Freight', role: 'AI Operations Associate',
+        { offerId: '66666666-1111-4111-8111-111111111111', enrollmentId: E1, learner: 'Ann Lee', client: 'Northgate Logistics', company: 'Northgate Logistics', role: 'AI Operations Associate',
           pay: '$52.00 an hour, 40 h a week', firstYear: '$108,160', feeRate: '110%', fee: '$118,976', feeCents: 11897600, status: 'accepted', statusLabel: 'Accepted',
           startDate: '2026-12-07', sentAt: iso(30), invoice: { id: '9', status: 'not_invoiced', statusLabel: 'Not invoiced' } },
         { offerId: '77777777-1111-4111-8111-111111111111', enrollmentId: E2, learner: 'Bo Kim', client: null, company: 'Orbit Retail', role: 'Data Analyst', pay: '$105,000 a year',
           firstYear: '$105,000', feeRate: '110%', fee: '$115,500', feeCents: 11550000, status: 'sent', statusLabel: 'Sent', startDate: null, sentAt: iso(5), invoice: null },
       ],
-      clients: [{ id: '88888888-1111-4111-8111-111111111111', name: 'Meridian Freight', candidates: 1 }] },
+      clients: [{ id: '88888888-1111-4111-8111-111111111111', name: 'Northgate Logistics', candidates: 1 }] },
   };
 }
 

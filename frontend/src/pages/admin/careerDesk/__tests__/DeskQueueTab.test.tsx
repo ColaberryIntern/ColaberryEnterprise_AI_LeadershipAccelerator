@@ -101,7 +101,7 @@ describe('the review queue', () => {
   });
 
   it('held booking links show the server note and send once with the employer email when none is on file', async () => {
-    const held = { interviewId: 'aaaaaaaa-0000-4000-8000-000000000001', learner: 'Ann Lee', enrollmentId: lowItem.enrollmentId!, company: 'Meridian Freight', position: 'Analyst',
+    const held = { interviewId: 'aaaaaaaa-0000-4000-8000-000000000001', learner: 'Ann Lee', enrollmentId: lowItem.enrollmentId!, company: 'Northgate Logistics', position: 'Analyst',
       hasContact: false, heldAt: '2026-11-20T15:00:00.000Z', heldLabel: 'Fri, Nov 20, 9:00 AM', action: { action: 'send_link', label: 'Send booking link' } };
     mockLoadQueue.mockResolvedValue(queueOf([], [held]));
     mockSendHeld.mockResolvedValue({ ok: true, outcome: 'held', message: 'Held: employer email is switched off. Nothing was sent; it waits in Held booking links.' });
