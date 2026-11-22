@@ -293,3 +293,63 @@ describe('publicDemoUrl', () => {
     expect(publicDemoUrl('a/b', 'https://example.test')).toBe('https://example.test/api/public/demo/a%2Fb');
   });
 });
+
+/**
+ * The header and the body have to agree, and nothing above this point could tell whether they
+ * did. The deployed demo returned 200 with correct HTML and rendered nothing, because Helmet's
+ * `script-src 'self'` forbade the inline engine the page depends on. These assertions are about
+ * that relationship rather than about either side of it.
+ */
+describe('the content security policy actually permits the page it is sent with', () => {
+  const cspOf = (res: request.Response) => String(res.headers['content-security-policy'] || '');
+
+  it('sends a nonce that matches EVERY script tag in the body', async () => {
+    findOne.mockResolvedValue(rowOf({ demo_spec: SPEC }));
+    const res = await request(app).get(`/api/public/demo/${TOKEN}`);
+
+    const nonce = /script-src 'nonce-([^']+)'/.exec(cspOf(res))?.[1];
+    expect(nonce).toBeTruthy();
+
+    // Both directions. "A nonce appears somewhere" would pass with the engine still blocked.
+    const tags = res.text.match(/<script\b[^>]*>/gi) || [];
+    expect(tags.length).toBeGreaterThan(0);
+    for (const tag of tags) expect(tag).toContain(`nonce="${nonce}"`);
+  });
+
+  it('does not fall back to unsafe-inline for SCRIPT, which would unblock injected script too', async () => {
+    findOne.mockResolvedValue(rowOf({ demo_spec: SPEC }));
+    const res = await request(app).get(`/api/public/demo/${TOKEN}`);
+
+    // Scoped to the script directive on purpose. `style-src` legitimately carries
+    // 'unsafe-inline', so a document-wide search for the string would pass no matter what
+    // `script-src` said, which is the assertion shape that let the original defect ship.
+    const scriptSrc = cspOf(res).split('; ').find((d) => d.startsWith('script-src ')) || '';
+    expect(scriptSrc).not.toContain("'unsafe-inline'");
+    expect(scriptSrc).toMatch(/^script-src 'nonce-/);
+  });
+
+  it('mints a DIFFERENT nonce per response', async () => {
+    findOne.mockResolvedValue(rowOf({ demo_spec: SPEC }));
+    const a = await request(app).get(`/api/public/demo/${TOKEN}`);
+    const b = await request(app).get(`/api/public/demo/${TOKEN}`);
+    const n = (r: request.Response) => /script-src 'nonce-([^']+)'/.exec(cspOf(r))?.[1];
+    expect(n(a)).toBeTruthy();
+    expect(n(a)).not.toBe(n(b));
+  });
+
+  it('sends the 404 body under script-src none, since it has no script to run', async () => {
+    findOne.mockResolvedValue(null);
+    const res = await request(app).get(`/api/public/demo/${TOKEN}`);
+    expect(res.status).toBe(404);
+    expect(cspOf(res)).toContain("script-src 'none'");
+    expect(res.text).not.toMatch(/<script/i);
+  });
+
+  it('forbids framing, objects, form posts and base rewriting on this public page', async () => {
+    findOne.mockResolvedValue(rowOf({ demo_spec: SPEC }));
+    const csp = cspOf(await request(app).get(`/api/public/demo/${TOKEN}`));
+    for (const d of ["object-src 'none'", "base-uri 'none'", "form-action 'none'", "frame-ancestors 'none'"]) {
+      expect(csp).toContain(d);
+    }
+  });
+});
