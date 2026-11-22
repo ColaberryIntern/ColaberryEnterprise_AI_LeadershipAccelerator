@@ -66,6 +66,14 @@ it('a WhatsApp delivery for an event that has already started is skipped, never 
   expect(s.calls.whatsapp).toHaveLength(0);
 });
 
+it('the connector is handed the row\u2019s previous note (so a failed-check streak carries across tries)', async () => {
+  const s = setup();
+  await runDeliveryTick(s.deps, T0); // held by the breaker
+  s.release();
+  await runDeliveryTick(s.deps, at(49 * 3600_000));
+  expect(s.calls.whatsapp.map((c) => c.previousError)).toEqual([null, 'held: whatsapp_paused_by_whatsapp']);
+});
+
 it('the WhatsApp connector is handed the media the context carries (the banner)', async () => {
   const s = setup();
   s.release();

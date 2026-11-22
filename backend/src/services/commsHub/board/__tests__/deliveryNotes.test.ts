@@ -13,6 +13,8 @@ it('each WhatsApp wait reads as a sentence, once, only while the row is waiting'
   expect(deliveryNotes([held('whatsapp_window')])).toEqual(['Waiting for 8 AM Central: WhatsApp messages go out between 8 AM and 8 PM.']);
   expect(deliveryNotes([held('whatsapp_daily_cap')])).toEqual(["Waiting for tomorrow: today's WhatsApp limit is reached."]);
   expect(deliveryNotes([held('whatsapp_pacing'), held('whatsapp_disconnected'), held('whatsapp_check_failed')])).toHaveLength(3);
+  // A failed-check hold carries when its streak began; it still reads as the same sentence.
+  expect(deliveryNotes([held('whatsapp_check_failed:2026-12-01T18:00:00.000Z')])).toEqual(['Waiting: WhatsApp could not be checked. It is tried again shortly.']);
   expect(deliveryNotes([held('whatsapp_window', 'sent')])).toEqual([]);
 });
 

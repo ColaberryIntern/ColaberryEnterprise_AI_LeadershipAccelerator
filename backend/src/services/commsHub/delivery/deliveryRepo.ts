@@ -171,7 +171,7 @@ export const deliveryRepo: DeliveryRepo = {
           SET status = 'sending', claimed_at = COALESCE(d.claimed_at, :now), attempt_count = d.attempt_count + 1, updated_at = :now
          FROM due, comms_hub_destinations dest
         WHERE d.id = due.id AND dest.id = d.destination_id
-       RETURNING d.id, d.message_id, d.destination_id, d.channel, d.idempotency_key, d.attempt_count AS attempt,
+       RETURNING d.id, d.message_id, d.destination_id, d.channel, d.idempotency_key, d.attempt_count AS attempt, d.error AS previous_error,
                  d.claimed_at AS first_claimed_at, dest.target_type, dest.target_id`,
       { replacements: { now, stale, limit, max: MAX_ATTEMPTS } },
     );

@@ -2,7 +2,7 @@ jest.mock('../sendState', () => ({ sendStateStore: {} }));
 jest.mock('../channelAlerts', () => ({ raiseChannelAlert: jest.fn() }));
 jest.mock('../whatsappConnection', () => ({ ...jest.requireActual('../whatsappConnection'), requireConnection: jest.fn() }));
 
-import { createWhatsAppConnector } from '../whatsappConnector';
+import { checkStreakStart, createWhatsAppConnector } from '../whatsappConnector';
 import { readWhatsAppConfig } from '../../channelConfig';
 import { ConnectorHoldError, ConnectorPermanentError, type ConnectorDelivery } from '../../connectors/types';
 import {
@@ -107,7 +107,7 @@ describe('W5 never twice', () => {
   it('the check itself failing: a 5-minute hold and no send', async () => {
     const s = setup({ provider: { listSentSince: jest.fn(async () => { throw new UnavailableError(); }) } });
     const e = await outcome(s.c.send(delivery()));
-    expect([e.reason, e.until]).toEqual(['whatsapp_check_failed', new Date(NOW.getTime() + 5 * 60_000)]);
+    expect([e.reason, e.until]).toEqual([`whatsapp_check_failed:${NOW.toISOString()}`, new Date(NOW.getTime() + 5 * 60_000)]);
     expect(s.provider.sendText).not.toHaveBeenCalled();
   });
 });
@@ -180,15 +180,26 @@ describe('the group pre-flight (GET /groups/{id}) and the bounded check', () => 
     const r = setup({ provider: { getGroup: jest.fn(async () => { throw new RateLimitedError(); }) } });
     expect((await outcome(r.c.send(delivery()))).reason).toBe('whatsapp_paused_by_whatsapp');
   });
-  it('a check that keeps failing holds 5 minutes, and after a whole day since the first claim fails for good', async () => {
+  const streakNote = (hoursAgo: number) => `held: whatsapp_check_failed:${new Date(NOW.getTime() - hoursAgo * 3600_000).toISOString()}`;
+  it('a check that keeps failing holds 5 minutes; after an unbroken day of failed checks it fails for good', async () => {
     const down = { getGroup: jest.fn(async () => { throw new UnavailableError(); }) };
-    const early = setup({ provider: down });
-    expect((await outcome(early.c.send(delivery({ since: new Date(NOW.getTime() - 23 * 3600_000) })))).reason).toBe('whatsapp_check_failed');
-    const late = setup({ provider: down });
-    const e = await outcome(late.c.send(delivery({ since: new Date(NOW.getTime() - 24 * 3600_000) })));
+    const first = await outcome(setup({ provider: down }).c.send(delivery()));
+    expect(first.reason).toBe(`whatsapp_check_failed:${NOW.toISOString()}`); // the streak starts now
+    const still = await outcome(setup({ provider: down }).c.send(delivery({ previousError: streakNote(23) })));
+    expect(still.reason).toBe(`whatsapp_check_failed:${new Date(NOW.getTime() - 23 * 3600_000).toISOString()}`); // carried, not restarted
+    const e = await outcome(setup({ provider: down }).c.send(delivery({ previousError: streakNote(24) })));
     expect([e instanceof ConnectorPermanentError, e.reason]).toEqual([true, 'whatsapp_check_gave_up']);
     const list = setup({ provider: { listSentSince: jest.fn(async () => { throw new UnavailableError(); }) } });
-    expect((await outcome(list.c.send(delivery({ since: new Date(NOW.getTime() - 25 * 3600_000) })))).reason).toBe('whatsapp_check_gave_up');
+    expect((await outcome(list.c.send(delivery({ previousError: streakNote(25) })))).reason).toBe('whatsapp_check_gave_up');
+  });
+  it('time spent in other holds never counts: claimed 48 h ago, held by the breaker, then one 5xx is a hold, not a give-up', async () => {
+    const s = setup({ provider: { getGroup: jest.fn(async () => { throw new UnavailableError(); }) } });
+    const e = await outcome(s.c.send(delivery({ since: new Date(NOW.getTime() - 48 * 3600_000), previousError: 'held: whatsapp_paused_by_whatsapp' })));
+    expect([e instanceof ConnectorHoldError, e.reason]).toEqual([true, `whatsapp_check_failed:${NOW.toISOString()}`]);
+  });
+  it('the streak start is read only from the hub\u2019s own note', () => {
+    expect(checkStreakStart(streakNote(3))).toEqual(new Date(NOW.getTime() - 3 * 3600_000));
+    for (const n of [null, undefined, '', 'held: whatsapp_pacing', 'held: whatsapp_check_failed', 'held: whatsapp_check_failed:not-a-date', 'Error: whatsapp_check_failed:2026-01-01T00:00:00.000Z']) expect(checkStreakStart(n)).toBeNull();
   });
   it('a second 429 after the first breaker closed opens a NEW breaker with its own alert key', async () => {
     const s = setup({ provider: { sendText: jest.fn(async () => { throw new RateLimitedError(); }) } });

@@ -66,7 +66,7 @@ export class FakeRepo implements DeliveryRepo {
       if (!due) continue;
       d.status = 'sending'; d.claimed_at = d.claimed_at ?? now; d.attempt_count += 1; d.updated_at = now;
       const dest = this.destinations.find((x) => x.id === d.destination_id)!;
-      out.push({ id: d.id, message_id: d.message_id, destination_id: d.destination_id, channel: d.channel, idempotency_key: d.idempotency_key, attempt: d.attempt_count, first_claimed_at: d.claimed_at, target_type: dest.target_type, target_id: dest.target_id });
+      out.push({ id: d.id, message_id: d.message_id, destination_id: d.destination_id, channel: d.channel, idempotency_key: d.idempotency_key, attempt: d.attempt_count, first_claimed_at: d.claimed_at, previous_error: d.error, target_type: dest.target_type, target_id: dest.target_id });
     }
     return out;
   }

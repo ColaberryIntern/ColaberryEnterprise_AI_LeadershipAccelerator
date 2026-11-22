@@ -20,6 +20,8 @@ export interface ClaimedDelivery {
   attempt: number;
   /** The FIRST time this delivery was claimed; the connectors look for earlier work from here. */
   first_claimed_at: Date;
+  /** The row's note from its last outcome (a hold says why it waited). The claim does not change it. */
+  previous_error?: string | null;
   target_type: string;
   target_id: string;
 }

@@ -44,6 +44,13 @@ const defaults: WhatsAppConnectorDeps = {
   alert: raiseChannelAlert, now: () => new Date(), random: Math.random,
 };
 
+/** When the current streak of failed WhatsApp checks began, read from the last hold's note, or null. */
+export function checkStreakStart(previousError: string | null | undefined): Date | null {
+  const m = /^held: whatsapp_check_failed:(\d{4}-\d{2}-\d{2}T[\d:.]+Z)$/.exec(previousError ?? '');
+  const t = m ? Date.parse(m[1]) : NaN;
+  return Number.isFinite(t) ? new Date(t) : null;
+}
+
 export function createWhatsAppConnector(overrides: Partial<WhatsAppConnectorDeps> = {}): Connector {
   const deps = { ...defaults, ...overrides };
   return {
@@ -120,8 +127,12 @@ export function createWhatsAppConnector(overrides: Partial<WhatsAppConnectorDeps
    * then say so). Until then it is a 5-minute hold.
    */
   function checkFailed(d: ConnectorDelivery, now: Date): Error {
-    if (now.getTime() - d.since.getTime() >= CHECK_GIVE_UP_MS) return new ConnectorPermanentError('WhatsApp could not be checked for a whole day, so the message was not sent.', 'whatsapp_check_gave_up');
-    return new ConnectorHoldError(new Date(now.getTime() + CHECK_FAILED_HOLD_MS), 'whatsapp_check_failed');
+    // The streak starts at the first failed check and carries in the hold's own note. Any other outcome
+    // in between (a breaker, window or cap hold, a successful check) ends it, so waiting for legitimate
+    // reasons never counts toward the day.
+    const streak = checkStreakStart(d.previousError) ?? now;
+    if (now.getTime() - streak.getTime() >= CHECK_GIVE_UP_MS) return new ConnectorPermanentError('WhatsApp could not be checked for a whole day, so the message was not sent.', 'whatsapp_check_gave_up');
+    return new ConnectorHoldError(new Date(now.getTime() + CHECK_FAILED_HOLD_MS), `whatsapp_check_failed:${streak.toISOString()}`);
   }
 
   async function handleProviderError(err: unknown, d: ConnectorDelivery, _group: string, now: Date): Promise<never> {

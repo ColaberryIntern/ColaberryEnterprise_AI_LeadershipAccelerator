@@ -44,7 +44,7 @@ export function deliveryNotes(rows: Array<{ channel: string; status: string; err
     if (r.status === 'sent' && r.error.startsWith('already_done')) {
       out.add(r.channel === 'whatsapp' ? 'Already in the WhatsApp group, so it was not sent again.' : 'An earlier try had already sent it, so it was not sent again.');
     }
-    const held = /^held: (\w+)$/.exec(r.error);
+    const held = /^held: (\w+)(?::[\dT:.Z-]+)?$/.exec(r.error);
     if (r.status === 'pending' && held && HELD[held[1]]) out.add(HELD[held[1]]);
   }
   return [...out];

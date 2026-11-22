@@ -73,7 +73,7 @@ export async function deliverOne(deps: WorkerDeps, d: ClaimedDelivery, now: Date
     if (held) return held;
     try {
       const sending = deps.connector(d.channel).send({
-        deliveryId: d.id, messageId: d.message_id, since: d.first_claimed_at,
+        deliveryId: d.id, messageId: d.message_id, since: d.first_claimed_at, previousError: d.previous_error ?? null,
         destination: { target_type: d.target_type, target_id: d.target_id },
         draft: ctx.draft!, media_urls: d.channel === 'community_post' || d.channel === 'whatsapp' ? ctx.media_urls : undefined,
       });

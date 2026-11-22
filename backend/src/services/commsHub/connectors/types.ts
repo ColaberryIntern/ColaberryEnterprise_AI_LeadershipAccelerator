@@ -13,6 +13,8 @@ export interface ConnectorDelivery {
   messageId: string;
   /** The first time this delivery was claimed; an earlier attempt's work is looked for from here. */
   since: Date;
+  /** CH10.4: the delivery's note from its last outcome, e.g. "held: whatsapp_check_failed:<since>". */
+  previousError?: string | null;
   destination: { target_type: string; target_id: string };
   /** The approved draft for this channel (in_app has a title; a community post does not). */
   draft: { title: string | null; body: string };
