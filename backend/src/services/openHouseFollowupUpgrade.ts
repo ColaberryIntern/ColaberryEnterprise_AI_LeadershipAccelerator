@@ -51,6 +51,40 @@ export function upgradeInstructions(text: string): string {
   return out;
 }
 
+/**
+ * OH1z (Ali, 2026-11-22, "Add steps"): the later steps, appended after Ali's two. Days count from
+ * the morning after the Open House (10:00 CT). Each has its own approved fallback copy
+ * (openHouseFollowupCopy.followupStepCopy, by copy_key) and stops for anyone who has paid.
+ */
+export const OH1Z_STEPS: SequenceStep[] = [
+  { audience: 'attended', copy_key: 'enroll', delay_days: 3, channel: 'email', ai_tone: 'warm',
+    subject: 'Ready to reserve your seat?', step_goal: 'Invite attendees to reserve their seat in the Accelerator',
+    ai_instructions: 'Greet them by first name. Thank them again for coming to the Open House. If the Forward Deployed AI Engineer Accelerator feels like the right next step, invite them to reserve their seat and choose their plan, using the exact link in the notes. Say that anything they have started on the platform stays with them. Offer a reply to talk it through with an admissions advisor. Warm and brief; no pressure, no urgency, no price.' } as SequenceStep,
+  { audience: 'missed', copy_key: 'invite', delay_days: 5, channel: 'email', ai_tone: 'warm',
+    subject: 'Join us at the next Open House', step_goal: 'Bring people who did not check in to the next Open House',
+    ai_instructions: 'Greet them by first name. Invite them to the next Open House, named in the notes, as the quickest way to see how the Forward Deployed AI Engineer Accelerator works and to ask questions live. Give the exact sign-up link in the notes. Never say they were absent. Short and friendly.' } as SequenceStep,
+  { audience: 'attended', copy_key: 'last_call', delay_days: 7, channel: 'email', ai_tone: 'warm',
+    subject: 'Any questions before you decide?', step_goal: 'A last check-in for attendees who have not reserved a seat',
+    ai_instructions: 'Greet them by first name. A short, final check-in after the Open House: invite any question that is holding them back (the schedule, the projects, whether it fits them) and say an admissions advisor will answer personally. Then say where to reserve a seat when they are ready, using the exact link in the notes. No pressure, no deadline, no price.' } as SequenceStep,
+];
+
+/** Ali's two steps get an explicit copy_key; the OH1z steps are appended once. Idempotent. */
+export function addFollowupSteps(steps: SequenceStep[]): { steps: SequenceStep[]; changes: string[] } {
+  const changes: string[] = [];
+  const next = (steps || []).map((s, i) => {
+    if (s.copy_key) return s;
+    const key = audienceOf(s) === 'attended' ? 'thanks' : 'catch_up';
+    changes.push(`step ${i + 1} ("${s.subject}") marked ${key}`);
+    return { ...s, copy_key: key } as SequenceStep;
+  });
+  for (const add of OH1Z_STEPS) {
+    if (next.some((s) => s.copy_key === add.copy_key)) continue;
+    next.push(add);
+    changes.push(`added [${add.audience}] day ${add.delay_days}: "${add.subject}"`);
+  }
+  return { steps: next, changes };
+}
+
 export interface UpgradeResult { steps: SequenceStep[]; prompt: string; changes: string[] }
 
 export function upgradeFollowupRebuild(steps: SequenceStep[], prompt: string | null | undefined): UpgradeResult {
