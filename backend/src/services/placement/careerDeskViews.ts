@@ -67,7 +67,8 @@ export function offerLine(r: OfferRow): OfferLine {
 
 export function kpiLine(k: KpiRow | undefined) {
   const n = (v: string | number | undefined) => Number(v ?? 0);
-  return { openOffers: n(k?.open), accepted: n(k?.accepted), fees: money(n(k?.fees_cents)), invoiced: money(n(k?.invoiced_cents)), paid: money(n(k?.paid_cents)) };
+  // feesPending: the stored fee of every current offer still open (sent or talk_first); fees: the invoice records (accepted).
+  return { openOffers: n(k?.open), accepted: n(k?.accepted), feesPending: money(n(k?.pending_cents)), fees: money(n(k?.fees_cents)), invoiced: money(n(k?.invoiced_cents)), paid: money(n(k?.paid_cents)) };
 }
 
 /** The recording notice: the latest daily zoom_scope_missing row in the last two days (zoomScopePreflight.ts writes one a day). */

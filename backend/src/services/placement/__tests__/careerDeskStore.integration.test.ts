@@ -132,9 +132,14 @@ describeIfDb('the staff desk against Postgres', () => {
       'yearly', 10500000, 10500000, 11000, 11550000, NOW(), 'pat', 'f7', 'accepted', 'pat') RETURNING id`);
     const [inv] = await rows<{ id: string }>(`INSERT INTO placement_invoices (offer_id, enrollment_id, fee_cents) VALUES ('${o.id}', '${E1}', 11550000) RETURNING id`);
     const [cl] = await rows<{ id: string }>("INSERT INTO hire_clients (name, created_by) VALUES ('Acme Corp', 'staff') RETURNING id");
+    for (const [status, fee] of [['sent', 5500000], ['talk_first', 100], ['declined', 999900]] as const) {
+      await sequelize.query(`INSERT INTO placement_offers (offer_group_id, version, client_key, enrollment_id, company, role, pay_basis, salary_cents, first_year_cents,
+        fee_rate_bp, fee_cents, fee_agreed_at, agreed_by, agreement_text_version, status, created_by) VALUES (gen_random_uuid(), 1, gen_random_uuid(), '${E1}', 'Beta', 'Dev',
+        'yearly', 5000000, 5000000, 11000, ${fee}, NOW(), 'pat', 'f7', '${status}', 'pat')`);
+    }
     const p = await svc.placements(async () => null);
-    expect(p).toMatchObject({ feeRate: { rate: 1.1, label: '110%' }, kpis: { accepted: 1, fees: '$115,500' }, clients: [{ name: 'Acme Corp', candidates: 0 }] });
-    expect(p.offers[0]).toMatchObject({ fee: '$115,500', invoice: { status: 'not_invoiced' } });
+    expect(p).toMatchObject({ feeRate: { rate: 1.1, label: '110%' }, kpis: { openOffers: 2, accepted: 1, feesPending: '$55,001', fees: '$115,500' }, clients: [{ name: 'Acme Corp', candidates: 0 }] });
+    expect(p.offers.find((x) => x.offerId === String(o.id))).toMatchObject({ fee: '$115,500', invoice: { status: 'not_invoiced' } });
     expect(await svc.setInvoiceStatus(String(inv.id), 'invoiced', 'staff-7')).toMatchObject({ outcome: 'changed' });
     expect(await svc.setInvoiceStatus(String(inv.id), 'invoiced', 'staff-7')).toMatchObject({ outcome: 'unchanged' });
     expect(await svc.putForward(String(cl.id), E1, 'staff-7')).toMatchObject({ outcome: 'added' });

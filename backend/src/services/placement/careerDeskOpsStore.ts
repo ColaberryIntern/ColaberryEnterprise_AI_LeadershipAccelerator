@@ -16,7 +16,7 @@ export interface BookingRow { id: string; enrollment_id: string; full_name: stri
 export interface OfferRow { id: string; enrollment_id: string; full_name: string | null; client_name: string | null; company: string; role: string; pay_basis: string;
   salary_cents: string | number | null; hourly_rate_cents: number | null; hours_per_week: string | number | null; first_year_cents: string | number; fee_rate_bp: number;
   fee_cents: string | number; start_date: string | Date | null; status: string; created_at: When; invoice_id: string | null; invoice_status: string | null }
-export interface KpiRow { open: number; accepted: number; fees_cents: string | number; invoiced_cents: string | number; paid_cents: string | number }
+export interface KpiRow { open: number; accepted: number; pending_cents: string | number; fees_cents: string | number; invoiced_cents: string | number; paid_cents: string | number }
 export interface ForwardingRow { forwarding_link: string | null; forwarding_code: string | null; forwarding_confirmed_at: When | null }
 
 const LIMIT = 200;
@@ -47,6 +47,7 @@ const offers = () => q<OfferRow>(`SELECT o.id, o.enrollment_id, e.full_name, c.n
 /** Over every current offer, not just the listed 200. */
 const kpis = async (): Promise<KpiRow> => (await q<KpiRow>(`SELECT COUNT(*) FILTER (WHERE o.status IN ('sent', 'talk_first'))::int AS open,
     COUNT(*) FILTER (WHERE o.status = 'accepted')::int AS accepted, COALESCE(SUM(inv.fee_cents), 0) AS fees_cents,
+    COALESCE(SUM(o.fee_cents) FILTER (WHERE o.status IN ('sent', 'talk_first')), 0) AS pending_cents,
     COALESCE(SUM(inv.fee_cents) FILTER (WHERE inv.status = 'invoiced'), 0) AS invoiced_cents, COALESCE(SUM(inv.fee_cents) FILTER (WHERE inv.status = 'paid'), 0) AS paid_cents
   FROM placement_offers o LEFT JOIN placement_invoices inv ON inv.offer_id = o.id WHERE o.superseded_at IS NULL`))[0];
 

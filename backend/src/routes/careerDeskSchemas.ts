@@ -47,7 +47,7 @@ export const BookingsResponse = z.object({ recording, bookings: z.array(z.object
 
 export const PlacementsResponse = z.object({
   feeRate: z.object({ rate: z.number(), label: z.string() }).strict(),
-  kpis: z.object({ openOffers: z.number(), accepted: z.number(), fees: z.string(), invoiced: z.string(), paid: z.string() }).strict(),
+  kpis: z.object({ openOffers: z.number(), accepted: z.number(), feesPending: z.string(), fees: z.string(), invoiced: z.string(), paid: z.string() }).strict(),
   offers: z.array(z.object({ offerId: z.string(), enrollmentId: z.string(), learner: text, client: text, company: z.string(), role: z.string(), pay: z.string(),
     firstYear: z.string(), feeRate: z.string(), fee: z.string(), feeCents: z.number(), status: z.string(), statusLabel: z.string(), startDate: text, sentAt: when,
     invoice: z.object({ id: z.string(), status: z.string(), statusLabel: z.string() }).strict().nullable() }).strict()),

@@ -143,6 +143,19 @@ describe('interview actions', () => {
   });
 });
 
+describe('a 404 refusal is still one audit row', () => {
+  it('unknown interview or item, on every queue action', async () => {
+    const GONE = IV(99);
+    expect((await sendLink(GONE, S)).status).toBe('not_found');
+    expect((await interviewAction(GONE, 'not_interview', S)).status).toBe('not_found');
+    expect((await setInterviewType(GONE, 'technical', S)).status).toBe('not_found');
+    expect((await itemAction('404', 'dismiss', S)).status).toBe('not_found');
+    expect(audits().map((a) => [a.event, a.subjectId, a.actor, a.payload.outcome])).toEqual([
+      ['desk_send_link', GONE, 'staff-1', 'not_found'], ['desk_not_interview', GONE, 'staff-1', 'not_found'],
+      ['desk_set_type', GONE, 'staff-1', 'not_found'], ['desk_dismiss', '404', 'staff-1', 'not_found']]);
+  });
+});
+
 describe('inbox and placement actions', () => {
   it('Send test maps the guard\'s answers and is audited every time', async () => {
     mockTest = async () => ({ status: 'failed', errorClass: 'SendBlocked' });

@@ -31,6 +31,11 @@ export interface ActionOpts { staff: string; read?: Read; note?: string | null; 
 const ok = (outcome: string, message: string, interviewId?: string): DeskResult => ({ status: 'ok', outcome, message, ...(interviewId ? { interviewId } : {}) });
 const no = (status: 'not_found' | 'conflict' | 'failed', message: string): DeskResult => ({ status, message });
 const noteOf = (n?: string | null) => (n ? n.slice(0, 500) : null);
+/** A 404 refusal: still its one audit row (the id staff sent, outcome not_found). */
+async function refused(subjectType: string, subjectId: string, event: string, staff: string, message: string): Promise<DeskResult> {
+  await audit({ subjectType, subjectId, event, actor: staff, payload: { outcome: 'not_found' } });
+  return no('not_found', message);
+}
 
 const SEND_WORDS: Partial<Record<BookingReplyResult['status'], DeskResult>> = {
   sent: ok('sent', 'Booking link sent to the employer.'),
@@ -56,7 +61,6 @@ const outcomeOf = (r: DeskResult) => (r.status === 'ok' ? r.outcome : r.status);
 /** "Send booking link" on an interview (review, or a held reply): ONE audit row with the outcome. */
 export async function sendLink(interviewId: string, o: ActionOpts): Promise<DeskResult> {
   const { r, from } = await sendLinkCore(interviewId, o);
-  if (from === null) return r;
   await audit({ subjectType: 'placement_interview', subjectId: interviewId, event: 'desk_send_link', actor: o.staff, from,
     payload: { outcome: outcomeOf(r), approved_by: o.staff, contact_added: Boolean(o.contactEmail) } });
   return r.status === 'ok' ? { ...r, interviewId } : r;
@@ -124,7 +128,7 @@ async function runItem(it: ItemRow, action: ItemAction, o: ActionOpts): Promise<
 /** One review-queue item's action, with its ONE audit row (a made interview and its send outcome are in its payload). */
 export async function itemAction(itemId: string, action: ItemAction, o: ActionOpts): Promise<DeskResult> {
   const it = await store.item(itemId);
-  if (!it) return no('not_found', 'No such review item.');
+  if (!it) return refused('placement_review_item', itemId, `desk_${action}`, o.staff, 'No such review item.');
   const { r, resolved, interviewId } = await runItem(it, action, o);
   await audit({ subjectType: 'placement_review_item', subjectId: String(it.id), event: `desk_${action}`, actor: o.staff, from: it.status ?? null,
     to: resolved ? 'resolved' : it.status ?? null,
@@ -135,7 +139,7 @@ export async function itemAction(itemId: string, action: ItemAction, o: ActionOp
 /** Not an interview / Try the room and invites again, on an interview, with its one audit row. */
 export async function interviewAction(interviewId: string, action: Exclude<InterviewAction, 'send_link'>, o: ActionOpts): Promise<DeskResult> {
   const iv = await store.interview(interviewId);
-  if (!iv) return no('not_found', 'No such interview.');
+  if (!iv) return refused('placement_interview', interviewId, `desk_${action}`, o.staff, 'No such interview.');
   const changed = await inTransaction((t) => (action === 'not_interview' ? store.cancelReview(interviewId, t) : store.retryConfirm(interviewId, MAX_CONFIRM_ATTEMPTS, t)));
   const r = changed ? ok(action === 'not_interview' ? 'cancelled' : 'retrying', action === 'not_interview' ? 'Marked as not an interview.' : 'The room and invites will be tried again within 5 minutes.')
     : no('conflict', action === 'not_interview' ? 'Only an interview with a recruiter can be marked not an interview.' : 'Nothing to try again for this interview.');
@@ -147,7 +151,7 @@ export async function interviewAction(interviewId: string, action: Exclude<Inter
 /** The interview's type (the next-interview card's type line), set by a person; one audit row. */
 export async function setInterviewType(interviewId: string, type: string, o: ActionOpts): Promise<DeskResult> {
   const iv = await store.interview(interviewId);
-  if (!iv) return no('not_found', 'No such interview.');
+  if (!iv) return refused('placement_interview', interviewId, 'desk_set_type', o.staff, 'No such interview.');
   const changed = await inTransaction((t) => store.setType(interviewId, type, t));
   await audit({ subjectType: 'placement_interview', subjectId: interviewId, event: 'desk_set_type', actor: o.staff, from: iv.state, to: iv.state, payload: { type, outcome: changed ? 'changed' : 'unchanged' } });
   return changed ? ok('changed', 'Interview type saved.') : ['done', 'cancelled'].includes(iv.state) ? no('conflict', 'This interview is over.') : ok('unchanged', 'Already set; nothing changed.');

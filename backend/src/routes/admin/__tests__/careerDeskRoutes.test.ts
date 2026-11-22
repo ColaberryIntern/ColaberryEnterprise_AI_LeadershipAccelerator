@@ -195,7 +195,7 @@ describe('reads: no provider link anywhere, no personal email or phone, honest e
     expect((await call('get', `${B}/inboxes`, undefined, owner())).body).toEqual({ testsSwitch: 'off', learners: [] });
     expect((await call('get', `${B}/bookings`, undefined, owner())).body).toEqual({ bookings: [], recording: null });
     const p = (await call('get', `${B}/placements`, undefined, owner())).body;
-    expect(p).toMatchObject({ offers: [], clients: [], kpis: { openOffers: 0, accepted: 0, fees: '$0' } });
+    expect(p).toMatchObject({ offers: [], clients: [], kpis: { openOffers: 0, accepted: 0, feesPending: '$0', fees: '$0' } });
   });
 
   it('inbox health lists every Career Prep learner (none set up reads Not set up yet) with the 30-day count and a pending Gmail confirmation, never the link', async () => {
@@ -217,7 +217,11 @@ describe('reads: no provider link anywhere, no personal email or phone, honest e
     let { body } = await call('get', `${B}/placements`, undefined, owner());
     expect(body.feeRate).toEqual({ rate: 1.1, label: '110%' });
     expect(body.offers[0]).toMatchObject({ pay: '$105,000 a year', fee: '$115,500', feeRate: '110%', statusLabel: 'Accepted', client: 'Acme Corp', invoice: { id: '1', status: 'not_invoiced', statusLabel: 'Not invoiced' } });
-    expect(body.kpis).toMatchObject({ accepted: 1, fees: '$115,500' });
+    expect(body.kpis).toMatchObject({ accepted: 1, fees: '$115,500', feesPending: '$0' });
+    deskDb.offers.push({ ...deskDb.offers[0], id: 'o2', status: 'sent', fee_cents: '5500000', invoice_id: null }, { ...deskDb.offers[0], id: 'o3', status: 'talk_first', fee_cents: '100', invoice_id: null },
+      { ...deskDb.offers[0], id: 'o4', status: 'declined', fee_cents: '999900', invoice_id: null });
+    ({ body } = await call('get', `${B}/placements`, {}, owner()));
+    expect(body.kpis).toMatchObject({ openOffers: 2, feesPending: '$55,001' });
     mockSettings.placement_fee_rate = 1.25;
     ({ body } = await call('get', `${B}/placements`, undefined, owner()));
     expect(body.feeRate).toEqual({ rate: 1.25, label: '125%' });
