@@ -8,7 +8,7 @@ import { sequelize } from '../config/database';
  */
 // 'report': a "Report a problem" submission (CH9.1); entity_id is null, the report row is not a hub entity.
 // 'eventbrite_event': a CCPP event (CH9.3); its id is not a UUID, so entity_id is null and the id is in detail.
-export type CommsHubEntityType = 'event' | 'thumbnail' | 'message' | 'delivery' | 'settings' | 'broadcast' | 'report' | 'eventbrite_event';
+export type CommsHubEntityType = 'event' | 'thumbnail' | 'message' | 'delivery' | 'settings' | 'broadcast' | 'report' | 'eventbrite_event' | 'whatsapp_group';
 
 export interface CommsHubActivityAttributes {
   id?: string;

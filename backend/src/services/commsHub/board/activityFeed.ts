@@ -24,6 +24,8 @@ const VERB: Record<string, string> = {
   'sending.paused': 'paused all sending', 'sending.resumed': 'resumed sending', 'settings.changed': 'changed the safety controls',
   'bug.reported': 'reported a problem',
   'registrants.viewed': 'viewed the registrants of', 'registrants.exported': 'downloaded the registrants of',
+  'whatsapp.groups_synced': 'synced the WhatsApp groups', 'whatsapp.group_enabled': 'switched on WhatsApp sending to',
+  'whatsapp.group_disabled': 'switched off WhatsApp sending to',
 };
 
 export interface ActivityRow { id: string; at: string; who: string; did: string; about: string | null; entity_type: string; entity_id: string | null }
@@ -46,6 +48,8 @@ export async function activityFeed(limit = 20): Promise<ActivityRow[]> {
     about: r.entity_type === 'message' ? msgTitle.get(r.entity_id ?? '') ?? null
       // CH9.3: an Eventbrite event has no hub row; its title travels in the activity detail.
       : r.entity_type === 'eventbrite_event' ? (typeof (r.detail as Record<string, unknown>)?.title === 'string' ? String((r.detail as Record<string, unknown>).title) : null)
+        // CH10.2: a WhatsApp group's name travels in the detail too.
+        : r.entity_type === 'whatsapp_group' ? (typeof (r.detail as Record<string, unknown>)?.name === 'string' ? String((r.detail as Record<string, unknown>).name) : null)
         : (r.entity_id ? eventTitle.get(r.entity_id) ?? null : null),
     entity_type: r.entity_type, entity_id: r.entity_id,
   }));

@@ -15,12 +15,14 @@ const TABLES = [
   'comms_hub_messages', 'comms_hub_drafts', 'comms_hub_destinations', 'comms_hub_approvals', 'comms_hub_deliveries',
   // CH7.5
   'comms_hub_alerts',
+  // CH10.2
+  'comms_hub_whatsapp_groups',
 ];
 
 describe('ensureCommsHubSchema: DDL and models agree', () => {
   const created = parseCreatedTables(COMMS_HUB_SCHEMA_STATEMENTS);
 
-  it('creates exactly the eleven hub tables', () => {
+  it('creates exactly the twelve hub tables', () => {
     expect(created.map((t) => t.table).sort()).toEqual([...TABLES].sort());
   });
 
@@ -85,10 +87,16 @@ describe('ensureCommsHubSchema: safe to run on every boot', () => {
 
 describe('CH6.1 the guarantees the message tables carry', () => {
   const joined = COMMS_HUB_SCHEMA_STATEMENTS.join('\n');
-  it('nine message statuses (the brief eight plus needs_approval), WhatsApp left for after the build', () => {
+  it('nine message statuses (the brief eight plus needs_approval); WhatsApp is only its groups table until CH10.3 adds the channel', () => {
     expect(COMMS_HUB_MESSAGE_STATUSES).toHaveLength(9);
     expect(COMMS_HUB_CHANNELS).toEqual(['community_post', 'in_app']);
-    expect(joined).not.toMatch(/whatsapp/i);
+    expect(COMMS_HUB_SCHEMA_STATEMENTS.filter((s) => /whatsapp/i.test(s)).every((s) => /comms_hub_whatsapp_groups/.test(s))).toBe(true);
+  });
+
+  it('CH10.2 WhatsApp groups: one row per provider group (unique), the id shape checked, every group starts not enabled', () => {
+    expect(joined).toMatch(/CREATE UNIQUE INDEX IF NOT EXISTS uq_comms_hub_whatsapp_groups_provider ON comms_hub_whatsapp_groups \(provider_group_id\)/);
+    expect(joined).toMatch(/CHECK \(provider_group_id ~ '\^\[0-9-\]\{10,31\}@g\[\.\]us\$'\)/);
+    expect(joined).toMatch(/enabled BOOLEAN NOT NULL DEFAULT false/);
   });
 
   it('a draft version is never overwritten: unique message + channel + version, version >= 1', () => {

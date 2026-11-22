@@ -412,3 +412,18 @@ export async function getWhatsAppStatus(): Promise<WhatsAppStatus> {
   const { data } = await api.get<WhatsAppStatus>('/api/admin/comms-hub/whatsapp/status');
   return data;
 }
+
+/** CH10.2: the number's WhatsApp groups. Every group starts switched off. */
+export interface WhatsAppGroup {
+  id: string; name: string; participants_count: number; enabled: boolean; sendable: boolean; cant_send_reason: string | null; last_synced_at: string;
+}
+export interface WhatsAppSyncResult { listed: number; added: number; left: number }
+export async function listWhatsAppGroups(): Promise<WhatsAppGroup[]> {
+  return (await api.get<{ groups: WhatsAppGroup[] }>('/api/admin/comms-hub/whatsapp/groups')).data.groups;
+}
+export async function syncWhatsAppGroups(): Promise<WhatsAppSyncResult> {
+  return (await api.post<WhatsAppSyncResult>('/api/admin/comms-hub/whatsapp/groups/sync')).data;
+}
+export async function setWhatsAppGroupEnabled(id: string, enabled: boolean): Promise<WhatsAppGroup> {
+  return (await api.put<{ group: WhatsAppGroup }>(`/api/admin/comms-hub/whatsapp/groups/${encodeURIComponent(id)}`, { enabled })).data.group;
+}

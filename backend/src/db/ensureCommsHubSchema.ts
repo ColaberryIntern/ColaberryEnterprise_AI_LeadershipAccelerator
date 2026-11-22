@@ -295,6 +295,30 @@ export const COMMS_HUB_SCHEMA_STATEMENTS: readonly string[] = [
   // The alert queue scans recent failure state changes every minute.
   `CREATE INDEX IF NOT EXISTS idx_comms_hub_activity_action ON comms_hub_activity (action, created_at)`,
 
+  // ---- CH10.2 WhatsApp groups (phase 3; WhatsApp ships switched off) ----
+  // One row per group the connected number belongs to, synced from the provider. Every group starts
+  // NOT enabled: Jackie switches on each group she wants to send to. A group no longer listed is
+  // marked left_at, never deleted (its deliveries keep pointing at it).
+  `CREATE TABLE IF NOT EXISTS comms_hub_whatsapp_groups (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     provider_group_id VARCHAR(64) NOT NULL,
+     name VARCHAR(255) NOT NULL,
+     participants_count INTEGER NOT NULL DEFAULT 0,
+     announcements BOOLEAN NOT NULL DEFAULT false,
+     our_rank VARCHAR(16),
+     suspended BOOLEAN NOT NULL DEFAULT false,
+     terminated BOOLEAN NOT NULL DEFAULT false,
+     left_at TIMESTAMPTZ,
+     enabled BOOLEAN NOT NULL DEFAULT false,
+     cant_send_reason VARCHAR(32),
+     last_synced_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+   )`,
+  `ALTER TABLE comms_hub_whatsapp_groups ADD CONSTRAINT comms_hub_whatsapp_groups_id_check
+     CHECK (provider_group_id ~ '^[0-9-]{10,31}@g[.]us$')`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS uq_comms_hub_whatsapp_groups_provider ON comms_hub_whatsapp_groups (provider_group_id)`,
+
   // Write-through link: the calendar rows this hub event owns. Nullable, so every existing row is untouched.
   `ALTER TABLE community_events ADD COLUMN IF NOT EXISTS hub_event_id UUID`,
   `CREATE INDEX IF NOT EXISTS idx_community_events_hub_event ON community_events (hub_event_id)`,
@@ -303,7 +327,7 @@ export const COMMS_HUB_SCHEMA_STATEMENTS: readonly string[] = [
 const REQUIRED_TABLES = [
   'comms_hub_events', 'comms_hub_thumbnails', 'comms_hub_event_photos', 'comms_hub_settings', 'comms_hub_activity',
   'comms_hub_messages', 'comms_hub_drafts', 'comms_hub_destinations', 'comms_hub_approvals', 'comms_hub_deliveries',
-  'comms_hub_alerts',
+  'comms_hub_alerts', 'comms_hub_whatsapp_groups',
 ];
 
 export async function ensureCommsHubSchema(): Promise<{ ok: boolean; missing: string[] }> {
