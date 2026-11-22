@@ -30,7 +30,7 @@ export const INTRO_VIDEO_PATH = '/portal/portfolio?tab=hire&section=video';
 export const CASE_STUDIES_PATH = '/portal/portfolio?tab=hire&section=cases';
 const SOURCE_WORD: Record<ObservationSource, string> = {
   video: 'A recorded video', phone_mock: 'A phone mock with Cora', real_interview: 'A recorded real interview',
-  training: 'A lesson quiz', project: 'A project',
+  training: 'A lesson quiz', project: 'A project', read_aloud: 'The read-aloud warm-up',
 };
 
 type Row = { value: number; source: ObservationSource; source_ref: string; observed_at: string | Date; question: string | null; asset_id: string | null };
@@ -46,6 +46,8 @@ export function describe(r: Row, now = Date.now()): SourceItem {
       ? { ...base, kind: 'try_answer', label, video: { streamUrl: answerUrl(r.asset_id, 'stream', now), posterUrl: answerUrl(r.asset_id, 'poster', now) } }
       : { ...base, kind: 'try_answer', label, notKept: true };
   }
+  // CP5.8: a read-aloud recording is deleted once scored, so there is never anything to play.
+  if (ref.startsWith('readaloud:')) return { ...base, kind: 'other', label: SOURCE_WORD.read_aloud, notKept: true };
   if (ref.startsWith('case-study:')) {
     const slug = ref.split(':').slice(2).join(':');
     return { ...base, kind: 'case_study', label: slug ? `Published case study: ${slug}` : 'A published case study', link: CASE_STUDIES_PATH };

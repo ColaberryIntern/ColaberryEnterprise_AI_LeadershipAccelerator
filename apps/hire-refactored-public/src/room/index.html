@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Interview room &middot; Hire &middot; Refactored.ai</title>
+  <!-- ALWAYS noindex: a room link is private to the employer it was sent to and is never a search result. -->
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="referrer" content="no-referrer" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" />
+  <link rel="stylesheet" href="/assets/tokens.css" />
+  <link rel="stylesheet" href="/assets/hire.css" />
+  <link rel="stylesheet" href="/assets/portfolio.css" />
+  <link rel="stylesheet" href="/assets/schedule.css" />
+  <link rel="stylesheet" href="/assets/room.css" />
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+</head>
+<body data-api="{{brand.platformApiBase}}" data-site="hire-refactored" data-view="room">
+  <a class="skip" href="#main">Skip to content</a>
+  <main id="main" tabindex="-1" class="iroom">
+    <header class="iroom-top">
+      <a class="logo" href="/" aria-label="Hire &middot; Refactored.ai home">Refactored<span class="faint">.ai</span></a>
+      <span class="iroom-prod">Interview room</span>
+      <b id="title" class="iroom-title"></b>
+      <span id="rec" class="iroom-rec" aria-live="polite"></span>
+    </header>
+    <div class="iroom-stage">
+      <section class="card panel" id="panel" aria-label="Interview room" aria-live="polite">
+        <p class="lede">Loading the interview room...</p>
+        <noscript><p class="lede">The interview room needs JavaScript. Reply to the booking email and we will help you join.</p></noscript>
+      </section>
+      <aside class="card iroom-side" id="side" aria-label="Your interview guide" hidden></aside>
+    </div>
+    <footer class="iroom-foot"><span>Refactored.ai &middot; Hire: the meeting opens in Zoom. Recording only if everyone agrees.</span></footer>
+  </main>
+  <script src="/assets/common.js" defer></script>
+  <script src="/assets/room-model.js" defer></script>
+  <script src="/assets/room.js" defer></script>
+</body>
+</html>

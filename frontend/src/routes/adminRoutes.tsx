@@ -5,6 +5,7 @@ import AdminLayout from '../components/Layout/AdminLayout';
 const AdminChangePasswordPage = lazy(() => import('../pages/admin/AdminChangePasswordPage'));
 const CareerReviewPage = lazy(() => import('../pages/admin/CareerReviewPage'));
 const PlacementStudentsPage = lazy(() => import('../pages/admin/PlacementStudentsPage'));
+const CareerDeskPage = lazy(() => import('../pages/admin/careerDesk/CareerDeskPage'));
 const CommsHubLayout = lazy(() => import('../components/admin/commsHub/CommsHubLayout'));
 const CommsHubTodayTab = lazy(() => import('../components/admin/commsHub/TodayTab'));
 const CommsHubEventsTab = lazy(() => import('../components/admin/commsHub/EventsTab'));
@@ -209,6 +210,10 @@ const adminRoutes = (
             missing sidebar was the visible symptom of the missing guard. */}
         <Route path="/admin/career-review" element={<CareerReviewPage />} />
         <Route path="/admin/placement/students" element={<PlacementStudentsPage />} />
+        <Route path="/admin/placement/queue" element={<CareerDeskPage />} />
+        <Route path="/admin/placement/inboxes" element={<CareerDeskPage />} />
+        <Route path="/admin/placement/bookings" element={<CareerDeskPage />} />
+        <Route path="/admin/placement/fees" element={<CareerDeskPage />} />
         {/* Communications Hub (CH1.3): one route, four tabs as child routes so a refresh keeps the tab. */}
         <Route path="/admin/comms-hub" element={<CommsHubLayout />}>
           <Route index element={<CommsHubTodayTab />} />

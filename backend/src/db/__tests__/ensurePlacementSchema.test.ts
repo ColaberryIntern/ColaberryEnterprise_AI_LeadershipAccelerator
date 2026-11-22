@@ -1,0 +1,88 @@
+const mockQuery = jest.fn();
+jest.mock('../../config/database', () => ({ sequelize: { query: (...a: unknown[]) => mockQuery(...a) } }));
+
+import { ensurePlacementSchema, PLACEMENT_SCHEMA_ROLLBACK, PLACEMENT_STATEMENTS } from '../ensurePlacementSchema';
+
+const tables = (list: readonly string[], re: RegExp) => list.map((s) => re.exec(s)?.[1]).filter(Boolean);
+
+describe('ensurePlacementSchema (statements)', () => {
+  it('is additive and re-runnable: every statement is IF NOT EXISTS, none ALTERs or DROPs', () => {
+    for (const s of PLACEMENT_STATEMENTS) {
+      expect(s).toMatch(/IF NOT EXISTS/);
+      expect(s).not.toMatch(/\bALTER\b|\bDROP\b/i);
+    }
+  });
+  it('CP6.1: one inbox per learner, one Gmail mailbox across learners (dots and +tags folded), one row per message', () => {
+    const inbox = PLACEMENT_STATEMENTS.find((s) => s.includes('CREATE TABLE IF NOT EXISTS job_search_inboxes')) as string;
+    expect(inbox).toMatch(/enrollment_id UUID NOT NULL UNIQUE/);
+    expect(PLACEMENT_STATEMENTS).toContain('CREATE UNIQUE INDEX IF NOT EXISTS uq_job_search_inboxes_mailbox ON job_search_inboxes (mailbox)');
+    expect(PLACEMENT_STATEMENTS.find((s) => s.includes('inbox_received ('))).toMatch(/message_id VARCHAR\(255\) NOT NULL UNIQUE/);
+  });
+  it('CP6.2: inbox events are stored once per (message_id, type), with the four F3 types only', () => {
+    const events = PLACEMENT_STATEMENTS.find((s) => s.includes('CREATE TABLE IF NOT EXISTS inbox_events')) as string;
+    expect(events).toMatch(/CONSTRAINT uq_inbox_events_message_type UNIQUE \(message_id, type\)/);
+    expect(events).toMatch(/CHECK \(type IN \('email\.classified', 'interview\.detected', 'interview\.updated', 'forwarding\.confirmation'\)\)/);
+    expect(events).toMatch(/processed_at TIMESTAMPTZ,/);
+  });
+  it('CP6.2: the backfill cursor is ONE row, apart from inbox_events', () => {
+    expect(PLACEMENT_STATEMENTS.find((s) => s.includes('CREATE TABLE IF NOT EXISTS inbox_backfill_state'))).toMatch(/id SMALLINT PRIMARY KEY CHECK \(id = 1\)/);
+  });
+  it('CP8.1: one interview per source event, six states only; one event row per inbox event; one review item per kind and event', () => {
+    const iv = PLACEMENT_STATEMENTS.find((s) => s.includes('CREATE TABLE IF NOT EXISTS placement_interviews')) as string;
+    expect(iv).toMatch(/source_event_id VARCHAR\(300\) NOT NULL UNIQUE/);
+    expect(iv).toMatch(/state IN \('new','awaiting','review','booked','done','cancelled'\)/);
+    expect(PLACEMENT_STATEMENTS).toContain('CREATE UNIQUE INDEX IF NOT EXISTS uq_placement_events_source ON placement_events (source_event_id) WHERE source_event_id IS NOT NULL');
+    expect(PLACEMENT_STATEMENTS.find((s) => s.includes('placement_review_items ('))).toMatch(/UNIQUE \(kind, source_event_id\)/);
+  });
+  it('CP8.1b: a partial index serves the booking-link sweep (only interviews still owed a reply)', () => {
+    expect(PLACEMENT_STATEMENTS).toContain("CREATE INDEX IF NOT EXISTS idx_placement_interviews_owed_link ON placement_interviews (created_at) WHERE state = 'new' AND booking_link_sent_at IS NULL");
+  });
+  it('CP9.1: one decision per party per interview; recording state and read-back are bounded; the mismatch review kind exists', () => {
+    const consents = PLACEMENT_STATEMENTS.find((s) => s.includes('CREATE TABLE IF NOT EXISTS interview_consents')) as string;
+    expect(consents).toMatch(/CONSTRAINT uq_interview_consents_party UNIQUE \(interview_id, party_ref\)/);
+    expect(consents).toMatch(/decision IN \('consent','decline'\)/);
+    const iv = PLACEMENT_STATEMENTS.find((s) => s.includes('CREATE TABLE IF NOT EXISTS placement_interviews')) as string;
+    expect(iv).toMatch(/recording_consent IN \('declined','pending','on','unavailable','failed'\)/);
+    expect(iv).toMatch(/readback_recording IN \('on','off'\)/);
+    expect(iv).toMatch(/recording_meeting_id VARCHAR\(128\)/);
+    expect(PLACEMENT_STATEMENTS.find((s) => s.includes('placement_review_items ('))).toMatch(/'recording_mismatch'/);
+    expect(PLACEMENT_STATEMENTS.find((s) => s.includes('CREATE TABLE IF NOT EXISTS interview_notes'))).toMatch(/char_length\(body\) <= 5000/);
+    // T24 (CP9.2): at most one replay per interview, four states, the retries counted.
+    const rp = PLACEMENT_STATEMENTS.find((s) => s.includes('CREATE TABLE IF NOT EXISTS interview_replays')) as string;
+    expect(rp).toMatch(/interview_id UUID NOT NULL UNIQUE REFERENCES placement_interviews\(id\)/);
+    expect(rp).toMatch(/status IN \('waiting','scored','no_score','unavailable'\)/);
+    expect(rp).toMatch(/attempts SMALLINT NOT NULL DEFAULT 0 CHECK \(attempts >= 0\)/);
+    // T25 (CP10.1): versioned offers (one current version per group), one invoice record per offer.
+    const of = PLACEMENT_STATEMENTS.find((s) => s.includes('CREATE TABLE IF NOT EXISTS placement_offers')) as string;
+    expect(of).toMatch(/status IN \('sent','accepted','declined','talk_first','withdrawn'\)/);
+    expect(of).toMatch(/UNIQUE \(offer_group_id, version\)/);
+    expect(of).toMatch(/client_key UUID NOT NULL UNIQUE/);
+    // Kit F7: who agreed and which agreement text they saw are stored on the offer; pay floors $1 (100 cents).
+    expect(of).toMatch(/agreed_by VARCHAR\(120\) NOT NULL/);
+    expect(of).toMatch(/agreement_text_version VARCHAR\(40\) NOT NULL/);
+    expect(of).toMatch(/salary_cents >= 100 AND salary_cents <= 200000000/);
+    expect(of).toMatch(/hourly_rate_cents >= 100 AND hourly_rate_cents <= 100000/);
+    expect(PLACEMENT_STATEMENTS).toContain('CREATE UNIQUE INDEX IF NOT EXISTS uq_placement_offers_current ON placement_offers (offer_group_id) WHERE superseded_at IS NULL');
+    expect(PLACEMENT_STATEMENTS.find((s) => s.includes('CREATE TABLE IF NOT EXISTS placement_invoices'))).toMatch(/offer_id UUID NOT NULL UNIQUE REFERENCES placement_offers\(id\)/);
+  });
+  it('has a rollback that drops every table it creates, dependents first, never run at boot', () => {
+    const made = tables(PLACEMENT_STATEMENTS, /CREATE TABLE IF NOT EXISTS (\w+)/);
+    const dropped = tables(PLACEMENT_SCHEMA_ROLLBACK, /DROP TABLE IF EXISTS (\w+)/);
+    expect([...dropped].sort()).toEqual([...made].sort());
+    expect(dropped.indexOf('inbox_received')).toBeLessThan(dropped.indexOf('job_search_inboxes'));
+    expect(dropped.indexOf('interview_consents')).toBeLessThan(dropped.indexOf('placement_interviews'));
+    expect(dropped.indexOf('interview_notes')).toBeLessThan(dropped.indexOf('placement_interviews'));
+    expect(dropped.indexOf('interview_replays')).toBeLessThan(dropped.indexOf('placement_interviews'));
+    expect(dropped.indexOf('placement_invoices')).toBeLessThan(dropped.indexOf('placement_offers'));
+    expect(dropped.indexOf('placement_offers')).toBeLessThan(dropped.indexOf('placement_interviews'));
+  });
+  it('keeps booting when one statement fails, and says so', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    jest.spyOn(console, 'log').mockImplementation(() => undefined);
+    mockQuery.mockReset().mockRejectedValueOnce(Object.assign(new Error('boom'), { name: 'SequelizeDatabaseError' })).mockResolvedValue([[], 0]);
+    await ensurePlacementSchema();
+    expect(mockQuery).toHaveBeenCalledTimes(PLACEMENT_STATEMENTS.length);
+    expect(String(warn.mock.calls[0][0])).toContain('placement_schema_stmt_skipped');
+    jest.restoreAllMocks();
+  });
+});

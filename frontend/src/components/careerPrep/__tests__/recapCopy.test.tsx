@@ -60,7 +60,7 @@ describe('the dashboard marks what the session moved (CP4.5)', () => {
   let root: Root | null = null;
   afterEach(() => { if (root) { const r = root; act(() => r.unmount()); } root = null; });
   it('a skill in newKeys reads New; the others do not', () => {
-    const d: PrepDashboard = { interviews: [], sources: { video: 2, phone_mock: 0, real_interview: 0, training: 0, project: 0 }, weeklyMinutes: [], streak: 1, thisWeek: 11,
+    const d: PrepDashboard = { interviews: [], sources: { video: 2, phone_mock: 0, real_interview: 0, training: 0, project: 0, read_aloud: 0 }, weeklyMinutes: [], streak: 1, thisWeek: 11,
       skills: [{ key: 'pace_clarity', label: 'Pace and clarity', score: 57, count: 2, sources: ['video'] }, { key: 'few_fillers', label: 'Few filler words', score: 64, count: 2, sources: ['video'] }] } as PrepDashboard;
     const h = document.createElement('div');
     const r = createRoot(h);

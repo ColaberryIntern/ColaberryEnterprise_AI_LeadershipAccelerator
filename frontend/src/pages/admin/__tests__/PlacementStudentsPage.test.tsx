@@ -53,6 +53,16 @@ describe('Placement > Student prep', () => {
     expect(one).toHaveBeenCalledWith('e1');
   });
 
+  it('the desk\'s Prep link (?student=<id>) opens that student, even one with no evidence listed yet (CP11.1b)', async () => {
+    window.history.pushState({}, '', '/admin/placement/students?student=e9');
+    list.mockResolvedValue([{ enrollmentId: 'e1', name: 'Ann Lee', lastObserved: '2026-11-15T16:00:00Z', observations: 12 }]);
+    one.mockResolvedValue({ skills: [], sources: {}, streak: 0, thisWeek: 0 });
+    await mount();
+    expect(one).toHaveBeenCalledWith('e9');
+    expect(host.querySelector('[data-testid="placement-student-prep"]')?.textContent).toContain('Readiness: Not enough data yet');
+    window.history.pushState({}, '', '/');
+  });
+
   it('says plainly when the viewer lacks the Placement section', async () => {
     list.mockRejectedValue({ response: { status: 403 } });
     await mount();

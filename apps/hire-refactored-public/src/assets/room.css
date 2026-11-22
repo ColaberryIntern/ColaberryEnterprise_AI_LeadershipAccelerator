@@ -1,0 +1,49 @@
+/*
+ * hire.refactored.ai - the employer interview room (/room/?i=&e=&t=, Career Prep CP9.1). Tokens only, on top of
+ * schedule.css. Laid out like the design's room (kit design/refactored-career-center.html, .room): a top bar with
+ * "RECORDING n OF n CONSENTED", the stage with a 360px side panel (the interview guide and private notes), a bottom
+ * bar. One column under 1100px; every control at least 44px; nothing scrolls sideways at 390px.
+ */
+.iroom{min-height:100vh;display:grid;grid-template-rows:auto 1fr auto;background:var(--bg-sunk)}
+.iroom-top{display:flex;align-items:center;flex-wrap:wrap;gap:12px 16px;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--bg-elevated)}
+.iroom-top .logo{gap:0}
+.iroom-prod{padding:2px 8px;border:1px solid var(--line);border-radius:4px;font:500 .78rem var(--font-mono);color:var(--fg-muted)}
+.iroom-title{min-width:0;overflow-wrap:anywhere}
+.iroom-rec{display:inline-flex;align-items:center;gap:.4rem;margin-left:auto;font:600 .74rem var(--font-mono);letter-spacing:.08em;color:var(--fg-muted)}
+.iroom-rec.on{color:var(--danger)}
+.iroom-rec i{width:9px;height:9px;border-radius:50%;background:var(--danger);animation:iroom-blink 1.2s infinite}
+@keyframes iroom-blink{50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.iroom-rec i{animation:none}}
+.iroom-stage{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px;padding:16px;align-items:start;min-width:0}
+.iroom .card{margin:0}
+.iroom .panel{padding:24px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.iroom .panel h2{font-family:var(--font-mono);font-size:1.25rem;margin:0}
+.iroom .panel p{margin:0}
+/* The two recording choices are ONE style: same size, same weight, side by side (neither is the default). */
+.iroom .choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:6px}
+.iroom .choice{min-height:48px;padding:10px 16px;border:2px solid var(--fg);border-radius:10px;background:var(--bg-elevated);color:var(--fg);font:600 .95rem var(--font-sans);cursor:pointer}
+.iroom .choice:hover:not([disabled]){background:var(--accent-soft)}
+.iroom .choice:focus-visible{outline:3px solid var(--focus-ring, var(--accent));outline-offset:2px}
+.iroom .choice[disabled]{opacity:.55;cursor:not-allowed}
+.iroom .panel .acts{margin-top:4px;align-items:center}
+.iroom .notice{display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.iroom-side{padding:18px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.iroom-side h3{font-family:var(--font-mono);font-size:1rem;margin:0}
+.iroom-side .qs{margin:0;padding-left:1.3rem;display:flex;flex-direction:column;gap:6px;font-size:.92rem}
+.iroom-side .field-label{font-weight:600;font-size:.88rem;margin-top:8px}
+.iroom-side textarea{width:100%;box-sizing:border-box;min-height:110px;padding:10px 12px;border-radius:8px;border:1px solid var(--line-strong);background:var(--bg);color:var(--fg);font:inherit;resize:vertical}
+.iroom-side .btn{min-height:44px}
+.iroom-side .btn[disabled]{opacity:.55;cursor:not-allowed}
+.iroom-side .notes{list-style:none;margin:4px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
+.iroom-side .notes li{padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+.iroom-side .notes time{font:500 .76rem var(--font-mono);color:var(--fg-muted)}
+.iroom-side .notes p{margin:2px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.iroom-foot{display:flex;justify-content:center;padding:14px 16px;border-top:1px solid var(--line);background:var(--bg-elevated);color:var(--fg-muted);font-size:.85rem;text-align:center}
+@media (max-width:1100px){.iroom-stage{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:600px){
+  .iroom-stage{padding:12px}
+  .iroom .panel{padding:16px}
+  .iroom .choices{grid-template-columns:minmax(0,1fr)}
+  .iroom-prod{display:none}
+  .iroom-rec{margin-left:0;width:100%}
+}

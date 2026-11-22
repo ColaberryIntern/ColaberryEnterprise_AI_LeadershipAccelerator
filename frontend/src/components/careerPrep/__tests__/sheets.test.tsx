@@ -7,12 +7,17 @@ import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
 import { filterJump, JUMP_ITEMS, sheetFromHash, SHEETS } from '../logic/sheets';
 import { useSheet } from '../useSheet';
 import { PageSheet } from '../PageSheet';
-import { InterviewsSheet, joinOpen, SheetBody } from '../SheetBodies';
+import { BookedAndAdded, joinOpen, SheetBody } from '../SheetBodies';
 import { JumpBar } from '../JumpBar';
 import { fetchHireInterviews, type HireInterview } from '../../../services/hireStudioApi';
+import { fetchPlacementInterviewsApi } from '../interviewsApi';
+import { fetchOffersApi } from '../offersApi';
 
 jest.mock('../../../services/hireStudioApi', () => ({ fetchHireInterviews: jest.fn() }));
+jest.mock('../interviewsApi', () => ({ fetchPlacementInterviewsApi: jest.fn() }));
+jest.mock('../offersApi', () => ({ fetchOffersApi: jest.fn(), answerOfferApi: jest.fn() }));
 const hire = fetchHireInterviews as jest.Mock;
+const offers = fetchOffersApi as jest.Mock;
 
 let host: HTMLDivElement | null = null;
 let root: Root | null = null;
@@ -92,13 +97,17 @@ describe('sheets are hashes on the room URL (CP4.6)', () => {
   });
 });
 
-describe('the offers sheet never shows a fee (CP4.6)', () => {
-  it('says plainly that offers are not tracked yet, and no Career Prep sheet source mentions a fee', () => {
+describe('the offers sheet never shows a fee (CP4.6, CP10.4)', () => {
+  it('is the real Offers sheet ("There\'s no cost to you."), and no Career Prep sheet source mentions a fee', async () => {
+    offers.mockResolvedValue([]);
     const h = mount(<MemoryRouter><SheetBody sheet="offers" prep={[]} /></MemoryRouter>);
-    expect(h.textContent).toContain('Offers are not tracked in the app yet');
+    await flush();
+    expect(h.querySelector('[data-testid="cp-offers-sheet"]')).not.toBeNull();
+    expect(h.textContent).toContain("There's no cost to you.");
     expect(h.textContent).not.toMatch(/fee/i);
     const dir = path.join(__dirname, '..');
-    for (const f of ['SheetBodies.tsx', 'PageSheet.tsx', 'JumpBar.tsx', 'useSheet.ts', path.join('logic', 'sheets.ts'), 'careerPrepApi.ts']) {
+    for (const f of ['SheetBodies.tsx', 'PageSheet.tsx', 'JumpBar.tsx', 'useSheet.ts', path.join('logic', 'sheets.ts'), 'careerPrepApi.ts',
+      'offersApi.ts', path.join('sheets', 'OffersSheet.tsx'), 'useOfferNotice.ts']) {
       expect(fs.readFileSync(path.join(dir, f), 'utf8')).not.toMatch(/\bfees?\b/i);
     }
   });
@@ -118,7 +127,7 @@ describe('Your interviews sheet (CP4.6)', () => {
   });
   it('lists booked interviews in Central with their status, and the ones the student added', async () => {
     hire.mockResolvedValue([booked()]);
-    const h = mount(<MemoryRouter><InterviewsSheet now={Date.parse('2026-11-17T19:55:00Z')} prep={[
+    const h = mount(<MemoryRouter><BookedAndAdded now={Date.parse('2026-11-17T19:55:00Z')} prep={[
       { id: 'i1', source: 'real', company: 'Meridian Freight', role: 'AI Engineer', type: 'technical', target: 75 },
       { id: 'i2', source: 'practice', company: 'Practice', role: 'Data Analyst', type: 'behavioral', target: 70 }]} /></MemoryRouter>);
     await flush();
@@ -129,14 +138,28 @@ describe('Your interviews sheet (CP4.6)', () => {
     expect(h.textContent).not.toContain('Meridian Freight · AI Engineer · Added by you');
   });
   it('says so when nothing is booked, and when the list cannot load', async () => {
-    const h = mount(<MemoryRouter><InterviewsSheet prep={[]} /></MemoryRouter>);
+    const h = mount(<MemoryRouter><BookedAndAdded prep={[]} /></MemoryRouter>);
     await flush();
-    expect(h.textContent).toContain('No employer has booked an interview with you yet.');
+    expect(h.textContent).toContain('Nothing booked through your Hire profile yet.');
     act(() => { root!.unmount(); }); root = null; host?.remove();
     hire.mockRejectedValue(new Error('offline'));
-    const h2 = mount(<MemoryRouter><InterviewsSheet prep={[]} /></MemoryRouter>);
+    const h2 = mount(<MemoryRouter><BookedAndAdded prep={[]} /></MemoryRouter>);
     await flush();
     expect(h2.querySelector('[role="alert"]')?.textContent).toContain('Could not load your booked interviews');
+  });
+});
+
+describe('the whole #interviews page (CP8.3 + CP4.6)', () => {
+  it('with an interview booked through the inbox and nothing through the Hire profile, nothing on the page says no employer booked', async () => {
+    hire.mockResolvedValue([]);
+    (fetchPlacementInterviewsApi as jest.Mock).mockResolvedValue({ kpis: { upcoming: 1, waiting: 0, recruiter: 0, held: 0 }, interviews: [{ id: 'pi-1', company: 'Northwind', role: 'ML Engineer',
+      state: 'booked', stateLabel: 'Booked', startsAt: '2026-11-23T15:00:00.000Z', minutes: 30, readAs: null, confidence: null, roomPage: '/portal/career/interview/pi-1',
+      joinOpensAt: '2026-11-23T14:50:00.000Z', joinClosesAt: '2026-11-23T15:30:00.000Z', prepId: null, history: [] }] });
+    const h = mount(<MemoryRouter><SheetBody sheet="interviews" prep={[]} /></MemoryRouter>);
+    await flush();
+    expect(h.querySelector('[data-testid="cp-ivs-row-pi-1"]')?.textContent).toContain('Booked');
+    expect(h.textContent).not.toMatch(/No employer has booked/i);
+    expect(h.textContent).toContain('Nothing booked through your Hire profile yet.');
   });
 });
 

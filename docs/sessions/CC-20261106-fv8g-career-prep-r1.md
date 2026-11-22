@@ -731,3 +731,69 @@ tests/systemV2/career-prep/.
     and pins the list to this one statement. The public card ships with the nginx image (the hire site is built in
     nginx/Dockerfile). Locally, 13 unrelated backend suites (Reese inventories, timeline, mgmtRbac, ...) fail the
     same 28 tests on clean main as on this branch; enrichVisitorGeo (maxmind) remains the only local tsc error.
+
+- [x] CP6.3 Release 2 checkpoint: the job-search inbox and its integration, on branch workstream/career-prep-r2r3
+  - Date: 2026-11-21
+  - Session: CC-20261106-fv8g
+  - What changed (loop run 20261121-career-prep-r2r3, T09 to T13, branch head cd80eaea4, not pushed, not merged): the
+    placement schema and boot file (T09, ecad5bc05); the #inbox sheet and its routes (T10, bc05aa40c); the daily
+    forwarding test and once-per-spell broken alert, switch career_prep_inbox_tests_enabled absent = off (T11,
+    319488fe6); the signed POST /api/integrations/inbox/events (T12, db817905a); the roster lookup and the backfill
+    client (T13, cd80eaea4). Everything outward-facing is dark: no inbox test mail, and both integration routes answer
+    503 while INBOX_INTEGRATION_SECRET is unset.
+  - Verification (on cd80eaea4): backend tsc 0 and frontend tsc 0; backend `npx jest -c jest.ci.config.ts --ci`
+    3083 suites passed, 3 failed, 58 skipped (50062 tests passed, 3 failed); frontend jest (whole suite) 820 suites
+    passed, 6 failed (10743 tests passed, 2 failed): 4 of the 6 are /testEnv/ helper files with no test, which the CI
+    command excludes (--testPathIgnorePatterns "/testEnv/"), the other 2 are listed below; CI=true build compiled successfully; secret-scan OK; lint-route-auth
+    OK; test typecheck baseline matched exactly; hire site node --test 140/140; Career Prep browser suite 43/43 across
+    3 suites (Edge, built app).
+  - Notes: all 5 failing suites are local CRLF-checkout artifacts in files this branch does not touch (git diff
+    against the base fd07e9d8a is empty for each): mountLearnerPortalRoutes, generateReeseToolInventory and
+    generateReeseBehaviourInventory (backend), publicNextOpenHouseJs and governmentHeaderParity (frontend). Each
+    compares text split on LF. Proof: with mountLearnerPortalRoutes.ts converted to LF the suite passes 7/7 (the file
+    was then restored). CI checks out LF. Postgres integration suites (ensurePlacementSchema, inboxService,
+    inboxTestJob, inboxEvents) run in CI's integration tier; no local Postgres.
+
+- [x] CP8.4 Release 2 checkpoint: interviews and booking, on branch workstream/career-prep-r2r3
+  - Date: 2026-11-21
+  - Session: CC-20261106-fv8g
+  - What changed (loop run 20261121-career-prep-r2r3, T15 to T20, gates run at head c15b39b11 plus the T21 commit,
+    draft PR https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/4292, not merged, not
+    deployed): interview states, events and ingestion (T15); the booking-link reply (T16); the token, slot grid and public
+    booking API (T17, 8011e8726); the booking page, room with recording off, and confirmations (T18, 81696245f);
+    reminders and the 24 h nudge (T19, c82a6880b, 5dba200cb); the Interviews sheet, the booked interview as the learner's
+    prep row, the card and the anchors (T20, a30c9e62c, c15b39b11). Employer email is switched off at ship.
+    T21 itself: careerPrepInboxRoutes.test.ts loads its router once in beforeAll (it timed out on a loaded machine,
+    the same pattern T20 fixed); 4 parallel batches green.
+  - Verification: backend tsc 0, frontend tsc 0; backend `npx jest -c jest.ci.config.ts --ci` 3115 suites passed,
+    4 failed, 62 skipped (50438 tests passed): careerPrepInboxRoutes (load timeout, fixed in this commit, then 4 of 4
+    green under 4 parallel batches) and the 3 known CRLF artifacts (mountLearnerPortalRoutes, generateReese*); frontend
+    jest (testEnv excluded, as CI) 823 suites passed, 2 failed (publicNextOpenHouseJs, governmentHeaderParity: the
+    known CRLF artifacts); CI=true build compiled; secret-scan OK; lint-route-auth OK; test typecheck baseline matched;
+    hire site node --test 149/149; Career Prep browser suites 49/49 across 4 suites (Edge, built app); scope check
+    clean. CI on c15b39b11: every PR check green, Integration tier all 59 suites (bookingConfirm 4/4, bookingService 2/2,
+    bookingScheduler 2/2, interviewIngest, careerPrep interviews 4/4).
+  - Notes: no local Postgres; the integration suites run only in CI.
+
+- [x] CP10.5 Release 3 checkpoint: the interview room, the replay, and the employer portal, on branch workstream/career-prep-r2r3
+  - Date: 2026-11-22
+  - Session: CC-20261106-fv8g
+  - What changed (loop run 20261121-career-prep-r2r3, T22 to T29, gates run at head 2f5931075, draft PR
+    https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/4292, not merged, not
+    deployed): recording consent and the room's Zoom permission check (T22, fe7efc783); the candidate and employer
+    interview rooms with the guide and private notes (T23, 0cb0fec7f); the replay and its scoring from the audio only
+    (T24, ed6f36a19); the fee calculation, versioned offers and the invoice record on acceptance (T25, cb896d82a);
+    employer accounts and magic-link sign-in (T26, 06124fbb7); the employer portal pages (T27, 5a55fbe40, 2ed17fc08);
+    employer follow-ups (T28, 182b4d90f, 2929e33eb); the candidate's Offers sheet, never a fee (T29, 53aa7a46c,
+    2f5931075). Switched off at ship: employer email, the employer portal (so no offer can exist), inbox tests.
+    T30 itself changes no code.
+  - Verification: backend tsc 0, frontend tsc 0; backend `npx jest -c jest.ci.config.ts --ci` 3154 suites passed,
+    3 failed, 69 skipped (50967 tests passed): the 3 known CRLF artifacts (mountLearnerPortalRoutes,
+    generateReeseBehaviourInventory, generateReeseToolInventory); frontend jest (testEnv excluded, as CI) 833 suites
+    passed, 2 failed (publicNextOpenHouseJs, governmentHeaderParity: the known CRLF artifacts); CI=true build
+    compiled; secret-scan OK (9424 files); lint-route-auth OK (193 admin route files); test typecheck baseline
+    matched; hire site node --test 198/198; Career Prep browser suites 64/64 across 4 suites (Edge, built app); size
+    and scope checks clean. CI on 2f5931075: every PR check green, Integration tier 66 suites passed, 0 failed
+    (offerStore 6/6).
+  - Notes: no local Postgres; the integration suites run only in CI. origin/main is still 7cdbaeabb (the run's base),
+    so the PR needs no merge from main. Carried to T33: the floor side panel's "Waiting on you" row for offers.

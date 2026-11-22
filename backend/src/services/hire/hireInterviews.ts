@@ -33,14 +33,28 @@ import {
 export const HOLDING_STATUSES = ['requested', 'confirmed', 'rescheduled'] as const;
 const DAY = 86_400_000;
 
-/** The times a candidate already holds around a window (a week either side, for the weekly cap). */
+/**
+ * The times a candidate already holds around a window (a week either side, for the weekly cap): their Hire profile
+ * interviews AND their BOOKED Career Prep placement interviews (CP8.2), so neither booking path can take a time the
+ * other already holds. Both paths decide under the same per-candidate advisory lock (`hire_interviews:<enrollment>`).
+ * A placement interview with no length yet counts 30 minutes. `to_regclass` first, so a database where the placement
+ * schema is not there yet reads as "none" without an error that would abort the caller's transaction.
+ */
 export async function heldTimes(enrollmentId: string, from: Date, to: Date, transaction?: Transaction): Promise<HeldTime[]> {
+  const window = [new Date(from.getTime() - 8 * DAY), new Date(to.getTime() + 8 * DAY)];
   const [rows] = await sequelize.query(
     `SELECT starts_at, minutes FROM hire_interviews
       WHERE enrollment_id = $1 AND status = ANY($2::text[]) AND starts_at >= $3 AND starts_at < $4`,
-    { bind: [enrollmentId, HOLDING_STATUSES, new Date(from.getTime() - 8 * DAY), new Date(to.getTime() + 8 * DAY)], transaction },
+    { bind: [enrollmentId, HOLDING_STATUSES, ...window], transaction },
   );
-  return (Array.isArray(rows) ? rows : []).map((r) => {
+  const [has] = await sequelize.query("SELECT to_regclass('placement_interviews') IS NOT NULL AS ok", { transaction });
+  const [placement] = (has as Array<{ ok: boolean }>)?.[0]?.ok
+    ? await sequelize.query(
+      `SELECT starts_at, COALESCE(minutes, 30) AS minutes FROM placement_interviews
+        WHERE enrollment_id = $1 AND state = 'booked' AND starts_at >= $2 AND starts_at < $3`,
+      { bind: [enrollmentId, ...window], transaction })
+    : [[]];
+  return [...(Array.isArray(rows) ? rows : []), ...(Array.isArray(placement) ? placement : [])].map((r) => {
     const row = r as { starts_at: string | Date; minutes: number };
     return { startsAt: new Date(row.starts_at), minutes: Number(row.minutes) };
   });

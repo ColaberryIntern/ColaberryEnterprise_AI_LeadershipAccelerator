@@ -108,6 +108,8 @@ export interface SlotQuery {
   readonly now: Date;
   readonly held: readonly HeldTime[];
   readonly days?: number;
+  /** Minutes kept free before and after every held time (default 0: the Hire profile's own booking is unchanged). */
+  readonly bufferMinutes?: number;
 }
 
 /** Every open start time, ascending, as UTC Dates. */
@@ -117,9 +119,10 @@ export function openSlots(rules: SlotRules, q: SlotQuery): Date[] {
   const earliest = q.now.getTime() + Math.max(0, rules.minNoticeHours) * 3_600_000;
   const perWeek = new Map<string, number>();
   for (const h of q.held) perWeek.set(weekOf(h.startsAt, rules.tz), (perWeek.get(weekOf(h.startsAt, rules.tz)) ?? 0) + 1);
+  const buf = Math.max(0, q.bufferMinutes ?? 0) * MIN;
   const overlaps = (s: number, e: number) => q.held.some((h) => {
     const hs = h.startsAt.getTime();
-    return s < hs + h.minutes * MIN && hs < e;
+    return s < hs + h.minutes * MIN + buf && hs - buf < e;
   });
 
   const [fy, fm, fd] = q.fromDate.split('-').map(Number);

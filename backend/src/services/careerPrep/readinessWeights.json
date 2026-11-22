@@ -3,7 +3,7 @@
   "halfLifeDays": 14,
   "minObservationsPerSkill": 3,
   "minSkillsForReadiness": 5,
-  "sourceWeights": { "real_interview": 1.5, "phone_mock": 1.2, "video": 1.0, "project": 1.0, "training": 0.8 },
+  "sourceWeights": { "real_interview": 1.5, "phone_mock": 1.2, "video": 1.0, "read_aloud": 1.0, "project": 1.0, "training": 0.8 },
   "targets": { "recruiter": 65, "hiring_manager": 75, "technical": 75, "behavioral": 70 },
   "skillWeightsByType": {
     "recruiter": { "pace_clarity": 1.5, "few_fillers": 1.5, "behavioral_stories": 1.2 },

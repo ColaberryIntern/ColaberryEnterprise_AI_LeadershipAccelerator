@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { PREP_SKILLS } from '../db/ensureCareerPrepSchema';
 import { NotFoundError } from '../services/careerPrep/sessions';
 import { skillSources } from '../services/careerPrep/skillSources';
+import { OBSERVATION_SOURCES } from '../services/careerPrep/readiness';
 import {
   AnswerRejectedError, deleteAnswer, listSavedAnswers, NotSaveableError, RecordingGoneError, resolveAnswerFile, saveAnswer, setShowPublic,
 } from '../services/careerPrep/savedAnswers';
@@ -22,7 +23,7 @@ import { logFailure } from '../routes/campusRoutes';
  */
 const SKILL = z.enum(PREP_SKILLS.map((s) => s.key) as [string, ...string[]]);
 const SourcesParams = z.object({ key: SKILL }).strict();
-const SourcesQuery = z.object({ source: z.enum(['video', 'phone_mock', 'real_interview', 'training', 'project']) }).strict();
+const SourcesQuery = z.object({ source: z.enum(OBSERVATION_SOURCES) }).strict();
 const AttemptParams = z.object({ attemptId: z.string().uuid() }).strict();
 const PublicBody = z.object({ on: z.boolean() }).strict();
 const SaveBody = z.object({ question: z.string().trim().min(1).max(600).optional() }).strict();

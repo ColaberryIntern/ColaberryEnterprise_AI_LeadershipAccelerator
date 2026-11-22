@@ -100,7 +100,9 @@ describe('the profile with and without booking', () => {
 
 describe('Practice answers (Career Prep R1.2, a second opt-in)', () => {
   const ANS = (n) => ({ question: `Question <${n}>?`, seconds: 42, streamUrl: `/api/public/hire/practice-answer/a${n}/stream`, posterUrl: `/api/public/hire/practice-answer/a${n}/poster` });
-  const render = (hire) => P.renderPortfolio(body(hire), 'ann-lee', [], NOW, API, 'America/Chicago');
+  // The zone is a named constant: a literal right after `API, ` matched gitleaks' generic-api-key rule (a false positive).
+  const ZONE = 'America/Chicago';
+  const render = (hire) => P.renderPortfolio(body(hire), 'ann-lee', [], NOW, API, ZONE);
 
   test('each switched-on answer plays from the public route with its question escaped, and no score', () => {
     const html = X.practiceAnswers([ANS(1)], API);

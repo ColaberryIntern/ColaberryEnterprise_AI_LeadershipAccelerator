@@ -31,72 +31,13 @@
  * Layout: no horizontal scroll in any of the room's own scroll containers, no tooltip off screen, for the room (Your progress, Your plan) at 1600, 1440, 390, light
  * and dark, and the floor at 1440 and 390; at 390 the last plan block is focused so its tooltip is on screen.
  *
- * Usage (repo root): node tests/systemV2/career-prep/careerPrep.e2e.js   (env: BUILD_DIR, PORT=3161, PW_CHANNEL=msedge)
+ * Usage (repo root): node tests/systemV2/career-prep/careerPrep.e2e.js, or runAll.js for every suite (env: see harness.js)
  * Exit 0 only when every check ran and passed; a check that did not evaluate counts as a failure.
  */
-const http = require('http');
+// The server, fake camera, page factory, check recorder and runner live in harness.js (split in loop task T06).
 const fs = require('fs');
 const path = require('path');
-const { chromium } = require(process.env.PW_PATH || 'playwright');
-const { installFakeApi } = require('./fakeApi');
-// Self-tests that MUST fail the run: flag-off (Career Prep closed: nothing renders) and wide (a 2000px block in the room), tip (a tooltip pushed off screen) and contrast (a room heading colored near-black).
-const SELFTEST = process.env.CP_E2E_SELFTEST || '';
-// CP_E2E_DAYS_AHEAD=n runs the whole suite with the browser clock (and the fixtures' "now") n days in the future.
-const NOW = Date.now() + Number(process.env.CP_E2E_DAYS_AHEAD || 0) * 86_400_000;
-
-const BUILD = path.resolve(process.env.BUILD_DIR || path.join(__dirname, '..', '..', '..', 'frontend', 'build'));
-const PORT = Number(process.env.PORT || 3161);
-const BASE = `http://127.0.0.1:${PORT}`;
-const TYPES = { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.woff2': 'font/woff2', '.ico': 'image/x-icon' };
-// A participant token that only has to EXIST for the portal's route guard; the fake API never reads it.
-const TOKEN = ['e30', Buffer.from(JSON.stringify({ sub: 'e2e', exp: 4102444800 })).toString('base64url'), 'x'].join('.');
-
-function serve() {
-  if (!fs.existsSync(path.join(BUILD, 'index.html'))) throw new Error(`no build at ${BUILD}: run the frontend build first`);
-  return http.createServer((req, res) => {
-    const url = decodeURIComponent((req.url || '/').split('?')[0]);
-    if (url === '/__iframe') { res.writeHead(200, { 'content-type': 'text/html' }); res.end(`<!doctype html><iframe id="f" sandbox="allow-scripts allow-same-origin allow-forms" src="/portal/career/room" style="width:1400px;height:860px;border:0"></iframe>`); return; }
-    let file = path.normalize(path.join(BUILD, url));
-    if (!file.startsWith(BUILD) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(BUILD, 'index.html');
-    res.writeHead(200, { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream' });
-    fs.createReadStream(file).pipe(res);
-  }).listen(PORT, '127.0.0.1');
-}
-
-const results = [];
-const check = (name, ok, detail = '') => { results.push({ name, ok: ok === true, detail }); console.log(`${ok === true ? 'PASS' : 'FAIL'}  ${name}${detail ? `  (${detail})` : ''}`); };
-
-/** A fake camera (a REAL MediaStream, drawn on a canvas, so it can be a <video>'s srcObject) and a fake recorder. */
-const FAKE_MEDIA = `
-  navigator.mediaDevices = navigator.mediaDevices || {};
-  navigator.mediaDevices.getUserMedia = async () => {
-    const c = document.createElement('canvas'); c.width = 320; c.height = 180;
-    const g = c.getContext('2d'); let k = 0;
-    const paint = () => { g.fillStyle = '#2f5f6f'; g.fillRect(0, 0, 320, 180); g.fillStyle = '#c9d8e2'; g.beginPath(); g.arc(160, 80, 34, 0, 7); g.fill(); g.fillRect(105, 120, 110, 60); g.fillStyle = '#e8f0f6'; g.fillRect(10 + (k++ % 40), 8, 6, 6); };
-    paint();
-    const stream = c.captureStream(10);
-    const timer = setInterval(paint, 100);
-    window.__cpStream = stream; window.__cpStopped = false;
-    stream.getTracks().forEach((t) => { const stop = t.stop.bind(t); t.stop = () => { clearInterval(timer); window.__cpStopped = true; stop(); }; });
-    return stream;
-  };
-  window.MediaRecorder = class { constructor() { this.ondataavailable = null; this.onstop = null; } start() {} stop() { this.ondataavailable && this.ondataavailable({ data: new Blob(['x'], { type: 'video/webm' }) }); this.onstop && this.onstop(); } };
-`;
-
-async function newPage(browser, opts = {}) {
-  // opts.api: options for the fixture student ({ empty: true } = no data yet).
-  const ctx = await browser.newContext({ viewport: opts.viewport || { width: 1440, height: 900 }, colorScheme: opts.dark ? 'dark' : 'light' });
-  await ctx.addInitScript(`localStorage.setItem('participant_token', '${TOKEN}'); ${FAKE_MEDIA}`);
-  const page = await ctx.newPage();
-  await page.clock.setSystemTime(new Date(NOW));
-  const errors = [];
-  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-  page.on('pageerror', (e) => errors.push(String(e)));
-  const api = await installFakeApi(page, NOW, opts.api || {});
-  return { ctx, page, errors, api };
-}
-
-const tid = (id) => `[data-testid="${id}"]`;
+const { SELFTEST, BASE, check, newPage, tid, shot, unit, runSuite } = require('./harness');
 
 async function flowFloorAndRoom(browser) {
   const { ctx, page, errors, api } = await newPage(browser);
@@ -184,8 +125,8 @@ async function flowFloorAndRoom(browser) {
     arrows: document.querySelectorAll('[data-testid="cp-skills"] .cp-delta.up, [data-testid="cp-skills"] .cp-delta.down').length,
     ivBars: document.querySelectorAll('[data-testid^="cp-iv-"] .cp-bar-tick').length, tables: document.querySelectorAll('.cp-chart figcaption button').length,
   }));
-  check('9c Your progress draws its charts from the data: the readiness line with its dashed ready line, 8 weekly bars, 9 skill bars with arrows, interview bars, 5 source tiles, a table toggle per chart',
-    charts.line === 1 && charts.dots === 8 && charts.ready && charts.bars === 8 && charts.skills === 9 && charts.arrows >= 8 && charts.ivBars === 2 && charts.tiles === 5 && charts.tables === 2, JSON.stringify(charts));
+  check('9c Your progress draws its charts from the data: the readiness line with its dashed ready line, 8 weekly bars, 9 skill bars with arrows, interview bars, 6 source tiles (CP5.8 adds read-aloud), a table toggle per chart',
+    charts.line === 1 && charts.dots === 8 && charts.ready && charts.bars === 8 && charts.skills === 9 && charts.arrows >= 8 && charts.ivBars === 2 && charts.tiles === 6 && charts.tables === 2, JSON.stringify(charts));
   for (const [how, act] of [['‹ Floor n', () => page.click(tid('cp-back'))], ['Esc', () => page.keyboard.press('Escape')]]) {
     if (how === 'Esc') { await page.goto(`${BASE}/portal/career/room`); await page.waitForSelector(tid('cp-room')); await page.click(tid('cp-cora-col')); }
     await act();
@@ -197,13 +138,6 @@ async function flowFloorAndRoom(browser) {
   return errors;
 }
 
-const FIDELITY = process.env.FIDELITY_DIR || '';
-async function shot(page, name) {
-  if (!FIDELITY) return;
-  fs.mkdirSync(FIDELITY, { recursive: true });
-  await page.waitForTimeout(250);
-  await page.screenshot({ path: path.join(FIDELITY, `${name}.png`) });
-}
 
 /** The design's views at 1600x960 (and Try at 390), for the fidelity gate, plus the empty student and the dark OS. */
 async function flowDesign(browser) {
@@ -309,20 +243,6 @@ async function flowDesign(browser) {
  * Each check runs in its own page, so one that cannot even start (an older build) is recorded as FAILED with the reason,
  * and the others still run.
  */
-async function unit(browser, errors, name, opts, fn) {
-  const { ctx, page, errors: e } = await newPage(browser, opts);
-  page.setDefaultTimeout(8000);
-  const plans = [];
-  page.on('request', (r) => { if (r.method() === 'POST' && new URL(r.url()).pathname === '/api/portal/career-prep/plans') plans.push(r.postDataJSON() || {}); });
-  try {
-    const [ok, detail] = await fn(page, plans);
-    check(name, ok, detail);
-  } catch (err) {
-    check(name, false, `could not run: ${String(err && err.message).split('\n')[0].slice(0, 160)}`);
-  }
-  errors.push(...e);
-  await ctx.close();
-}
 
 async function flowR11(browser) {
   const errors = [];
@@ -608,27 +528,15 @@ async function layout(browser) {
   check('10h the tab strip never overflows or scrolls (1600/1440/390, PortfolioPage.css loaded)', strip.length === 0, strip.join('; '));
 }
 
-(async () => {
-  const server = serve();
-  const browser = await chromium.launch({ channel: process.env.PW_CHANNEL || 'msedge' });
-  try {
-    const errs = [];
-    errs.push(...await flowFloorAndRoom(browser));
-    errs.push(...await flowAnchors(browser));
-    errs.push(...await flowSheets(browser));
-    errs.push(...await flowDesign(browser));
-    errs.push(...await flowR11(browser));
-    errs.push(...await flowR12(browser));
-    const frameErrs = await flowIframe(browser);
-    check('8 zero console errors in every flow, and inside a sandboxed iframe', errs.length === 0 && frameErrs.length === 0, [...errs, ...frameErrs].slice(0, 3).join(' | '));
-    await layout(browser);
-  } catch (e) {
-    check('suite ran to the end', false, String(e && e.message).slice(0, 300));
-  } finally {
-    await browser.close();
-    server.close();
-  }
-  const failed = results.filter((r) => !r.ok);
-  console.log(`\n${results.length - failed.length}/${results.length} passed`);
-  process.exit(failed.length || results.length < 20 ? 1 : 0);
-})();
+runSuite(20, async (browser) => {
+  const errs = [];
+  errs.push(...await flowFloorAndRoom(browser));
+  errs.push(...await flowAnchors(browser));
+  errs.push(...await flowSheets(browser));
+  errs.push(...await flowDesign(browser));
+  errs.push(...await flowR11(browser));
+  errs.push(...await flowR12(browser));
+  const frameErrs = await flowIframe(browser);
+  check('8 zero console errors in every flow, and inside a sandboxed iframe', errs.length === 0 && frameErrs.length === 0, [...errs, ...frameErrs].slice(0, 3).join(' | '));
+  await layout(browser);
+});

@@ -129,10 +129,12 @@ describe('each part of a session has its own body (CP4.4)', () => {
   beforeEach(() => { mockStart.mockResolvedValue({ session: view(all), resumed: false }); mockPatch.mockImplementation(async () => ({ session: view(all) })); });
   afterEach(() => { delete (window as unknown as { speechSynthesis?: unknown }).speechSynthesis; });
 
-  it('Warm up gives the line to say and no camera', async () => {
+  it('Warm up is the scored read-aloud (CP5.8): Record, audio only, and no camera Try', async () => {
     const h = mount(<Harness />);
     await click(h, 'cp-session-start');
-    expect(h.querySelector('[data-testid="cp-body-warmup"]')?.textContent).toContain('Hi, I am glad to be here.');
+    expect(h.querySelector('[data-testid="cp-body-warmup"] [data-testid="cp-readaloud"]')).not.toBeNull();
+    expect(h.querySelector('[data-testid="cp-ra-record"]')?.textContent).toBe('Record');
+    expect(h.querySelector('[data-testid="cp-body-warmup"]')?.textContent).toContain('Out loud, no camera.');
     expect(h.querySelector('[data-testid="cp-try"]')).toBeNull();
   });
   it("Learn explains the part's skill in plain words", async () => {

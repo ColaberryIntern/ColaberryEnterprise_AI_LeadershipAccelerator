@@ -66,6 +66,17 @@ describe('openSlots', () => {
     expect(s).toEqual(['2026-11-16T15:00:00.000Z', '2026-11-16T15:30:00.000Z', '2026-11-16T17:00:00.000Z', '2026-11-16T17:30:00.000Z']);
   });
 
+  it('T17: bufferMinutes keeps a gap around every held time; the default (0) changes nothing', () => {
+    const held = [{ startsAt: new Date('2026-11-16T15:00:00Z'), minutes: 20 }]; // 9:00-9:20 CT
+    const plain = iso(openSlots(rules(), { minutes: 30, fromDate: '2026-11-16', now: NOW, held, days: 1 }));
+    expect(plain).toContain('2026-11-16T15:30:00.000Z'); // 9:30, ten minutes after it ends: open without a buffer
+    const buffered = iso(openSlots(rules(), { minutes: 30, fromDate: '2026-11-16', now: NOW, held, days: 1, bufferMinutes: 15 }));
+    expect(buffered).not.toContain('2026-11-16T15:30:00.000Z'); // removed by the 15-minute buffer
+    expect(buffered[0]).toBe('2026-11-16T16:00:00.000Z'); // 10:00, forty minutes after: open
+    const before = [{ startsAt: new Date('2026-11-16T16:40:00Z'), minutes: 20 }]; // 10:40 CT
+    expect(iso(openSlots(rules(), { minutes: 30, fromDate: '2026-11-16', now: NOW, held: before, days: 1, bufferMinutes: 15 }))).not.toContain('2026-11-16T16:00:00.000Z'); // ends 10:30, 10 min before
+  });
+
   it('closes a whole week once it holds max_per_week interviews, and leaves the next week open', () => {
     const held = [{ startsAt: new Date('2026-11-18T20:00:00Z'), minutes: 20 }, { startsAt: new Date('2026-11-19T20:00:00Z'), minutes: 20 }];
     const s = openSlots(rules({ maxPerWeek: 2 }), { minutes: 60, fromDate: '2026-11-16', now: NOW, held });

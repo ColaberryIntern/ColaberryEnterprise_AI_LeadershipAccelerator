@@ -37,8 +37,8 @@ describe('the Career Prep floor: one floor, three names (CP2.1)', () => {
     expect(opensInPlace(f.rooms[0])).toBe(false);
   });
 
-  it('ships in the real sidebar: a Placement group, gated placement, with an in-place Student prep link', () => {
+  it('ships in the real sidebar: a Placement group, gated placement, with in-place Student prep and the kit F9 desk links', () => {
     const g = NAV_GROUPS.find((x) => x.section === PLACEMENT_SECTION);
-    expect(g?.links).toEqual([expect.objectContaining({ path: '/admin/placement/students', inPlace: true })]);
+    expect(g?.links).toEqual(['students', 'queue', 'inboxes', 'bookings', 'fees'].map((p) => expect.objectContaining({ path: `/admin/placement/${p}`, inPlace: true })));
   });
 });

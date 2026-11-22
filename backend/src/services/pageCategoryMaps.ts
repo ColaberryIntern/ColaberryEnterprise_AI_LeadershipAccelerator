@@ -212,6 +212,16 @@ export const BRAND_PAGE_CATEGORIES: Record<string, BrandPageCategoryMap> = {
       // Booking an interview with a builder (/talent/<slug>/schedule/, one shell): the
       // strongest "talk to a person" intent on the site, the same meaning as `/intro`.
       '/schedule': 'contact',
+      // Career Prep CP8.2: an employer booking an interview with a learner from the link in
+      // our reply (/book/?t=<token>, one shell). The same meaning as `/schedule`. The page
+      // loads no tracker (the link is private), so this names it rather than scoring it.
+      '/book': 'contact',
+      // Career Prep CP9.1: the employer's interview room for a booked interview (/room/?i=&e=&t=,
+      // one shell, private signed link, no tracker). Meeting the candidate: the same meaning.
+      '/room': 'contact',
+      // Career Prep CP10.2: the employer portal (/client/, one shell, signed in by emailed link, no tracker). An
+      // employer working with us on hires: the same "talk to a person" meaning as the room.
+      '/client': 'contact',
       // The shells above are what is ON DISK; what the browser REPORTS is the live path
       // nginx serves them under (nginx/hire-refactored.conf): /talent/<slug>/,
       // /talent/<slug>/schedule/, /case-studies/<slug>/. The tracker sends

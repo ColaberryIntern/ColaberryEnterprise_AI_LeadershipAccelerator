@@ -2,8 +2,9 @@ import React from 'react';
 import type { InterviewType, PrepRecap, PrepSegment } from './careerPrepApi';
 import type { SessionApi } from './useSession';
 import { clock, secondsLeft } from './logic/sessionMachine';
-import { FOLLOW_UPS, LEARN_TEXT, questionFor, WARM_UP_LINE } from './logic/sessionCopy';
+import { FOLLOW_UPS, LEARN_TEXT, questionFor } from './logic/sessionCopy';
 import { TryRecorder } from './TryRecorder';
+import { ReadAloud } from './ReadAloud';
 import { stillScoring } from './logic/recapCopy';
 
 /**
@@ -39,7 +40,8 @@ function promptFor(seg: PrepSegment, index: number, type: InterviewType, questio
 }
 
 function Body({ seg, index, sessionId, type, questions, initials }: { seg: PrepSegment; index: number; sessionId: string; type: InterviewType; questions?: string[]; initials?: string }): React.ReactElement {
-  if (seg.kind === 'warmup') return <div className="cp-callout"><b>Out loud, no camera.</b><p data-testid="cp-body-warmup">{WARM_UP_LINE}</p></div>;
+  // CP5.8: the warm-up is the scored read-aloud (its own key, so a new part never shows the previous score).
+  if (seg.kind === 'warmup') return <div data-testid="cp-body-warmup"><ReadAloud key={`${sessionId}:${index}`} sessionId={sessionId} segmentIndex={index} /></div>;
   if (seg.kind === 'learn') return <div className="cp-callout"><b>In plain words</b><p data-testid="cp-body-learn">{(seg.targetSkill && LEARN_TEXT[seg.targetSkill]) || 'Pick one answer you will give and say it out loud twice, slower the second time.'}</p></div>;
   if (seg.kind === 'cooldown') return <div className="cp-callout"><b>The one sentence</b><p data-testid="cp-body-cooldown">Say the one sentence you want them to remember about you. Your scores from this session appear on Your progress.</p></div>;
   const prompt = promptFor(seg, index, type, questions);

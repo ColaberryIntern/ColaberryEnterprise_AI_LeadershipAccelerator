@@ -9,6 +9,9 @@ import type { LlmCall } from './careerPrepLlm';
  *   real      linked from hire_interviews (an employer booked them on hire.refactored.ai), confirmed
  *             and still ahead. IDEMPOTENT: hire_interview_id is UNIQUE. Company and role are cut to the
  *             column width (120), so one long employer name can never fail the whole link.
+ *             CP8.3: also a placement interview an employer booked from the job-search inbox's reply
+ *             (placementLink.ts, a module of its own so the booking work never loads the model client;
+ *             IDEMPOTENT on placement_interview_id).
  *   added     the student typed it in (and may paste the job description for practice questions).
  *   practice  "Create one for me": no date, a 4-day practice window.
  *

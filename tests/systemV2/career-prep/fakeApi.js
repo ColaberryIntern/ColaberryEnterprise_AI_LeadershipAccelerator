@@ -9,7 +9,12 @@
  * Two students: the default one has eight weeks of history (readiness trend, every skill scored, minutes per week, a
  * streak), so Your progress draws every chart; `{ empty: true }` is a student with no data yet (no readiness, every
  * skill short of a score, zero minutes), for the honest empty state. Dates are relative to "now", weeks are Central.
+ * `{ placement: true }` (CP8.3) adds an interview an employer BOOKED from the job-search inbox: its prep row (what
+ * bookingConfirm links) leads the summary and the anchors, and GET /interviews/placement lists it, in the server's shapes.
  */
+const { roomRoute } = require('./fakeRoom');
+const { heldInterview, replayRoute, placementKpis } = require('./fakeReplay');
+
 const DAY = 86_400_000;
 const CT = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit' });
 /** The Central calendar date `days` after `now` (dates are never hard-coded, so the suite passes on any day). */
@@ -29,9 +34,20 @@ function makeState(now, opts = {}) {
   const skill = (key, label, score, change30, sources) => (empty
     ? { key, label, count: key === 'pace_clarity' ? 1 : 0, sources: key === 'pace_clarity' ? ['video'] : [] }
     : { key, label, score, change30, count: 4, sources });
+  // CP8.3: the booked placement interview (pi-7) and the prep row the booking linked for it (i7), two days out.
+  const north = { id: 'i7', source: 'real', company: 'Northwind', role: 'ML Engineer', type: 'recruiter', startsAt: new Date(now + 2 * DAY).toISOString(), target: 65 };
   return {
     empty,
-    interviews: [acme, globex],
+    interviews: opts.placement ? [north, acme, globex] : [acme, globex],
+    // CP9.2: `{ held: true }` adds a held interview with a scored replay (fakeReplay.js).
+    placement: [...(opts.placement ? [placementBooked(north)] : []), ...(opts.held ? [heldInterview(now)] : [])],
+    // CP9.1: the candidate room (fakeRoom.js): no decision yet, and every decision the page sent.
+    roomDecision: null,
+    roomDecisions: [],
+    // CP10.4: `{ offers: true }` adds one offer waiting on the learner; every answer the page sent.
+    offers: opts.offers ? [{ id: 'of-1', groupId: '0f0f0f0f-0000-4000-8000-000000000001', version: 1, company: 'Northwind', role: 'ML Engineer', payBasis: 'yearly',
+      salaryCents: 10_500_000, hourlyRateCents: null, hoursPerWeek: null, startDate: '2027-01-04', respondBy: new Date(now + 5 * DAY).toISOString(), status: 'sent' }] : [],
+    offerAnswers: [],
     skills: [
       skill('pace_clarity', 'Pace and clarity', 48, 4, ['video', 'phone_mock']),
       skill('ending_with_number', 'Ending on a result with a number', 57, 9, ['video', 'real_interview']),
@@ -47,6 +63,11 @@ function makeState(now, opts = {}) {
     plan: null,
     session: null,
     attempts: 0,
+    // CP5.8: read-aloud attempt ids, and the uploads the browser sent (to prove audio only, with the line id).
+    readAloud: new Set(),
+    // CP6.1: no job-search inbox set up yet.
+    inbox: { address: null, health: 'setup', healthLabel: 'Not set up yet', verifiedAt: null, forwardingConfirmedAt: null, lastReceivedAt: null, lastTestAt: null, lastTestMs: null, receivedThisMonth: 0, steps: { create: false, added: false, forwarding: false, tested: false } },
+    readAloudUploads: [],
     finished: false,
     // R1.1: Try answers the student saved (attempt ids), and how long POST /plans takes (to see the busy state).
     saved: new Set(opts.saved || []),
@@ -55,6 +76,14 @@ function makeState(now, opts = {}) {
     planDelayMs: opts.planDelayMs || 0,
     now,
   };
+}
+
+/** The server's shape (placementInterviewsView.toView) for a booked interview; Join is the consent-room page. */
+function placementBooked(prep) {
+  const start = Date.parse(prep.startsAt);
+  return { id: 'pi-7', company: prep.company, role: prep.role, state: 'booked', stateLabel: 'Booked', startsAt: prep.startsAt, minutes: 30, readAs: 'Recruiter screen',
+    confidence: 0.97, roomPage: '/portal/career/interview/pi-7', joinOpensAt: new Date(start - 10 * 60_000).toISOString(), joinClosesAt: new Date(start + 30 * 60_000).toISOString(),
+    prepId: prep.id, history: [{ at: new Date(start - 3 * DAY).toISOString(), label: 'Found in your job-search inbox' }, { at: new Date(start - 2.5 * DAY).toISOString(), label: 'Booked' }] };
 }
 
 const segs = (state) => [
@@ -73,7 +102,7 @@ function dashboard(state) {
       anchorId: 'i1',
       interviews: state.interviews,
       skills: state.skills,
-      sources: { video: state.attempts, phone_mock: 0, real_interview: 0, training: 0, project: 0 },
+      sources: { video: state.attempts, phone_mock: 0, real_interview: 0, training: 0, project: 0, read_aloud: 0 },
       weeklyMinutes: Array.from({ length: 8 }, (_, k) => ({ week: centralMonday(state.now, 7 - k), minutes: k === 7 ? thisWeek : 0 })),
       streak: state.finished ? 1 : 0,
       thisWeek,
@@ -85,7 +114,7 @@ function dashboard(state) {
       trend: [...TREND.map((value, k) => ({ week: centralMonday(state.now, 7 - k), value })), { week: centralMonday(state.now), value: state.readiness }] },
     interviews: state.interviews.map((i) => (i.id === 'i1' ? { ...i, readiness: state.readiness } : i)),
     skills: [...state.skills].sort((a, b) => (a.score ?? 101) - (b.score ?? 101)),
-    sources: { video: 15 + state.attempts, phone_mock: 6, real_interview: 2, training: 18, project: 3 },
+    sources: { video: 15 + state.attempts, phone_mock: 6, real_interview: 2, training: 18, project: 3, read_aloud: 0 },
     weeklyMinutes: [...MINUTES.map((minutes, k) => ({ week: centralMonday(state.now, 7 - k), minutes })), { week: centralMonday(state.now), minutes: 60 + thisWeek }],
     streak: state.finished ? 5 : 4,
     thisWeek: 60 + thisWeek,
@@ -144,7 +173,34 @@ function route(state, method, path, query, body) {
     return { session: sessionView(state), resumed: false };
   }
   const attempt = /^\/api\/portal\/career-prep\/sessions\/[^/]+\/attempts(\/[^/]+)?$/.exec(path);
+  // CP6.1: the job-search inbox (the server's shape: inboxService.getInbox); nothing received in the fixture.
+  if (path === `${P}/inbox` && method === 'PUT') { state.inbox = { ...state.inbox, address: String(body.address || '').trim().toLowerCase().replace(/@googlemail\.com$/, '@gmail.com'), health: 'setup', healthLabel: 'Not set up yet', steps: { create: true, added: true, forwarding: false, tested: false } }; return { inbox: state.inbox }; }
+  if (path === `${P}/inbox`) return { inbox: state.inbox };
+  if (path === `${P}/inbox/received`) return { items: [] };
+  if (path === `${P}/interviews/placement`) return { kpis: placementKpis(state.placement), interviews: state.placement };
+  // CP10.4: the learner's offers in the server's candidate shape (the pay, never the fee); answers are recorded.
+  if (path === `${P}/offers`) return { offers: state.offers };
+  const ans = /^\/api\/portal\/career-prep\/offers\/([^/]+)\/(accept|decline|talk-first)$/.exec(path);
+  if (ans && method === 'POST') {
+    state.offerAnswers.push({ groupId: ans[1], decision: ans[2], version: body.version });
+    const o = state.offers.find((x) => x.groupId === ans[1]);
+    o.status = { accept: 'accepted', decline: 'declined', 'talk-first': 'talk_first' }[ans[2]];
+    return { offer: o, replay: false };
+  }
+  if (path === `${P}/read-aloud/line`) return { line: { id: 'ra-02', text: 'The problem was simple to describe and hard to solve, so I started by talking to the people who lived with it.' } };
+  const line = /name="lineId"\r?\n\r?\n([^\r\n]+)/.exec((body && body.raw) || '');
+  if (attempt && method === 'POST' && line) {
+    const id = `ra${state.readAloud.size + 1}`; state.readAloud.add(id);
+    state.readAloudUploads.push({ lineId: line[1], audio: /Content-Type: audio\//.test(body.raw), video: /Content-Type: video\//.test(body.raw) });
+    return { attempt: { id, status: 'pending', result: null, errorClass: null } };
+  }
   if (attempt && method === 'POST') { state.attempts += 1; return { attempt: { id: `a${state.attempts}`, status: 'pending', result: null, errorClass: null } }; }
+  // The read-aloud scorer's real shape (attempts.readAloudResult): three parts and the one score that counts.
+  if (attempt && attempt[1] && state.readAloud.has(attempt[1].slice(1))) return { attempt: { id: attempt[1].slice(1), status: 'done', errorClass: null, result: { seconds: 9.2, notes: [], readAloud: { score: 91, lineId: 'ra-02' }, scores: [
+    { key: 'pace', label: 'Pace', score: 100, value: '137 wpm', target: '100 to 165 wpm', source: 'Career Prep read-aloud warm-up' },
+    { key: 'smoothness', label: 'Smoothness', score: 70, value: '2 pause(s) of 1 s or more', target: 'no pauses of 1 s or more', source: 'Career Prep read-aloud warm-up' },
+    { key: 'completeness', label: 'Completeness', score: 100, value: '21 of 21 words', target: 'every word of the line', source: 'Career Prep read-aloud warm-up' },
+  ] } } };
   // The scorer's real shape (attempts.attemptResult): pace, fillers and repetition against their published targets, and its notes.
   // R1.1: a scored attempt says whether its recording is saved, or still saveable (pending).
   if (attempt) return { attempt: { id: 'a1', status: 'done', errorClass: null, recording: state.saved.has('a1') ? 'saved' : 'pending', result: { seconds: 41, scores: [
@@ -202,8 +258,11 @@ async function installFakeApi(page, now = Date.now(), opts = {}) {
     const req = r.request();
     const url = new URL(req.url());
     let body = {};
-    try { body = req.postDataJSON() || {}; } catch { body = {}; }
+    // A multipart upload is not JSON: keep its raw text so the read-aloud fixture can see the lineId field (CP5.8).
+    try { body = req.postDataJSON() || {}; } catch { body = { raw: req.postData() || '' }; }
     if (state.planDelayMs && req.method() === 'POST' && url.pathname === '/api/portal/career-prep/plans') await new Promise((ok) => setTimeout(ok, state.planDelayMs));
+    const room = roomRoute(state, req.method(), url.pathname, body) || replayRoute(state, req.method(), url.pathname);
+    if (room) { sent.push({ path: url.pathname, payload: room.body }); await r.fulfill({ status: room.status, contentType: 'application/json', body: JSON.stringify(room.body) }); return; }
     const out = route(state, req.method(), url.pathname, url.searchParams, body);
     const payload = out === null ? {} : out;
     sent.push({ path: url.pathname, payload });

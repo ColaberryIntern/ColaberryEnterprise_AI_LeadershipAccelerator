@@ -25,6 +25,7 @@ const SOURCES: ReadonlyArray<{ key: keyof PrepDashboard['sources']; icon: string
   { key: 'real_interview', icon: 'ri-building-line', label: 'real interviews recorded', word: 'real interviews' },
   { key: 'training', icon: 'ri-book-open-line', label: 'training lessons done', word: 'training' },
   { key: 'project', icon: 'ri-tools-line', label: 'projects verified', word: 'projects' },
+  { key: 'read_aloud', icon: 'ri-mic-line', label: 'read-aloud warm-ups', word: 'read-aloud' },
 ];
 const SRC = new Map(SOURCES.map((s) => [s.key as string, s]));
 const shortWeek = (iso: string) => new Date(`${iso}T18:00:00Z`).toLocaleDateString('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric' });

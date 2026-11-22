@@ -26,7 +26,7 @@ export const DashboardResponse = z.object({
     key: z.string(), label: z.string(), score: score.optional(), change30: z.number().optional(),
     count: z.number().int().min(0), sources: z.array(z.string()),
   }).strict()),
-  sources: z.object({ video: z.number().int(), phone_mock: z.number().int(), real_interview: z.number().int(), training: z.number().int(), project: z.number().int() }).strict(),
+  sources: z.object({ video: z.number().int(), phone_mock: z.number().int(), real_interview: z.number().int(), training: z.number().int(), project: z.number().int(), read_aloud: z.number().int() }).strict(),
   weeklyMinutes: z.array(z.object({ week: z.string(), minutes: z.number().int().min(0) }).strict()),
   streak: z.number().int().min(0),
   thisWeek: z.number().int().min(0),

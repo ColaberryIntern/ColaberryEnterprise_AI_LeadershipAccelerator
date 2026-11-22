@@ -1,0 +1,23 @@
+/* Career Prep v27, CP5.8: the read-aloud warm-up inside the Session tab. Scoped to .cp-room and built only from the room's
+   tokens (careerPrepRoom.css), so it follows the room's light palette and never leaks into other pages. */
+.cp-room .cp-ra{display:flex;flex-direction:column;gap:12px;padding:14px 16px;border:1px solid var(--line);border-radius:10px;background:var(--bg-elevated)}
+.cp-room .cp-ra-how{margin:0}
+.cp-room .cp-ra-line{margin:0;padding:12px 14px;border-left:4px solid var(--accent);background:var(--cp-sunk);border-radius:6px;font-size:1.15rem;line-height:1.55}
+.cp-room .cp-ra-armed{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+.cp-room .cp-ra-meter{position:relative;display:inline-block;width:140px;height:10px;background:var(--cp-track);border-radius:5px;overflow:hidden}
+.cp-room .cp-ra-meter span{position:absolute;left:0;top:0;bottom:0;background:var(--cp-live);border-radius:5px;transition:width .1s linear}
+.cp-room .cp-ra-dot{display:inline-block;width:10px;height:10px;margin-right:6px;border-radius:50%;background:var(--cp-rec);vertical-align:middle}
+.cp-room .cp-ra-result{display:flex;flex-direction:column;gap:8px}
+.cp-room .cp-ra-score{display:flex;align-items:baseline;gap:10px;margin:0}
+.cp-room .cp-ra-score b{font:600 2.4rem/1 var(--cp-mono);color:var(--fg)}
+.cp-room .cp-ra-bars{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.cp-room .cp-ra-row{display:grid;grid-template-columns:120px minmax(60px,1fr) 36px;grid-template-areas:'name bar v' 'name val val';align-items:center;column-gap:10px}
+.cp-room .cp-ra-row .cp-bar{grid-area:bar;margin:0}
+.cp-room .cp-ra-name{grid-area:name;white-space:nowrap}
+.cp-room .cp-ra-v{grid-area:v;text-align:right;font-family:var(--cp-mono)}
+.cp-room .cp-ra-row small{grid-area:val}
+@media (max-width:600px){
+  /* One fixed label column, wide enough for "Completeness" (never broken mid-word), so every bar starts at the same x. */
+  .cp-room .cp-ra-row{grid-template-columns:7.75rem minmax(40px,1fr) 32px}
+  .cp-room .cp-ra-line{font-size:1.05rem}
+}

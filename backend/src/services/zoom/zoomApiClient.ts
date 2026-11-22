@@ -47,7 +47,17 @@ export async function zoomFetchWithTimeout(
 }
 
 // ---- Server-to-Server OAuth ----
-let cachedToken: { token: string; expiresAt: number } | null = null;
+// `scopes` is the space-separated `scope` string the SAME token response already carries (null when it had none).
+let cachedToken: { token: string; expiresAt: number; scopes: string[] | null } | null = null;
+
+/**
+ * Career Prep v27, CP9.1 (E6): the scopes granted to the app, as the last token response stated them. Read-only: it
+ * never makes a request of its own (call getZoomAccessToken first to make sure a token was fetched). null =
+ * no token yet, or the response named no scopes ("cannot tell"; callers treat that as missing).
+ */
+export function getZoomGrantedScopes(): string[] | null {
+  return cachedToken?.scopes ? [...cachedToken.scopes] : null;
+}
 
 export async function getZoomAccessToken(): Promise<string> {
   assertZoomConfigured();
@@ -64,7 +74,8 @@ export async function getZoomAccessToken(): Promise<string> {
     throw new Error(`Zoom OAuth token error ${res.status}: ${body}`);
   }
   const data: any = await res.json();
-  cachedToken = { token: data.access_token, expiresAt: now + data.expires_in * 1000 };
+  const scopes = typeof data.scope === 'string' ? data.scope.split(/\s+/).filter(Boolean) : null;
+  cachedToken = { token: data.access_token, expiresAt: now + data.expires_in * 1000, scopes: scopes && scopes.length ? scopes : null };
   return cachedToken.token;
 }
 

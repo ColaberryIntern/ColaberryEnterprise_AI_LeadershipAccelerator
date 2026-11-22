@@ -5,6 +5,7 @@ jest.mock('../../openaiInstrumented', () => ({ getInstrumentedOpenAI: jest.fn() 
 
 import { addInterview, createPractice, linkHireInterviews, practiceUntil } from '../interviews';
 import { questionsFromJd } from '../jdQuestions';
+import { linkPlacementInterview } from '../placementLink';
 
 const JD = 'We need an AI engineer to build retrieval-augmented generation pipelines in Python, deploy them on AWS, and work with product managers on evaluation.';
 const QS = ['Walk me through a RAG pipeline you built end to end.', 'How do you evaluate retrieval quality?', 'Tell me about deploying a model on AWS.',
@@ -82,6 +83,30 @@ describe('questionsFromJd', () => {
     const call = jest.fn();
     expect(await questionsFromJd('AI job', 'R', 'technical', call)).toBeNull();
     expect(call).not.toHaveBeenCalled();
+  });
+});
+
+describe('linkPlacementInterview (CP8.3)', () => {
+  const LINK = { placementInterviewId: 'pi-1', enrollmentId: 'e1', company: '  Acme  ', position: 'Data Analyst', type: 'technical' as const, startsAt: new Date('2026-11-23T15:00:00Z') };
+  it('one keyed upsert: the partial unique index as the conflict target, the same learner only, columns cut to their width', async () => {
+    mockQuery.mockResolvedValueOnce([[{ id: 'c1' }], 1]);
+    expect(await linkPlacementInterview(LINK)).toBe('c1');
+    const [sql, opts] = mockQuery.mock.calls[0] as [string, { replacements: Record<string, unknown> }];
+    expect(sql).toContain("VALUES (:e, 'real', LEFT(:company, 120), LEFT(:role, 120), :type, :start, :pid)");
+    expect(sql).toContain('ON CONFLICT (placement_interview_id) WHERE placement_interview_id IS NOT NULL');
+    expect(sql).toContain('DO UPDATE SET starts_at = EXCLUDED.starts_at');
+    expect(sql).toContain('WHERE career_interviews.enrollment_id = EXCLUDED.enrollment_id');
+    expect(opts.replacements).toEqual({ e: 'e1', company: 'Acme', role: 'Data Analyst', type: 'technical', start: LINK.startsAt, pid: 'pi-1' });
+    expect(mockTransaction).not.toHaveBeenCalled(); // one statement: no lock, no window between a check and an insert
+  });
+  it('what the email did not say gets plain words, never a blank: An employer, Interview, recruiter', async () => {
+    mockQuery.mockResolvedValueOnce([[{ id: 'c2' }], 1]);
+    await linkPlacementInterview({ ...LINK, company: null, position: '  ', type: null });
+    expect((mockQuery.mock.calls[0][1] as { replacements: Record<string, unknown> }).replacements).toMatchObject({ company: 'An employer', role: 'Interview', type: 'recruiter' });
+  });
+  it('returns null when no row comes back (the id is linked to another learner)', async () => {
+    mockQuery.mockResolvedValueOnce([[], 0]);
+    expect(await linkPlacementInterview(LINK)).toBeNull();
   });
 });
 

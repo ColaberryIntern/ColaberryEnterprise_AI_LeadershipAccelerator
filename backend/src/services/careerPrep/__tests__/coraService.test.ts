@@ -12,7 +12,7 @@ const dash: Dashboard = {
   readiness: { value: 64, target: 75, trend: [] },
   interviews: [{ id: 'i1', source: 'real', company: 'Acme', role: 'AI Engineer', type: 'technical', target: 75 }],
   skills: [{ key: 'few_fillers', label: 'Few filler words', score: 48, change30: 6, count: 4, sources: ['video'] }, { key: 'proof_of_work', label: 'Proof of work', count: 0, sources: [] }],
-  sources: { video: 4, phone_mock: 0, real_interview: 0, training: 0, project: 0 },
+  sources: { video: 4, phone_mock: 0, real_interview: 0, training: 0, project: 0, read_aloud: 0 },
   weeklyMinutes: [], streak: 3, thisWeek: 40,
 };
 const reply = (r: string) => JSON.stringify({ reply: r });

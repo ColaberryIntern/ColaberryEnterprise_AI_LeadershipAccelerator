@@ -1,0 +1,98 @@
+/*
+ * hire.refactored.ai - the employer portal (/client/, Career Prep CP10.2). Tokens only, on top of hire.css,
+ * portfolio.css (.card) and schedule.css (.field, .notice). Built to the kit design (design/refactored-career-center.html:
+ * the Candidates cards, the Offers and fees KPIs, table and callout, the Make an offer dialog with its calculation).
+ * Two card columns from 900px, one below; every control at least 44px; tables scroll inside their card, never the page.
+ */
+.cp{min-height:100vh;display:grid;grid-template-rows:auto 1fr auto;background:var(--bg-sunk)}
+.cp-top{display:flex;align-items:center;flex-wrap:wrap;gap:10px 16px;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--bg-elevated)}
+.cp-top .logo{gap:0}
+.cp-prod{padding:2px 8px;border:1px solid var(--line);border-radius:4px;font:500 .78rem var(--font-mono);color:var(--fg-muted)}
+.cp-who-top{margin-left:auto;font-weight:600;overflow-wrap:anywhere}
+.cp-main{width:100%;max-width:1240px;margin:0 auto;padding:20px 16px 40px;box-sizing:border-box;min-width:0}
+.cp-main:focus{outline:none}
+.cp-foot{display:flex;justify-content:center;padding:14px 16px;border-top:1px solid var(--line);background:var(--bg-elevated);color:var(--fg-muted);font-size:.85rem;text-align:center}
+.cp .small{font-size:.86rem}
+.cp .lede{color:var(--fg-muted);margin:.2rem 0 0}
+.cp h1{font-family:var(--font-mono);font-size:1.5rem;margin:0}
+.cp .btn{min-height:44px;cursor:pointer}
+.cp .btn-sm{padding:8px 12px;font-size:.86rem}
+.cp .btn[disabled]{opacity:.5;cursor:not-allowed}
+.cp-backdrop .btn{min-height:44px;cursor:pointer}
+.cp-backdrop .btn[disabled]{opacity:.5;cursor:not-allowed}
+.cp-backdrop .btn-sm{padding:8px 12px;font-size:.86rem}
+.cp-tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:18px}
+.cp-tabs button{min-height:44px;padding:8px 16px;border:1px solid var(--line-strong);border-radius:999px;background:var(--bg-elevated);color:var(--fg-muted);font:600 .9rem var(--font-sans);cursor:pointer}
+.cp-tabs button[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+.cp-title{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px;margin-bottom:16px}
+.cp-signin{max-width:520px;margin:40px auto}
+.cp-signin input{width:100%;box-sizing:border-box;min-height:44px;padding:10px 12px;border-radius:8px;border:1px solid var(--line-strong);background:var(--bg);color:var(--fg);font:inherit;margin:6px 0 14px}
+.cp .field-label,.cp-backdrop .field-label{font-weight:600;font-size:.88rem}
+.pill{display:inline-block;font:600 .64rem var(--font-mono);letter-spacing:.09em;text-transform:uppercase;padding:.25em .65em;border-radius:999px;border:1px solid currentColor;white-space:nowrap;vertical-align:middle}
+.p-ok{color:var(--success);background:var(--success-soft)}
+.p-warn{color:var(--warning);background:var(--warning-soft)}
+.p-info{color:var(--accent);background:var(--accent-soft)}
+.p-mute{color:var(--fg-faint)}
+.av{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font:600 .78rem var(--font-mono);background:var(--accent-soft);color:var(--accent);border:1px solid var(--line-strong);flex:none}
+.av.lg{width:56px;height:56px;font-size:1.1rem}
+.cp-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.cp .card{margin:0;padding:18px;min-width:0}
+.cp-head{display:flex;gap:14px;align-items:flex-start}
+.cp-who{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.cp-who h3{margin:0;font-size:1.1rem;overflow-wrap:anywhere}
+.cp-ready{display:flex;flex-direction:column;align-items:flex-end;text-align:right;max-width:120px}
+.cp-ready small{color:var(--fg-faint);font-size:.72rem}
+.score{font:600 1.6rem var(--font-mono);line-height:1}
+.li{display:flex;gap:.75rem;align-items:flex-start;padding:.65rem 0;border-top:1px solid var(--line)}
+.cp-head + .li{margin-top:.6rem}
+.li .label{width:92px;flex:none;font-size:.68rem;padding-top:2px}
+.li .grow{flex:1;min-width:0;overflow-wrap:anywhere}
+.cp-acts{display:flex;flex-wrap:wrap;gap:8px;margin:.7rem 0 .4rem}
+.cp-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-bottom:16px}
+.kpi .v{font:600 1.9rem var(--font-mono);line-height:1.1;margin:.2rem 0}
+.cp-tablewrap{overflow-x:auto}
+.tbl{width:100%;border-collapse:collapse;font-size:.88rem}
+.tbl th{text-align:left;font:500 .68rem var(--font-mono);letter-spacing:.11em;text-transform:uppercase;color:var(--fg-faint);padding:.55rem .5rem;border-bottom:1px solid var(--line-strong);white-space:nowrap}
+.tbl td{padding:.65rem .5rem;border-bottom:1px solid var(--line);vertical-align:top}
+.tbl .num{font-family:var(--font-mono);text-align:right;white-space:nowrap}
+.callout{border:1px solid var(--line);border-left:3px solid var(--accent);background:var(--accent-soft);padding:.7rem .9rem;border-radius:10px;font-size:.88rem;margin:.8rem 0 0}
+.cp-main > .callout{margin:0 0 16px}
+body.cp-locked{overflow:hidden}
+.cp-backdrop{position:fixed;inset:0;z-index:50;display:flex;align-items:flex-start;justify-content:center;padding:32px 16px;overflow-y:auto;background:rgba(10,16,22,.55)}
+.cp-backdrop[hidden]{display:none}
+.cp-dialog{width:100%;max-width:720px;margin:0;padding:22px;box-sizing:border-box;display:flex;flex-direction:column;gap:12px}
+.cp-dialog h2{font-family:var(--font-mono);font-size:1.3rem;margin:.3rem 0 0}
+.cp-dhead{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.cp-dhead > div{min-width:0}
+/* Names come from the data: a long unbroken one wraps inside the dialog instead of widening it. */
+.cp-dialog .label,.cp-dialog h2,.cp-check,.calc .ln span,.cp-dialog .notice,.cp-dialog .acts .faint{overflow-wrap:anywhere;min-width:0}
+.cp-two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.cp-dialog .field{margin-bottom:0}
+.cp-dialog select{min-height:44px;padding:10px 12px;border-radius:8px;border:1px solid var(--line-strong);background:var(--bg-elevated);color:var(--fg);font:inherit;width:100%}
+.seg{display:inline-flex;border:1px solid var(--line-strong);border-radius:10px;overflow:hidden;align-self:flex-start}
+.seg button{min-height:44px;border:0;background:none;padding:.45rem 1rem;color:var(--fg-muted);font:600 .9rem var(--font-sans);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent)}
+.calc{background:var(--bg-sunk);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.calc .ln{display:flex;justify-content:space-between;gap:1rem;padding:.3rem 0;font-size:.9rem}
+.calc .ln b{font-family:var(--font-mono);text-align:right}
+.calc .tot{border-top:1px solid var(--line-strong);margin-top:.4rem;padding-top:.6rem;font-size:1rem}
+.calc .tot b{color:var(--accent);font-size:1.25rem}
+.calc p{margin:.4rem 0 0}
+.cp-check{display:flex;gap:10px;align-items:flex-start;font-size:.9rem;min-height:44px;cursor:pointer}
+.cp-check input{width:20px;height:20px;margin:2px 0 0;flex:none}
+.cp-dialog .acts{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+/* Follow-ups (kit F8): the message box, and template buttons that wrap on a phone. */
+.cp-dialog textarea{width:100%;box-sizing:border-box;min-height:9rem;padding:10px 12px;border-radius:8px;border:1px solid var(--line-strong);background:var(--bg-elevated);color:var(--fg);font:inherit;resize:vertical}
+.seg.cp-wrap{display:flex;flex-wrap:wrap;max-width:100%}
+.cp-dialog .callout{overflow-wrap:anywhere}
+@media (max-width:900px){.cp-grid{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:600px){
+  .cp-prod{display:none}
+  .cp-kpis{grid-template-columns:minmax(0,1fr)}
+  .cp-two{grid-template-columns:minmax(0,1fr)}
+  .cp-head{flex-wrap:wrap}
+  .cp-ready{align-items:flex-start;text-align:left;max-width:none;width:100%;flex-direction:row;gap:8px;align-items:baseline}
+  .cp-acts .btn{flex:1 1 calc(50% - 8px);justify-content:center}
+  .cp-backdrop{padding:0}
+  .cp-dialog{border-radius:0;min-height:100%}
+}

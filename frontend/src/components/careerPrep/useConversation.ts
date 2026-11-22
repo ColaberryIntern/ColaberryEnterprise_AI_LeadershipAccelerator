@@ -11,7 +11,7 @@ import { cards, cora, me } from './useRoomLog';
 /**
  * Career Prep v27 (CP3.4): what the student types and picks. `ask` routes the common asks in code
  * (askRouter) and sends the rest to Cora; `pickCard` dispatches a picked card by its id prefix (add,
- * create, type:, plan:, min:, focus:, skill:, start, suggest:, remind:, tab:, offer, or an interview id).
+ * create, type:, plan:, min:, focus:, skill:, start, suggest:, remind:, tab:, offer, sheet:offers, or an interview id).
  */
 export type PrepForm = null | { mode: 'add' } | { mode: 'practice'; type: InterviewType };
 export interface ConversationDeps {
@@ -72,6 +72,7 @@ export function usePickCard(d: ConversationDeps, ask: (text: string) => void): (
     if (kind === 'remind') { d.remind(value === 'tonight' ? 'tonight' : 'tomorrow'); return; }
     if (kind === 'tab') { d.onTab(value === 'plan' ? 'plan' : value === 'session' ? 'session' : 'progress'); return; }
     if (kind === 'offer') { d.offerPlans(); return; }
+    if (kind === 'sheet' && value === 'offers') { d.onSheet('offers'); return; } // CP10.4: Cora's card on a waiting offer
     void d.anchorOn(card.id);
   }, [d, ask]);
 }

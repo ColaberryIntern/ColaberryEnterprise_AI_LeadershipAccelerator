@@ -1,8 +1,9 @@
 import fs from 'fs';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { z } from 'zod';
-import { createAttempt, enqueueAttempt, getAttempt } from '../services/careerPrep/attempts';
+import { createAttempt, enqueueAttempt, getAttempt, readAloudCount } from '../services/careerPrep/attempts';
 import { NotFoundError } from '../services/careerPrep/sessions';
+import { lineById, lineFor } from '../services/careerPrep/readAloudLines';
 import { logFailure } from '../routes/campusRoutes';
 
 /**
@@ -10,10 +11,16 @@ import { logFailure } from '../routes/campusRoutes';
  * (prepAttemptUpload) runs in the route; `guardUpload` turns its errors into plain answers (413 too large,
  * 400 not a video) instead of an HTML error page. The uploaded file is either handed to the scoring queue
  * (which deletes it) or deleted here, on every path.
+ *
+ * CP5.8: a read-aloud warm-up is the same upload with `lineId` (audio only). GET .../read-aloud/line gives the line to read:
+ * the student's count of scored read-alouds picks the next one, so the lines rotate.
  */
 const Params = z.object({ id: z.string().uuid() }).strict();
 const AttemptParams = z.object({ id: z.string().uuid(), attemptId: z.string().uuid() }).strict();
-const Body = z.object({ segmentIndex: z.coerce.number().int().min(0).max(20), clientKey: z.string().regex(/^[A-Za-z0-9-]{8,64}$/) }).strict();
+const Body = z.object({
+  segmentIndex: z.coerce.number().int().min(0).max(20), clientKey: z.string().regex(/^[A-Za-z0-9-]{8,64}$/),
+  lineId: z.string().regex(/^ra-\d{2}$/).optional(),
+}).strict();
 
 const drop = (req: Request) => (req.file?.path ? fs.promises.rm(req.file.path, { force: true }).catch(() => undefined) : Promise.resolve());
 
@@ -33,9 +40,13 @@ export async function postAttempt(req: Request, res: Response): Promise<void> {
   const p = Params.safeParse(req.params);
   const b = Body.safeParse(req.body);
   if (!p.success || !b.success || !req.file?.path) { await drop(req); res.status(400).json({ error: 'Record an answer to upload.' }); return; }
+  const line = b.data.lineId ? lineById(b.data.lineId) : undefined;
+  if (b.data.lineId && !line) { await drop(req); res.status(400).json({ error: 'That read-aloud line does not exist.' }); return; }
+  // Audio only ever comes from the read-aloud warm-up; a Try answer without a line must be a video.
+  if (!line && /^audio\//i.test(req.file.mimetype ?? '')) { await drop(req); res.status(400).json({ error: 'A Try answer needs the camera: record a video.' }); return; }
   try {
-    const { attempt, created } = await createAttempt(req.participant!.sub, p.data.id, b.data.segmentIndex, b.data.clientKey);
-    if (created) void enqueueAttempt(attempt.id, req.participant!.sub, req.file.path); else await drop(req);
+    const { attempt, created } = await createAttempt(req.participant!.sub, p.data.id, b.data.segmentIndex, b.data.clientKey, line?.id);
+    if (created) void enqueueAttempt(attempt.id, req.participant!.sub, req.file.path, line ? { readAloudLine: line } : {}); else await drop(req);
     res.status(created ? 202 : 200).json({ attempt });
   } catch (err) {
     await drop(req);
@@ -52,5 +63,15 @@ export async function getAttemptStatus(req: Request, res: Response): Promise<voi
     if (err instanceof NotFoundError) { res.status(404).json({ error: 'Not found' }); return; }
     logFailure('career_prep_attempt_read_failed', err);
     res.status(500).json({ error: 'Could not load the score.' });
+  }
+}
+
+/** CP5.8: the line this student reads next (rotation by their count of scored read-alouds). */
+export async function getReadAloudLine(req: Request, res: Response): Promise<void> {
+  try {
+    res.json({ line: lineFor(await readAloudCount(req.participant!.sub)) });
+  } catch (err) {
+    logFailure('career_prep_read_aloud_line_failed', err);
+    res.status(500).json({ error: 'Could not load the line to read.' });
   }
 }

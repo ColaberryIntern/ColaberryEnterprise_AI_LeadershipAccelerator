@@ -18499,3 +18499,174 @@ Steps 1-4 are safe without 5: the form accepts, the lead is captured and attribu
   - What changed: `HqRoomLink` now exports `roomGoesThroughBridge` and `roomBridgeBlockedReason`, and reads the first for its own branch, so the chip a surface draws and the link the leaf returns cannot disagree about what is blocked. `HqPanel`'s row chip and `HqInside`'s door plate read that reason: a room the badge opens but view-as withholds now shows a `ri-lock-line` icon plus "Viewing as" / "VIEWING AS", instead of "Open in admin ↗" / "OPEN ↗". Badge-locked rooms keep their grandfathered wording ("🔒" / "🔒 NO ACCESS"), because a badge lock and a view-as block have different causes and different fixes: one means ask an admin for the section, the other means leave view-as. No CSS change: `.cm-hq-rrow.is-disabled` and `.office.is-disabled` already greyed the row and the plate, so only the lettering was lying.
   - Verification: `hqRoomLinkViewAs.test.tsx` gains nine cases - the panel row and the door plate both carry the lock icon and no longer contain "Open in admin"/"OPEN"; the cause is named as view-as and not as the badge; two controls restore the open wording with no view-as session; a badge-locked room reads as a badge lock (the glyph, not the icon) both inside and outside a view-as session; a same-tab Career Prep door still offers to open during view-as; and the shared predicate is pinned directly (null for external, own and in-place rooms, the blocked sentence only for the bridged shape). CI run 44965060603: Frontend unit tests, Frontend typecheck, Frontend build, Backend typecheck, Test-file typecheck, Integration tier, secret and security scans all pass; Backend unit tests failed on the first push and the fix is described in Notes. This working tree predates `components/campus/hq` entirely, so nothing was run locally and no local pass is claimed.
   - Notes: found by me in the view-as screenshot taken while verifying PR 4241 on 2026-11-21, filed as AF12.15 (Basecamp todo 10534817192, due 26 Nov) rather than fixed inline. The AF2.7b suite that closed the security half states in its own header that it asserts "on the ANCHOR, never on the label", which is exactly where this slipped through: the row was already dead, aria-disabled, greyed and carrying the reason on `title` and in its accessible name, and only the visible chip still promised an action it would not perform. SECOND LESSON, from CI: the first push drew the new state with a padlock emoji and `house-style-emoji` in `bannedCopyRule.ts` rejected it - emoji are not allowed in product copy, an icon component is, and the rule holds each frontend file to a frozen count that fails on MORE violations and on FEWER alike. Drawing the state with `ri-lock-line` instead leaves both files' glyph inventories character-for-character identical to main, so the baseline is untouched in either direction rather than renegotiated.
+
+## Career Prep v27 Releases 2 and 3: loop run 20261121-career-prep-r2r3 (session CC-20261106-fv8g)
+
+Branch `workstream/career-prep-r2r3`, one PR (https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/4292), not merged and not deployed. Every task below was graded by an independent verifier on fresh evidence (score out of 12); the run directory `.loop-architect/runs/20261121-career-prep-r2r3/` (not committed) holds each verify-Tnn.md and log. Basecamp list: https://app.basecamp.com/3945211/buckets/7463955/todolists/10512940569 . Every switch this work adds ships OFF.
+
+- [x] T01 CP0.3 flag inventory: every Career Prep gate and dark switch listed
+  - Date: 2026-11-21
+  - Session: CC-20261106-fv8g
+  - What changed: run-dir flag-inventory.md plus checkFlagInventory.js (gate-symbol and spec-grep modes, self-test); no product code.
+  - Verification: verifier PASS 11/12 (attempt 2); checkFlagInventory.js exit 0 on origin/main fd07e9d8a; refreshed in T33 (both modes exit 0 on the branch).
+- [x] T02 Gitleaks false positive on the branch
+  - Date: 2026-11-21
+  - Session: CC-20261106-fv8g
+  - What changed: the practice-answers test names its zone constant so gitleaks stops flagging it (e4a471dca); later `.gitleaksignore` fingerprints for made-up test tokens (98bc5640d).
+  - Verification: verifier PASS 12/12; gitleaks range scan "no leaks found".
+- [x] T03 attachArtifactToTicket finds completed to-dos
+  - Date: 2026-11-21
+  - Session: CC-20261106-fv8g
+  - What changed: `scripts/artifacts/attachArtifactToTicket.js` resolves a ticket by code whether open or completed (7ed14a6de).
+  - Verification: verifier PASS 12/12; `node --test scripts/artifacts/__tests__/` 6/6.
+- [x] T04 CP5.5 close-out and the M1, M2, M3 decision records (Basecamp only)
+  - Date: 2026-11-21
+  - Session: CC-20261106-fv8g
+  - What changed: four one-page decision-record PDFs posted to Basecamp; the attach tool identifies Ali by Basecamp person id and sends a generic User-Agent (9da3ecee5).
+  - Verification: verifier PASS 11/12 (attempt 2); each closed ticket carries an embedded PDF.
+- [x] T05 CP7 deferral, the Kes note draft, M0 (no code, no contact)
+  - Date: 2026-11-21
+  - Session: CC-20261106-fv8g
+  - What changed: run-dir kes-note-draft.md (plain text, not sent); CP7 deferral comment.
+  - Verification: verifier PASS 11/12.
+- [x] T06 Branch, baseline, browser-suite split, size and scope tooling
+  - Date: 2026-11-21
+  - Session: CC-20261106-fv8g
+  - What changed: careerPrep.e2e.js split into harness.js + per-area suites + runAll.js before any check was added; run-dir sizeCheck.js and scopeCheck.js (bc5bdd414).
+  - Verification: verifier PASS 12/12; browser suites green on base and after the split.
+- [x] T07 Read-aloud backend
+  - Date: 2026-11-21
+  - Session: CC-20261106-fv8g
+  - What changed: read-aloud scoring (pace, smoothness, completeness), `read_aloud` observation source (b2803397a).
+  - Verification: verifier PASS 12/12 (attempt 2); unit tests on the score rules.
+- [x] T08 Read-aloud frontend
+  - Date: 2026-11-21
+  - Session: CC-20261106-fv8g
+  - What changed: the read-aloud segment in the room, audio only (edb6f5a10, fa0f8c8b7).
+  - Verification: verifier PASS 12/12 (attempt 3); 18 Career Prep suites 208 tests; readAloud.e2e.js red on base, green after.
+- [x] T09 CP6.1a job-search inbox schema and health rules
+  - Date: 2026-11-21
+  - Session: CC-20261106-fv8g
+  - What changed: `ensurePlacementSchema.ts` tables and the pure `inboxHealth.ts` (ecad5bc05).
+  - Verification: verifier PASS 12/12; CI integration tier ensurePlacementSchema.integration green.
+- [x] T10 CP6.1b inbox routes and the #inbox sheet
+  - Date: 2026-11-21
+  - Session: CC-20261106-fv8g
+  - What changed: student inbox routes behind `requireCareerPrep`; the #inbox sheet (bc05aa40c).
+  - Verification: verifier PASS 11/12 (attempt 2); placement.e2e PL1/PL2 red before, green after.
+- [x] T11 CP6.1c daily forwarding test and alerts (switch `career_prep_inbox_tests_enabled`, off)
+  - Date: 2026-11-21
+  - Session: CC-20261106-fv8g
+  - What changed: `inboxTestJob.ts` one test per Central day, alerts, gated by the switch (319488fe6).
+  - Verification: verifier PASS 11/12; inboxTestJob + inboxArrival suites green.
+- [x] T12 CP6.2a inbox events endpoint with HMAC over the raw bytes
+  - Date: 2026-11-21
+  - Session: CC-20261106-fv8g
+  - What changed: `/api/integrations/inbox/*` mounted before `express.json()`; 503 while `INBOX_INTEGRATION_SECRET` is unset (db817905a).
+  - Verification: verifier PASS 12/12; signature and mount-order tests.
+- [x] T13 CP6.2b roster and backfill client
+  - Date: 2026-11-21
+  - Session: CC-20261106-fv8g
+  - What changed: roster endpoint for the inbox manager and the backfill client (cd80eaea4).
+  - Verification: verifier PASS 11/12 (attempt 2); roster and backfill suites green.
+- [x] T14 CP6.3 Release 2 inbox checkpoint
+  - Date: 2026-11-21
+  - Session: CC-20261106-fv8g
+  - What changed: full gate at cd80eaea4; session-log entry (ec167c1ae).
+  - Verification: verifier PASS 12/12; every ci.yml job green locally and on the PR.
+- [x] T15 CP8.1a interview states, events and ingestion
+  - Date: 2026-11-21
+  - Session: CC-20261106-fv8g
+  - What changed: `interviewStates.ts`, `interviewIngest.ts` (auto at 0.95, review at 0.70) (5e8992eb5).
+  - Verification: verifier PASS 12/12 (attempt 2); CI integration tier interviewIngest.integration (two concurrent dispatches) green.
+- [x] T16 CP8.1b booking-link reply (switch `career_prep_employer_mail_enabled`, off)
+  - Date: 2026-11-21
+  - Session: CC-20261106-fv8g
+  - What changed: `bookingReply.ts` From "Ali M. via Refactored.ai", Reply-To the job-search address; held while the switch is off (0f7006936).
+  - Verification: verifier PASS 12/12 (attempt 2); bookingReply suites green.
+- [x] T17 CP8.2a booking token, slots and the public booking API
+  - Date: 2026-11-21
+  - Session: CC-20261106-fv8g
+  - What changed: per-link tokens, shared slots, `publicBookingRoutes.ts` with per-link limiters (3482eab01, 8011e8726).
+  - Verification: verifier PASS 12/12 (attempt 4); hireSlots, bookingToken, booking route suites green.
+- [x] T18 CP8.2b booking page and confirm side effects (rooms created with recording OFF)
+  - Date: 2026-11-21
+  - Session: CC-20261106-fv8g
+  - What changed: hire site /book/ page; `bookingConfirm.ts` with a per-interview lease; `zoomService` autoRecording 'none' for placement rooms (+5 lines); invites carry the consent-room page, never the Zoom link (15b22d43f to 81696245f).
+  - Verification: verifier PASS 12/12 (attempt 4); bookingConfirm.integration 4/4 in CI; hire site node --test green.
+- [x] T19 CP8.2c reminders and the 24 h nudge
+  - Date: 2026-11-21
+  - Session: CC-20261106-fv8g
+  - What changed: `bookingScheduler.ts` 24 h and 1 h reminders, the 24 h nudge, all switch-gated (c82a6880b, 5dba200cb).
+  - Verification: verifier PASS 12/12; bookingScheduler suites green.
+- [x] T20 CP8.3 Interviews sheet, anchors and the campus card
+  - Date: 2026-11-21
+  - Session: CC-20261106-fv8g
+  - What changed: #interviews sheet, real interviews as room anchors and on the card (a30c9e62c, c15b39b11).
+  - Verification: verifier PASS 11/12; placement.e2e PL3/PL4 red before, green after.
+- [x] T21 CP8.4 interviews and booking checkpoint
+  - Date: 2026-11-21
+  - Session: CC-20261106-fv8g
+  - What changed: full gate at c15b39b11; inbox route test loads its router once (7bfb3b72b).
+  - Verification: verifier PASS 12/12; every gate green, Integration tier 59 suites.
+- [x] T22 CP9.1a room provider, consent and the recording gate
+  - Date: 2026-11-21
+  - Session: CC-20261106-fv8g
+  - What changed: consent records; recording turned on only at full consent and read back; Zoom scope preflight (E6) (fe7efc783).
+  - Verification: verifier PASS 12/12; consent and scope tests.
+- [x] T23 CP9.1b candidate and employer room pages
+  - Date: 2026-11-21
+  - Session: CC-20261106-fv8g
+  - What changed: consent room pages; the meeting link only after consent (016f2cf04, 0cb0fec7f, b144cf628).
+  - Verification: verifier PASS 12/12; placement.e2e PL5/PL6 red before, green after.
+- [x] T24 CP9.2 Interview Replay
+  - Date: 2026-11-21
+  - Session: CC-20261106-fv8g
+  - What changed: `interview_replays`, scoring from the audio only, the replay drawer (ed6f36a19, 817defe34).
+  - Verification: verifier PASS 11/12; placement.e2e PL7/PL8; replay suites green.
+- [x] T25 CP10.1 fee calculator, versioned offers and the invoice record on acceptance
+  - Date: 2026-11-22
+  - Session: CC-20261106-fv8g
+  - What changed: `feeCalculator.ts` (integer cents, rate from `placement_fee_rate`, default 1.1), offers, invoice records only (bdb3dfb43, c7b1e5a5f, cb896d82a).
+  - Verification: verifier PASS 12/12 (attempt 2); offerStore.integration green in CI.
+- [x] T26 CP10.2a employer accounts and the client API (switch `hire_client_portal_enabled`, off)
+  - Date: 2026-11-22
+  - Session: CC-20261106-fv8g
+  - What changed: `ensureHireClientSchema.ts`, magic-link sign-in, uniform refusal while off (d88be9995, 06124fbb7).
+  - Verification: verifier PASS 12/12 (attempt 2); clientStore.integration 5/5 in CI.
+- [x] T27 CP10.2b employer portal pages
+  - Date: 2026-11-22
+  - Session: CC-20261106-fv8g
+  - What changed: hire site /client/ pages (candidates, interviews, offers) (5a55fbe40, 2ed17fc08).
+  - Verification: verifier PASS 11/12; hireSite.e2e HS checks green.
+- [x] T28 CP10.3 employer follow-ups
+  - Date: 2026-11-22
+  - Session: CC-20261106-fv8g
+  - What changed: `ensureEmployerFollowUpSchema.ts`, `followUpScheduler.ts` (switch-gated, https-only typed links) (89e2c84d0, 182b4d90f, 2929e33eb).
+  - Verification: verifier PASS 12/12 (attempt 2); followUpStore.integration 6/6 in CI.
+- [x] T29 CP10.4 candidate Offers sheet, never a fee
+  - Date: 2026-11-22
+  - Session: CC-20261106-fv8g
+  - What changed: `careerPrepOfferRoutes.ts` and the #offers sheet (53aa7a46c, 2f5931075).
+  - Verification: verifier PASS 11/12; placement.e2e PL9/PL10; fee-key deep scan test green.
+- [x] T30 CP10.5 Release 3 checkpoint
+  - Date: 2026-11-22
+  - Session: CC-20261106-fv8g
+  - What changed: full gate at 2f5931075; session-log entry (27b061943).
+  - Verification: verifier PASS 12/12; Integration tier 66 suites.
+- [x] T31 CP11.1a staff interview desk backend
+  - Date: 2026-11-22
+  - Session: CC-20261106-fv8g
+  - What changed: 12 routes under `/api/admin/placement/desk`, each `requireSection('placement')`; every action writes one audit row (88f8268ee, 37da6fbad).
+  - Verification: verifier PASS 11/12; careerDeskRoutes 57 tests, careerDeskStore.integration 5/5 in CI.
+- [x] T32 CP11.1b staff interview desk screens
+  - Date: 2026-11-22
+  - Session: CC-20261106-fv8g
+  - What changed: `frontend/src/pages/admin/careerDesk/` (review queue, inbox health, bookings, placements and fees), four Placement sidebar links, focus fold (dcb82fbde, d11481779).
+  - Verification: verifier PASS 12/12; careerDesk.e2e.js 6/6 (1/6 on the previous build); every PR check green.
+- [x] T33 Phase G quality gate: attach-tool fetch timeouts, flag-inventory refresh, the test-interview seed script
+  - Date: 2026-11-22
+  - Session: CC-20261106-fv8g
+  - What changed: `attachArtifactToTicket.js` bounds both Basecamp calls at 30 s (b7e1ede36); flag-inventory.md refreshed with the T01 findings; `backend/src/scripts/seedPlacementTestInterview.ts` writes the tagged test records for one allow-listed learner (one interview, one test employer account with one member, the put-forward; dry run by default; `--remove` deletes, in one transaction in foreign-key order, exactly them and every follow-up, offer and invoice record testing hangs off them) so Ali can test booking, the room, the replay, offers and follow-ups while intake is dark; PR screenshots in `docs/screenshots/career-prep-r2r3/`; test fixtures drop prototype company names.
+  - Verification: fetchTimeout.test.js red before (0/3), green after (12/12 in the folder); seedPlacementTestInterview.test.ts 7/7 plus seedPlacementTestInterview.integration.test.ts on real Postgres in CI (zero rows left per table, an untagged client untouched); checkFlagInventory.js both modes exit 0; full gate green (both tsc with planted control errors, backend and frontend jest with only the known CRLF artifacts, build, browser suites 70/70, hire 198/198); every PR check green.
+  - Notes: the full gate results and the PR state are recorded in the PR body and the run's T33 logs.

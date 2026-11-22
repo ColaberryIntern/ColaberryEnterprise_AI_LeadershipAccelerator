@@ -18,7 +18,7 @@ export interface Dashboard {
   readiness?: { value: number; target?: number; changeSinceFirst?: number; trend: Array<{ week: string; value: number }> };
   interviews: InterviewView[];
   skills: SkillView[];
-  sources: { video: number; phone_mock: number; real_interview: number; training: number; project: number };
+  sources: { video: number; phone_mock: number; real_interview: number; training: number; project: number; read_aloud: number };
   weeklyMinutes: Array<{ week: string; minutes: number }>;
   streak: number;
   thisWeek: number;
@@ -73,7 +73,7 @@ export function buildDashboard(data: PrepData, now: Date, anchorId?: string): Da
   const anchor = anchorId ? data.interviews.find((i) => i.id === anchorId) : defaultAnchor(data.interviews, now);
   const value = readiness(readings, anchor?.type ?? null);
   const trend = weeklyTrend(data, anchor?.id ?? NO_INTERVIEW);
-  const sources = { video: 0, phone_mock: 0, real_interview: 0, training: 0, project: 0 };
+  const sources = { video: 0, phone_mock: 0, real_interview: 0, training: 0, project: 0, read_aloud: 0 };
   for (const ref of new Set(data.sourceRefs.map((s) => `${s.source}|${s.ref}`))) sources[ref.split('|')[0] as keyof typeof sources]++;
   return {
     ...(anchor ? { anchorId: anchor.id } : {}),

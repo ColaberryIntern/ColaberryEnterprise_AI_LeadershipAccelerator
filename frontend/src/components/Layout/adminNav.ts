@@ -207,10 +207,14 @@ export const NAV_GROUPS: NavGroup[] = [
     { path: '/admin/comms-hub', label: 'Communications Hub', icon: 'calendar-event-line' },
   ]},
   // Career Prep v27 (CP2.1): one floor, three names in the campus tower (students: Career Prep; partners: Hiring; staff:
-  // Placement). Release 1 ships one staff page, each student's prep, read-only; the kit's queue, inboxes, bookings and
-  // fees pages join this group in Releases 2 and 3 when they exist. Staff doors open in place (M1 Q5 default).
+  // Placement). Release 1 shipped each student's prep, read-only; Releases 2 and 3 add the kit's interview desk (F9):
+  // review queue, inbox health, bookings, placements and fees. Staff doors open in place (M1 Q5 default).
   { label: 'Placement', section: 'placement', links: [
     { path: '/admin/placement/students', label: 'Student prep', icon: 'user-star-line', inPlace: true },
+    { path: '/admin/placement/queue', label: 'Review queue', icon: 'inbox-unarchive-line', inPlace: true },
+    { path: '/admin/placement/inboxes', label: 'Inbox health', icon: 'mail-check-line', inPlace: true },
+    { path: '/admin/placement/bookings', label: 'Bookings', icon: 'calendar-check-line', inPlace: true },
+    { path: '/admin/placement/fees', label: 'Placements and fees', icon: 'hand-coin-line', inPlace: true },
   ]},
   { label: 'Inbox & Content', section: 'inbox_content', links: [
     { path: '/admin/inbox', label: 'Inbox COS', icon: 'inbox-2-line' },

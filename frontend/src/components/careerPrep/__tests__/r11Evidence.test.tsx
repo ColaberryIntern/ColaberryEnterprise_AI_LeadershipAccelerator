@@ -28,7 +28,7 @@ const d: PrepDashboard = {
     { key: 'few_fillers', label: 'Few filler words', score: 97.1, count: 3, sources: ['video'] },
     { key: 'proof_of_work', label: 'Proof of work', count: 1, sources: ['project'] },
   ],
-  sources: { video: 3, phone_mock: 0, real_interview: 0, training: 0, project: 1 },
+  sources: { video: 3, phone_mock: 0, real_interview: 0, training: 0, project: 1, read_aloud: 0 },
   weeklyMinutes: [], streak: 0, thisWeek: 0,
 };
 

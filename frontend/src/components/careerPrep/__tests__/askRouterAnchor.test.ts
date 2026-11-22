@@ -40,7 +40,7 @@ describe('anchorCards', () => {
 });
 
 describe('insightLines (only from real metrics)', () => {
-  const base: PrepDashboard = { interviews: [], skills: [], sources: { video: 0, phone_mock: 0, real_interview: 0, training: 0, project: 0 }, weeklyMinutes: [], streak: 0, thisWeek: 0 };
+  const base: PrepDashboard = { interviews: [], skills: [], sources: { video: 0, phone_mock: 0, real_interview: 0, training: 0, project: 0, read_aloud: 0 }, weeklyMinutes: [], streak: 0, thisWeek: 0 };
   it('is empty with no data', () => expect(insightLines(base)).toEqual([]));
   it('cites readiness, the two weakest skills and the biggest gain', () => {
     const d: PrepDashboard = { ...base, readiness: { value: 64, target: 75, trend: [] }, skills: [
