@@ -36,12 +36,22 @@ const SESSIONS = [
   { date: '2026-12-03', status: 'scheduled', held: false, registered: 70, registered_lp: 65, checked_in: 0, checked_in_lp: 0, walk_ins: 0, followups_booked: 0, followups_sent: 0 },
 ];
 const snap = (w = win(), over = {}) => ({ generated_ct: '2026-11-22 13:49', launch_ct: '2026-11-10 15:10', windows: { cur: w }, email: null, sessions: SESSIONS, ...over });
-const legacy = () => { const w = win(); for (const k of ['oh_held', 'oh_upcoming', 'attended', 'followup_sent', 'held_watched', 'attended_watched']) delete w.journey[k]; return w; };
+const OH_KEYS = ['oh_held', 'oh_upcoming', 'attended', 'followup_sent', 'held_watched', 'attended_watched', 'interacted',
+  'paid', 'paid_held', 'paid_attended', 'paid_interacted', 'checkout_held', 'already_paid'];
+const legacy = () => { const w = win(); for (const k of OH_KEYS) delete w.journey[k]; return w; };
+// Second ask (interaction, paid, every message). Numbers shaped like production on 22 Nov, with one made-up payer.
+const full = (over = {}) => win({ interacted: 3, paid: 1, paid_held: 1, paid_attended: 1, paid_interacted: 1, checkout_held: 2, already_paid: 0, ...over });
+const COMMS = { people: 139, reached: 131, median_per_person: 2, max_per_person: 4, messages: [
+  { key: 'event:open_house_welcome:email', channel: 'email', kind: 'system', source: 'open_house_welcome', step: null, sent: 125, not_sent: 0, people: 125, subject: "You're in. Your first assignment takes 2 minutes.", subjects: 1, first_ct: '2026-11-15', last_ct: '2026-11-22' },
+  { key: 'campaign:x:2:email', channel: 'email', kind: 'campaign', source: 'Open House Countdown (Maya)', step: 3, sent: 71, not_sent: 0, people: 71, subject: null, subjects: 15, first_ct: '2026-11-19', last_ct: '2026-11-19' },
+  { key: 'campaign:x:9:email', channel: 'email', kind: 'campaign', source: 'One-off', step: 1, sent: 1, not_sent: 0, people: 1, subject: 'Your Open House is Tonight, Victoria', subjects: 1, first_ct: '2026-11-19', last_ct: '2026-11-19' },
+  { key: 'campaign:x:3:sms', channel: 'sms', kind: 'campaign', source: 'Open House Countdown (Maya)', step: 4, sent: 39, not_sent: 2, not_sent_status: 'failed', people: 39, subject: null, subjects: 0, first_ct: '2026-11-19', last_ct: '2026-11-19' }],
+  queued: [{ source: 'Open House Countdown (Maya)', channel: 'email', sends: 195, people: 65, next_ct: '2026-11-26 18:30' }] };
 
 test('funnel: the Open House rows are measured against sign-ups, then against those whose session happened', () => {
   const rows = M.funnel(win(), targets);
   const held = rows.find((r) => r.step === 'Their Open House has happened');
-  const came = rows.find((r) => r.step === 'Checked in at the Open House');
+  const came = rows.find((r) => r.step === 'Came to the Open House');
   assert.equal(held.prevN, 139, 'held is a share of landing-page sign-ups, not of the Quick check');
   assert.equal(came.prevN, 74);
   assert.equal(came.pctPrev, 5.4);
@@ -51,7 +61,7 @@ test('funnel: the Open House rows are measured against sign-ups, then against th
 
 test('funnel: a snapshot from before attendance existed has no Open House rows and the rest is unchanged', () => {
   const rows = M.funnel(legacy(), targets);
-  assert.ok(!rows.some((r) => /Open House has happened|Checked in/.test(r.step)));
+  assert.ok(!rows.some((r) => /Open House has happened|Came to the Open House|Paid to enroll/.test(r.step)));
   assert.equal(rows.length, 11);
   assert.equal(rateOf('attend', legacy(), null), null, 'no data is null, never zero');
 });
@@ -72,7 +82,7 @@ test('rateOf attend: attended over held, and graded grey under minSample', () =>
 
 test('findings: attendance is stated with its floor, and the video comparison only with enough people', () => {
   const f = I.findings(win(), targets).map((x) => x.text);
-  assert.ok(f.some((t) => /4 of 74 sign-ups whose Open House has happened checked in \(5\.4%\)\..*floor/.test(t)));
+  assert.ok(f.some((t) => /4 of 74 sign-ups whose Open House has happened came \(5\.4%\)\..*floor/.test(t)));
   assert.ok(f.some((t) => /Finished the welcome video before the session: 4\.8% checked in \(1 of 21\)\. Did not: 5\.7% \(3 of 53\)\. No real difference yet\./.test(t)));
   assert.ok(f.some((t) => /65 more sign-ups are waiting/.test(t)));
   const few = I.findings(win({ held_watched: 3, attended_watched: 0 }), targets).map((x) => x.text);
@@ -102,6 +112,61 @@ test('render: the Open House section and session table appear, escaped and witho
   assert.doesNotMatch(html, /\bfree\b/i);
   const old = buildHtml(snap(legacy(), { sessions: undefined }), targets, [], []);
   assert.doesNotMatch(old, /sec-openhouse/);
+});
+
+test('funnel: took part is a share of those who came; paid is a share of everyone whose Open House happened', () => {
+  const rows = M.funnel(full(), targets);
+  const steps = rows.map((r) => r.step);
+  const i = steps.indexOf('Came to the Open House');
+  assert.equal(steps[i + 1], 'Took part (poll, question or status)');
+  assert.equal(steps[i + 2], 'Paid to enroll (of everyone whose Open House happened)');
+  assert.equal(rows[i + 1].prevN, 4);
+  assert.equal(rows[i + 2].prevN, 74, 'paid is measured against held, so paying without coming still counts');
+  assert.equal(rateOf('interact', full(), null).d, 4);
+  assert.deepEqual(rateOf('paid', full(), null), { n: 1, d: 74 });
+});
+
+test('forks: who paid adds up to everyone whose Open House happened', () => {
+  const f = M.forks(full(), null, targets).find((x) => x.id === 'paid');
+  assert.equal(f.total, 74);
+  assert.deepEqual(f.options.map((o) => o.n), [1, 0, 0, 1, 72]);
+  const none = M.forks(full({ paid: 0, paid_held: 0, paid_attended: 0, paid_interacted: 0, checkout_held: 1 }), null, targets).find((x) => x.id === 'paid');
+  assert.equal(none.total, 74);
+});
+
+test('findings: paid and took part are stated, including nobody paying yet', () => {
+  const f = I.findings(full(), targets).map((x) => x.text);
+  assert.ok(f.some((t) => /3 of the 4 who came took part/.test(t)));
+  assert.ok(f.some((t) => /1 of 74 paid to enroll after their Open House \(1\.4%\): 1 took part, 0 came and watched, 0 never came\. 1 more started checkout and did not pay\./.test(t)));
+  const none = I.findings(full({ paid: 0, paid_held: 0, paid_attended: 0, paid_interacted: 0, checkout_held: 1 }), targets).map((x) => x.text);
+  assert.ok(none.some((t) => /Nobody whose Open House has happened has paid to enroll yet \(0 of 74\)\. 1 started checkout/.test(t)));
+  assert.ok(I.kpis(full(), null, targets).some((t) => t.label === 'Paid to enroll' && t.value === 1));
+});
+
+test('messages: every one listed in order with plain names; a one-person subject never shows', () => {
+  const html = buildHtml(snap(full(), { comms: COMMS }), targets, [], []);
+  assert.match(html, /id="sec-comms"/);
+  assert.match(html, /Welcome email, right after sign-up/);
+  assert.match(html, /“You&#39;re in\. Your first assignment takes 2 minutes\.”|“You’re in|You&#x27;re in/);
+  assert.match(html, /Open House Countdown \(Maya\), step 3/);
+  assert.match(html, /written for each person, 15 versions/);
+  assert.doesNotMatch(html, /Victoria/, 'a subject sent to one person is not shown');
+  assert.match(html, /\(text, no subject\)/);
+  assert.match(html, /2 <span class="muted">\(failed\)<\/span>/);
+  assert.match(html, /Still to go out/);
+  assert.match(html, /131 of 139 sign-ups got at least one message\. Each got a median of 2 \(most: 4\)/);
+  assert.doesNotMatch(buildHtml(snap(full()), targets, [], []), /sec-comms/, 'no comms block, no section');
+});
+
+test('collect.sql: interaction, payment and messages come from the tables that hold them', () => {
+  const sql = fs.readFileSync(path.join(__dirname, '..', 'collect.sql'), 'utf8');
+  assert.match(sql, /CREATE TEMP TABLE oh_did/);
+  assert.match(sql, /session_guest_poll_responses[\s\S]*session_guest_questions[\s\S]*session_pulse/);
+  assert.match(sql, /sb\.paysimple_payment_id IS NOT NULL AND sb\.started_at >= g\.reg_at/);
+  assert.match(sql, /sb\.plan::text <> 'comp'/);
+  assert.match(sql, /CREATE TEMP TABLE commz/);
+  assert.match(sql, /p\.email_lower = lower\(c\.to_address\)[\s\S]*cl\.lead_id = c\.lead_id/, 'texts are matched by lead');
+  assert.match(sql, /session_presence_events pe[\s\S]*classroom_enter/, 'in the room = the follow-up rule');
 });
 
 test('collect.sql reads visitor_sessions once, never per visitor (it timed out on 22 Nov 2026)', () => {

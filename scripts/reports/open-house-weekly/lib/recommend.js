@@ -92,11 +92,13 @@ const RATE_FACTS = {
   check: (r) => `${r.pct}% of credit collectors took the Quick check (${r.n} of ${r.d}).`,
   bounce: (r) => `${r.pct}% of visitors left before a quarter of the page (${r.n} of ${r.d}).`,
   emailOpen: (r) => `${r.pct}% of welcome emails were opened (${r.n} of ${r.d}, Mandrill, a floor).`,
-  attend: (r) => `${r.pct}% of sign-ups whose Open House happened checked in (${r.n} of ${r.d}, platform check-ins, a floor).`,
+  attend: (r) => `${r.pct}% of sign-ups whose Open House happened came (${r.n} of ${r.d}, seen in the room on the platform, a floor).`,
+  interact: (r) => `${r.pct}% of the people at the Open House took part: a poll, a question or a status (${r.n} of ${r.d}).`,
+  paid: (r) => `${r.pct}% of sign-ups whose Open House happened paid to enroll (${r.n} of ${r.d}).`,
 };
 const ANCHOR = { seatClick: 'sec-forks', formFinish: 'sec-forks', signup: 'sec-funnel', enter: 'sec-account', play: 'sec-account',
-  finish: 'sec-account', credit: 'sec-forks', check: 'sec-forks', bounce: 'sec-page', emailOpen: 'sec-email', attend: 'sec-openhouse' };
-const STAGE = { seatClick: 1, bounce: 0.9, formFinish: 1.2, signup: 1.1, enter: 1.5, play: 2, finish: 2.2, credit: 2.4, check: 2.4, emailOpen: 1, attend: 2.6 };
+  finish: 'sec-account', credit: 'sec-forks', check: 'sec-forks', bounce: 'sec-page', emailOpen: 'sec-email', attend: 'sec-openhouse', interact: 'sec-openhouse', paid: 'sec-openhouse' };
+const STAGE = { seatClick: 1, bounce: 0.9, formFinish: 1.2, signup: 1.1, enter: 1.5, play: 2, finish: 2.2, credit: 2.4, check: 2.4, emailOpen: 1, attend: 2.6, interact: 2.7, paid: 3 };
 
 /** The 10 numbers that matter most this week, as tour stops. */
 function topTen(w, email, targets) {

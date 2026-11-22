@@ -155,15 +155,15 @@
       "kind": "build",
       "ticket": "https://app.basecamp.com/3945211/buckets/47502609/todos/10535929836",
       "title": "OH1y: the funnel now runs past sign-up to the Open House itself",
-      "detail": "New last steps: their Open House has happened, then checked in (platform check-ins, the same rule the attended/missed follow-up uses). A per-session table shows registered, checked in, walk-ins and follow-ups booked and sent. A finding compares attendance for people who finished the welcome video before the session with those who did not. Attendance is a floor: people who join Zoom directly never check in."
+      "detail": "Ali: the Open House is a step, taking part at the Open House is a step, then paid enrollment; and show every communication. New last steps: their Open House has happened, came (seen in the room: checked in, entered the classroom or set a status; the same rule the attended/missed follow-up uses), took part (poll, question or status), then paid to enroll (a PaySimple payment after sign-up, comp plans excluded, measured against everyone whose Open House happened). A per-session table, a who-paid fork, and every message the week's sign-ups received (email, text, call), grouped by message, with what is still queued. Attendance is a floor: people who join Zoom directly are not seen."
     },
     {
       "id": "M-2026-11-22-attendance",
       "date": "2026-11-22 08:30",
       "kind": "measurement",
       "ticket": "https://app.basecamp.com/3945211/buckets/47502609/todos/10535929836",
-      "title": "First Open House (19 Nov): 11 of 228 registrants checked in on the platform (4.8%), plus 7 walk-ins",
-      "detail": "Of the 123 who registered through the ad landing page, 5 checked in. This is a floor, not the attendance: the 19 Nov session ran on a Zoom meeting separate from the platform's, so people who joined Zoom directly were not counted. Finishing the welcome video did not go with showing up yet (1 of 21 video finishers checked in, 3 of 53 others); too few to judge."
+      "title": "First Open House (19 Nov): 17 of 228 registrants were seen in the room (7.5%), plus 7 walk-ins; 22 took part; nobody has paid yet",
+      "detail": "Of the 123 who registered through the ad landing page, 5 came. Six registrants who entered the classroom or set a status had been marked absent by the system for skipping check-in; they count as there now, in the report and in the follow-up email. 22 people took part (13 answered polls, 3 asked questions, 12 set a status). No registrant has paid to enroll since. Attendance is a floor: the 19 Nov session ran on a Zoom meeting separate from the platform's, so people who joined Zoom directly were not counted. Finishing the welcome video did not go with showing up yet (1 of 21 video finishers came, 3 of 53 others); too few to judge."
     },
     {
       "id": "H-2026-11-22-attend",

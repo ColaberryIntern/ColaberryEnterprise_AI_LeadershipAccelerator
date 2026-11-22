@@ -86,7 +86,7 @@ LEFT JOIN LATERAL (
 WHERE r.email_lower NOT LIKE 'ali+%' AND r.email_lower NOT LIKE '%@colaberry.com'
   AND r.email_lower NOT LIKE '%@colaberry-test.local' AND r.email_lower !~ '^(e2e[-_]|test-fixture-)';
 
--- ── 3b. OH1y: who checked in at each Open House (platform check-ins; same rule as the follow-up) ───────────────────
+-- ── 2a. OH1y: who was in the room at each Open House (the follow-up's rule: checked in, entered, or set a status) ──
 CREATE TEMP TABLE oh_here AS
 SELECT DISTINCT x.session_id, x.email FROM (
   SELECT sg.session_id, sg.email_lower AS email FROM session_guests sg
@@ -96,9 +96,32 @@ SELECT DISTINCT x.session_id, x.email FROM (
   SELECT ar.session_id, lower(e.email) FROM attendance_records ar JOIN enrollments e ON e.id = ar.enrollment_id
     JOIN live_sessions s ON s.id = ar.session_id AND s.open_house_event_id IS NOT NULL
    WHERE ar.status::text IN ('present', 'late') AND e.email IS NOT NULL
+  UNION ALL
+  -- A member who entered the classroom or set their status was there, even when marked absent for skipping check-in.
+  SELECT pe.session_id, lower(e.email) FROM session_presence_events pe JOIN enrollments e ON e.id = pe.enrollment_id
+    JOIN live_sessions s ON s.id = pe.session_id AND s.open_house_event_id IS NOT NULL
+   WHERE pe.event_type = 'classroom_enter' AND e.email IS NOT NULL
+  UNION ALL
+  SELECT sp.session_id, lower(e.email) FROM session_pulse sp JOIN enrollments e ON e.id = sp.enrollment_id
+    JOIN live_sessions s ON s.id = sp.session_id AND s.open_house_event_id IS NOT NULL
+   WHERE e.email IS NOT NULL
 ) x
 WHERE x.email NOT LIKE 'ali+%' AND x.email NOT LIKE '%@colaberry.com'
   AND x.email NOT LIKE '%@colaberry-test.local' AND x.email !~ '^(e2e[-_]|test-fixture-)';
+
+-- OH1y: who did something in the room: a guest answered a poll, asked a question or set their status; a signed-in member
+-- set their status, answered a poll or chatted. One row per (session, email, kind).
+CREATE TEMP TABLE oh_did AS
+SELECT DISTINCT x.session_id, x.email, x.kind FROM (
+  SELECT p.session_id, sg.email_lower AS email, 'poll' AS kind FROM session_guest_poll_responses p JOIN session_guests sg ON sg.id = p.guest_id
+  UNION ALL SELECT q.session_id, sg.email_lower, 'question' FROM session_guest_questions q JOIN session_guests sg ON sg.id = q.guest_id
+  UNION ALL SELECT sg.session_id, sg.email_lower, 'status' FROM session_guests sg WHERE sg.pulse_state IS NOT NULL
+  UNION ALL SELECT sp.session_id, lower(e.email), 'status' FROM session_pulse sp JOIN enrollments e ON e.id = sp.enrollment_id
+  UNION ALL SELECT pr.session_id, lower(e.email), 'poll' FROM session_poll_responses pr JOIN enrollments e ON e.id = pr.enrollment_id
+  UNION ALL SELECT cm.session_id, lower(e.email), 'chat' FROM session_chat_messages cm JOIN enrollments e ON e.id = cm.enrollment_id
+) x
+JOIN live_sessions s ON s.id = x.session_id AND s.open_house_event_id IS NOT NULL
+WHERE x.email IS NOT NULL;
 
 CREATE TEMP TABLE regx AS
 SELECT g.*, wl.sent_at AS email_at,
@@ -125,8 +148,19 @@ SELECT g.*, wl.sent_at AS email_at,
   EXISTS (SELECT 1 FROM oh_here h WHERE h.session_id = os.session_id AND h.email = g.email_lower) AS attended,
   (os.session_id IS NOT NULL AND EXISTS (SELECT 1 FROM scheduled_emails se JOIN leads l2 ON l2.id = se.lead_id
      WHERE se.metadata->>'event_session_id' = os.session_id::text AND se.metadata ? 'event_followup'
-       AND se.status::text = 'sent' AND lower(l2.email) = g.email_lower)) AS followup_sent
+       AND se.status::text = 'sent' AND lower(l2.email) = g.email_lower)) AS followup_sent,
+  EXISTS (SELECT 1 FROM oh_did d WHERE d.session_id = os.session_id AND d.email = g.email_lower) AS interacted,
+  -- Paid = a PaySimple subscription with a payment on it, started after they signed up. Comp plans are not paid.
+  -- "Checkout" = any non-comp subscription row created after sign-up, paid or not (pending / failed included).
+  pay.paid_at, pay.checkout_at, pay.paid_before
 FROM reg g
+LEFT JOIN LATERAL (
+  SELECT min(sb.started_at) FILTER (WHERE sb.paysimple_payment_id IS NOT NULL AND sb.started_at >= g.reg_at) AS paid_at,
+         min(sb.created_at) FILTER (WHERE sb.created_at >= g.reg_at) AS checkout_at,
+         bool_or(sb.paysimple_payment_id IS NOT NULL AND sb.started_at < g.reg_at) AS paid_before
+  FROM subscriptions sb JOIN enrollments e3 ON e3.id = sb.enrollment_id
+  WHERE lower(e3.email) = g.email_lower AND sb.plan::text <> 'comp'
+) pay ON true
 LEFT JOIN LATERAL (
   SELECT s.id AS session_id,
          ((s.session_date + s.start_time::time)::timestamp AT TIME ZONE 'America/Chicago') AS starts_at,
@@ -147,6 +181,27 @@ SELECT x.*, LEAST(x.signin_at, x.opened_at) AS entered_at,
   CASE WHEN x.opened_at IS NOT NULL AND (x.signin_at IS NULL OR x.opened_at <= x.signin_at) THEN 'button'
        WHEN x.signin_at IS NOT NULL THEN 'link' END AS entered_by
 FROM regx x;
+
+-- ── 2c. OH1y: every message this week's landing-page sign-ups received after signing up, until the window closed ───
+-- Matched by address (email) or by lead (texts are addressed to a phone). One row per message, never per match.
+CREATE TEMP TABLE cur_ppl AS
+SELECT y.email_lower, min(y.reg_at) AS reg_at FROM regy y WHERE y.name = 'cur' AND y.door = 'landing_page' GROUP BY 1;
+CREATE TEMP TABLE cur_leads AS
+SELECT p.email_lower, l.id AS lead_id FROM cur_ppl p JOIN leads l ON lower(l.email) = p.email_lower;
+CREATE TEMP TABLE commz AS
+SELECT DISTINCT ON (c.id) c.id, who.email_lower AS person, c.channel::text AS channel, c.status::text AS status, c.subject,
+       c.created_at, c.campaign_id, c.metadata
+FROM communication_logs c
+JOIN LATERAL (
+  SELECT p.email_lower, p.reg_at FROM cur_ppl p WHERE p.email_lower = lower(c.to_address)
+  UNION ALL
+  SELECT cl.email_lower, p.reg_at FROM cur_leads cl JOIN cur_ppl p USING (email_lower) WHERE cl.lead_id = c.lead_id
+) who ON true
+WHERE c.created_at >= (SELECT s FROM win WHERE name = 'cur') - interval '5 minutes'
+  AND c.created_at < (SELECT e FROM win WHERE name = 'cur')
+  AND c.created_at >= who.reg_at - interval '5 minutes'
+  AND coalesce(c.direction::text, 'outbound') <> 'inbound'
+ORDER BY c.id, who.email_lower;
 
 -- ── 3. The second LP path: "Start Learning AI for $0" -> /portal/signup (an Explorer account, no Open House) ────
 CREATE TEMP TABLE startpath AS
@@ -220,6 +275,14 @@ SELECT json_build_object(
         'followup_sent', count(*) FILTER (WHERE oh_held AND followup_sent),
         'held_watched', count(*) FILTER (WHERE oh_held AND finished_at IS NOT NULL AND finished_at < oh_starts_at),
         'attended_watched', count(*) FILTER (WHERE oh_held AND attended AND finished_at IS NOT NULL AND finished_at < oh_starts_at),
+        'interacted', count(*) FILTER (WHERE oh_held AND attended AND interacted),
+        -- Paid: every landing-page sign-up who paid after signing up, then split by how far they got at the Open House.
+        'paid', count(*) FILTER (WHERE paid_at IS NOT NULL),
+        'paid_held', count(*) FILTER (WHERE oh_held AND paid_at IS NOT NULL),
+        'paid_attended', count(*) FILTER (WHERE oh_held AND attended AND paid_at IS NOT NULL),
+        'paid_interacted', count(*) FILTER (WHERE oh_held AND attended AND interacted AND paid_at IS NOT NULL),
+        'checkout_held', count(*) FILTER (WHERE oh_held AND checkout_at IS NOT NULL),
+        'already_paid', count(*) FILTER (WHERE paid_before),
         'exits', coalesce(json_agg(round(exit_s)::int ORDER BY exit_s) FILTER (
             WHERE new_account AND played_at IS NOT NULL AND finished_at IS NULL AND exit_s IS NOT NULL), '[]'),
         'median_min_signup_to_enter', round((extract(epoch FROM percentile_cont(0.5) WITHIN GROUP (ORDER BY entered_at - reg_at)) / 60.0)::numeric, 1),
@@ -233,6 +296,44 @@ SELECT json_build_object(
           (SELECT count(*) FROM regy y WHERE y.name = w.name AND y.door = 'landing_page' AND y.new_account AND y.finished_at IS NOT NULL AND (y.reg_at AT TIME ZONE 'America/Chicago')::date = day) AS finished
         FROM generate_series((w.s AT TIME ZONE 'America/Chicago')::date, (w.e AT TIME ZONE 'America/Chicago')::date, interval '1 day') AS day) d)
   )) FROM win w),
+  -- OH1y: every message this week's landing-page sign-ups received, grouped by what it was. A subject is only carried
+  -- when every send of that message had the same one (Maya writes a subject per person, some with a first name).
+  'comms', json_build_object(
+    'people', (SELECT count(*) FROM cur_ppl),
+    'reached', (SELECT count(DISTINCT person) FROM commz WHERE status = 'sent'),
+    'median_per_person', (SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY n) FROM (
+        SELECT p.email_lower, count(c.id) FILTER (WHERE c.status = 'sent') AS n FROM cur_ppl p LEFT JOIN commz c ON c.person = p.email_lower GROUP BY 1) t),
+    'max_per_person', (SELECT max(n) FROM (SELECT person, count(*) AS n FROM commz WHERE status = 'sent' GROUP BY 1) t),
+    'messages', (SELECT coalesce(json_agg(m ORDER BY m.first_at, m.sent DESC), '[]') FROM (
+      SELECT k.key, min(k.channel) AS channel, min(k.kind) AS kind, min(k.source) AS source, min(k.step) AS step,
+             count(*) FILTER (WHERE k.status = 'sent') AS sent,
+             count(*) FILTER (WHERE k.status <> 'sent') AS not_sent,
+             string_agg(DISTINCT k.status, ', ') FILTER (WHERE k.status <> 'sent') AS not_sent_status,
+             count(DISTINCT k.person) FILTER (WHERE k.status = 'sent') AS people,
+             CASE WHEN count(DISTINCT k.subject) = 1 THEN min(k.subject) END AS subject,
+             count(DISTINCT k.subject) AS subjects,
+             to_char(min(k.created_at) AT TIME ZONE 'America/Chicago', 'YYYY-MM-DD') AS first_ct,
+             to_char(max(k.created_at) AT TIME ZONE 'America/Chicago', 'YYYY-MM-DD') AS last_ct,
+             min(k.created_at) AS first_at
+      FROM (
+        SELECT c.*, CASE
+            WHEN c.metadata->>'event' IS NOT NULL THEN 'event:' || (c.metadata->>'event') || ':' || c.channel
+            WHEN c.campaign_id IS NOT NULL THEN 'campaign:' || c.campaign_id || ':' || coalesce(c.metadata->>'step_index', '?') || ':' || c.channel
+            WHEN c.metadata->>'email_type' IS NOT NULL THEN 'reminder:' || (c.metadata->>'email_type') || ':' || coalesce(c.metadata->>'reminder_type', '') || ':' || c.channel
+            ELSE 'other:' || c.channel END AS key,
+          CASE WHEN c.metadata->>'event' IS NOT NULL THEN 'system' WHEN c.campaign_id IS NOT NULL THEN 'campaign'
+               WHEN c.metadata->>'email_type' IS NOT NULL THEN 'reminder' ELSE 'other' END AS kind,
+          coalesce(c.metadata->>'event', cp.name, nullif(concat_ws(' ', c.metadata->>'email_type', c.metadata->>'reminder_type'), ''), 'other') AS source,
+          CASE WHEN c.metadata->>'step_index' ~ '^[0-9]+$' THEN (c.metadata->>'step_index')::int + 1 END AS step
+        FROM commz c LEFT JOIN campaigns cp ON cp.id = c.campaign_id
+      ) k GROUP BY k.key) m),
+    -- Still waiting to go out to these people (campaign sends booked, not yet sent).
+    'queued', (SELECT coalesce(json_agg(q ORDER BY q.next_ct), '[]') FROM (
+      SELECT coalesce(cp.name, 'no campaign') AS source, se.channel::text AS channel, count(*) AS sends, count(DISTINCT cl.email_lower) AS people,
+             to_char(min(se.scheduled_for) AT TIME ZONE 'America/Chicago', 'YYYY-MM-DD HH24:MI') AS next_ct
+      FROM scheduled_emails se JOIN cur_leads cl ON cl.lead_id = se.lead_id LEFT JOIN campaigns cp ON cp.id = se.campaign_id
+      WHERE se.status::text IN ('pending', 'processing', 'paused')
+      GROUP BY 1, 2) q)),
   -- OH1y: every Open House since launch, whatever window the sign-ups fell in. All doors, test addresses excluded.
   'sessions', (SELECT coalesce(json_agg(t ORDER BY t.date), '[]') FROM (
     SELECT to_char(s.session_date, 'YYYY-MM-DD') AS date, s.status::text AS status,
@@ -243,6 +344,18 @@ SELECT json_build_object(
       count(DISTINCT r.email_lower) FILTER (WHERE r.email_lower IN (SELECT h.email FROM oh_here h WHERE h.session_id = s.id)) AS checked_in,
       count(DISTINCT r.email_lower) FILTER (WHERE r.source = 'landing_page' AND r.email_lower IN (SELECT h.email FROM oh_here h WHERE h.session_id = s.id)) AS checked_in_lp,
       (SELECT count(*) FROM oh_here h WHERE h.session_id = s.id AND h.email NOT IN (SELECT r3.email_lower FROM open_house_registrations r3 WHERE r3.event_id = s.open_house_event_id)) AS walk_ins,
+      (SELECT count(DISTINCT d.email) FROM oh_did d WHERE d.session_id = s.id) AS interacted,
+      (SELECT count(DISTINCT d.email) FROM oh_did d WHERE d.session_id = s.id AND d.kind = 'poll') AS answered_poll,
+      (SELECT count(DISTINCT d.email) FROM oh_did d WHERE d.session_id = s.id AND d.kind = 'question') AS asked_question,
+      (SELECT count(DISTINCT d.email) FROM oh_did d WHERE d.session_id = s.id AND d.kind IN ('status', 'chat')) AS set_status_or_chat,
+      -- Registrants (all doors) who paid after this Open House started, and how many of them had checked in.
+      count(DISTINCT r.email_lower) FILTER (WHERE EXISTS (SELECT 1 FROM subscriptions sb JOIN enrollments e4 ON e4.id = sb.enrollment_id
+          WHERE lower(e4.email) = r.email_lower AND sb.plan::text <> 'comp' AND sb.paysimple_payment_id IS NOT NULL
+            AND sb.started_at >= ((s.session_date + s.start_time::time)::timestamp AT TIME ZONE 'America/Chicago'))) AS paid_after,
+      count(DISTINCT r.email_lower) FILTER (WHERE r.email_lower IN (SELECT h.email FROM oh_here h WHERE h.session_id = s.id)
+        AND EXISTS (SELECT 1 FROM subscriptions sb JOIN enrollments e4 ON e4.id = sb.enrollment_id
+          WHERE lower(e4.email) = r.email_lower AND sb.plan::text <> 'comp' AND sb.paysimple_payment_id IS NOT NULL
+            AND sb.started_at >= ((s.session_date + s.start_time::time)::timestamp AT TIME ZONE 'America/Chicago'))) AS paid_after_checked_in,
       (SELECT count(*) FROM scheduled_emails se WHERE se.metadata->>'event_session_id' = s.id::text AND se.metadata ? 'event_followup') AS followups_booked,
       (SELECT count(*) FROM scheduled_emails se WHERE se.metadata->>'event_session_id' = s.id::text AND se.metadata ? 'event_followup' AND se.status::text = 'sent') AS followups_sent
     FROM live_sessions s

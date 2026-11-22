@@ -109,6 +109,15 @@ describe('FOLLOWUP_PEOPLE_SQL', () => {
     expect(FOLLOWUP_PEOPLE_SQL).toMatch(/status::text IN \('present', 'late'\)/);
     expect(FOLLOWUP_PEOPLE_SQL).toMatch(/'missed'[\s\S]*NOT EXISTS \(SELECT 1 FROM here/);
   });
+  it('a member who entered the classroom or set their status attended, even when marked absent (19 Nov: six were)', () => {
+    const here = FOLLOWUP_PEOPLE_SQL.slice(0, FOLLOWUP_PEOPLE_SQL.indexOf('), reg AS'));
+    expect(here).toMatch(/session_presence_events pe[\s\S]*pe\.event_type = 'classroom_enter'/);
+    expect(here).toMatch(/session_pulse sp[\s\S]*sp\.session_id = :sid/);
+    expect(here).toMatch(/email NOT LIKE '%@colaberry\.com'/);
+    // 13 staff addresses registered for 19 Nov; they get neither email.
+    const reg = FOLLOWUP_PEOPLE_SQL.slice(FOLLOWUP_PEOPLE_SQL.indexOf('), reg AS'), FOLLOWUP_PEOPLE_SQL.indexOf('), people AS'));
+    expect(reg).toMatch(/r\.email_lower NOT LIKE '%@colaberry\.com'/);
+  });
   it('skips removed leads and anyone already booked for this session (idempotent)', () => {
     expect(FOLLOWUP_PEOPLE_SQL).toMatch(/cl\.status = 'removed'/);
     expect(FOLLOWUP_PEOPLE_SQL).toMatch(/metadata->>'event_session_id' = CAST\(:sid AS text\)/);

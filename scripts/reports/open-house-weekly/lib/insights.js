@@ -27,6 +27,10 @@ function kpis(cur, prev, targets) {
       return tile('🎤', 'Came to the Open House', j.attended, j.oh_held ? `${g.pct}% of ${j.oh_held} whose session happened (a floor)` : 'no Open House has happened yet',
         g, pj && pj.attended);
     })()]),
+    ...(j.paid_held === undefined ? [] : [(() => {
+      const g = grade('paid', j.paid_held, j.oh_held, targets);
+      return tile('💳', 'Paid to enroll', j.paid_held, j.oh_held ? `${g.pct}% of ${j.oh_held} whose Open House happened` : 'no Open House has happened yet', g, pj && pj.paid_held);
+    })()]),
   ];
 }
 
@@ -78,7 +82,16 @@ function attendanceFindings(j, targets) {
   const out = [];
   const g = grade('attend', j.attended, j.oh_held, targets);
   out.push({ tone: g.status === 'good' ? 'good' : g.status === 'low' ? 'info' : 'warn', icon: '🎤',
-    text: `${j.attended} of ${j.oh_held} sign-ups whose Open House has happened checked in (${g.pct}%). ${ATTEND_FLOOR}` });
+    text: `${j.attended} of ${j.oh_held} sign-ups whose Open House has happened came (${g.pct}%). ${ATTEND_FLOOR}` });
+  if (j.interacted !== undefined && j.attended > 0) {
+    out.push({ tone: 'info', icon: '🙋', text: `${j.interacted} of the ${j.attended} who came took part: answered a poll, asked a question or set a status (${pct(j.interacted, j.attended)}%).` });
+  }
+  if (j.paid_held !== undefined) {
+    const started = Math.max(0, (j.checkout_held || 0) - j.paid_held);
+    out.push({ tone: j.paid_held ? 'good' : 'warn', icon: '💳', text: j.paid_held
+      ? `${j.paid_held} of ${j.oh_held} paid to enroll after their Open House (${pct(j.paid_held, j.oh_held)}%): ${j.paid_interacted} took part, ${Math.max(0, j.paid_attended - j.paid_interacted)} came and watched, ${Math.max(0, j.paid_held - j.paid_attended)} never came.${started ? ` ${started} more started checkout and did not pay.` : ''}`
+      : `Nobody whose Open House has happened has paid to enroll yet (0 of ${j.oh_held}).${started ? ` ${started} started checkout and did not pay.` : ''}` });
+  }
   const notWatched = j.oh_held - j.held_watched, attNotWatched = j.attended - j.attended_watched;
   if (j.held_watched >= targets.minSample && notWatched >= targets.minSample) {
     const a = pct(j.attended_watched, j.held_watched), b = pct(attNotWatched, notWatched);
@@ -93,6 +106,7 @@ function attendanceFindings(j, targets) {
 /** What the report cannot measure yet, so nobody reads silence as zero. */
 function blindSpots(snap) {
   const list = [
+    { icon: '📬', what: 'Opens and clicks on every message except the welcome email', why: 'The message list shows what was sent; only the welcome email is read back from Mandrill, and texts report delivery only.', next: 'Read Mandrill opens and clicks for the countdown and reminder emails too.' },
     { icon: '🎟️', what: 'Open House: people who joined Zoom directly', why: 'Attendance counts platform check-ins only. Anyone who went straight to Zoom is not counted, so the attendance rate is a floor.', next: 'Read the Zoom participant report for each Open House and join it by email (needs the Zoom participant scope).' },
     { icon: '💵', what: 'Ad spend, cost per sign-up', why: 'Meta spend is not in our database.', next: 'Add weekly spend by campaign, then cost per sign-up and per finished video.' },
     { icon: '📄', what: 'The /open-house form page itself', why: 'It records no page views, so "opened the form, did not submit" is inferred from the button click.', next: 'Add page tracking to the form page.' },

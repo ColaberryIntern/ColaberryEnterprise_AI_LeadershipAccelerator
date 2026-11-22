@@ -21,6 +21,8 @@ function rateOf(key, w, email) {
     case 'keepGoing': return { n: j.kept_going, d: j.entered };
     // OH1y: snapshots before 22 Nov 2026 have no attendance; null = "no data", never zero.
     case 'attend': return j.oh_held === undefined ? null : { n: j.attended, d: j.oh_held };
+    case 'interact': return j.interacted === undefined ? null : { n: j.interacted, d: j.attended };
+    case 'paid': return j.paid_held === undefined ? null : { n: j.paid_held, d: j.oh_held };
     case 'emailOpen': return email ? { n: email.opened, d: email.emails } : null;
     case 'emailClick': return email ? { n: email.clicked, d: email.emails } : null;
     default: return null;

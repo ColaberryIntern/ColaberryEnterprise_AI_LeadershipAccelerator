@@ -11,7 +11,7 @@ const credited = (j) => (j.credited === undefined ? j.finished : j.credited);
 const pct = (n, d) => (d > 0 ? Math.round((1000 * n) / d) / 10 : null);
 
 /** Why attendance is a floor; said wherever the number appears. */
-const ATTEND_FLOOR = 'Platform check-ins only: people who joined Zoom directly are not counted, so this is a floor.';
+const ATTEND_FLOOR = 'Counts people the platform saw in the room (checked in, entered the classroom or set a status); people who joined Zoom directly are not counted, so this is a floor.';
 
 /** Grade one rate against its target. Under minSample people it is 'low' (grey), never green or red. */
 function grade(key, n, d, targets) {
@@ -49,7 +49,11 @@ function funnel(w, targets) {
   // the session does not depend on the video. Absent from snapshots before 22 Nov 2026.
   if (j.oh_held !== undefined) {
     rows.push({ icon: '📅', step: 'Their Open House has happened', n: j.oh_held, base: 'signups' },
-      { icon: '🎤', step: 'Checked in at the Open House', n: j.attended, rate: 'attend', note: ATTEND_FLOOR });
+      { icon: '🎤', step: 'Came to the Open House', n: j.attended, rate: 'attend', note: ATTEND_FLOOR });
+    // Interaction and payment (OH1y, second ask). Paid is measured against everyone whose Open House happened, not
+    // against the step before: a person can pay without having come, and the funnel must not hide that.
+    if (j.interacted !== undefined) rows.push({ icon: '🙋', step: 'Took part (poll, question or status)', n: j.interacted, rate: 'interact' });
+    if (j.paid_held !== undefined) rows.push({ icon: '💳', step: 'Paid to enroll (of everyone whose Open House happened)', n: j.paid_held, rate: 'paid', base: 'oh_held' });
   }
   return rows.map((r, i) => {
     const prevN = i === 0 ? null : r.base ? j[r.base] : rows[i - 1].n;
@@ -102,7 +106,21 @@ function forks(w, email, targets) {
   if (j.oh_held !== undefined) {
     f.push({ id: 'attend', icon: '🎤', q: 'When their Open House happened, did they check in?', rate: 'attend', source: 'platform check-ins (a floor)', options: [
       { label: 'Checked in', n: j.attended, good: true },
-      { label: 'Did not check in (or joined Zoom directly)', n: Math.max(0, j.oh_held - j.attended), bad: true }] });
+      { label: 'Not seen in the room (or joined Zoom directly)', n: Math.max(0, j.oh_held - j.attended), bad: true }] });
+    if (j.interacted !== undefined) {
+      f.push({ id: 'interact', icon: '🙋', q: 'In the room, did they take part?', rate: 'interact', options: [
+        { label: 'Answered a poll, asked a question or set a status', n: j.interacted, good: true },
+        { label: 'Only watched', n: Math.max(0, j.attended - j.interacted) }] });
+    }
+    if (j.paid_held !== undefined) {
+      const ti = j.paid_interacted, ta = Math.max(0, j.paid_attended - ti), tn = Math.max(0, j.paid_held - j.paid_attended);
+      f.push({ id: 'paid', icon: '💳', q: 'After their Open House, who paid to enroll?', rate: 'paid', options: [
+        { label: 'Paid, and took part at the Open House', n: ti, good: true },
+        { label: 'Paid, came but only watched', n: ta, good: true },
+        { label: 'Paid without coming', n: tn, good: true },
+        { label: 'Started checkout, did not pay', n: Math.max(0, (j.checkout_held || 0) - j.paid_held) },
+        { label: 'Not yet', n: Math.max(0, j.oh_held - Math.max(j.paid_held, j.checkout_held || 0)), bad: true }] });
+    }
   }
   if (email && email.emails > 0) {
     f.splice(4, 0, { id: 'email', icon: '✉️', q: 'Did they open the welcome email?', rate: 'emailOpen', source: 'Mandrill', options: [

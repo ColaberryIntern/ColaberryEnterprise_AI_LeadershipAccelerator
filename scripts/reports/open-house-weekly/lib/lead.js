@@ -50,7 +50,7 @@ document.querySelectorAll('.tourhi').forEach(function(e){e.classList.remove('tou
 
 const OVERVIEW_KEYS = [['seatClick', 'Clicked Save my seat'], ['formFinish', 'Finished the form'], ['enter', 'Entered the account'],
   ['play', 'Pressed play'], ['finish', 'Watched 75%+'], ['credit', 'Collected the credit'], ['check', 'Took the Quick check'], ['ace', 'Scored 5 of 5'],
-  ['attend', 'Came to the Open House']];
+  ['attend', 'Came to the Open House'], ['interact', 'Took part at the Open House'], ['paid', 'Paid to enroll']];
 
 /** Summary overview: every step's pass-through rate vs its target (Power BI bullet chart). */
 function overviewRows(w, email, targets) {

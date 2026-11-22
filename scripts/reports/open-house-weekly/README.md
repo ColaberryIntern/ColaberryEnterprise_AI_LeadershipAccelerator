@@ -72,7 +72,8 @@ node scripts/reports/open-house-weekly/render.js docs/reports/open-house-weekly/
 | Inside the account | Button vs email link; where quitters left the video; median timings | `timeline_card_progress`, `sign_in_link_uses` |
 | Day by day | Clustered columns | |
 | Welcome email | Delivered, opened and clicked, from Mandrill (a floor) | `../../audits/open-house-funnel/mandrillFunnel.js` |
-| At the Open House (OH1y) | Landing-page sign-ups whose Open House happened, how many checked in, and a table of every Open House since launch: registered, from the ad page, checked in, walk-ins, follow-ups booked and sent | `open_house_registrations` → `live_sessions.open_house_event_id`; `session_guests` + `attendance_records` (the follow-up's rule); `scheduled_emails` `event_followup` |
+| At the Open House (OH1y) | Landing-page sign-ups whose Open House happened, how many **came** (seen in the room: checked in, entered the classroom or set a status), how many **took part** (poll, question or status), and how many **paid to enroll**; a table of every Open House since launch | `open_house_registrations` → `live_sessions.open_house_event_id`; `session_guests`, `attendance_records`, `session_presence_events`, `session_pulse` (the follow-up's rule); `session_guest_poll_responses`, `session_guest_questions`, `session_poll_responses`, `session_chat_messages`; `subscriptions` with a PaySimple payment after sign-up, comp excluded |
+| Every message they received (OH1y) | Every email, text and call sent to the week's landing-page sign-ups after they signed up, grouped by message (system email, reminder, campaign step), with people, sent, not sent, and what is still queued. A subject shows only when every send had the same one and 3+ people got it | `communication_logs` (matched by address, or by lead for texts), `scheduled_emails` pending |
 | What we cannot see yet | Each blind spot, with the next build that would close it | |
 
 ## Rules it follows
@@ -93,7 +94,7 @@ node scripts/reports/open-house-weekly/render.js docs/reports/open-house-weekly/
 node --test scripts/reports/open-house-weekly/__tests__
 ```
 
-There are 39 tests (`attendance.test.js` holds the OH1y ones). They cover:
+There are 44 tests (`attendance.test.js` holds the OH1y ones). They cover:
 
 - grading: thresholds, the boundary value, small samples, and lower-is-better;
 - funnel math: what each step is measured against;

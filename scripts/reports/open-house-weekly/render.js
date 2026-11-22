@@ -73,8 +73,9 @@ function buildHtml(snap, targets = defaultTargets, shots = [], entries = S.load(
        <div class="panel"><h3>Timing (median)</h3><div class="stat">${j.median_min_signup_to_enter ?? 'n/a'} min</div><div class="statl">sign-up → in the account</div>
          <div class="stat" style="margin-top:10px">${j.median_min_enter_to_finish ?? 'n/a'} min</div><div class="statl">in the account → finished the video</div>
          <div class="stat" style="margin-top:10px">${j.returned_later}</div><div class="statl">came back on a later day</div></div></div>`, 'sec-account'),
-    j.oh_held === undefined ? '' : section('🎤 At the Open House', `This week's landing-page sign-ups: ${j.oh_held} had their Open House happen and ${j.attended} checked in; ${j.oh_upcoming} are still waiting for theirs. Below: every Open House since launch, all doors.`,
+    j.oh_held === undefined ? '' : section('🎤 At the Open House', `This week's landing-page sign-ups: ${j.oh_held} had their Open House happen and ${j.attended} came${j.interacted !== undefined ? `, ${j.interacted} took part` : ''}${j.paid_held !== undefined ? `, ${j.paid_held} paid to enroll` : ''}; ${j.oh_upcoming} are still waiting for theirs. Below: every Open House since launch, all doors.`,
       P.sessionsTable(snap.sessions), 'sec-openhouse'),
+    snap.comms === undefined ? '' : section('📨 Every message they received', 'Every email, text and call that went to this week\'s landing-page sign-ups, in order, grouped by message.', P.commsPanel(snap.comms), 'sec-comms'),
     section('📅 Day by day', 'Landing page door, by the day of the visit or sign-up (CT).', X.columnsSvg(cur.daily, [
       { key: 'visitors', label: 'Visitors', color: C.sky }, { key: 'signups', label: 'Sign-ups', color: C.blue },
       { key: 'entered', label: 'Entered', color: C.green }, { key: 'finished', label: 'Finished video', color: C.navy }])),
