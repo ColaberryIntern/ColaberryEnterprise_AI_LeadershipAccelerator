@@ -404,3 +404,11 @@ export async function getActivity(limit = 20): Promise<ActivityRow[]> {
 }
 /** Try the recipients that missed a partly sent or failed message again (CH7.2 route). */
 export async function retryHubMessage(id: string): Promise<MessageView> { return one(api.post(`${messages}/${id}/retry`)); }
+
+/** CH10.1: the WhatsApp channel's state. Never carries the token or the full number. */
+export type WhatsAppState = 'not_configured' | 'connected' | 'waiting_for_qr' | 'disconnected';
+export interface WhatsAppStatus { configured: boolean; enabled: boolean; state: WhatsAppState; number_last4: string | null; reason: string | null }
+export async function getWhatsAppStatus(): Promise<WhatsAppStatus> {
+  const { data } = await api.get<WhatsAppStatus>('/api/admin/comms-hub/whatsapp/status');
+  return data;
+}

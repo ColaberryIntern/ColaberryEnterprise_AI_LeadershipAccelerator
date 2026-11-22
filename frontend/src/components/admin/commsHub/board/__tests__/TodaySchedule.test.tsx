@@ -94,6 +94,7 @@ beforeEach(() => {
     ],
   };
   (api.getCommsHubSummary as jest.Mock).mockResolvedValue(SUMMARY);
+  (api.getWhatsAppStatus as jest.Mock).mockResolvedValue({ configured: false, enabled: false, state: 'not_configured', number_last4: null, reason: 'WhatsApp is switched off for the hub.' });
   (api.getBoard as jest.Mock).mockImplementation(async (scope: string) => board[scope]);
   (api.listHubEvents as jest.Mock).mockResolvedValue(EVENTS);
   (api.getHubSettings as jest.Mock).mockResolvedValue(SETTINGS);
@@ -228,9 +229,10 @@ describe('Schedule & history', () => {
     expect((api.getActivity as jest.Mock).mock.calls.length).toBe(logLoads + 1);
   });
 
-  it('WhatsApp groups is a single coming-next note; the activity log reads as sentences', async () => {
+  it('the WhatsApp card says it is not connected (CH10.1); the activity log reads as sentences', async () => {
     await renderAt('/admin/comms-hub/schedule');
-    expect(container.textContent).toContain('WhatsApp: coming next.');
+    expect(container.querySelector('[data-testid="ch-whatsapp-card"]')?.textContent).toContain('Not connected');
+    expect(container.textContent).not.toContain('WhatsApp: coming next.');
     expect(container.querySelector('.ch-activity')?.textContent).toContain('Jackie approvedDemo Tuesday: reminder');
   });
 });

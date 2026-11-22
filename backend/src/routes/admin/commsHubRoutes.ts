@@ -15,6 +15,7 @@ import bugReportRoutes from './commsHubBugReportRoutes';
 import eventbriteRoutes from './commsHubEventbriteRoutes';
 import adoptRoutes from './commsHubAdoptRoutes';
 import countsRoutes from './commsHubCountsRoutes';
+import whatsAppRoutes from './commsHubWhatsAppRoutes';
 
 /**
  * Communications Hub admin API (CH1.3 onward). Every route sits under /api/admin/comms-hub, which
@@ -56,5 +57,7 @@ router.use(eventbriteRoutes);
 router.use(adoptRoutes);
 // CH9.7 registered / watched live / watched the replay, on the event.
 router.use(countsRoutes);
+// CH10.1 WhatsApp: the channel's status (ships switched off).
+router.use(whatsAppRoutes);
 
 export default router;
