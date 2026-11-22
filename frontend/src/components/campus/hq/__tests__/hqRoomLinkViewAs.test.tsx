@@ -179,14 +179,14 @@ describe('AF12.15: what a withheld room says on its face', () => {
 
     it('the side-panel row shows a padlock and no longer offers to open', async () => {
       const h = await mount(panel('Revenue'));
-      expect(chip(h, '[data-admin-blocked="view-as"]', '.go')).toBe('Viewing as');
+      expect(chip(h, '[data-admin-blocked="view-as"]', '.go')).toBe('Leave view-as');
       expect(locked(chipEl(h, '[data-admin-blocked="view-as"]', '.go'))).toBe(true);
       expect(h.querySelector('[data-admin-blocked="view-as"]')!.textContent).not.toContain('Open in admin');
     });
 
     it('the door plate shows a padlock and no longer reads OPEN', async () => {
       const h = await mount(scene('Revenue'));
-      expect(chip(h, '[data-admin-blocked="view-as"]', '.pl')).toBe('VIEWING AS');
+      expect(chip(h, '[data-admin-blocked="view-as"]', '.pl')).toBe('LEAVE VIEW-AS');
       expect(locked(chipEl(h, '[data-admin-blocked="view-as"]', '.pl'))).toBe(true);
       expect(h.querySelector('[data-admin-blocked="view-as"]')!.textContent).not.toContain('OPEN');
     });

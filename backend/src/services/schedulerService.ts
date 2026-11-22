@@ -754,6 +754,17 @@ async function processScheduledActions(): Promise<void> {
       continue;
     }
 
+    // OH1z: the later Open House follow-up steps (reserve your seat, last call, next Open House)
+    // are never sent to someone who has paid to enroll by then.
+    if (action.metadata?.event_followup && action.metadata?.stop_if_paid && action.to_email) {
+      const { hasPaidMembership } = await import('./openHouseFollowup');
+      if (await hasPaidMembership(action.to_email)) {
+        await cancelScheduledMessage(action, 'enrollment_already_paid');
+        console.log(`[Scheduler] Cancelled follow-up step ${action.id}: already a paid member`);
+        continue;
+      }
+    }
+
     // Guard: skip payment_readiness actions if enrollment is already paid
     if (cachedCampaign && cachedCampaign.type === 'payment_readiness' && action.to_email) {
       const paidEnrollment = await Enrollment.findOne({

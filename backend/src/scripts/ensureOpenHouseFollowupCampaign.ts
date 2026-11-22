@@ -9,6 +9,7 @@
  *   ... --replay <sessionId> <url> --apply   # sets the recording link the "missed" email carries
  *   ... --book <sessionId>              # books that session's follow-ups now (only if the campaign is active)
  *   ... --upgrade-rebuild [--apply]     # OH1w: tag Ali's rebuilt steps attended/missed, replace placeholders, add the hard rules
+ *   ... --add-steps [--apply]           # OH1z: append reserve-your-seat (day 3), invite (day 5), last call (day 7)
  *
  * The campaign reuses the countdown campaign's sender (Maya), tenant, brand and send window, and
  * sends under the event_reminder category. Ali approves and activates it in Admin > Campaigns;
@@ -162,6 +163,24 @@ async function main(): Promise<void> {
 
   const book = arg('--book');
   if (book) { console.log(JSON.stringify(await bookOpenHouseFollowups(book))); return; }
+
+  // OH1z: append the enroll / last call / invite steps. Dry run by default; --apply saves.
+  if (has('--add-steps')) {
+    const c = await findFollowupCampaign();
+    if (!c || !c.sequence_id) throw new Error('No follow-up campaign with a sequence');
+    const row = await one<{ steps: any[] }>(`SELECT steps FROM follow_up_sequences WHERE id = :id`, { id: c.sequence_id });
+    const { addFollowupSteps } = await import('../services/openHouseFollowupUpgrade');
+    const up = addFollowupSteps(row?.steps || []);
+    if (!up.changes.length) { log('add-steps: already there, nothing to change'); return; }
+    for (const ch of up.changes) log(`add-steps: ${ch}`);
+    up.steps.forEach((s, i) => log(`add-steps: step ${i + 1} [${s.audience}/${s.copy_key}] day ${s.delay_days} "${s.subject}"`));
+    if (apply) {
+      await sequelize.query(`UPDATE follow_up_sequences SET steps = CAST(:steps AS jsonb), updated_at = NOW() WHERE id = :id`,
+        { replacements: { steps: JSON.stringify(up.steps), id: c.sequence_id } });
+      log('add-steps: saved');
+    }
+    return;
+  }
 
   if (has('--upgrade-rebuild')) {
     const c = await findFollowupCampaign();
