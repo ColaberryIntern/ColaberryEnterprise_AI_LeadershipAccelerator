@@ -24,7 +24,7 @@ export const SWITCH_WORDS: Record<SwitchState, [string, Tone]> = { on: ['On', 'o
 
 /** The server's answer to the last action, and the audit line when it ran. A live region, so a screen reader hears it. */
 export const DeskAnswerLine: React.FC<{ result: DeskResult | null; testId: string }> = ({ result, testId }) => (
-  <div role="status" aria-live="polite" data-testid={testId} className="cdesk-answer-slot">
+  <div role="status" aria-live="polite" data-testid={testId} className="cdesk-answer-slot" tabIndex={-1}>
     {result && (
       <p className={`cdesk-answer ${result.ok ? 'is-ok' : 'is-bad'}`}>
         <span data-testid={`${testId}-text`}>{result.text}</span>

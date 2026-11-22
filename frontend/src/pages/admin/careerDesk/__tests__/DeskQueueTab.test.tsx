@@ -54,6 +54,18 @@ describe('the review queue', () => {
     expect(q(h, 'cdesk-q-empty')?.textContent).toContain('All clear.');
   });
 
+  it('T32 fold: when an action removes the selected item, focus moves to the next item (and its card), or to the answer line when none is left', async () => {
+    mockLoadQueue.mockResolvedValueOnce(queueOf([lowItem, unmatched])).mockResolvedValueOnce(queueOf([unmatched]))
+      .mockResolvedValueOnce(queueOf([]));
+    mockQueueAction.mockResolvedValue({ ok: true, outcome: 'resolved', message: 'Done.' });
+    const h = await mount();
+    await click(q(h, 'cdesk-q-act-dismiss'));
+    expect((document.activeElement as HTMLElement).getAttribute('data-qkey')).toBe('item:43');
+    expect(q(h, 'cdesk-q-title')?.textContent).toBe('No learner matched this email');
+    await click(q(h, 'cdesk-q-act-dismiss'));
+    expect(document.activeElement).toBe(q(h, 'cdesk-q-answer'));
+  });
+
   it('a refusal shows the server words and no audit line', async () => {
     mockLoadQueue.mockResolvedValue(queueOf([lowItem]));
     mockQueueAction.mockResolvedValue({ ok: false, message: 'This interview just changed (someone else acted on it). Refresh the queue.' });

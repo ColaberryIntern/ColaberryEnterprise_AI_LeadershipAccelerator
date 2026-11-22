@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { loadInboxes, loadQueue, queueAction, sendHeldLink, type HeldLink, type QueueItem } from './careerDeskApi';
 import { DeskAnswerLine, DeskError, kindPill, Pill } from './DeskParts';
 import { actKey, DeskQueueDetail, type ActExtra } from './DeskQueueDetail';
@@ -24,7 +24,7 @@ const QueueTable: React.FC<{ items: QueueItem[]; sel: string; onSel: (k: string)
             <td data-label="Why it's here"><Pill tone={tone}>{text}</Pill></td>
             <td data-label="Learner">{q.learner || <span className="cdesk-faint">No learner yet</span>}</td>
             <td data-label="Company · subject">
-              <button type="button" className="cdesk-rowbtn" aria-pressed={on} onClick={(e) => { e.stopPropagation(); onSel(keyOf(q)); }}>{q.company || 'Company not named'}</button>
+              <button type="button" className="cdesk-rowbtn" aria-pressed={on} data-qkey={keyOf(q)} onClick={(e) => { e.stopPropagation(); onSel(keyOf(q)); }}>{q.company || 'Company not named'}</button>
               <div className="cdesk-small cdesk-muted">{q.subject || q.position || q.title}</div>
             </td>
             <td data-label="Read as" className="cdesk-num">{pct(q.confidence) ?? <span className="cdesk-faint">Not scored</span>}</td>
@@ -40,14 +40,28 @@ const DeskQueueTab: React.FC = () => {
   const learners = useDeskData(loadInboxes, 'learners');
   const act = useDeskAction();
   const [sel, setSel] = useState('');
+  const root = useRef<HTMLDivElement>(null);
+  const acted = useRef<{ key: string; index: number } | null>(null);
+  // T32 fold: once an action removes the selected item, focus moves to the next item (or the answer line when none is left).
+  useEffect(() => {
+    const was = acted.current;
+    const items = queue.data?.items;
+    if (!was || !items) return;
+    acted.current = null;
+    if (items.some((x) => keyOf(x) === was.key)) return;
+    const next = items[Math.min(was.index, items.length - 1)];
+    if (next) setSel(keyOf(next));
+    const el = root.current?.querySelector<HTMLElement>(next ? `[data-qkey="${keyOf(next)}"]` : '[data-testid="cdesk-q-answer"]');
+    el?.focus();
+  }, [queue.data]);
   if (queue.error) return <DeskError text={queue.error} onRetry={queue.reload} testId="cdesk-q-error" />;
   if (!queue.data) return <p className="cdesk-muted" data-testid="cdesk-q-loading">Loading the review queue...</p>;
   const { items, held, heldNote } = queue.data;
   const picked = items.find((q) => keyOf(q) === sel) ?? items[0];
-  const onAct = (item: QueueItem, action: string, extra: ActExtra) => act.run(actKey(item, action), () => queueAction(item, action, extra), queue.reload);
+  const onAct = (item: QueueItem, action: string, extra: ActExtra) => { acted.current = { key: keyOf(item), index: items.indexOf(item) }; return act.run(actKey(item, action), () => queueAction(item, action, extra), queue.reload); };
   const onSend = (h: HeldLink, email?: string) => act.run(heldKey(h), () => sendHeldLink(h.interviewId, email), queue.reload);
   return (
-    <div className="cdesk-stackgap">
+    <div className="cdesk-stackgap" ref={root}>
       <DeskAnswerLine result={act.result} testId="cdesk-q-answer" />
       {items.length === 0 ? (
         <div className="cdesk-card" data-testid="cdesk-q-empty"><b>All clear.</b> <span className="cdesk-muted">New items appear here the moment the inbox manager is not sure.</span></div>
