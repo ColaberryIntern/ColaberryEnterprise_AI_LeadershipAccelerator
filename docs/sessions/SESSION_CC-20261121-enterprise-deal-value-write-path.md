@@ -1,0 +1,183 @@
+# Session CC-20261121-enterprise-deal-value-write-path
+
+**Date:** 2026-11-21 (Central)
+**Ticket:** R23 — Revenue source: enterprise.colaberry.ai with three plans
+https://app.basecamp.com/3945211/buckets/7463955/todos/10534796798
+**PR:** https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/4304
+**Branch:** `workstream/r23-deal-value-write-path` off `2299fb7d8`
+**Phase:** 3 of 3 — the write path
+
+---
+
+## What this phase was for
+
+Phase 2 shipped `enterprise_deal_values` and `enterpriseDealValueService`, which is the only
+sanctioned way into that table. **Nothing in the product could call that service.** So the
+enterprise stream reported zero in production whether or not a deal had been signed, and the
+ticket's own remaining item read: *"There is no write path. Nothing in the product can record a
+deal value, so the stream reads zero in production regardless of the table being there."*
+
+This is the same gap R16 left between shipping `gov_bid_values` and shipping its pricing
+control, and it is closed the same way, on the same three layers.
+
+| Layer | File | What it does |
+|---|---|---|
+| Read | `services/revenueFlow/enterpriseFlow.ts` | builds `deals[]`: company, plan, **shape**, stage, signed, live value |
+| Type | `services/revenueFlow/revenueFlowTypes.ts` | `EnterpriseDeal`, and `deals?` on `RevenueStream` |
+| Write | `controllers/revenueFlowController.ts` | `handleConfirmDealValue`, `handleGetDealValueHistory` |
+| Route | `routes/admin/commercializationRoutes.ts` | `POST .../revenue-flow/deal-value` + the history read |
+| UI | `components/admin/revenueFlow/DealPricingPanel.tsx` | the form, with the two entry modes |
+| UI | `components/admin/revenueFlow/RevenueFlowDashboard.tsx` | mounts it |
+
+---
+
+## The decision that mattered: the retainer rail moved to the wire
+
+The service's input has been a discriminated union since Phase 2, and TypeScript enforces it
+for every in-process caller. **A request body is `any`**, so that protection stopped at the
+controller door. A flat schema with the amount fields optional would have accepted:
+
+```json
+{ "valueKind": "monthly_retainer", "dealValueCents": 450000, "periodMonths": 12 }
+```
+
+and handed the service an object its own types say cannot exist. Middlesex would have been
+filed at **$4,500 instead of $54,000**.
+
+So `DealValueBody` is a `z.discriminatedUnion` with **`.strict()` on each member**:
+
+- a retainer *requires* `monthlyFeeCents` and a positive term
+- a total-contract deal cannot carry a monthly fee at all
+- a mixed body is a 400, not a field silently stripped
+- a body supplying `confirmedBy` is **refused rather than ignored** — the name comes from the
+  session, and a caller that believes otherwise should find out
+
+## The plan shape is what makes the form safe
+
+Ali, 2026-11-21, on Plan A: *"we are looking at a retainer, a monthly fee."*
+
+Each roster row carries its plan's `EngagementShape`, so a Plan A deal opens on the **monthly
+fee** with a required term, and the panel renders the multiplication *before* the save:
+
+> $4,500 per month over 12 months = $54,000 total contract value
+
+A wrong term is therefore wrong on screen rather than wrong in the database. An unrecorded plan
+opens on one total figure rather than guessing a retainer. The mode stays overridable, because a
+Plan A deal genuinely sold as a fixed project exists.
+
+---
+
+## Two deliberate departures from the R16 precedent
+
+**The panel renders when empty.** `BidPricingPanel` hides itself with no bids.
+`enterprise_intakes` holds 0 rows in production, so a panel that hid itself would be
+*indistinguishable from the state this phase exists to end*. Its empty state names why there is
+nothing to price and what would make one appear. A roster of `undefined` (source unreadable) is
+also kept distinct from `[]` (read, and empty), because `unmeasurable` and `measured_zero` are
+different answers.
+
+**There is now a test at the HTTP layer.** R16 shipped a tested service and a tested panel with
+nothing between them, so every rail living in the controller was unverified — including its
+dollars-to-cents conversion, which has never been asserted. 20 cases now cover this one.
+
+`actorFrom` was extracted rather than copied. Two copies of the one rail that makes a
+confirmation mean anything is two places for it to drift, and a drifted copy fails **open**: it
+would accept an unattributed write rather than refuse one.
+
+---
+
+## BREAK and HARDEN: 14 of 14 mutations killed
+
+Every mutation grep-confirmed as applied before its result was believed, and the revert
+confirmed afterwards. Killed:
+
+`.strict()` dropped · retainer term made optional · `actorFrom` falling back to a literal
+instead of null · every deal reported as signed · the signed-first tiebreak removed from the
+sort · a blank company passed through to the control · the plan shape defaulted to retainer ·
+the monthly fee withheld when the term was known · **rounding moved after the multiplication** ·
+the retainer term guard removed · an unrecorded plan opening on the retainer field · the
+retainer payload also sending a total · a blank term sent as 0 instead of null.
+
+### The one that survived was a test gap, not a bug
+
+Replacing `z.discriminatedUnion('valueKind', [...])` with a plain `z.union([...])` of the same
+two members passed all 18 cases.
+
+Probed rather than assumed. With `.strict()` and a `z.literal` discriminator on each member,
+**both schemas accept and reject exactly the same bodies** — a retainer carrying
+`dealValueCents` is refused either way. That safety is real, and M1 pins it.
+
+What a plain union loses is the ability to say *which* field is wrong:
+
+```
+discriminated, bad valueKind     -> fieldErrors: { valueKind: ["Invalid input"] }
+plain union,   bad valueKind     -> formErrors: ["Invalid input"], fieldErrors: {}
+discriminated, retainer-as-total -> names monthlyFeeCents AND the unrecognized dealValueCents
+plain union,   retainer-as-total -> "Invalid input"
+```
+
+The controller returns `error.flatten()` as `details` and the panel surfaces the server's own
+message, so that difference is the entire debugging experience of a failed save. Two tests now
+pin the field-level detail, which kills M3.
+
+Worth keeping: a surviving mutation is not automatically a defect. This one pointed at something
+the tests were silent about that a caller would feel.
+
+---
+
+## Why the arithmetic is exported as pure functions
+
+`@testing-library/react` is **not a dependency of this frontend**, and introducing one is
+escalation-tier under the Autonomy Model rather than a step inside a feature. The precedent
+panel was therefore tested only through `renderToStaticMarkup`, which runs no effects and no
+handlers.
+
+Rather than add a dependency or leave the money logic untested, `initialMode`,
+`retainerTotalCents` and `dealValuePayload` are exported and tested directly. The
+$4,500-versus-$54,000 decision is now a function with inputs and an output. One of those tests
+pins that cents are rounded **before** the multiplication, because rounding after lets a
+part-cent fee drift by the length of the term.
+
+---
+
+## Verified
+
+- **171** backend revenueFlow / controller / schema tests across **10 suites**, green
+- **63** frontend revenueFlow tests across **4 suites**, green
+- The **TWC 40 TAC §807.172(d)** banned-word ratchet passes over all the new copy
+- **14/14** mutations killed
+
+## NOT verified, and why
+
+**Local `tsc` is a confirmed false clean in this worktree.** A deliberately planted type error
+(`const __control: number = "definitely not a number"` appended to `DealPricingPanel.tsx`, grep
+count 1) was reported as **zero errors** by the frontend project's own `tsc --noEmit`. The
+shared root `node_modules` carries a pre-existing `@types/d3-dispatch` breakage that aborts the
+compile before it reaches any changed file. **CI is the only authority on types here**, and no
+local typecheck pass is being claimed.
+
+**The rendered card against production.** `/admin/revenue-flow` is auth-gated.
+
+**Every populated branch.** Both `enterprise_intakes` and `enterprise_deal_values` hold 0 rows
+in production, so the roster, the funnel stages, the plan breakdown, the priced headline and the
+retainer round-trip are exercised only by tests. The first real inquiry is the first time
+production runs those paths.
+
+---
+
+## Noted, not fixed
+
+- **`src/__tests__/routes/adminRoutes.test.ts` fails to load locally**, on
+  `handleAdminChangePassword` being undefined: the suite mocks `adminAuthController` with only
+  `handleAdminLogin` and `handleAdminLogout`, and the real controller has grown a third
+  handler. Pre-existing, unrelated to this diff, and already excluded from CI by name in
+  `backend/jest.ci.config.ts` as a known red suite. Not touched here.
+- **The W28 intake form still does not constrain its service field to the three plans.** So for
+  a real inquiry `planKey` will be null and the form will open on one total figure rather than
+  Plan A's retainer. That is a change to W28's own form, not to this surface. The panel names
+  the gap on the row rather than hiding it.
+
+## Commits
+
+- `8646de548` — R23 Phase 3: the write path
+- `1855927a3` — pin the error diagnostics, because a mutation survived without them
