@@ -114,6 +114,22 @@ describe('the written brief', () => {
     expect(writtenBrief(intakeRow({ people_count: null, hours_per_week: null }) as any))
       .toContain('Who does it today: not stated');
   });
+
+  it('R23 Phase 5: reads the service as the plan\'s words, never as the stored key', () => {
+    // The brief is put in front of the AI interviewer and is read by people. A line saying
+    // "Service considered: build" is the stored key leaking into prose.
+    expect(writtenBrief(intakeRow({ service: 'build' }) as any))
+      .toContain('Service considered: A new build');
+    expect(writtenBrief(intakeRow({ service: 'not_sure' }) as any))
+      .toContain('Service considered: Not sure yet');
+  });
+
+  it('R23 Phase 5: an unanswered service question still reads as "not stated"', () => {
+    // One phrase for an unanswered question, decided by `writtenBrief`'s own `or()`, rather
+    // than a second wording introduced by the label helper.
+    expect(writtenBrief(intakeRow({ service: '' }) as any))
+      .toContain('Service considered: not stated');
+  });
 });
 
 describe('the form arrives', () => {
@@ -150,6 +166,51 @@ describe('the form arrives', () => {
   it('requires consent to be contacted and a company', () => {
     expect(() => intakeFormSchema.parse({ ...FORM, consentContact: false })).toThrow();
     expect(() => intakeFormSchema.parse({ ...FORM, company: '' })).toThrow();
+  });
+
+  /**
+   * R23 Phase 5 — the service answer becomes a stored plan key at this boundary.
+   *
+   * The form now posts `build` / `guide` / `train` / `not_sure`, and this is where anything
+   * else becomes one of them. The design question that these cases pin down is what happens
+   * to input that is NOT one of the four: it is canonicalized where possible and kept
+   * otherwise, never rejected, because a 400 on a lead form loses a prospect nobody can
+   * recover. A page left open in a tab before this deployed still posts `Build`.
+   */
+  describe('the service answer', () => {
+    const service = (raw: unknown): string => intakeFormSchema.parse({ ...FORM, service: raw }).service;
+
+    it('stores the plan KEY for the display words the form used to post', () => {
+      expect(service('Build')).toBe('build');
+      expect(service('Guide')).toBe('guide');
+      expect(service('Train')).toBe('train');
+      expect(service('Not sure yet')).toBe('not_sure');
+    });
+
+    it('accepts the four canonical answers unchanged', () => {
+      for (const value of ['build', 'guide', 'train', 'not_sure']) {
+        expect(service(value)).toBe(value);
+      }
+    });
+
+    it('does NOT reject an answer it cannot read, and keeps the words', () => {
+      // The whole reason this is not a Zod enum. A rejected submission here is a lost lead,
+      // and the prospect never learns their form failed.
+      expect(() => service('a thing nobody anticipated')).not.toThrow();
+      expect(service('a thing nobody anticipated')).toBe('a thing nobody anticipated');
+      expect(service('')).toBe('');
+      expect(service(undefined)).toBe('');
+    });
+
+    it('writes the key to the intake row and the WORDS to the lead', () => {
+      // One value, two renderings. `interest_area` feeds classifiers written against the
+      // display words, so canonicalizing the intake row must not silently change what a
+      // dozen downstream readers see.
+      return createEnterpriseIntake(FORM, { ipAddress: null, userAgent: null }).then(() => {
+        expect(mockIntakeCreate.mock.calls[0][0].service).toBe('build');
+        expect(mockCreateLead.mock.calls[0][0].interest_area).toBe('A new build');
+      });
+    });
   });
 });
 
