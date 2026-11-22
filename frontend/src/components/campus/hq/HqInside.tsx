@@ -89,7 +89,7 @@ export function HqFloorScene({ s, f, people, agents = [] }: { s: HqState; f: HqF
             {r.external && r.open && <span className="ext">↗</span>}
             {/* C103 (Ali, 2026-10-31): no /admin address on the door; it pushed the OPEN plates out of line */}
             <span className="gl"><i className={`ri-${r.icon}`} /><b title={roomName(r, hq.isStaff)}>{roomName(r, hq.isStaff)}</b></span>
-            <span className="pl">{!r.open ? '🔒 NO ACCESS' : blocked ? <><i className="ri-lock-line" aria-hidden="true" /> VIEWING AS</> : r.own ? 'OPEN →' : 'OPEN ↗'}</span><span className="kn" />
+            <span className="pl">{!r.open ? '🔒 NO ACCESS' : blocked ? <><i className="ri-lock-line" aria-hidden="true" /> LEAVE VIEW-AS</> : r.own ? 'OPEN →' : 'OPEN ↗'}</span><span className="kn" />
             {here.length > 0 && <span className="who"><HqPeople people={here} label={`At ${r.label}`} size="sm" /></span>}
           </>);
           return r.open ? (
