@@ -37,6 +37,7 @@ import {
 import { handoffsFor, artifactsFor } from './planDocumentInsights';
 import { separateHardRules } from './planPeople';
 import { rosterWithEveryStoryOwned } from './storyOwners';
+import { gateWaitingAgents } from './waitingGates';
 import { bullet, fmt, good, type TabContext } from './commandCenterTabContext';
 import { agentsTab } from './commandCenterAgentsTab';
 
@@ -305,7 +306,9 @@ function knowledgeBaseTab(_c: TabContext): string[] {
     + 'empty `fulfilled_by` is a real gap — show it rather than hiding the row. The one '
     + 'exception is `kind` CONSTRAINT ("use Gmail and Twilio"): constraints never get a story '
     + 'of their own, by design, because they are the tools the other stories are built with. '
-    + 'Show them in their own group labelled "built with, not built", never flagged as a gap.',
+    + 'Show them in their own group labelled "built with, not built", never flagged as a gap. '
+    + 'A CONSTRAINT may still list stories in `fulfilled_by`: those are the stories that USE '
+    + 'the tool, not stories that build it. Show them as "used by", which is expected, not an error.',
   );
   lines.push(
     'Everything the project knows about itself: your requirements, your stories, your '
@@ -384,7 +387,8 @@ function dataModelTab(c: TabContext): string[] {
 export function commandCenterTabSections(source: BuildPlan, schedule?: Schedule | null): string[] {
   // The same repair and re-sort plan.json gets, so the brief and the data never disagree.
   const plan = rosterWithEveryStoryOwned(source);
-  const agents = separateHardRules(plan.agents ?? [], rolesOf(plan.stories));
+  const roles = rolesOf(plan.stories);
+  const agents = gateWaitingAgents(separateHardRules(plan.agents ?? [], roles), plan.requirements, roles);
   const c: TabContext = {
     plan,
     schedule,
