@@ -59,7 +59,11 @@ describeIfDb('the employer notes against Postgres', () => {
   it('the database itself refuses a second row with the same key (UNIQUE (interview_id, client_key))', async () => {
     const id = await interview();
     await guide.addNote(id, END, K(2), 'first');
-    await expect(sequelize.query(`INSERT INTO interview_notes (interview_id, client_key, body) VALUES ('${id}', '${K(2)}', 'again')`)).rejects.toThrow(/uq_interview_notes_key|duplicate key/);
+    // Sequelize wraps Postgres's unique violation (23505) as SequelizeUniqueConstraintError ("Validation error"); the
+    // driver's own error names the constraint.
+    const err = await sequelize.query(`INSERT INTO interview_notes (interview_id, client_key, body) VALUES ('${id}', '${K(2)}', 'again')`).then(() => null, (e: unknown) => e);
+    expect(err).toMatchObject({ name: 'SequelizeUniqueConstraintError', parent: { code: '23505', constraint: 'uq_interview_notes_key' } });
+    expect(await count(id)).toBe(1);
   });
 
   it('at the cap, two racing saves with different keys: exactly one is stored', async () => {
