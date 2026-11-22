@@ -236,6 +236,7 @@ export function StepApprove({ c }: { c: Compose }): React.ReactElement {
   });
   const feeds = m.destinations.filter((d) => d.channel === 'community_post');
   const inApp = m.destinations.filter((d) => d.channel === 'in_app');
+  const groups = m.destinations.filter((d) => d.channel === 'whatsapp');
   const approved = m.status === 'approved' || m.status === 'scheduled';
   return (
     <section aria-labelledby="ch-c3" className="ch-compose-step">
@@ -272,7 +273,8 @@ export function StepApprove({ c }: { c: Compose }): React.ReactElement {
         <ul className="mb-1">
           {feeds.length > 0 && <li>1 community post{m.include.thumbnail && m.event?.thumbnail_id ? ' with banner' : ''} to {feeds.length} {feeds.length === 1 ? 'feed' : 'feeds'}</li>}
           {inApp.length > 0 && <li>1 in-app notification to {inApp.map((d) => d.label).join(', ')}</li>}
-          {feeds.length + inApp.length === 0 && <li>No recipients yet</li>}
+          {groups.length > 0 && <li>1 WhatsApp message{m.include.thumbnail && m.event?.thumbnail_id ? ' with banner' : ''} to {groups.map((d) => d.label ?? 'a WhatsApp group').join(', ')}</li>}
+          {feeds.length + inApp.length + groups.length === 0 && <li>No recipients yet</li>}
           <li>{m.send_at ? centralLabel(m.send_at) : 'As soon as it is approved'}</li>
         </ul>
         <p className="ch-studio-hint mb-0">If the message or the recipients change after this, it comes back to you for approval.</p>
