@@ -110,14 +110,14 @@ function buildVisual() {
     [D.FACTS.swatiOver, 'measured over-count, 20 Nov'],
     [D.FACTS.swatiOld, 'saved vs played, pre-fix build'],
     [D.FACTS.storm, 'retry rate after one failure'],
-    [D.FACTS.callers, 'the 19 Nov fix\'s real reach'],
+    [D.FACTS.callers, 'callers returning the promise'],
   ].map(([v, l]) => `<div class="fact"><div class="fv">${esc(v)}</div><div class="fl">${esc(l)}</div></div>`).join('');
 
   const body = `
   <h1>Watch gate: one decision is holding the rest</h1>
-  <p class="lede">Four of the five items on this to-do are live, in review, or deliberately
-    queued behind one another. The fifth is not an engineering question.
-    <strong>It needs an answer from Ali, and the other work is shaped by it.</strong></p>
+  <p class="lede">All four engineering items are now live in production. The fifth is not an
+    engineering question and never was.
+    <strong>It needs an answer from Ali, and it is the only thing left on this to-do.</strong></p>
 
   <div class="cols">
     <div class="col wide">
@@ -174,9 +174,10 @@ function buildDocument() {
   <div class="ad">
     <div><strong>ASKED:</strong> fix the video watch gate, which Swati Raman reported was
       over-counting progress so a learner could pass 75% without watching 75%.</div>
-    <div><strong>DELIVERED:</strong> one of the two causes is fixed and live, a third defect found
-      during the work is in review, a fourth was found and deliberately queued behind it, and the
-      fifth is a product decision that is now the only thing blocking the rest.</div>
+    <div><strong>DELIVERED:</strong> four defects found and shipped - the original over-count, a
+      retry storm the first fix created, and a protection that had reached only one of four watch
+      surfaces. All four are live. The fifth item is a product decision, and it is now the only
+      thing left on this to-do.</div>
   </div>
 
   <div class="take"><strong>TAKEAWAY.</strong> This gate has been wrong in both directions inside
