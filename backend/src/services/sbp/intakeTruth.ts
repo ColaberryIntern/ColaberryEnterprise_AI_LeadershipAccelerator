@@ -147,15 +147,43 @@ export function outlineAnsweredAngles(idea: string): Map<string, string> {
   return out;
 }
 
-/** The outline's labelled lines found in a description, in the order written. */
-export function outlineLines(idea: string): Array<{ dimension: UnderstandingDimension; text: string; line: string }> {
-  const out: Array<{ dimension: UnderstandingDimension; text: string; line: string }> = [];
+/**
+ * A picked button, said as the sentence the student meant.
+ *
+ * ShiftFill v5 (2026-11-21): the outline's buttons ("Something arrives", "Flag
+ * it for me", "Send me a summary at the end of the day") were stored bare, so
+ * the Command Center quoted them as if the student had typed a placeholder.
+ * The label is the other half of the sentence; put it back. Free text the
+ * student typed is already a sentence and is left exactly as written.
+ */
+const TRIGGER_SENTENCE: Readonly<Record<string, string>> = {
+  'Someone asks': 'It starts when someone asks for it.',
+  'Something arrives': 'It starts when something arrives.',
+  'A time of day': 'It runs at a set time of day.',
+};
+const lowerFirst = (s: string): string => s.charAt(0).toLowerCase() + s.slice(1);
+const SENTENCE_LABELS = new Set(["When it isn't sure, it should", "Before I'd let it run on its own, I'd need it to"]);
+
+export function outlineStatement(label: string, text: string): string {
+  if (label === 'What makes it start') return TRIGGER_SENTENCE[text] ?? text;
+  if (!SENTENCE_LABELS.has(label)) return text;
+  const parts = text.split(/;\s*/).map((p) => lowerFirst(p.trim().replace(/\.$/, ''))).filter(Boolean);
+  const joined = parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}` : parts[0];
+  return `${label} ${joined}.`;
+}
+
+/**
+ * The outline's labelled lines found in a description, in the order written.
+ * `text` is the raw answer (for matching quotes); `statement` is what gets shown.
+ */
+export function outlineLines(idea: string): Array<{ dimension: UnderstandingDimension; text: string; statement: string; line: string }> {
+  const out: Array<{ dimension: UnderstandingDimension; text: string; statement: string; line: string }> = [];
   for (const raw of idea.split(/\r?\n/)) {
     const line = raw.trim();
     for (const [label, dimension] of OUTLINE_LABEL_TO_DIMENSION) {
       if (!line.startsWith(`${label}:`)) continue;
       const text = line.slice(label.length + 1).trim();
-      if (text) out.push({ dimension, text, line });
+      if (text) out.push({ dimension, text, statement: outlineStatement(label, text), line });
       break;
     }
   }
@@ -204,7 +232,7 @@ export function itemsFromIntake(input: IntakeTruthInput): IntakeTruthResult {
   const outline = idea ? outlineLines(idea) : [];
   if (outline.length) {
     // A guided outline: every line already says what it answers.
-    for (const o of outline) items.push(fact(o.dimension, o.text, o.text));
+    for (const o of outline) items.push(fact(o.dimension, o.statement, o.line));
   } else if (idea) {
     // The description is the one thing every intake has, and it is the
     // student's own words about what they are building.
