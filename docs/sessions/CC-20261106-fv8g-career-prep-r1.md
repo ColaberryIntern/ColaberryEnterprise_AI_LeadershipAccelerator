@@ -774,3 +774,26 @@ tests/systemV2/career-prep/.
     clean. CI on c15b39b11: every PR check green, Integration tier all 59 suites (bookingConfirm 4/4, bookingService 2/2,
     bookingScheduler 2/2, interviewIngest, careerPrep interviews 4/4).
   - Notes: no local Postgres; the integration suites run only in CI.
+
+- [x] CP10.5 Release 3 checkpoint: the interview room, the replay, and the employer portal, on branch workstream/career-prep-r2r3
+  - Date: 2026-11-22
+  - Session: CC-20261106-fv8g
+  - What changed (loop run 20261121-career-prep-r2r3, T22 to T29, gates run at head 2f5931075, draft PR
+    https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/4292, not merged, not
+    deployed): recording consent and the room's Zoom permission check (T22, fe7efc783); the candidate and employer
+    interview rooms with the guide and private notes (T23, 0cb0fec7f); the replay and its scoring from the audio only
+    (T24, ed6f36a19); the fee calculation, versioned offers and the invoice record on acceptance (T25, cb896d82a);
+    employer accounts and magic-link sign-in (T26, 06124fbb7); the employer portal pages (T27, 5a55fbe40, 2ed17fc08);
+    employer follow-ups (T28, 182b4d90f, 2929e33eb); the candidate's Offers sheet, never a fee (T29, 53aa7a46c,
+    2f5931075). Switched off at ship: employer email, the employer portal (so no offer can exist), inbox tests.
+    T30 itself changes no code.
+  - Verification: backend tsc 0, frontend tsc 0; backend `npx jest -c jest.ci.config.ts --ci` 3154 suites passed,
+    3 failed, 69 skipped (50967 tests passed): the 3 known CRLF artifacts (mountLearnerPortalRoutes,
+    generateReeseBehaviourInventory, generateReeseToolInventory); frontend jest (testEnv excluded, as CI) 833 suites
+    passed, 2 failed (publicNextOpenHouseJs, governmentHeaderParity: the known CRLF artifacts); CI=true build
+    compiled; secret-scan OK (9424 files); lint-route-auth OK (193 admin route files); test typecheck baseline
+    matched; hire site node --test 198/198; Career Prep browser suites 64/64 across 4 suites (Edge, built app); size
+    and scope checks clean. CI on 2f5931075: every PR check green, Integration tier 66 suites passed, 0 failed
+    (offerStore 6/6).
+  - Notes: no local Postgres; the integration suites run only in CI. origin/main is still 7cdbaeabb (the run's base),
+    so the PR needs no merge from main. Carried to T33: the floor side panel's "Waiting on you" row for offers.
