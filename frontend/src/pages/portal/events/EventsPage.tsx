@@ -181,7 +181,10 @@ const EventCard: React.FC<{ ev: OpenHouseView; focused?: boolean }> = ({ ev, foc
       )}
       {/* C27 (v6 D5): one-tap Sign up (Eventbrite is the record), or "You're going" once Eventbrite has you */}
       {ev.is_registered && (
-        <div className="evt-foot"><span className="evt-going" data-testid={`evt-going-${ev.id}`}>✓ You&rsquo;re going</span></div>
+        <div className="evt-foot"><span className="evt-going" data-testid={`evt-going-${ev.id}`}>
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" aria-hidden="true" focusable="false"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          You&rsquo;re going
+        </span></div>
       )}
       {/* While an event is live, Watch live is the one action; signing up for it has passed. */}
       {ev.registration_url && !ev.is_registered && !watchLiveHref(ev) && !liveId && (
@@ -285,7 +288,7 @@ const EventsPage: React.FC = () => {
         {!loading && !failed && events.length === 0 && (
           <div className="evt-state">
             <p className="evt-state-title">No events scheduled right now.</p>
-            <p>Check back soon — new sessions are added most weeks.</p>
+            <p>Check back soon. New sessions are added most weeks.</p>
           </div>
         )}
 
