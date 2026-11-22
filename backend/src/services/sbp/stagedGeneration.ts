@@ -247,6 +247,11 @@ export function buildReleaseStoriesPrompt(
       : `The previous release ends with ${previousKeyStory ?? 'its last story'}; do not repeat its work.`,
     'Use CONSTRAINT requirements as context in task_guidance (the tools to use), and you may cite them',
     'in `fulfills` alongside the work they serve.',
+    // ShiftFill v5: STORY-012 told the student to "integrate with the temp agencies' APIs";
+    // nothing the student wrote says the agencies have one. An invented integration is a
+    // build task nobody can do.
+    'Reach outside parties (agencies, vendors, customers) only through a tool the requirements name',
+    '(for example, email them through Gmail). Never invent an API, portal or system the inputs do not name.',
     // ShiftFill v3: one story said "As a scheduler … alert the scheduler" while every other
     // story, and every requirement, named Dana. Two names for one person reads as two people.
     'When the requirements name a person ("Dana"), write for that person by name ("As Dana, …") and',
