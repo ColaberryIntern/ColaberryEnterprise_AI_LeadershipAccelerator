@@ -103,7 +103,54 @@ function escapeHtml(value: string): string {
  * @param spec       the demo spec, as stored on `projects.demo_spec`
  * @param engineHtml the engine asset, from `demoKitFiles()`
  */
-export function renderConnectedDemo(spec: unknown, engineHtml: string): string {
+/**
+ * Stamp a CSP nonce onto every `<script` in a TRUSTED template.
+ *
+ * ## Why this exists at all
+ *
+ * The engine ships its JavaScript inline, and the API sends Helmet's `script-src 'self'`. An
+ * inline script is not `'self'`, so the browser blocked it and the public demo rendered a banner
+ * above a permanent "Loading the demo..." - a 200 response, correct bytes on the wire, and a page
+ * that never came up. Found by opening the deployed URL in a real browser on 2026-11-22; no test
+ * that asserts on HTML strings can see this, because the bytes were right and the POLICY was not.
+ *
+ * ## Why the template and not the rendered page
+ *
+ * This runs BEFORE the spec is injected, and it must stay that way. The spec is student data: a
+ * label reading `<script` is not an attack, but stamping it would edit the JSON payload, so a
+ * regex over the finished page would corrupt data in the one case nobody would think to test.
+ * Here the input is a repo-versioned constant with a known script count.
+ *
+ * Refuses rather than returning the input unchanged when there is nothing to stamp or the
+ * template is already stamped: a silent no-op here is the blank page coming back, and double
+ * stamping would emit two `nonce` attributes on one tag.
+ */
+export function withScriptNonce(engineHtml: string, nonce: string): string {
+  if (!/^[A-Za-z0-9+/_-]{16,}={0,2}$/.test(nonce)) {
+    throw new DemoRenderError('DemoEngineUnusable', 'the CSP nonce is not a plausible nonce');
+  }
+  if (/<script[^>]*\snonce=/i.test(engineHtml)) {
+    throw new DemoRenderError('DemoEngineUnusable', 'the engine asset is already nonce-stamped');
+  }
+  const expected = (engineHtml.match(/<script\b/gi) || []).length;
+  if (!expected) {
+    throw new DemoRenderError('DemoEngineUnusable', 'the engine asset carries no script tag');
+  }
+  let stamped = 0;
+  const out = engineHtml.replace(/<script\b/gi, () => {
+    stamped += 1;
+    return `<script nonce="${nonce}"`;
+  });
+  if (stamped !== expected) {
+    throw new DemoRenderError(
+      'DemoEngineUnusable',
+      `nonce stamped ${stamped} of ${expected} script tags`,
+    );
+  }
+  return out;
+}
+
+export function renderConnectedDemo(spec: unknown, engineHtml: string, nonce?: string): string {
   const problems = validateDemoSpecShape(spec);
   if (problems.length) {
     throw new DemoRenderError(
@@ -117,7 +164,15 @@ export function renderConnectedDemo(spec: unknown, engineHtml: string): string {
   // narrowed value to read `app.name` from without an `as`.
   const parsed = DemoSpecSchema.parse(spec);
 
-  if (!engineHtml.includes(DEMO_SPEC_SLOT)) {
+  // Stamped BEFORE the spec goes in, so the nonce can only ever touch the repo's own template.
+  // See `withScriptNonce` for why doing this to the finished page would be a data bug.
+  const template = nonce ? withScriptNonce(engineHtml, nonce) : engineHtml;
+  const nonceAttr = nonce ? ` nonce="${nonce}"` : '';
+  // The slot as it looks AFTER stamping. Deriving it from the one constant rather than writing a
+  // second literal means the two cannot drift apart.
+  const slot = nonce ? DEMO_SPEC_SLOT.replace('<script ', `<script${nonceAttr} `) : DEMO_SPEC_SLOT;
+
+  if (!template.includes(slot)) {
     throw new DemoRenderError(
       'DemoEngineUnusable',
       'the engine asset has no empty demo-spec slot, so there is nowhere to put the spec',
@@ -125,11 +180,11 @@ export function renderConnectedDemo(spec: unknown, engineHtml: string): string {
   }
 
   const json = escapeForScriptTag(JSON.stringify(sortKeys(parsed)));
-  let html = engineHtml.replace(
-    DEMO_SPEC_SLOT,
+  let html = template.replace(
+    slot,
     // A function, not a string: `$&` and `$1` in a spec value would otherwise be interpreted as
     // replacement patterns, silently corrupting the JSON.
-    () => `<script type="application/json" id="demo-spec">${json}</script>`,
+    () => `<script${nonceAttr} type="application/json" id="demo-spec">${json}</script>`,
   );
 
   if (html.includes(DEMO_TITLE_SLOT)) {
