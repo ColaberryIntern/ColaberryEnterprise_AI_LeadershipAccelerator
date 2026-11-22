@@ -481,7 +481,16 @@ router.get('/api/portal/project/demo/share', requireParticipant, async (req: Req
     const status = err?.error_class === 'NotFoundError' ? 404
       : err?.error_class === 'ForbiddenError' ? 403 : 500;
     console.error('[ProjectRoutes] GET /project/demo/share error:', err.message);
-    res.status(status).json({ error: err.message });
+    /*
+     * A CLASSIFIED refusal's message is written for the caller and is safe to return. An
+     * unclassified 500 is not: it is whatever threw, which on this route means a Sequelize or
+     * driver message, and that can carry column names, SQL fragments or connection details.
+     * Logged in full above, answered with a fixed string here. The admin demo route next door
+     * already does this; an independent review caught that this one did not.
+     */
+    res.status(status).json({
+      error: status === 500 ? 'Could not read the demo share state.' : err.message,
+    });
   }
 });
 
@@ -507,7 +516,13 @@ router.post('/api/portal/project/demo/share', requireParticipant, async (req: Re
           // tell "you sent something I will not publish" from "I broke".
           : String(err?.error_class || '').startsWith('ConnectedDemo') ? 422 : 500;
     console.error('[ProjectRoutes] POST /project/demo/share error:', err?.error_class, err.message);
-    res.status(status).json({ error: err.message, error_class: err?.error_class });
+    // Same rule as the GET above: the classified refusals are the caller's to read, the
+    // unclassified 500 is not. `error_class` stays either way, because a client that can tell
+    // 422-because-of-your-data-model from 500-because-we-broke is the point of classifying it.
+    res.status(status).json({
+      error: status === 500 ? 'Could not publish or revoke the demo link.' : err.message,
+      error_class: err?.error_class,
+    });
   }
 });
 

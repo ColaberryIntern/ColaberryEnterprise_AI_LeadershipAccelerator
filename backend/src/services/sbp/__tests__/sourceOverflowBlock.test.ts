@@ -31,7 +31,13 @@
  * 56 rows is a modest sample, so the structural argument is stated first and does not depend on
  * it: the intake cap is 60,000 and the brief budget is 150,000, so a brief cannot reach the limit
  * by construction. The measured argument is the second: 7.5x of headroom on the largest real
- * brief, 2.5x on the largest expansion. Turning this on cannot fail a build that succeeds today.
+ * brief, 2.5x on the largest expansion. Turning this on cannot fail a STUDENT build that succeeds
+ * today.
+ *
+ * "STUDENT" is the correction. This line read "a build" and the measurement behind it counted
+ * only SBP tables, while `factory/govBuildPlanAI.ts` is a second non-test caller of
+ * `decomposeBuild` whose input nothing bounds the same way. See `featureFlags.ts` for the scope
+ * and what is owed; the gov path's refusal is classified and actionable rather than measured.
  * What it can do is refuse an input the system has never yet received, which is precisely the
  * case where silent clipping would do the most damage.
  *

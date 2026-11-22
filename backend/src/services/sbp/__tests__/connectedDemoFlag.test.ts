@@ -323,13 +323,70 @@ describe('every planStorySpecs caller resolves the Connected Demo story', () => 
    * `budget / N` while the verifier paid `budget / (N + 1)` on any build carrying STORY-900.
    */
   it('every call passes the resolution, and there are at least three of them', () => {
+    /*
+     * BROADENED, and the reason is a change this sweep caught. It used to require the literal
+     * `connectedDemo` inside each CALL EXPRESSION, which assumed the resolution is always
+     * inlined as an argument. `milestoneService` now resolves it on the line above, into a local,
+     * because that caller LATCHES and needs the strict lookup inside a try/catch. The sweep
+     * failed on a change that honored its intent exactly.
+     *
+     * So it checks the intent in two parts instead: the FILE must call one of the two resolvers,
+     * and the CALL must not hand `planStorySpecs` a hardcoded answer. The second half is new and
+     * is strictly stronger than what the old check could see: `planStorySpecs(plan, cc, false)`
+     * contains no `connectedDemo` either way, but it is the actual defect being guarded against
+     * and the old form would have reported it with the same message as a missing argument.
+     */
+    /*
+     * BOTH halves needed a correction a mutation found, and both are lessons already paid for
+     * elsewhere in this change:
+     *
+     *  - COMMENTS ARE STRIPPED. `buildVerificationService` puts a five-line comment between the
+     *    second argument and the third, so a regex anchored on the argument matched the comment's
+     *    bracket instead. Same strip the T10 sweep and the design-reader scan both needed.
+     *  - IMPORTS ARE STRIPPED. `import { connectedDemoMaterializedFor }` keeps the resolver's
+     *    NAME in the file after the call to it has been deleted, so a plain `src.includes(...)`
+     *    reported the file as resolving when it no longer did. That was the surviving mutation.
+     */
+    const stripComments = (s: string): string =>
+      s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    const stripImports = (s: string): string =>
+      s.replace(/^\s*import[\s\S]*?from\s+'[^']*';/gm, '');
+
+    const RESOLVERS = ['connectedDemoMaterializedFor(', 'connectedDemoMaterializedForStrict('];
     const callers = walk(SRC)
       .map((f) => [rel(f), fs.readFileSync(f, 'utf8')] as const)
-      .flatMap(([file, src]) => callExpressions(src, 'planStorySpecs').map((call) => [file, call] as const));
+      .flatMap(([file, src]) => callExpressions(src, 'planStorySpecs')
+        .map((call) => [file, stripComments(call), stripImports(stripComments(src))] as const));
 
     expect(callers.length).toBeGreaterThanOrEqual(3);
-    const missing = callers.filter(([, call]) => !call.includes('connectedDemo'));
-    expect(missing.map(([file]) => file)).toEqual([]);
+
+    // 1. Nobody hands it a hardcoded answer. The trailing comma is permitted by the style here,
+    //    so it is permitted by the pattern; without it the mutation walked straight through.
+    const hardcoded = callers.filter(([, call]) => /,\s*(?:true|false)\s*,?\s*\)?\s*$/.test(call.trim())
+      || /,\s*(?:true|false)\s*,?\s*\)/.test(call));
+    expect(hardcoded.map(([file]) => file)).toEqual([]);
+
+    // 2. Every calling file CALLS one of the two resolvers, not merely imports its name.
+    const unresolved = callers.filter(([, , body]) => !RESOLVERS.some((r) => body.includes(r)));
+    expect(unresolved.map(([file]) => file)).toEqual([]);
+  });
+
+  it('and that sweep can still FAIL, on both halves', () => {
+    /*
+     * The control. Two assertions that each report an empty list are exactly the shape that
+     * passes over an empty input, and this sweep has three callers whose shape could drift.
+     * Checked against synthetic sources rather than by mutating the tree.
+     */
+    const hardcodedCall = 'const specs = planStorySpecs(plan, cc, false);';
+    expect(/,\s*(?:true|false)\s*\)/.test(hardcodedCall)).toBe(true);
+
+    const resolvedCall = 'const specs = planStorySpecs(plan, cc, hasDemo);';
+    expect(/,\s*(?:true|false)\s*\)/.test(resolvedCall)).toBe(false);
+
+    // And a file that calls it without resolving anything is caught by the second half.
+    const unresolvedSrc = 'import { planStorySpecs } from "x";\nplanStorySpecs(plan, cc, flag);';
+    expect(['connectedDemoMaterializedFor', 'connectedDemoMaterializedForStrict']
+      .some((r) => unresolvedSrc.includes(r))).toBe(false);
   });
 
   it('and the three known call sites are among them, so the scan is not reading the wrong tree', () => {

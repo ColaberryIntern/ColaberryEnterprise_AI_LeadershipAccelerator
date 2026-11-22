@@ -29,7 +29,8 @@ import Project from '../../models/Project';
 import StudentTask from '../../models/StudentTask';
 import { getPublishedPlan } from '../sbp/planStore';
 import { planStorySpecs, commandCenterSpecForProject } from '../sbp/verification/storyPoints';
-import { connectedDemoMaterializedFor } from '../sbp/connectedDemoFlag';
+// The STRICT variant, because this file's answer latches. See the note at its call site.
+import { connectedDemoMaterializedForStrict, ConnectedDemoLookupFailed } from '../sbp/connectedDemoFlag';
 import { CANONICAL_PROGRAM_ID } from '../timeline/curriculumScope';
 import { isCurriculumRequired } from '../timeline/typeRegistry';
 import { CURRICULUM_WEEKS, MilestoneState, PROJECT_MILESTONE_TARGET } from './milestoneLadder';
@@ -128,12 +129,43 @@ export async function getProjectCompletions(enrollmentId: string): Promise<Proje
   for (const project of projects) {
     const stored = await getPublishedPlan(project.id);
     if (!stored) continue;
-    // Resolved from the board, like the Command Center id beside it: a milestone count that
-    // omitted a story the student is being graded on would under-report their completion.
+    /*
+     * Resolved from the board, like the Command Center id beside it.
+     *
+     * CORRECTED. This comment used to read "a milestone count that omitted a story the student is
+     * being graded on would UNDER-report their completion", and that is backwards: `complete` is
+     * `verified >= ids.length`, so omitting a story SHRINKS the denominator and the project reads
+     * complete SOONER. An independent review caught both the inverted comment and what it was
+     * hiding.
+     *
+     * Which is why this uses the STRICT lookup. `syncMilestones` writes `project_complete`
+     * through `findOrCreate` and this file's own header says one already latched stays latched,
+     * so a soft `false` on a transient database error would permanently mark a build complete
+     * with STORY-900 unverified, and feed the promotion engine. There is no next run to correct
+     * it, which is exactly the condition the soft path's rationale assumes.
+     *
+     * On a failed lookup the project is SKIPPED for this run. That is the one safe answer: a
+     * project left uncounted is counted next run, and nothing irreversible happens in between.
+     */
+    let hasDemo: boolean;
+    try {
+      hasDemo = await connectedDemoMaterializedForStrict(project.id);
+    } catch (err) {
+      console.warn(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        level: 'warn',
+        service: 'backend',
+        event: 'milestone_project_skipped',
+        error_class: err instanceof ConnectedDemoLookupFailed ? err.error_class : 'Error',
+        outcome: 'partial',
+        context: { projectId: project.id, reason: 'connected demo row undetermined; completeness not recorded' },
+      }));
+      continue;
+    }
     const specs = planStorySpecs(
       stored.plan,
       await commandCenterSpecForProject(project.id),
-      await connectedDemoMaterializedFor(project.id),
+      hasDemo,
     );
     const ids = specs.map((s) => s.id);
     if (ids.length === 0) continue;

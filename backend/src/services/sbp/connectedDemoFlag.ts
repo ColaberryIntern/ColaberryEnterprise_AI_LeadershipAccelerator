@@ -84,6 +84,20 @@ function warn(event: string, context: Record<string, unknown>, err?: unknown): v
  * one story and the next run pays it. The failure is logged with its `error_class` so it is
  * visible rather than absorbed, which is what separates this from the silent-swallow CLAUDE.md
  * forbids.
+ *
+ * ## "THE NEXT RUN PAYS IT" IS ONLY TRUE WHERE THERE IS A NEXT RUN
+ *
+ * An independent review found that argument applied, unchanged, to a path where it is false.
+ * `milestoneService.getProjectCompletions` computes `complete: verified >= ids.length`, and
+ * `syncMilestones` writes `project_complete` through `findOrCreate`, where that file's own header
+ * says "one already latched stays latched". Dropping STORY-900 from `ids` SHRINKS the
+ * denominator, so one transient lookup failure marks a build complete with the demo unverified,
+ * permanently, and feeds the promotion engine.
+ *
+ * The fail-soft is right for pricing and wrong for latching, so the two now have different
+ * functions. `connectedDemoMaterializedForStrict` throws, and the latching caller skips the
+ * project for that run rather than guessing: a project left uncounted this run is counted the
+ * next one, and nothing irreversible happens in between.
  */
 export async function connectedDemoMaterializedFor(projectId: string | null | undefined): Promise<boolean> {
   if (!projectId) return false;
@@ -107,6 +121,51 @@ export async function connectedDemoMaterializedFor(projectId: string | null | un
   } catch (err) {
     warn('connected_demo_row_lookup_failed', { projectId, fell_back_to: false }, err);
     return false;
+  }
+}
+
+/**
+ * Thrown by the strict lookup. Carries a stable `error_class`, because a caller that latches has
+ * to be able to tell "no row" from "could not tell", and those are the same value otherwise.
+ */
+export class ConnectedDemoLookupFailed extends Error {
+  readonly name = 'ConnectedDemoLookupFailed';
+
+  readonly error_class = 'ConnectedDemoLookupFailed';
+
+  constructor(readonly projectId: string, cause: unknown) {
+    super(
+      `could not determine whether project ${projectId} has a Connected Demo story, so no `
+      + 'conclusion about its completeness is safe to record: '
+      + (cause instanceof Error ? cause.message : String(cause)),
+    );
+  }
+}
+
+/**
+ * The same question, for callers whose answer LATCHES.
+ *
+ * Identical to `connectedDemoMaterializedFor` except that a failed lookup THROWS rather than
+ * answering `false`. Use this wherever a wrong `false` cannot be corrected by a later run:
+ * today that is milestone completion, which writes a row that stays written.
+ *
+ * It deliberately does not re-implement the count. Two definitions of "does this build have a
+ * demo" is the duplicate-truth failure this module's header is about.
+ */
+export async function connectedDemoMaterializedForStrict(
+  projectId: string | null | undefined,
+): Promise<boolean> {
+  // No project id is an ANSWER, not a failure: nothing can hold a row. Same as the soft path.
+  if (!projectId) return false;
+  try {
+    const { default: StudentTask } = await import('../../models/StudentTask');
+    const n = await StudentTask.count({
+      where: { project_id: projectId, story_id: CONNECTED_DEMO_STORY_ID },
+    });
+    return n > 0;
+  } catch (err) {
+    warn('connected_demo_row_lookup_failed_strict', { projectId, refused: true }, err);
+    throw new ConnectedDemoLookupFailed(projectId, err);
   }
 }
 

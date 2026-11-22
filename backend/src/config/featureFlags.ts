@@ -95,8 +95,28 @@ export const FLAGS = {
   //     which is worth knowing if either constant moves again.
   // (2) MEASURED: the largest real brief has 7.5x of headroom and the largest expansion 2.5x.
   //
-  // Turning this on therefore cannot fail a build that succeeds today; what it can do is refuse
-  // an input the system has never yet received, which is exactly where clipping would be worst.
+  // Turning this on therefore cannot fail a STUDENT build that succeeds today; what it can do is
+  // refuse an input the system has never yet received, which is exactly where clipping would be
+  // worst.
+  //
+  // THE SCOPE OF THAT SENTENCE, narrowed 22 Nov 2026 after an independent review. It used to read
+  // "cannot fail a build that succeeds today", unqualified, and both arguments above are about
+  // the student pipeline ONLY: every row counted is an SBP table, and the structural ceiling is
+  // built from `INTAKE_IDEA_MAX` plus interview answers, which are student-intake shapes.
+  //
+  // `decomposeBuild` has a SECOND non-test caller. `factory/govBuildPlanAI.ts` reuses this engine
+  // unchanged, and nothing bounds its input the way intake bounds a student's: its `document` is
+  // up to 200 solicitation requirement texts joined, and its `brief` is a generated build spec.
+  // No row of the measurement above covers it, and claiming otherwise would be asserting a
+  // measurement one scope wider than it was taken.
+  //
+  // So the honest statement is: the gov build-plan path CAN now be refused where it was
+  // previously clipped, that has not been measured, and the refusal is therefore made ACTIONABLE
+  // rather than silent. `govBuildPlanAI` classifies `SourceOverflowBlocked` and tells the
+  // operator which input is over and by how much, instead of the generic "could not be generated
+  // right now" behind a Regenerate button that cannot succeed. A refusal somebody can act on is a
+  // better answer than a clip nobody can see, which is the whole argument for this flag; it is
+  // not a substitute for measuring that path, which is owed.
   //
   // `!== 'false'` rather than `=== 'true'`: on by default, with an escape hatch that does not
   // need a deploy. Read once at boot.
