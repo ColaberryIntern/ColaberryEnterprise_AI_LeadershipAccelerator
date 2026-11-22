@@ -57,6 +57,11 @@ describe('ensurePlacementSchema (statements)', () => {
     expect(of).toMatch(/status IN \('sent','accepted','declined','talk_first','withdrawn'\)/);
     expect(of).toMatch(/UNIQUE \(offer_group_id, version\)/);
     expect(of).toMatch(/client_key UUID NOT NULL UNIQUE/);
+    // Kit F7: who agreed and which agreement text they saw are stored on the offer; pay floors $1 (100 cents).
+    expect(of).toMatch(/agreed_by VARCHAR\(120\) NOT NULL/);
+    expect(of).toMatch(/agreement_text_version VARCHAR\(40\) NOT NULL/);
+    expect(of).toMatch(/salary_cents >= 100 AND salary_cents <= 200000000/);
+    expect(of).toMatch(/hourly_rate_cents >= 100 AND hourly_rate_cents <= 100000/);
     expect(PLACEMENT_STATEMENTS).toContain('CREATE UNIQUE INDEX IF NOT EXISTS uq_placement_offers_current ON placement_offers (offer_group_id) WHERE superseded_at IS NULL');
     expect(PLACEMENT_STATEMENTS.find((s) => s.includes('CREATE TABLE IF NOT EXISTS placement_invoices'))).toMatch(/offer_id UUID NOT NULL UNIQUE REFERENCES placement_offers\(id\)/);
   });

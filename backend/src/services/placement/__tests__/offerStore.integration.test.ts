@@ -23,7 +23,9 @@ describeIfDb('offers and invoice records against Postgres', () => {
   const K = (n: number) => `bbbbbbbb-aaaa-4aaa-8aaa-${String(n).padStart(12, '0')}`;
   const one = async (sql: string): Promise<Record<string, unknown>> => ((await sequelize.query(sql))[0] as Array<Record<string, unknown>>)[0];
   const input = (over: Record<string, unknown> = {}) => ({ enrollmentId: E1, clientId: null, company: 'Acme', role: 'Analyst',
-    pay: { basis: 'yearly' as const, salaryCents: 105_000_00 }, feeAgreed: true, createdBy: 'test', ...over });
+    pay: { basis: 'yearly' as const, salaryCents: 105_000_00 }, feeAgreed: true,
+    agreedBy: 'pat@acme.example', agreementTextVersion: 'f7-fee-2026-11', createdBy: 'test', ...over });
+  const COLS = 'first_year_cents, fee_rate_bp, fee_cents, fee_agreed_at, agreed_by, agreement_text_version, status, created_by';
   const made = async (n: number) => { const r = await svc.createOffer(input(), K(n), 1.1); if (r.status !== 'ok') throw new Error(r.status); return r.offer; };
 
   beforeAll(async () => {
@@ -65,13 +67,25 @@ describeIfDb('offers and invoice records against Postgres', () => {
   it('the database refuses a second current version, a second invoice and a mixed pay shape', async () => {
     const o = await made(6);
     const dup = await sequelize.query(`INSERT INTO placement_offers (offer_group_id, version, client_key, enrollment_id, company, role, pay_basis, salary_cents,
-      first_year_cents, fee_rate_bp, fee_cents, fee_agreed_at, status, created_by) VALUES ('${o.offer_group_id}', 9, '${K(7)}', '${E1}', 'A', 'R', 'yearly', 100, 100, 11000, 110, NOW(), 'sent', 't')`).then(() => null, (e: unknown) => e);
+      ${COLS}) VALUES ('${o.offer_group_id}', 9, '${K(7)}', '${E1}', 'A', 'R', 'yearly', 100, 100, 11000, 110, NOW(), 'p', 'v', 'sent', 't')`).then(() => null, (e: unknown) => e);
     expect(dup).toMatchObject({ name: 'SequelizeUniqueConstraintError', parent: { code: '23505', constraint: 'uq_placement_offers_current' } });
     await svc.respondToOffer(E1, o.offer_group_id, 1, 'accept');
     const inv = await sequelize.query(`INSERT INTO placement_invoices (offer_id, enrollment_id, fee_cents) VALUES ('${o.id}', '${E1}', 1)`).then(() => null, (e: unknown) => e);
     expect(inv).toMatchObject({ name: 'SequelizeUniqueConstraintError', parent: { code: '23505' } });
     const mixed = await sequelize.query(`INSERT INTO placement_offers (offer_group_id, version, client_key, enrollment_id, company, role, pay_basis, salary_cents, hourly_rate_cents,
-      first_year_cents, fee_rate_bp, fee_cents, fee_agreed_at, status, created_by) VALUES (gen_random_uuid(), 1, '${K(8)}', '${E1}', 'A', 'R', 'yearly', 100, 50, 100, 11000, 110, NOW(), 'sent', 't')`).then(() => null, (e: unknown) => e);
-    expect(mixed).toMatchObject({ parent: { code: '23514' } });
+      ${COLS}) VALUES (gen_random_uuid(), 1, '${K(8)}', '${E1}', 'A', 'R', 'yearly', 100, 100, 100, 11000, 110, NOW(), 'p', 'v', 'sent', 't')`).then(() => null, (e: unknown) => e);
+    expect(mixed).toMatchObject({ parent: { code: '23514', constraint: 'ck_placement_offers_pay' } });
+  });
+
+  it('stores who agreed and the agreement text version; refuses a 99 cent salary or rate and a missing agreed_by', async () => {
+    const o = await made(10);
+    expect(await one(`SELECT agreed_by, agreement_text_version FROM placement_offers WHERE id = '${o.id}'`)).toEqual({ agreed_by: 'pat@acme.example', agreement_text_version: 'f7-fee-2026-11' });
+    const raw = (n: number, pay: string, agreedBy: string) => sequelize.query(`INSERT INTO placement_offers (offer_group_id, version, client_key, enrollment_id, company, role,
+      pay_basis, salary_cents, hourly_rate_cents, hours_per_week, ${COLS}) VALUES (gen_random_uuid(), 1, '${K(n)}', '${E1}', 'A', 'R', ${pay}, 100, 11000, 110, NOW(), ${agreedBy}, 'v', 'sent', 't')`)
+      .then(() => null, (e: unknown) => e);
+    expect(await raw(11, `'yearly', 99, NULL, NULL`, `'p'`)).toMatchObject({ parent: { code: '23514' } });
+    expect(await raw(12, `'hourly', NULL, 99, 40`, `'p'`)).toMatchObject({ parent: { code: '23514' } });
+    expect(await raw(14, `'yearly', 100, NULL, NULL`, 'NULL')).toMatchObject({ parent: { code: '23502' } });
+    expect(await raw(15, `'yearly', 100, NULL, NULL`, `'p'`)).toBeNull(); // the $1 floor itself is allowed
   });
 });

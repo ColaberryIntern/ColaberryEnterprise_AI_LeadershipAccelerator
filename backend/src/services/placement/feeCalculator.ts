@@ -10,11 +10,15 @@
  * Money is integer CENTS end to end (never floating dollars). The fee is rounded half up at the half cent:
  * fee_cents = floor((first_year_cents x rate_bp + 5000) / 10000), with the rate in basis points (1.1 = 11000).
  * Limits (D3: base salary only; a value outside them is a typing mistake, refused with a reason, never clamped):
- * yearly salary above $0 and at most $2,000,000; hourly rate above $0 and at most $1,000; 1 to 80 hours a week;
- * the rate itself above 1.0 and at most 3.0 (a setting outside that is ignored by the reader, which uses 1.1).
+ * kit F7 "salary from $1 to $2,000,000; rate from $1 to $1,000; hours from 1 to 80" (the same floors and ceilings are
+ * CHECKs on placement_offers); the rate itself above 1.0 and at most 3.0 AFTER rounding to basis points (1.00004 rounds
+ * to 10000 bp and is refused, matching CHECK fee_rate_bp > 10000; a setting outside that is ignored by the reader,
+ * which uses 1.1).
  */
 export const DEFAULT_FEE_RATE = 1.1;
 export const WEEKS = 52;
+export const MIN_SALARY_CENTS = 100;
+export const MIN_HOURLY_CENTS = 100;
 export const MAX_SALARY_CENTS = 2_000_000 * 100;
 export const MAX_HOURLY_CENTS = 1_000 * 100;
 export const MAX_HOURS = 80;
@@ -30,19 +34,22 @@ const whole = (n: unknown): n is number => typeof n === 'number' && Number.isSaf
 /** null = the pay is valid; otherwise the plain reason it is not. */
 export function payProblem(p: Pay): string | null {
   if (p.basis === 'yearly') {
-    if (!whole(p.salaryCents) || p.salaryCents <= 0) return 'The yearly salary must be more than $0.';
+    if (!whole(p.salaryCents) || p.salaryCents < MIN_SALARY_CENTS) return 'The yearly salary must be at least $1.';
     if (p.salaryCents > MAX_SALARY_CENTS) return 'The yearly salary can be at most $2,000,000.';
     return null;
   }
   if (p.basis !== 'hourly') return 'Pay must be a yearly salary or an hourly rate.';
-  if (!whole(p.rateCents) || p.rateCents <= 0) return 'The hourly rate must be more than $0.';
+  if (!whole(p.rateCents) || p.rateCents < MIN_HOURLY_CENTS) return 'The hourly rate must be at least $1.';
   if (p.rateCents > MAX_HOURLY_CENTS) return 'The hourly rate can be at most $1,000.';
   if (typeof p.hoursPerWeek !== 'number' || !Number.isFinite(p.hoursPerWeek) || p.hoursPerWeek < 1 || p.hoursPerWeek > MAX_HOURS) return 'Hours a week must be 1 to 80.';
   if (Math.round(p.hoursPerWeek * 10) !== p.hoursPerWeek * 10) return 'Hours a week can have at most one decimal place.';
   return null;
 }
 
-export const validRate = (rate: unknown): rate is number => typeof rate === 'number' && Number.isFinite(rate) && rate > MIN_RATE && rate <= MAX_RATE;
+/** The rate in basis points (1.1 = 11000), as stored in fee_rate_bp. */
+const toBp = (rate: number): number => Math.round(rate * 10_000);
+export const validRate = (rate: unknown): rate is number => typeof rate === 'number' && Number.isFinite(rate) && rate > MIN_RATE && rate <= MAX_RATE
+  && toBp(rate) > toBp(MIN_RATE) && toBp(rate) <= toBp(MAX_RATE);
 
 /** First-year salary in cents: the salary, or rate x hours x 52 (hours in tenths, so the product stays whole). */
 export function firstYearCents(p: Pay): number {
@@ -53,7 +60,7 @@ export function computeFee(p: Pay, rate: number = DEFAULT_FEE_RATE): FeeResult {
   const problem = payProblem(p);
   if (problem) return { ok: false, reason: problem };
   if (!validRate(rate)) return { ok: false, reason: 'The fee rate must be above 1.0 and at most 3.0.' };
-  const rateBp = Math.round(rate * 10_000);
+  const rateBp = toBp(rate);
   const fy = Math.round(firstYearCents(p));
   return { ok: true, fee: { firstYearCents: fy, feeCents: Math.floor((fy * rateBp + 5_000) / 10_000), rateBp } };
 }

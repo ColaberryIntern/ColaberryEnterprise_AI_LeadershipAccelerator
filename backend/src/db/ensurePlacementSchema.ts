@@ -57,10 +57,10 @@ import { sequelize } from '../config/database';
  *                        the candidate only); recording = where Zoom keeps the file (server side only, never served).
  *   placement_offers     (CP10.1, kit F7, services/placement/offerService.ts) VERSIONED: one offer_group_id, an edit adds
  *                        version n+1 and supersedes the old one (one current version per group, a partial UNIQUE
- *                        index). Every F7 field: pay basis (yearly salary, or hourly rate x hours a week), first-year
- *                        salary, the fee rate and fee (integer cents, computed by feeCalculator.ts and stored as sent),
- *                        start date, respond-by, the employer's fee agreement, status sent / accepted / declined /
- *                        talk_first / withdrawn. client_key UNIQUE = one row per Send (a double click makes one).
+ *                        index). The F7 stored fields: pay_basis, the inputs (salary_cents, or hourly_rate_cents and
+ *                        hours_per_week; $1 floors, $2,000,000 / $1,000 / 80 h ceilings), first_year_cents, fee_rate_bp,
+ *                        fee_cents (feeCalculator.ts, stored as sent), agreed_by, fee_agreed_at (agreed_at),
+ *                        agreement_text_version; also start_date, respond_by, status. client_key UNIQUE = one per Send.
  *                        client_id is the employer account (T26 adds its table; no foreign key until then).
  *   placement_invoices   (CP10.1) the invoice RECORD an accepted offer creates, at most one per offer (offer_id UNIQUE);
  *                        not_invoiced / invoiced / paid. Nothing is sent or charged (D8).
@@ -234,8 +234,8 @@ export const PLACEMENT_STATEMENTS: readonly string[] = [
      company VARCHAR(200) NOT NULL,
      role VARCHAR(200) NOT NULL,
      pay_basis VARCHAR(6) NOT NULL CHECK (pay_basis IN ('yearly','hourly')),
-     salary_cents BIGINT CHECK (salary_cents IS NULL OR (salary_cents > 0 AND salary_cents <= 200000000)),
-     hourly_rate_cents INTEGER CHECK (hourly_rate_cents IS NULL OR (hourly_rate_cents > 0 AND hourly_rate_cents <= 100000)),
+     salary_cents BIGINT CHECK (salary_cents IS NULL OR (salary_cents >= 100 AND salary_cents <= 200000000)),
+     hourly_rate_cents INTEGER CHECK (hourly_rate_cents IS NULL OR (hourly_rate_cents >= 100 AND hourly_rate_cents <= 100000)),
      hours_per_week NUMERIC(4,1) CHECK (hours_per_week IS NULL OR (hours_per_week >= 1 AND hours_per_week <= 80)),
      first_year_cents BIGINT NOT NULL CHECK (first_year_cents > 0),
      fee_rate_bp INTEGER NOT NULL CHECK (fee_rate_bp > 10000 AND fee_rate_bp <= 30000),
@@ -243,6 +243,7 @@ export const PLACEMENT_STATEMENTS: readonly string[] = [
      start_date DATE,
      respond_by TIMESTAMPTZ,
      fee_agreed_at TIMESTAMPTZ NOT NULL,
+     agreed_by VARCHAR(120) NOT NULL, agreement_text_version VARCHAR(40) NOT NULL,
      status VARCHAR(12) NOT NULL CHECK (status IN ('sent','accepted','declined','talk_first','withdrawn')),
      decided_at TIMESTAMPTZ,
      created_by VARCHAR(120) NOT NULL,

@@ -8,7 +8,8 @@ import type { OfferRow, OfferStatus } from './offerStore';
  * Career Prep v27, CP10.1 (kit F7): offers, versioned, and the invoice RECORD an acceptance makes. No route calls this
  * yet (the employer portal, T26/T27, and the candidate's offers, T29, do); nothing here sends mail or charges anyone.
  *
- *   create   the employer must agree to the fee (feeAgreed: true). The fee is computed NOW with the current rate
+ *   create   the employer must agree to the fee (feeAgreed: true, plus agreedBy and agreementTextVersion, both stored
+ *            with the offer as agreed_by / agreement_text_version beside fee_agreed_at). The fee is computed NOW with the current rate
  *            (setting placement_fee_rate, default 1.1; a missing, unreadable or out-of-range setting uses 1.1 and says so
  *            in a log line) and STORED with the offer, so a later rate change never changes a sent offer.
  *   edit     = a new version: under the group's current-row lock, the old version is superseded and version n+1 is sent,
@@ -22,7 +23,9 @@ import type { OfferRow, OfferStatus } from './offerStore';
  */
 export interface OfferInput {
   enrollmentId: string; interviewId?: string | null; clientId?: string | null; company: string; role: string;
-  pay: Pay; startDate?: string | null; respondBy?: string | null; feeAgreed: boolean; createdBy: string;
+  pay: Pay; startDate?: string | null; respondBy?: string | null; feeAgreed: boolean;
+  /** Kit F7: who ticked the agreement (at most 120 characters) and which agreement text they saw (at most 40). */
+  agreedBy: string; agreementTextVersion: string; createdBy: string;
 }
 export type OfferResult = { status: 'ok'; offer: OfferRow; replay: boolean } | { status: 'invalid'; reason: string } | { status: 'not_found' | 'final' | 'stale' };
 export type RespondResult = OfferResult | { status: 'ok'; offer: OfferRow; replay: boolean; invoiceCreated: boolean };
@@ -49,6 +52,9 @@ export async function feeRate(read: (k: string) => Promise<unknown> = getSetting
 
 function prepare(input: OfferInput, rate: number): { ok: true; row: Omit<store.NewOffer, 'groupId' | 'version' | 'clientKey'> } | { ok: false; reason: string } {
   if (!input.feeAgreed) return { ok: false, reason: 'The employer must agree to the placement fee before the offer is sent.' };
+  const by = typeof input.agreedBy === 'string' ? input.agreedBy.trim() : '';
+  const ver = typeof input.agreementTextVersion === 'string' ? input.agreementTextVersion.trim() : '';
+  if (!by || by.length > 120 || !ver || ver.length > 40) return { ok: false, reason: 'The offer must record who agreed to the fee and which agreement text they saw.' };
   if (!input.company.trim() || !input.role.trim()) return { ok: false, reason: 'An offer needs a company and a role.' };
   const f = computeFee(input.pay, rate);
   if (!f.ok) return f;
@@ -57,7 +63,7 @@ function prepare(input: OfferInput, rate: number): { ok: true; row: Omit<store.N
     company: input.company.trim().slice(0, 200), role: input.role.trim().slice(0, 200), payBasis: p.basis,
     salaryCents: p.basis === 'yearly' ? p.salaryCents : null, hourlyRateCents: p.basis === 'hourly' ? p.rateCents : null,
     hoursPerWeek: p.basis === 'hourly' ? p.hoursPerWeek : null, firstYearCents: f.fee.firstYearCents, feeRateBp: f.fee.rateBp, feeCents: f.fee.feeCents,
-    startDate: input.startDate ?? null, respondBy: input.respondBy ?? null, createdBy: input.createdBy.slice(0, 120) } };
+    startDate: input.startDate ?? null, respondBy: input.respondBy ?? null, agreedBy: by, agreementTextVersion: ver, createdBy: input.createdBy.slice(0, 120) } };
 }
 
 /** Two requests with the same key at the same moment: the loser's insert hits client_key UNIQUE; answer the winner's row as a replay. */

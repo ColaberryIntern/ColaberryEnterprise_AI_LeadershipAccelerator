@@ -12,13 +12,13 @@ export interface OfferRow {
   interview_id: string | null; client_id: string | null; company: string; role: string; pay_basis: 'yearly' | 'hourly';
   salary_cents: string | number | null; hourly_rate_cents: number | null; hours_per_week: string | number | null; first_year_cents: string | number;
   fee_rate_bp: number; fee_cents: string | number; start_date: string | null; respond_by: Date | string | null; fee_agreed_at: Date | string;
-  status: OfferStatus; decided_at: Date | string | null; created_by: string; created_at: Date | string;
+  agreed_by: string; agreement_text_version: string; status: OfferStatus; decided_at: Date | string | null; created_by: string; created_at: Date | string;
 }
 export type OfferStatus = 'sent' | 'accepted' | 'declined' | 'talk_first' | 'withdrawn';
 export interface NewOffer {
   groupId: string; version: number; clientKey: string; enrollmentId: string; interviewId: string | null; clientId: string | null;
   company: string; role: string; payBasis: 'yearly' | 'hourly'; salaryCents: number | null; hourlyRateCents: number | null; hoursPerWeek: number | null;
-  firstYearCents: number; feeRateBp: number; feeCents: number; startDate: string | null; respondBy: string | null; createdBy: string;
+  firstYearCents: number; feeRateBp: number; feeCents: number; startDate: string | null; respondBy: string | null; agreedBy: string; agreementTextVersion: string; createdBy: string;
 }
 
 const rows = async <T>(sql: string, replacements: Record<string, unknown>, t?: Transaction): Promise<T[]> =>
@@ -44,9 +44,10 @@ export async function lockCurrent(groupId: string, t: Transaction): Promise<Offe
 
 export async function insertOffer(o: NewOffer, t: Transaction): Promise<OfferRow> {
   const [row] = await rows<OfferRow>(`INSERT INTO placement_offers (offer_group_id, version, client_key, enrollment_id, interview_id, client_id, company, role,
-      pay_basis, salary_cents, hourly_rate_cents, hours_per_week, first_year_cents, fee_rate_bp, fee_cents, start_date, respond_by, fee_agreed_at, status, created_by)
+      pay_basis, salary_cents, hourly_rate_cents, hours_per_week, first_year_cents, fee_rate_bp, fee_cents, start_date, respond_by, fee_agreed_at,
+      agreed_by, agreement_text_version, status, created_by)
     VALUES (:groupId, :version, :clientKey, :enrollmentId, :interviewId, :clientId, :company, :role, :payBasis, :salaryCents, :hourlyRateCents, :hoursPerWeek,
-      :firstYearCents, :feeRateBp, :feeCents, :startDate, :respondBy, NOW(), 'sent', :createdBy) RETURNING *`, { ...o }, t);
+      :firstYearCents, :feeRateBp, :feeCents, :startDate, :respondBy, NOW(), :agreedBy, :agreementTextVersion, 'sent', :createdBy) RETURNING *`, { ...o }, t);
   return row;
 }
 

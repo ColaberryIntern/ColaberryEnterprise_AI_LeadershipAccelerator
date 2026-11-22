@@ -13,7 +13,7 @@ jest.mock('../offerStore', () => ({
     const row = { id: `of-${mockDb.n}`, offer_group_id: o.groupId, version: o.version, superseded_at: null, client_key: o.clientKey, enrollment_id: o.enrollmentId,
       interview_id: o.interviewId, client_id: o.clientId, company: o.company, role: o.role, pay_basis: o.payBasis, salary_cents: o.salaryCents, hourly_rate_cents: o.hourlyRateCents,
       hours_per_week: o.hoursPerWeek, first_year_cents: o.firstYearCents, fee_rate_bp: o.feeRateBp, fee_cents: o.feeCents, start_date: o.startDate, respond_by: o.respondBy,
-      fee_agreed_at: new Date(), status: 'sent', decided_at: null, created_by: o.createdBy, created_at: new Date() } as Row;
+      fee_agreed_at: new Date(), agreed_by: o.agreedBy, agreement_text_version: o.agreementTextVersion, status: 'sent', decided_at: null, created_by: o.createdBy, created_at: new Date() } as Row;
     mockDb.offers.push(row);
     return row;
   },
@@ -33,7 +33,8 @@ import { candidateOffer, createOffer, editOffer, feeRate, respondToOffer, withdr
 /** CP10.1 (kit F7): offers, versioned; accept makes one invoice record; the candidate never sees the fee. */
 const K = (n: number) => `aaaaaaaa-aaaa-4aaa-8aaa-${String(n).padStart(12, '0')}`;
 const input = (over: Partial<OfferInput> = {}): OfferInput => ({ enrollmentId: 'enr-ann', clientId: 'cl-1', company: 'Acme', role: 'AI Solutions Analyst',
-  pay: { basis: 'yearly', salaryCents: 105_000_00 }, startDate: '2027-01-04', respondBy: '2026-11-27T23:00:00.000Z', feeAgreed: true, createdBy: 'client:cl-1', ...over });
+  pay: { basis: 'yearly', salaryCents: 105_000_00 }, startDate: '2027-01-04', respondBy: '2026-11-27T23:00:00.000Z', feeAgreed: true,
+  agreedBy: 'pat@acme.example', agreementTextVersion: 'f7-fee-2026-11', createdBy: 'client:cl-1', ...over });
 const ok = <T extends { status: string }>(r: T) => { if (r.status !== 'ok') throw new Error(`expected ok, got ${r.status}`); return r as Extract<T, { status: 'ok' }>; };
 
 beforeEach(() => {
@@ -49,6 +50,22 @@ describe('create', () => {
     expect(a.offer).toMatchObject({ version: 1, status: 'sent', first_year_cents: 105_000_00, fee_cents: 115_500_00, fee_rate_bp: 11_000 });
     const b = ok(await createOffer(input(), K(1)));
     expect([b.replay, b.offer.id, mockDb.offers.length]).toEqual([true, a.offer.id, 1]);
+  });
+  it('stores who agreed and which agreement text they saw (kit F7: agreed_by, agreed_at, agreement_text_version)', async () => {
+    const a = ok(await createOffer(input(), K(1))).offer;
+    expect([a.agreed_by, a.agreement_text_version, a.fee_agreed_at instanceof Date]).toEqual(['pat@acme.example', 'f7-fee-2026-11', true]);
+  });
+  it('refuses an offer without agreed_by or agreement_text_version (missing, blank or too long); nothing stored', async () => {
+    const noBy = { ...input() } as Partial<OfferInput>; delete noBy.agreedBy;
+    const noVer = { ...input() } as Partial<OfferInput>; delete noVer.agreementTextVersion;
+    expect(await createOffer(noBy as OfferInput, K(2))).toEqual({ status: 'invalid', reason: 'The offer must record who agreed to the fee and which agreement text they saw.' });
+    expect(await createOffer(noVer as OfferInput, K(3))).toEqual({ status: 'invalid', reason: 'The offer must record who agreed to the fee and which agreement text they saw.' });
+    expect(await createOffer(input({ agreedBy: '   ' }), K(4))).toMatchObject({ status: 'invalid' });
+    expect(await createOffer(input({ agreementTextVersion: 'v'.repeat(41) }), K(5))).toMatchObject({ status: 'invalid' });
+    expect(await createOffer(input({ agreedBy: 'a'.repeat(121) }), K(6))).toMatchObject({ status: 'invalid' });
+    const v1 = ok(await createOffer(input(), K(7))).offer;
+    expect(await editOffer(v1.offer_group_id, noVer as OfferInput, K(8))).toMatchObject({ status: 'invalid' });
+    expect(mockDb.offers).toHaveLength(1);
   });
   it('the same Send racing: the loser hits client_key UNIQUE and gets the winner\'s offer as a replay, not an error', async () => {
     const store = jest.requireMock('../offerStore') as { byClientKey: (k: string) => Promise<Row | undefined> };
@@ -72,9 +89,14 @@ describe('create', () => {
     expect(await feeRate()).toBe(1.2);
     mockSetting.mockResolvedValue(9);
     expect(await feeRate()).toBe(1.1);
+    // Above 1.0 but rounds to 10000 basis points: refused here, so an offer never hits CHECK fee_rate_bp > 10000 (a 500).
+    mockSetting.mockResolvedValue('1.00004');
+    expect(await feeRate()).toBe(1.1);
     mockSetting.mockRejectedValue(Object.assign(new Error('x'), { name: 'SequelizeConnectionError' }));
     expect(await feeRate()).toBe(1.1);
-    expect((console.warn as jest.Mock).mock.calls.map((c) => JSON.parse(c[0]).event)).toEqual(['placement_fee_rate_invalid', 'placement_fee_rate_unreadable']);
+    expect((console.warn as jest.Mock).mock.calls.map((c) => JSON.parse(c[0]).event)).toEqual(['placement_fee_rate_invalid', 'placement_fee_rate_invalid', 'placement_fee_rate_unreadable']);
+    mockSetting.mockResolvedValue('1.00004');
+    expect(ok(await createOffer(input(), K(1))).offer.fee_rate_bp).toBe(11_000);
   });
 });
 
