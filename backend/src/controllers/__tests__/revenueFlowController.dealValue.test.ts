@@ -151,6 +151,38 @@ describe('a monthly retainer cannot be posted as a total, and vice versa', () =>
     expect(mockConfirm).not.toHaveBeenCalled();
   });
 
+  /**
+   * These two assert the DIAGNOSTICS, and they exist because a mutation survived.
+   *
+   * Swapping `z.discriminatedUnion` for a plain `z.union` of the same two members passed all
+   * eighteen other cases in this file. That is not a correctness hole: with `.strict()` and a
+   * `z.literal` discriminator on each member, both schemas accept and reject exactly the same
+   * bodies, which is what M1 above actually pins.
+   *
+   * What a plain union loses is the ability to say WHICH field is wrong. It collapses every
+   * failure to `formErrors: ["Invalid input"]` with an empty `fieldErrors`, where the
+   * discriminated form names `valueKind`, names the missing `monthlyFeeCents`, and names the
+   * unrecognized `dealValueCents`. The controller returns `error.flatten()` as `details`, so
+   * that difference is the entire debugging experience of a failed save - and the panel
+   * surfaces the server's message precisely because the server's message is the useful one.
+   */
+  it('tells the caller WHICH field is wrong when valueKind is unrecognized', async () => {
+    const r = res();
+    await handleConfirmDealValue(req({ ...goodTotal, valueKind: 'retainer' }), r);
+    const details = r.json.mock.calls[0][0].details;
+    expect(Object.keys(details.fieldErrors)).toContain('valueKind');
+  });
+
+  it('names the missing monthly fee and the smuggled total, not just "invalid"', async () => {
+    const r = res();
+    await handleConfirmDealValue(req({
+      ...goodTotal, valueKind: 'monthly_retainer', periodMonths: 12,
+    }), r);
+    const details = r.json.mock.calls[0][0].details;
+    expect(Object.keys(details.fieldErrors)).toContain('monthlyFeeCents');
+    expect(JSON.stringify(details)).toContain('dealValueCents');
+  });
+
   it('passes a valid retainer through UNMULTIPLIED, so the service owns the arithmetic', async () => {
     const r = res();
     await handleConfirmDealValue(req(goodRetainer), r);
