@@ -40,7 +40,7 @@ const GUIDE = 'owner-testing-guide.md';
 const MATRIX = 'acceptance-matrix-l04.md';
 
 /** The head this packet was written against. Also asserted to be a real commit, below. */
-const PACKET_HEAD_SHA = '990bdc6d6bee6fc47c947118f38240e122ed43b3';
+const PACKET_HEAD_SHA = 'aa1df0c79f067925e5c3d4bcc228540fbc9db14e';
 
 /** The SHAs the stale draft already carried. The declared head must not be one of them. */
 const STALE_SHAS = [

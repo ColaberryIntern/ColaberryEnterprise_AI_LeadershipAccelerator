@@ -39,9 +39,9 @@ That is the commit to roll back *to* if either merge turns out badly. Record the
 
 | PR | Branch | Head SHA | Checks |
 |---|---|---|---|
-| the spine closeout PR | `workstream/spine-closeout-connected-demo` | `990bdc6d6bee6fc47c947118f38240e122ed43b3` | recorded on the PR |
+| the spine closeout PR | `workstream/spine-closeout-connected-demo` | `aa1df0c79f067925e5c3d4bcc228540fbc9db14e` | recorded on the PR |
 
-- **Reviewed head SHA:** `990bdc6d6bee6fc47c947118f38240e122ed43b3`
+- **Reviewed head SHA:** `aa1df0c79f067925e5c3d4bcc228540fbc9db14e`
 
 **Read that value as of packet time, not as of merge time.** A branch head moves with every
 further commit, so the authoritative value is always
