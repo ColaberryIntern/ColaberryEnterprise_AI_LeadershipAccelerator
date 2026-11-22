@@ -29,7 +29,7 @@ const STOP = new Set(['that', 'this', 'with', 'from', 'into', 'when', 'then', 't
   'agent', 'ensure', 'make', 'sure', 'given', 'story', 'able', 'about', 'after', 'before']);
 
 /** Content words, lower-cased, crude singular. "Call-out reasons" -> call, out?, reason. */
-function words(text: string): Set<string> {
+export function words(text: string): Set<string> {
   const out = new Set<string>();
   for (const w of text.toLowerCase().split(/[^a-z0-9]+/)) {
     if (w.length < 4 || STOP.has(w)) continue;

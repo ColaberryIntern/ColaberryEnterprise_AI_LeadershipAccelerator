@@ -252,6 +252,12 @@ export function buildReleaseStoriesPrompt(
     // build task nobody can do.
     'Reach outside parties (agencies, vendors, customers) only through a tool the requirements name',
     '(for example, email them through Gmail). Never invent an API, portal or system the inputs do not name.',
+    // ShiftFill v6: STORY-002 said "integrate with the leave management system" when nothing
+    // the student wrote says where approved leave is recorded. The rule above covered
+    // outside parties, not data whose home is unstated.
+    'When the inputs do not say where some data lives (who is on leave, who is licensed where),',
+    'do not name a system for it: say in task_guidance to ask the named person where it is kept,',
+    'and use a tool the requirements name (such as a Google Sheet) only if the inputs say it is kept there.',
     // ShiftFill v3: one story said "As a scheduler … alert the scheduler" while every other
     // story, and every requirement, named Dana. Two names for one person reads as two people.
     'When the requirements name a person ("Dana"), write for that person by name ("As Dana, …") and',
