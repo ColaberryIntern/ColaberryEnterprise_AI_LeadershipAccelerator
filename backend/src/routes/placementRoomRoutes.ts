@@ -78,8 +78,8 @@ const candidate = (req: Request, res: Response): Caller | null => {
 };
 const employer = (req: Request): Caller => ({ party: 'employer', endMs: Number((req.query as { e: string }).e) });
 
-/** FIRST on the employer routes: the signed link, checked with no store, limiter or database touched. */
-function signedLink(now: () => Date): RequestHandler {
+/** FIRST on the employer routes (and the guide routes): the signed link, checked with no store, limiter or database touched. */
+export function signedLink(now: () => Date): RequestHandler {
   return (req: Request, res: Response, next: NextFunction) => {
     res.set('Cache-Control', 'no-store');
     const q = LinkQuery.safeParse(req.query);

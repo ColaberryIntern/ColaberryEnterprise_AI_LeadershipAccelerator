@@ -9,6 +9,11 @@
  *       "Booked" with the consent-room page link; no provider link anywhere on the page
  *   HS2 (CP8.2) a used link shows the plain "already used" page and offers no times
  *   HS3 (CP8.2) the booking page fits a phone (390 wide): no horizontal scroll, every time button at least 44px tall
+ *   HS4 (CP9.1) the employer room shows the guide and saves a note: the consent screen names recording AND AI scoring
+ *       of the candidate's voice and words, says any no = unrecorded with no replay, gives No the same button as Yes,
+ *       shows NO meeting link until a (double-clicked: ONE request) decision; the guide lists the role's questions;
+ *       a double-clicked Save sends ONE note (one key) and lists it
+ *   HS5 (CP9.1) the employer room fits a phone (390 wide): no horizontal scroll, every control at least 44px tall
  *   HSX zero console errors in these flows
  *
  * Env: HIRE_DIR (default apps/hire-refactored-public/dist), HIRE_PORT (default 3171), PW_CHANNEL (default msedge).
@@ -18,7 +23,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { chromium } = require(process.env.PW_PATH || 'playwright');
-const { check, results } = require('./harness');
+const { check, results, shot } = require('./harness');
 
 const DIR = path.resolve(process.env.HIRE_DIR || path.join(__dirname, '..', '..', '..', 'apps', 'hire-refactored-public', 'dist'));
 const PORT = Number(process.env.HIRE_PORT || 3171);
@@ -69,6 +74,81 @@ async function bookingPage(browser, token, viewport) {
   return { ctx, page, errors, confirms };
 }
 
+const IID = '11111111-1111-4111-8111-111111111111';
+const LINK = `?i=${IID}&e=1795447800000&t=${'S'.repeat(43)}`;
+const QUESTIONS = ['Walk me through a pipeline you built.', 'How do you check a forecast before it reaches a customer?'];
+
+/** The employer room's API as the fixture (the server's shapes): a decision, the guide, and notes keyed per Save. */
+async function roomPage(browser, viewport) {
+  const ctx = await browser.newContext({ viewport: viewport || { width: 1600, height: 960 }, timezoneId: 'America/New_York' });
+  const page = await ctx.newPage();
+  page.setDefaultTimeout(8000);
+  const errors = []; const decisions = []; const saves = []; const notes = [];
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  page.on('pageerror', (e) => errors.push(String(e)));
+  const view = () => { const d = decisions[0] || null; const n = d === 'consent' ? 1 : 0;
+    return { room: { interviewId: IID, you: 'employer', company: 'Acme', role: 'Data Analyst', startsAt: '2026-11-23T15:00:00.000Z', endsAt: '2026-11-23T15:30:00.000Z',
+      opensAt: '2026-11-23T14:50:00.000Z', yourDecision: d, consent: { consented: n, of: 2, declined: d === 'decline', label: `RECORDING ${n} OF 2 CONSENTED` }, recording: { status: 'off', note: null },
+      join: d ? { status: 'ready', url: SENTINEL, reason: null } : { status: 'decide_first', url: null, reason: 'Choose first.' } } }; };
+  const guide = () => ({ company: 'Acme', role: 'Data Analyst', questions: QUESTIONS, notes: notes.map((x) => ({ id: x.id, body: x.body, at: '2026-11-23T15:05:00.000Z' })) });
+  await page.route(/^https:\/\/enterprise\.colaberry\.ai\/.*/, async (route) => {
+    const req = route.request(); const url = new URL(req.url());
+    const json = (status, body) => route.fulfill({ status, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(body) });
+    if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'content-type', 'access-control-allow-methods': 'GET,POST' } });
+    if (url.searchParams.get('t') !== 'S'.repeat(43)) return json(401, { error: 'This room link is not valid.', reason: 'invalid' });
+    await new Promise((r) => setTimeout(r, 250)); // a slow answer, so a second click lands while the first is in flight
+    if (url.pathname === `/api/public/room/${IID}/consent`) { decisions.push(req.postDataJSON().decision); return json(200, view()); }
+    if (url.pathname === `/api/public/room/${IID}`) return json(200, view());
+    if (url.pathname === `/api/public/room/${IID}/guide`) return json(200, { guide: guide() });
+    if (url.pathname === `/api/public/room/${IID}/notes`) {
+      const b = req.postDataJSON(); saves.push(b);
+      const had = notes.find((x) => x.key === b.key);
+      if (!had) notes.push({ id: String(notes.length + 1), key: b.key, body: b.body });
+      return json(had ? 200 : 201, { note: { id: '1', body: b.body, at: '2026-11-23T15:05:00.000Z' }, replay: !!had, guide: guide() });
+    }
+    return route.abort();
+  });
+  await page.goto(`${BASE}/room/${LINK}`);
+  return { ctx, page, errors, decisions, saves, notes };
+}
+
+async function runRoom(browser, all) {
+  const name = 'HS4 employer room shows the guide and saves a note';
+  const r = await roomPage(browser);
+  try {
+    await r.page.waitForSelector('[data-decide]');
+    await r.page.waitForSelector('#side .qs li');
+    const before = await r.page.evaluate(() => ({ text: document.querySelector('#panel')?.textContent || '', rec: document.querySelector('#rec')?.textContent,
+      cls: [...document.querySelectorAll('[data-decide]')].map((b) => b.className), sizes: [...document.querySelectorAll('[data-decide]')].map((b) => Math.round(b.getBoundingClientRect().width)),
+      open: !!document.querySelector('#open'), zoom: /zoom\.example/.test(document.documentElement.outerHTML), qs: [...document.querySelectorAll('#side .qs li')].map((li) => li.textContent) }));
+    await shot(r.page, 'iroom-employer-1600');
+    await r.page.locator('[data-decide="consent"]').dblclick();
+    await r.page.waitForSelector('#open');
+    const href = await r.page.getAttribute('#open', 'href');
+    await r.page.fill('#note', 'Clear on trade-offs; ask about monitoring next round.');
+    await r.page.locator('#save').dblclick();
+    await r.page.waitForSelector('#notes li');
+    const after = await r.page.evaluate(() => ({ notes: [...document.querySelectorAll('#notes li p')].map((p) => p.textContent), draft: document.querySelector('#note')?.value }));
+    await shot(r.page, 'iroom-employer-1600-after');
+    check(name, /AI scores the candidate's voice and words/.test(before.text) && /scores the audio only; it never analyzes the video/.test(before.text) && /not recorded, nothing is scored, and the candidate gets no replay/.test(before.text)
+      && before.rec === 'RECORDING 0 OF 2 CONSENTED' && before.cls.length === 2 && before.cls[0] === before.cls[1] && before.sizes[0] === before.sizes[1] && !before.open && !before.zoom
+      && before.qs.join('|') === QUESTIONS.join('|') && r.decisions.join() === 'consent' && href === SENTINEL
+      && r.saves.length === 1 && r.notes.length === 1 && after.notes.join() === 'Clear on trade-offs; ask about monitoring next round.' && after.draft === '',
+    JSON.stringify({ rec: before.rec, cls: before.cls, sizes: before.sizes, open: before.open, zoom: before.zoom, qs: before.qs.length, decisions: r.decisions, saves: r.saves.length, after }).slice(0, 300));
+  } catch (e) { check(name, false, String(e.message).split('\n')[0].slice(0, 160)); }
+  all.push(...r.errors); await r.ctx.close();
+
+  const p = await roomPage(browser, { width: 390, height: 844 });
+  try {
+    await p.page.waitForSelector('#side .qs li');
+    await shot(p.page, 'iroom-employer-390');
+    const m = await p.page.evaluate(() => ({ over: document.documentElement.scrollWidth - window.innerWidth,
+      minH: Math.min(...[...document.querySelectorAll('[data-decide], #save')].map((b) => b.getBoundingClientRect().height)) }));
+    check('HS5 the employer room fits a phone (390): no sideways scroll, 44px targets', m.over <= 0 && m.minH >= 44, `overflow ${m.over}px, smallest control ${Math.round(m.minH)}px`);
+  } catch (e) { check('HS5 the employer room fits a phone (390): no sideways scroll, 44px targets', false, String(e.message).split('\n')[0].slice(0, 160)); }
+  all.push(...p.errors); await p.ctx.close();
+}
+
 async function run(browser) {
   const all = [];
   const a = await bookingPage(browser, TOKEN);
@@ -104,6 +184,8 @@ async function run(browser) {
   } catch (e) { check('HS3 the booking page fits a phone (390): no sideways scroll, 44px targets', false, String(e.message).split('\n')[0].slice(0, 160)); }
   all.push(...p.errors); await p.ctx.close();
 
+  await runRoom(browser, all);
+
   // The used link's 410 is the answer under test (the browser logs every non-2xx response); nothing else is allowed.
   const real = all.filter((e) => !/fonts\.(googleapis|gstatic)/.test(e) && !/status of 410 \(Gone\)/.test(e));
   check('HSX zero console errors in these flows', real.length === 0, real.slice(0, 2).join(' | ').slice(0, 200));
@@ -120,5 +202,5 @@ async function run(browser) {
   } finally { if (server) server.close(); }
   const failed = results.filter((r) => !r.ok);
   console.log(`\n${results.length - failed.length}/${results.length} passed`);
-  process.exit(failed.length || results.length < 4 ? 1 : 0);
+  process.exit(failed.length || results.length < 6 ? 1 : 0);
 })();

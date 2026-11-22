@@ -1,0 +1,46 @@
+/* Career Prep v27, CP9.1: the candidate's interview room (/portal/career/interview/<id>). Built on the room's tokens
+   (careerPrepRoom.css, .cp-room) and laid out like the design's room (kit design/refactored-career-center.html, .room):
+   a top bar with "RECORDING n OF n CONSENTED", the stage with a 360px side panel, a bottom bar. One column on a phone. */
+.cp-iroom-top{gap:12px}
+.cp-room .cp-iroom-brand{font:700 1rem var(--cp-mono);letter-spacing:-.02em}
+.cp-room .cp-iroom-prod{padding:2px 8px;border:1px solid var(--line);border-radius:4px;font:500 .78rem var(--cp-mono);color:var(--fg-muted)}
+.cp-room .cp-iroom-title{font-weight:600;min-width:0;overflow-wrap:anywhere}
+.cp-room .cp-iroom-rec{display:inline-flex;align-items:center;gap:.4rem;margin-left:auto;font:600 .74rem var(--cp-mono);letter-spacing:.08em;color:var(--fg-muted)}
+.cp-room .cp-iroom-rec.is-on{color:var(--cp-bad)}
+.cp-room .cp-iroom-rec i{width:9px;height:9px;border-radius:50%;background:var(--cp-bad);animation:cp-iroom-blink 1.2s infinite}
+@keyframes cp-iroom-blink{50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.cp-room .cp-iroom-rec i{animation:none}}
+.cp-room .cp-iroom-stage{flex:1;display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px;padding:16px;min-height:0;overflow:auto;background:var(--cp-sunk)}
+.cp-room .cp-iroom-main{display:flex;flex-direction:column;gap:12px;min-width:0;max-width:760px;margin:0 auto;width:100%}
+.cp-room .cp-iroom-card{padding:20px 22px;border:1px solid var(--line);border-radius:10px;background:var(--bg-elevated);display:flex;flex-direction:column;gap:10px}
+.cp-room .cp-iroom-card h2{font-size:1.25rem}
+.cp-room .cp-iroom-card p{margin:0}
+/* The two recording choices are ONE style: same size, same weight, side by side (neither is the default). */
+.cp-room .cp-iroom-choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:6px}
+.cp-room .cp-iroom-choice{min-height:48px;padding:.6rem 1rem;border:2px solid var(--fg);border-radius:8px;background:var(--bg-elevated);color:var(--fg);font-weight:600;line-height:1.2}
+.cp-room .cp-iroom-choice:hover:not(:disabled){background:var(--accent-soft)}
+.cp-room .cp-iroom-choice:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.cp-room .cp-iroom-choice:disabled{opacity:.55;cursor:default}
+.cp-room .cp-iroom-go{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.cp-room .cp-iroom-alert{padding:10px 12px;border-left:4px solid var(--cp-warn);background:var(--cp-warnsoft);border-radius:6px;display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.cp-room .cp-iroom-side{padding:16px;border:1px solid var(--line);border-radius:10px;background:var(--bg-elevated);overflow:auto;display:flex;flex-direction:column;gap:10px;align-self:start}
+.cp-room .cp-iroom-side h3{font-size:1rem;margin-bottom:8px}
+.cp-room .cp-iroom-side h4{font-size:.9rem;margin:10px 0 4px}
+.cp-room .cp-iroom-side p{margin:6px 0}
+.cp-room .cp-iroom-side-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.cp-room .cp-iroom-side-head .cp-linkbtn{min-height:44px}
+.cp-room .cp-iroom-kicker{font:600 .72rem var(--cp-mono);letter-spacing:.04em;text-transform:uppercase;color:var(--fg-muted)}
+.cp-room .cp-iroom-stops{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0}
+.cp-room .cp-iroom-stops>div{padding:8px 10px;border:1px solid var(--line);border-radius:8px}
+.cp-room .cp-iroom-stops dt{font-size:.76rem;font-weight:600;color:var(--fg-muted)}
+.cp-room .cp-iroom-stops dd{margin:0;font:600 1.3rem var(--cp-mono)}
+.cp-room .cp-iroom-list{margin:0;padding-left:1.2rem;display:flex;flex-direction:column;gap:4px;font-size:.92rem}
+.cp-room .cp-iroom-foot{display:flex;align-items:center;justify-content:center;gap:10px;min-height:64px;padding:8px 16px;border-top:1px solid var(--line);background:var(--bg-elevated)}
+@media (max-width:1100px){.cp-room .cp-iroom-stage{grid-template-columns:minmax(0,1fr)}.cp-room .cp-iroom-side{align-self:stretch}}
+@media (max-width:600px){
+  .cp-room .cp-iroom-stage{padding:12px}
+  .cp-room .cp-iroom-card{padding:16px}
+  .cp-room .cp-iroom-choices{grid-template-columns:minmax(0,1fr)}
+  .cp-room .cp-iroom-prod{display:none}
+  .cp-room .cp-iroom-rec{margin-left:0;width:100%}
+}

@@ -6,6 +6,7 @@ jest.mock('../../routes/careerPrepPlacementInterviewsRoutes', () => { const { Ro
 jest.mock('../../routes/integrationsInboxRoutes', () => { const { Router: R } = jest.requireActual('express'); return { __esModule: true, default: R() }; });
 jest.mock('../../routes/publicBookingRoutes', () => { const { Router: R } = jest.requireActual('express'); return { bookingRouters: { view: R(), confirm: R() } }; });
 jest.mock('../../routes/placementRoomRoutes', () => { const { Router: R } = jest.requireActual('express'); return { roomRouters: { candidate: R(), employer: R() } }; });
+jest.mock('../../routes/placementRoomGuideRoutes', () => { const { Router: R } = jest.requireActual('express'); return { roomGuideRouter: R() }; });
 const mockPreflight = jest.fn();
 jest.mock('../../services/placement/zoomScopePreflight', () => ({ runScopePreflight: (...a: unknown[]) => mockPreflight(...a) }));
 const mockStartInboxTests = jest.fn();
@@ -65,7 +66,8 @@ describe('placementBoot', () => {
 
   it('T12: registers the signed inbox events router as an INTEGRATION router (mounted before the JSON parser)', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    expect(saved.i).toEqual([require('../../routes/integrationsInboxRoutes').default, require('../../routes/publicBookingRoutes').bookingRouters.confirm]); // T17: the confirm parses its own 10kb body first
+    expect(saved.i).toEqual([require('../../routes/integrationsInboxRoutes').default, require('../../routes/publicBookingRoutes').bookingRouters.confirm, // T17: the confirm parses its own 10kb body first
+      require('../../routes/placementRoomGuideRoutes').roomGuideRouter]); // T23: the employer notes POST parses its own 16kb body first
   });
 
   it('T11: registers the daily forwarding test + broken alerts as a scheduler', () => {

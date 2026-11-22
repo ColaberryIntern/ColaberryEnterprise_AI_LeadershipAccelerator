@@ -11,11 +11,15 @@
  *       #interviews (KPIs, the next-interview card, its row, Join waiting for 10 minutes before); Continue prep opens the
  *       room anchored on that same interview
  *   PL4 (CP8.3) the #interviews sheet fits a phone (390 wide): no horizontal scroll
+ *   PL5 (CP9.1) candidate consent gates the meeting link: the consent screen names recording AND AI scoring of the
+ *       voice and words (from the audio only), says any no = unrecorded with no replay, gives No the same button as Yes,
+ *       and shows NO meeting link; a double click on Yes sends ONE decision, then Open the meeting carries the link
+ *   PL6 (CP9.1) the candidate interview room fits a phone (390 wide): no horizontal scroll, every control 44px or taller
  *   PLX zero console errors in these flows
  *
  * Usage (repo root): node tests/systemV2/career-prep/placement.e2e.js, or runAll.js (env: see harness.js)
  */
-const { BASE, check, newPage, tid, runSuite } = require('./harness');
+const { BASE, check, newPage, tid, shot, runSuite } = require('./harness');
 
 /** Elements that scroll sideways inside the room, and the page itself when it does (a phone layout must have none). */
 const sideways = () => [document.documentElement, ...document.querySelectorAll('.cp-room *')]
@@ -123,7 +127,44 @@ async function flowInterviewsPhone(browser) {
   return errors;
 }
 
-runSuite(5, async (browser) => {
-  const errs = [...await flowInbox(browser), ...await flowInboxPhone(browser), ...await flowBooked(browser), ...await flowInterviewsPhone(browser)];
+/** Elements that scroll sideways on the interview room page, and the page itself (a phone must have none). */
+const roomSideways = () => [document.documentElement, ...document.querySelectorAll('.cp-iroom *')]
+  .filter((el) => el.scrollWidth > el.clientWidth + 1 && ['auto', 'scroll'].includes(getComputedStyle(el).overflowX)).map((el) => el.className).slice(0, 3)
+  .concat(document.documentElement.scrollWidth > innerWidth + 1 ? ['page'] : []);
+
+async function flowRoom(browser, viewport) {
+  const { ctx, page, errors, api } = await newPage(browser, { api: { placement: true }, viewport: viewport || { width: 1600, height: 960 } });
+  page.setDefaultTimeout(8000);
+  const name = viewport ? 'PL6 the candidate interview room fits a phone (390): no horizontal scroll, 44px controls' : 'PL5 candidate consent gates the meeting link';
+  try {
+    await page.goto(`${BASE}/portal/career/interview/pi-7`);
+    await page.waitForSelector(tid('cp-iroom-consent'));
+    await shot(page, viewport ? 'iroom-candidate-390' : 'iroom-candidate-1600');
+    if (viewport) {
+      const m = await page.evaluate(() => ({ minH: Math.min(...[...document.querySelectorAll('.cp-iroom-choice, [data-testid="cp-iroom-prep-toggle"], [data-testid="cp-iroom-back"]')].map((b) => b.getBoundingClientRect().height)) }));
+      const wide = await page.evaluate(roomSideways);
+      check(name, wide.length === 0 && m.minH >= 44, JSON.stringify({ wide, minH: m.minH }));
+    } else {
+      const before = await page.evaluate(() => ({ text: document.querySelector('[data-testid="cp-iroom-consent"]')?.textContent || '', rec: document.querySelector('[data-testid="cp-iroom-rec"]')?.textContent,
+        same: document.querySelector('[data-testid="cp-iroom-consent-btn"]')?.className === document.querySelector('[data-testid="cp-iroom-decline-btn"]')?.className,
+        sizes: [...document.querySelectorAll('.cp-iroom-choice')].map((b) => { const r = b.getBoundingClientRect(); return `${Math.round(r.width)}x${Math.round(r.height)}`; }),
+        open: !!document.querySelector('[data-testid="cp-iroom-open"]'), zoom: /zoom\.example/.test(document.documentElement.outerHTML) }));
+      await page.locator(tid('cp-iroom-consent-btn')).dblclick();
+      await page.waitForSelector(tid('cp-iroom-open'));
+      const href = await page.getAttribute(tid('cp-iroom-open'), 'href');
+      check(name, /AI scores your voice and words/.test(before.text) && /scores the audio only; it never analyzes the video/.test(before.text) && /not recorded, nothing is scored, and there is no replay/.test(before.text)
+        && before.rec === 'RECORDING 0 OF 2 CONSENTED' && before.same && before.sizes.length === 2 && before.sizes[0] === before.sizes[1] && !before.open && !before.zoom
+        && api.state.roomDecisions.join() === 'consent' && href === 'https://zoom.example/j/SECRET', JSON.stringify({ ...before, text: before.text.slice(0, 60), decisions: api.state.roomDecisions, href }));
+    }
+  } catch (e) {
+    check(name, false, String(e && e.message).split('\n')[0].slice(0, 200));
+  }
+  await ctx.close();
+  return errors;
+}
+
+runSuite(7, async (browser) => {
+  const errs = [...await flowInbox(browser), ...await flowInboxPhone(browser), ...await flowBooked(browser), ...await flowInterviewsPhone(browser),
+    ...await flowRoom(browser), ...await flowRoom(browser, { width: 390, height: 844 })];
   check('PLX zero console errors in the placement flows', errs.length === 0, errs.slice(0, 3).join(' | '));
 });

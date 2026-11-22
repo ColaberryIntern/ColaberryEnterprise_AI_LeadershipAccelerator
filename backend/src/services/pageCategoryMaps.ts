@@ -216,6 +216,9 @@ export const BRAND_PAGE_CATEGORIES: Record<string, BrandPageCategoryMap> = {
       // our reply (/book/?t=<token>, one shell). The same meaning as `/schedule`. The page
       // loads no tracker (the link is private), so this names it rather than scoring it.
       '/book': 'contact',
+      // Career Prep CP9.1: the employer's interview room for a booked interview (/room/?i=&e=&t=,
+      // one shell, private signed link, no tracker). Meeting the candidate: the same meaning.
+      '/room': 'contact',
       // The shells above are what is ON DISK; what the browser REPORTS is the live path
       // nginx serves them under (nginx/hire-refactored.conf): /talent/<slug>/,
       // /talent/<slug>/schedule/, /case-studies/<slug>/. The tracker sends

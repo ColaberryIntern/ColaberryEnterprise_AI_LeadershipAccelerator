@@ -47,7 +47,9 @@ import { sequelize } from '../config/database';
  *                        _at = what Zoom last said about THAT meeting's recording ('on' / 'off'; NULL = cannot tell).
  *   interview_consents   (CP9.1) one decision per party per interview (UNIQUE (interview_id, party_ref)); the first
  *                        decision stands, so a double click or a replay records nothing new.
- *   interview_notes      (CP9.1) the employer's private notes on an interview (written by the room page, T23).
+ *   interview_notes      (CP9.1) the employer's private notes on an interview (written by the room page through
+ *                        roomGuide.ts). client_key is the page's key for one Save, UNIQUE per interview, so a double
+ *                        click or a retried request stores one note.
  */
 export const PLACEMENT_STATEMENTS: readonly string[] = [
   `CREATE TABLE IF NOT EXISTS job_search_inboxes (
@@ -184,9 +186,11 @@ export const PLACEMENT_STATEMENTS: readonly string[] = [
   `CREATE TABLE IF NOT EXISTS interview_notes (
      id BIGSERIAL PRIMARY KEY,
      interview_id UUID NOT NULL REFERENCES placement_interviews(id) ON DELETE CASCADE,
+     client_key UUID NOT NULL,
      body TEXT NOT NULL CHECK (char_length(body) <= 5000),
      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     CONSTRAINT uq_interview_notes_key UNIQUE (interview_id, client_key)
    )`,
   'CREATE INDEX IF NOT EXISTS idx_interview_notes_interview ON interview_notes (interview_id, created_at)',
 ];

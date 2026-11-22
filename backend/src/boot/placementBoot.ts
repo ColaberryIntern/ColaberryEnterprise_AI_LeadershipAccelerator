@@ -5,6 +5,7 @@ import careerPrepPlacementInterviewsRoutes from '../routes/careerPrepPlacementIn
 import integrationsInboxRoutes from '../routes/integrationsInboxRoutes';
 import { bookingRouters } from '../routes/publicBookingRoutes';
 import { roomRouters } from '../routes/placementRoomRoutes';
+import { roomGuideRouter } from '../routes/placementRoomGuideRoutes';
 import { startInboxTestCron } from '../services/placement/inboxTestJob';
 import { startInboxBackfill } from '../services/placement/inboxBackfill';
 import { startInboxReplay } from '../services/placement/inboxEvents';
@@ -31,6 +32,7 @@ import { runScopePreflight } from '../services/placement/zoomScopePreflight';
 export const INTEGRATION_ROUTERS: Router[] = [
   integrationsInboxRoutes, // CP6.2: signed inbox-manager events (own express.raw; 503 until INBOX_INTEGRATION_SECRET is set)
   bookingRouters.confirm, // CP8.2: the booking confirm, with its OWN 10kb JSON parser (so before the global 5mb one); 5/15 min per link
+  roomGuideRouter, // CP9.1: the employer room's guide + private notes (signed link first; the notes POST has its OWN 16kb JSON parser)
 ];
 export const PUBLIC_ROUTERS: Router[] = [
   careerPrepInboxRoutes, // CP6.1: the student's job-search inbox (participant + Career Prep gated per route)

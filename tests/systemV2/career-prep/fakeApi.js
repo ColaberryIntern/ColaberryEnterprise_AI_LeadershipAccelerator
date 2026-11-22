@@ -12,6 +12,8 @@
  * `{ placement: true }` (CP8.3) adds an interview an employer BOOKED from the job-search inbox: its prep row (what
  * bookingConfirm links) leads the summary and the anchors, and GET /interviews/placement lists it, in the server's shapes.
  */
+const { roomRoute } = require('./fakeRoom');
+
 const DAY = 86_400_000;
 const CT = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit' });
 /** The Central calendar date `days` after `now` (dates are never hard-coded, so the suite passes on any day). */
@@ -37,6 +39,9 @@ function makeState(now, opts = {}) {
     empty,
     interviews: opts.placement ? [north, acme, globex] : [acme, globex],
     placement: opts.placement ? [placementBooked(north)] : [],
+    // CP9.1: the candidate room (fakeRoom.js): no decision yet, and every decision the page sent.
+    roomDecision: null,
+    roomDecisions: [],
     skills: [
       skill('pace_clarity', 'Pace and clarity', 48, 4, ['video', 'phone_mock']),
       skill('ending_with_number', 'Ending on a result with a number', 57, 9, ['video', 'real_interview']),
@@ -241,6 +246,8 @@ async function installFakeApi(page, now = Date.now(), opts = {}) {
     // A multipart upload is not JSON: keep its raw text so the read-aloud fixture can see the lineId field (CP5.8).
     try { body = req.postDataJSON() || {}; } catch { body = { raw: req.postData() || '' }; }
     if (state.planDelayMs && req.method() === 'POST' && url.pathname === '/api/portal/career-prep/plans') await new Promise((ok) => setTimeout(ok, state.planDelayMs));
+    const room = roomRoute(state, req.method(), url.pathname, body);
+    if (room) { sent.push({ path: url.pathname, payload: room.body }); await r.fulfill({ status: room.status, contentType: 'application/json', body: JSON.stringify(room.body) }); return; }
     const out = route(state, req.method(), url.pathname, url.searchParams, body);
     const payload = out === null ? {} : out;
     sent.push({ path: url.pathname, payload });
