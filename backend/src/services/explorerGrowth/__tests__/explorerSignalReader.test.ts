@@ -334,3 +334,23 @@ describe('the enroll page category is read as intent', () => {
     expect(line).not.toContain('tier: 3');
   });
 });
+
+describe('buying-intent acts that used to move people into a cohort (2026-11-22)', () => {
+  it('scores an unpaid checkout and a seat reservation as tier-4 intent', async () => {
+    mockSources([
+      { match: /FROM subscriptions/, rows: [{ signal: 'checkout_started', occurred_at: NOW }] },
+      { match: /FROM student_navigation_events/, rows: [{ signal: 'class_seat_reserved', occurred_at: NOW }] },
+    ]);
+    const r = await readLearnerSignals(ENR, { asOf: NOW });
+    expect(r.bands.intent.total).toBeCloseTo(55, 5); // 30 + 25
+    expect(r.recentIntentTier).toBe(4);
+  });
+
+  it('the checkout source excludes paid rows and comp grants, keyed on the learner', async () => {
+    await readLearnerSignals(ENR, { asOf: NOW });
+    const call = queryMock.mock.calls.find((c) => /FROM subscriptions/.test(String(c[0])));
+    expect(String(call?.[0])).toMatch(/paysimple_payment_id IS NULL/);
+    expect(String(call?.[0])).toMatch(/'comp'/);
+    expect(call?.[1].replacements).toEqual({ enrollmentId: ENR });
+  });
+});

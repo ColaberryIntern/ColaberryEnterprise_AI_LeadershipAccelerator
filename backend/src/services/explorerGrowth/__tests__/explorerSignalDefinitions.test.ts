@@ -154,3 +154,16 @@ describe('highestTier — the HIGH_INTENT gate input', () => {
     expect(highestTier(manyViews)).toBe(1);
   });
 });
+
+describe('reserving a class date and starting a checkout are scored buying intent (2026-11-22)', () => {
+  it.each(['class_seat_reserved', 'checkout_started'])('%s is a tier-4 intent signal', (signal) => {
+    expect(getSignalDefinition(signal)).toMatchObject({ band: 'intent', tier: 4 });
+  });
+
+  it('a reservation cannot be forged through the public signal route', () => {
+    // The route's zod enum IS writableSignals(); a browser posting class_seat_reserved
+    // would otherwise mint top-tier intent for itself.
+    expect(writableSignals()).not.toContain('class_seat_reserved');
+    expect(writableSignals()).not.toContain('checkout_started');
+  });
+});

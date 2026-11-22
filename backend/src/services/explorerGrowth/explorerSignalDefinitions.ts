@@ -65,6 +65,17 @@ export const EXPLORER_SIGNAL_DEFINITIONS: Record<string, ExplorerSignalDefinitio
   strategy_call_booked: { band: 'intent', weight: 30, halfLifeDays: 21, cap: 30, tier: 4, source: 'strategy_calls' },
   enrollment_form_completed: { band: 'intent', weight: 35, halfLifeDays: 30, cap: 35, tier: 4, source: 'enrollments' },
   event_attended: { band: 'intent', weight: 25, halfLifeDays: 30, cap: 25, tier: 4, source: 'student_points_events' },
+  // Ali, 2026-11-22: "Reserve my spot" and starting a checkout used to MOVE an unpaid
+  // Explorer into the class cohort. Only paid people are in a cohort now, and both acts
+  // are scored here instead. Tier 4 because picking a class date and opening the payment
+  // page are commitments, not browsing. The C100 reader (explorerBuyingSignals.ts) still
+  // shows the raw abandoned-checkout facts on the learner view; these are the weighted copy.
+  // Source 'portal_enrollment' = a server-written row in student_navigation_events, kept
+  // out of writableSignals() so the public signal route cannot forge one.
+  class_seat_reserved: { band: 'intent', weight: 25, halfLifeDays: 21, cap: 25, tier: 4, source: 'portal_enrollment' },
+  // One row per checkout started (`subscriptions`, never paid). Once they pay they are not
+  // an Explorer any more, so the population this scores never includes a payer.
+  checkout_started: { band: 'intent', weight: 30, halfLifeDays: 14, cap: 30, tier: 4, source: 'subscriptions' },
 
   // --- FRICTION (§6.3) — high is BAD; F >= 25 suppresses all commercial action ---
   payment_failed: { band: 'friction', weight: 40, halfLifeDays: 14, cap: 40, source: 'enrollments' },

@@ -44,6 +44,9 @@ export type ExplorerSignalSource =
   | 'interaction_outcomes'
   | 'strategy_calls'
   | 'inbox_cases'
+  /** Server-written rows in student_navigation_events (portalEnrollmentService); not client-writable. */
+  | 'portal_enrollment'
+  | 'subscriptions'
   | 'derived';
 
 export interface ExplorerSignalDefinition {

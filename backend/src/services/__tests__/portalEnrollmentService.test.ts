@@ -1,5 +1,5 @@
 import { getEnrollmentView, selectCohort } from '../portalEnrollmentService';
-import { Enrollment, Cohort } from '../../models';
+import { Enrollment, Cohort, StudentNavigationEvent } from '../../models';
 
 jest.mock('../../config/env', () => require('../../__tests__/testSupport/configMocks')
   .envModuleMock({ paysimpleApiUser: 'u', paysimpleApiKey: 'k', paymentMode: 'test' }));
@@ -7,7 +7,12 @@ jest.mock('../../models', () => ({
   Enrollment: { findByPk: jest.fn() },
   Cohort: { findByPk: jest.fn(), findAll: jest.fn() },
   Subscription: { findAll: jest.fn(), findOne: jest.fn(), create: jest.fn() },
+  StudentNavigationEvent: { findOne: jest.fn(), create: jest.fn() },
 }));
+const navFindOne = StudentNavigationEvent.findOne as jest.Mock;
+const navCreate = StudentNavigationEvent.create as jest.Mock;
+// clearAllMocks keeps a mockResolvedValue alive across tests; reset these explicitly.
+beforeEach(() => { navFindOne.mockReset(); navFindOne.mockResolvedValue(null); navCreate.mockReset(); });
 jest.mock('../paysimpleService', () => ({ findOrCreateCustomer: jest.fn(), createPaymentLink: jest.fn() }));
 jest.mock('../openHouseService', () => ({ isDemoCohortName: (n: string) => /demo|test|sandbox/i.test(n || '') }));
 
@@ -72,6 +77,22 @@ describe('portalEnrollmentService', () => {
       expect(v!.default_cohort_id).toBe('c-july');
     });
 
+    it('an unpaid Explorer with a reservation reads as enrolled, while staying in the Explorer bucket', async () => {
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue({ id: 'e1', cohort_id: 'c-explorer', payment_status: 'pending' });
+      navFindOne.mockResolvedValue({ metadata: { cohort_id: 'c-nov' } });
+      const v = await getEnrollmentView('e1', NOW);
+      expect(v!.status).toBe('enrolled');
+      expect(v!.enrolled_cohort?.id).toBe('c-nov');
+      expect(v!.default_cohort_id).toBe('c-nov');
+    });
+
+    it('a reservation pointing at a cohort that is no longer a real class is ignored', async () => {
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue({ id: 'e1', cohort_id: 'c-explorer', payment_status: 'pending' });
+      navFindOne.mockResolvedValue({ metadata: { cohort_id: 'gone' } });
+      const v = await getEnrollmentView('e1', NOW);
+      expect(v!.status).toBe('not_enrolled');
+    });
+
     it('a paid student is enrolled_paid', async () => {
       (Enrollment.findByPk as jest.Mock).mockResolvedValue({ id: 'e1', cohort_id: 'c-july', payment_status: 'paid' });
       const v = await getEnrollmentView('e1', NOW);
@@ -98,13 +119,55 @@ describe('portalEnrollmentService', () => {
       expect(await selectCohort('nope', 'c-july', NOW)).toEqual({ ok: false, reason: 'enrollment_not_found' });
     });
 
-    it('enrolls into an open upcoming cohort (happy path)', async () => {
-      const e = freshEnrollment();
+    it('an UNPAID pick reserves the date and does NOT move them into the cohort (happy path)', async () => {
+      const e = freshEnrollment({ cohort_id: 'c-explorer' });
       (Enrollment.findByPk as jest.Mock).mockResolvedValue(e);
+      navFindOne.mockResolvedValueOnce(null); // no prior reservation (idempotency check)
+      navFindOne.mockResolvedValue({ metadata: { cohort_id: 'c-july' } }); // the view reads it back
       const r = await selectCohort('e1', 'c-july', NOW);
       expect(r.ok).toBe(true);
       expect((r as any).changed).toBe(true);
-      expect(e.update).toHaveBeenCalledWith({ cohort_id: 'c-july' });
+      expect(e.update).not.toHaveBeenCalled();
+      expect(navCreate).toHaveBeenCalledWith(expect.objectContaining({
+        enrollment_id: 'e1', event_type: 'class_seat_reserved',
+        metadata: expect.objectContaining({ cohort_id: 'c-july' }),
+      }));
+      // …and the tab still tells them their spot is reserved.
+      expect((r as any).view.status).toBe('enrolled');
+      expect((r as any).view.enrolled_cohort.id).toBe('c-july');
+    });
+
+    it('re-reserving the same date is a no-op (no second intent row)', async () => {
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue(freshEnrollment({ cohort_id: 'c-explorer' }));
+      navFindOne.mockResolvedValue({ metadata: { cohort_id: 'c-july' } });
+      const r = await selectCohort('e1', 'c-july', NOW);
+      expect(r.ok).toBe(true);
+      expect((r as any).changed).toBe(false);
+      expect(navCreate).not.toHaveBeenCalled();
+    });
+
+    it('changing a reservation to another date records a new reservation', async () => {
+      const e = freshEnrollment({ cohort_id: 'c-explorer' });
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue(e);
+      navFindOne.mockResolvedValue({ metadata: { cohort_id: 'c-july' } });
+      const r = await selectCohort('e1', 'c-nov', NOW);
+      expect(r.ok).toBe(true);
+      expect(navCreate).toHaveBeenCalledWith(expect.objectContaining({ metadata: expect.objectContaining({ cohort_id: 'c-nov' }) }));
+      expect(e.update).not.toHaveBeenCalled();
+    });
+
+    it('an invalid pick writes no reservation', async () => {
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue(freshEnrollment());
+      await selectCohort('e1', 'c-explorer', NOW);
+      expect(navCreate).not.toHaveBeenCalled();
+    });
+
+    it('a failed reservation write surfaces (no silent half-state: cohort_id was never touched)', async () => {
+      const e = freshEnrollment();
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue(e);
+      navCreate.mockRejectedValueOnce(new Error('db down'));
+      await expect(selectCohort('e1', 'c-july', NOW)).rejects.toThrow('db down');
+      expect(e.update).not.toHaveBeenCalled();
     });
 
     it('is idempotent — re-selecting the current cohort is a no-op success', async () => {
