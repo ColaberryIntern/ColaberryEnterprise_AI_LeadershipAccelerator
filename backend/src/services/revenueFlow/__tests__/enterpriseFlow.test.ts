@@ -9,6 +9,12 @@ jest.mock('../enterpriseDealValueService', () => ({
     (v.periodMonths && v.periodMonths > 0
       ? Math.round((v.dealValueCents / v.periodMonths) * 12)
       : null),
+  // Phase 3. The real one divides the stored TOTAL by the term, which is exact for anything
+  // entered as a retainer because that is how the total was built.
+  monthlyCents: (v: { dealValueCents: number; periodMonths: number | null }) =>
+    (v.periodMonths && v.periodMonths > 0
+      ? Math.round(v.dealValueCents / v.periodMonths)
+      : null),
 }));
 
 import { buildEnterpriseFlow } from '../enterpriseFlow';
@@ -398,5 +404,156 @@ describe('enterprise site stream: events', () => {
     const flow = await buildEnterpriseFlow(WINDOW_START);
     expect(flow.events.length).toBeGreaterThan(0);
     for (const e of flow.events) expect(e.stream).toBe('enterprise_site');
+  });
+});
+
+/**
+ * Phase 3 — the roster the pricing control is rendered from.
+ *
+ * Until this existed the table from Phase 2 had no write path at all, so the stream read zero
+ * in production whether or not a deal had been signed. These hold the two properties the
+ * control depends on, and both of them are about a person at a keyboard rather than a number:
+ *
+ *   The SHAPE travels with the row, so the form opens on the monthly fee for a retainer plan.
+ *   Lose it and a $4,500 monthly retainer is filed as a $4,500 engagement.
+ *
+ *   The rows needing attention are at the TOP, signed-unpriced first, because a signed deal
+ *   with no value is the one actually suppressing the headline.
+ */
+describe('the deal roster behind the pricing control', () => {
+  it('carries one row per intake, with the company and the stage it reached', async () => {
+    withRows([
+      intake({ id: 'a', company: 'Acme Industrial', interviewed_at: '2026-11-05T10:00:00Z' }),
+      intake({ id: 'b', company: 'Borden Glass', proposal_sent_at: '2026-11-06T10:00:00Z' }),
+    ]);
+    const flow = await buildEnterpriseFlow(WINDOW_START);
+    const deals = flow.stream.deals ?? [];
+    expect(deals).toHaveLength(2);
+    expect(deals.map((d) => d.company).sort()).toEqual(['Acme Industrial', 'Borden Glass']);
+    const byId = new Map(deals.map((d) => [d.enterpriseIntakeId, d]));
+    expect(byId.get('a')!.stage).toBe('interviewed');
+    expect(byId.get('b')!.stage).toBe('proposal_sent');
+  });
+
+  it('reports the furthest stage reached, not the earliest box ticked', async () => {
+    withRows([intake({
+      id: 'a',
+      call_requested_at: '2026-11-02T10:00:00Z',
+      interviewed_at: '2026-11-03T10:00:00Z',
+      proposal_sent_at: '2026-11-04T10:00:00Z',
+      signed_at: '2026-11-05T10:00:00Z',
+    })]);
+    const flow = await buildEnterpriseFlow(WINDOW_START);
+    expect(flow.stream.deals![0].stage).toBe('signed');
+  });
+
+  it('a lost prospect reads as lost on the row, while still counting in the funnel', async () => {
+    withRows([intake({
+      id: 'a', interviewed_at: '2026-11-03T10:00:00Z', lost_at: '2026-11-09T10:00:00Z',
+    })]);
+    const flow = await buildEnterpriseFlow(WINDOW_START);
+    expect(flow.stream.deals![0].stage).toBe('lost');
+    // The funnel is about how far a cohort GOT, so losing them later does not un-interview
+    // them. Subtracting the lost from the stages would understate reach.
+    expect(stage(flow, 'interviewed').count).toBe(1);
+  });
+
+  it('carries the plan SHAPE, which is what opens the form on a monthly fee', async () => {
+    withRows([
+      intake({ id: 'a', company: 'Retainer Co', service: 'build' }),
+      intake({ id: 'b', company: 'Training Co', service: 'train' }),
+      intake({ id: 'c', company: 'Blank Co', service: '' }),
+    ]);
+    const flow = await buildEnterpriseFlow(WINDOW_START);
+    const byId = new Map((flow.stream.deals ?? []).map((d) => [d.enterpriseIntakeId, d]));
+    // Plan A is the Middlesex shape: "we are looking at a retainer, a monthly fee."
+    expect(byId.get('a')!.shape).toBe('monthly_retainer');
+    expect(byId.get('a')!.planLabel).toBe('A new build');
+    expect(byId.get('b')!.shape).toBe('training_program');
+    // An unrecorded plan gets NO shape rather than the first one. A defaulted shape here
+    // would open the form on the wrong field for a deal nobody has classified.
+    expect(byId.get('c')!.shape).toBeNull();
+    expect(byId.get('c')!.planKey).toBeNull();
+  });
+
+  it('never hands the control a blank company, because a blank row cannot be chosen', async () => {
+    withRows([intake({ id: 'a', company: '   ' }), intake({ id: 'b', company: null })]);
+    const flow = await buildEnterpriseFlow(WINDOW_START);
+    for (const d of flow.stream.deals ?? []) expect(d.company.trim()).not.toBe('');
+  });
+
+  it('says whether a deal is signed, which is what decides if its value reaches the headline', async () => {
+    withRows([
+      intake({ id: 'i-signed', signed_at: '2026-11-08T10:00:00Z' }),
+      intake({ id: 'i-open', proposal_sent_at: '2026-11-08T10:00:00Z' }),
+    ]);
+    const flow = await buildEnterpriseFlow(WINDOW_START);
+    const byId = new Map((flow.stream.deals ?? []).map((d) => [d.enterpriseIntakeId, d]));
+    expect(byId.get('i-signed')!.signed).toBe(true);
+    expect(byId.get('i-open')!.signed).toBe(false);
+  });
+
+  it('shows the live value, with the monthly fee recoverable behind the total', async () => {
+    mockLiveValues.mockResolvedValue([dealValue({
+      enterpriseIntakeId: 'a', dealValueCents: 5400000, periodMonths: 12,
+    })]);
+    withRows([intake({ id: 'a', signed_at: '2026-11-08T10:00:00Z' })]);
+    const flow = await buildEnterpriseFlow(WINDOW_START);
+    const priced = flow.stream.deals![0].priced!;
+    expect(priced.cents).toBe(5400000);
+    // $54,000 over 12 months is the $4,500 retainer that was actually negotiated. Exact,
+    // because the total was built by multiplying it out.
+    expect(priced.monthlyCents).toBe(450000);
+    expect(priced.confirmedBy).toBe('ali@colaberry.com');
+  });
+
+  it('withholds the monthly figure when no term was recorded rather than assuming twelve', async () => {
+    mockLiveValues.mockResolvedValue([dealValue({
+      enterpriseIntakeId: 'a', dealValueCents: 5400000, periodMonths: null,
+    })]);
+    withRows([intake({ id: 'a', signed_at: '2026-11-08T10:00:00Z' })]);
+    const flow = await buildEnterpriseFlow(WINDOW_START);
+    expect(flow.stream.deals![0].priced!.monthlyCents).toBeNull();
+    expect(flow.stream.deals![0].priced!.periodMonths).toBeNull();
+  });
+
+  it('an unvalued deal reads as null, never as a zero value', async () => {
+    mockLiveValues.mockResolvedValue([]);
+    withRows([intake({ id: 'a', signed_at: '2026-11-08T10:00:00Z' })]);
+    const flow = await buildEnterpriseFlow(WINDOW_START);
+    // Null, not { cents: 0 }. "Nobody has priced this" and "this is worth nothing" are
+    // different statements and the control must not merge them.
+    expect(flow.stream.deals![0].priced).toBeNull();
+  });
+
+  it('puts the rows that need attention first: signed and unvalued at the top', async () => {
+    mockLiveValues.mockResolvedValue([dealValue({ enterpriseIntakeId: 'priced' })]);
+    withRows([
+      intake({ id: 'priced', company: 'A Priced', signed_at: '2026-11-08T10:00:00Z' }),
+      intake({ id: 'open', company: 'B Open', proposal_sent_at: '2026-11-08T10:00:00Z' }),
+      intake({ id: 'signed', company: 'C Signed', signed_at: '2026-11-09T10:00:00Z' }),
+    ]);
+    const flow = await buildEnterpriseFlow(WINDOW_START);
+    // Signed-unvalued, then unvalued-unsigned, then the one already priced. Deliberately
+    // asserted as the whole order rather than just "the first one", because the middle rank
+    // is the part a careless sort gets wrong.
+    expect((flow.stream.deals ?? []).map((d) => d.enterpriseIntakeId))
+      .toEqual(['signed', 'open', 'priced']);
+  });
+
+  it('offers no roster at all when the table cannot be read', async () => {
+    withRows([], false);
+    const flow = await buildEnterpriseFlow(WINDOW_START);
+    // Undefined, not []. An empty roster says "no deals to price"; this state is "the source
+    // could not be read", which the control reports differently.
+    expect(flow.stream.deals).toBeUndefined();
+    expect(flow.stream.status).toBe('unmeasurable');
+  });
+
+  it('offers an EMPTY roster when the table is there and holds nothing', async () => {
+    withRows([]);
+    const flow = await buildEnterpriseFlow(WINDOW_START);
+    expect(flow.stream.deals).toEqual([]);
+    expect(flow.stream.status).toBe('measured_zero');
   });
 });

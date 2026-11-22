@@ -97,6 +97,66 @@ export interface RevenueStream {
    * forced an empty array that reads as "no members".
    */
   bids?: FlaggedBid[];
+  /**
+   * The individual enterprise deals behind the enterprise stream, so the page can offer the
+   * same price control the government stream has.
+   *
+   * Populated ONLY for `enterprise_site`; undefined elsewhere, for the reason `bids` above
+   * states. Deliberately a SECOND field rather than a shared `rows`: a bid and an enterprise
+   * deal are priced against different tables, with different basis vocabularies and different
+   * engagement shapes, and one union would have made the panel decide at runtime which kind of
+   * thing it was holding.
+   */
+  deals?: EnterpriseDeal[];
+}
+
+/**
+ * One enterprise intake, as the deal-pricing control needs it.
+ *
+ * ── WHY `shape` TRAVELS WITH THE ROW ─────────────────────────────────────────────────────
+ *
+ * It is the whole reason Phase 2's retainer foot-gun stays closed at the UI.
+ *
+ * `enterprise_deal_values.deal_value_cents` always holds the TOTAL. Plan A is a monthly
+ * retainer (Ali, 2026-11-21, on Middlesex: "we are looking at a retainer, a monthly fee"), so
+ * the figure a person actually negotiated for a Plan A deal is the MONTHLY one. A form that
+ * asked for "contract value" and got $4,500 would file a twelve-month engagement as $4,500
+ * instead of $54,000.
+ *
+ * So the plan's `EngagementShape` rides along and the form opens on the matching entry mode:
+ * a retainer deal asks for a monthly fee and a required term, and the total is computed. The
+ * person can still override the mode, because a Plan A deal genuinely sold as a fixed project
+ * exists; what they cannot do is meet a field whose meaning is ambiguous.
+ */
+export interface EnterpriseDeal {
+  enterpriseIntakeId: string;
+  /** The company name, or an honest stand-in. Never blank: a blank row cannot be chosen. */
+  company: string;
+  /** Which of the three plans, where the open-text service field could be read. Null when not. */
+  planKey: string | null;
+  planLabel: string | null;
+  /** 'monthly_retainer' | 'guided_project' | 'training_program', or null with no plan. */
+  shape: string | null;
+  /** How far this prospect got, as the funnel's own stage key. */
+  stage: string;
+  /**
+   * Whether this deal is SIGNED, which is what decides whether its value reaches the
+   * headline. Sent explicitly rather than inferred from `stage` so the panel can say plainly
+   * that pricing a proposal-stage deal records a forecast and does not touch revenue.
+   */
+  signed: boolean;
+  /** The live value, or null when nobody has recorded one. */
+  priced: {
+    cents: number;
+    display: string;
+    periodMonths: number | null;
+    /** The monthly fee behind the total, where a term exists. Null otherwise. */
+    monthlyCents: number | null;
+    basisSource: string;
+    valueBasis: string;
+    confirmedBy: string;
+    confirmedAt: string;
+  } | null;
 }
 
 /**
