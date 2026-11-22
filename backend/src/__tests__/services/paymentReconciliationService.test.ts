@@ -21,6 +21,11 @@ const mockEnrFindOne = jest.fn();
 const mockEnrFindAll = jest.fn();
 const mockEnrFindByPk = jest.fn();
 const mockCohortIncrement = jest.fn();
+// The seat counter is recounted from the rows now (cohortSeatCounter), not incremented.
+const mockRecount = jest.fn();
+jest.mock('../../services/cohortSeatCounter', () => ({
+  recountCohortSeats: (...a: any[]) => mockRecount(...a),
+}));
 jest.mock('../../models', () => ({
   __esModule: true,
   Enrollment: {
@@ -181,7 +186,7 @@ describe('findMatchingEnrollment', () => {
 });
 
 describe('reconcilePayment (idempotency)', () => {
-  it('marks the enrollment paid and increments seats once', async () => {
+  it('marks the enrollment paid and recounts seats once', async () => {
     const enr = enrollment();
     mockEnrFindByPk.mockResolvedValue(enr);
 
@@ -191,7 +196,8 @@ describe('reconcilePayment (idempotency)', () => {
     expect(enr.update).toHaveBeenCalledWith(expect.objectContaining({
       payment_status: 'paid', portal_enabled: true, amount_paid: 199, paysimple_payment_id: '999', paysimple_customer_id: '111',
     }));
-    expect(mockCohortIncrement).toHaveBeenCalledTimes(1);
+    expect(mockRecount).toHaveBeenCalledTimes(1);
+    expect(mockCohortIncrement).not.toHaveBeenCalled();
   });
 
   it('is a no-op on a second run against an already-paid enrollment (no double increment)', async () => {
@@ -202,7 +208,7 @@ describe('reconcilePayment (idempotency)', () => {
 
     expect(applied).toBe(false);
     expect(enr.update).not.toHaveBeenCalled();
-    expect(mockCohortIncrement).not.toHaveBeenCalled();
+    expect(mockRecount).not.toHaveBeenCalled();
   });
 
   it('is a no-op when the enrollment no longer exists', async () => {
@@ -211,7 +217,7 @@ describe('reconcilePayment (idempotency)', () => {
     const applied = await reconcilePayment('gone', payment(), 111);
 
     expect(applied).toBe(false);
-    expect(mockCohortIncrement).not.toHaveBeenCalled();
+    expect(mockRecount).not.toHaveBeenCalled();
   });
 });
 
@@ -240,7 +246,7 @@ describe('runPaymentReconciliationSweep', () => {
     expect(result.autoReconciled).toHaveLength(0);
     expect(result.flagged).toHaveLength(1);
     expect(result.flagged[0].status).toBe('Authorized');
-    expect(mockCohortIncrement).not.toHaveBeenCalled();
+    expect(mockRecount).not.toHaveBeenCalled();
   });
 
   it('auto-reconciles an Authorized payment when the customer_id was already linked (higher trust)', async () => {
@@ -265,7 +271,7 @@ describe('runPaymentReconciliationSweep', () => {
 
     expect(result.autoReconciled).toHaveLength(0);
     expect(result.flagged).toHaveLength(1);
-    expect(mockCohortIncrement).not.toHaveBeenCalled();
+    expect(mockRecount).not.toHaveBeenCalled();
   });
 
   it('skips a payment with no matching enrollment at all, without erroring', async () => {
@@ -291,7 +297,7 @@ describe('runPaymentReconciliationSweep', () => {
 
     expect(result.autoReconciled).toHaveLength(0);
     expect(result.flagged).toHaveLength(0);
-    expect(mockCohortIncrement).not.toHaveBeenCalled();
+    expect(mockRecount).not.toHaveBeenCalled();
     expect(mockEnrFindAll).not.toHaveBeenCalled();
   });
 
@@ -333,7 +339,7 @@ describe('runPaymentReconciliationSweep', () => {
     expect(result.autoReconciled).toHaveLength(0);
     expect(result.flagged).toHaveLength(1);
     expect(result.flagged[0].reason).toMatch(/prospects enrollment/i);
-    expect(mockCohortIncrement).not.toHaveBeenCalled();
+    expect(mockRecount).not.toHaveBeenCalled();
   });
 
   it('reconciles a $149 payment (the current annual-billed monthly rate), not just $199', async () => {
@@ -386,6 +392,6 @@ describe('runPaymentReconciliationSweep', () => {
 
     expect(result.autoReconciled).toHaveLength(1);
     expect(enr.update).not.toHaveBeenCalled();
-    expect(mockCohortIncrement).not.toHaveBeenCalled();
+    expect(mockRecount).not.toHaveBeenCalled();
   });
 });

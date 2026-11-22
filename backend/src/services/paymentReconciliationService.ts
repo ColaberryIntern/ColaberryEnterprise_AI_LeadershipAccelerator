@@ -5,6 +5,7 @@ import {
   PaySimplePayment, PaySimpleCustomer,
 } from './paysimpleService';
 import { resolvePaidBatchPlacement } from './batch/batchPlacementService';
+import { recountCohortSeats } from './cohortSeatCounter';
 
 /**
  * Cross-references PaySimple payments against Accelerator enrollment records.
@@ -219,8 +220,9 @@ export async function reconcilePayment(
   // `alreadyPaid: false` is sound here for the same reason as in `markEnrollmentPaid`:
   // the guard one line above returned for every already-paid row.
   //
-  // The `Cohort.increment` below reads `fresh.cohort_id`, which `update()` refreshes on
-  // the instance, so writing the batch in this same object makes the seat land on it.
+  // The seat recount below reads `fresh.cohort_id`, which `update()` refreshes on the
+  // instance, so writing the batch in this same object makes the seat land on it.
+  const arrivedInCohortId = fresh.cohort_id;
   const placedCohortId = await resolvePaidBatchPlacement({
     currentCohortId: fresh.cohort_id,
     alreadyPaid: false,
@@ -251,7 +253,9 @@ export async function reconcilePayment(
     // consumers named above actually read.
     tier: 'member',
   });
-  await Cohort.increment('seats_taken', { by: 1, where: { id: fresh.cohort_id } });
+  // Recount, not +1 (cohortSeatCounter). `arrivedInCohortId` is where the row sat before
+  // placement, so the seat it no longer holds there is released too.
+  await recountCohortSeats([arrivedInCohortId, fresh.cohort_id]);
   return true;
 }
 
