@@ -21,6 +21,11 @@ export interface WhatsAppConfig {
   baseUrl: string;
   dailyCap: number;
   notConfigured: NotConfiguredReason | null;
+  /**
+   * TEST SEAM (CH10.6): skip the 8 AM to 8 PM Central window, so the local end-to-end run can send at
+   * any hour. Read from COMMS_HUB_WHATSAPP_ALWAYS_OPEN=true and IGNORED when NODE_ENV is production.
+   */
+  windowAlwaysOpen: boolean;
 }
 
 function cleanUrl(raw: string): string { return raw.trim().replace(/\/+$/, ''); }
@@ -43,7 +48,8 @@ export function readWhatsAppConfig(env: NodeJS.ProcessEnv = process.env): WhatsA
   if (!enabled) notConfigured = 'switched_off';
   else if (!token) notConfigured = 'no_token';
   else if (!baseUrlAllowed(baseUrl, env.NODE_ENV)) notConfigured = 'base_url_not_allowed';
-  return { enabled, token: notConfigured ? null : token, baseUrl, dailyCap, notConfigured };
+  const windowAlwaysOpen = env.NODE_ENV !== 'production' && (env.COMMS_HUB_WHATSAPP_ALWAYS_OPEN ?? '').trim().toLowerCase() === 'true';
+  return { enabled, token: notConfigured ? null : token, baseUrl, dailyCap, notConfigured, windowAlwaysOpen };
 }
 
 export const NOT_CONFIGURED_TEXT: Record<NotConfiguredReason, string> = {

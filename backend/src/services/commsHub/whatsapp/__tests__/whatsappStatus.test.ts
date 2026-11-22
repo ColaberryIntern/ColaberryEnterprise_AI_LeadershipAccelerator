@@ -33,6 +33,11 @@ describe('readWhatsAppConfig', () => {
       expect([url, c.notConfigured, c.token]).toEqual([url, 'base_url_not_allowed', null]);
     }
   });
+  it('the window test seam works outside production only', () => {
+    expect(readWhatsAppConfig({ ...ON, COMMS_HUB_WHATSAPP_ALWAYS_OPEN: 'true' }).windowAlwaysOpen).toBe(true);
+    expect(readWhatsAppConfig({ ...ON, NODE_ENV: 'production', COMMS_HUB_WHATSAPP_ALWAYS_OPEN: 'true' }).windowAlwaysOpen).toBe(false);
+    expect(readWhatsAppConfig(ON).windowAlwaysOpen).toBe(false);
+  });
   it('outside production: https or localhost http only', () => {
     expect(baseUrlAllowed('http://127.0.0.1:3299', 'test')).toBe(true);
     expect(baseUrlAllowed('http://localhost:3299', 'development')).toBe(true);

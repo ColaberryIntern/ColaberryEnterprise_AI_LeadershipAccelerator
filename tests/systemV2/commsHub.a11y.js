@@ -113,6 +113,7 @@ async function main() {
   const member = jwt.sign({ sub: enrollmentId, email: `a11y-${RUN}@example.invalid`, role: 'participant' }, process.env.JWT_SECRET, { expiresIn: '1h' });
   fs.mkdirSync(SHOTS, { recursive: true });
   let hubEventId = null;
+  let waConnected = false;
   const browser = await chromium.launch({ channel: process.env.PW_CHANNEL || 'msedge', headless: process.env.HEADED !== '1' });
 
   try {
@@ -122,6 +123,14 @@ async function main() {
       if (r.ok) hubEventId = (await r.json()).event.id; else await sleep(5000); // eslint-disable-line no-await-in-loop
     }
     check('an Eventbrite event is managed in the hub, so the pages have content', !!hubEventId);
+    // CH10.6: with the backend on the local fake Whapi, give the WhatsApp card its groups and a pause banner.
+    const waStatus = await (await fetch(`${api}/api/admin/comms-hub/whatsapp/status`, { headers: { authorization: `Bearer ${token}` } })).json().catch(() => ({}));
+    waConnected = waStatus.state === 'connected';
+    if (waConnected) {
+      await fetch(`${api}/api/admin/comms-hub/whatsapp/groups/sync`, { method: 'POST', headers: { authorization: `Bearer ${token}` } });
+      await db.query("UPDATE comms_hub_settings SET whatsapp_breaker_until = now() + interval '1 hour', whatsapp_breaker_reason = 'a11y' WHERE id = 1");
+    }
+    console.log(`  note  WhatsApp: ${waConnected ? 'connected to the local fake, card measured with groups and a pause' : 'not connected, card measured in its off state'}`);
 
     for (const [width, height] of [[390, 844], [1280, 900]]) {
       const ctx = await browser.newContext({ viewport: { width, height } }); // eslint-disable-line no-await-in-loop
@@ -141,6 +150,15 @@ async function main() {
         const v = await axe(page, '.comms-hub'); // eslint-disable-line no-await-in-loop
         check(`${name} @390: axe finds no WCAG A/AA violations in the hub`, v.inside.length === 0, v.inside.slice(0, 4).join(' | '));
         if (v.outside.length) console.log(`  note  ${name} @390: outside the hub (shared admin shell, reported not failed): ${[...new Set(v.outside)].slice(0, 3).join(' | ')}`);
+        if (name === 'schedule') {
+          const card = '[data-testid="ch-whatsapp-card"]';
+          await page.locator(card).waitFor(); // eslint-disable-line no-await-in-loop
+          if (waConnected) await page.getByTestId('ch-wa-paused').waitFor(); // eslint-disable-line no-await-in-loop
+          const w = await page.evaluate(measure, card); // eslint-disable-line no-await-in-loop
+          check('WhatsApp card @390: nothing wider than the screen, every control at least 44x44', w.wide.length === 0 && w.smallCount === 0, `${w.wide.join('; ')}${w.small.join('; ')}` || 'ok');
+          const wv = await axe(page, card); // eslint-disable-line no-await-in-loop
+          check(`WhatsApp card @390: axe finds no WCAG A/AA violations (${waConnected ? 'groups and pause shown' : 'off state'})`, wv.inside.length === 0, wv.inside.slice(0, 4).join(' | '));
+        }
         await page.screenshot({ path: path.join(SHOTS, `${name}-390.png`), fullPage: true }); // eslint-disable-line no-await-in-loop
       }
       await ctx.close(); // eslint-disable-line no-await-in-loop
@@ -177,6 +195,11 @@ async function main() {
     // Every row the member's portal visit left anywhere (presence, room visits, level, community profile...).
     await sweepEnrollment(db, enrollmentId, problems);
     await step('cohort', 'DELETE FROM cohorts WHERE id = $1', [cohortId]);
+    if (waConnected) {
+      await step('whatsapp groups', "DELETE FROM comms_hub_whatsapp_groups WHERE provider_group_id LIKE '12036300000000000_@g.us'", []);
+      await step('whatsapp pause', 'UPDATE comms_hub_settings SET whatsapp_breaker_until = NULL, whatsapp_breaker_reason = NULL WHERE id = 1', []);
+      await step('whatsapp activity', "DELETE FROM comms_hub_activity WHERE action LIKE 'whatsapp.%' AND actor_id = $1", [organizerId]);
+    }
     try { fs.writeFileSync(FIXTURE, JSON.stringify({ events: [], attendees: [] })); } catch (e) { problems.push(`fixture: ${e.message}`); }
     const left = [...await countLeft(db, enrollmentId)];
     const hub = (await db.query(`SELECT (SELECT count(*) FROM comms_hub_events WHERE ccpp_event_id = $1)::int AS events,

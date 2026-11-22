@@ -44,7 +44,8 @@ function sentId(raw: unknown): { id: string } {
 }
 
 export function createWhapiProvider(deps: WhapiDeps): WhatsAppProvider {
-  const doFetch: FetchLike = deps.fetch ?? ((url, init) => fetch(url, init));
+  // The timeout is set per call below; it is repeated here so the default fetch is never unbounded on its own.
+  const doFetch: FetchLike = deps.fetch ?? ((url, init) => fetch(url, { ...init, signal: init.signal ?? AbortSignal.timeout(deps.timeoutMs ?? WHAPI_TIMEOUT_MS) }));
   const now = deps.now ?? Date.now;
   const log = deps.log ?? ((line: string) => console.log(line));
   const emit = (level: 'info' | 'warn', event: string, ctx: Record<string, unknown>, errorClass?: string): void => {

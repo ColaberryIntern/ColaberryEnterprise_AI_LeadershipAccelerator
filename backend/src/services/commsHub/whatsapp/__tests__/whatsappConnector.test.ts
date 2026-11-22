@@ -65,6 +65,10 @@ describe('holds and refusals before anything is sent', () => {
     expect([e instanceof ConnectorHoldError, e.reason]).toEqual([true, reason]);
     expect(s.calls).toEqual([]);
   });
+  it('the local test seam skips the window (never in production: channelConfig ignores it there)', async () => {
+    const s = setup({ now: new Date('2026-12-02T03:00:00Z'), config: { ...ON, windowAlwaysOpen: true } });
+    expect((await s.c.send(delivery())).provider_message_id).toBe('wa-1');
+  });
   it('outside 8 AM to 8 PM Central: a hold until the window opens', async () => {
     const s = setup({ now: new Date('2026-12-02T03:00:00Z') }); // 9 PM CST
     const e = await outcome(s.c.send(delivery()));
@@ -80,7 +84,7 @@ describe('holds and refusals before anything is sent', () => {
   });
   it('a group no longer in the hub is a permanent refusal', async () => {
     const s = setup();
-    s.state.providerGroupId.mockResolvedValue(null);
+    (s.state.providerGroupId as jest.Mock).mockResolvedValue(null);
     expect((await outcome(s.c.send(delivery()))).reason).toBe('whatsapp_group_gone');
   });
 });

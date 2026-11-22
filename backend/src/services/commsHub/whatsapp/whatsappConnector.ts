@@ -62,7 +62,7 @@ export function createWhatsAppConnector(overrides: Partial<WhatsAppConnectorDeps
       const s = await deps.state.read();
       if (s.breaker_until && s.breaker_until > now) throw new ConnectorHoldError(s.breaker_until, 'whatsapp_paused_by_whatsapp');
       if (s.next_send_at && s.next_send_at > now) throw new ConnectorHoldError(s.next_send_at, 'whatsapp_pacing');
-      const closed = windowHoldUntil(now);
+      const closed = config.windowAlwaysOpen ? null : windowHoldUntil(now);
       if (closed) throw new ConnectorHoldError(closed, 'whatsapp_window');
       const capped = dailyCapHoldUntil(s, config.dailyCap, now);
       if (capped) throw new ConnectorHoldError(capped, 'whatsapp_daily_cap');

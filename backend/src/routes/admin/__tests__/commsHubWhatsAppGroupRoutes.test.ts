@@ -77,7 +77,7 @@ it('switching a group on: 200 with the group; bad id or body is 400; unknown 404
   }
   mockSet.mockRejectedValueOnce(new GroupNotFoundError());
   expect((await request(app).put(`${BASE}/${GID}`).set(as(JACKIE)).send({ enabled: true })).status).toBe(404);
-  mockSet.mockRejectedValueOnce(new GroupNotSendableError());
+  mockSet.mockRejectedValueOnce(new GroupNotSendableError('admins_only'));
   const refused = await request(app).put(`${BASE}/${GID}`).set(as(JACKIE)).send({ enabled: true });
   expect([refused.status, refused.body.error_class]).toEqual([409, 'GroupNotSendable']);
   expect(mockSet).toHaveBeenCalledTimes(3);
