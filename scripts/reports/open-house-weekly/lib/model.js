@@ -50,10 +50,11 @@ function funnel(w, targets) {
   if (j.oh_held !== undefined) {
     rows.push({ icon: '📅', step: 'Their Open House has happened', n: j.oh_held, base: 'signups' },
       { icon: '🎤', step: 'Came to the Open House', n: j.attended, rate: 'attend', note: ATTEND_FLOOR });
-    // Interaction and payment (OH1y, second ask). Paid is measured against everyone whose Open House happened, not
-    // against the step before: a person can pay without having come, and the funnel must not hide that.
+    // Interaction and payment (OH1y, second ask). Paid is measured against every ad sign-up, not against the step
+    // before: a person can pay without having come, or before their Open House, and the funnel must not hide that.
+    // Every payer from every source is in the "Who paid" section; this row is the ad funnel's share of them.
     if (j.interacted !== undefined) rows.push({ icon: '🙋', step: 'Took part (poll, question or status)', n: j.interacted, rate: 'interact' });
-    if (j.paid_held !== undefined) rows.push({ icon: '💳', step: 'Paid to enroll (of everyone whose Open House happened)', n: j.paid_held, rate: 'paid', base: 'oh_held' });
+    if (j.paid !== undefined) rows.push({ icon: '💳', step: 'Paid to enroll (of every ad sign-up)', n: j.paid, rate: 'paid', base: 'signups' });
   }
   return rows.map((r, i) => {
     const prevN = i === 0 ? null : r.base ? j[r.base] : rows[i - 1].n;
@@ -112,14 +113,15 @@ function forks(w, email, targets) {
         { label: 'Answered a poll, asked a question or set a status', n: j.interacted, good: true },
         { label: 'Only watched', n: Math.max(0, j.attended - j.interacted) }] });
     }
-    if (j.paid_held !== undefined) {
-      const ti = j.paid_interacted, ta = Math.max(0, j.paid_attended - ti), tn = Math.max(0, j.paid_held - j.paid_attended);
-      f.push({ id: 'paid', icon: '💳', q: 'After their Open House, who paid to enroll?', rate: 'paid', options: [
+    if (j.paid !== undefined) {
+      const co = j.checkout ?? j.checkout_held ?? 0;
+      const ti = j.paid_interacted, ta = Math.max(0, j.paid_attended - ti), tn = Math.max(0, j.paid - j.paid_attended);
+      f.push({ id: 'paid', icon: '💳', q: 'Which ad sign-ups paid to enroll?', rate: 'paid', options: [
         { label: 'Paid, and took part at the Open House', n: ti, good: true },
         { label: 'Paid, came but only watched', n: ta, good: true },
-        { label: 'Paid without coming', n: tn, good: true },
-        { label: 'Started checkout, did not pay', n: Math.max(0, (j.checkout_held || 0) - j.paid_held) },
-        { label: 'Not yet', n: Math.max(0, j.oh_held - Math.max(j.paid_held, j.checkout_held || 0)), bad: true }] });
+        { label: 'Paid without coming (or before their Open House)', n: tn, good: true },
+        { label: 'Started checkout, did not pay', n: Math.max(0, co - j.paid) },
+        { label: 'Not yet', n: Math.max(0, j.signups - Math.max(j.paid, co)), bad: true }] });
     }
   }
   if (email && email.emails > 0) {

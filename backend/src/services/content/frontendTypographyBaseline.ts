@@ -117,7 +117,10 @@ export const FRONTEND_TYPOGRAPHY_BASELINE_TOTALS: Readonly<Record<string, number
   // 2026-11-19: 2095 -> 2089. The class check-in's live view moved out of ClassCheckinPage
   // into the new CheckinLiveController, and its copy was written to house style on the move
   // (dashes became colons, full stops or commas). ClassCheckinPage's entry (6) is DELETED.
-  [DASH_RULE.id]: 2089,
+  //
+  // 2026-11-22: 2089 -> 2088. The member Events page's empty state ("Check back soon. New
+  // sessions are added most weeks.") lost its dash. EventsPage's entry (1) is DELETED.
+  [DASH_RULE.id]: 2088,
   // 2026-11-15: 74 -> 72. The v5 site adoption rewrote HomeV2 and ServicesV2,
   // and the four new pages were written to house style, so the two entries
   // those files held are gone rather than carried over.

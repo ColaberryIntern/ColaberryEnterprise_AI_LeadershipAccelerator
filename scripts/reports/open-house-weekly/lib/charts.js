@@ -4,10 +4,34 @@
  */
 'use strict';
 
+const B = require('./brand');
+
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const C = { navy: '#1a365d', blue: '#2b6cb0', sky: '#63b3ed', teal: '#319795', green: '#2f855a', amber: '#b7791f', red: '#c53030', grey: '#a0aec0', ink: '#2d3748', mute: '#718096', line: '#e2e8f0' };
+
+/**
+ * C125: the chart palette, moved onto the Colaberry Training brand (see lib/brand.js).
+ *
+ * `navy` and `blue` KEEP THEIR KEY NAMES on purpose, even though neither is navy or blue any
+ * more. Both are read by name from page.js and render.js - including inside Mermaid `classDef`
+ * strings, where a missing key renders as the literal text "undefined" in a diagram rather than
+ * failing - so renaming them is a wide, silent-breakage change for no gain. The values are the
+ * brand's; the keys are an interface.
+ *
+ * green / amber / red are UNCHANGED. They are the report's traffic light, every conditional
+ * format depends on them, and cherry is itself a red: using the brand accent for "on target"
+ * beside it for "below target" would make the whole report unreadable.
+ */
+const C = {
+  navy: B.cherryDeep,   // the deep brand red: headings, the darkest series
+  blue: B.berry,        // the brand berry: the neutral "this is a count" series
+  sky: '#7FB3C8',       // berry, lightened, for the quieter of two counts
+  teal: B.leaf,         // the brand leaf
+  green: B.STATUS.good, amber: B.STATUS.ok, red: B.STATUS.bad, grey: B.STATUS.low,
+  ink: B.ink, mute: B.inkMuted, line: B.line,
+  cherry: B.cherry, cherryDeep: B.cherryDeep,
+};
 const STATUS = { good: C.green, ok: C.amber, bad: C.red, low: C.grey, none: C.blue };
-const TONE = { mute: '#cbd5e0', info: C.sky, warn: '#f6ad55', good: '#68d391', best: C.green };
+const TONE = { mute: '#D6D4D2', info: C.sky, warn: '#f6ad55', good: '#86C96A', best: C.green };
 
 /** Centered funnel: bar width = share of visitors (min 6% so a zero step still shows), color = target status. */
 function funnelSvg(rows) {
@@ -103,4 +127,4 @@ function peopleGrid(p) {
   return `<div class="pgrid">${icons}</div><div class="plegend">${legend}</div>`;
 }
 
-module.exports = { esc, C, STATUS, TONE, funnelSvg, columnsSvg, breakdownSvg, donutSvg, scrollSvg, exitSvg, peopleGrid };
+module.exports = { esc, C, B, STATUS, TONE, funnelSvg, columnsSvg, breakdownSvg, donutSvg, scrollSvg, exitSvg, peopleGrid };

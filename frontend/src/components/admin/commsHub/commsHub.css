@@ -240,7 +240,13 @@
 .ch-day + .ch-day { margin-top: 1rem; }
 .ch-day-h { font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--neutral-600); margin-bottom: 0.25rem; }
 .ch-failure { color: var(--red-700); }
-.ch-history td { overflow-wrap: anywhere; }
+/* History: break between words only. `anywhere` let the table shrink every column to one character,
+   so "Sent", "WhatsApp" and "Details" split mid-word when the right-hand cards were open. The date
+   wraps onto two lines instead (it was forced onto one and took a third of the width), so all six
+   columns still fit the card; the badge and the action button never split. */
+.ch-history td { overflow-wrap: break-word; }
+.ch-history .ch-history-when { min-width: 6.5rem; }
+.ch-history .ch-status, .ch-history .btn { white-space: nowrap; }
 .ch-activity-row { display: block; }
 /* Form controls on the hub tabs meet the 44 px target too (the filters, quiet hours, test cohort). */
 .comms-hub .form-select, .comms-hub .form-control:not(textarea) { min-height: 44px; }

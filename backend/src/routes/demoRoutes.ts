@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { Router, Request, Response } from 'express';
 import { Op } from 'sequelize';
 
@@ -45,9 +46,45 @@ const NOT_FOUND_HTML = [
   'If someone shared it with you, ask them for a current link.</p></main></body></html>',
 ].join('');
 
-/** Headers every response from this route carries, found or not. */
-function publicHeaders(res: Response): void {
+/**
+ * Headers every response from this route carries, found or not.
+ *
+ * `nonce` is the one difference between the two bodies: the demo page runs the engine inline and
+ * needs a policy that allows exactly that script, while the 404 body has no script at all and is
+ * sent under `script-src 'none'`. Passing no nonce therefore does not mean "no policy", it means
+ * the stricter one.
+ */
+function publicHeaders(res: Response, nonce?: string): void {
   res.set('Content-Type', 'text/html; charset=utf-8');
+  /*
+   * OVERRIDES Helmet's app-wide policy for this response, deliberately.
+   *
+   * Helmet sends `script-src 'self'`. The engine is inline, inline is not `'self'`, so the
+   * browser blocked it and the public demo served a banner above a permanent
+   * "Loading the demo..." while returning 200 with correct bytes. A nonce is the narrow fix:
+   * `'unsafe-inline'` would also unblock any script an attacker got into the page, and this page
+   * renders student-authored strings.
+   *
+   * Everything else is tighter than the app default, because this is the one route in the
+   * product that answers an unauthenticated stranger: no objects, no framing, no form posts, no
+   * base rewriting, and images and fonts only from here (plus the engine's web font over https).
+   */
+  res.set(
+    'Content-Security-Policy',
+    [
+      "default-src 'self'",
+      nonce ? `script-src 'nonce-${nonce}'` : "script-src 'none'",
+      "script-src-attr 'none'",
+      "style-src 'self' https: 'unsafe-inline'",
+      "font-src 'self' https: data:",
+      "img-src 'self' data:",
+      "connect-src 'none'",
+      "object-src 'none'",
+      "base-uri 'none'",
+      "form-action 'none'",
+      "frame-ancestors 'none'",
+    ].join('; '),
+  );
   // The token is unguessable, but a link pasted into a public place would otherwise be indexed,
   // and an indexed demo is one a search engine keeps serving after it is revoked.
   res.set('X-Robots-Tag', 'noindex, nofollow');
@@ -126,9 +163,12 @@ async function serveDemo(req: Request, res: Response): Promise<void> {
       return;
     }
 
+    // Fresh per response. A nonce reused across responses is a nonce an attacker can predict,
+    // which is the whole reason the header is not simply `'unsafe-inline'`.
+    const nonce = crypto.randomBytes(16).toString('base64');
     res.status(200);
-    publicHeaders(res);
-    res.send(renderConnectedDemo(projected.demo_spec, engine));
+    publicHeaders(res, nonce);
+    res.send(renderConnectedDemo(projected.demo_spec, engine, nonce));
   } catch (err: unknown) {
     // Includes DemoRenderError for a spec that no longer passes its contract. Logged with its
     // class so it is findable, answered with the same bytes as every other failure so the route

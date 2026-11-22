@@ -165,13 +165,23 @@ function preheader(text) {
 <div style="display:none;font-size:1px;color:${C.bg};line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden">${esc(text)}</div>`;
 }
 
-function topBanner(text) {
+// `bg` DEFAULTS TO NAVY so every existing caller renders byte-identically. This kit is shared
+// with the family dashboard and the intern delivery briefing; changing the constant itself to
+// brand one email would have silently rebranded those two as well.
+function topBanner(text, bg) {
+  const ground = bg || C.navy;
   return `
-<tr><td bgcolor="${C.navy}" style="background:${C.navy};color:#ffffff;text-align:center;font-size:11px;padding:8px 12px;letter-spacing:.06em">${esc(text)}</td></tr>`;
+<tr><td bgcolor="${ground}" style="background:${ground};color:#ffffff;text-align:center;font-size:11px;padding:8px 12px;letter-spacing:.06em">${esc(text)}</td></tr>`;
 }
 
-// The outer shell. `body` is a string of <tr> rows for the 600px column.
-function shell({ title, preheaderText, banner, body }) {
+/**
+ * The outer shell. `body` is a string of <tr> rows for the 600px column.
+ *
+ * `bannerBg` and `pageBg` are optional overrides for a caller that carries its own brand; both
+ * fall back to this kit's palette, so omitting them is exactly the previous behavior.
+ */
+function shell({ title, preheaderText, banner, body, bannerBg, pageBg }) {
+  const page = pageBg || C.bg;
   return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
@@ -185,10 +195,10 @@ function shell({ title, preheaderText, banner, body }) {
   </style>
   <![endif]-->
 </head>
-<body style="margin:0;padding:0;background:${C.bg};font-family:${FONT};color:${C.ink};-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%">
+<body style="margin:0;padding:0;background:${page};font-family:${FONT};color:${C.ink};-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%">
 ${preheaderText ? preheader(preheaderText) : ''}
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="${C.bg}" style="background:${C.bg};font-family:${FONT}">
-  ${banner ? topBanner(banner) : ''}
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="${page}" style="background:${page};font-family:${FONT}">
+  ${banner ? topBanner(banner, bannerBg) : ''}
   <tr><td align="center" style="padding:18px 8px 60px 8px;font-family:${FONT}">
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="width:600px;max-width:600px;font-family:${FONT}">
       ${body}

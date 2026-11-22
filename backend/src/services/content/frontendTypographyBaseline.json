@@ -477,7 +477,6 @@
     "frontend/src/pages/portal/community/Composer.tsx": 2,
     "frontend/src/pages/portal/community/PostCard.tsx": 1,
     "frontend/src/pages/portal/company/CompanyMemberDrilldown.tsx": 4,
-    "frontend/src/pages/portal/events/EventsPage.tsx": 1,
     "frontend/src/pages/portal/feed/todayFeed.ts": 4,
     "frontend/src/pages/portal/internship/InternshipCaseStudies.tsx": 2,
     "frontend/src/pages/portal/internship/InternshipCertification.tsx": 2,

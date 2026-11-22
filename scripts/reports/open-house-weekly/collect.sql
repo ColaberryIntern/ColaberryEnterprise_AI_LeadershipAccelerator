@@ -70,6 +70,45 @@ LEFT JOIN LATERAL (
   ORDER BY s.started_at LIMIT 1
 ) ss ON true;
 
+-- ── 1b. The heat map's two inputs: what was clicked, and how far the clickers got ────────────────────────────────
+--
+-- A SEPARATE PASS, NOT AN EXTRA event_type IN `lpev` ABOVE. Adding 'click' to that filter would
+-- feed the same rows into `vis`, and `vis` is what every number in this report is counted from.
+-- The HAVING clause would most likely absorb it with no visible change, which is exactly the
+-- problem: "most likely" is not a property you want on the line that defines "visitor". The
+-- README promises this report agrees with the C120 audit to the person, so the clicks are
+-- collected beside that table and never through it.
+--
+-- `click` IS INCLUDED HERE AND NOWHERE ELSE IN THIS FILE. The tracker emits `cta_click` for an
+-- element matching a CTA selector and plain `click` for any other link or button
+-- (frontend/public/v1/track.js, onClick). The funnel only ever read `cta_click`, so every
+-- non-CTA click on the landing page has been recorded and never once looked at.
+CREATE TEMP TABLE clk AS
+SELECT w.name, pe.visitor_id, pe.event_type, pe.event_data, pe.created_at
+FROM win w JOIN page_events pe ON pe.created_at >= w.s AND pe.created_at < w.e
+WHERE pe.page_url ILIKE :'lp' AND pe.visitor_id IS NOT NULL
+  AND pe.event_type IN ('cta_click', 'click');
+
+-- One row per (window, clicked thing). The label is resolved the way the tracker resolves it, so
+-- it can be joined to a measured element position by the same key: `data_track` first (which is
+-- `data-track` or `data-track-cta`), then the trimmed element text, and only then a description
+-- of an element that offered neither.
+CREATE TEMP TABLE clkagg AS
+SELECT c.name,
+       c.event_type,
+       left(nullif(c.event_data->>'data_track', ''), 80) AS data_track,
+       left(nullif(c.event_data->>'element_text', ''), 120) AS element_text,
+       left(nullif(c.event_data->>'href', ''), 160) AS href,
+       nullif(c.event_data->>'element_tag', '') AS element_tag,
+       count(*) AS clicks,
+       count(DISTINCT c.visitor_id) AS people,
+       -- A click from someone with no pageview in this window cannot be placed against this
+       -- window's visitor count, so it is counted and flagged rather than silently mixed in.
+       count(DISTINCT c.visitor_id) FILTER (WHERE NOT EXISTS (
+         SELECT 1 FROM visx v WHERE v.name = c.name AND v.visitor_id = c.visitor_id)) AS people_without_pageview
+FROM clk c
+GROUP BY 1, 2, 3, 4, 5, 6;
+
 -- ── 2. Open House sign-ups: one row per (window, registration), both doors ───────────────────────────────────────
 CREATE TEMP TABLE reg AS
 SELECT w.name, r.id AS reg_id, r.created_at AS reg_at, r.source AS door, r.email_lower, e.id AS enrollment_id,
@@ -203,6 +242,33 @@ WHERE c.created_at >= (SELECT s FROM win WHERE name = 'cur') - interval '5 minut
   AND coalesce(c.direction::text, 'outbound') <> 'inbound'
 ORDER BY c.id, who.email_lower;
 
+-- ── 2d. OH1y: everyone who paid to enroll in each window, wherever they came from ──────────────────────────────────
+-- Ali, 22 Nov: "We had some people pay." The funnel's paid step only follows ad sign-ups; this follows every payer
+-- (a PaySimple payment on a non-comp plan, first started in the window) back to where they came from.
+CREATE TEMP TABLE payers AS
+SELECT w.name, p.email, p.paid_at, p.plan,
+  CASE WHEN EXISTS (SELECT 1 FROM open_house_registrations r WHERE r.email_lower = p.email AND r.source = 'landing_page') THEN 'ad_signup'
+       WHEN EXISTS (SELECT 1 FROM leads l JOIN page_events pe ON pe.visitor_id = l.visitor_id
+                    WHERE lower(l.email) = p.email AND pe.page_url ILIKE :'lp' AND pe.event_type = 'pageview') THEN 'ad_visit'
+       WHEN EXISTS (SELECT 1 FROM open_house_registrations r WHERE r.email_lower = p.email) THEN 'oh_other_door'
+       WHEN EXISTS (SELECT 1 FROM campaign_leads cl JOIN leads l ON l.id = cl.lead_id JOIN campaigns c ON c.id = cl.campaign_id
+                    WHERE lower(l.email) = p.email AND (c.name ILIKE '%win-back%' OR c.name ILIKE '%alumni%')) THEN 'winback'
+       WHEN (SELECT l.source FROM leads l WHERE lower(l.email) = p.email ORDER BY l.created_at LIMIT 1) ILIKE 'open_house%' THEN 'earlier_oh_lead'
+       WHEN (SELECT l.source FROM leads l WHERE lower(l.email) = p.email ORDER BY l.created_at LIMIT 1) ILIKE 'ccpp_%' THEN 'winback'
+       ELSE 'other' END AS origin,
+  EXISTS (SELECT 1 FROM open_house_registrations r WHERE r.email_lower = p.email) AS oh_registered,
+  EXISTS (SELECT 1 FROM oh_here h JOIN live_sessions s ON s.id = h.session_id WHERE h.email = p.email
+          AND ((s.session_date + s.start_time::time)::timestamp AT TIME ZONE 'America/Chicago') < p.paid_at) AS came_before_paying
+FROM win w
+JOIN (
+  SELECT lower(en.email) AS email, min(sb.started_at) AS paid_at, (array_agg(sb.plan::text ORDER BY sb.started_at))[1] AS plan
+  FROM subscriptions sb JOIN enrollments en ON en.id = sb.enrollment_id
+  WHERE sb.plan::text <> 'comp' AND sb.paysimple_payment_id IS NOT NULL AND sb.started_at IS NOT NULL
+  GROUP BY 1
+) p ON p.paid_at >= w.s AND p.paid_at < w.e
+WHERE p.email NOT LIKE 'ali+%' AND p.email NOT LIKE '%@colaberry.com'
+  AND p.email NOT LIKE '%@colaberry-test.local' AND p.email !~ '^(e2e[-_]|test-fixture-)';
+
 -- ── 3. The second LP path: "Start Learning AI for $0" -> /portal/signup (an Explorer account, no Open House) ────
 CREATE TEMP TABLE startpath AS
 SELECT v.name, count(DISTINCT v.visitor_id) AS accounts
@@ -231,6 +297,29 @@ SELECT json_build_object(
     'scroll', (SELECT json_build_object('d25', count(*) FILTER (WHERE max_scroll >= 25), 'd50', count(*) FILTER (WHERE max_scroll >= 50),
         'd75', count(*) FILTER (WHERE max_scroll >= 75), 'd90', count(*) FILTER (WHERE max_scroll >= 90),
         'd100', count(*) FILTER (WHERE max_scroll >= 100)) FROM visx v WHERE v.name = w.name),
+    -- The heat map's data. `scroll` above already carries the reach at each of the five
+    -- thresholds the tracker records; this adds what people clicked, and how far the people who
+    -- clicked the main CTA had actually read before they clicked it.
+    'heat', json_build_object(
+      'clicks', (SELECT coalesce(json_agg(t ORDER BY t.clicks DESC, t.label), '[]') FROM (
+          SELECT coalesce(a.data_track, a.element_text,
+                          'an unlabeled ' || CASE a.element_tag WHEN 'a' THEN 'link' WHEN 'button' THEN 'button'
+                                                                ELSE coalesce(a.element_tag, 'control') END) AS label,
+                 a.event_type, a.data_track, a.element_text, a.href, a.element_tag,
+                 a.clicks, a.people, a.people_without_pageview
+          FROM clkagg a WHERE a.name = w.name) t),
+      -- Split by whether they clicked the seat CTA. This is the pairing that shows whether the
+      -- page is read before it converts: `under25` is people who clicked having never reached a
+      -- quarter of the way down, which is only possible because a CTA sits above the fold.
+      'by_seat', (SELECT coalesce(json_agg(t ORDER BY t.seat DESC), '[]') FROM (
+          SELECT v.cta_seat AS seat, count(*) AS people,
+                 count(*) FILTER (WHERE coalesce(v.max_scroll, 0) < 25) AS under25,
+                 count(*) FILTER (WHERE v.max_scroll >= 25) AS d25,
+                 count(*) FILTER (WHERE v.max_scroll >= 50) AS d50,
+                 count(*) FILTER (WHERE v.max_scroll >= 75) AS d75,
+                 count(*) FILTER (WHERE v.max_scroll >= 90) AS d90,
+                 count(*) FILTER (WHERE v.max_scroll >= 100) AS d100
+          FROM visx v WHERE v.name = w.name GROUP BY 1) t)),
     'median_visit_s', (SELECT round(percentile_cont(0.5) WITHIN GROUP (ORDER BY duration_s))::int FROM visx v WHERE v.name = w.name AND duration_s > 0),
     'by_source', (SELECT coalesce(json_agg(t ORDER BY t.visitors DESC), '[]') FROM (
         SELECT v.source AS label, count(*) AS visitors, count(*) FILTER (WHERE v.cta_seat) AS clicked_seat,
@@ -252,6 +341,12 @@ SELECT json_build_object(
         'lp_linked_to_visit', count(*) FILTER (WHERE door = 'landing_page' AND visitor_id IN (SELECT visitor_id FROM visx v WHERE v.name = w.name)),
         'lp_from_seat_click', count(*) FILTER (WHERE door = 'landing_page' AND visitor_id IN (SELECT visitor_id FROM visx v WHERE v.name = w.name AND v.cta_seat)))
       FROM reg g WHERE g.name = w.name),
+    'payers', (SELECT json_build_object(
+        'total', count(*), 'monthly', count(*) FILTER (WHERE plan = 'monthly'), 'annual', count(*) FILTER (WHERE plan = 'annual'),
+        'oh_registered', count(*) FILTER (WHERE oh_registered), 'came_before_paying', count(*) FILTER (WHERE came_before_paying),
+        'by_origin', (SELECT coalesce(json_agg(t ORDER BY t.n DESC, t.origin), '[]') FROM (
+            SELECT origin, count(*) AS n, count(*) FILTER (WHERE came_before_paying) AS came FROM payers p2 WHERE p2.name = w.name GROUP BY 1) t))
+      FROM payers p WHERE p.name = w.name),
     -- Everything from here follows the landing page door only, the ad funnel.
     'journey', (SELECT json_build_object(
         'signups', count(*),
@@ -282,6 +377,7 @@ SELECT json_build_object(
         'paid_attended', count(*) FILTER (WHERE oh_held AND attended AND paid_at IS NOT NULL),
         'paid_interacted', count(*) FILTER (WHERE oh_held AND attended AND interacted AND paid_at IS NOT NULL),
         'checkout_held', count(*) FILTER (WHERE oh_held AND checkout_at IS NOT NULL),
+        'checkout', count(*) FILTER (WHERE checkout_at IS NOT NULL),
         'already_paid', count(*) FILTER (WHERE paid_before),
         'exits', coalesce(json_agg(round(exit_s)::int ORDER BY exit_s) FILTER (
             WHERE new_account AND played_at IS NOT NULL AND finished_at IS NULL AND exit_s IS NOT NULL), '[]'),

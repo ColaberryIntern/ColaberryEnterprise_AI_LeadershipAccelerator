@@ -5,6 +5,12 @@
 'use strict';
 const { pct, grade, delta, funnel, ATTEND_FLOOR } = require('./model');
 
+/** Where a payer came from, in words (collect.sql payers.origin). Exported for the report and the email. */
+const ORIGIN = {
+  ad_signup: 'Ad sign-up', ad_visit: 'Visited the ad page, did not sign up', oh_other_door: 'Open House registrant, another door',
+  winback: 'Win-back or alumni campaign', earlier_oh_lead: 'Earlier Open House lead (before the ads)', other: 'Somewhere else',
+};
+
 function kpis(cur, prev, targets) {
   const j = cur.journey, pj = prev && prev.journey;
   const tile = (icon, label, value, sub, g, prevValue, unit) => ({
@@ -27,10 +33,8 @@ function kpis(cur, prev, targets) {
       return tile('🎤', 'Came to the Open House', j.attended, j.oh_held ? `${g.pct}% of ${j.oh_held} whose session happened (a floor)` : 'no Open House has happened yet',
         g, pj && pj.attended);
     })()]),
-    ...(j.paid_held === undefined ? [] : [(() => {
-      const g = grade('paid', j.paid_held, j.oh_held, targets);
-      return tile('💳', 'Paid to enroll', j.paid_held, j.oh_held ? `${g.pct}% of ${j.oh_held} whose Open House happened` : 'no Open House has happened yet', g, pj && pj.paid_held);
-    })()]),
+    ...(cur.payers === undefined ? [] : [tile('💳', 'Paid to enroll, every source', cur.payers.total,
+      `${j.paid ?? 0} of them came from the ads`, null, prev && prev.payers && prev.payers.total)]),
   ];
 }
 
@@ -46,6 +50,10 @@ function findings(cur, targets) {
   }
   const j = cur.journey;
   out.push(...attendanceFindings(j, targets));
+  if (cur.payers && cur.payers.total) {
+    const p = cur.payers, top = p.by_origin.map((o) => `${ORIGIN[o.origin] || o.origin}: ${o.n}`).join('; ');
+    out.push({ tone: 'good', icon: '💰', text: `${p.total} people paid to enroll this week (${p.monthly} monthly, ${p.annual} annual): ${top}. ${p.came_before_paying} had come to an Open House before paying.` });
+  }
   if (j.entered > 0 && j.played === 0) {
     out.push({ tone: 'bad', icon: '⏸️', text: `${j.entered} people reached the welcome video and none pressed play. The step between “in the account” and “watching” is the one to fix first.` });
   }
@@ -86,11 +94,11 @@ function attendanceFindings(j, targets) {
   if (j.interacted !== undefined && j.attended > 0) {
     out.push({ tone: 'info', icon: '🙋', text: `${j.interacted} of the ${j.attended} who came took part: answered a poll, asked a question or set a status (${pct(j.interacted, j.attended)}%).` });
   }
-  if (j.paid_held !== undefined) {
-    const started = Math.max(0, (j.checkout_held || 0) - j.paid_held);
-    out.push({ tone: j.paid_held ? 'good' : 'warn', icon: '💳', text: j.paid_held
-      ? `${j.paid_held} of ${j.oh_held} paid to enroll after their Open House (${pct(j.paid_held, j.oh_held)}%): ${j.paid_interacted} took part, ${Math.max(0, j.paid_attended - j.paid_interacted)} came and watched, ${Math.max(0, j.paid_held - j.paid_attended)} never came.${started ? ` ${started} more started checkout and did not pay.` : ''}`
-      : `Nobody whose Open House has happened has paid to enroll yet (0 of ${j.oh_held}).${started ? ` ${started} started checkout and did not pay.` : ''}` });
+  if (j.paid !== undefined) {
+    const started = Math.max(0, (j.checkout ?? j.checkout_held ?? 0) - j.paid);
+    out.push({ tone: j.paid ? 'good' : 'warn', icon: '💳', text: j.paid
+      ? `${j.paid} of ${j.signups} ad sign-ups paid to enroll (${pct(j.paid, j.signups)}%): ${j.paid_interacted} took part at the Open House, ${Math.max(0, j.paid_attended - j.paid_interacted)} came and watched, ${Math.max(0, j.paid - j.paid_attended)} paid without coming.${started ? ` ${started} more started checkout and did not pay.` : ''}`
+      : `No ad sign-up has paid to enroll yet (0 of ${j.signups}).${started ? ` ${started} started checkout and did not pay.` : ''}` });
   }
   const notWatched = j.oh_held - j.held_watched, attNotWatched = j.attended - j.attended_watched;
   if (j.held_watched >= targets.minSample && notWatched >= targets.minSample) {
@@ -111,6 +119,17 @@ function blindSpots(snap) {
     { icon: '💵', what: 'Ad spend, cost per sign-up', why: 'Meta spend is not in our database.', next: 'Add weekly spend by campaign, then cost per sign-up and per finished video.' },
     { icon: '📄', what: 'The /open-house form page itself', why: 'It records no page views, so "opened the form, did not submit" is inferred from the button click.', next: 'Add page tracking to the form page.' },
     { icon: '🔗', what: 'Which email a sign-in link came from', why: 'Every link sign-in looks the same.', next: 'Tag the welcome email link so its sign-ins are counted separately.' },
+    // C125. The heat map is only as good as these three, so they are named beside it rather
+    // than left for a reader to infer from a caveat under the chart.
+    { icon: '📍', what: 'Where on the page a click happened',
+      why: 'No click anywhere in page_events carries a coordinate, so a click is only ever known by the element it names. The heat map places it by measuring where that element sits.',
+      next: 'Record the click position and the page height alongside the label, and the placement stops being an inference.' },
+    { icon: '📏', what: 'Anything between the five scroll points',
+      why: 'Scrolling is recorded at 25, 50, 75, 90 and 100% only. On a page nine screens long the first of those is already three screens down, so the whole first stretch reads as "arrived" and nothing finer.',
+      next: 'Fire the scroll beat every 10%, which is a one-line change to the thresholds in /v1/track.js.' },
+    { icon: '🔀', what: 'Which copy of a repeated button was clicked',
+      why: 'The three Save my seat buttons share one data-track value, so their clicks arrive as one number that cannot be split between the sticky header, the hero and the closing band.',
+      next: 'Give each copy its own data-track value, for example "Save my seat (header)".' },
   ];
   const em = snap.email;
   if (!em) list.push({ icon: '✉️', what: 'Welcome email opens and clicks', why: 'Mandrill was not read for this run.', next: 'Run with Mandrill (run.sh does by default).' });
@@ -118,4 +137,4 @@ function blindSpots(snap) {
   return list;
 }
 
-module.exports = { kpis, findings, blindSpots };
+module.exports = { kpis, findings, blindSpots, ORIGIN };

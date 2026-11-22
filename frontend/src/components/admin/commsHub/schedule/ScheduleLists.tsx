@@ -90,7 +90,7 @@ export function HistoryTable({ list, onChanged }: { list: BoardList; onChanged: 
             <tbody>
               {list.rows.map((r) => (
                 <tr key={r.id}>
-                  <td className="text-nowrap">{whenOf(r.send_at ?? r.updated_at)}</td>
+                  <td className="ch-history-when">{whenOf(r.send_at ?? r.updated_at)}</td>
                   <td>
                     <span className="fw-bold d-block">{r.title}</span>
                     {r.failure && (
