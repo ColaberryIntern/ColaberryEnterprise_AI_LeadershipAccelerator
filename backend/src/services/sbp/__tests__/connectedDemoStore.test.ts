@@ -419,8 +419,13 @@ describe('WRITE-BOUNDARY SENTINEL: no column of projects can reach demo_spec', (
 
 describe('the generator itself', () => {
   it('throws ConnectedDemoDataModelMissing, the pure error, not the store error', () => {
+    /*
+     * Spread through the real input type rather than through `never`. `{ ...(x as never) }` is
+     * not spreadable under TS 5.9 and the cast was hiding the shape rather than widening it;
+     * naming the one field being made invalid is also what the test is actually about.
+     */
     expect(() =>
-      buildConnectedDemoSpec({ ...(input() as never), dataModel: null } as never),
+      buildConnectedDemoSpec({ ...input(), dataModel: null } as unknown as Parameters<typeof buildConnectedDemoSpec>[0]),
     ).toThrow(ConnectedDemoDataModelMissing);
   });
 

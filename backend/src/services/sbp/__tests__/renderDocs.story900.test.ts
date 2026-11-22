@@ -192,7 +192,7 @@ describe('a plan that carries its own STORY-900 wins', () => {
         fulfills: [],
         owner_agent: 'agent.builder',
         acceptance: ['Given a plan', 'When it names STORY-900', 'Trust: the plan wins'],
-      } as BuildPlan['stories'][number],
+      } as unknown as BuildPlan['stories'][number],
     ],
   };
 

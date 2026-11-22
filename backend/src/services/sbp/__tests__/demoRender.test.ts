@@ -13,7 +13,9 @@
  */
 import fs from 'fs';
 import path from 'path';
-import { JSDOM, VirtualConsole } from 'jsdom';
+// Typed in one place, because jsdom ships no types and is not a declared dependency.
+// See `jsdomForTests.ts` for why that is a shim rather than an import.
+import { JSDOM, VirtualConsole, type JsdomInstance } from './jsdomForTests';
 import {
   renderConnectedDemo,
   DemoRenderError,

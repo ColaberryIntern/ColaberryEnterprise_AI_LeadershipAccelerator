@@ -70,6 +70,10 @@ function baseInput(over: Partial<BridgeInput> = {}): BridgeInput {
       // Empty by default, so the base fixture keeps the case that matters most: a high-risk
       // human task with NOBODY named to approve it. That is what Herriman actually looked like.
       assignments: [],
+      // REQUIRED since the bridge started resolving the accountable role against the roster
+      // rather than trusting the allocation alone. Empty is the honest default here for the same
+      // reason `assignments` is: the base fixture is the project with nobody named.
+      roles: [],
     },
     profileKey: 'internal_tool',
     ...over,

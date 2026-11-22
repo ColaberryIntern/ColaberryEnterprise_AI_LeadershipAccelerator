@@ -21,7 +21,9 @@
  */
 import fs from 'fs';
 import path from 'path';
-import { JSDOM, VirtualConsole } from 'jsdom';
+// Typed in one place, because jsdom ships no types and is not a declared dependency.
+// See `jsdomForTests.ts` for why that is a shim rather than an import.
+import { JSDOM, VirtualConsole, type JsdomInstance } from './jsdomForTests';
 import { ACTION_LIFECYCLE } from '../demoSpec/contract';
 
 const ENGINE = fs.readFileSync(
@@ -42,7 +44,7 @@ type Loose = Record<string, unknown>;
  * from the engine's own script are still surfaced, via `jsdomError`.
  */
 function boot(spec: Loose): {
-  dom: JSDOM;
+  dom: JsdomInstance;
   /** The rendered app's markup. See `appText` for why this is not `document.body`. */
   body: string;
   /**
