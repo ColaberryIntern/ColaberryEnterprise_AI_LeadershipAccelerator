@@ -11,6 +11,13 @@
   max-width: 1080px;
   margin: 0 auto;
   padding: 4px 0 40px;
+
+  /* The query container for the lens grid below. `width: 100%` is deliberate and
+     load-bearing: an element with `container-type: inline-size` no longer sizes to
+     its own contents, so inside a flex parent it would collapse to zero. The Settings
+     "Points" tab renders this same component, and that is the case this guards. */
+  container-type: inline-size;
+  width: 100%;
 }
 
 .points-root .pts-empty,
@@ -65,13 +72,28 @@
 /* Lens grid */
 .points-root .pts-lenses {
   display: grid;
-  /* Always 3 lenses across (minmax(0,1fr) lets them shrink to fit any width,
-     e.g. the narrower Settings > Points tab). Collapses to 1 column on phones. */
+  /* Three lenses across while there is room for three. `minmax(0,1fr)` lets them
+     shrink, which is not the same as letting them shrink to an unreadable width. */
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 18px;
 }
+/* Kept for browsers without container queries, and for the case where the window
+   itself is the narrow thing. Both rules set the same value, so they cannot fight. */
 @media (max-width: 680px) {
+  .points-root .pts-lenses { grid-template-columns: 1fr; }
+}
+/* The rule that actually fires on /portal/points.
+   Reported by Ruth Kumera, 27 Oct 2026: the AI builder status page cut off its own
+   content. The horizontal clipping was fixed in #3778; this is what was left.
+   On this route the working column is 462px inside a 1440px window, because the
+   portal shell spends the rest on the left nav and the people panel. A `max-width`
+   media query asks the WINDOW, so it reported "desktop" to a container that was
+   narrower than a phone, and the three lenses rendered at 146px each. Measured on
+   production before the fix: "1,391 pts" broke across 2 line boxes and a milestone
+   title across 4, so a number split mid-digit. Asking the container instead gives
+   one 462px column and both drop to a single line. */
+@container (max-width: 680px) {
   .points-root .pts-lenses { grid-template-columns: 1fr; }
 }
 /* Tighter internals so the 3 lenses stay clean at narrow column widths. */
