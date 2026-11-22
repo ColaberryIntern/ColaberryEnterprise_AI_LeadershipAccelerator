@@ -95,6 +95,15 @@ const LEARNER_SOURCES: Record<string, string> = {
     SELECT 'assignment_submitted' AS signal, submitted_at AS occurred_at
     FROM assignment_submissions
     WHERE enrollment_id = :enrollmentId AND submitted_at IS NOT NULL`,
+
+  // A checkout they started and never paid (comp grants are not checkouts). The
+  // `class_seat_reserved` intent signal needs no entry: it is a row in
+  // student_navigation_events, which the first source above already reads by event_type.
+  subscriptions: `
+    SELECT 'checkout_started' AS signal, created_at AS occurred_at
+    FROM subscriptions
+    WHERE enrollment_id = :enrollmentId AND paysimple_payment_id IS NULL
+      AND plan IS DISTINCT FROM 'comp'`,
 };
 
 /**
