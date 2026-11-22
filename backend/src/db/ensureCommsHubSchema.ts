@@ -40,7 +40,8 @@ export const COMMS_HUB_CHANNELS = ['community_post', 'in_app'] as const;
 export const COMMS_HUB_MESSAGE_STATUSES = ['draft', 'needs_approval', 'approved', 'scheduled', 'sending', 'sent', 'partially_failed', 'failed', 'cancelled'] as const;
 export const COMMS_HUB_MESSAGE_KINDS = ['announcement', 'reminder', 'starting_soon', 'recording_thanks', 'time_change', 'cancellation', 'update', 'other'] as const;
 export const COMMS_HUB_PLAN_KINDS = ['announcement', 'reminder', 'starting_soon', 'recording_thanks'] as const;
-export const COMMS_HUB_DESTINATION_TYPES = ['cohort_feed', 'in_app_audience'] as const;
+// CH9.6 event_registrants: in-app to the people registered for one Eventbrite event the hub manages.
+export const COMMS_HUB_DESTINATION_TYPES = ['cohort_feed', 'in_app_audience', 'event_registrants'] as const;
 export const COMMS_HUB_DELIVERY_STATUSES = ['pending', 'sending', 'sent', 'failed', 'cancelled', 'skipped'] as const;
 export const COMMS_HUB_ALERT_STATUSES = ['pending', 'sending', 'sent', 'failed'] as const;
 export const COMMS_HUB_ALERT_STATES = ['failed', 'partially_failed'] as const;
@@ -65,11 +66,22 @@ export const COMMS_HUB_SCHEMA_STATEMENTS: readonly string[] = [
      thumbnail_id UUID,
      broadcast_occurrence_id UUID,
      promotion_plan JSONB NOT NULL DEFAULT '[]'::jsonb,
+     ccpp_event_id VARCHAR(32),
+     source_image_url TEXT,
+     ccpp_missing_since TIMESTAMPTZ,
      created_by VARCHAR(64),
      updated_by VARCHAR(64),
      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
    )`,
+  // CH9.5 an Eventbrite event managed in the hub. Additive and nullable, so the phase 1 table (already
+  // in production) gains them with every existing row untouched; the CREATE above covers a new database.
+  `ALTER TABLE comms_hub_events ADD COLUMN IF NOT EXISTS ccpp_event_id VARCHAR(32)`,
+  `ALTER TABLE comms_hub_events ADD COLUMN IF NOT EXISTS source_image_url TEXT`,
+  `ALTER TABLE comms_hub_events ADD COLUMN IF NOT EXISTS ccpp_missing_since TIMESTAMPTZ`,
+  // One hub event per Eventbrite event. Partial, so the many hub-made events (null) never collide; an
+  // upsert must name the same predicate in its conflict target (adoptEventbriteEvent does).
+  `CREATE UNIQUE INDEX IF NOT EXISTS uq_comms_hub_events_ccpp ON comms_hub_events (ccpp_event_id) WHERE ccpp_event_id IS NOT NULL`,
   `ALTER TABLE comms_hub_events ADD CONSTRAINT comms_hub_events_status_check
      CHECK (status IN (${list(COMMS_HUB_EVENT_STATUSES)}))`,
   `ALTER TABLE comms_hub_events ADD CONSTRAINT comms_hub_events_type_check
@@ -201,6 +213,16 @@ export const COMMS_HUB_SCHEMA_STATEMENTS: readonly string[] = [
      CHECK (channel IN (${list(COMMS_HUB_CHANNELS)}))`,
   `ALTER TABLE comms_hub_destinations ADD CONSTRAINT comms_hub_destinations_type_check
      CHECK (target_type IN (${list(COMMS_HUB_DESTINATION_TYPES)}))`,
+  // CH9.6: production already has this CHECK from phase 1 without 'event_registrants', and the ADD above
+  // is a no-op once it exists. Widen it only when its definition lacks the new type, in one statement,
+  // so a normal boot changes nothing and the table is never left without the check.
+  `DO $$ BEGIN
+     IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'comms_hub_destinations_type_check'
+                AND pg_get_constraintdef(oid) NOT LIKE '%event_registrants%') THEN
+       ALTER TABLE comms_hub_destinations DROP CONSTRAINT comms_hub_destinations_type_check,
+         ADD CONSTRAINT comms_hub_destinations_type_check CHECK (target_type IN (${list(COMMS_HUB_DESTINATION_TYPES)}));
+     END IF;
+   END $$`,
   `CREATE UNIQUE INDEX IF NOT EXISTS uq_comms_hub_destinations_target ON comms_hub_destinations (message_id, channel, target_type, target_id)`,
 
   `CREATE TABLE IF NOT EXISTS comms_hub_approvals (
@@ -307,8 +329,14 @@ export async function ensureCommsHubSchema(): Promise<{ ok: boolean; missing: st
       `SELECT 1 AS present FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'community_events' AND column_name = 'hub_event_id'`,
       { type: QueryTypes.SELECT },
     );
+    // CH9.5: the Eventbrite link column, without which managing an Eventbrite event cannot work.
+    const ccppCol = await sequelize.query(
+      `SELECT 1 AS present FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'comms_hub_events' AND column_name = 'ccpp_event_id'`,
+      { type: QueryTypes.SELECT },
+    );
     missing = REQUIRED_TABLES.filter((t) => !present.has(t));
     if (cols.length === 0) missing.push('community_events.hub_event_id');
+    if (ccppCol.length === 0) missing.push('comms_hub_events.ccpp_event_id');
     if (missing.length > 0) {
       console.error(JSON.stringify({
         timestamp: new Date().toISOString(), level: 'error', service: 'backend', event: 'SchemaInvariantViolation',

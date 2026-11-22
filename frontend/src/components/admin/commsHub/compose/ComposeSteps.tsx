@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import type { Channel, DestinationView, MessageKind, MessageView, Tone } from '../../../../services/commsHubApi';
 import type { Compose } from './useCompose';
+import RegistrantReachNote from './RegistrantReachNote';
 import RichText from '../../../../pages/portal/community/RichText';
 import { centralLabel, centralToIso, isoToCentral } from './centralTime';
 
@@ -229,6 +230,8 @@ export function StepApprove({ c }: { c: Compose }): React.ReactElement {
             <input className="form-check-input" type="checkbox" id={`ch-to-${keyOf(d)}`} checked={picked.has(keyOf(d))} disabled={!!d.has_delivery}
               onChange={() => setPicked((p) => { const n = new Set(p); if (n.has(keyOf(d))) n.delete(keyOf(d)); else n.add(keyOf(d)); return n; })} />
             <label className="form-check-label" htmlFor={`ch-to-${keyOf(d)}`}>{d.channel === 'in_app' ? 'In-app notification: ' : 'Community feed: '}{d.label}{d.has_delivery ? ' (already sent)' : ''}</label>
+            {/* CH9.6: before approving, how many registrants this actually reaches. */}
+            {d.target_type === 'event_registrants' && <RegistrantReachNote hubEventId={d.target_id} />}
           </div>
         ))}
         {recipientsChanged && <button type="button" className="btn btn-outline-secondary comms-hub-action mt-1" onClick={() => void c.setRecipients(chosen)}>{c.busy === 'recipients' ? 'Saving...' : 'Save recipients'}</button>}

@@ -15,7 +15,7 @@
  * already drops pricing.
  */
 import { classifyRequirementCategory } from './govRequirementItems';
-import { isSubmissionInstructionRequirement } from './documentChecks';
+import { isSubmissionInstructionRequirement, isNonTechnicalAdministrativeRequirement } from './documentChecks';
 import type { ResponseFigure } from './responseSlots';
 import type { ProposalBlueprint } from './proposalBlueprintTypes';
 
@@ -156,7 +156,14 @@ export function deriveProposalDocuments(
     // still enumerated there and needs no drafted narrative section. The classifier excludes anything naming a
     // technical capability (GIS, work order, integration, offline, SCADA...), so a genuine "the proposal must
     // include a technical approach" requirement is NOT swept up. See HERRIMAN_ROOT_CAUSE_MATRIX.md F01.
-    if (rule.key === 'technical' && isSubmissionInstructionRequirement(statement)) continue;
+    if (rule.key === 'technical' && !isScope && isSubmissionInstructionRequirement(statement)) continue;
+    // F01/R3 (admin-clause leak): the City's own evaluation process (review panel, how proposals are scored),
+    // procurement/contractual mechanics (entering a written agreement, negotiation, right to reject), and residual
+    // submission rules (no late response, no facsimile) are NOT solution answers. When such a clause would default
+    // into the Technical Proposal, drop it from derivation — the generated Compliance Matrix still enumerates it. A
+    // scope requirement is never dropped (!isScope), and the classifier's proposer-solution guard keeps a genuine
+    // "Describe the Proposer's understanding..." narrative ask in the technical response. See HERRIMAN_ROOT_CAUSE_MATRIX.md.
+    if (rule.key === 'technical' && !isScope && isNonTechnicalAdministrativeRequirement(statement)) continue;
     let doc = byKey.get(rule.key);
     if (!doc) { doc = { key: rule.key, title: rule.title, order: rule.order, gate: rule.gate, adminOnly: rule.adminOnly, requirements: [], sections: [], docType: 'derived', pageLimit: null, fileName: null, blueprintVersion: null }; byKey.set(rule.key, doc); }
     if (!doc.requirements.some((x) => x.canonicalReqId === canonicalReqId)) {

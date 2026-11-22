@@ -74,6 +74,16 @@ describe('CH6.3 create', () => {
     expect(recommended.map((r) => [r.channel, r.target_id, r.label])).toEqual([['community_post', 'c2', 'December 2026 feed'], ['in_app', 'c2', 'December 2026 members']]);
   });
 
+  it('CH9.6 an Eventbrite event managed in the hub also recommends its registrants (in-app); a hub-made one does not', async () => {
+    events.get('e1')!.ccpp_event_id = '1992498063344';
+    mockLLM.mockResolvedValue(reply());
+    const { recommended } = await createDraftMessage({ eventId: 'e1', kind: 'reminder' }, JACKIE, NOW);
+    expect(recommended.map((r) => [r.channel, r.target_type, r.target_id])).toEqual([
+      ['community_post', 'cohort_feed', 'c1'], ['in_app', 'in_app_audience', 'all_members'], ['in_app', 'event_registrants', 'e1'],
+    ]);
+    expect(recommended[2]).toMatchObject({ label: 'Registrants of Demo Tuesday (in-app)', reason: expect.stringContaining('registered') });
+  });
+
   it('subject only (no event): drafts with no facts to fill, recommended to every open cohort and all members', async () => {
     mockLLM.mockResolvedValue({ content: JSON.stringify({ community_post: { body: 'The Weekly Live guide is in the library.' }, in_app: { title: 'New guide', body: 'Weekly Live guide is in the library' } }) });
     const { message, drafts: d, recommended } = await createDraftMessage({ subject: 'New Weekly Live guide', kind: 'update' }, JACKIE, NOW);

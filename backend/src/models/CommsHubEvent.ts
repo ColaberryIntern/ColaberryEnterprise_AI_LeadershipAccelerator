@@ -31,6 +31,12 @@ export interface CommsHubEventAttributes {
   broadcast_occurrence_id?: string | null;
   /** CH6.4: the promotion-plan rows ticked for this event (plan kinds). */
   promotion_plan?: string[];
+  /** CH9.5: the Eventbrite (CCPP) event this hub event manages; null for an event made in the hub. */
+  ccpp_event_id?: string | null;
+  /** CH9.5: the Eventbrite picture, the portal card's image until a hub thumbnail is chosen. */
+  source_image_url?: string | null;
+  /** CH9.5: when the event was last seen missing from Eventbrite's public list; null while it is there. */
+  ccpp_missing_since?: Date | null;
   created_by?: string | null;
   updated_by?: string | null;
   created_at?: Date;
@@ -54,6 +60,9 @@ class CommsHubEvent extends Model<CommsHubEventAttributes> implements CommsHubEv
   declare thumbnail_id: string | null;
   declare broadcast_occurrence_id: string | null;
   declare promotion_plan: string[];
+  declare ccpp_event_id: string | null;
+  declare source_image_url: string | null;
+  declare ccpp_missing_since: Date | null;
   declare created_by: string | null;
   declare updated_by: string | null;
   declare created_at: Date;
@@ -78,6 +87,9 @@ CommsHubEvent.init(
     thumbnail_id: { type: DataTypes.UUID, allowNull: true },
     broadcast_occurrence_id: { type: DataTypes.UUID, allowNull: true },
     promotion_plan: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
+    ccpp_event_id: { type: DataTypes.STRING(32), allowNull: true },
+    source_image_url: { type: DataTypes.TEXT, allowNull: true },
+    ccpp_missing_since: { type: DataTypes.DATE, allowNull: true },
     created_by: { type: DataTypes.STRING(64), allowNull: true },
     updated_by: { type: DataTypes.STRING(64), allowNull: true },
     created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },

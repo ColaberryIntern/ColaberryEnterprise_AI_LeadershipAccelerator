@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { PageHeader } from '../shell';
 import { apiErrorMessage, getCommsHubSummary, setSendingPaused, type CommsHubSummary } from '../../../services/commsHubApi';
+import ReportAProblem from '../../../pages/admin/marketing/bugReport/ReportAProblem';
 // The hub's styles for every tab (Today, Events, Compose, Schedule), not only the Events tab.
 import './commsHub.css';
 
@@ -117,6 +118,11 @@ export default function CommsHubLayout(): React.ReactElement {
         </div>
       )}
       <Outlet context={context} />
+      {/* CH9.1 Report a problem, bottom right on every tab. Its own endpoint: Marketing's is gated on
+          `campaigns`, which neither Jackie nor Taiwo holds. The route is in the report, so no tab prop. */}
+      <ReportAProblem brandLabel="Communications Hub" endpoint={COMMS_HUB_BUG_REPORT_ENDPOINT} extra={{ area: 'comms-hub' }} />
     </div>
   );
 }
+
+export const COMMS_HUB_BUG_REPORT_ENDPOINT = '/api/admin/comms-hub/bug-report';

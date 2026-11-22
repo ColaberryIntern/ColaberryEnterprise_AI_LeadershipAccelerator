@@ -34,6 +34,10 @@ const LIST = Number(process.env.LIST || 10406233777);
 const PARENT_VAULT = Number(process.env.PARENT_VAULT || 10406233371);
 const DRY = process.env.DRY === '1';
 const ALI_PERSON_ID = 17454835;
+/** Post an artifact whose filename is already on the ticket, because its CONTENT has been
+ *  refreshed. Off by default so an accidental re-run stays a no-op. Trash the superseded vault
+ *  upload first, or the folder keeps serving the old bytes under the same name. */
+const ALLOW_REPOST = process.env.ALLOW_REPOST === '1';
 
 let TOKEN = null;
 async function tok() {
@@ -191,9 +195,17 @@ async function main() {
     if (!fs.existsSync(post.file)) throw new Error(`missing file: ${post.file}`);
     const bytes = fs.statSync(post.file).size;
 
-    if (existingComments.some((c) => (c.content || '').includes(post.filename))) {
-      console.log(`${post.filename}: already on the ticket, skipped`);
+    // Idempotency: re-running the same spec must not post the artifact twice. The guard is the
+    // FILENAME appearing in any existing comment, which is right for a re-run and wrong for a
+    // deliberate refresh -- a ticket whose state has moved on needs the same filename posted
+    // again with new bytes, and before ALLOW_REPOST there was no way to say so. Trashing the old
+    // vault upload is not enough on its own, because this check reads the ticket, not the folder.
+    if (!ALLOW_REPOST && existingComments.some((c) => (c.content || '').includes(post.filename))) {
+      console.log(`${post.filename}: already on the ticket, skipped (ALLOW_REPOST=1 to refresh it)`);
       continue;
+    }
+    if (ALLOW_REPOST && existingComments.some((c) => (c.content || '').includes(post.filename))) {
+      console.log(`${post.filename}: already on the ticket -- REPOSTING with new bytes`);
     }
 
     // File it in the numbered folder, unless an upload of that name is already there.

@@ -26,7 +26,13 @@ import type { ClaimedDelivery, DeliveryRepo, SendContext, SendOutcome, WorkerSet
  * context is re-read; the send happens; and its outcome is written before the lock is released, so
  * the next sender to that feed sees the recorded post (CH7.1's retry rule depends on that).
  */
-const TARGET_TYPE_FOR: Record<string, string> = { community_post: 'cohort_feed', in_app: 'in_app_audience' };
+// CH9.6: a channel allows a SET of target types; in-app reaches an audience or an event's registrants.
+const TARGET_TYPES_FOR: Record<string, readonly string[]> = { community_post: ['cohort_feed'], in_app: ['in_app_audience', 'event_registrants'] };
+
+/** Pure: is this a legal destination shape for its channel, before the target itself is looked up. */
+export function destinationShapeAllowed(channel: string, targetType: string): boolean {
+  return (TARGET_TYPES_FOR[channel] ?? []).includes(targetType);
+}
 
 export function sendLockKey(d: Pick<ClaimedDelivery, 'channel' | 'target_type' | 'target_id' | 'message_id'>): string {
   return d.channel === 'community_post' ? `comms_hub:post:${d.target_type}:${d.target_id}` : `comms_hub:in_app:${d.message_id}`;
@@ -45,9 +51,15 @@ async function readSettings(t?: Transaction): Promise<WorkerSettings> {
 async function readContext(d: ClaimedDelivery, t: Transaction): Promise<SendContext> {
   const m = await CommsHubMessage.findByPk(d.message_id, { transaction: t });
   const dest = await CommsHubDestination.findByPk(d.destination_id, { transaction: t });
-  let destinationAllowed = !!dest && dest.message_id === d.message_id && dest.channel === d.channel && dest.target_type === TARGET_TYPE_FOR[d.channel];
-  if (destinationAllowed && dest!.target_id !== ALL_MEMBERS) destinationAllowed = !!(await Cohort.findByPk(dest!.target_id, { attributes: ['id'], transaction: t }));
-  if (destinationAllowed && dest!.target_id === ALL_MEMBERS) destinationAllowed = d.channel === 'in_app';
+  let destinationAllowed = !!dest && dest.message_id === d.message_id && dest.channel === d.channel && destinationShapeAllowed(d.channel, dest.target_type);
+  if (destinationAllowed && dest!.target_type === 'event_registrants') {
+    // CH9.6: the message's own event, still an Eventbrite event managed in the hub (never a cohort lookup).
+    const ev = await CommsHubEvent.findByPk(dest!.target_id, { attributes: ['id', 'ccpp_event_id'], transaction: t });
+    destinationAllowed = !!ev && !!ev.ccpp_event_id && m?.event_id === ev.id;
+  } else {
+    if (destinationAllowed && dest!.target_id !== ALL_MEMBERS) destinationAllowed = !!(await Cohort.findByPk(dest!.target_id, { attributes: ['id'], transaction: t }));
+    if (destinationAllowed && dest!.target_id === ALL_MEMBERS) destinationAllowed = d.channel === 'in_app';
+  }
   const draft = await CommsHubDraft.findOne({ where: { message_id: d.message_id, channel: d.channel }, order: [['version', 'DESC']], transaction: t });
   let media_urls: string[] = [];
   if (m && d.channel === 'community_post' && m.include?.thumbnail !== false && m.event_id) {

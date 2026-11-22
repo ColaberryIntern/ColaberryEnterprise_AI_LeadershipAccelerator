@@ -45,18 +45,74 @@ export interface DealValue {
   notes: string | null;
 }
 
-export interface ConfirmDealValueInput {
+interface DealValueCommon {
   enterpriseIntakeId: string;
-  dealValueCents: number;
   valueBasis: string;
   basisSource: DealBasisSource;
-  periodMonths?: number | null;
   currency?: string;
   notes?: string | null;
   /** From the session. Never from a request body. */
   confirmedBy: string;
   /** Injectable for tests; defaults to now. */
   now?: Date;
+}
+
+/**
+ * A deal priced as one total figure: a project, a fixed-scope build, a training program.
+ * `periodMonths` is optional here and only affects the annualized view.
+ */
+export interface TotalContractInput extends DealValueCommon {
+  valueKind: 'total_contract';
+  /** The WHOLE engagement, in cents. */
+  dealValueCents: number;
+  periodMonths?: number | null;
+}
+
+/**
+ * A deal priced as a monthly retainer — Plan A, the Middlesex shape.
+ *
+ * ── WHY THIS IS A SEPARATE INPUT AND NOT A FLAG ──────────────────────────────────────────
+ *
+ * The first version of this service took one `dealValueCents` plus a `periodMonths`, and a
+ * retainer had no honest place to go. Somebody recording Middlesex would type the figure they
+ * actually negotiated — the monthly fee — with a twelve-month term, and the service would
+ * have stored $4,500 as the whole engagement instead of $54,000. The mandatory basis text
+ * makes them DESCRIBE the figure, which helps a reader afterwards and prevents nothing at the
+ * moment of entry.
+ *
+ * So the monthly case has its own field name and its own required term, and the total is
+ * computed rather than typed. `monthlyFeeCents` cannot be mistaken for a total the way a
+ * generic `dealValueCents` could, and a retainer with no term is refused outright instead of
+ * silently becoming one month of itself.
+ */
+export interface MonthlyRetainerInput extends DealValueCommon {
+  valueKind: 'monthly_retainer';
+  /** The RECURRING fee, in cents per month. The stored total is this times the term. */
+  monthlyFeeCents: number;
+  /** Required here, unlike a total-contract deal: without it there is no total to compute. */
+  periodMonths: number;
+}
+
+export type ConfirmDealValueInput = TotalContractInput | MonthlyRetainerInput;
+
+/**
+ * Collapse either input shape to the one invariant the table holds: `deal_value_cents` is
+ * ALWAYS the total contract value.
+ *
+ * One invariant rather than two, so every `SUM` on this table is correct without the caller
+ * knowing which shape produced a row. The monthly figure stays exactly recoverable as
+ * total / term, because that is how the total was built.
+ */
+function normalize(
+  input: ConfirmDealValueInput,
+): { totalCents: number; periodMonths: number | null } {
+  if (input.valueKind === 'monthly_retainer') {
+    return {
+      totalCents: input.monthlyFeeCents * input.periodMonths,
+      periodMonths: input.periodMonths,
+    };
+  }
+  return { totalCents: input.dealValueCents, periodMonths: input.periodMonths ?? null };
 }
 
 interface Row {
@@ -118,14 +174,39 @@ function validate(input: ConfirmDealValueInput): void {
   if (!input.enterpriseIntakeId || !String(input.enterpriseIntakeId).trim()) {
     throw new DealValueRejected('An enterprise intake id is required.');
   }
-  if (!Number.isInteger(input.dealValueCents)) {
+  if (input.valueKind !== 'total_contract' && input.valueKind !== 'monthly_retainer') {
     throw new DealValueRejected(
-      'dealValueCents must be a whole number of CENTS, not dollars. The usual cause is '
-      + 'passing a dollar amount: $45,000 is 4500000, not 45000.',
+      "valueKind must be 'total_contract' or 'monthly_retainer'. A retainer is priced per "
+      + 'month and a project as a whole, and the two cannot share one field without a '
+      + 'twelve-month retainer being filed as a single month of it.',
     );
   }
-  if (input.dealValueCents < 0) {
+
+  // Checked on whichever field this shape actually uses, so the message names the field the
+  // caller passed rather than a generic one.
+  const amount = input.valueKind === 'monthly_retainer'
+    ? input.monthlyFeeCents : input.dealValueCents;
+  const field = input.valueKind === 'monthly_retainer' ? 'monthlyFeeCents' : 'dealValueCents';
+  if (!Number.isInteger(amount)) {
+    throw new DealValueRejected(
+      `${field} must be a whole number of CENTS, not dollars. The usual cause is passing a `
+      + 'dollar amount: $45,000 is 4500000, not 45000.',
+    );
+  }
+  if (amount < 0) {
     throw new DealValueRejected('A deal cannot be worth less than nothing.');
+  }
+
+  if (input.valueKind === 'monthly_retainer') {
+    // Required, not defaulted. A retainer with no term has no total, and assuming one month
+    // would understate every retainer in the system by the length of its own contract.
+    if (!Number.isInteger(input.periodMonths) || input.periodMonths <= 0) {
+      throw new DealValueRejected(
+        'A monthly retainer needs periodMonths: a positive whole number of months. Without '
+        + 'it there is no total contract value to record, and defaulting to one month would '
+        + 'understate the deal by the length of its own term.',
+      );
+    }
   }
   if (!DEAL_BASIS_SOURCES.includes(input.basisSource as DealBasisSource)) {
     throw new DealValueRejected(
@@ -146,7 +227,8 @@ function validate(input: ConfirmDealValueInput): void {
       + 'end to end, so an unattributed figure would be the model pricing its own pipeline.',
     );
   }
-  if (input.periodMonths !== undefined && input.periodMonths !== null) {
+  if (input.valueKind === 'total_contract'
+    && input.periodMonths !== undefined && input.periodMonths !== null) {
     if (!Number.isInteger(input.periodMonths) || input.periodMonths <= 0) {
       throw new DealValueRejected(
         'periodMonths must be a positive whole number of months, or omitted entirely to mean '
@@ -175,6 +257,8 @@ export async function confirmDealValue(
   }
 
   const now = input.now ?? new Date();
+  // Either shape collapses to the total here, once, so the insert below has one meaning.
+  const { totalCents, periodMonths } = normalize(input);
 
   // ONE transaction. Superseding the old row and inserting the new one are halves of a single
   // fact, and the partial unique index means a crash between them would otherwise leave the
@@ -199,9 +283,9 @@ export async function confirmDealValue(
         transaction: t,
         replacements: {
           iid: input.enterpriseIntakeId,
-          cents: input.dealValueCents,
+          cents: totalCents,
           currency: (input.currency ?? 'USD').toUpperCase(),
-          period: input.periodMonths ?? null,
+          period: periodMonths,
           basis: String(input.valueBasis).trim(),
           source: input.basisSource,
           by: String(input.confirmedBy).trim(),
@@ -272,4 +356,17 @@ export async function getDealValueHistory(enterpriseIntakeId: string): Promise<D
 export function annualizedCents(value: DealValue): number | null {
   if (value.periodMonths === null || value.periodMonths <= 0) return null;
   return Math.round((value.dealValueCents / value.periodMonths) * 12);
+}
+
+/**
+ * The monthly fee behind a stored total, or null when the term was not recorded.
+ *
+ * Exact for anything entered as a retainer, because the total was built by multiplying this
+ * figure by the term. For a total-contract deal that happens to carry a term it is a derived
+ * average rather than a negotiated fee, which is why a plan's retainer nature comes from its
+ * `shape` in `enterprisePlans` and is never inferred from the presence of a term.
+ */
+export function monthlyCents(value: DealValue): number | null {
+  if (value.periodMonths === null || value.periodMonths <= 0) return null;
+  return Math.round(value.dealValueCents / value.periodMonths);
 }

@@ -29,7 +29,8 @@ import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import { classInstant, formatCentralClock } from './centralDate';
 import { longSessionDate } from './email/sessionReminderEmail';
-import { followupCopy, firstNameOf, screenFollowupCopy, FollowupTrack, NextOpenHouse } from './openHouseFollowupCopy';
+import { followupCopy, firstNameOf, screenFollowupCopy, FollowupTrack, NextOpenHouse, OPEN_HOUSE_SIGNUP_URL } from './openHouseFollowupCopy';
+import type { SequenceStep } from '../models/FollowUpSequence';
 
 export const OPEN_HOUSE_FOLLOWUP_KEY = 'open_house_followup';
 
@@ -120,8 +121,60 @@ export interface FollowupBookResult {
 const empty = (outcome: FollowupBookResult['outcome']): FollowupBookResult =>
   ({ outcome, attended: 0, missed: 0, booked: 0, no_lead: 0, screened_out: 0, errors: 0 });
 
-/** Book the follow-ups for one Open House session. Never throws for a single person. */
-export async function bookOpenHouseFollowups(sessionId: string, opts: { now?: Date; log?: Log } = {}): Promise<FollowupBookResult> {
+/**
+ * OH1w: which of the follow-up sequence's steps this person gets. A sequence with audience tags
+ * (Ali's rebuild: step 1 attended, step 2 missed) gives each person only the steps tagged for
+ * their track, plus untagged steps (everyone). A sequence with no tags at all is the OH1u
+ * original: one fixed email, step 0. Returns the steps with their index in the sequence.
+ */
+export function stepsForTrack(steps: SequenceStep[] | null | undefined, track: FollowupTrack): Array<{ index: number; step: SequenceStep | null }> {
+  const list = Array.isArray(steps) ? steps : [];
+  const tagged = list.some((x) => x?.audience === 'attended' || x?.audience === 'missed');
+  if (!tagged) return [{ index: 0, step: null }];
+  return list.map((step, index) => ({ index, step })).filter(({ step }) => !step.audience || step.audience === track);
+}
+
+/**
+ * The facts and links Maya's AI is given for one follow-up. Every link it may use is listed
+ * exactly; the scheduler screens the draft against the same list (allowed_links) and sends the
+ * approved fixed copy instead when the draft fails.
+ */
+export function followupAiNotes(input: {
+  track: FollowupTrack; eventDate: string; next: NextOpenHouse | null; replayUrl: string | null; todayUrl: string; signupUrl: string;
+}): { notes: string; allowed: string[]; primary: string } {
+  const lines = [
+    `OPEN HOUSE FOLLOW-UP. The Colaberry Open House was on ${input.eventDate}.`,
+    input.track === 'attended'
+      ? 'This person CHECKED IN on the platform during the Open House. Thank them for coming.'
+      : 'This person registered but did NOT check in on the platform. They may still have joined on Zoom directly, so never say they were absent or that we missed them: say we did not see them check in, thank them if they did join, and make it easy to catch up.',
+  ];
+  const allowed: string[] = [];
+  let primary = input.signupUrl;
+  if (input.track === 'attended') {
+    lines.push(`Their Today page (the next step): ${input.todayUrl}`);
+    allowed.push(input.todayUrl);
+    primary = input.todayUrl;
+  } else {
+    if (input.replayUrl) {
+      lines.push(`Recording of the Open House: ${input.replayUrl}`);
+      allowed.push(input.replayUrl);
+    } else {
+      lines.push('There is NO recording link. Do not mention a recording or a replay.');
+    }
+    if (input.next?.registered) {
+      lines.push(`They are already registered for the next Open House, ${input.next.when_label}; their Join link will come by email. Do not ask them to register.`);
+    } else {
+      if (input.next) lines.push(`The next Open House: ${input.next.when_label}.`);
+      lines.push(`Where to save a spot: ${input.signupUrl}`);
+      allowed.push(input.signupUrl);
+    }
+  }
+  lines.push(`Links: use ONLY these, exactly as written: ${allowed.join(' , ') || '(none)'}. Never write a placeholder like [insert link].`);
+  return { notes: lines.join('\n'), allowed, primary };
+}
+
+/** Book the follow-ups for one Open House session (or one person in it). Never throws for a single person. */
+export async function bookOpenHouseFollowups(sessionId: string, opts: { now?: Date; log?: Log; leadId?: number } = {}): Promise<FollowupBookResult> {
   const now = opts.now ?? new Date();
   const log = opts.log ?? defaultLog;
   const campaign = await findFollowupCampaign();
@@ -135,50 +188,69 @@ export async function bookOpenHouseFollowups(sessionId: string, opts: { now?: Da
   if (!s.open_house_event_id || s.status === 'cancelled') return empty('not_open_house');
   if (now.getTime() < sessionEnd(s).getTime() + FOLLOWUP_GRACE_MINUTES * 60_000) return empty('not_ended');
 
+  const [seq] = await sequelize.query<{ steps: SequenceStep[] }>(
+    `SELECT steps FROM follow_up_sequences WHERE id = :id`, { replacements: { id: campaign.sequence_id }, type: QueryTypes.SELECT },
+  );
   const replayUrl = String(campaign.settings?.replay_urls?.[sessionId] || '') || null;
   const next = await nextOpenHouseAfter(s.session_date);
   const sendAt = followupSendAt(s.session_date, now);
   const eventDate = longSessionDate(s.session_date);
   const result = empty('booked');
   const { ScheduledEmail, CampaignLead } = await import('../models');
-  const { grantEventReminderPermission } = await import('./openHouseCountdown');
+  const { grantEventReminderPermission, PORTAL_TODAY_URL } = await import('./openHouseCountdown');
+  const { admitToCampaign } = await import('./campaignMembership');
 
   await sequelize.transaction(async (t) => {
-    // One booking run per session at a time (cron + manual script): the NOT EXISTS check
-    // below and the inserts are then race-free. Released at commit.
+    // One booking run per session at a time (cron, exit sweep, manual script): the NOT EXISTS
+    // check below and the inserts are then race-free. Released at commit.
     await sequelize.query(`SELECT pg_advisory_xact_lock(hashtext(:k))`, { replacements: { k: `oh1u:${sessionId}` }, transaction: t });
-    const people = await sequelize.query<{ email: string; track: FollowupTrack; lead_id: number | null; name: string | null }>(
+    const everyone = await sequelize.query<{ email: string; track: FollowupTrack; lead_id: number | null; name: string | null }>(
       FOLLOWUP_PEOPLE_SQL, { replacements: { sid: sessionId, campaignId: campaign.id }, type: QueryTypes.SELECT, transaction: t },
     );
+    const people = opts.leadId ? everyone.filter((p) => Number(p.lead_id) === Number(opts.leadId)) : everyone;
     for (const p of people) {
       if (p.track === 'attended') result.attended += 1; else result.missed += 1;
       if (!p.lead_id) { result.no_lead += 1; continue; }
-      const copy = followupCopy({
-        track: p.track, firstName: firstNameOf(p.name), eventDate, replayUrl,
-        next: next ? { when_label: next.when_label, registered: next.emails.has(p.email) } as NextOpenHouse : null,
-      });
+      const nextFor: NextOpenHouse | null = next ? { when_label: next.when_label, registered: next.emails.has(p.email) } : null;
+      const copy = followupCopy({ track: p.track, firstName: firstNameOf(p.name), eventDate, replayUrl, next: nextFor });
       const problems = screenFollowupCopy(copy);
       if (problems.length) {
         result.screened_out += 1;
         log('followup_screened_out', { outcome: 'failure', error_class: 'ContractViolation', context: { lead_id: p.lead_id, track: p.track, problems } });
         continue;
       }
+      const ai = followupAiNotes({ track: p.track, eventDate, next: nextFor, replayUrl, todayUrl: PORTAL_TODAY_URL, signupUrl: OPEN_HOUSE_SIGNUP_URL });
       try {
         await grantEventReminderPermission(campaign.id, Number(p.lead_id));
+        // One campaign at a time: the follow-up takes them out of the countdown (and anything else).
+        await admitToCampaign(campaign.id, Number(p.lead_id), { supersede: true });
+        const steps = stepsForTrack(seq?.steps, p.track);
         // A savepoint per person: in Postgres one failed insert aborts the whole transaction,
         // so without it a single bad row would fail everyone after it.
         await sequelize.transaction({ transaction: t }, async (sp) => {
-          await ScheduledEmail.create({
-            lead_id: p.lead_id, sequence_id: campaign.sequence_id, campaign_id: campaign.id, step_index: 0,
-            channel: 'email', subject: copy.subject, body: copy.body, to_email: p.email, to_phone: null,
-            max_attempts: 1, attempts_made: 0, scheduled_for: sendAt, status: 'pending', ai_instructions: null,
-            metadata: { event_followup: true, followup_track: p.track, event_session_id: sessionId, event_title: s.title, event_date: s.session_date },
-          } as any, { transaction: sp });
-          await CampaignLead.findOrCreate({
+          for (const { index, step } of steps) {
+            await ScheduledEmail.create({
+              lead_id: p.lead_id, sequence_id: campaign.sequence_id, campaign_id: campaign.id, step_index: index,
+              channel: 'email', subject: step?.subject || copy.subject,
+              // The approved fixed copy is the body until (and unless) the AI draft passes the screen.
+              body: copy.body, to_email: p.email, to_phone: null,
+              max_attempts: 1, attempts_made: 0,
+              scheduled_for: new Date(sendAt.getTime() + (step?.delay_days || 0) * 86_400_000),
+              status: 'pending', ai_instructions: step?.ai_instructions || null,
+              metadata: {
+                event_followup: true, followup_track: p.track, event_session_id: sessionId, event_title: s.title, event_date: s.session_date,
+                step_goal: step?.step_goal || null, ai_tone: step?.ai_tone || null,
+                ai_context_notes: [ai.notes, step?.ai_context_notes].filter(Boolean).join('\n'),
+                allowed_links: ai.allowed, primary_link: ai.primary,
+              },
+            } as any, { transaction: sp });
+          }
+          const [cl, created] = await CampaignLead.findOrCreate({
             where: { campaign_id: campaign.id, lead_id: p.lead_id } as any,
-            defaults: { campaign_id: campaign.id, lead_id: p.lead_id, status: 'active', total_steps: 1 } as any,
+            defaults: { campaign_id: campaign.id, lead_id: p.lead_id, status: 'active', total_steps: steps.length } as any,
             transaction: sp,
           });
+          if (!created && (cl as any).status === 'completed') await cl.update({ status: 'active', completed_at: null } as any, { transaction: sp });
         });
         result.booked += 1;
       } catch (err: any) {
@@ -187,8 +259,18 @@ export async function bookOpenHouseFollowups(sessionId: string, opts: { now?: Da
       }
     }
   });
-  log('followups_booked', { outcome: result.errors ? 'partial' : 'success', context: { session_id: sessionId, ...result } });
+  log('followups_booked', { outcome: result.errors ? 'partial' : 'success', context: { session_id: sessionId, lead_id: opts.leadId ?? null, ...result } });
   return result;
+}
+
+/** True when this session is an Open House from the last FOLLOWUP_LOOKBACK_DAYS days (the automatic window). */
+export async function isRecentOpenHouse(sessionId: string): Promise<boolean> {
+  const rows = await sequelize.query<{ ok: boolean }>(
+    `SELECT TRUE AS ok FROM live_sessions WHERE id = :sid AND open_house_event_id IS NOT NULL
+        AND session_date BETWEEN CURRENT_DATE - CAST(:days AS int) AND CURRENT_DATE`,
+    { replacements: { sid: sessionId, days: FOLLOWUP_LOOKBACK_DAYS }, type: QueryTypes.SELECT },
+  );
+  return rows.length > 0;
 }
 
 /**

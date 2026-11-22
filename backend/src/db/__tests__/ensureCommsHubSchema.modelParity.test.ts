@@ -33,9 +33,15 @@ describe('ensureCommsHubSchema: DDL and models agree', () => {
     expect(Array.from(mapped).filter((c) => !ddl.includes(c))).toEqual([]);
   });
 
-  it('adds hub_event_id to community_events, and the CommunityEvent model declares it', () => {
-    expect(parseAddedColumns(COMMS_HUB_SCHEMA_STATEMENTS)).toEqual([{ table: 'community_events', column: 'hub_event_id' }]);
+  it('adds hub_event_id to community_events and, CH9.5, the three Eventbrite columns to comms_hub_events; each model declares them', () => {
+    expect(parseAddedColumns(COMMS_HUB_SCHEMA_STATEMENTS)).toEqual([
+      { table: 'comms_hub_events', column: 'ccpp_event_id' },
+      { table: 'comms_hub_events', column: 'source_image_url' },
+      { table: 'comms_hub_events', column: 'ccpp_missing_since' },
+      { table: 'community_events', column: 'hub_event_id' },
+    ]);
     expect(modelColumnNames(modelsByTable().community_events).has('hub_event_id')).toBe(true);
+    for (const c of ['ccpp_event_id', 'source_image_url', 'ccpp_missing_since']) expect(modelColumnNames(modelsByTable().comms_hub_events).has(c)).toBe(true);
   });
 });
 
@@ -53,7 +59,13 @@ describe('ensureCommsHubSchema: safe to run on every boot', () => {
   });
 
   it('touches no existing table except the one nullable column, and drops nothing', () => {
+    // CH9.6: the ONE allowed DROP. Widening the destinations type CHECK (phase 1 created it without
+    // 'event_registrants') replaces the constraint in a single ALTER, only when its definition lacks
+    // the new value. It drops a rule, never data, and the table is never without the check.
+    const WIDEN = /^DO \$\$ BEGIN\s+IF EXISTS \(SELECT 1 FROM pg_constraint WHERE conname = 'comms_hub_destinations_type_check'[\s\S]*ALTER TABLE comms_hub_destinations DROP CONSTRAINT comms_hub_destinations_type_check,\s+ADD CONSTRAINT comms_hub_destinations_type_check CHECK \(target_type IN \([^)]*'event_registrants'[^)]*\)\);\s+END IF;\s+END \$\$$/;
+    expect(COMMS_HUB_SCHEMA_STATEMENTS.filter((s) => /\bDROP\b/i.test(s))).toHaveLength(1);
     for (const s of COMMS_HUB_SCHEMA_STATEMENTS) {
+      if (WIDEN.test(s)) continue;
       // ON DELETE CASCADE / RESTRICT on a FK is a rule, not a statement; strip it before looking for deletes.
       expect(s.replace(/ON DELETE (CASCADE|RESTRICT)/gi, '')).not.toMatch(/\bDROP\b|\bTRUNCATE\b|\bDELETE\b|ALTER COLUMN/i);
       const altered = /ALTER TABLE (\w+)/i.exec(s)?.[1];

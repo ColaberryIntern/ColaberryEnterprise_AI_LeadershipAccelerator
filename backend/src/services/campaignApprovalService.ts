@@ -6,6 +6,26 @@ import Campaign from '../models/Campaign';
 import { generateTrackedLink, validateCampaignForPublish } from './campaignLinkService';
 import { emitExecutiveEvent } from './executiveAwarenessService';
 
+/**
+ * Record an approval-state change on the executive feed, and WAIT for it.
+ *
+ * These used to be fire-and-forget (`emitExecutiveEvent(...).catch(() => {})`). A caller that
+ * finishes right after approving - a one-off script, which is how the Open House campaigns are
+ * approved - closed its database connection before the write ran, so the "Campaign approved"
+ * event never reached the feed and the swallow hid it. Awaiting costs one insert; a failure is
+ * logged with its class and never blocks the approval itself.
+ */
+export async function recordApprovalEvent(input: Parameters<typeof emitExecutiveEvent>[0]): Promise<void> {
+  try {
+    await emitExecutiveEvent(input);
+  } catch (err: any) {
+    console.warn(JSON.stringify({
+      level: 'warn', service: 'backend', event: 'campaign_approval_event_failed', outcome: 'failure',
+      error_class: err?.name || 'UnknownError', context: { title: input.title, entityId: input.entityId, message: err?.message },
+    }));
+  }
+}
+
 // ─── Submit for Approval ────────────────────────────────────────────────────
 
 export async function submitForApproval(campaignId: string): Promise<Campaign> {
@@ -18,14 +38,14 @@ export async function submitForApproval(campaignId: string): Promise<Campaign> {
 
   await campaign.update({ approval_status: 'pending_approval' });
 
-  emitExecutiveEvent({
+  await recordApprovalEvent({
     category: 'campaign',
     severity: 'info',
     title: 'Campaign submitted for approval',
     description: `"${campaign.name}" (${campaign.type}) submitted for review.`,
     entityType: 'campaign',
     entityId: campaignId,
-  }).catch(() => {});
+  });
 
   return campaign;
 }
@@ -58,14 +78,14 @@ export async function approveCampaign(
     }
   }
 
-  emitExecutiveEvent({
+  await recordApprovalEvent({
     category: 'campaign',
     severity: 'important',
     title: 'Campaign approved',
     description: `"${campaign.name}" approved and tracking link generated.`,
     entityType: 'campaign',
     entityId: campaignId,
-  }).catch(() => {});
+  });
 
   return campaign.reload();
 }
@@ -85,7 +105,7 @@ export async function rejectCampaign(
 
   await campaign.update({ approval_status: 'draft' });
 
-  emitExecutiveEvent({
+  await recordApprovalEvent({
     category: 'campaign',
     severity: 'info',
     title: 'Campaign approval rejected',
@@ -93,7 +113,7 @@ export async function rejectCampaign(
     entityType: 'campaign',
     entityId: campaignId,
     metadata: { rejection_reason: reason },
-  }).catch(() => {});
+  });
 
   return campaign;
 }
@@ -115,14 +135,14 @@ export async function goLive(campaignId: string): Promise<Campaign> {
     started_at: campaign.started_at || new Date(),
   });
 
-  emitExecutiveEvent({
+  await recordApprovalEvent({
     category: 'campaign',
     severity: 'important',
     title: 'Campaign is now live',
     description: `"${campaign.name}" (${campaign.channel}) is now live at ${campaign.tracking_link || campaign.destination_path}.`,
     entityType: 'campaign',
     entityId: campaignId,
-  }).catch(() => {});
+  });
 
   return campaign;
 }

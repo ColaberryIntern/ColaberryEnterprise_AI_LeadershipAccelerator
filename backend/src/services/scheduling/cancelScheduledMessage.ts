@@ -82,6 +82,8 @@ export type CancellationReason =
   | 'campaign_paused'
   | 'campaign_completed'
   | 'lead_removed_from_campaign'
+  // OH1w: one campaign at a time. Joining a campaign as a MOVE ends the old membership.
+  | 'moved_to_another_campaign'
   // Sequence lifecycle
   | 'sequence_deleted'
   | 'sequence_reenrolled'

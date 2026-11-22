@@ -15,6 +15,8 @@ const mockAlerts = jest.fn(async () => ({ queued: 0, sent: 0, retried: 0, failed
 jest.mock('../../alerts/alertRepo', () => ({ alertRepo: {} }));
 jest.mock('../../alerts/failureAlerts', () => ({ runFailureAlerts: (...a: unknown[]) => mockAlerts(...(a as [])), defaultAlertSenders: {} }));
 jest.mock('../deliveryWorker', () => ({ runDeliveryTick: (...a: unknown[]) => mockTick(...(a as [])), defaultConnector: jest.fn() }));
+const mockEbSync = jest.fn(async () => null);
+jest.mock('../../eventbrite/adoption', () => ({ syncAdoptedEventsIfDue: (...a: unknown[]) => mockEbSync(...(a as [])) }));
 const mockSchedule = jest.fn(() => ({ stop: jest.fn() }));
 jest.mock('node-cron', () => ({ __esModule: true, default: { schedule: (...a: unknown[]) => mockSchedule(...(a as [])) } }));
 
@@ -51,6 +53,16 @@ it('each tick repairs live events, drafts plan messages as the worker, sends, th
   expect(mockSync).toHaveBeenCalledWith(NOW.getTime());
   expect(mockPlans).toHaveBeenCalledWith(WORKER_ACTOR, NOW);
   expect(mockTick).toHaveBeenCalledWith(deps, NOW);
+  // CH9.5: the Eventbrite sync runs before the send, so a moved date voids approvals first.
+  expect(mockEbSync).toHaveBeenCalledWith(NOW);
+  expect(mockEbSync.mock.invocationCallOrder[0]).toBeLessThan(mockTick.mock.invocationCallOrder[0]);
+});
+
+it('CH9.5 a failing Eventbrite sync is logged and sending still runs', async () => {
+  mockEbSync.mockRejectedValueOnce(new Error('ccpp down'));
+  expect(await runCommsHubTick(deps, NOW)).toBe('ran');
+  expect(logs).toContain('comms_hub_eventbrite_sync_failed');
+  expect(mockTick).toHaveBeenCalledTimes(1);
 });
 
 it('a tick still running is not stacked: the next minute is skipped and says so', async () => {

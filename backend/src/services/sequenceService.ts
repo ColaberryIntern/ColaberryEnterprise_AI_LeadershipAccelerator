@@ -301,6 +301,13 @@ export async function enrollLeadInSequence(leadId: number, sequenceId: string, c
   const sequence = await FollowUpSequence.findByPk(sequenceId);
   if (!sequence || !sequence.is_active) throw new Error('Sequence not found or inactive');
 
+  // OH1w: an audience-tagged follow-up is booked by its event (openHouseFollowup.ts), person by
+  // person. Enrolling into it would send every step to everyone. Fail closed: schedule nothing.
+  if (isAudienceTaggedSequence(sequence.steps)) {
+    console.log(`[Sequence] Sequence ${sequenceId} is audience-tagged (an event follow-up); booked by its event, not by enrollment. Scheduling nothing for lead ${leadId}.`);
+    return [];
+  }
+
   // Idempotency guard: skip if lead already has active scheduled actions for this sequence.
   // This prevents duplicate ScheduledEmail creation when enrollment is called multiple times
   // (e.g., by cron jobs, agents, or concurrent requests).
@@ -561,7 +568,7 @@ export async function enrollLeadInSequence(leadId: number, sequenceId: string, c
   // Create CampaignLead record so campaign UI shows lead count
   if (campaignId) {
     try {
-      await CampaignLead.findOrCreate({
+      const [cl, created] = await CampaignLead.findOrCreate({
         where: { campaign_id: campaignId, lead_id: leadId },
         defaults: {
           campaign_id: campaignId,
@@ -570,6 +577,11 @@ export async function enrollLeadInSequence(leadId: number, sequenceId: string, c
           total_steps: sequence.steps.length,
         } as any,
       });
+      // OH1w: new steps were just scheduled for someone who had FINISHED this campaign (a second
+      // Open House registration), so they are in it again. A 'removed' person stays removed.
+      if (!created && scheduledActions.length > 0 && (cl as any).status === 'completed') {
+        await cl.update({ status: 'active', completed_at: null } as any);
+      }
     } catch (err: any) {
       console.warn('[Sequence] CampaignLead upsert failed (non-blocking):', err.message);
     }
@@ -601,6 +613,11 @@ export function isPreScheduledSequence(steps: SequenceStep[] | null | undefined)
   return steps.some((s) => s.minutes_before_call != null || s.days_before_cohort_start != null || s.minutes_before_event != null);
 }
 
+/** OH1w: a sequence whose steps are tagged by audience (an event follow-up). See SequenceStep.audience. */
+export function isAudienceTaggedSequence(steps: SequenceStep[] | null | undefined): boolean {
+  return Array.isArray(steps) && steps.some((s) => s?.audience === 'attended' || s?.audience === 'missed');
+}
+
 export async function scheduleNextStep(completedAction: any): Promise<any | null> {
   if (!completedAction.sequence_id) return null;
 
@@ -612,6 +629,9 @@ export async function scheduleNextStep(completedAction: any): Promise<any | null
 
   // Skip T-minus campaigns — those are pre-scheduled at enrollment
   if (isPreScheduledSequence(sequence.steps)) return null;
+  // OH1w: an audience-tagged follow-up books every step a person gets up front; chaining the
+  // next step would send the OTHER audience's email (Ali's rebuild: attended got "you missed it").
+  if (isAudienceTaggedSequence(sequence.steps)) return null;
 
   // Idempotency: check if next step already exists (from pre-scheduled enrollment or duplicate call)
   const existing = await ScheduledEmail.count({

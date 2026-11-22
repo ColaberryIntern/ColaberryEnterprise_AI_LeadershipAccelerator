@@ -68,7 +68,8 @@ describe('ensureCommsHubSchema()', () => {
     respond({ presentTables: TABLES.filter((t) => t !== 'comms_hub_activity'), hasColumn: false, secondBoot: false });
     const r = await ensureCommsHubSchema();
     expect(r.ok).toBe(false);
-    expect(r.missing).toEqual(['comms_hub_activity', 'community_events.hub_event_id']);
+    // CH9.5: the Eventbrite link column is checked too (the mock answers "absent" for every column query).
+    expect(r.missing).toEqual(['comms_hub_activity', 'community_events.hub_event_id', 'comms_hub_events.ccpp_event_id']);
     const logged = JSON.parse(error.mock.calls[0][0]);
     expect(logged).toMatchObject({ event: 'SchemaInvariantViolation', context: { area: 'comms_hub' } });
   });

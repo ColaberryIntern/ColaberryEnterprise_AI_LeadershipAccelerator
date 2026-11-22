@@ -6,6 +6,31 @@
  */
 import { AUTONOMY_LABEL, bullet, good, type TabContext } from './commandCenterTabContext';
 
+export interface WorkflowArrow { from: string; to: string; labels: string[] }
+
+/**
+ * One arrow per pair of agents. `derived.handoffs` has one entry per thing
+ * passed, so ShiftFill v5 had two Offer Sender → Summary Generator entries, and
+ * a builder drawing one arrow each put two labels on the same path.
+ */
+export function workflowArrows(handoffs: TabContext['handoffs']): WorkflowArrow[] {
+  const byPair = new Map<string, WorkflowArrow>();
+  for (const h of handoffs) {
+    const k = `${h.from_agent}\u0000${h.to_agent}`;
+    const a = byPair.get(k) ?? { from: h.from_agent, to: h.to_agent, labels: [] };
+    if (!a.labels.includes(h.via)) a.labels.push(h.via);
+    byPair.set(k, a);
+  }
+  return [...byPair.values()];
+}
+
+/** Agents with three or more outgoing arrows: where labels collide. */
+export function fanOuts(arrows: readonly WorkflowArrow[]): { from: string; count: number }[] {
+  const count = new Map<string, number>();
+  for (const a of arrows) count.set(a.from, (count.get(a.from) ?? 0) + 1);
+  return [...count.entries()].filter(([, n]) => n >= 3).map(([from, n]) => ({ from, count: n }));
+}
+
 export function agentsTab(c: TabContext): string[] {
   const { plan, agents, handoffs } = c;
   const lines: string[] = [];
@@ -53,8 +78,21 @@ export function agentsTab(c: TabContext): string[] {
     }
     lines.push('');
     if (handoffs.length) {
-      lines.push('How they hand work to each other, from `plan.derived.handoffs`:');
-      handoffs.forEach((h) => lines.push(bullet(`${h.from_agent} → ${h.to_agent} (${h.via})`)));
+      const arrows = workflowArrows(handoffs);
+      lines.push(
+        'How they hand work to each other, from `plan.derived.handoffs`. That list has one entry '
+        + 'per thing passed; the diagram has ONE arrow per pair of agents, so the pairs are '
+        + 'grouped for you here:',
+      );
+      arrows.forEach((a) => lines.push(bullet(`${a.from} → ${a.to} (${a.labels.join(', ')})`)));
+      const busy = fanOuts(arrows);
+      if (busy.length) {
+        // ShiftFill v5: Offer Sender fed three agents and its labels drew on top of each other.
+        lines.push(bullet(
+          `Crowded spots: ${busy.map((b) => `${b.from} feeds ${b.count} agents`).join('; ')}. `
+          + 'This is where labels collide, so check it first.',
+        ));
+      }
       lines.push('');
     }
     lines.push(
@@ -84,12 +122,26 @@ export function agentsTab(c: TabContext): string[] {
   );
   lines.push(good(
     'a workflow diagram above the cards: one node per agent, laid out in the order work flows, '
-    + 'an arrow for every entry in `plan.derived.handoffs` labelled with what passes along it, '
-    + 'and the trigger drawn as the entry point (an event, a schedule, a person). Nodes are '
+    + 'ONE arrow per pair of agents (the grouped list above), labelled with what passes along it, '
+    + 'and the trigger drawn as the entry point (an event, a schedule, a person). Every label '
+    + 'stays readable: no label overlaps another label, an arrow or a node. Where one agent '
+    + 'feeds several, spread the receiving nodes apart vertically and put each label near the '
+    + 'receiving end of its own arrow, or, if it still does not fit, number the arrows and list '
+    + 'the numbered labels in a key under the diagram. Check this at the narrowest width the page '
+    + 'supports, not only at full width. Nodes are '
     + 'shaped or coloured by autonomy, so a reader can see at a glance where a human sits in '
     + 'the loop. Then an approval queue: for each agent that waits for a human, what it would '
     + 'be waiting on and who releases it (empty on real data, and saying so). Then the cards, '
     + 'each opening a detail page with its stories and their verification state.',
+  ));
+  // ShiftFill v5b (2026-11-21): a wide label column ("Waits for a person because of")
+  // squeezed the values, so words broke mid-word ("Ranke / d") and the autonomy
+  // badge ran past the card edge. Readability is part of the card, not polish.
+  lines.push(good(
+    'agent cards whose text reads cleanly: each label sits above its value, or the value '
+    + 'column gets at least half the card width; no word ever breaks mid-word (wrap between '
+    + 'words only); badges and pills stay inside the card and wrap onto their own line when '
+    + 'space runs out. Check this at the narrowest width the page supports, not only at full width.',
   ));
   lines.push('');
   return lines;

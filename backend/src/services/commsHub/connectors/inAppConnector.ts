@@ -5,6 +5,7 @@ import CommunityNotification from '../../../models/CommunityNotification';
 import Enrollment from '../../../models/Enrollment';
 import { createNotification } from '../../communityNotificationService';
 import { ensureTeamIdentity } from './teamIdentity';
+import { registrantEnrollmentIds } from '../eventbrite/registrantAudience';
 import { ConnectorPermanentError, type Connector, type ConnectorDelivery, type ConnectorResult } from './types';
 
 /**
@@ -50,12 +51,17 @@ export async function audienceEnrollmentIds(targetId: string): Promise<string[]>
 export const inAppConnector: Connector = {
   channel: 'in_app',
   async send(d: ConnectorDelivery): Promise<ConnectorResult> {
-    if (d.destination.target_type !== 'in_app_audience') {
-      throw new ConnectorPermanentError(`An in-app notification goes to an audience, not ${d.destination.target_type}.`, 'bad_destination');
+    const kind = d.destination.target_type;
+    if (kind !== 'in_app_audience' && kind !== 'event_registrants') {
+      throw new ConnectorPermanentError(`An in-app notification goes to an audience, not ${kind}.`, 'bad_destination');
     }
     if (!d.draft.body.trim() && !(d.draft.title ?? '').trim()) throw new ConnectorPermanentError('The in-app notification is empty.', 'empty_body');
     const team = await ensureTeamIdentity();
-    const audience = await audienceEnrollmentIds(d.destination.target_id);
+    // CH9.6: the registrants of a managed Eventbrite event who are on the platform, resolved at send
+    // time (registrations made since approval count). Eventbrite unreadable: thrown, so the worker retries.
+    const audience = kind === 'event_registrants'
+      ? await registrantEnrollmentIds(d.destination.target_id)
+      : await audienceEnrollmentIds(d.destination.target_id);
     if (audience.length === 0) return { provider_message_id: d.messageId, reached: 0, already_done: false };
 
     const members = await CommunityMember.findAll({ where: { enrollment_id: { [Op.in]: audience } }, attributes: ['id', 'enrollment_id'] });

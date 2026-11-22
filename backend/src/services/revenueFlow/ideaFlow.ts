@@ -158,11 +158,24 @@ function betsStream(): RevenueStream {
  *
  * ── THE PRICE IS NOW DECIDED, WHICH ADVANCES ONE STAGE AND ONLY ONE ──────────────────────
  *
- * Ali, 2026-11-16: "We can charge 1% of the 1st year salary for all talent hired from the
- * platform." That settles the basis, so `defined` moves from 0 to 1. It deliberately does
+ * Ali, 2026-11-21: the fee is 10% of the first year salary, for talent hired out of the
+ * platform. That settles the basis, so `defined` moves from 0 to 1. It deliberately does
  * NOT move `wired`: a fee basis is an agreement, and the three things still missing are a
  * table that records a placement, a hired salary to take a percentage OF, and an event that
  * marks the fee earned. None of those exists, and a stated price is not a measurement.
+ *
+ * ── CORRECTED FROM 1% ON 2026-11-21, AND THE CORRECTION IS RECORDED RATHER THAN QUIET ────
+ *
+ * This file said 1% from 16 November until 21 November, quoting Ali by date in four places
+ * and asserting it in a test. On 21 November, describing the enterprise offer, he priced
+ * the same motion at 10%. A tenfold difference in a stated price is not a thing to resolve
+ * by picking the more plausible number, so it was put back to him with both figures and
+ * their sources; he confirmed 10% and that the earlier 1% was wrong.
+ *
+ * It is written down here, not just changed, for two reasons. The figure was live on a
+ * board Ram reads, so "it has always said 10%" would be false. And a price attributed to a
+ * person by date is a claim about what they said - if the attribution can be rewritten
+ * silently, the date beside it stops meaning anything.
  *
  * The number is carried here as a stated basis rather than rendered as money, which is the
  * same treatment `gov_bid_values` gives a priced bid: a human put their name to a figure,
@@ -175,7 +188,8 @@ function fdeStream(): RevenueStream {
     status: 'unmeasurable' as TileStatus,
     headline: noMoney(
       'Priced, not yet set up',
-      'Declared as a revenue source on 2026-11-13 and priced on 2026-11-16 at 1% of first '
+      'Declared as a revenue source on 2026-11-13, priced on 2026-11-16 and REPRICED by Ali '
+      + 'on 2026-11-21 at 10% of first '
       + 'year salary per hire. Nothing records a company paying to hire a forward-deployed '
       + 'engineer, so there is still no figure to report.',
     ),
@@ -188,7 +202,7 @@ function fdeStream(): RevenueStream {
       ),
       setupStage(
         'defined', 'Given a checkable definition', 1,
-        'Settled by Ali on 2026-11-16: a fee per hire, at 1% of the first year salary, for '
+        'Settled by Ali on 2026-11-21: a fee per hire, at 10% of the first year salary, for '
         + 'all talent hired from the platform. That is a basis a system can compute against, '
         + 'which is what this stage asks for.',
         'fde_setup',
@@ -209,10 +223,12 @@ function fdeStream(): RevenueStream {
       ),
     ],
     provenance:
-      'Declared by Ali on 2026-11-13, priced by Ali on 2026-11-16. Every count above '
+      'Declared by Ali on 2026-11-13, priced by Ali on 2026-11-16 and corrected to 10% on '
+      + '2026-11-21. Every count above '
       + 'describes setup state, not trading activity, and no figure is derived from any table.',
     caveat:
-      'FDE hiring has a price (1% of first year salary per hire) and no way to record a '
+      'FDE hiring has a price (10% of first year salary per hire, corrected from a mistaken '
+      + '1% on 2026-11-21) and no way to record a '
       + 'placement, a salary or an earned fee. Until a table holds those three things, this '
       + 'stream can report progress but not money.',
     drillDownKey: null,

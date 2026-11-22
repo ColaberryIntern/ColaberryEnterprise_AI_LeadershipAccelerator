@@ -50,6 +50,19 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
       'Keeps the next announced Open House in live_sessions (create-or-update by Eventbrite id), gives it its community room and a platform-minted Zoom meeting when it has none (OH1v: never replaces an existing link), and books the countdown for any registrant of it who has no countdown row for that session in any status. Before this the session existed only after a manual script run, and anyone who registered earlier was enrolled with zero reminders: all 22 Dec 3 registrants on 2026-11-20. Grants only the event_reminder permission, never overwriting a person\'s own choice. Books only while the countdown campaign is active. OH1u: also books the follow-up after each Open House from the last 2 days (attended: thank-you + Today page; missed: replay when set + the next Open House), one per person per event, only while the open_house_followup campaign is active. Sends nothing itself; every send gate still decides each message.',
   },
   {
+    // OH1w (2026-11-21). Seeded rather than baselined, for the reason BatchRollover gives
+    // below. `schedule` must stay equal to the cron expression in schedulerService.ts.
+    agent_name: 'CampaignExitSweep',
+    agent_type: 'scheduled_processor',
+    module: 'sweepFinishedMembers',
+    source_file: 'backend/src/services/campaignMembership.ts',
+    trigger_type: 'cron',
+    schedule: '40 * * * *',
+    category: 'operations',
+    description:
+      'Campaign membership exits (Ali, 2026-11-21: "once the campaign is over, you must be removed because Explorer Growth only reaches out to people that aren\'t in campaigns"). Hourly, finds members of a running campaign with nothing pending, the last message older than the campaign\'s exit grace (default 24 hours) and any event they were reminded about well past, marks them completed, and applies the campaign\'s "when someone finishes" setting: remove (default) or move to another campaign (the Open House countdown moves people into the Open House follow-up, booked by attendance). A failed move still finishes them, so nobody stays stuck. Sends nothing itself; a move is a normal, fully gated enrollment. Up to 500 members per run.',
+  },
+  {
     // Intern nudge cadence (2026-11-11). Seeded rather than added to cronRegistryBaseline.ts,
     // for the reason BatchRollover gives below: an instrumentCronJob() name with no ai_agents row
     // tracks its run_count and error_count against nothing, and the baseline is a ratchet that is

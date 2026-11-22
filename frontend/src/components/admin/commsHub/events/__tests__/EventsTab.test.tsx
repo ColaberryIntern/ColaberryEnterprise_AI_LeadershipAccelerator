@@ -13,6 +13,10 @@ jest.mock('../../../../../services/commsHubApi', () => ({
   duplicateHubEvent: jest.fn(), cancelHubEvent: jest.fn(), describeHubEvent: jest.fn(),
   // CH4.4 the editor now holds the thumbnail studio; its own test covers it.
   listThumbnails: jest.fn(), listEventPhotos: jest.fn(), getLivePanel: jest.fn(), getPromotionPlan: jest.fn(),
+  // CH9.2 the "From Eventbrite" section under the list; its own test covers it.
+  listEventbriteEvents: jest.fn(), getRegistrants: jest.fn(),
+  // CH9.7 the counts under the live panel; their own test covers them.
+  getEventCounts: jest.fn(),
 }));
 
 /** CH3.1 + CH3.2 rendered: the list in training-site shape, the editor, save/duplicate/cancel, Write with AI, a11y. */
@@ -27,7 +31,7 @@ const ev = (n: number, o: Partial<HubEvent> = {}): HubEvent => ({
   id: `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`, title: `Event ${n}`, event_type: 'session', audience: { kind: 'all_members' }, status: 'scheduled',
   starts_at: at(n), ends_at: null, central: { date: at(n).slice(0, 10), start_time: '18:00', end_time: null, label: 'x' },
   repeat_rule: null, next_occurrence_at: at(n), upcoming_preview: [], join_url: null, registration_url: null, hosts: [],
-  description: `About event ${n}.`, placement: { calendar: true, events_page: true, campus_rail: true }, thumbnail_id: null, broadcast_occurrence_id: null,
+  description: `About event ${n}.`, placement: { calendar: true, events_page: true, campus_rail: true }, thumbnail_id: null, broadcast_occurrence_id: null, ccpp_event_id: null, ccpp_missing_since: null,
   created_at: '2026-11-20T00:00:00.000Z', updated_at: '2026-11-20T00:00:00.000Z', ...o,
 });
 
@@ -43,6 +47,8 @@ beforeEach(() => {
   (api.listEventPhotos as jest.Mock).mockResolvedValue([]);
   (api.getPromotionPlan as jest.Mock).mockResolvedValue({ event_id: 'x', rows: [] });
   (api.getLivePanel as jest.Mock).mockResolvedValue({ input_configured: true, occurrence: null, commands: [], input_held_by: null });
+  (api.listEventbriteEvents as jest.Mock).mockResolvedValue({ status: 'ok', window: 'upcoming', events: [], fetched_at: '2026-11-21T22:00:00.000Z' });
+  (api.getEventCounts as jest.Mock).mockResolvedValue({ registered: { value: null, reason: 'This event has no registration.' }, watched_live: { value: null, reason: 'Not streamed yet.' }, watched_replay: { value: null, reason: 'Not streamed yet.' } });
 });
 beforeEach(() => { (api.listHubCohorts as jest.Mock).mockResolvedValue([{ id: '77777777-7777-4777-8777-777777777777', name: 'November 2026', status: 'open', start_date: '2026-11-03' }]); });
 afterEach(() => { act(() => { root.unmount(); }); container.remove(); jest.clearAllMocks(); });
@@ -87,7 +93,8 @@ describe('CH3.1 the list', () => {
     await renderAt('/admin/comms-hub/events');
     const order: string[] = [];
     for (const el of Array.from(container.querySelectorAll<HTMLElement>('button:not([disabled]), a[href]'))) { el.focus(); order.push((document.activeElement?.textContent ?? '').trim()); }
-    expect(order).toEqual(['Upcoming', 'Past', 'Cancelled', 'Open event', 'Open Event 2', 'Open Event 3']);
+    // CH9.2: the "From Eventbrite" section follows the hub's own list, with its two window buttons.
+    expect(order).toEqual(['Upcoming', 'Past', 'Cancelled', 'Open event', 'Open Event 2', 'Open Event 3', 'Upcoming', 'Past 90 days']);
   });
 
   it('one event: featured only; none: the empty state offers New event; scope buttons say which is on', async () => {
@@ -113,6 +120,26 @@ describe('CH3.1 the list', () => {
     await renderAt('/admin/comms-hub/events');
     expect(await axeViolations()).toEqual([]);
     for (const b of Array.from(container.querySelectorAll('button'))) expect(b.className).toMatch(/comms-hub-action/);
+  });
+});
+
+describe('CH9.3 registrants from an Eventbrite card', () => {
+  it('View registrants on an Eventbrite card opens that event\'s registrants; Close shuts it', async () => {
+    (api.listHubEvents as jest.Mock).mockResolvedValue([]);
+    (api.listEventbriteEvents as jest.Mock).mockResolvedValue({ status: 'ok', window: 'upcoming', fetched_at: 'x', events: [
+      { ccpp_event_id: '777', title: 'AI Open House', starts_at: '2026-12-04T00:30:00.000Z', ends_at: null, registration_url: null, image_url: null, registered: 1, description: null, eventbrite_status: 'live', adopted_event_id: null },
+    ] });
+    (api.getRegistrants as jest.Mock).mockResolvedValue({ event: { ccpp_event_id: '777', title: 'AI Open House', starts_at: '' }, eventbrite: 'ok', count: 1,
+      rows: [{ name: 'Ada', email: 'ada@x.test', registered_at: null, sources: ['eventbrite'], has_account: false }] });
+    await renderAt('/admin/comms-hub/events');
+    const view = Array.from(container.querySelectorAll('button')).find((b) => (b.textContent ?? '').startsWith('View registrants'))!;
+    expect(view.textContent).toBe('View registrants for AI Open House');
+    await act(async () => { view.click(); });
+    await settle();
+    expect(api.getRegistrants).toHaveBeenCalledWith('777');
+    expect(container.querySelector('[role="dialog"]')?.textContent).toContain('ada@x.test');
+    await act(async () => { btn('Close').click(); });
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
   });
 });
 
@@ -265,5 +292,29 @@ describe('CH3.2 the editor', () => {
     for (const el of Array.from(container.querySelectorAll('input, select, textarea'))) {
       expect(container.querySelector(`label[for="${el.id}"]`)).not.toBeNull();
     }
+  });
+
+  it('CH9.5 an event managed from Eventbrite: title, date, times, repeat and registration link are read-only and say why; the rest stays editable', async () => {
+    (api.getHubEvent as jest.Mock).mockResolvedValue(ev(1, { ccpp_event_id: '1992498063344', registration_url: 'https://www.eventbrite.com/e/x-1992498063344' }));
+    await renderAt(`/admin/comms-hub/events?edit=${ev(1).id}`);
+    expect(container.querySelector('[data-testid="ch-from-eventbrite"]')?.textContent).toContain('Managed from Eventbrite');
+    const el = (id: string) => container.querySelector(`#${id}`) as HTMLInputElement & HTMLSelectElement;
+    for (const id of ['ch-title', 'ch-date', 'ch-start', 'ch-end', 'ch-reg']) expect([id, el(id).readOnly]).toEqual([id, true]);
+    expect(el('ch-repeat').disabled).toBe(true);
+    for (const id of ['ch-join', 'ch-desc', 'ch-type']) expect([id, el(id).readOnly || el(id).disabled]).toEqual([id, false]);
+    expect(container.textContent).toContain('Edit it there; the change shows here within 15 minutes.');
+    expect(container.querySelector('[data-testid="ch-missing-from-eventbrite"]')).toBeNull();
+    expect(await axeViolations()).toEqual([]);
+  });
+
+  it('CH9.5 a managed event gone from Eventbrite says so, and suggests cancelling here; a hub-made event shows neither note', async () => {
+    (api.getHubEvent as jest.Mock).mockResolvedValue(ev(1, { ccpp_event_id: '1992498063344', ccpp_missing_since: '2026-11-21T22:00:00.000Z' }));
+    await renderAt(`/admin/comms-hub/events?edit=${ev(1).id}`);
+    expect(container.querySelector('[data-testid="ch-missing-from-eventbrite"]')?.textContent).toContain('no longer on Eventbrite');
+    act(() => { root.unmount(); }); container.remove();
+    (api.getHubEvent as jest.Mock).mockResolvedValue(ev(1));
+    await renderAt(`/admin/comms-hub/events?edit=${ev(1).id}`);
+    expect(container.querySelector('[data-testid="ch-from-eventbrite"]')).toBeNull();
+    expect((container.querySelector('#ch-title') as HTMLInputElement).readOnly).toBe(false);
   });
 });

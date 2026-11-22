@@ -68,9 +68,11 @@ import { QueryTypes } from 'sequelize';
 import { sequelize } from '../../config/database';
 import { TileStatus } from '../commercialization/commercializationTiles';
 import { ENTERPRISE_PLANS, EnterprisePlanKey, planOf } from './enterprisePlans';
-import { DealValue, annualizedCents, getLiveDealValues } from './enterpriseDealValueService';
 import {
-  FlowEvent, FunnelStage, RevenueStream, formatCents, money, noMoney,
+  DealValue, annualizedCents, getLiveDealValues, monthlyCents,
+} from './enterpriseDealValueService';
+import {
+  EnterpriseDeal, FlowEvent, FunnelStage, RevenueStream, formatCents, money, noMoney,
 } from './revenueFlowTypes';
 
 export interface EnterpriseFlow {
@@ -171,6 +173,27 @@ function stage(
   classification: FunnelStage['classification'] = 'enterprise_inquiry',
 ): FunnelStage {
   return { key, label, count, value, classification, definition };
+}
+
+/**
+ * The furthest stage one intake actually reached.
+ *
+ * Checked in reverse funnel order, so a signed deal reads as signed rather than as the
+ * earliest box it ticked. `lost` is checked FIRST and is deliberately not a funnel stage: the
+ * funnel counts how far a cohort got, and a lost prospect still got as far as it got, so
+ * subtracting them from the stages would understate reach. For a single row, though, "they did
+ * not proceed" is the fact that matters to someone deciding whether to price it.
+ *
+ * The other keys match the funnel's own stage keys exactly, so a row's stage and the stage it
+ * is counted in are the same word.
+ */
+function stageKeyOf(r: IntakeRow): string {
+  if (r.lost_at || r.status === 'lost') return 'lost';
+  if (r.signed_at || r.status === 'signed') return 'signed';
+  if (r.proposal_sent_at) return 'proposal_sent';
+  if (r.interviewed_at || r.status === 'interviewed') return 'interviewed';
+  if (r.call_requested_at || r.status === 'call_requested') return 'call_requested';
+  return 'inquired';
 }
 
 function absentFlow(reason: string): EnterpriseFlow {
@@ -328,6 +351,52 @@ export async function buildEnterpriseFlow(windowStart: Date): Promise<Enterprise
     + 'plans so the gap is visible rather than quietly excluded.',
   ));
 
+  // ── THE DEALS THEMSELVES, so the page can offer the price control next to the gap ─────
+  //
+  // Phase 3. Until this existed there was no write path at all: the table shipped in Phase 2
+  // and nothing in the product could put a row in it, so the stream read zero in production
+  // regardless of the table being there. This roster is what the control is rendered from.
+  //
+  // Ordered unpriced-first, then signed-first. Someone who opens this panel is here to close
+  // the gap, so the rows with no value are at the top; among those, a SIGNED deal with no
+  // value is the one actually suppressing the headline, so it outranks a proposal-stage one.
+  const signedIds = new Set(signedRows.map((r) => r.id));
+  const deals: EnterpriseDeal[] = rows
+    .map((r): EnterpriseDeal => {
+      const planKey = planOf(r.service);
+      const plan = planKey ? ENTERPRISE_PLANS.find((p) => p.key === planKey) ?? null : null;
+      const v = valueByIntake.get(r.id) ?? null;
+      return {
+        enterpriseIntakeId: r.id,
+        // Never blank. A row the reader cannot tell apart from another row is a row they
+        // cannot safely price, and the id alone is not a company.
+        company: (r.company ?? '').trim() || '(company not recorded)',
+        planKey,
+        planLabel: plan?.label ?? null,
+        // The retainer default the form opens on. See EnterpriseDeal's header.
+        shape: plan?.shape ?? null,
+        stage: stageKeyOf(r),
+        signed: signedIds.has(r.id),
+        priced: v
+          ? {
+            cents: v.dealValueCents,
+            display: formatCents(v.dealValueCents, v.currency),
+            periodMonths: v.periodMonths,
+            monthlyCents: monthlyCents(v),
+            basisSource: v.basisSource,
+            valueBasis: v.valueBasis,
+            confirmedBy: v.confirmedBy,
+            confirmedAt: v.confirmedAt,
+          }
+          : null,
+      };
+    })
+    .sort((a, b) => {
+      if ((a.priced === null) !== (b.priced === null)) return a.priced === null ? -1 : 1;
+      if (a.signed !== b.signed) return a.signed ? -1 : 1;
+      return a.company.localeCompare(b.company);
+    });
+
   // ── EVENTS ────────────────────────────────────────────────────────────────────────────
   // One event per dated transition that actually happened, bounded by the window. Every
   // valueCents is null because the classification says it must be.
@@ -456,6 +525,7 @@ export async function buildEnterpriseFlow(windowStart: Date): Promise<Enterprise
       // shows them is the Enterprise Clients page, which is not a revenue drill-down, so
       // this stays null rather than pointing at something that would not open.
       drillDownKey: null,
+      deals,
     },
     events,
   };

@@ -1,7 +1,12 @@
 /**
- * Commercialization Command Center routes (/admin/commercialization). Read-only,
- * admin-gated. Backs C8.1's board design; see commercializationTiles.ts for why each
- * tile reports what it does.
+ * Commercialization Command Center routes (/admin/commercialization). Admin-gated. Backs
+ * C8.1's board design; see commercializationTiles.ts for why each tile reports what it does.
+ *
+ * Mostly reads, and TWO writes, both of which record what something is worth: the government
+ * bid price (R16) and the enterprise deal value (R23 Phase 3). This header said "read-only"
+ * until 2026-11-21, which stopped being true when the first of those landed - worth correcting
+ * rather than leaving, because "read-only" is exactly the sort of claim someone relies on when
+ * deciding how carefully to read the rest of the file.
  *
  * The section gate for this prefix is declared in mgmtSectionGate.ts PATH_SECTION as
  * 'revenue'. That gate is deny-by-default for scoped roles, so an unmapped prefix here
@@ -23,7 +28,9 @@ import {
 } from '../../controllers/revenueRoomController';
 import {
   handleConfirmBidValue,
+  handleConfirmDealValue,
   handleGetBidValueHistory,
+  handleGetDealValueHistory,
   handleGetRevenueFlowBoard,
 } from '../../controllers/revenueFlowController';
 
@@ -67,6 +74,29 @@ router.get(
   '/api/admin/commercialization/revenue-flow/bid-value/:deliveryProjectId',
   requireAdmin,
   handleGetBidValueHistory,
+);
+// R23 Phase 3 - the enterprise equivalent, and the piece that was missing: Phase 2 shipped
+// `enterprise_deal_values` and the service that guards it, but nothing in the product could
+// call that service, so the enterprise stream read zero whether or not a deal had been signed.
+//
+// A LITERAL `deal-value` segment, deliberately distinct from `bid-value` rather than a shared
+// `:kind` parameter. Two different tables, two different basis vocabularies, two different
+// engagement shapes; one parameterized endpoint would have had to decide at runtime which
+// table it was writing, and a money write is the last place to put that decision.
+//
+// `confirmedBy` comes from the session here too, and the body is a DISCRIMINATED UNION so a
+// monthly retainer cannot be posted as a total contract value. See the controller's header.
+router.post(
+  '/api/admin/commercialization/revenue-flow/deal-value',
+  requireAdmin,
+  handleConfirmDealValue,
+);
+// R23 Phase 3 - the value history of one enterprise deal. Declared after the literal POST
+// above, and parameterized on a segment that cannot collide with `bid-value`.
+router.get(
+  '/api/admin/commercialization/revenue-flow/deal-value/:enterpriseIntakeId',
+  requireAdmin,
+  handleGetDealValueHistory,
 );
 // C8.4's funnel snapshot had no route of its own: it was observable only indirectly,
 // through the shape of the hypothesis response. R1 needs it directly for the drill-down,

@@ -37,16 +37,16 @@ const LADDER = [
     title: 'A failed beat retried on every sample',
     detail: 'Re-crediting a rejected beat restores the buffer above the flush threshold, which is '
       + 'the condition that triggers a send. One failure became roughly three requests a second.',
-    state: 'IN REVIEW',
-    note: 'PR #4276, blocked on review',
+    state: 'LIVE',
+    note: 'PR #4276, merged eeb820b6, deployed and verified by name over HTTPS',
   },
   {
     n: 4,
     title: 'Three of four callers never got the 19 Nov protection',
     detail: 'Only TimelineCard returns its promise. The drawer, the workspace and ambient media '
       + 'catch and return undefined, so the re-credit is dead code and a failed save still loses time.',
-    state: 'NOT STARTED',
-    note: 'Ordered after #4276 on purpose: without the back-off it spreads the storm',
+    state: 'LIVE',
+    note: 'PR #4287, merged 06fe191a, deployed; build proved, behavior not browser-tested',
   },
   {
     n: 5,
@@ -129,7 +129,7 @@ const FACTS = {
   storm: 'about 3 requests per second',
   swatiOld: '20% saved at 96% played',
   swatiOver: '158s watched credited as 324s',
-  callers: '1 of 4 callers returns its promise',
+  callers: '1 of 4, now 4 of 4',
 };
 
 /** What these artifacts do NOT establish. Stated so nothing here is read as more than it is. */
@@ -138,7 +138,11 @@ const NOT_ESTABLISHED = [
     + 'show whether saves still arrive in pairs has not been posted.',
   'That any learner\'s stored progress was repaired. Every fix here changes what is recorded from '
     + 'now on. Rows already written during either era are untouched.',
-  'That the back-off works in production. #4276 is mutation-checked in CI and is not merged.',
+  'That the back-off and the caller fix WORK in production, only that they are there. #4276 was '
+    + 'proved live by name, because it reads two HTTP headers and a string literal survives '
+    + 'minification; #4287 adds no literal, so what was proved for it is that the build shipped - '
+    + 'the deployed commit contains it and the served bundle changed. Behavior on a real failing '
+    + 'save is a browser test nobody has run.',
   'That 75% means the same thing on every surface. Until item 5 is decided, the drawer, the tile '
     + 'and the workspace can each answer differently.',
 ];

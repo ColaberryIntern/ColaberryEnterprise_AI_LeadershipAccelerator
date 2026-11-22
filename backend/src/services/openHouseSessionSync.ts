@@ -171,9 +171,13 @@ export async function bookCountdownForEarlierRegistrants(sessionId: string, log:
   });
   result.candidates = leads.length;
   const { enrollLeadInSequence } = await import('./sequenceService');
+  const { admitToCampaign } = await import('./campaignMembership');
   for (const { lead_id } of leads) {
     try {
       await grantEventReminderPermission(campaign.id, Number(lead_id));
+      // OH1w: the Open House takes precedence; booking the countdown moves them out of any
+      // other running campaign (one campaign at a time).
+      await admitToCampaign(campaign.id, Number(lead_id), { supersede: true });
       const out = await enrollLeadInSequence(Number(lead_id), campaign.sequence_id, campaign.id);
       const n = Array.isArray(out) ? out.length : 0;
       if (n > 0) { result.booked++; result.rows += n; } else result.nothing_booked++;
