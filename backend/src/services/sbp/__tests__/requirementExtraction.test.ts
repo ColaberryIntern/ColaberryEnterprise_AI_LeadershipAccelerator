@@ -4,6 +4,7 @@ import {
   REQUIREMENT_EXTRACTION_SYSTEM_PROMPT,
   REQUIREMENTS_JSON_SCHEMA,
 } from '../requirementExtraction';
+import { FLAGS } from '../../../config/featureFlags';
 import { BUILD_PLAN_JSON_SCHEMA } from '../planContract';
 import {
   PROMPT_SECTIONS, briefPrecedesDocument, MAX_DOCUMENT_CHARS,
@@ -157,20 +158,49 @@ describe('extractRequirements returns a requirement set and nothing else', () =>
       .rejects.toThrow(/did not match refined_requirements/);
   });
 
-  it('RETURNS the source overflow, so a reviewer knows what the model never read', async () => {
-    // Stronger than the plan stage, which only logs it. This stage exists to be reviewed, and a
-    // reviewer judging whether a requirement set is complete has to know that 40,000 characters
-    // of the document were clipped before the model saw any of it.
+  it('RETURNS the source overflow with the block OFF, so a reviewer knows what was never read', async () => {
+    /*
+     * Stronger than the plan stage, which only logs it. This stage exists to be reviewed, and a
+     * reviewer judging whether a requirement set is complete has to know that 40,000 characters
+     * of the document were clipped before the model saw any of it.
+     *
+     * L9.6 turned `sbpSourceOverflowBlock` on, so at the DEFAULT this input is refused and there
+     * is no partial set to review at all. That is the better outcome and it is asserted below.
+     * This case keeps the escape hatch's behavior covered rather than deleting it.
+     */
     const doc = 'x'.repeat(MAX_DOCUMENT_CHARS + 40_000);
-    const { overflows } = await extractRequirements({
+    const prev = FLAGS.sbpSourceOverflowBlock;
+    (FLAGS as { sbpSourceOverflowBlock: boolean }).sbpSourceOverflowBlock = false;
+    try {
+      const { overflows } = await extractRequirements({
+        brief: 'b', document: doc, client: clientReturning(SET) as never,
+      } as never);
+      expect(overflows).toEqual([{
+        tag: 'EXPANDED_DOCUMENT',
+        limit: MAX_DOCUMENT_CHARS,
+        actual: MAX_DOCUMENT_CHARS + 40_000,
+        droppedChars: 40_000,
+      }]);
+    } finally {
+      (FLAGS as { sbpSourceOverflowBlock: boolean }).sbpSourceOverflowBlock = prev;
+    }
+  });
+
+  it('at the DEFAULT it refuses instead, so no half-read requirement set reaches a reviewer', async () => {
+    // The reason the flip is an improvement here rather than a loss: a reviewer cannot be misled
+    // by a set extracted from a document the model only partly saw, because there is no set.
+    const doc = 'x'.repeat(MAX_DOCUMENT_CHARS + 40_000);
+    await expect(extractRequirements({
       brief: 'b', document: doc, client: clientReturning(SET) as never,
+    } as never)).rejects.toThrow('source exceeds the prompt budget');
+  });
+
+  it('and a document that FITS still returns an empty overflow list, not a refusal', async () => {
+    // The control: a gate that refused everything would satisfy the case above.
+    const { overflows } = await extractRequirements({
+      brief: 'b', document: 'a short document', client: clientReturning(SET) as never,
     } as never);
-    expect(overflows).toEqual([{
-      tag: 'EXPANDED_DOCUMENT',
-      limit: MAX_DOCUMENT_CHARS,
-      actual: MAX_DOCUMENT_CHARS + 40_000,
-      droppedChars: 40_000,
-    }]);
+    expect(overflows).toEqual([]);
   });
 
   it('classifies a timeout as retry-later, not as broken', async () => {

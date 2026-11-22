@@ -1,3 +1,4 @@
+import { FLAGS } from '../../../config/featureFlags';
 import {
   sourceOverflows,
   buildDecomposeUserPrompt,
@@ -26,6 +27,26 @@ import {
  */
 
 const over = (n: number) => 'x'.repeat(n);
+
+/**
+ * Run with the overflow BLOCK off, and always put it back.
+ *
+ * L9.6 turned `sbpSourceOverflowBlock` on by default, so `buildDecomposeUserPrompt` now REFUSES
+ * an over-budget input rather than clipping it. The clipping path is still shipped and still
+ * correct - it is what runs for anybody who sets the escape hatch - so the cases below force the
+ * flag off rather than being deleted. Deleting them would have retired the only coverage of the
+ * SAFE-002 clamp on the day the flag flipped, which is how a safety behavior quietly stops being
+ * tested.
+ */
+function clipping<T>(fn: () => T): T {
+  const prev = FLAGS.sbpSourceOverflowBlock;
+  (FLAGS as { sbpSourceOverflowBlock: boolean }).sbpSourceOverflowBlock = false;
+  try {
+    return fn();
+  } finally {
+    (FLAGS as { sbpSourceOverflowBlock: boolean }).sbpSourceOverflowBlock = prev;
+  }
+}
 
 describe('sourceOverflows reports what the model will not see', () => {
   it('reports nothing when both inputs fit — a measured answer, not an absence', () => {
@@ -76,7 +97,7 @@ describe('the clip itself still happens, and the overflow report agrees with it'
     // control, not an accident. Both behaviours are asserted together so neither can be traded
     // away for the other.
     const doc = over(MAX_DOCUMENT_CHARS + 1_000);
-    const prompt = buildDecomposeUserPrompt({ brief: 'b', document: doc } as never);
+    const prompt = clipping(() => buildDecomposeUserPrompt({ brief: 'b', document: doc } as never));
     expect(prompt).toContain(`…[truncated at ${MAX_DOCUMENT_CHARS} chars]`);
 
     // Measure THE BLOCK, not the whole prompt.
@@ -103,9 +124,24 @@ describe('the clip itself still happens, and the overflow report agrees with it'
       [over(MAX_BRIEF_CHARS + 1), 'fits'],
     ];
     for (const [brief, document] of cases) {
-      const prompt = buildDecomposeUserPrompt({ brief, document } as never);
+      const prompt = clipping(() => buildDecomposeUserPrompt({ brief, document } as never));
       const marked = prompt.includes('…[truncated at');
       expect(sourceOverflows({ brief, document }).length > 0).toBe(marked);
     }
+  });
+
+  it('and with the flag at its DEFAULT, the same inputs are refused instead of clipped', () => {
+    /*
+     * The other half of the flip, asserted here rather than only in `sourceOverflowBlock.test.ts`,
+     * because this is the file that owns the clipping claim. Without it the suite would say
+     * "an over-long document is truncated" and never mention that in production it no longer is.
+     */
+    const doc = over(MAX_DOCUMENT_CHARS + 1_000);
+    expect(() => buildDecomposeUserPrompt({ brief: 'b', document: doc } as never))
+      .toThrow('source exceeds the prompt budget');
+    // And an input that fits is untouched by the default, so the gate is not an outage.
+    const fine = buildDecomposeUserPrompt({ brief: 'b', document: 'fits' } as never);
+    expect(fine).not.toContain('…[truncated at');
+    expect(fine).toContain('fits');
   });
 });
