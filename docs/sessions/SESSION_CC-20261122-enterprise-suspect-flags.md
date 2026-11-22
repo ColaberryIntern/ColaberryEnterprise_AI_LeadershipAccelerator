@@ -195,6 +195,87 @@ is the proof, arriving blank. That is a change to W28's own form and is not made
 
 ---
 
+## Deployed and production-verified
+
+Merged as `0f1eb2bfb`, deployed 19:17-19:18Z on 2026-11-22. Registry mode confirmed `:main`
+matched `sha-0f1eb2bfbf83d0646a29156a8d9c3a6d53c5ca1e` for both images before pulling. CI was
+10 of 10 green (1 skipped) on head `67641003c`.
+
+### The proof that matters: the deployed code was asked about the real row
+
+Not a grep for a string. `buildEnterpriseFlow` run read-only inside the running container:
+
+```
+ROW {"company":"Acme Test Logistics","stage":"interviewed","signed":false,
+     "priced":false,"flags":["looks like a test row (company name, contact name, contact email)"]}
+rows_flagged = 1
+inquired     = 1
+suspect events = 1   EVENT 2026-11-21 | Acme Test Logistics: looks like a test row (...)
+```
+
+**All three fields tripped**, so the contact name and the email on that row are placeholder text
+too, not only the company name.
+
+`rows_flagged = 1` **while** `inquired = 1` is the pair that proves the design rather than the
+plumbing: the flagged row is counted in the funnel *and* flagged. That is flag-not-filter
+verified in production instead of only in a test.
+
+The caveat came out at 828 characters and does carry the louder clause: *"EVERY row in this
+table is flagged, so the enterprise site has not produced a single unflagged inquiry yet. The
+stream reads as live because the table is not empty, which is a fact about the table rather than
+about demand."*
+
+### Both containers were replaced, despite compose saying otherwise
+
+| | image before → after | started before → after |
+|---|---|---|
+| backend | `7398bf3b0160` → `9fe5abd6aa79` | 14:09:38Z → **19:17:38Z** |
+| nginx | `b096abd416b6` → `f681a62f5386` | 19:09:08Z → **19:18:32Z** |
+
+Compose printed `accelerator-backend Running`, not `Recreated`, and only the nginx image showed
+in the pull output. It replaced both anyway. **Second consecutive day that verb has been
+misleading**, which is exactly why the proof is the image id and the timestamp.
+
+### A pre-existing partial deploy, found by the before-state read
+
+Before I started, host HEAD was `e6d0d6d43` (built 18:05Z) while the **backend** container had
+been running since **14:09:38Z** and nginx since 19:09:08Z. Somebody's earlier deploy had
+updated nginx and not backend, so production was serving a backend older than its own checkout
+and nothing was reporting it. This deploy corrected it as a side effect. **The condition is
+reachable and silent**, which is the part worth remembering.
+
+### A marker I had to throw away before it produced false proof
+
+The obvious string to grep for was `looks like a test row`, and the before-state read returned
+**2** for it in the OLD build: `govBidFlow.suspectReasons()` uses the identical sentence. It is
+4 now. Used as the marker it would have given a number that rose across the deploy and meant
+nothing at all. **Every marker actually used was measured at zero beforehand.**
+
+With that correction: 7 backend markers present, positive control 1, negative control **0**.
+Served nginx bundle: 5 markers at 2 each, positive control 2, negative control **0**. Five
+surfaces 200 on `enterprise.colaberry.ai`, and `www.refactored.ai/health` 200.
+
+### The cascade was checked, not assumed
+
+#4313 merged two minutes before mine. The last successful build at that moment was
+`e6d0d6d43`, and `git merge-base --is-ancestor` proved it does **not** contain this merge, with
+the reversed direction confirming the check was live rather than silently failing. Deploying
+then would have served pre-merge code and reported success.
+
+### Errors
+
+5 in the window, **none from this change**: all `intel-card-content` /
+`IncompleteGeneration` from the card generation pipeline. Checked by grep for
+`enterprise|suspect|revenueFlow` rather than by eye; 0 matches.
+
+### Still not verified
+
+The rendered card, which is auth-gated: the copy is proven present in the served bundle, but
+nobody has looked at the page. Every value-dependent branch, since `enterprise_deal_values`
+still holds 0 rows.
+
+---
+
 ## One process note worth keeping
 
 A `cat >> file` with no stdin hung for the full two-minute timeout and left an empty
