@@ -189,6 +189,10 @@ describe('with the block at its DEFAULT, an over-budget build is refused and SAI
         error_class: 'SourceOverflowBlocked',
         tag: 'EXPANDED_DOCUMENT',
         limit: MAX_DOCUMENT_CHARS,
+        // `actual` as well as `droppedChars`. A verifier deleted this one field with the suite
+        // green: without it an operator knows something was refused and not how far over the
+        // input was, which is the first number they need to decide what to tell the student.
+        actual: MAX_DOCUMENT_CHARS + 7_000,
         droppedChars: 7_000,
       },
     });
@@ -212,5 +216,72 @@ describe('with the block at its DEFAULT, an over-budget build is refused and SAI
     // logging both would make an operator think the model saw a partial document.
     const { lines } = await blocked('b', over(MAX_DOCUMENT_CHARS + 7_000));
     expect(lines.some((l) => l.event === 'sbp_decompose_source_truncated')).toBe(false);
+  });
+});
+
+/**
+ * The STAGED path, which is what production actually runs.
+ *
+ * `SBP_STAGED_GENERATION` is on unless set to 'off', so `decomposeBuild` delegates to
+ * `generateStagedPlan` before it ever builds its own prompt, and the refusal surfaces through
+ * that catch rather than the one above. An independent verifier measured it arriving as
+ * `UpstreamError`, whose student-facing recovery is the Retry button: a retry of an input that is
+ * too long can never succeed, so the one thing the person is offered is the one thing that cannot
+ * work. The class is ours now, and it says what happened.
+ */
+describe('a staged build classifies a refusal as a refusal, not as an upstream failure', () => {
+  it('fails with SourceOverflowBlocked rather than UpstreamError', async () => {
+    const cap = captureLogs();
+    let thrown: unknown;
+    try {
+      await decomposeBuild({
+        brief: 'b',
+        document: over(MAX_DOCUMENT_CHARS + 7_000),
+        client: stubClient(),
+        correlationId: 'corr-staged',
+        staged: true,
+      } as never);
+    } catch (e) {
+      thrown = e;
+    } finally {
+      cap.restore();
+    }
+    expect((thrown as { error_class?: string })?.error_class).toBe('SourceOverflowBlocked');
+    expect((thrown as { error_class?: string })?.error_class).not.toBe('UpstreamError');
+  });
+
+  it('and the failure line carries that class too, so a log search finds it', async () => {
+    const cap = captureLogs();
+    try {
+      await decomposeBuild({
+        brief: 'b',
+        document: over(MAX_DOCUMENT_CHARS + 7_000),
+        client: stubClient(),
+        correlationId: 'corr-staged',
+        staged: true,
+      } as never).catch(() => undefined);
+    } finally {
+      cap.restore();
+    }
+    const failed = cap.lines.find((l) => l.event === 'sbp_decompose_failed');
+    expect(failed).toBeDefined();
+    expect((failed!.context as { error_class?: string }).error_class).toBe('SourceOverflowBlocked');
+  });
+
+  it('a staged build whose source fits is not refused, so the class is not a blanket', async () => {
+    // The control: without it, a classifier that returned SourceOverflowBlocked for everything
+    // would satisfy both cases above.
+    const cap = captureLogs();
+    let thrown: unknown;
+    try {
+      await decomposeBuild({
+        brief: 'b', document: 'fits', client: stubClient(), correlationId: 'corr-staged', staged: true,
+      } as never);
+    } catch (e) {
+      thrown = e;
+    } finally {
+      cap.restore();
+    }
+    expect((thrown as { error_class?: string })?.error_class).not.toBe('SourceOverflowBlocked');
   });
 });

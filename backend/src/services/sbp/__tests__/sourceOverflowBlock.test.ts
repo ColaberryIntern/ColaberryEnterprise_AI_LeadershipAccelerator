@@ -1,5 +1,5 @@
 /**
- * P7-T1.3 and L9.6 — the source-overflow block, now ON, and the proof that it refuses the right
+ * P7-T1.3 and L9.6: the source-overflow block, now ON, and the proof that it refuses the right
  * inputs and only those.
  *
  * ## The decision was pre-registered, then measured, then re-measured

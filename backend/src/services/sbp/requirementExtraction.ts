@@ -26,6 +26,7 @@
  * `storyAuthorization.ts` rather than here, so this module cannot accidentally become the thing
  * that decides it.
  */
+import { FLAGS } from '../../config/featureFlags';
 import { BUILD_PLAN_JSON_SCHEMA, PlanRequirement } from './planContract';
 import {
   DecomposeInputs,
@@ -34,6 +35,7 @@ import {
   composeSystemPrompt,
   sourceBlocks,
   sourceOverflows,
+  SourceOverflowError,
   type SourceOverflow,
 } from './decomposePrompt';
 import { REQUIREMENT_CHECKLIST } from './requirementCoverage';
@@ -220,9 +222,31 @@ export async function extractRequirements(
   const model = opts.model || process.env.SBP_REQUIREMENTS_MODEL || process.env.SBP_DECOMPOSE_MODEL || 'gpt-4o';
   const client = opts.client ?? defaultClient('sbp_requirement_extract');
 
-  // Source that never reaches the model, said out loud. Same reporting as the plan stage, from
-  // the same shared assembly, so the two stages cannot disagree about what was clipped.
+  /*
+   * Source that never reaches the model, said out loud. Same reporting as the plan stage, from
+   * the same shared assembly, so the two stages cannot disagree about what was clipped.
+   *
+   * THE BLOCKED BRANCH IS FIRST, AND IT REFUSES HERE RATHER THAN THREE FRAMES LATER.
+   *
+   * This is the DEFAULT path: `SBP_STAGED_GENERATION` is on unless set to 'off', so a staged
+   * build reaches `extractRequirements` before `decomposeService` ever builds its own prompt.
+   * An independent verifier measured what that produced: `sbp_requirements_source_truncated`
+   * with outcome `partial`, asserting the model had read clipped source, followed by a throw
+   * from `sourceBlocks` deeper in - and the model had not been called at all. A log line saying
+   * a generation ran on partial input, for a generation that never ran, is worse than no line.
+   *
+   * So when the block is on, the refusal is logged as a refusal and thrown immediately.
+   */
   const overflows = sourceOverflows(opts);
+  if (overflows.length && FLAGS.sbpSourceOverflowBlock) {
+    for (const o of overflows) {
+      log('sbp_requirements_source_blocked', opts.correlationId, 'failure', {
+        error_class: 'SourceOverflowBlocked',
+        tag: o.tag, limit: o.limit, actual: o.actual, droppedChars: o.droppedChars,
+      });
+    }
+    throw new SourceOverflowError(overflows);
+  }
   for (const o of overflows) {
     log('sbp_requirements_source_truncated', opts.correlationId, 'partial', {
       tag: o.tag, limit: o.limit, actual: o.actual, droppedChars: o.droppedChars,

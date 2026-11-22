@@ -85,11 +85,18 @@ export const FLAGS = {
   // OUTPUT, not an input source, and these budgets do not govern it.
   //
   // TWO INDEPENDENT ARGUMENTS, because 56 rows is a modest sample and the structural one does
-  // not depend on it. (1) The intake cap is 60,000 and the brief budget is 150,000, so a brief
-  // cannot reach the limit by construction, whatever the sample size. (2) The largest real brief
-  // has 7.5x of headroom and the largest expansion 2.5x. Turning this on therefore cannot fail a
-  // build that succeeds today; what it can do is refuse an input the system has never yet
-  // received, which is exactly the case where clipping would be worst.
+  // not depend on it.
+  //
+  // (1) STRUCTURAL, stated at its real margin rather than a flattering one. The brief is the
+  //     idea (at most INTAKE_IDEA_MAX, 60,000) PLUS up to 20 interview answers of 4,000, so the
+  //     constructive ceiling is 140,000 against a 150,000 budget: a margin of 10,000, not the
+  //     90,000 an earlier version of this comment implied by quoting the intake cap alone. A
+  //     verifier caught that. The conclusion survives and the headroom is thinner than it looked,
+  //     which is worth knowing if either constant moves again.
+  // (2) MEASURED: the largest real brief has 7.5x of headroom and the largest expansion 2.5x.
+  //
+  // Turning this on therefore cannot fail a build that succeeds today; what it can do is refuse
+  // an input the system has never yet received, which is exactly where clipping would be worst.
   //
   // `!== 'false'` rather than `=== 'true'`: on by default, with an escape hatch that does not
   // need a deploy. Read once at boot.

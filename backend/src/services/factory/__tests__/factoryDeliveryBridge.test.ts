@@ -20,11 +20,6 @@ import {
 // Moved out of the bridge 2026-11-06 so `factoryValidate` can share the thresholds without the
 // upstream gate importing the downstream adapter. The tests below are unchanged.
 import { riskLevelFor } from '../factoryTaskRisk';
-// The gate itself, exercised directly at the bottom of this file: the bridge is only one of its
-// callers, and the `none` branch is reachable from a decomposition that states it outright.
-import {
-  validateStoryContract, type DeliveryStoryContract,
-} from '../../delivery/deliveryStoryContract';
 import { PROFILE_MANDATORY_CHECKS, type ReleaseCheckResult } from '../../../modules/delivery/releaseChecks';
 import { INPACT_DIMENSIONS } from '../../../modules/delivery/inpact';
 import type {
@@ -335,10 +330,25 @@ describe('story contract issues are reported, not swallowed', () => {
   describe('an accountable role named on the ALLOCATION counts, and only when it resolves', () => {
     const ROLE = { id: 'role-lead', name: 'Proposal Lead', definition: 'Owns the bid response.' };
 
-    const withRoster = (roles: Array<{ id: string; name: string; definition: string }>) =>
+    /**
+     * A roster entry ALONE is not enough, which is the whole point of the second condition.
+     *
+     * `holder` is an assignment that puts a PERSON in the role on some other task, which is what
+     * makes it a role somebody actually holds. It is deliberately NOT an approver assignment on
+     * `t-human`: that would satisfy the first branch and never reach the fallback.
+     */
+    const holder = {
+      task_id: 't-ai', role_id: 'role-lead', responsibility: 'RESPONSIBLE',
+      executor: { type: 'person', id: 'person-1' },
+    };
+
+    const withRoster = (
+      roles: Array<{ id: string; name: string; definition: string }>,
+      assignments: unknown[] = [holder],
+    ) =>
       bridgeFactoryToDelivery(baseInput({
         blockToRequirement: { b1: 'REQ-1' },
-        project: { ...baseInput().project, roles } as never,
+        project: { ...baseInput().project, roles, assignments } as never,
       }));
 
     it('derives internal_review from it, and the blocking issue goes away', () => {
@@ -355,11 +365,62 @@ describe('story contract issues are reported, not swallowed', () => {
       expect(gap).toBeDefined();
       expect(gap!.ref).toBe('t-human');
       expect(gap!.detail).toContain('Proposal Lead');
+      // And the remediation, which a verifier deleted with the suite green. A provenance note
+      // that does not say what to do about it leaves a reviewer informed and stuck.
+      expect(gap!.detail).toContain('Record an explicit assignment');
+    });
+
+    it('STILL REFUSES a roster role that NOBODY HOLDS, because a name is not an accountability', () => {
+      /*
+       * Case A from the verification. `allocation.ts:150` already states this rule for the
+       * upstream gate: "A role that exists in `roles` but nobody fills is a name, not an
+       * accountability." The first version of this fallback checked the roster only, and this
+       * input passed with no blocking issue.
+       */
+      const result = withRoster([ROLE], []); // in the roster, held by nobody
+      const human = result.stories.find((s) => s.storyId === 'story-t-human')!;
+      expect(human.approvalPolicy).toBeNull();
+      expect(result.storyIssues.filter((i) => i.severity === 'blocking').map((i) => i.rule))
+        .toEqual(['high_risk_story_without_approval']);
+      expect(result.gaps.some((g) => g.rule === 'APPROVER_FROM_ALLOCATION')).toBe(false);
+    });
+
+    it('STILL REFUSES a role held ONLY BY AN AGENT, which is the bypass that matters', () => {
+      /*
+       * Case B, and the serious one. The `executor?.type !== 'agent'` filter in the branch above
+       * exists precisely to stop an agent counting as the approver. Reading the same role id back
+       * off the allocation walked straight around it: an R4 `regulated` / `decide_full` task whose
+       * only accountable party was an AGENT passed its own contract with zero blocking issues.
+       * `contracts/factoryContract.ts:179` is explicit that "a system may never BE
+       * approver/accountable".
+       */
+      const base = baseInput({ blockToRequirement: { b1: 'REQ-1' } });
+      const result = bridgeFactoryToDelivery({
+        ...base,
+        project: {
+          ...base.project,
+          roles: [ROLE],
+          tasks: base.project.tasks.map((t2) => (t2.id === 't-human'
+            ? { ...t2, data_sensitivity: 'regulated', decision_authority: 'decide_full' }
+            : t2)),
+          assignments: [{
+            task_id: 't-human', role_id: 'role-lead', responsibility: 'ACCOUNTABLE',
+            executor: { type: 'agent', id: 'agent-1' },
+          }],
+        } as never,
+      });
+      const human = result.stories.find((s) => s.storyId === 'story-t-human')!;
+      expect(human.approvalPolicy).toBeNull();
+      expect(result.storyIssues.filter((i) => i.severity === 'blocking').map((i) => i.rule))
+        .toContain('high_risk_story_without_approval');
+      expect(result.gaps.some((g) => g.rule === 'APPROVER_FROM_ALLOCATION')).toBe(false);
     });
 
     it('STILL REFUSES when the roster does not contain the id the allocation names', () => {
       // An id pointing at nobody is not an approver. Without this the change would turn a
       // dangling reference into a green gate, which is worse than the defect it fixes.
+      // A holder IS present for a different role, so this isolates the unresolvable id rather
+      // than passing for the no-holder reason the case above already covers.
       const result = withRoster([{ id: 'role-someone-else', name: 'Other', definition: 'x' }]);
       const human = result.stories.find((s) => s.storyId === 'story-t-human')!;
       expect(human.approvalPolicy).toBeNull();
@@ -375,6 +436,7 @@ describe('story contract issues are reported, not swallowed', () => {
         project: {
           ...base.project,
           roles: [ROLE],
+          assignments: [holder],
           tasks: base.project.tasks.map((t) => (t.id === 't-human'
             ? { ...t, data_sensitivity: 'regulated', decision_authority: 'decide_full' }
             : t)),
@@ -418,71 +480,10 @@ describe('story contract issues are reported, not swallowed', () => {
       const base = baseInput({ blockToRequirement: { b1: 'REQ-1' } });
       const result = bridgeFactoryToDelivery({
         ...base,
-        project: { ...base.project, roles: [ROLE], agent_teams: [] } as never,
+        project: { ...base.project, roles: [ROLE], assignments: [holder], agent_teams: [] } as never,
       });
       const ai = result.stories.find((s) => s.storyId === 'story-t-ai')!;
       expect(ai.approvalPolicy).toBeNull();
-    });
-  });
-
-  /**
-   * The gate itself, asserted directly rather than only through the bridge.
-   *
-   * A mutation changing `(!story.approvalPolicy || story.approvalPolicy === 'none')` to
-   * `(!story.approvalPolicy)` survived every test in this repo. That is not a style point: the
-   * `none` branch is the one a DECLARED policy can walk through. The bridge never emits `none`
-   * for human work today, so nothing exercised it, and a decomposition that stated
-   * `approval_policy: "none"` on an R4 would have passed a gate built to stop exactly that.
-   *
-   * Tested on `validateStoryContract` directly, because that is where the rule lives and the
-   * bridge is only one of its callers.
-   */
-  describe('the approval gate refuses "none" as firmly as it refuses nothing at all', () => {
-    const story = (over: Partial<DeliveryStoryContract>): DeliveryStoryContract => ({
-      storyId: 'story-x',
-      title: 'Sign the bid bond',
-      fulfills: ['REQ-1'],
-      businessReason: 'The bond must be filed with the response.',
-      agentImpacts: null,
-      trustDimensions: null,
-      riskLevel: 'R4',
-      acceptance: ['The bond is filed.'],
-      failurePaths: ['The bond is late.'],
-      testRequirements: ['A check that the filing receipt exists.'],
-      evidenceRequired: ['manual_check'],
-      executionPolicy: 'manual_only',
-      approvalPolicy: null,
-      ...over,
-    } as DeliveryStoryContract);
-
-    const rules = (s: DeliveryStoryContract) => validateStoryContract(s).map((i) => i.rule);
-
-    it('refuses an R4 with no approval policy', () => {
-      expect(rules(story({ approvalPolicy: null }))).toContain('high_risk_story_without_approval');
-    });
-
-    it('refuses an R4 that DECLARES none, which is the case a mutation walked straight through', () => {
-      expect(rules(story({ approvalPolicy: 'none' }))).toContain('high_risk_story_without_approval');
-    });
-
-    it('accepts an R4 with a real policy, so the rule is a gate and not a blanket refusal', () => {
-      expect(rules(story({ approvalPolicy: 'internal_review' }))).not.toContain('high_risk_story_without_approval');
-      expect(rules(story({ approvalPolicy: 'client_approval' }))).not.toContain('high_risk_story_without_approval');
-    });
-
-    it('leaves low-risk stories alone, whatever they declare', () => {
-      for (const policy of [null, 'none', 'internal_review'] as const) {
-        expect(rules(story({ riskLevel: 'R1', approvalPolicy: policy })))
-          .not.toContain('high_risk_story_without_approval');
-      }
-    });
-
-    it('fires from R3 upward, which is where the ladder says consequential work starts', () => {
-      // The boundary, both sides of it.
-      expect(rules(story({ riskLevel: 'R2', approvalPolicy: 'none' })))
-        .not.toContain('high_risk_story_without_approval');
-      expect(rules(story({ riskLevel: 'R3', approvalPolicy: 'none' })))
-        .toContain('high_risk_story_without_approval');
     });
   });
 

@@ -43,7 +43,15 @@ export type DecomposeErrorClass =
   | 'UpstreamTimeout'
   | 'UpstreamError'
   | 'EmptyResponse'
-  | 'ContractViolation';
+  | 'ContractViolation'
+  /**
+   * The source-overflow block refused the input (L9.6). OURS, not an upstream failure, and the
+   * distinction is the point: `UpstreamError` is the class whose student-facing recovery is the
+   * Retry button, and retrying an input that is too long can never succeed. An independent
+   * verifier measured a refusal on the staged path arriving as `UpstreamError`, which offered
+   * exactly that useless retry.
+   */
+  | 'SourceOverflowBlocked';
 
 export class DecomposeError extends Error {
   constructor(public readonly error_class: DecomposeErrorClass, message: string) {
@@ -198,7 +206,10 @@ export async function decomposeBuild(opts: DecomposeOptions): Promise<DecomposeR
     } catch (err) {
       if (err instanceof DecomposeError) throw err;
       const cls = (err as ModelCallError)?.errorClass;
-      const errorClass: DecomposeErrorClass = cls ?? 'UpstreamError';
+      // A refusal is classified as a refusal. See `SourceOverflowBlocked` on the union above.
+      const errorClass: DecomposeErrorClass = err instanceof SourceOverflowError
+        ? 'SourceOverflowBlocked'
+        : cls ?? 'UpstreamError';
       log('sbp_decompose_failed', opts.correlationId, 'failure', {
         error_class: errorClass, model, path: 'staged', message: (err as Error)?.message,
       });
@@ -226,6 +237,9 @@ export async function decomposeBuild(opts: DecomposeOptions): Promise<DecomposeR
   } catch (err) {
     if (err instanceof SourceOverflowError) {
       for (const o of err.overflows) {
+        // All four numbers, and a test pins each one. `actual` was droppable with the suite
+        // green until a verifier found it: without it an operator knows something was refused
+        // and not how far over the input was, which is the first thing they need to act.
         log('sbp_decompose_source_blocked', opts.correlationId, 'failure', {
           error_class: err.error_class,
           tag: o.tag, limit: o.limit, actual: o.actual, droppedChars: o.droppedChars,

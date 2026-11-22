@@ -46,6 +46,9 @@ import {
   type ReleaseGateResult, type DeploymentAuthorizationRefusal,
 } from '../delivery/releaseGate';
 import { sourceBlockIdFor } from './factoryDecomposeInput';
+// ONE definition of "a role a human holds", shared with `validateAllocation`. Duplicating the
+// predicate is how the upstream gate and this one would come to disagree about the same task.
+import { humanlyFilledRoleIds } from '../lifecycle/generation/allocation';
 // The SAME predicate the decompose adapter uses to demote a non-binding row to a `context`
 // block. Read from the other end here: a row the decomposer told the model not to cite must not
 // then be demanded by traceability.
@@ -246,10 +249,14 @@ export function buildDeliveryStories(input: BridgeInput): {
 } {
   const { project } = input;
   const gaps: BridgeGap[] = [];
-  const classOf = new Map(project.allocation.map((a) => [a.task_id, a.execution_class]));
+
   // The WHOLE row, not just its class: `accountable_role_id` lives here and is what L10.8 reads.
   const allocOf = new Map(project.allocation.map((a) => [a.task_id, a]));
   const roleOf = new Map((project.roles ?? []).map((r) => [r.id, r]));
+  // Role ids a PERSON OR TEAM holds, by the project-wide definition `validateAllocation` uses.
+  // Not "appears in the roster": see the accountable-role resolution below for the two inputs
+  // that distinction was letting through.
+  const humanRoles = humanlyFilledRoleIds({ assignments: project.assignments ?? [] } as FactoryProject);
 
   const teamOf = new Map<string, AgentTeam>();
   for (const t of project.agent_teams ?? []) {
@@ -288,7 +295,7 @@ export function buildDeliveryStories(input: BridgeInput): {
   for (const task of project.tasks) {
     if (task.kind === 'START' || task.kind === 'END') continue;
 
-    const cls = classOf.get(task.id);
+    const cls = allocOf.get(task.id)?.execution_class;
     const team = teamOf.get(task.id);
     const isAi = cls !== undefined && AI_CLASSES.includes(cls);
 
@@ -318,10 +325,29 @@ export function buildDeliveryStories(input: BridgeInput): {
       (a) => a.task_id === task.id
         && (a.responsibility === 'APPROVER' || a.responsibility === 'ACCOUNTABLE'),
     );
+    /*
+     * The accountable role this task names, and the TWO things it has to satisfy.
+     *
+     * It must exist in the roster, and it must be a role A HUMAN ACTUALLY HOLDS on this project.
+     * The first version checked only the roster and an independent verifier measured two inputs
+     * it let through that the gate had been refusing:
+     *
+     *   A. a roster role nobody fills. `allocation.ts:150` already writes the rule down: "A role
+     *      that exists in `roles` but nobody fills is a name, not an accountability."
+     *   B. worse: a task whose only ACCOUNTABLE assignment has an `{type: 'agent'}` executor.
+     *      The `executor?.type !== 'agent'` filter one branch above exists precisely to stop an
+     *      agent counting as the approver, and reading the same role id back off the allocation
+     *      walked straight around it. An R4 `regulated` / `decide_full` task accountable only to
+     *      an agent passed its own contract with no blocking issue at all.
+     *
+     * `humanlyFilledRoleIds` is REUSED rather than reimplemented. It is the same predicate
+     * `validateAllocation` applies at `allocation.ts:263`, and "who counts as a human holder"
+     * must have one definition or the two gates will drift apart.
+     */
     const accountableId = allocOf.get(task.id)?.accountable_role_id ?? null;
-    // Resolved against the ROSTER, so an id naming nobody is the same as naming nobody. An
-    // unresolvable id would otherwise read as an approver that does not exist.
-    const accountableRole = accountableId ? roleOf.get(accountableId) ?? null : null;
+    const accountableRole = accountableId && humanRoles.has(accountableId)
+      ? roleOf.get(accountableId) ?? null
+      : null;
     const {
       executionPolicy, approvalPolicy, escalation, approverFromAllocation,
     } = policiesFor(cls, team, taskApprovers, accountableRole);
