@@ -19,6 +19,9 @@
 .cp-room .cp-inbox-form input{flex:1 1 220px;min-width:0;min-height:44px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg-elevated);color:var(--fg);font:inherit}
 .cp-room .cp-inbox-table{width:100%;border-collapse:collapse;font-size:.9rem}
 .cp-room .cp-inbox-table th,.cp-room .cp-inbox-table td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+/* CP10.4: the #offers sheet. Each offer is a card (it reuses .cp-ivs-next); the list itself has no bullets. */
+.cp-room .cp-offers{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.cp-room .cp-offer p{margin:2px 0}
 /* CP8.3: the #interviews sheet (KPIs, the next interview, every interview, its history). The table reuses .cp-inbox-table. */
 .cp-room .cp-ivs{display:flex;flex-direction:column;gap:12px}
 .cp-room .cp-ivs h3{margin-top:6px;font-size:1rem}

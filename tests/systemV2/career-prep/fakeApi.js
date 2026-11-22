@@ -44,6 +44,10 @@ function makeState(now, opts = {}) {
     // CP9.1: the candidate room (fakeRoom.js): no decision yet, and every decision the page sent.
     roomDecision: null,
     roomDecisions: [],
+    // CP10.4: `{ offers: true }` adds one offer waiting on the learner; every answer the page sent.
+    offers: opts.offers ? [{ id: 'of-1', groupId: '0f0f0f0f-0000-4000-8000-000000000001', version: 1, company: 'Northwind', role: 'ML Engineer', payBasis: 'yearly',
+      salaryCents: 10_500_000, hourlyRateCents: null, hoursPerWeek: null, startDate: '2027-01-04', respondBy: new Date(now + 5 * DAY).toISOString(), status: 'sent' }] : [],
+    offerAnswers: [],
     skills: [
       skill('pace_clarity', 'Pace and clarity', 48, 4, ['video', 'phone_mock']),
       skill('ending_with_number', 'Ending on a result with a number', 57, 9, ['video', 'real_interview']),
@@ -174,6 +178,15 @@ function route(state, method, path, query, body) {
   if (path === `${P}/inbox`) return { inbox: state.inbox };
   if (path === `${P}/inbox/received`) return { items: [] };
   if (path === `${P}/interviews/placement`) return { kpis: placementKpis(state.placement), interviews: state.placement };
+  // CP10.4: the learner's offers in the server's candidate shape (the pay, never the fee); answers are recorded.
+  if (path === `${P}/offers`) return { offers: state.offers };
+  const ans = /^\/api\/portal\/career-prep\/offers\/([^/]+)\/(accept|decline|talk-first)$/.exec(path);
+  if (ans && method === 'POST') {
+    state.offerAnswers.push({ groupId: ans[1], decision: ans[2], version: body.version });
+    const o = state.offers.find((x) => x.groupId === ans[1]);
+    o.status = { accept: 'accepted', decline: 'declined', 'talk-first': 'talk_first' }[ans[2]];
+    return { offer: o, replay: false };
+  }
   if (path === `${P}/read-aloud/line`) return { line: { id: 'ra-02', text: 'The problem was simple to describe and hard to solve, so I started by talking to the people who lived with it.' } };
   const line = /name="lineId"\r?\n\r?\n([^\r\n]+)/.exec((body && body.raw) || '');
   if (attempt && method === 'POST' && line) {

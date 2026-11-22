@@ -6,6 +6,7 @@ jest.mock('../../routes/hireClientRoutes', () => { const { Router: R } = jest.re
 const mockEnsureFollowUps = jest.fn();
 jest.mock('../../db/ensureEmployerFollowUpSchema', () => ({ ensureEmployerFollowUpSchema: (...a: unknown[]) => mockEnsureFollowUps(...a) }));
 jest.mock('../../routes/hireClientFollowUpRoutes', () => { const { Router: R } = jest.requireActual('express'); return { __esModule: true, default: R() }; });
+jest.mock('../../routes/careerPrepOfferRoutes', () => { const { Router: R } = jest.requireActual('express'); return { __esModule: true, default: R() }; });
 const mockStartFollowUps = jest.fn();
 jest.mock('../../services/placement/followUpScheduler', () => ({ startFollowUpScheduler: mockStartFollowUps }));
 // The real routers import the app config; the wiring under test only needs something mountable.
@@ -75,7 +76,8 @@ describe('placementBoot', () => {
       require('../../routes/placementRoomRoutes').roomRouters.candidate, require('../../routes/placementRoomRoutes').roomRouters.employer, // T22: the two rooms
       require('../../routes/placementReplayRoutes').replayRouters.candidate, require('../../routes/placementReplayRoutes').replayRouters.public, // T24: the replay
       require('../../routes/hireClientRoutes').default, // T26: the employer portal API
-      require('../../routes/hireClientFollowUpRoutes').default]); // T28: the employer's follow-ups
+      require('../../routes/hireClientFollowUpRoutes').default, // T28: the employer's follow-ups
+      require('../../routes/careerPrepOfferRoutes').default]); // T29: the learner's own offers
   });
 
   it('T12: registers the signed inbox events router as an INTEGRATION router (mounted before the JSON parser)', () => {

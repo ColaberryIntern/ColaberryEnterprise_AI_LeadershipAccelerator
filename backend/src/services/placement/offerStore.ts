@@ -60,6 +60,17 @@ export async function setStatus(id: string, status: OfferStatus, t: Transaction)
   return row;
 }
 
+/** CP10.4: the columns the CANDIDATE's offers are built from. No fee, rate, first-year figure or invoice column is read. */
+export type CandidateOfferRow = Pick<OfferRow, 'id' | 'offer_group_id' | 'version' | 'company' | 'role' | 'pay_basis' | 'salary_cents'
+  | 'hourly_rate_cents' | 'hours_per_week' | 'start_date' | 'respond_by' | 'status'>;
+
+/** The learner's OWN offers, current versions only, newest first (withdrawn ones included, so the sheet can say so). */
+export async function candidateOffers(enrollmentId: string): Promise<CandidateOfferRow[]> {
+  return rows<CandidateOfferRow>(`SELECT o.id, o.offer_group_id, o.version, o.company, o.role, o.pay_basis, o.salary_cents, o.hourly_rate_cents,
+      o.hours_per_week, o.start_date, o.respond_by, o.status
+    FROM placement_offers o WHERE o.enrollment_id = :e AND o.superseded_at IS NULL ORDER BY o.created_at DESC LIMIT 100`, { e: enrollmentId });
+}
+
 /** true = this call made the invoice record; false = the offer already had one. */
 export async function insertInvoice(offer: OfferRow, t: Transaction): Promise<boolean> {
   const made = await rows(`INSERT INTO placement_invoices (offer_id, enrollment_id, fee_cents) VALUES (:id, :e, :fee)

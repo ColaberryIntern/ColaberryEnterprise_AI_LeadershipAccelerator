@@ -10,6 +10,7 @@ import { replayRouters } from '../routes/placementReplayRoutes';
 import hireClientRoutes from '../routes/hireClientRoutes';
 import { ensureHireClientSchema } from '../db/ensureHireClientSchema';
 import hireClientFollowUpRoutes from '../routes/hireClientFollowUpRoutes';
+import careerPrepOfferRoutes from '../routes/careerPrepOfferRoutes';
 import { ensureEmployerFollowUpSchema } from '../db/ensureEmployerFollowUpSchema';
 import { startFollowUpScheduler } from '../services/placement/followUpScheduler';
 import { startReplayJob } from '../services/placement/replayJob';
@@ -51,6 +52,7 @@ export const PUBLIC_ROUTERS: Router[] = [
   replayRouters.public, // CP9.2: the employer's replay (signed room link) and the one-hour signed recording stream
   hireClientRoutes, // CP10.2: the employer portal API (switch hire_client_portal_enabled; magic-link session, scoped to its client)
   hireClientFollowUpRoutes, // CP10.3: the employer's follow-ups (the same guard; scoped to its client)
+  careerPrepOfferRoutes, // CP10.4: the learner's own offers and answers (participant + Career Prep gated; never a fee)
 ];
 export const SCHEDULERS: Array<{ name: string; start: () => void }> = [
   { name: 'inbox-tests', start: startInboxTestCron }, // CP6.1c: daily forwarding test + broken alerts (switch-gated per pass)

@@ -19,6 +19,10 @@
  *       score, and its History drawer shows the replay (score, "never the video", one card per answer with pace, filler
  *       words and key words covered) with the recording on OUR server's path; no meeting link, no face wording
  *   PL8 (CP9.2) the replay in the History drawer fits a phone (390 wide): no horizontal scroll
+ *   PL9 (CP10.4) offer shows pay and Accept, never a fee: Cora's card on a waiting offer opens #offers; the card shows the
+ *       pay, the three answers and "There's no cost to you."; no served offers body has a fee-derived key; Accept asks
+ *       once more and a double click on the confirmation sends ONE accept for version 1
+ *   PL10 (CP10.4) the #offers sheet fits a phone (390 wide): no horizontal scroll, every answer 44px or taller
  *   PLX zero console errors in these flows
  *
  * Usage (repo root): node tests/systemV2/career-prep/placement.e2e.js, or runAll.js (env: see harness.js)
@@ -204,8 +208,51 @@ async function flowReplay(browser, viewport) {
   return errors;
 }
 
-runSuite(9, async (browser) => {
+/** Every key, anywhere in a served body, that is the employer's charge or derived from it (fee, rate, invoice, agreement). */
+const feeKeys = (v, at = '$') => (Array.isArray(v) ? v.flatMap((x, i) => feeKeys(x, `${at}[${i}]`))
+  : v && typeof v === 'object' ? Object.entries(v).flatMap(([k, x]) => [...(/fee|invoice|first_?year|rate_?bp|agreed|agreement/i.test(k) ? [`${at}.${k}`] : []), ...feeKeys(x, `${at}.${k}`)]) : []);
+
+async function flowOffers(browser, viewport) {
+  const { ctx, page, errors, api } = await newPage(browser, { api: { offers: true }, viewport: viewport || { width: 1440, height: 900 } });
+  page.setDefaultTimeout(8000);
+  const name = viewport ? 'PL10 the #offers sheet fits a phone (390): no horizontal scroll, every answer 44px or taller'
+    : 'PL9 offer shows pay and Accept, never a fee: Cora\'s card opens #offers; Accept asks once more, then sends version 1 once';
+  try {
+    await page.goto(`${BASE}/portal/career/room`);
+    await page.waitForFunction(() => /You have an offer from Northwind/.test(document.querySelector('[data-testid="cp-cora-col"]')?.textContent || ''));
+    await page.locator('[data-testid="cp-cora-col"] button', { hasText: 'Open my offers' }).click();
+    await page.waitForSelector(tid('cp-offer-of-1'));
+    await shot(page, viewport ? 'offers-sheet-390' : 'offers-sheet-1440');
+    if (viewport) {
+      const m = await page.evaluate(() => ({ minH: Math.min(...[...document.querySelectorAll('[data-testid="cp-offer-actions-of-1"] button')].map((b) => b.getBoundingClientRect().height)) }));
+      const wide = await page.evaluate(sideways);
+      check(name, wide.length === 0 && m.minH >= 44, JSON.stringify({ wide, minH: m.minH }));
+    } else {
+      const s = await page.evaluate(() => ({
+        hash: location.hash, pay: document.querySelector('[data-testid="cp-offer-pay-of-1"]')?.textContent || '',
+        buttons: [...document.querySelectorAll('[data-testid="cp-offer-actions-of-1"] button')].map((b) => b.textContent).join('|'),
+        text: document.querySelector('[data-testid="cp-offers-sheet"]')?.textContent || '', waiting: document.querySelector('[data-testid="cp-offers-waiting"]')?.textContent || '',
+      }));
+      await page.click(tid('cp-offer-accept-of-1'));
+      const before = api.state.offerAnswers.length;
+      await page.dblclick(tid('cp-offer-yes-of-1'));
+      await page.waitForFunction(() => document.querySelector('[data-testid="cp-offer-status-of-1"]')?.textContent === 'Accepted');
+      const leaks = api.sent.filter((x) => x.path.includes('/offers')).flatMap((x) => feeKeys(x.payload));
+      check(name, s.hash === '#offers' && s.pay === '$105,000 a year' && s.buttons === 'Accept|Talk to my recruiter first|Decline' && /There's no cost to you\./.test(s.text)
+        && /^Waiting on you: 1 offer to answer, the first by /.test(s.waiting) && !/\bfees?\b|invoice/i.test(s.text) && before === 0 && leaks.length === 0
+        && JSON.stringify(api.state.offerAnswers) === JSON.stringify([{ groupId: '0f0f0f0f-0000-4000-8000-000000000001', decision: 'accept', version: 1 }]),
+      JSON.stringify({ ...s, text: s.text.slice(0, 160), answers: api.state.offerAnswers, leaks }));
+    }
+  } catch (e) {
+    check(name, false, String(e && e.message).split('\n')[0].slice(0, 200));
+  }
+  await ctx.close();
+  return errors;
+}
+
+runSuite(11, async (browser) => {
   const errs = [...await flowInbox(browser), ...await flowInboxPhone(browser), ...await flowBooked(browser), ...await flowInterviewsPhone(browser),
-    ...await flowRoom(browser), ...await flowRoom(browser, { width: 390, height: 844 }), ...await flowReplay(browser), ...await flowReplay(browser, { width: 390, height: 844 })];
+    ...await flowRoom(browser), ...await flowRoom(browser, { width: 390, height: 844 }), ...await flowReplay(browser), ...await flowReplay(browser, { width: 390, height: 844 }),
+    ...await flowOffers(browser), ...await flowOffers(browser, { width: 390, height: 844 })];
   check('PLX zero console errors in the placement flows', errs.length === 0, errs.slice(0, 3).join(' | '));
 });

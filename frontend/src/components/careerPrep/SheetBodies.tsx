@@ -6,14 +6,15 @@ import type { Sheet } from './logic/askRouter';
 import { interviewWhen } from './logic/careerPrepCopy';
 import { InboxSheet } from './sheets/InboxSheet';
 import { InterviewsSheet } from './sheets/InterviewsSheet';
+import { OffersSheet } from './sheets/OffersSheet';
 import { useClock } from './useClock';
 
 /**
  * Career Prep v27 (CP4.6): what each sheet shows, from data that exists today. Your interviews: from CP8.3 the
  * sheets/InterviewsSheet.tsx page (the interviews the job-search inbox found), then the ones employers booked through
  * the Hire profile (with "Join the room" from 10 minutes before the start) and the ones the student added or Cora made. Digital resume: the portfolio page employers see. The job-search inbox is real from
- * CP6.1 (sheets/InboxSheet.tsx). Offers and applications are not tracked by the platform yet, so those sheets say so
- * plainly instead of showing anything made up.
+ * CP6.1 (sheets/InboxSheet.tsx). Offers are real from CP10.4 (sheets/OffersSheet.tsx). Applications are not tracked by
+ * the platform yet, so that sheet says so plainly instead of showing anything made up.
  */
 const STATUS: Record<HireInterview['status'], string> = { requested: 'Waiting on you', confirmed: 'Confirmed', declined: 'Declined', rescheduled: 'New time proposed', cancelled: 'Cancelled', completed: 'Held' };
 const JOIN_EARLY_MS = 10 * 60_000;
@@ -52,14 +53,14 @@ export function BookedAndAdded({ prep, now: fixed }: { prep: PrepInterview[]; no
   );
 }
 
-const NOT_YET: Record<'offers' | 'applications', string> = {
-  offers: 'Offers are not tracked in the app yet. When an employer sends you one, it will show here with the date to reply by.',
+const NOT_YET: Record<'applications', string> = {
   applications: 'Applications are not tracked in the app yet. Add the interviews they lead to from Cora, and she will prepare you.',
 };
 
 export function SheetBody({ sheet, prep }: { sheet: Sheet; prep: PrepInterview[] }): React.ReactElement {
   if (sheet === 'interviews') return <InterviewsSheet><BookedAndAdded prep={prep} /></InterviewsSheet>;
   if (sheet === 'inbox') return <InboxSheet />;
+  if (sheet === 'offers') return <OffersSheet />;
   if (sheet === 'resume') {
     return <p data-testid="cp-resume-sheet">Your digital resume is your portfolio page. <Link className="cp-send" to="/portal/portfolio">Open your portfolio page</Link></p>;
   }

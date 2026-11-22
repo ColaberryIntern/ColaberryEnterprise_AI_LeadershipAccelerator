@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import { getSetting } from '../settingsService';
 import { computeFee, DEFAULT_FEE_RATE, validRate, type Pay } from './feeCalculator';
 import * as store from './offerStore';
-import type { OfferRow, OfferStatus } from './offerStore';
+import type { CandidateOfferRow, OfferRow, OfferStatus } from './offerStore';
 
 /**
  * Career Prep v27, CP10.1 (kit F7): offers, versioned, and the invoice RECORD an acceptance makes. No route calls this
@@ -144,9 +144,11 @@ export interface CandidateOffer {
   id: string; groupId: string; version: number; company: string; role: string; payBasis: 'yearly' | 'hourly';
   salaryCents: number | null; hourlyRateCents: number | null; hoursPerWeek: number | null; startDate: string | null; respondBy: string | null; status: OfferStatus;
 }
-export function candidateOffer(o: OfferRow): CandidateOffer {
+/** A DATE column may arrive as 'YYYY-MM-DD' or as a Date (driver parsers differ): the day either way, as clientView does. */
+const dateOnly = (v: string | Date | null): string | null => (v === null ? null : typeof v === 'string' ? v.slice(0, 10) : new Date(v).toISOString().slice(0, 10));
+export function candidateOffer(o: CandidateOfferRow): CandidateOffer {
   const n = (v: string | number | null) => (v === null ? null : Number(v));
   return { id: o.id, groupId: o.offer_group_id, version: o.version, company: o.company, role: o.role, payBasis: o.pay_basis,
-    salaryCents: n(o.salary_cents), hourlyRateCents: o.hourly_rate_cents, hoursPerWeek: n(o.hours_per_week), startDate: o.start_date,
+    salaryCents: n(o.salary_cents), hourlyRateCents: o.hourly_rate_cents, hoursPerWeek: n(o.hours_per_week), startDate: dateOnly(o.start_date),
     respondBy: o.respond_by ? new Date(o.respond_by).toISOString() : null, status: o.status };
 }

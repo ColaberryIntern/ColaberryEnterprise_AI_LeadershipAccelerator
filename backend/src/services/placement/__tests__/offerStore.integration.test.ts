@@ -88,4 +88,24 @@ describeIfDb('offers and invoice records against Postgres', () => {
     expect(await raw(14, `'yearly', 100, NULL, NULL`, 'NULL')).toMatchObject({ parent: { code: '23502' } });
     expect(await raw(15, `'yearly', 100, NULL, NULL`, `'p'`)).toBeNull(); // the $1 floor itself is allowed
   });
+
+  it('CP10.4 candidateOffers: only the learner\'s own CURRENT versions, no fee column read, and the candidate shape maps cleanly', async () => {
+    const E2 = '7fffffff-cccc-4ccc-8ccc-cccccccccccc';
+    await sequelize.query(`INSERT INTO enrollments (id) VALUES ('${E2}') ON CONFLICT DO NOTHING`);
+    const mine = await svc.createOffer(input({ startDate: '2026-12-07', respondBy: '2026-12-01T23:00:00Z' }), K(20), 1.1);
+    const theirs = await svc.createOffer(input({ enrollmentId: E2, company: 'Other' }), K(21), 1.1);
+    if (mine.status !== 'ok' || theirs.status !== 'ok') throw new Error('setup');
+    await svc.editOffer(mine.offer.offer_group_id, input({ startDate: '2026-12-07', pay: { basis: 'yearly', salaryCents: 110_000_00 } }), K(22), 1.1);
+    const { candidateOffers } = await import('../offerStore');
+    const rows = (await candidateOffers(E2));
+    expect(rows.map((r) => r.company)).toEqual(['Other']);
+    for (const r of rows) expect(Object.keys(r).filter((k) => /fee|invoice|first_year|agreed|agreement/.test(k))).toEqual([]);
+    const own = (await candidateOffers(E1)).filter((r) => r.offer_group_id === mine.offer.offer_group_id);
+    expect(own.map((r) => r.version)).toEqual([2]);
+    expect(svc.candidateOffer(own[0])).toMatchObject({ version: 2, salaryCents: 110_000_00, startDate: '2026-12-07', status: 'sent' });
+    const [a, b] = await Promise.all([svc.respondToOffer(E1, mine.offer.offer_group_id, 2, 'accept'), svc.respondToOffer(E1, mine.offer.offer_group_id, 2, 'accept')]);
+    expect([a.status, b.status]).toEqual(['ok', 'ok']);
+    expect((await one(`SELECT COUNT(*)::int AS n FROM placement_invoices i JOIN placement_offers o ON o.id = i.offer_id WHERE o.offer_group_id = '${mine.offer.offer_group_id}'`)).n).toBe(1);
+    expect(await svc.respondToOffer(E2, mine.offer.offer_group_id, 2, 'decline')).toEqual({ status: 'not_found' });
+  });
 });

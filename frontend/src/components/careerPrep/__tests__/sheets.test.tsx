@@ -11,10 +11,13 @@ import { BookedAndAdded, joinOpen, SheetBody } from '../SheetBodies';
 import { JumpBar } from '../JumpBar';
 import { fetchHireInterviews, type HireInterview } from '../../../services/hireStudioApi';
 import { fetchPlacementInterviewsApi } from '../interviewsApi';
+import { fetchOffersApi } from '../offersApi';
 
 jest.mock('../../../services/hireStudioApi', () => ({ fetchHireInterviews: jest.fn() }));
 jest.mock('../interviewsApi', () => ({ fetchPlacementInterviewsApi: jest.fn() }));
+jest.mock('../offersApi', () => ({ fetchOffersApi: jest.fn(), answerOfferApi: jest.fn() }));
 const hire = fetchHireInterviews as jest.Mock;
+const offers = fetchOffersApi as jest.Mock;
 
 let host: HTMLDivElement | null = null;
 let root: Root | null = null;
@@ -94,13 +97,17 @@ describe('sheets are hashes on the room URL (CP4.6)', () => {
   });
 });
 
-describe('the offers sheet never shows a fee (CP4.6)', () => {
-  it('says plainly that offers are not tracked yet, and no Career Prep sheet source mentions a fee', () => {
+describe('the offers sheet never shows a fee (CP4.6, CP10.4)', () => {
+  it('is the real Offers sheet ("There\'s no cost to you."), and no Career Prep sheet source mentions a fee', async () => {
+    offers.mockResolvedValue([]);
     const h = mount(<MemoryRouter><SheetBody sheet="offers" prep={[]} /></MemoryRouter>);
-    expect(h.textContent).toContain('Offers are not tracked in the app yet');
+    await flush();
+    expect(h.querySelector('[data-testid="cp-offers-sheet"]')).not.toBeNull();
+    expect(h.textContent).toContain("There's no cost to you.");
     expect(h.textContent).not.toMatch(/fee/i);
     const dir = path.join(__dirname, '..');
-    for (const f of ['SheetBodies.tsx', 'PageSheet.tsx', 'JumpBar.tsx', 'useSheet.ts', path.join('logic', 'sheets.ts'), 'careerPrepApi.ts']) {
+    for (const f of ['SheetBodies.tsx', 'PageSheet.tsx', 'JumpBar.tsx', 'useSheet.ts', path.join('logic', 'sheets.ts'), 'careerPrepApi.ts',
+      'offersApi.ts', path.join('sheets', 'OffersSheet.tsx'), 'useOfferNotice.ts']) {
       expect(fs.readFileSync(path.join(dir, f), 'utf8')).not.toMatch(/\bfees?\b/i);
     }
   });

@@ -8,6 +8,7 @@ import { usePlanMaker } from './usePlanMaker';
 import { useReminder } from './useReminder';
 import { useAsk, usePickCard, type ConversationDeps, type PrepForm } from './useConversation';
 import { cora, me, useRoomLog } from './useRoomLog';
+import { useOfferNotice } from './useOfferNotice';
 
 /**
  * Career Prep v27 (CP3.3, CP3.4, CP4.1): the room's conversation, composed from small hooks:
@@ -28,6 +29,7 @@ export interface CareerPrepRoomState {
 
 export function useCareerPrep(initialAnchorId: string | null = null, hooks: RoomHooks = {}): CareerPrepRoomState {
   const { log, push, answer } = useRoomLog();
+  useOfferNotice(push); // CP10.4: Cora's card when an offer is waiting on the student
   const [form, setForm] = useState<PrepForm>(null);
   const [error, setErrorState] = useState<string | null>(null);
   const h = useRef(hooks);
