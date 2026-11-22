@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Saturday, November 21, 2026 at 5:54 PM</div>
-    <div><span class="sid">CC-20261120-e2fc</span><span class="count">9 changes</span></div>
+    <div class="meta">Generated Sunday, November 22, 2026 at 8:14 AM</div>
+    <div><span class="sid">CC-20261120-e2fc</span><span class="count">10 changes</span></div>
   </header>
   <main>
     
@@ -184,6 +184,20 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">`workflowDiagram.test.ts` 8/8, including the new card case. sbp + factory + runbook coverage: 308 suites / 4,210 tests pass. Backend tsc is clean on our sources; the only output is third-party `@types/d3-dispatch` noise that main shows too.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">like the diagram fix, this is guidance to the page builder, so only a cold rebuild proves it.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">10</span>
+          <h2>#4301 deployed: agent cards readable in a cold rebuild</h2>
+          <span class="badge">2026-11-22</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">deployed be87244e5 (registry mode, marker &quot;no word ever breaks mid-word&quot; in `commandCenterAgentsTab.js`). No code change in this entry. BC L12.10 closed.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">the v5 Story 000 brief on prod carries the card rule. A cold rebuild from it (`ShiftFill-Command-Center-v5c.html`) puts each label above its value. Measured in Edge at 360px and 1280px: 0 words broken mid-word, 0 elements outside a card, no sideways scroll. The diagram still has no overlapping label. 9 tabs, 0 console errors.</span></div>
+          
           
         </div>
       </article>
