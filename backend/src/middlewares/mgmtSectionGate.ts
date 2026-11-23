@@ -396,6 +396,11 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   ['/api/admin/events', 'system'],
   ['/api/admin/work-ledger-health', 'system'],
   ['/api/admin/automation', 'system'],
+  // Platform Operations (/admin/system/operations). The gate runs BEFORE requireSection,
+  // so an unclassified path 403s every scoped identity before the route can admit them.
+  // The prefix is the exact one the page calls; matchesPrefix is '/'-delimited, so it
+  // cannot swallow '/api/admin/system-health', which is a different surface.
+  ['/api/admin/system/operations', 'system'],
   ['/api/admin/agent-orphans', 'intelligence'],
   ['/api/admin/knowledge-ops', 'intelligence'],
 ];
