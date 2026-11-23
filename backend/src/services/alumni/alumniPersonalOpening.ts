@@ -37,6 +37,9 @@ export interface AlumniOpeningContext {
   placementMonthYear?: string | null;
 }
 
+/** Placement dates before this year are CCPP's 1/1/1900 "no date" placeholder (Colaberry began well after). */
+export const MIN_PLACEMENT_YEAR = 2000;
+
 const MONTHS: Record<string, string> = {
   jan: 'January', feb: 'February', mar: 'March', apr: 'April', may: 'May', jun: 'June',
   jul: 'July', aug: 'August', sep: 'September', oct: 'October', nov: 'November', dec: 'December',
@@ -65,7 +68,11 @@ export function openingContextFrom(alumni: Record<string, any> | null | undefine
   const stage = String(alumni?.career_stage || '').trim() || null;
   const hired = String(alumni?.hired_date || '').match(/^(\d{4})-(\d{2})-\d{2}/);
   const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  const placementMonthYear = hired && Number(hired[2]) >= 1 && Number(hired[2]) <= 12 ? `${MONTH_NAMES[Number(hired[2]) - 1]} ${hired[1]}` : null;
+  // Ali, Nov 22: "don't use any placement dates that say 1/1/1900. If that's the case, use class
+  // start date." CCPP writes 1/1/1900 as "no date"; a timezone shift can make it 12/31/1899. Any
+  // year before MIN_PLACEMENT_YEAR is that placeholder, never a real placement.
+  const placementMonthYear = hired && Number(hired[1]) >= MIN_PLACEMENT_YEAR && Number(hired[2]) >= 1 && Number(hired[2]) <= 12
+    ? `${MONTH_NAMES[Number(hired[2]) - 1]} ${hired[1]}` : null;
   return { program: program || null, classMonthYear: month && year ? `${month} ${year}` : null, classYear: year, careerStage: stage, placementMonthYear };
 }
 

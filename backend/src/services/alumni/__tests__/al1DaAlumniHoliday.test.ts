@@ -103,6 +103,14 @@ describe('placement date: the day they started their career (Ali, Nov 22)', () =
     expect(PLACED.placementMonthYear).toBe('March 2021');
     expect(openingContextFrom({ hired_date: 'not a date' }).placementMonthYear).toBeNull();
   });
+  it('a 1/1/1900 placement (CCPP "no date"), or 12/31/1899 after a timezone shift, is ignored: the class start is used', () => {
+    for (const h of ['1900-01-01', '1900-01-01T00:00:00.000Z', '1899-12-31']) {
+      const ctx = openingContextFrom({ class_name: 'Data Analytics Bootcamp - Jul 11 2020 (ONLINE)', hired_date: h });
+      expect(ctx.placementMonthYear).toBeNull();
+      expect(templateOpening(ctx, 0)).toBe('Since your Data Analytics Bootcamp class in July 2020, the analyst role has changed a lot, and I want you to hear my take on it.');
+      expect(templateOpening(ctx, 0)).not.toMatch(/1900|1899/);
+    }
+  });
   it('openings anchor on placement, never the class start, when there is one; all ten differ and pass the check', () => {
     const lines = Array.from({ length: 10 }, (_, i) => templateOpening(PLACED, i));
     expect(lines[0]).toBe('Since you started your career in March 2021, the analyst role has changed a lot, and I want you to hear my take on it.');
