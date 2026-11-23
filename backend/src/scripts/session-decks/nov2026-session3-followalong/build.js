@@ -37,9 +37,13 @@ const [imageDir, outDir] = process.argv.slice(2);
 if (!imageDir || !outDir) { console.error('usage: node build.js <imageDir> <outDir>'); process.exit(2); }
 
 const MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg' };
+/** Logos repeat by design (every slide's brand bar). Every OTHER picture may appear once (Ali, 2026-11-23). */
+const LOGOS = new Set(['colaberry-mark.png', 'colaberry-mark-white.png', 'colaberry-horizontal.png', 'colaberry-horizontal-white.png']);
+const USED = {};
 function img(file) {
   const p = path.join(imageDir, file);
   if (!fs.existsSync(p)) throw new Error(`image not found: ${file}`);
+  if (!LOGOS.has(file)) USED[file] = (USED[file] || 0) + 1;
   return `data:${MIME[path.extname(file).toLowerCase()]};base64,${fs.readFileSync(p).toString('base64')}`;
 }
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -121,6 +125,8 @@ const EXTRA_CSS = `
   .storybox{border-left:8px solid var(--cherry);background:var(--bg-soft);border-radius:0 18px 18px 0;padding:2.4vh 2vw;margin-top:2.4vh}
   .storybox li{font-size:clamp(15px,1.5vw,22px);margin:1vh 0;list-style:none;display:flex;gap:12px;align-items:baseline}
   .tagline{display:inline-block;margin-top:1.6vh;font-size:12px;font-weight:800;letter-spacing:2px;color:#a59c96;text-transform:uppercase}
+  .foodstrip{display:grid;grid-template-columns:1fr 1fr;gap:1vw;margin-bottom:1.6vh}
+  .foodstrip .photo{height:17vh}
   #pnbtn{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);z-index:56;background:#1a202c;color:#fff;border:none;border-radius:999px;padding:8px 16px;font-weight:800;font-size:12px;letter-spacing:1px;cursor:pointer;opacity:.85}
   #pnbtn.hide{display:none}
 `;
@@ -144,9 +150,9 @@ const SVG = {
     ${['Order', 'Date', 'Customer', 'Region', 'Amount'].map((h, i) => `<text x="${30 + i * 98}" y="34" font-size="14" font-weight="700" fill="#fff">${h}</text>`).join('')}
     ${[['1001', 'Nov 20', 'Ana', 'West', '120'], ['1002', 'Nov 20', 'Ben', 'East', '85'], ['1002', 'Nov 20', 'Ben', 'East', '85'], ['1003', 'Nov 21', 'Cy', '', '240'], ['1004', 'Nov 21', 'Dee', 'South', '-60'], ['1005', 'Nov 22', 'Eli', 'North', '310']].map((r, j) =>
       r.map((c, i) => `<text x="${30 + i * 98}" y="${74 + j * 38}" font-size="15" fill="#2d3748">${c}</text>`).join('')).join('')}
-    <rect x="18" y="94" width="484" height="30" rx="8" fill="none" stroke="#FB2832" stroke-width="3"/>
-    <rect x="312" y="132" width="80" height="30" rx="8" fill="none" stroke="#FB2832" stroke-width="3"/>
-    <rect x="410" y="170" width="86" height="30" rx="8" fill="none" stroke="#FB2832" stroke-width="3"/>
+    <rect x="18" y="130" width="484" height="30" rx="8" fill="none" stroke="#FB2832" stroke-width="3"/>
+    <rect x="312" y="168" width="80" height="30" rx="8" fill="none" stroke="#FB2832" stroke-width="3"/>
+    <rect x="410" y="206" width="86" height="30" rx="8" fill="none" stroke="#FB2832" stroke-width="3"/>
     <text x="260" y="318" text-anchor="middle" font-size="14" font-weight="700" fill="#E5121D">Made-up practice data: listed twice, an empty box, an amount below zero</text>
   </svg>`,
   checklist: `<svg viewBox="0 0 520 300" role="img" aria-label="A checklist with PASS and FAIL marks and a STOP answer">
@@ -215,13 +221,13 @@ function body(s) {
         <div class="kicker">In plain words</div><h2>A skill is a<br><span class="red">recipe card for Claude.</span></h2>
         <p class="sub">You write it once. Claude keeps it. When a question matches the WHEN line, Claude pulls out the card and follows it the same way every time.</p>
         <div class="glossary"><div><b>Prompt:</b> the message you type to Claude</div><div><b>Skill:</b> saved instructions Claude uses when the moment fits</div><div><b>Practice data:</b> made-up numbers, safe to play with</div></div>
-      </div><div class="card5">
+      </div><div><div class="foodstrip"><div class="photo"><img src="${img('food-bowl.jpg')}" alt="A finished dish"></div><div class="photo"><img src="${img('food-board.jpg')}" alt="Fresh ingredients on a cutting board"></div></div><div class="card5">
         <div class="row"><div class="k">🏷️ Name</div><div class="v">morning-order-check</div></div>
         <div class="row hot"><div class="k">⏰ When</div><div class="v">Someone asks if an orders file is safe to share</div></div>
         <div class="row"><div class="k">📋 Steps</div><div class="v">Listed twice? Empty box? Odd amount? Future date?</div></div>
         <div class="row"><div class="k">🎯 Result</div><div class="v">PASS or FAIL for each, then GO or STOP</div></div>
         <div class="row"><div class="k">🚫 Never</div><div class="v">Change the data. Only report on it.</div></div>
-      </div></div>`;
+      </div></div></div>`;
     case 'handson': return `${brand(`Hands-on ${s.n} of 5`)}
       <div class="split"><div class="hstack"><div>
           <div class="stepbadge">✋ Hands-on ${s.n} of 5</div><h2>${esc(s.title.replace(/^Hands-on \d: /, '').replace(/^./, (c) => c.toUpperCase()))}</h2>
@@ -260,18 +266,30 @@ function body(s) {
         <div class="kicker">Next Monday · 6:30 PM Central</div><h2>It's 2 AM and nobody is at the keyboard.<br><span class="red">Does anything happen at all?</span></h2>
         <p class="sub">Next week: your first AI assistant that keeps working while you sleep.</p>
         <ul class="points"><li>Questions now? <b>Type them on your phone or computer</b>, they show up here</li></ul>
-      </div><div class="avatar"><img src="${img('ali-avatar-2.jpg')}" alt="Ali Muwwakkil"></div></div>`;
+      </div><div class="photo" style="height:66vh"><img src="${img('night-street.jpg')}" alt="A city street at night"></div></div>`;
     default: return '';
   }
+}
+
+/**
+ * Every slide has its own background photo (assets/bg-NN.jpg, NN = slide number), under a
+ * tint that keeps the text readable: white on content slides, cherry on statements, navy on
+ * live votes. The photo shows what the slide is about (Ali, 2026-11-23).
+ */
+function bgStyle(s, k) {
+  const tint = s.kind === 'poll' ? 'rgba(11,18,32,.86),rgba(11,18,32,.92)'
+    : s.kind === 'statement' ? 'rgba(229,18,29,.80),rgba(160,10,24,.88)'
+      : 'rgba(255,255,255,.72),rgba(255,255,255,.84)';
+  return ` style="background:linear-gradient(${tint}),url('${img(`bg-${String(k + 1).padStart(2, '0')}.jpg`)}') center/cover no-repeat"`;
 }
 
 function section(s, k) {
   if (s.kind === 'poll') {
     const p = s.poll;
-    return `<section class="slide poll" data-idx="${k}" data-poll="${esc(p.key)}" data-kind="${esc(p.kind)}" data-q="${esc(p.q)}" data-options='${esc(JSON.stringify(p.options)).replace(/'/g, '&#39;')}'${typeof p.answer === 'number' ? ` data-answer="${p.answer}"` : ''}${p.reveal ? ` data-reveal="${esc(p.reveal)}"` : ''}></section>`;
+    return `<section class="slide poll"${bgStyle(s, k)} data-idx="${k}"data-poll="${esc(p.key)}" data-kind="${esc(p.kind)}" data-q="${esc(p.q)}" data-options='${esc(JSON.stringify(p.options)).replace(/'/g, '&#39;')}'${typeof p.answer === 'number' ? ` data-answer="${p.answer}"` : ''}${p.reveal ? ` data-reveal="${esc(p.reveal)}"` : ''}></section>`;
   }
   const cls = s.kind === 'statement' ? 'slide statement wm' : 'slide wm';
-  return `<section class="${cls}" data-idx="${k}"${s.kind === 'lobby' ? ' data-oh="lobby"' : ''}>${body(s)}</section>`;
+  return `<section class="${cls}"${bgStyle(s, k)} data-idx="${k}"${s.kind === 'lobby' ? ' data-oh="lobby"' : ''}>${body(s)}</section>`;
 }
 
 /* -------------------------------------------------------------- deck data -- */
@@ -344,6 +362,9 @@ li.right{font-weight:800;color:#2f6b16} .ph{color:#64748b;font-size:14px}
 ${rows}
 </body></html>
 `;
+
+const repeats = Object.entries(USED).filter(([, n]) => n > 1).map(([f, n]) => `${f} x${n}`);
+if (repeats.length) { console.error('LINT FAIL\n  picture used more than once: ' + repeats.join(', ')); process.exit(1); }
 
 fs.mkdirSync(outDir, { recursive: true });
 fs.writeFileSync(path.join(outDir, 'deck.html'), deck);
