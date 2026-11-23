@@ -235,6 +235,25 @@ beforeEach(() => {
 afterEach(() => jest.restoreAllMocks());
 
 describe('the counts cannot drift', () => {
+  /**
+   * WHICH CELL CATCHES WHAT. These are not interchangeable, and the distinction
+   * was measured by mutation rather than reasoned about.
+   *
+   *   - a READ added with no handler, or a handler with no read  -> this cell
+   *   - a ROUTE REGISTRATION deleted from the router             -> the
+   *     per-path cells below, NOT this one
+   *
+   * Deleting `router.get(.../learners/:enrollmentId/signals)` leaves this cell
+   * GREEN, and it has to: this cell compares two lists that both live outside
+   * the router, so a missing registration does not change either count. Only
+   * the per-path cell for that route fires. Adding a fourteenth name to
+   * `EXPLORER_BRAND_READS` is the reverse - this cell fires alone.
+   *
+   * The route file's comment credits "a test" with the count equality, which is
+   * this cell; it is written here which hazard that actually covers, because a
+   * comment crediting the wrong pin is a failure this repo has already had once
+   * in the rate-limit suite next door.
+   */
   it('registers one route per read, and one handler per read', () => {
     // The drift this prevents already happened once, in this build's own plan:
     // the read list grew from six to eleven to thirteen while the route task
