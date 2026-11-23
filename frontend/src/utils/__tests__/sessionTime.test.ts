@@ -192,6 +192,21 @@ describe('sessionStartInstant', () => {
     expect(sessionStartInstant('2026-03-08', '01:30:00')).toBe('2026-03-08T07:30:00.000Z');
   });
 
+  /**
+   * These two are the ONLY cases that tell one pass from two, and without them
+   * the second pass is untested code. The naive timestamp sits 5-6 hours before
+   * the real instant, so the passes disagree exactly when a DST transition
+   * falls inside that gap - a pre-dawn hour on changeover day. No class is
+   * scheduled at 3 AM, but the helper is general, and a line that no test can
+   * fail is a line nobody can safely keep.
+   */
+  it('re-reads the offset at the target when a DST change falls in between', () => {
+    // Fall back (07:00Z): one pass would answer 08:00Z, which is 2 AM, not 3.
+    expect(sessionStartInstant('2026-11-01', '03:00')).toBe('2026-11-01T09:00:00.000Z');
+    // Spring forward (08:00Z): one pass would answer 11:00Z, which is 6 AM, not 5.
+    expect(sessionStartInstant('2026-03-08', '05:00')).toBe('2026-03-08T10:00:00.000Z');
+  });
+
   it('picks the earlier instant for the hour that repeats on fall-back night', () => {
     // 2026-11-01 01:30 happens twice; the CDT one (06:30Z) wins, deterministically.
     expect(sessionStartInstant('2026-11-01', '01:30:00')).toBe('2026-11-01T06:30:00.000Z');
