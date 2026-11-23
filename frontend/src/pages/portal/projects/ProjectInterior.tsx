@@ -13,6 +13,7 @@ import { CONNECTED_DEMO_STORY_ID } from './connectedDemoStoryId';
 import TimelineCard, { type TimelineFeedCard } from '../../../components/timeline/TimelineCard';
 import TimelineFeed from '../../../components/timeline/TimelineFeed';
 import { isPrepStory, DEMO_DAY_STORY_ID } from './DemoEvidencePanel';
+import { splitOutline, emptySectionsLabel, selectionAfterCollapse } from './outlineSections';
 // Every rule for the Classroom card is scoped `.tl-de …` in timeline.css, and
 // /portal/projects is its own route chunk: import it here so a cold load of
 // the Projects tab styles the cards (ProjectsNextStepHero does the same).
@@ -153,6 +154,9 @@ const ProjectInterior: React.FC<{
 }> = ({ project, onBack, condensed, onOpenTask }) => {
   const demo = useIsExplorer();   // Explorer = demo mode
   const [sel, setSel] = useState<string>('all'); // 'all' or a list id (drives the outline filter)
+  // AF12.19: default CLOSED. The common case is a person looking for their work, and the
+  // twelve empty sections are what made that hard enough to report as a bug.
+  const [showEmpty, setShowEmpty] = useState(false);
   const prog = projectProgress(project);
   const rv = reqVerified(project);
   const nx = nextTask(project);
@@ -188,6 +192,17 @@ const ProjectInterior: React.FC<{
   }));
   openTasks.sort((a, b) => rank[a.t.due] - rank[b.t.due]);
   const selName = sel === 'all' ? null : project.lists.find((l) => l.id === sel)?.name;
+  // AF12.19: the outline's sections, split into the ones that can be navigated to and the
+  // ones that cannot. The rule is in `outlineSections.ts` so it is assertable without a DOM.
+  const outline = splitOutline(project.lists);
+  const outlineRow = (l: typeof project.lists[number]) => {
+    const d = l.tasks.filter((t) => t.state === 'done').length;
+    return (
+      <button key={l.id} className={`pj-olrow${sel === l.id ? ' active' : ''}`} onClick={() => setSel(l.id)}>
+        <span className="nm">{l.name}</span><span className="ct">{d}/{l.tasks.length}</span>
+      </button>
+    );
+  };
   // The card hands itself up; the page owns routing (TimelineCard is Router-free
   // by design). A locked card never calls this — the release gate holds there.
   const openCard = (card: TimelineFeedCard) => { if (card.project_task_id) onOpenTask(card.project_task_id); };
@@ -300,14 +315,29 @@ const ProjectInterior: React.FC<{
               <button className={`pj-olrow${sel === 'all' ? ' active' : ''}`} onClick={() => setSel('all')}>
                 <span className="nm">All tasks</span><span className="ct">{open + done}</span>
               </button>
-              {project.lists.map((l) => {
-                const d = l.tasks.filter((t) => t.state === 'done').length;
-                return (
-                  <button key={l.id} className={`pj-olrow${sel === l.id ? ' active' : ''}`} onClick={() => setSel(l.id)}>
-                    <span className="nm">{l.name}</span><span className="ct">{d}/{l.tasks.length}</span>
+              {outline.filled.map(outlineRow)}
+              {/* AF12.19: an agent-domain board is created with thirteen sections and only R0 can
+                  hold anything, so twelve of them read 0/0 on every builder's board, forever. An
+                  outline row is a FILTER, and a row that filters to nothing is a dead control.
+                  Collapsed rather than dropped: the empty rungs are the ladder ahead of a builder,
+                  which is worth being able to look at. */}
+              {outline.empty.length > 0 && (
+                <>
+                  <button
+                    type="button"
+                    className="pj-olrow pj-olmore"
+                    aria-expanded={showEmpty}
+                    onClick={() => {
+                      if (showEmpty) setSel((cur) => selectionAfterCollapse(cur, outline.empty));
+                      setShowEmpty((v) => !v);
+                    }}
+                    data-testid="pj-outline-empty-toggle"
+                  >
+                    <span className="nm">{emptySectionsLabel(outline.empty.length, showEmpty)}</span>
                   </button>
-                );
-              })}
+                  {showEmpty && outline.empty.map(outlineRow)}
+                </>
+              )}
             </div>
           </div>
 
