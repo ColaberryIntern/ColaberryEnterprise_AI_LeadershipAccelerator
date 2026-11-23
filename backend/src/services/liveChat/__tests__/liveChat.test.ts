@@ -15,7 +15,7 @@ import { findGuest } from '../../sessionGuestStore';
 import { chatJson } from '../../runtime/runtimeAi';
 import * as store from '../liveChatStore';
 import { sanitizeVerdict, handleAttendeeMessage, ASSISTANT_NAME } from '../liveChatAgent';
-import { postChatAsGuest, answerEscalation, resetChatCounters, CHAT_LIMITS } from '../liveChatService';
+import { postChatAsGuest, answerEscalation, postAsInstructor, resetChatCounters, CHAT_LIMITS, INSTRUCTOR_NAME } from '../liveChatService';
 
 const mockVerify = verifyGuestPass as unknown as jest.Mock;
 const mockFind = findGuest as unknown as jest.Mock;
@@ -107,6 +107,24 @@ describe('answerEscalation', () => {
     S.resolveEscalation.mockResolvedValueOnce(null);
     expect(await status(answerEscalation(SID, 'e1', 0))).toBe(409);
     expect(await status(answerEscalation(SID, 'e1', 7))).toBe(400);
+    expect(S.insertMessage).not.toHaveBeenCalled();
+  });
+});
+
+describe('instructor answers', () => {
+  it('a typed answer to an escalation posts under the instructor name, addressed to the asker', async () => {
+    S.resolveEscalation.mockResolvedValue({ message_id: 'm1', options: ['A', 'B', 'C'], asked_by: 'Ana R.' });
+    expect(await answerEscalation(SID, 'e1', undefined, '  Yes, on the class page tonight.  ')).toEqual({ posted: true });
+    expect(S.resolveEscalation).toHaveBeenCalledWith(SID, 'e1', 'answered', null);
+    expect(S.insertMessage).toHaveBeenCalledWith(SID, 'assistant', INSTRUCTOR_NAME, '@Ana R. Yes, on the class page tonight.', { replyTo: 'm1' });
+  });
+  it('a private question is answered in the chat with the question but never the asker', async () => {
+    expect(await postAsInstructor(SID, 'Week 2.', 'When do we build skills?')).toEqual({ posted: true });
+    expect(S.insertMessage).toHaveBeenCalledWith(SID, 'assistant', INSTRUCTOR_NAME, 'Q: When do we build skills?\nA: Week 2.');
+  });
+  it('refuses an empty or over-long instructor answer', async () => {
+    expect(await status(postAsInstructor(SID, '  '))).toBe(400);
+    expect(await status(answerEscalation(SID, 'e1', undefined, 'x'.repeat(CHAT_LIMITS.chars + 1)))).toBe(400);
     expect(S.insertMessage).not.toHaveBeenCalled();
   });
 });

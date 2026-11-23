@@ -18772,3 +18772,8 @@ Branch `workstream/career-prep-r2r3`, one PR (https://github.com/ColaberryIntern
   - Session: CC-20261118-e16w
   - What changed: `liveChatAgent.ts` prompt asks for three different, concrete answers (never "I'm not sure" or "ask Ali", since Ali is the one choosing); an unsure question with fewer than two usable options now escalates with none (question + Skip) instead of being dropped.
   - Verification: liveChat tests updated and green (45 with the learner-writer tripwire). Production e2e on PR #4385 found the weak options ("I'm not sure ... ask Ali") this fixes.
+- [x] Live chat: the instructor can type his own answer to an escalation, and answer a private question in the chat (question shown, asker never)
+  - Date: 2026-11-23
+  - Session: CC-20261118-e16w
+  - What changed: `answerEscalation` accepts a typed `text` (posts as "Ali", addressed to the asker); new `postAsInstructor` + POST `/api/portal/sessions/:id/chat-post` (deck kit token or admin) posts "Q: ... A: ..." for a private question.
+  - Verification: liveChat suite + learner-writer tripwire 48/48 (3 new: typed answer, private Q and A without the asker, empty/over-long refused).
