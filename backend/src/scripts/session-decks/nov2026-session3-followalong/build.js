@@ -125,6 +125,39 @@ const EXTRA_CSS = `
   .storybox{border-left:8px solid var(--cherry);background:var(--bg-soft);border-radius:0 18px 18px 0;padding:2.4vh 2vw;margin-top:2.4vh}
   .storybox li{font-size:clamp(15px,1.5vw,22px);margin:1vh 0;list-style:none;display:flex;gap:12px;align-items:baseline}
   .tagline{display:inline-block;margin-top:1.6vh;font-size:12px;font-weight:800;letter-spacing:2px;color:#a59c96;text-transform:uppercase}
+  /* Join QR on every slide (Ali, 2026-11-23): small in the corner so latecomers can join without
+     interrupting; click to enlarge, J to show or hide. Hidden on the lobby and vote slides, which
+     already show a QR. */
+  #qrdock{position:fixed;right:14px;bottom:40px;z-index:57;background:#fff;border:1px solid var(--line);border-radius:12px;padding:6px 8px 6px 6px;display:flex;align-items:center;gap:8px;box-shadow:0 8px 24px rgba(26,32,44,.18);cursor:zoom-in;opacity:.92}
+  #qrdock .q{width:min(10vh,86px);height:min(10vh,86px)} #qrdock .q svg{width:100%;height:100%;display:block}
+  #qrdock span{font-size:11px;font-weight:800;line-height:1.25;color:var(--ink-2);letter-spacing:.3px}
+  #qrdock.off,#qrdock.hidehere{display:none}
+  #qrbig{position:fixed;inset:0;z-index:300;background:rgba(11,18,32,.86);display:none;align-items:center;justify-content:center;flex-direction:column;gap:2vh;cursor:zoom-out}
+  #qrbig.on{display:flex}
+  #qrbig .q{width:min(60vh,520px);height:min(60vh,520px);background:#fff;border-radius:24px;padding:18px}
+  #qrbig .q svg{width:100%;height:100%}
+  #qrbig b{color:#fff;font-size:clamp(20px,2.4vw,34px)} #qrbig span{color:#cbd5e1;font-size:clamp(13px,1.3vw,18px)}
+  [data-copylink]{margin:.6vh 0 .4vh}
+  /* Half and three-quarter screen (Ali, 2026-11-23: he shares the deck beside claude.ai). Below
+     ~1150px wide every two-column slide stacks, decorative pictures step aside, and prompt
+     cards get the room, so the slide still reads at half a 1920 screen. */
+  @media (max-width:1150px){
+    .slide{padding:3.5vh 3.5vw}
+    .split,.split.rev{grid-template-columns:minmax(0,1fr);gap:2vh}
+    .split>.photo,.split>.avatar,.hstack .photo,.illus,.foodstrip,.photostack{display:none}
+    #qrdock .q{width:56px;height:56px} #qrdock{bottom:34px;right:10px}
+    .slide{padding-bottom:12vh}
+    .hstack{height:auto;display:block}
+    .howto{margin-top:1.4vh} .howto div{padding:1vh .8vw;font-size:13px}
+    .pcard{max-height:none} .pcard pre{font-size:15px}
+    h1{font-size:clamp(28px,5vw,52px)} h2{font-size:clamp(22px,4vw,40px)}
+    .sub{font-size:15px}
+    .ways{gap:2vw} .way{padding:1.6vh 1.2vw}
+    .chain{grid-template-columns:1fr;gap:1vh} .chain .arrow{display:none} .link{padding:1.6vh 1vw;flex-direction:row;align-items:center;gap:1vw}
+    .vs,.three{grid-template-columns:minmax(0,1fr)} .desc{font-size:18px;padding:2vh 1.6vw}
+    .card5 .v{font-size:15px}
+    .storybox li{font-size:16px}
+  }
   .foodstrip{display:grid;grid-template-columns:1fr 1fr;gap:1vw;margin-bottom:1.6vh}
   .foodstrip .photo{height:17vh}
   #pnbtn{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);z-index:56;background:#1a202c;color:#fff;border:none;border-radius:999px;padding:8px 16px;font-weight:800;font-size:12px;letter-spacing:1px;cursor:pointer;opacity:.85}
@@ -195,7 +228,8 @@ function body(s) {
       <div class="ways">
         <div class="way"><div class="big">📱</div><h3>On your phone</h3><div class="bigqr" data-qr style="width:min(26vh,250px);height:min(26vh,250px)"></div>
           <ol><li>Point your camera at the code</li><li>Type your name and email</li><li>Keep the page open all class</li></ol></div>
-        <div class="way"><div class="big">💻</div><h3>On your computer</h3><div class="url" data-checkin></div>
+        <div class="way"><div class="big">💻</div><h3>On your computer</h3><div class="url">The link is in the Zoom chat</div>
+          <button class="runbtn" data-copylink type="button">📋 Copy link for the chat</button>
           <ol><li>Click the link in the Zoom chat</li><li>Type your name and email</li><li>Click <b>Open as a side window</b> so the class keeps the rest of your screen</li></ol>
           <div class="counter-row"><span>In the room</span><div class="count" data-present>0</div></div></div>
       </div>`;
@@ -315,9 +349,11 @@ const deck = `<!DOCTYPE html>
 <body>
 <div id="progress"></div>
 <div id="counter"></div>
-<div id="hint">← → navigate · P presenter window · N notes · Q show QR</div>
+<div id="hint">← → navigate · P presenter window · J join QR · Q lobby</div>
 <div id="livepill">REHEARSAL · LIVE OFF</div>
 <button id="pnbtn" type="button">🗒️ Open presenter window (P)</button>
+<div id="qrdock" title="Click to enlarge · J to show or hide"><div class="q" data-qr></div><span>Scan to<br>join along</span></div>
+<div id="qrbig"><div class="q" data-qr></div><b>Scan to join along</b><span>Name and email, no account needed · or use the link in the Zoom chat</span></div>
 <div id="notes"></div>
 ${slides.map(section).join('\n')}
 <script type="application/json" id="deckdata">${safeJson(DATA)}</script>

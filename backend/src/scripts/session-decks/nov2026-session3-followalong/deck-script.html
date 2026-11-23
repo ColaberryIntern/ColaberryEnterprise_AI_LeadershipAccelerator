@@ -214,6 +214,10 @@
     if (b) { e.stopPropagation(); pollAct(b.dataset.act); return; }
     var cp = e.target.closest('[data-copy]');
     if (cp) { e.stopPropagation(); var d = DATA[i]; if (d.prompt) copyText(d.prompt.text, cp); return; }
+    var cl = e.target.closest('[data-copylink]');
+    if (cl) { e.stopPropagation(); if (K.checkinUrl) copyText(K.checkinUrl, cl); return; }
+    if (e.target.closest('#qrdock')) { qrBig.classList.add('on'); return; }
+    if (e.target.closest('#qrbig')) { qrBig.classList.remove('on'); return; }
     if (e.target.closest('a,button,.pcard')) return;
     if (!autoTried) { autoTried = true; if (!pw) openPresenter(); }
     if (e.clientX > innerWidth * 0.5) show(i + 1); else show(i - 1);
@@ -224,6 +228,8 @@
     if (next > 0 && classStart === null) classStart = Date.now() - PLAN[next] * 60000;
     i = next;
     slides.forEach(function(s, k){ s.classList.toggle('active', k === i); });
+    // The lobby and vote slides already carry a QR; the corner one steps aside there.
+    qrDock.classList.toggle('hidehere', slides[i].dataset.oh === 'lobby' || !!slides[i].dataset.poll);
     counter.textContent = (i + 1) + ' / ' + slides.length;
     progress.style.width = ((i + 1) / slides.length * 100) + '%';
     var d = DATA[i];
@@ -238,7 +244,12 @@
     else if (e.key === 'n' || e.key === 'N') { notesOn = !notesOn; notes.style.display = notesOn ? 'block' : 'none'; }
     else if (e.key === 'q' || e.key === 'Q') { var lob = slides.findIndex(function(s){ return s.dataset.oh === 'lobby'; }); if (lob >= 0) show(lob); }
     else if (e.key === 'Home') show(0);
+    else if (e.key === 'j' || e.key === 'J') { qrDock.classList.toggle('off'); try { localStorage.setItem('s3fa-qrdock', qrDock.classList.contains('off') ? 'off' : 'on'); } catch (err) { /* convenience only */ } }
+    else if (e.key === 'Escape') qrBig.classList.remove('on');
   }
+  /* corner join QR: on by default, J remembers the choice on this computer */
+  var qrDock = document.getElementById('qrdock'), qrBig = document.getElementById('qrbig');
+  try { if (localStorage.getItem('s3fa-qrdock') === 'off') qrDock.classList.add('off'); } catch (err) { /* convenience only */ }
   addEventListener('keydown', onKey);
   setInterval(poll, 2500);
   show(0);
