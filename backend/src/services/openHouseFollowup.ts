@@ -141,13 +141,20 @@ const empty = (outcome: FollowupBookResult['outcome']): FollowupBookResult =>
   ({ outcome, attended: 0, missed: 0, booked: 0, no_lead: 0, screened_out: 0, errors: 0, held_by_other: 0, rows: {} });
 
 /**
- * OH1z: a running membership in another campaign that takes precedence. The follow-up never moves
- * someone out of one: a Nov 19 registrant already counting down to Dec 3 keeps their Dec 3 reminders.
+ * OH1z: someone the follow-up must NOT pull out: a running membership in a campaign that takes
+ * precedence AND still has something queued for them that is not about THIS Open House. A Nov 19
+ * registrant counting down to Dec 3 keeps their Dec 3 reminders; a payment- or class-readiness
+ * member keeps theirs. But the countdown to the Open House being followed up (its sends done or
+ * cancelled at the start) never holds anyone: that is the big move after every Open House.
  */
 export const HELD_BY_PRECEDENCE_SQL = `
 SELECT 1 FROM campaign_leads cl JOIN campaigns c ON c.id = cl.campaign_id
  WHERE cl.lead_id = :leadId AND cl.campaign_id <> :campaignId AND cl.status IN ('enrolled', 'active')
    AND c.status = 'active' AND c.archived_at IS NULL AND (c.settings->>'takes_precedence') = 'true'
+   AND EXISTS (SELECT 1 FROM scheduled_emails se
+                WHERE se.campaign_id = cl.campaign_id AND se.lead_id = cl.lead_id
+                  AND se.status IN ('pending', 'processing', 'paused')
+                  AND COALESCE(se.metadata->>'event_session_id', '') <> CAST(:sid AS text))
  LIMIT 1`;
 
 /**
@@ -304,7 +311,7 @@ export async function bookOpenHouseFollowups(sessionId: string, opts: { now?: Da
         log('followup_screened_out', { outcome: 'failure', error_class: 'ContractViolation', context: { lead_id: p.lead_id, track: p.track, problems: bad.map((x) => `${x.key || 'first'}: ${x.problems.join('; ')}`) } });
         continue;
       }
-      const held = await sequelize.query(HELD_BY_PRECEDENCE_SQL, { replacements: { leadId: p.lead_id, campaignId: campaign.id }, type: QueryTypes.SELECT, transaction: t });
+      const held = await sequelize.query(HELD_BY_PRECEDENCE_SQL, { replacements: { leadId: p.lead_id, campaignId: campaign.id, sid: sessionId }, type: QueryTypes.SELECT, transaction: t });
       if (held.length) { result.held_by_other += 1; continue; }
       if (opts.dryRun) {
         result.booked += 1;
