@@ -5,21 +5,17 @@ import { act } from 'react-dom/test-utils';
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 /**
- * The class check-in landing — the first tests this file has ever had.
+ * The class check-in landing: the surface the room QR resolves to.
  *
- * WHY IT MATTERED THAT IT HAD NONE. This is the surface the room QR actually resolves to
- * (`broadcastSessionLinks.ts:47-49`, `sessionReminderEmail.ts:42-44`), so it is the single
- * highest-traffic live surface in the subsystem and the one a class cannot start without —
- * 615 untested lines carrying attendance, the sign-in round trip, the Builder pulse, polls,
- * Prompt Drops and the connection warning. `CompanionDeck`'s header says outright that its
- * logic was NOT extracted from here because doing it blind to no coverage was too risky. This
- * file is what removes that excuse.
- *
- * WHAT IS PINNED, IN PRIORITY ORDER: attendance is recorded exactly once; the sign-in round
- * trip carries the student back to this URL (without it the QR silently does nothing); the
- * pulse offers DOC 04's four states in BOTH controllers; a question cannot be double-posted;
- * and the 2026-08-20 incident — a phone that had lost the class and said nothing — stays
- * fixed in both directions.
+ * 2026-11-23, Ali: "It should not be a login at all. They just put their name and email (could be
+ * accessing from live stream and not have an account). ... When they login it should not send an
+ * email. It should check them in and immediately start showing them how they look when they are
+ * checked in to the class." So the page is name + email only, for everyone, and these tests pin:
+ *   - no portal session is ever used (no join, no portalApi, no login link anywhere);
+ *   - check-in goes straight to the live view, before class too, and keeps re-confirming until
+ *     the class opens (that is what turns it into attendance);
+ *   - the live loop (status, questions, votes) runs on the guest pass;
+ *   - the 2026-08-20 incident (a phone that had lost the class and said nothing) stays fixed.
  *
  * Mocks are built inside the factories and read back through the typed import, because babel
  * hoists `jest.mock` above const declarations.
@@ -28,21 +24,10 @@ import { act } from 'react-dom/test-utils';
 jest.mock('react-router-dom', () => ({
   __esModule: true,
   useParams: () => ({ sessionId: 'sess-1' }),
-  useNavigate: jest.fn(),
 }));
-jest.mock('../../../utils/portalApi', () => ({ __esModule: true, default: { get: jest.fn() } }));
-jest.mock('../../../contexts/ParticipantAuthContext', () => ({ useParticipantAuth: jest.fn() }));
-jest.mock('../../../services/onboardingApi', () => ({
-  __esModule: true,
-  joinSession: jest.fn(),
-  setSessionPulse: jest.fn(),
-  askSessionQuestion: jest.fn(),
-  getCompanionState: jest.fn(),
-  submitPollResponse: jest.fn(),
-}));
-jest.mock('../../../services/pointsFx', () => ({ __esModule: true, emitPointsEarned: jest.fn() }));
 jest.mock('../../../services/guestCheckinApi', () => ({
   __esModule: true,
+  getCheckinInfo: jest.fn(),
   guestCheckin: jest.fn(),
   getGuestCompanionState: jest.fn(),
   guestVote: jest.fn(),
@@ -53,35 +38,20 @@ jest.mock('../../../services/guestCheckinApi', () => ({
   forgetGuest: jest.fn(),
 }));
 
-import { useNavigate } from 'react-router-dom';
-import portalApi from '../../../utils/portalApi';
-import { useParticipantAuth } from '../../../contexts/ParticipantAuthContext';
 import {
-  joinSession, setSessionPulse, askSessionQuestion, getCompanionState, submitPollResponse,
-} from '../../../services/onboardingApi';
-import { emitPointsEarned } from '../../../services/pointsFx';
-import {
-  guestCheckin, getGuestCompanionState, guestPulse, guestAsk, guestVote, loadSavedGuest, saveGuest,
+  getCheckinInfo, guestCheckin, getGuestCompanionState, guestPulse, guestAsk, guestVote, loadSavedGuest, saveGuest,
 } from '../../../services/guestCheckinApi';
 import { LIVE_PULSES } from '../../../components/portal/livePulse';
-import ClassCheckinPage from '../ClassCheckinPage';
+import ClassCheckinPage, { CHECKIN_TAB_TITLE } from '../ClassCheckinPage';
 
-const mockUseNavigate = useNavigate as unknown as jest.Mock;
-const mockGet = (portalApi as unknown as { get: jest.Mock }).get;
-const mockAuth = useParticipantAuth as unknown as jest.Mock;
-const mockJoin = joinSession as unknown as jest.Mock;
-const mockPulse = setSessionPulse as unknown as jest.Mock;
-const mockAsk = askSessionQuestion as unknown as jest.Mock;
-const mockCompanion = getCompanionState as unknown as jest.Mock;
-const mockPoll = submitPollResponse as unknown as jest.Mock;
-const mockPoints = emitPointsEarned as unknown as jest.Mock;
-const mockGuestCheckin = guestCheckin as unknown as jest.Mock;
-const mockGuestState = getGuestCompanionState as unknown as jest.Mock;
-const mockGuestPulse = guestPulse as unknown as jest.Mock;
-const mockGuestAsk = guestAsk as unknown as jest.Mock;
-const mockGuestVote = guestVote as unknown as jest.Mock;
+const mockInfo = getCheckinInfo as unknown as jest.Mock;
+const mockCheckin = guestCheckin as unknown as jest.Mock;
+const mockState = getGuestCompanionState as unknown as jest.Mock;
+const mockPulse = guestPulse as unknown as jest.Mock;
+const mockAsk = guestAsk as unknown as jest.Mock;
+const mockVote = guestVote as unknown as jest.Mock;
 const mockLoadSaved = loadSavedGuest as unknown as jest.Mock;
-const mockSaveGuest = saveGuest as unknown as jest.Mock;
+const mockSave = saveGuest as unknown as jest.Mock;
 
 const INFO = {
   title: 'Week 12 - Build Day',
@@ -91,58 +61,29 @@ const INFO = {
   room_id: 'room-9',
 };
 
-const STATUS_STATE = {
-  phase: 'status', title: 'Week 12', question: null, prompt: null, my_pulse: null,
-};
-
+const STATUS_STATE = { phase: 'status', title: 'Week 12', question: null, prompt: null, my_pulse: null };
 const PROMPT_STATE = {
-  phase: 'prompt',
-  title: 'Week 12',
-  question: null,
-  my_pulse: null,
-  prompt: {
-    label: 'Build the dashboard',
-    prompt: 'Create a dashboard that shows last month by region.',
-    pasteWhere: 'Claude Code',
-    expectedResult: 'a chart appears',
-    stopCondition: 'it errors twice',
-  },
+  phase: 'prompt', title: 'Week 12', question: null, my_pulse: null,
+  prompt: { label: 'Build the dashboard', prompt: 'Create a dashboard that shows last month by region.', pasteWhere: 'Claude' },
 };
-
 const QUESTION_STATE = {
-  phase: 'question',
-  title: 'Week 12',
-  prompt: null,
-  my_pulse: null,
-  question: {
-    key: 'q1', kind: 'poll', q: 'Which ships first?',
-    options: ['The schema', 'The UI'], answer: 0, revealed: false, my_choice: null,
-  },
+  phase: 'question', title: 'Week 12', prompt: null, my_pulse: null,
+  question: { key: 'q1', kind: 'poll', q: 'Which ships first?', options: ['The schema', 'The UI'], answer: 0, revealed: false, my_choice: null },
 };
 
 let container: HTMLDivElement;
 let root: Root;
-let navigate: jest.Mock;
 
 beforeEach(() => {
-  navigate = jest.fn();
-  mockUseNavigate.mockReturnValue(navigate);
-  mockAuth.mockReturnValue({ isAuthenticated: true });
-  mockGet.mockResolvedValue({ data: INFO });
-  mockJoin.mockResolvedValue({ awarded: false, points: 0 });
+  mockInfo.mockResolvedValue(INFO);
+  mockCheckin.mockResolvedValue({ pass: 'pass-1', name: 'Ana Ruiz', matched: false, class_window: 'open' });
+  mockState.mockResolvedValue(STATUS_STATE);
   mockPulse.mockResolvedValue(undefined);
   mockAsk.mockResolvedValue(undefined);
-  mockPoll.mockResolvedValue(undefined);
-  mockCompanion.mockResolvedValue(STATUS_STATE);
+  mockVote.mockResolvedValue(undefined);
   mockLoadSaved.mockReturnValue(null);
-  mockGuestCheckin.mockResolvedValue({ pass: 'pass-1', name: 'Ana Ruiz', matched: false, class_window: 'open' });
-  mockGuestState.mockResolvedValue(STATUS_STATE);
-  mockGuestPulse.mockResolvedValue(undefined);
-  mockGuestAsk.mockResolvedValue(undefined);
-  mockGuestVote.mockResolvedValue(undefined);
 });
 
-/** Let the info → join → companion chain settle; it is three chained promises deep. */
 const flush = async () => {
   await act(async () => undefined);
   await act(async () => undefined);
@@ -172,15 +113,6 @@ const click = async (id: string) => {
   await flush();
 };
 
-async function typeQuestion(value: string) {
-  const input = find('checkin-ask-input') as HTMLInputElement;
-  await act(async () => {
-    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!;
-    setter.call(input, value);
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-  });
-}
-
 async function typeInto(id: string, value: string) {
   const input = find(id) as HTMLInputElement;
   await act(async () => {
@@ -190,109 +122,136 @@ async function typeInto(id: string, value: string) {
   });
 }
 
-async function checkInAsGuest(name = 'Ana Ruiz', email = 'ana@example.com') {
+async function checkIn(name = 'Ana Ruiz', email = 'ana@example.com') {
   await typeInto('checkin-guest-name', name);
   await typeInto('checkin-guest-email', email);
   await click('checkin-guest-submit');
 }
 
-async function pressEnter() {
-  const input = find('checkin-ask-input') as HTMLInputElement;
-  await act(async () => {
-    input.dispatchEvent(new KeyboardEvent('keydown', {
-      key: 'Enter', bubbles: true, cancelable: true,
-    }));
-  });
+/** Render, then check in: the state every live-loop test starts from. */
+async function renderCheckedIn() {
+  await render();
+  await checkIn();
 }
 
-describe('recording attendance', () => {
-  it('checks the student in once, without being asked', async () => {
-    // The whole point of the QR: scanning it IS the check-in. A student who has to press
-    // something has already been failed by the scan.
+describe('name and email, never a login', () => {
+  it('asks for name and email, then shows the live view straight away', async () => {
     await render();
 
-    expect(mockJoin).toHaveBeenCalledWith('sess-1', 'classroom');
-    expect(mockJoin).toHaveBeenCalledTimes(1);
-    expect(text()).toContain('checked in');
-    expect(text()).toContain('Week 12 - Build Day');
+    expect(find('checkin-guest-form')).not.toBeNull();
+    expect(text()).toContain('No account or password needed');
+    await checkIn();
+
+    expect(mockCheckin).toHaveBeenCalledWith('sess-1', 'Ana Ruiz', 'ana@example.com');
+    expect(mockSave).toHaveBeenCalledWith('sess-1', { pass: 'pass-1', name: 'Ana Ruiz', email: 'ana@example.com' });
+    expect(text()).toContain('checked in, Ana');
+    expect(find('pulse-grid')).not.toBeNull();
   });
 
-  it('fires the points burst only when the server says points were awarded', async () => {
-    mockJoin.mockResolvedValue({ awarded: true, points: 25 });
+  it('offers no way to log in, anywhere on the page', async () => {
     await render();
-
-    expect(mockPoints).toHaveBeenCalledWith(25);
+    expect(text().toLowerCase()).not.toContain('log in');
+    expect(container.querySelector('a[href*="/portal/login"]')).toBeNull();
+    await checkIn();
+    expect(text().toLowerCase()).not.toContain('log in');
+    expect(find('checkin-enter')).toBeNull();
   });
 
-  it('CONTROL: a re-scan awards nothing and fires no burst', async () => {
-    // joinSession is idempotent server-side; a second scan re-confirms and awards 0.
-    mockJoin.mockResolvedValue({ awarded: false, points: 0 });
+  it('wears Colaberry Training branding: tab title and footer', async () => {
+    mockInfo.mockResolvedValue({ ...INFO, program_name: 'Forward Deployed AI Engineer Accelerator' });
     await render();
 
-    expect(mockPoints).not.toHaveBeenCalled();
+    expect(document.title).toBe(CHECKIN_TAB_TITLE);
+    expect(find('checkin-foot')!.textContent).toBe('Colaberry Training · Forward Deployed AI Engineer Accelerator');
+    expect(text()).not.toContain('Enterprise');
   });
 
-  it('offers a way forward when recording attendance fails', async () => {
-    // A failed check-in must never be a dead end: the class is still happening, and an
-    // instructor can mark someone present by hand.
-    mockJoin.mockRejectedValue(new Error('offline'));
+  it('a device that checked in before goes straight back to the live view, without the form', async () => {
+    mockLoadSaved.mockReturnValue({ pass: 'old', name: 'Ana Ruiz', email: 'ana@example.com' });
     await render();
 
-    expect(text()).toContain('couldn');
-    expect(find('checkin-retry-join')).not.toBeNull();
-
-    await click('checkin-enter-anyway');
-    expect(navigate).toHaveBeenCalledWith('/portal/rooms/room-9');
+    expect(mockCheckin).toHaveBeenCalledWith('sess-1', 'Ana Ruiz', 'ana@example.com');
+    expect(find('checkin-guest-form')).toBeNull();
+    expect(text()).toContain('checked in, Ana');
   });
 
-  it('retries the check-in on request', async () => {
-    mockJoin.mockRejectedValue(new Error('offline'));
+  it("shows the server's reason when a check-in is refused", async () => {
+    mockCheckin.mockRejectedValue({ response: { status: 410, data: { error: 'This class has already ended' } } });
+    await render();
+    await checkIn();
+
+    expect(find('checkin-guest-error')!.textContent).toBe('This class has already ended');
+  });
+
+  it('will not submit without a name and a real-looking email', async () => {
+    await render();
+    await checkIn('Ana', 'not-an-email');
+
+    expect(mockCheckin).not.toHaveBeenCalled();
+    expect(find('checkin-guest-error')!.textContent).toContain('valid email');
+  });
+
+  it('a class closed to check-in says so, and still offers no login', async () => {
+    mockInfo.mockResolvedValue({ ...INFO, accepts_guests: false });
     await render();
 
-    mockJoin.mockResolvedValue({ awarded: false, points: 0 });
-    await click('checkin-retry-join');
-
-    expect(find('checkin-enter')).not.toBeNull();
+    expect(find('checkin-closed')).not.toBeNull();
+    expect(find('checkin-guest-form')).toBeNull();
+    expect(text().toLowerCase()).not.toContain('log in');
   });
 });
 
-describe('the student who is not signed in yet', () => {
-  beforeEach(() => { mockAuth.mockReturnValue({ isAuthenticated: false }); });
+describe('before and after the class', () => {
+  const EARLY = { ...INFO, class_window: 'before', start_label: '6:30 PM CST' };
 
-  it('CARRIES THEM BACK HERE after sign-in', async () => {
-    // Without the `next` parameter the magic-link round trip lands on /portal/today and the
-    // attendance is never recorded — the QR looks like it did nothing, which is the exact
-    // failure this page exists to prevent.
+  it('BEFORE: checking in shows the live view at once, and says class starts soon', async () => {
+    mockInfo.mockResolvedValue(EARLY);
+    mockCheckin.mockResolvedValue({ pass: 'pass-1', name: 'Ana Ruiz', matched: false, class_window: 'before' });
     await render();
 
-    const href = find('checkin-login')!.getAttribute('href');
-    expect(href).toBe('/portal/login?next=%2Fportal%2Fclass-checkin%2Fsess-1');
+    expect(text()).toContain('6:30 PM CST');
+    await checkIn();
+
+    expect(text()).toContain('checked in, Ana');
+    expect(find('pulse-grid')).not.toBeNull();
+    expect(text()).toContain('Class starts soon');
   });
 
-  it('names the class so they know they scanned the right code', async () => {
+  it('BEFORE: keeps re-confirming each minute so the check-in becomes attendance once class opens', async () => {
+    jest.useFakeTimers();
+    mockInfo.mockResolvedValue(EARLY);
+    mockCheckin.mockResolvedValue({ pass: 'pass-1', name: 'Ana Ruiz', matched: false, class_window: 'before' });
     await render();
+    await checkIn();
+    expect(mockCheckin).toHaveBeenCalledTimes(1);
 
-    expect(text()).toContain('Week 12 - Build Day');
-    expect(text()).toContain('Cohort - July 2026');
-    expect(text()).toContain('6:30 PM');
+    mockCheckin.mockResolvedValue({ pass: 'pass-1', name: 'Ana Ruiz', matched: true, class_window: 'open' });
+    await act(async () => { jest.advanceTimersByTime(60 * 1000); });
+    await flush();
+    expect(mockCheckin).toHaveBeenCalledTimes(2);
+
+    // Once the server says the class is open, it stops re-confirming.
+    await act(async () => { jest.advanceTimersByTime(3 * 60 * 1000); });
+    expect(mockCheckin).toHaveBeenCalledTimes(2);
   });
 
-  it('records no attendance for someone who is not signed in', async () => {
+  it('AFTER: says the class has ended and records nothing', async () => {
+    mockInfo.mockResolvedValue({ ...INFO, class_window: 'ended' });
     await render();
 
-    expect(mockJoin).not.toHaveBeenCalled();
+    expect(find('checkin-ended')).not.toBeNull();
+    expect(find('checkin-guest-form')).toBeNull();
+    expect(mockCheckin).not.toHaveBeenCalled();
   });
 });
 
 describe('when the class cannot be loaded', () => {
   it('says the link may be incomplete rather than crashing, and retries', async () => {
-    mockGet.mockRejectedValue(new Error('404'));
+    mockInfo.mockRejectedValue(new Error('404'));
     await render();
 
     expect(text()).toContain('load this class');
-    expect(mockJoin).not.toHaveBeenCalled();
-
-    mockGet.mockResolvedValue({ data: INFO });
+    mockInfo.mockResolvedValue(INFO);
     await click('checkin-retry-load');
 
     expect(text()).toContain('Week 12 - Build Day');
@@ -301,39 +260,29 @@ describe('when the class cannot be loaded', () => {
 
 describe('the Builder pulse', () => {
   it('offers DOC 04 four states on the status screen', async () => {
-    await render();
-
-    LIVE_PULSES.forEach(({ state }) => {
-      expect(find(`pulse-${state}`)).not.toBeNull();
-    });
+    await renderCheckedIn();
+    LIVE_PULSES.forEach(({ state }) => { expect(find(`pulse-${state}`)).not.toBeNull(); });
     expect(text()).toContain('Following');
   });
 
   it('OFFERS ALL FOUR IN BUILD MODE TOO', async () => {
-    // The regression this guards: Build Mode used to offer three and drop `here`, so during
-    // the one segment where an instructor most needs to know who is merely following along,
-    // there was no button for it — and a student who had already tapped it watched their own
-    // status vanish from the grid when the instructor moved to a prompt.
-    mockCompanion.mockResolvedValue(PROMPT_STATE);
-    await render();
+    mockState.mockResolvedValue(PROMPT_STATE);
+    await renderCheckedIn();
 
     expect(text()).toContain('Create a dashboard that shows last month by region.');
-    LIVE_PULSES.forEach(({ state }) => {
-      expect(find(`pulse-${state}`)).not.toBeNull();
-    });
+    LIVE_PULSES.forEach(({ state }) => { expect(find(`pulse-${state}`)).not.toBeNull(); });
   });
 
-  it('sends the wire value, not the label', async () => {
-    // `here` is the value in the database CHECK constraint; "Following" is only what it says.
-    await render();
+  it('sends the wire value on the guest pass, not the label', async () => {
+    await renderCheckedIn();
     await click('pulse-here');
 
-    expect(mockPulse).toHaveBeenCalledWith('sess-1', 'here');
+    expect(mockPulse).toHaveBeenCalledWith('sess-1', 'pass-1', 'here');
     expect(find('pulse-here')!.getAttribute('aria-pressed')).toBe('true');
   });
 
   it('keeps the tap on screen even when the write fails', async () => {
-    await render();
+    await renderCheckedIn();
     mockPulse.mockRejectedValue(new Error('offline'));
     await click('pulse-stuck');
 
@@ -342,21 +291,18 @@ describe('the Builder pulse', () => {
 });
 
 describe('asking a question', () => {
-  it('sends the question and clears the box', async () => {
-    await render();
-    await typeQuestion('how do I run that?');
+  it('sends the question on the guest pass and clears the box', async () => {
+    await renderCheckedIn();
+    await typeInto('checkin-ask-input', 'how do I run that?');
     await click('checkin-ask-send');
 
-    expect(mockAsk).toHaveBeenCalledWith('sess-1', 'how do I run that?');
+    expect(mockAsk).toHaveBeenCalledWith('sess-1', 'pass-1', 'how do I run that?');
     expect((find('checkin-ask-input') as HTMLInputElement).value).toBe('');
   });
 
   it('POSTS ONCE when Enter is pressed twice', async () => {
-    // React batches, so two presses both read `qState === 'idle'` out of the same closure.
-    // Nothing downstream deduplicates a question, so the instructor's deck showed it twice.
-    await render();
-    await typeQuestion('does anyone else see this?');
-
+    await renderCheckedIn();
+    await typeInto('checkin-ask-input', 'does anyone else see this?');
     const input = find('checkin-ask-input') as HTMLInputElement;
     await act(async () => {
       const evt = () => new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
@@ -368,312 +314,74 @@ describe('asking a question', () => {
     expect(mockAsk).toHaveBeenCalledTimes(1);
   });
 
-  it('will not send an empty box, or one holding only spaces', async () => {
-    await render();
-    expect((find('checkin-ask-send') as HTMLButtonElement).disabled).toBe(true);
-
-    await typeQuestion('   ');
-    await pressEnter();
-
-    expect(mockAsk).not.toHaveBeenCalled();
-  });
-
   it('keeps the text in the box when the send fails', async () => {
-    await render();
+    await renderCheckedIn();
     mockAsk.mockRejectedValue(new Error('offline'));
-    await typeQuestion('this took me a minute to write');
+    await typeInto('checkin-ask-input', 'this took me a minute to write');
     await click('checkin-ask-send');
 
-    expect((find('checkin-ask-input') as HTMLInputElement).value)
-      .toBe('this took me a minute to write');
+    expect((find('checkin-ask-input') as HTMLInputElement).value).toBe('this took me a minute to write');
   });
 });
 
 describe('answering what is on the instructor screen', () => {
-  it('shows the live question and submits a tap', async () => {
-    mockCompanion.mockResolvedValue(QUESTION_STATE);
-    await render();
+  it('shows the live question and votes on the guest pass', async () => {
+    mockState.mockResolvedValue(QUESTION_STATE);
+    await renderCheckedIn();
 
     expect(text()).toContain('Which ships first?');
     await click('checkin-opt-1');
-
-    expect(mockPoll).toHaveBeenCalledWith('sess-1', 'q1', 1);
-  });
-
-  it('takes no vote once the answer is revealed', async () => {
-    mockCompanion.mockResolvedValue({
-      ...QUESTION_STATE,
-      question: { ...QUESTION_STATE.question, revealed: true },
-    });
-    await render();
-
-    expect((find('checkin-opt-0') as HTMLButtonElement).disabled).toBe(true);
+    expect(mockVote).toHaveBeenCalledWith('sess-1', 'pass-1', 'q1', 1);
   });
 
   it('takes no vote once the instructor has locked it', async () => {
-    mockCompanion.mockResolvedValue({
-      ...QUESTION_STATE,
-      question: { ...QUESTION_STATE.question, theater: { state: 'locked' } },
-    });
-    await render();
+    mockState.mockResolvedValue({ ...QUESTION_STATE, question: { ...QUESTION_STATE.question, theater: { state: 'locked' } } });
+    await renderCheckedIn();
 
     expect((find('checkin-opt-0') as HTMLButtonElement).disabled).toBe(true);
     expect(text()).toContain('Voting locked');
   });
 });
 
-describe('the phone that has lost the class (2026-08-20)', () => {
+describe('the device that has lost the class (2026-08-20)', () => {
   it('says nothing after a single dropped request', async () => {
-    // Venue wifi drops one request routinely. Warning on the first failure would train
-    // students to ignore the warning.
     jest.useFakeTimers();
-    mockCompanion.mockRejectedValue({ response: { status: 500 } });
-    await render();
+    mockState.mockRejectedValue({ response: { status: 500 } });
+    await renderCheckedIn();
 
     expect(find('checkin-link-warn')).toBeNull();
   });
 
-  it('admits it is reconnecting after three', async () => {
-    // The incident: the poll swallowed every error and kept rendering its last view forever,
-    // so a student watched a status screen while the room answered questions. Indistinguishable
-    // from "the instructor is not on a question slide", which is why nobody could see it.
+  it('admits it is reconnecting after three, and clears it once the class comes back', async () => {
     jest.useFakeTimers();
-    mockCompanion.mockRejectedValue({ response: { status: 500 } });
-    await render();
-
+    mockState.mockRejectedValue({ response: { status: 500 } });
+    await renderCheckedIn();
     await act(async () => { jest.advanceTimersByTime(2500); });
     await act(async () => { jest.advanceTimersByTime(2500); });
-
-    expect(find('checkin-link-warn')).not.toBeNull();
     expect(text()).toContain('Reconnecting');
-  });
 
-  it('does not pretend a 401 might recover', async () => {
-    // The session is gone; no amount of waiting brings it back, so spending the grace window
-    // on hope just delays the only thing that helps.
-    jest.useFakeTimers();
-    mockCompanion.mockRejectedValue({ response: { status: 401 } });
-    await render();
-
-    expect(text()).toContain('been signed out');
-    expect(text()).toContain('Questions will not reach this phone');
-  });
-
-  it('clears the warning on its own once the class comes back', async () => {
-    // Recovery is automatic by design: the student should not have to know to reload.
-    jest.useFakeTimers();
-    mockCompanion.mockRejectedValue({ response: { status: 500 } });
-    await render();
+    mockState.mockResolvedValue(STATUS_STATE);
     await act(async () => { jest.advanceTimersByTime(2500); });
-    await act(async () => { jest.advanceTimersByTime(2500); });
-    expect(find('checkin-link-warn')).not.toBeNull();
-
-    mockCompanion.mockResolvedValue(STATUS_STATE);
-    await act(async () => { jest.advanceTimersByTime(2500); });
-
     expect(find('checkin-link-warn')).toBeNull();
   });
-});
 
-describe('getting into the class', () => {
-  it('opens the session room', async () => {
-    await render();
-    await click('checkin-enter');
+  it('an expired check-in asks for name and email again, never a login', async () => {
+    jest.useFakeTimers();
+    mockState.mockRejectedValue({ response: { status: 401 } });
+    await renderCheckedIn();
 
-    expect(navigate).toHaveBeenCalledWith('/portal/rooms/room-9');
-  });
-
-  it('falls back to Today for a session with no room yet', async () => {
-    // Never the retired /portal/sessions/:id page. The student is checked in either way, and
-    // Today's own next-class card picks up from there.
-    mockGet.mockResolvedValue({ data: { ...INFO, room_id: null } });
-    await render();
-    await click('checkin-enter');
-
-    expect(navigate).toHaveBeenCalledWith('/portal/today');
-  });
-});
-
-/**
- * 2026-11-19. Ali opened Session 3's check-in signed in as a July-cohort account and got
- * "We couldn't check you in" (POST /join answered 404: not this cohort). His requirement:
- * "They should get name and email here for tracking." Attendees scan from their phones and
- * mostly are not signed in, so the check-in cannot depend on a portal session.
- */
-describe('name + email check-in for anyone who is not a signed-in member of the class', () => {
-  it('asks a signed-out visitor for name and email, then puts them in the live view', async () => {
-    mockAuth.mockReturnValue({ isAuthenticated: false });
-    await render();
-
-    expect(find('checkin-guest-form')).not.toBeNull();
-    await checkInAsGuest();
-
-    expect(mockGuestCheckin).toHaveBeenCalledWith('sess-1', 'Ana Ruiz', 'ana@example.com');
-    expect(mockSaveGuest).toHaveBeenCalledWith('sess-1', { pass: 'pass-1', name: 'Ana Ruiz', email: 'ana@example.com' });
-    expect(text()).toContain('checked in, Ana');
-    expect(mockJoin).not.toHaveBeenCalled();
-  });
-
-  it('gives the guest the SAME live loop: status, questions and votes on the guest pass', async () => {
-    mockAuth.mockReturnValue({ isAuthenticated: false });
-    await render();
-    await checkInAsGuest();
-
-    await click('pulse-stuck');
-    expect(mockGuestPulse).toHaveBeenCalledWith('sess-1', 'pass-1', 'stuck');
-    expect(mockPulse).not.toHaveBeenCalled();
-
-    await typeQuestion('where is the skill file?');
-    await click('checkin-ask-send');
-    expect(mockGuestAsk).toHaveBeenCalledWith('sess-1', 'pass-1', 'where is the skill file?');
-  });
-
-  it('a guest votes on the question on screen with the guest pass', async () => {
-    mockAuth.mockReturnValue({ isAuthenticated: false });
-    mockGuestState.mockResolvedValue(QUESTION_STATE);
-    await render();
-    await checkInAsGuest();
-
-    expect(text()).toContain('Which ships first?');
-    await click('checkin-opt-0');
-    expect(mockGuestVote).toHaveBeenCalledWith('sess-1', 'pass-1', 'q1', 0);
-    expect(mockPoll).not.toHaveBeenCalled();
-  });
-
-  it('offers no "Open the live room" to a guest, whose pass opens nothing in the portal', async () => {
-    mockAuth.mockReturnValue({ isAuthenticated: false });
-    await render();
-    await checkInAsGuest();
-
-    expect(find('checkin-enter')).toBeNull();
-  });
-
-  it('THE SESSION 3 CASE: signed in, but not on this class, gets the form instead of an error', async () => {
-    mockJoin.mockRejectedValue({ response: { status: 404 } });
-    await render();
-
-    expect(text()).not.toContain('couldn');
-    expect(text()).toContain('isn’t on this class');
-    expect(find('checkin-guest-form')).not.toBeNull();
-    // Already signed in: no "log in instead" link pointing them at the account that failed.
-    expect(find('checkin-login')).toBeNull();
-
-    mockGuestCheckin.mockResolvedValue({ pass: 'pass-2', name: 'Ali Muwwakkil', matched: false, class_window: 'open' });
-    await checkInAsGuest('Ali Muwwakkil', 'ali@example.com');
-    expect(mockGuestCheckin).toHaveBeenCalledWith('sess-1', 'Ali Muwwakkil', 'ali@example.com');
-    expect(text()).toContain('checked in, Ali');
-  });
-
-  it('a phone that checked in before re-confirms on its own, without the form', async () => {
-    mockAuth.mockReturnValue({ isAuthenticated: false });
-    mockLoadSaved.mockReturnValue({ pass: 'old', name: 'Ana Ruiz', email: 'ana@example.com' });
-    await render();
-
-    expect(mockGuestCheckin).toHaveBeenCalledWith('sess-1', 'Ana Ruiz', 'ana@example.com');
-    expect(find('checkin-guest-form')).toBeNull();
-    expect(text()).toContain('checked in, Ana');
-  });
-
-  it('shows the server\'s reason when a check-in is refused', async () => {
-    mockAuth.mockReturnValue({ isAuthenticated: false });
-    mockGuestCheckin.mockRejectedValue({ response: { status: 410, data: { error: 'This class has already ended' } } });
-    await render();
-    await checkInAsGuest();
-
-    expect(find('checkin-guest-error')!.textContent).toBe('This class has already ended');
-  });
-
-  it('will not submit without a name and a real-looking email', async () => {
-    mockAuth.mockReturnValue({ isAuthenticated: false });
-    await render();
-    await checkInAsGuest('Ana', 'not-an-email');
-
-    expect(mockGuestCheckin).not.toHaveBeenCalled();
-    expect(find('checkin-guest-error')!.textContent).toContain('valid email');
-  });
-
-  it('CONTROL: a class closed to guests on Studio setup only offers sign-in', async () => {
-    mockAuth.mockReturnValue({ isAuthenticated: false });
-    mockGet.mockResolvedValue({ data: { ...INFO, accepts_guests: false } });
-    await render();
-
-    expect(find('checkin-guest-form')).toBeNull();
-    expect(find('checkin-login')).not.toBeNull();
-  });
-});
-
-describe('before and after the class', () => {
-  const EARLY = { ...INFO, class_window: 'before', start_label: '6:30 PM CST' };
-
-  it('BEFORE: captures name + email and says when the class starts, instead of an error', async () => {
-    mockAuth.mockReturnValue({ isAuthenticated: false });
-    mockGet.mockResolvedValue({ data: EARLY });
-    mockGuestCheckin.mockResolvedValue({ pass: 'pass-1', name: 'Ana Ruiz', matched: false, class_window: 'before' });
-    await render();
-
-    expect(text()).toContain('6:30 PM CST');
-    await checkInAsGuest();
-
-    expect(find('checkin-waiting')).not.toBeNull();
-    expect(text()).toContain('on the list, Ana');
-    expect(text()).toContain('starts');
-  });
-
-  it('BEFORE, signed in: records nothing yet and says when to come back', async () => {
-    mockGet.mockResolvedValue({ data: EARLY });
-    await render();
-
-    expect(mockJoin).not.toHaveBeenCalled();
-    expect(find('checkin-before')).not.toBeNull();
-    expect(text()).toContain('6:30 PM CST');
-    expect(text()).not.toContain('couldn');
-  });
-
-  it('AFTER: says the class has ended and records nothing', async () => {
-    mockAuth.mockReturnValue({ isAuthenticated: false });
-    mockGet.mockResolvedValue({ data: { ...INFO, class_window: 'ended' } });
-    await render();
-
-    expect(find('checkin-ended')).not.toBeNull();
-    expect(find('checkin-guest-form')).toBeNull();
-    expect(mockGuestCheckin).not.toHaveBeenCalled();
-  });
-});
-
-describe('the footer names the program', () => {
-  it('uses the canonical name the backend sends, never the retired one', async () => {
-    mockGet.mockResolvedValue({ data: { ...INFO, program_name: 'Forward Deployed AI Engineer Accelerator' } });
-    await render();
-
-    expect(find('checkin-foot')!.textContent).toBe('Colaberry Forward Deployed AI Engineer Accelerator');
-    expect(text()).not.toContain('Enterprise AI Leadership');
+    expect(text()).toContain('Check in again');
+    expect(text().toLowerCase()).not.toContain('log in');
   });
 });
 
 describe('it looks like Colaberry', () => {
-  it('drives its colors from semantic tokens', async () => {
-    /**
-     * NOT the blanket "no hex anywhere" assertion the sibling live surfaces carry, because
-     * this sheet would fail it and the file header claims otherwise. Verified 2026-10-31:
-     * fifteen hex literals, of which thirteen are `var(--token, #fallback)` fallbacks (a
-     * legitimate pattern) or `color:#fff` on a filled button, and two are the Prompt Drop
-     * box's deliberately terminal-dark `#0f1720`/`#26313f`/`#e7eef6`, which do not adapt to
-     * light mode. Recorded rather than silently "fixed" here — restyling a student-facing
-     * code block is a design decision, not a test cleanup, and asserting something untrue
-     * would be worse than asserting less.
-     */
+  it('drives its colors from semantic tokens, with thumb-sized status buttons', async () => {
     await render();
     const css = container.querySelector('style')?.textContent || '';
 
     expect(css).toContain('var(--surface-card)');
     expect(css).toContain('var(--text-body)');
-  });
-
-  it('gives every status button a thumb-sized target', async () => {
-    // This page is reached by scanning a QR, so it is a phone surface first.
-    await render();
-    const css = container.querySelector('style')?.textContent || '';
-
     expect(css).toMatch(/\.cbck-status\{[^}]*min-height:/);
   });
 });

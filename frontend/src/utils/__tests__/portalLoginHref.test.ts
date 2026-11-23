@@ -1,4 +1,4 @@
-import { loginHrefPreserving } from '../portalLoginHref';
+import { loginHrefPreserving, redirectsToLoginOn401 } from '../portalLoginHref';
 
 // Regression cover for the QR check-in sign-in loop (2026-08-24).
 // A 401 on any /portal page used to send the student to a bare /portal/login,
@@ -49,5 +49,22 @@ describe('loginHrefPreserving', () => {
 
   it('falls back to bare login for an over-long path', () => {
     expect(loginHrefPreserving('/portal/' + 'a'.repeat(300))).toBe('/portal/login');
+  });
+});
+
+// 2026-11-23: the class check-in page needs no sign-in, so an expired token there must never
+// bounce the attendee to the login page. Every other portal page keeps the redirect.
+describe('redirectsToLoginOn401', () => {
+  it('never redirects from the class check-in page', () => {
+    expect(redirectsToLoginOn401('/portal/class-checkin/5b8a95b7-1a88-42d5-b257-fd786d071f6e')).toBe(false);
+  });
+  it('still redirects from every other portal page', () => {
+    expect(redirectsToLoginOn401('/portal/today')).toBe(true);
+    expect(redirectsToLoginOn401('/portal/rooms/r1')).toBe(true);
+    expect(redirectsToLoginOn401('/portal/class-checkin')).toBe(true);
+  });
+  it('does nothing outside the portal', () => {
+    expect(redirectsToLoginOn401('/')).toBe(false);
+    expect(redirectsToLoginOn401('/admin')).toBe(false);
   });
 });
