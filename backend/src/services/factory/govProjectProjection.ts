@@ -411,7 +411,7 @@ export function assembleProposalDocuments(
         cycle: s.latestRun ? { status: s.latestRun.status, runId: s.latestRun.id } : null,
       };
     });
-  const readiness = proposalReadiness(list.map((s) => ({ adminOnly: s.view.adminOnly, superseded: s.view.superseded, docType: s.view.docType, passes: !!s.latest?.passes, score: s.latest?.scores ? weightedTotal(s.latest.scores) : undefined })));
+  const readiness = proposalReadiness(list.map((s) => ({ adminOnly: s.view.adminOnly, superseded: s.view.superseded, docType: s.view.docType, passes: !!s.latest?.passes, score: s.latest?.scores ? weightedTotal(s.latest.scores as CheckScores) : undefined })));
   return { documents, readiness };
 }
 
