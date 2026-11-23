@@ -11,6 +11,7 @@ import { isSwitchOn, SWITCHES, type Read } from './darkSwitches';
 import { candidateRoomUrl, roomPageUrl } from './roomLink';
 import { FROM_NAME } from './bookingReplyEmail';
 import { employerBookedEmail, learnerBookedEmail, type ConfirmFacts, type ConfirmMail } from './bookingConfirmEmail';
+import { NO_CLICK_TRACKING } from './mailTracking';
 
 /**
  * Career Prep v27, CP8.2b (kit F4 step 3): the work AFTER an employer's booking COMMITS (the route starts it once the
@@ -121,7 +122,7 @@ export async function sendOne(to: string, mail: ConfirmMail, eventId: string, ic
     const routed = await resolveEmailRecipient(to, mail.subject);
     const info = await guardedSendMail({ from: `"${FROM_NAME}" <${env.emailFrom}>`, to: routed.to, subject: routed.subject, text: mail.text,
       ...(replyTo ? { replyTo } : {}), ...(ics ? { icalEvent: { method: 'PUBLISH', filename: 'interview.ics', content: ics } } : {}),
-      headers: { 'X-MC-Tags': tag, 'X-MC-Metadata': JSON.stringify({ business_event_id: eventId }) } });
+      headers: { 'X-MC-Tags': tag, 'X-MC-Metadata': JSON.stringify({ business_event_id: eventId }), ...NO_CLICK_TRACKING } });
     return info?.messageId ? { ok: true, messageId: String(info.messageId) } : { ok: false, errorClass: 'SendBlocked', error: 'blocked by kill switch or dev guard' };
   }).catch((err: unknown) => ({ outcome: 'failed' as const, errorClass: errClass(err) }));
   if (res.outcome === 'sent' || (res.outcome === 'skipped' && res.reason === 'already_sent')) return 'sent';

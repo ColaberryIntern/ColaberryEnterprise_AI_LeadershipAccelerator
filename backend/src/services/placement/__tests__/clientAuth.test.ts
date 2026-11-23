@@ -73,6 +73,7 @@ describe('request a link', () => {
     expect(mockDb.tokens[0].token_hash).toBe(createHash('sha256').update(token).digest('hex'));
     expect(JSON.stringify(mockDb.tokens)).not.toContain(token);
     expect(mockSend.mock.calls[0][0]).toMatchObject({ to: ANN, subject: 'Your Refactored.ai sign-in link' });
+    expect(mockSend.mock.calls[0][0].headers['X-MC-Track']).toBe('opens'); // the sign-in link never passes through Mandrill's http click tracker
     expect(signinEmailText('L')).not.toMatch(new RegExp('[\\u2013\\u2014]')); // no en or em dash in the copy
   });
   it('an unknown or malformed address: no row, no email (the route answers the same message)', async () => {

@@ -7,6 +7,7 @@ import { isSwitchOn, SWITCHES, type Read } from './darkSwitches';
 import { newBookingToken } from './bookingToken';
 import { BOOKING_SUBJECT, bookingReplyEmail, FROM_NAME } from './bookingReplyEmail';
 import { canMove } from './interviewStates';
+import { NO_CLICK_TRACKING } from './mailTracking';
 
 /**
  * Career Prep v27, CP8.1b (kit F4 step 2): reply to the employer with the booking link, for an interview in `new`.
@@ -83,7 +84,7 @@ async function deliver(r: Row, round: string, now: Date): Promise<ProviderResult
   const inReplyTo = round === 'first' ? originalMessageId(r.source_event_id) : null;
   const info = await guardedSendMail({ from: `"${FROM_NAME}" <${env.emailFrom}>`, to: routed.to, ...(testMode ? {} : { cc: String(r.job_address) }),
     replyTo: String(r.job_address), subject: routed.subject, text: mail.text,
-    headers: { 'X-MC-Tags': 'career-prep-booking-link', ...(inReplyTo ? { 'In-Reply-To': inReplyTo, References: inReplyTo } : {}) } });
+    headers: { 'X-MC-Tags': 'career-prep-booking-link', ...NO_CLICK_TRACKING, ...(inReplyTo ? { 'In-Reply-To': inReplyTo, References: inReplyTo } : {}) } });
   return info?.messageId ? { ok: true, messageId: String(info.messageId) } : { ok: false, errorClass: 'SendBlocked', error: 'blocked by kill switch or dev guard' };
 }
 

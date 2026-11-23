@@ -113,7 +113,7 @@ describe('sendBookingLink', () => {
     const [m] = sent();
     expect(m.from).toMatch(/^"Ali M\. via Refactored\.ai" </);
     expect([m.to, m.cc, m.replyTo]).toEqual(['pat@acme.example', 'ann.lee.careers@gmail.com', 'ann.lee.careers@gmail.com']);
-    expect(m.headers).toMatchObject({ 'In-Reply-To': '<m1@acme.example>', References: '<m1@acme.example>' });
+    expect(m.headers).toMatchObject({ 'In-Reply-To': '<m1@acme.example>', References: '<m1@acme.example>', 'X-MC-Track': 'opens' }); // the booking link never passes through Mandrill's http click tracker
     const token = decodeURIComponent((/\/book\/\?t=([^\s]+)/.exec(m.text) as RegExpExecArray)[1]);
     expect(db.iv[0].booking_token_hash).toBe(hashBookingToken(token));
     expect(`${m.subject}${m.text}`).not.toMatch(DASHES);
