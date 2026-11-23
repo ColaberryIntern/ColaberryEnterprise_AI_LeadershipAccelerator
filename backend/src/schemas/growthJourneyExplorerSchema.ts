@@ -14,14 +14,14 @@ import { z } from 'zod';
  * copies of a bound is one refactor from being one copy), or split the query in
  * two and validate each half with the schema that owns it.
  *
- * The third. `splitScope` lifts exactly these three keys out of `req.query`; the
+ * The third. `splitScope` lifts exactly this schema's keys out of `req.query`; the
  * REST goes to Explorer's own schema, verbatim, so a brand-scoped read enforces
  * byte-identical input rules to the Explorer route it mirrors. That is what
  * makes "the same page, by brand" true at the contract level rather than as an
  * intention.
  *
  * An unknown key still 400s, which is the property worth checking: it is not in
- * this schema's three keys, so it stays in the remainder, and the remainder goes
+ * this schema's keys, so it stays in the remainder, and the remainder goes
  * to a `.strict()` schema.
  */
 
@@ -33,14 +33,32 @@ export const explorerScopeQuerySchema = z
      * it only against a real membership and refuses rather than widening.
      */
     brand_id: z.string().uuid().optional(),
-    program_id: z.string().uuid().optional(),
   })
   .strict();
 
+/*
+ * ─── THERE IS NO `program_id` HERE, AND THAT IS THE CORRECTION ──────────────
+ *
+ * The first version accepted one and echoed it back in the response envelope
+ * while nothing read it: `scopedContext` takes `{ tenant_id, brand_id }` only,
+ * and the reads receive a brand and nothing else. So
+ * `?brand_id=...&program_id=<any uuid>` answered 200 with an envelope asserting
+ * a programme the rows were never filtered by - a caller believing it got
+ * something it did not, which is the exact failure `noQuerySchema` further down
+ * the controller exists to prevent. An independent review caught it, and T5 was
+ * specified to type its client off that envelope, so the inert field would have
+ * become a frontend contract.
+ *
+ * It is dropped rather than enforced because there is nothing to enforce:
+ * Explorer Growth IS one programme. `?program_id=` is now a 400. The envelope
+ * still carries `program_id: null`, matching its sibling reads and following
+ * `shadowRunsRead`'s rule - echoing a filter that never ran would claim one.
+ */
+
 export type ExplorerScopeQuery = z.infer<typeof explorerScopeQuerySchema>;
 
-/** The three scope keys, named once so the split and the schema cannot disagree. */
-export const SCOPE_KEYS = ['tenant_id', 'brand_id', 'program_id'] as const;
+/** The scope keys, named once so the split and the schema cannot disagree. */
+export const SCOPE_KEYS = ['tenant_id', 'brand_id'] as const;
 
 /**
  * Split a request's query into the scope keys and everything else.

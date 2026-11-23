@@ -45,7 +45,7 @@ import {
  * ─── IT VALIDATES WITH EXPLORER'S OWN SCHEMAS, NOT COPIES ───────────────────
  *
  * The query half of every request is validated by the exact schema the matching
- * Explorer route uses, imported unchanged. Only the three scope keys are lifted
+ * Explorer route uses, imported unchanged. Only the scope keys are lifted
  * out first (`splitScope`), because Explorer's schemas are `.strict()` and would
  * reject them. So a brand-scoped read enforces byte-identical input rules to the
  * page it mirrors - which is what makes "the same page, by brand" a fact about
@@ -127,7 +127,7 @@ async function serveExplorerRead<S extends z.ZodTypeAny>(
   if (!scopeParsed.success) return badRequest(res, scopeParsed.error);
 
   // Explorer's own schema, unchanged. An unknown key is still a 400: it was not
-  // one of the three scope keys, so it is in `rest`, and `rest` is strict.
+  // a scope key, so it is in `rest`, and `rest` is strict.
   const queryParsed = querySchema.safeParse(split.rest);
   if (!queryParsed.success) return badRequest(res, queryParsed.error);
 
@@ -142,7 +142,10 @@ async function serveExplorerRead<S extends z.ZodTypeAny>(
       ctxBrandId: ctx.brandId ?? null,
     });
 
-    res.json(envelope(result, ctx.tenantId ?? '', scopeQuery.program_id ?? null));
+    // `null`, never an echo of the request: see the scope schema on why
+    // `program_id` is not accepted at all. Explorer Growth is one programme, so
+    // there is no programme filter to report.
+    res.json(envelope(result, ctx.tenantId ?? '', null));
   } catch (err) {
     const errorClass = logReadFailure(req, err, event);
     res.status(500).json({ error: READ_FAILURE, error_class: errorClass });

@@ -409,6 +409,27 @@ describe('input validation', () => {
     expect(res.status).toBe(400);
   });
 
+  it('400 on `program_id`, which is not a scope this surface enforces', async () => {
+    // It was accepted and echoed back in the envelope at first, while nothing
+    // read it - so a caller could ask for a programme, get a 200 asserting that
+    // programme, and receive rows filtered only by brand. Explorer Growth IS one
+    // programme, so there is nothing to enforce and the parameter is refused
+    // rather than honoured in name only. The envelope still reports
+    // `program_id: null`, which is the honest value.
+    const res = await auth(
+      request(app())
+        .get(`${EXPLORERS}/learners`)
+        .query({ brand_id: BRAND, program_id: '60000000-0000-4000-8000-000000000001' })
+    );
+    expect(res.status).toBe(400);
+    expect(ex.learners).not.toHaveBeenCalled();
+  });
+
+  it('reports program_id as null rather than echoing a filter that never ran', async () => {
+    const res = await auth(request(app()).get(`${EXPLORERS}/summary`).query({ brand_id: BRAND }));
+    expect(res.body.scope.program_id).toBeNull();
+  });
+
   it('400 on a query parameter sent to a read that takes none', async () => {
     const res = await auth(request(app()).get(`${EXPLORERS}/summary`).query({ brand_id: BRAND, limit: '50' }));
     expect(res.status).toBe(400);
