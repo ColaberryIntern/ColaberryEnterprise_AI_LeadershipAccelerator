@@ -141,6 +141,24 @@
   // Questions from phones (live.questions, newest last from the server). Private to the presenter
   // window: the room never sees who asked (Ali, 2026-11-23). Done ticks are kept on this computer only.
   var qDone = {};
+  // Escalations from the chat's class assistant (backend liveChat): questions it was not sure of,
+  // each with three ready answers. Ali taps one and the assistant posts it in the class chat.
+  var escal = [], escBusy = {};
+  var ESC_URL = K.broadcastUrl ? K.broadcastUrl.replace(/\/broadcast$/, '/chat-escalations') : null;
+  function loadEscalations(){
+    if (!LIVE || !ESC_URL) return;
+    fetch(ESC_URL + '?t=' + encodeURIComponent(K.token), { headers: { Accept: 'application/json' } })
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(d){ if (d && Array.isArray(d.escalations)) { escal = d.escalations; renderPresenter(); } })
+      .catch(function(){});
+  }
+  function answerEsc(id, choice){
+    if (!ESC_URL || escBusy[id]) return;
+    escBusy[id] = true; renderPresenter();
+    fetch(ESC_URL + '/' + encodeURIComponent(id) + '?t=' + encodeURIComponent(K.token), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ choice: choice }) })
+      .catch(function(){})
+      .then(function(){ escal = escal.filter(function(x){ return x.id !== id; }); delete escBusy[id]; renderPresenter(); setTimeout(loadEscalations, 500); });
+  }
   function qKey(x){ return String(x.at) + '|' + String(x.text).slice(0, 40); }
   var PCSS = 'body{margin:0;background:#0b1220;color:#e7eef6;font-family:"Segoe UI",Roboto,Arial,sans-serif;font-size:16px;line-height:1.45}' +
     '#pv{padding:12px 14px 80px}.top{display:flex;align-items:baseline;gap:10px}.num{font-size:34px;font-weight:900;color:#ff6a71}.of{color:#7f93ab;font-weight:700}' +
@@ -157,6 +175,7 @@
     'button{font:inherit;font-weight:800;border:none;border-radius:999px;padding:9px 14px;cursor:pointer;background:#27405f;color:#fff}button.pri{background:#FB2832}' +
     '.link{background:#16233a;font-size:13px;word-break:break-all}.link .lab{color:#9fb3c8}' +
     '.next{color:#9fb3c8;font-size:14px;margin-top:12px}.next b{color:#e7eef6}' +
+    '.esc{background:#0d2a4a;border:2px solid #7aa2ff}.esc .lab{color:#9cc0ff}.esc .one{border-bottom:1px solid #22406a;padding:6px 0 10px;margin-bottom:6px}.esc .one:last-child{border-bottom:none;margin-bottom:0}.esc .qq{font-size:16px;font-weight:800;color:#fff}.esc .qq small{display:block;font-weight:500;color:#9cc0ff;font-size:12px}.esc .opt{display:block;width:100%;text-align:left;margin-top:6px;background:#16365e;border-radius:10px;padding:8px 10px;font-weight:600;font-size:14px;line-height:1.35}.esc .opt b{color:#9cc0ff;margin-right:6px}.esc .skip{margin-top:6px;background:transparent;border:1px solid #22406a;font-size:12px;padding:5px 10px}' +
     '.qs{background:#2a1d00;border:2px solid #F5C542}.qs .lab{color:#F5C542}.qs ul{list-style:none;margin:0;padding:0}.qs li{display:flex;gap:8px;align-items:flex-start;padding:7px 4px;border-bottom:1px solid #4a3a10;font-size:16px;font-weight:700;color:#fff3c4}.qs li:last-child{border-bottom:none}.qs li small{display:block;font-weight:500;color:#e8c768;font-size:12px}.qs li button{flex:none;padding:5px 10px;font-size:12px;background:#4a3a10}.qs .none{color:#e8c768;font-size:13px;font-weight:500}' +
     '.pulse{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:8px 0}.pulse div{background:#16233a;border-radius:10px;padding:6px 8px;text-align:center}.pulse b{display:block;font-size:20px}.pulse span{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#9fb3c8;font-weight:800}.pulse .stuck b{color:#ff6a71}' +
     '.nav{position:fixed;left:0;right:0;bottom:0;display:flex;gap:8px;padding:10px 14px;background:#0b1220;border-top:1px solid #22324d}.nav button{flex:1;font-size:18px;padding:12px}' +
@@ -182,6 +201,7 @@
     var li = e.target.closest('[data-say]');
     if (li) { var k = Number(li.getAttribute('data-say')); checked[i] = checked[i] || {}; checked[i][k] = !checked[i][k]; renderPresenter(); return; }
     var a = e.target.closest('[data-pact]'); if (a) { pollAct(a.getAttribute('data-pact')); return; }
+    var eb = e.target.closest('[data-esc]'); if (eb) { var ch = eb.getAttribute('data-ch'); answerEsc(eb.getAttribute('data-esc'), ch === 'skip' ? 'skip' : Number(ch)); return; }
     var qd = e.target.closest('[data-qdone]'); if (qd) { qDone[qd.getAttribute('data-qdone')] = true; renderPresenter(); return; }
     var c = e.target.closest('[data-copylink]'); if (c && K.checkinUrl) copyText(K.checkinUrl, c);
   }
@@ -198,6 +218,7 @@
       '<div class="clocks"><div class="clk ' + clockClass(slideUsed, budget) + '"><span>This slide</span><b>' + mmss(slideUsed) + ' / ' + d.min + ':00</b></div>' +
       '<div class="clk ' + (drift <= 0 ? 'ok' : drift <= 3 ? 'warn' : 'over') + '"><span>Class</span><b>' + (classStart ? mmss(elapsed) : '0:00') + '</b><span>' + (classStart ? (drift > 0 ? drift + ' min behind' : drift < 0 ? (-drift) + ' min ahead' : 'on time') : 'starts on next slide') + '</span></div></div>';
     if (live) h += '<div class="pulse"><div><b>' + (live.present || 0) + '</b><span>In</span></div><div class="stuck"><b>' + (live.stuck || 0) + '</b><span>Stuck</span></div><div><b>' + (live.finished || 0) + '</b><span>Finished</span></div></div>';
+    if (escal.length) h += '<div class="box esc"><div class="lab">The class assistant needs you · ' + escal.length + '</div>' + escal.slice(0, 4).map(function(x){ var busy = escBusy[x.id]; return '<div class="one"><div class="qq">' + esc(x.question) + '<small>' + esc(x.asked_by || '') + ' asked in the chat. Tap the answer to post it.</small></div>' + (x.options || []).map(function(o, k){ return '<button class="opt" data-esc="' + esc(x.id) + '" data-ch="' + k + '"' + (busy ? ' disabled' : '') + '><b>' + String.fromCharCode(65 + k) + '</b>' + esc(o) + '</button>'; }).join('') + '<button class="skip" data-esc="' + esc(x.id) + '" data-ch="skip"' + (busy ? ' disabled' : '') + '>Skip</button></div>'; }).join('') + '</div>';
     var qs = ((live && live.questions) || []).slice().reverse().filter(function(x){ return !qDone[qKey(x)]; });
     h += '<div class="box qs"><div class="lab">Questions from phones' + (qs.length ? ' · ' + qs.length + ' open' : '') + '</div>' + (qs.length ? '<ul>' + qs.slice(0, 6).map(function(x){ return '<li><span style="flex:1">' + esc(x.text) + '<small>' + esc(x.name || '') + '</small></span><button data-qdone="' + esc(qKey(x)) + '">Done</button></li>'; }).join('') + '</ul>' : '<div class="none">None yet. They appear here only, never on the shared screen.</div>') + '</div>';
     if (d.do) h += '<div class="box do"><div class="lab">Do</div>' + esc(d.do) + '</div>';
@@ -262,6 +283,8 @@
   try { if (localStorage.getItem('s3fa-qrdock') === 'off') qrDock.classList.add('off'); } catch (err) { /* convenience only */ }
   addEventListener('keydown', onKey);
   setInterval(poll, 2500);
+  setInterval(loadEscalations, 3000);
+  loadEscalations();
   show(0);
 })();
 </script>
