@@ -17,6 +17,14 @@ import { dollars, paintFor, streamPaint } from './flowTokens';
  * Here the gap says "N days, nothing recorded", which on this data is frequently the honest
  * headline.
  *
+ * ── THE CUT-OFF SAYS SO TOO, FOR THE SAME REASON ─────────────────────────────────────────
+ *
+ * `maxDays` exists so a 180-day window does not produce a mile of DOM, and until 2026-11-23
+ * it dropped the days past it in silence. On a surface whose stated doctrine is that an empty
+ * stretch must explain itself, a timeline that ends without saying it ended is the same defect
+ * in a worse place: the reader sees the oldest drawn day and reads the window as having started
+ * there. The notice at the foot says how many active days are not drawn.
+ *
  * ── THE VALUE ON A PILL IS NOT ALWAYS REVENUE, AND THE PILL SAYS SO ──────────────────────
  *
  * `never_paid` carries the amount the plan WOULD have been worth. Showing that figure
@@ -72,7 +80,7 @@ export default function FlowTimeline({
   onPickEntity,
   'data-testid': testId = 'flow-timeline',
 }: Props) {
-  const days = useMemo(() => {
+  const { days, hidden } = useMemo(() => {
     const map = new Map<string, TimelineEvent[]>();
     for (const e of events) {
       const list = map.get(e.at) ?? [];
@@ -81,9 +89,8 @@ export default function FlowTimeline({
     }
     // Newest first. The payload is already sorted, but a component that depends on its
     // caller's ordering breaks silently the first time someone reuses it.
-    return Array.from(map.entries())
-      .sort((a, b) => (a[0] < b[0] ? 1 : -1))
-      .slice(0, maxDays);
+    const all = Array.from(map.entries()).sort((a, b) => (a[0] < b[0] ? 1 : -1));
+    return { days: all.slice(0, maxDays), hidden: Math.max(0, all.length - maxDays) };
   }, [events, maxDays]);
 
   if (!days.length) {
@@ -198,6 +205,24 @@ export default function FlowTimeline({
           </React.Fragment>
         );
       })}
+
+      {hidden > 0 && (
+        <div
+          className="mt-2 p-2"
+          data-testid={`${testId}-truncated`}
+          style={{
+            fontSize: 11,
+            background: 'var(--status-warning-bg)',
+            borderLeft: '3px solid var(--status-warning)',
+            borderRadius: 4,
+          }}
+        >
+          <strong>Needs attention: this timeline is cut off.</strong>{' '}
+          Showing the {days.length} most recent days that held an event.{' '}
+          {hidden} earlier {hidden === 1 ? 'day' : 'days'} in this window also held events and
+          are not drawn above.
+        </div>
+      )}
     </div>
   );
 }
