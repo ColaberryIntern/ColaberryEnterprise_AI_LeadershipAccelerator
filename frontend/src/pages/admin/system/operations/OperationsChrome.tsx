@@ -86,7 +86,7 @@ export function PlannedButton({ label, phase, primary }: { label: string; phase:
       type="button"
       className={`ops-btn${primary ? ' ops-btn--primary' : ''}`}
       disabled
-      title={`Not wired yet — ${phase}.`}
+      title={`Not wired yet: ${phase}.`}
     >
       {label}
     </button>

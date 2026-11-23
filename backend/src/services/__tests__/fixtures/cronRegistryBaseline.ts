@@ -246,6 +246,14 @@ export const KNOWN_DUPLICATE_REGISTRY_NAMES: ReadonlyArray<string> = [
 export const EXPECTED_NON_CALL_MENTION_FILES: ReadonlyArray<string> = [
   'scripts/lib/reeseBehaviourInventory.ts', // 4 killSwitch descriptions citing the wrapper
   'services/agentRegistrySeed.ts', // AiNewsRefresh's description: "…failure tracking via instrumentCronJob."
+  // The Platform Operations timer scan. Admitted deliberately, and it is the one case where
+  // naming the wrapper in a string is the POINT rather than prose: `scanTimers.ts` compares
+  // a parsed AST identifier against it to work out which timers report under a name and
+  // which report under none, and `buildFleet.ts` prints the instruction a person follows to
+  // give an unwatched timer one. Neither can register a cron: the first only reads source,
+  // the second only builds a row for a page.
+  'services/platformOperations/scanTimers.ts', // AST matcher: fn.text === 'instrumentCronJob'
+  'services/platformOperations/buildFleet.ts', // "Wrap the body in instrumentCronJob with this name"
 ];
 
 /** Where instrumentCronJob() is declared. Pinned because the scan used to skip the WHOLE

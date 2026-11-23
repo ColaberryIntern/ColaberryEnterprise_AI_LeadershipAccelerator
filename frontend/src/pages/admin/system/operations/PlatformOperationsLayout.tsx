@@ -46,7 +46,7 @@ export default function PlatformOperationsLayout() {
             key={t.key}
             className="ops-tab"
             aria-disabled="true"
-            title={`Designed, not built yet — ${t.question}`}
+            title={`Designed, not built yet: ${t.question}`}
           >
             {t.label}
           </span>

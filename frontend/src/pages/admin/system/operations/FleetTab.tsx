@@ -23,7 +23,7 @@ function ago(iso: string | null, now: number): string {
 }
 
 function duration(ms: number | null): string {
-  if (ms === null) return '—';
+  if (ms === null) return 'no record';
   if (ms < 1000) return `${ms} ms`;
   if (ms < 60000) return `${Math.round(ms / 100) / 10} s`;
   return `${Math.round(ms / 6000) / 10} min`;
