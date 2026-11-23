@@ -63,7 +63,9 @@ Keep it under 80 words. No technical words.`,
 After my 5th answer, write my skill card with: name, when to use it, steps, result, never.`,
 };
 
-const RUN = ['Tap Copy (phone) or Open in Claude (computer)', 'Paste it into a new chat in Claude and send it', 'Tap Finished below when Claude answers'];
+// Phones run prompts on the class page (Run it here), so nobody needs the Claude app (Ali,
+// 2026-11-23). On a computer, Open in Claude is still there for anyone who prefers claude.ai.
+const RUN = ['Tap Run it here below', 'Read the answer right on this page', 'Tap Finished when you are done'];
 
 module.exports = [
   {
@@ -76,8 +78,8 @@ module.exports = [
   {
     kind: 'lobby', min: 4, title: 'Get connected',
     do: 'Give it 2 to 3 minutes. Paste the computer link in the Zoom chat (copy button below). Read the counter out loud as it climbs.',
-    say: ['On your phone: scan the code', 'On a computer: click the link in the chat, then Open as a side window', 'Type your name and email so we know you were here', 'No Claude yet? The page shows you how to get it in one minute'],
-    follow: { step: 'Step 1', icon: '📱', heading: 'You are in. Now get Claude ready', body: 'You will copy short prompts into Claude tonight. If you do not have Claude yet, open the helper below and follow the 3 steps.', install: true },
+    say: ['On your phone: scan the code', 'On a computer: click the link in the chat, then Open as a side window', 'Type your name and email so we know you were here', 'Nothing to install: you run every prompt right on that page'],
+    follow: { step: 'Step 1', icon: '📱', heading: 'You are in. Keep this page open', body: 'Tonight you run short prompts right here: tap Run it here when one appears and the answer shows on this page. Nothing to install.' },
   },
   {
     kind: 'agenda', min: 1, title: "Tonight's plan",
@@ -117,9 +119,9 @@ module.exports = [
   {
     kind: 'handson', min: 3, title: 'Hands-on 1: say hello to Claude', n: 1, img: 'phonelaptop',
     prompt: { label: 'Hands-on 1: say hello', text: P.hello, expect: 'Claude says hello and that it is ready.' },
-    do: 'Run it yourself on screen with the Open in Claude button. Wait until most people type Finished.',
-    say: ['This is only to make sure Claude is open and working', 'Phone: tap Copy, open the Claude app, paste. Computer: click Open in Claude', 'Stuck? Tap Stuck on the page and a mentor will help'],
-    follow: { step: 'Hands-on 1 of 5', icon: '🤝', heading: 'Say hello to Claude', bullets: RUN, install: true },
+    do: 'Run it yourself on screen with the Open in Claude button. Wait until most people tap Finished.',
+    say: ['This is only to make sure everything works', 'On your phone or computer: tap Run it here, and the answer shows on the page', 'Stuck? Tap Stuck on the page and a mentor will help'],
+    follow: { step: 'Hands-on 1 of 5', icon: '🤝', heading: 'Say hello to Claude', bullets: RUN },
   },
   {
     kind: 'handson', min: 4, title: 'Hands-on 2: make practice data', n: 2, img: 'sheet',

@@ -265,7 +265,7 @@ function body(s) {
     case 'handson': return `${brand(`Hands-on ${s.n} of 5`)}
       <div class="split"><div class="hstack"><div>
           <div class="stepbadge">✋ Hands-on ${s.n} of 5</div><h2>${esc(s.title.replace(/^Hands-on \d: /, '').replace(/^./, (c) => c.toUpperCase()))}</h2>
-          <div class="howto"><div><b>1</b>Copy it on your phone, or click Open in Claude</div><div><b>2</b>Paste it into a new Claude chat and send</div><div><b>3</b>Tap <b style="display:inline;font-size:1em">Finished</b> when Claude answers</div></div>
+          <div class="howto"><div><b>1</b>On your phone or computer, tap Run it here</div><div><b>2</b>Read the answer right on that page</div><div><b>3</b>Tap <b style="display:inline;font-size:1em">Finished</b> when you are done</div></div>
           ${s.n === 2 ? '<div class="raffle" style="margin-top:2vh">🛡️ <b>Rule:</b> never practice on real company data. Made-up data is safe to get wrong.</div>' : ''}
         </div><div class="illus">${SVG[s.img] || ''}</div></div>
         ${promptCard(s)}</div>`;
