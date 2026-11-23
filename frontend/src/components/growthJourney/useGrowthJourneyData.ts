@@ -46,6 +46,22 @@ import type { AsyncState } from '../explorerGrowth/AsyncPanel';
  * The type parameter was already generic, so nothing needed widening - the plan's
  * "with the type widened" describes work that was not there.
  */
+/**
+ * An `Error` that remembers the HTTP status it came from.
+ *
+ * `null` when there was no response at all - a network failure, a timeout, a
+ * CORS rejection. That is a different fact from a status the server chose, and a
+ * caller branching on `403` must not treat "we never reached the server" as one.
+ */
+export interface ResponseError extends Error {
+  status: number | null;
+}
+
+/** The status a failure carried, or `null` if it never reached the server. */
+export function statusOf(error: Error | null): number | null {
+  return (error as ResponseError | null)?.status ?? null;
+}
+
 export function useGrowthJourneyData<T>(
   fetcher: () => Promise<T>,
   /** Changes whenever the request should be re-issued (filters, ids, windows). */
@@ -87,7 +103,20 @@ export function useGrowthJourneyData<T>(
           (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
           (err as Error)?.message ||
           'Request failed';
-        setState({ loading: false, error: new Error(message), data: null });
+        // THE HTTP STATUS IS CARRIED, not just the message.
+        //
+        // Added for the brand-scoped Explorer reads, where a 403 is a
+        // CONFIGURATION state ("tenant memberships are not set up yet") and
+        // every other failure is an error. Without the status those two are
+        // indistinguishable downstream, and the only way to tell them apart
+        // would be matching on the message string - which is a guarantee that
+        // breaks the first time somebody rewords a server response.
+        //
+        // Additive: every existing consumer reads `.message` and is unaffected.
+        const error: ResponseError = Object.assign(new Error(message), {
+          status: (err as { response?: { status?: number } })?.response?.status ?? null,
+        });
+        setState({ loading: false, error, data: null });
       });
   }, [key, nonce]);
 
