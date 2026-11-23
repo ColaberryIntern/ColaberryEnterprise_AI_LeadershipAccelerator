@@ -1,11 +1,21 @@
 const mem = { buildMembershipFlow: jest.fn() };
 const gov = { buildGovFlow: jest.fn() };
+const dem = { getMembershipDemandPath: jest.fn() };
 
 jest.mock('../membershipFlow', () => ({
   buildMembershipFlow: (...a: unknown[]) => mem.buildMembershipFlow(...a),
 }));
 jest.mock('../govBidFlow', () => ({
   buildGovFlow: (...a: unknown[]) => gov.buildGovFlow(...a),
+}));
+/**
+ * Mocked because it queries. Before it was mocked here it ran for real against no database on
+ * every test in this file, threw, and was swallowed into a caveat nothing asserted. Every test
+ * still passed, which is precisely the failure this file exists to catch elsewhere: a check
+ * that passes because there was nothing to check.
+ */
+jest.mock('../demandPathService', () => ({
+  getMembershipDemandPath: (...a: unknown[]) => dem.getMembershipDemandPath(...a),
 }));
 
 import { getRevenueFlowBoard } from '../revenueFlowService';
@@ -64,11 +74,113 @@ function govFlow(over: Record<string, unknown> = {}) {
   };
 }
 
+/** Two bands in the shape `demandPath` builds them, small enough to read in an assertion. */
+function demandPath() {
+  return [
+    {
+      key: 'asked',
+      label: 'Who we asked',
+      definition: 'A campaign that went out.',
+      attributionBreak: 'Nothing joins these to a payment.',
+      sources: [{
+        key: 'alumni:da243a23',
+        label: 'Colaberry Alumni AI Champion Campaign',
+        count: 10_343,
+        countLabel: 'people asked',
+        measures: [{ label: 'emails sent', count: 8_518, note: 'Emails, not people.' }],
+        status: 'live',
+        attributable: false,
+        note: 'Reach only.',
+        tone: 'muted',
+      }],
+    },
+    {
+      key: 'arrived',
+      label: 'Where the people who pay came from',
+      definition: 'The channel on the lead of each person who pays today.',
+      attributionBreak: null,
+      sources: [{
+        key: 'open_house',
+        label: 'Open house',
+        count: 17,
+        countLabel: 'paying members',
+        measures: [{ label: 'leads ever recorded', count: 320, note: 'A crude denominator.' }],
+        status: 'live',
+        attributable: true,
+        note: 'The open house produced more paying members than any other channel.',
+        tone: 'good',
+      }],
+    },
+  ];
+}
+
 beforeEach(() => {
   mem.buildMembershipFlow.mockReset();
   gov.buildGovFlow.mockReset();
+  dem.getMembershipDemandPath.mockReset();
   mem.buildMembershipFlow.mockResolvedValue(membershipFlow());
   gov.buildGovFlow.mockResolvedValue(govFlow());
+  // Undefined by default, which is the state of every stream but membership, so the existing
+  // assertions in this file keep measuring what they were written to measure.
+  dem.getMembershipDemandPath.mockResolvedValue(undefined);
+});
+
+describe('the path in front of the membership number', () => {
+  const membershipOf = async () => {
+    const board = await getRevenueFlowBoard(NOW);
+    return board.streams.find((s) => s.key === 'membership');
+  };
+
+  it('rides on the membership stream when it can be built', async () => {
+    dem.getMembershipDemandPath.mockResolvedValue(demandPath());
+    const stream = await membershipOf();
+    expect(stream?.demand).toHaveLength(2);
+    expect(stream?.demand?.map((b) => b.key)).toEqual(['asked', 'arrived']);
+    expect(stream?.demand?.[1].sources[0].count).toBe(17);
+  });
+
+  /**
+   * Undefined, not an empty array. An empty path would render as "nobody was asked and nobody
+   * arrived", which is a claim; no path at all is the truth when nothing could be measured.
+   */
+  it('is absent rather than empty when there is nothing to show', async () => {
+    dem.getMembershipDemandPath.mockResolvedValue(undefined);
+    const stream = await membershipOf();
+    expect(stream).toBeDefined();
+    expect(stream?.demand).toBeUndefined();
+  });
+
+  it('never attaches to a stream whose demand nobody can measure', async () => {
+    dem.getMembershipDemandPath.mockResolvedValue(demandPath());
+    const board = await getRevenueFlowBoard(NOW);
+    for (const s of board.streams.filter((x) => x.key !== 'membership')) {
+      expect(s.demand).toBeUndefined();
+    }
+  });
+
+  /**
+   * `demandPath` throws by design when a band would claim a campaign earned money. The cost of
+   * that has to be the band and a caveat, never the stream and never the page.
+   */
+  it('costs the band and not the page when it throws', async () => {
+    dem.getMembershipDemandPath.mockRejectedValue(new Error('a campaign claimed attribution'));
+    const board = await getRevenueFlowBoard(NOW);
+    const stream = board.streams.find((s) => s.key === 'membership');
+    expect(stream).toBeDefined();
+    expect(stream?.headline.display).not.toBe('Cannot be read');
+    expect(stream?.demand).toBeUndefined();
+    expect(board.caveats.join(' ')).toMatch(/could not be built/);
+    expect(board.caveats.join(' ')).toMatch(/a campaign claimed attribution/);
+  });
+
+  it('does not disturb the membership stream it attaches to', async () => {
+    dem.getMembershipDemandPath.mockResolvedValue(demandPath());
+    const stream = await membershipOf();
+    const pristine = membershipFlow().stream as Record<string, unknown>;
+    for (const field of ['key', 'label', 'status', 'provenance', 'drillDownKey']) {
+      expect((stream as unknown as Record<string, unknown>)[field]).toEqual(pristine[field]);
+    }
+  });
 });
 
 describe('booked revenue and possible winnings are never added together', () => {
