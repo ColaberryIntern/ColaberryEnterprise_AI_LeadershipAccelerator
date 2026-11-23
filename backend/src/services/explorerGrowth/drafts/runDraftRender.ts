@@ -5,6 +5,7 @@ import { DEFAULT_BRAND_VOICE, generateMessage } from '../../aiMessageService';
 import { buildCompositeContext } from '../../contextGraphService';
 import { validateGeneratedMessage, validateSubjectLine } from '../../messageValidatorService';
 import { loadBrainRules } from '../brainRules';
+import { resolveExplorerBrandId } from '../../explorerIdentity';
 import { enqueueExplorerDraft, loadEarlierExplorerEmails, loadExplorerSignals } from './explorerApproval';
 import type { ExplorerFactSet } from '../explorerFactGuard';
 import { groundDraft } from '../explorerKnowledgeGrounding';
@@ -123,7 +124,12 @@ export function liveDeps(): DraftRenderDeps {
     inOpenHouseCountdown: (leadId) => isInOpenHouseCountdown(leadId),
     // OH1o: the brain rules (Brain tab), the countdown's signals, the earlier emails in full, the
     // campaign subject check, and the approval queue (only while explorer_growth_send_enabled is on).
-    loadBrainRules: async () => (await loadBrainRules()).rules,
+    // Explorer's whole population is Colaberry Training's, so that brand's own
+    // rules are the ones that govern what Maya says here. A brand with no rules
+    // of its own falls back to the global set, and an unresolvable brand reads
+    // the global set too - which is exactly what this line did before, so the
+    // failure mode is today's behaviour rather than a new one.
+    loadBrainRules: async () => (await loadBrainRules(await resolveExplorerBrandId())).rules,
     loadSignals: loadExplorerSignals,
     loadEarlierEmails: loadEarlierExplorerEmails,
     validateSubject: (subject, context) => {

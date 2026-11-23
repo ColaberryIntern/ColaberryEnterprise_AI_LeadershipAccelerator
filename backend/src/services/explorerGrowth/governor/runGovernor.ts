@@ -17,6 +17,7 @@ import { isInOpenHouseCountdown } from './openHouseHold';
 import { governorKillSwitch } from './killSwitch';
 import { hoursSinceLastBrainPick } from './brainCadence';
 import { loadBrainRules } from '../brainRules';
+import { resolveExplorerBrandId } from '../../explorerIdentity';
 
 /**
  * Explorer Growth OS — Governor batch runner. Plan §9; EPIC 4 T005.
@@ -134,7 +135,10 @@ async function runOne(
     // OH1k: the one global kill switch, read strictly (unreadable = on).
     governorKillSwitch(),
     // OH1o: the cadence is a brain rule (Brain tab); unreadable = the code default, floor 24 h.
-    loadBrainRules(),
+    // Read for Explorer's own brand, whose rules may now differ from the global
+    // set. No brand rules, or an unresolvable brand, reads the global set, which
+    // is what this call did before.
+    resolveExplorerBrandId().then((brandId) => loadBrainRules(brandId)),
   ]);
 
   const ctx: GovernorContext = {

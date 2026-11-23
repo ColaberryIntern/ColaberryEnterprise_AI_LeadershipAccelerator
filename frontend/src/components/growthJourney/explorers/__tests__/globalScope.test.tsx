@@ -138,12 +138,30 @@ describe('BrainPanel', () => {
       toBeTruthy();
   });
 
-  it('says plainly that saving changes every brand', async () => {
+  it('with a brand chosen, says the rules are THAT brand and no other changes', async () => {
     await render(<BrainPanel brandId="b-enterprise" brandName="Colaberry Enterprise" />);
 
-    // THE load-bearing assertion. This is the fact an operator needs before they
-    // touch the voice field, and it is the one the storage cannot enforce.
-    expect(text()).toContain('saving here changes what she says everywhere');
+    // THE load-bearing assertion for the brand case. Until the rules were
+    // keyed by brand this panel had to warn that saving rewrote everyone's; now
+    // it must say the opposite, and saying the old thing would be worse than
+    // saying nothing because an operator would avoid a safe edit.
+    // Asserted around the apostrophes rather than through them: the copy uses
+    // `&rsquo;`, which renders as U+2019 and does not match a typed `'`. A test
+    // that pins the character pins the typography, not the meaning.
+    expect(text()).toContain('rules below are this brand');
+    expect(text()).toContain('Saving writes only this brand');
+    expect(text()).toContain('no other brand changes');
+    // The old warning must be GONE for the brand case.
+    expect(text()).not.toContain('changes what Maya says on all of them');
+  });
+
+  it('with NO brand chosen, warns that saving changes every brand', async () => {
+    await render(<BrainPanel brandId={null} brandName={null} />);
+
+    // The shared set is still shared. The warning did not disappear when the
+    // rules became per-brand, it moved to the case where it is true.
+    expect(text()).toContain('These are the shared rules');
+    expect(text()).toContain('changes what Maya says on all of them');
   });
 
   it('attributes the already-given list to Colaberry Training, not the selected brand', async () => {

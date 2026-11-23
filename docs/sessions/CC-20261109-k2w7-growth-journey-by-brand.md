@@ -445,3 +445,98 @@ line before trusting the clean run.
 record.** A `mockResolvedValue` declared in the `jest.mock` factory survives exactly one test;
 every later one receives `undefined` and fails as `Cannot read properties of undefined
 (reading 'then')` deep inside the hook, far from the cause. Set it in `beforeEach`.
+
+---
+
+## T15 — Maya's brain rules, per brand, 2026-11-23
+
+**Session:** CC-20261109-k2w7
+**What changed:** `maya_brain_rules` is now keyed by brand, with the shared set as the fallback.
+The Brain tab reads and writes the selected brand; the draft renderer, the governor and the send
+guard all read Explorer's brand. New shared module `services/explorerIdentity.ts`.
+**Verification:** backend 52,394 passed; 12 new cells in `brainRulesByBrand.test.ts`; leak
+mutation kills 3 of 12; frontend 394 growthJourney + 203 Explorer passed; both typechecks clean;
+test-typecheck baseline matched both directions; copy ratchets 42 passed; build compiled.
+
+### Why this was the increment that mattered
+
+T3 shipped a per-brand role **title and description** in `journey_programs.metadata`. That is
+display copy. Maya's voice, her never-say list, which shelves she draws from and how often are
+what actually make her an Enrollment Specialist on one brand and a Business Development
+Specialist on another, and until now they were **one setting shared by everybody**.
+
+### The property that made it safe to ship
+
+`loadBrainRules()` with no brand reads exactly the key it always read. A brand with no row falls
+back to the shared set. So with no brand rows anywhere, **behaviour is byte-identical to
+before** — which is the state of every brand on the day this ships. It changes nothing until
+somebody saves a brand's rules, and the first save affects only that brand.
+
+That matters because this touches the path that decides what Maya says. A change there should
+do nothing until it is asked to.
+
+### A cycle, and the fix CLAUDE.md names
+
+`services/growthJourney/**` imports `services/explorerGrowth/**` in at least six places. So the
+moment `explorerGrowth` needed Explorer's brand identity — which lives in
+`growthJourney/explorerProgramBridge` — the import would have closed a cycle between two
+top-level service trees.
+
+CLAUDE.md's Modular Composition Rule names both the smell and the remedy: *"A imports B imports
+A is a code smell that signals a missing third module C that both depend on."*
+`services/explorerIdentity.ts` is module C. It depends on `modules/tenancy` only, which imports
+no service, so it cannot be part of any cycle.
+
+It holds the two BRAND slugs, not the programme slug: pulling the programme slug in would drag
+a growthJourney dependency back into module C and undo the point of it. `explorerProgramBridge`
+composes `EXPLORER_PROGRAM` from it, so **all 14 existing importers are untouched** — the same
+extract-and-re-export shape used for `queryParams`, `explorerStates` and `mayaBrainApi`.
+
+### The guard that made me justify a new dependency
+
+`noSendPaths.test.ts` enforces a **whitelist** of what the Governor may import, and the new
+import failed it. That is the test working: its header says a new dependency *"is a deliberate
+decision that fails this test until someone adds it and says why."*
+
+Traced rather than assumed before adding it:
+`governor -> services/explorerIdentity -> modules/tenancy/tenantResolver -> models`.
+`explorerIdentity` has exactly one import; `tenantResolver` has exactly one, and it is `models`.
+No mailer, scheduler, queue or campaign engine anywhere on the chain.
+
+### Isolation is asserted on keys written, not on a read-back
+
+The load-bearing property is that saving Colaberry Enterprise's voice cannot rewrite what Maya
+says to Colaberry Training's 1,191 learners. The test asserts the **keys written**, because a
+read-back assertion passes against an implementation that writes both keys and happens to read
+the right one. A mutation making the save write the global key regardless kills 3 of 12 cells;
+the 9 read cells correctly survive, which is what makes it a targeted kill rather than coupling.
+
+### Three things that went wrong here, each worth keeping
+
+1. **My test fixture was invalid, not the code.** It distinguished rule sets by a short
+   `explorerVoice` marker; `resolveBrainRules` rejects a voice that short and substitutes the
+   real one, so all seven cells failed at once. The fixture now varies `brainPickMinHours` and
+   `neverSay`, all valid values, all three distinct — and the defaults cell pins that the
+   default differs from both, so a drift cannot make the fallback cells pass while proving
+   nothing.
+2. **A test asserted typography, not meaning.** The notice copy uses `&rsquo;`, which renders as
+   U+2019 and does not match a typed `'`. The assertion now reads around the apostrophes.
+3. **`tsc` caught what jest could not.** Explorer's 203 tests passed with a `BrainControl`
+   fixture missing the two new fields, because the jest transform does not typecheck. The
+   frontend `tsc --noEmit` found it. Running the suite is not the same as checking the types.
+
+### Still not brand-scoped, and the notice says so
+
+The shelf inventory is one library, and the already-given list is Explorer's population, which
+is Colaberry Training's. The notice did not disappear when the rules became per-brand; it
+changed to name the half that still does not follow the selector. **A notice removed the moment
+part of a problem is fixed is how the other half gets forgotten.**
+
+### One failure I could not fully attribute
+
+The full suite showed 5 failures: the four long-standing ones, plus
+`sessionRecordingService.test.ts`, which is new to that list. It **passes in isolation (27
+tests)**, is absent from this branch's diff, was last touched on 2026-11-18 by other work, and
+fails with a Sequelize model-registry `TypeError` in the Zoom recording path. It reads as an
+ordering flake under the full parallel run. **I did not prove it also flakes on `main`**, so it
+is recorded as unattributed rather than as pre-existing.

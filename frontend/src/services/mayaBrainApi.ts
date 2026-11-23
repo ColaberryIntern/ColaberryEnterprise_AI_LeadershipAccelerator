@@ -85,10 +85,22 @@ export interface BrainInventory {
 
 export interface BrainGivenRow { recipient_masked: string; date: string | null; shelf: string; item_id: string | null; status: string }
 
+/**
+ * Whose rules came back: this brand's own, the shared set, or the built-in
+ * defaults. The UI has to say which. An operator who believes they are editing
+ * Colaberry Enterprise's voice, while actually looking at the global set, will
+ * save it to Enterprise and conclude nothing happened - or assume it changed
+ * for everyone and stop checking.
+ */
+export type BrainRulesSource = 'brand' | 'global' | 'default';
+
 export interface BrainControl {
   rules: MayaBrainRules;
   rules_problems: string[];
   rules_stored: boolean;
+  rules_source: BrainRulesSource;
+  /** Echoed by the server, so a response cannot be read as another brand's. */
+  brand_id: string | null;
   hard_rules: string;
   send_enabled: boolean | null;
   inventory: BrainInventory | null;
@@ -120,14 +132,36 @@ export interface BrainSampleResult {
   note: string;
 }
 
-export async function getBrainControl(): Promise<BrainControl> {
-  const { data } = await api.get<BrainControl>(`${BRAIN}/control`);
+/**
+ * The brand is OPTIONAL and omitted by default, which reads the shared set.
+ * That is what Explorer Growth's own page has always done, so its Brain tab is
+ * unchanged by this without being edited.
+ */
+export async function getBrainControl(brandId: string | null = null): Promise<BrainControl> {
+  const { data } = await api.get<BrainControl>(`${BRAIN}/control`, {
+    params: params({ brand_id: brandId ?? undefined }),
+  });
   return data;
 }
 
-export async function saveBrainRules(rules: MayaBrainRules): Promise<MayaBrainRules> {
-  const { data } = await api.put<{ rules: MayaBrainRules }>(`${BRAIN}/rules`, rules);
-  return data.rules;
+/**
+ * Saves to ONE brand, or to the shared set when no brand is given.
+ *
+ * The server echoes the brand it wrote, and that is what this returns alongside
+ * the rules: a client that reported "saved" against the brand it *meant* to
+ * write, rather than the one the server actually wrote, would hide exactly the
+ * bug worth catching.
+ */
+export async function saveBrainRules(
+  rules: MayaBrainRules,
+  brandId: string | null = null
+): Promise<{ rules: MayaBrainRules; brand_id: string | null }> {
+  const { data } = await api.put<{ rules: MayaBrainRules; brand_id: string | null }>(
+    `${BRAIN}/rules`,
+    rules,
+    { params: params({ brand_id: brandId ?? undefined }) }
+  );
+  return { rules: data.rules, brand_id: data.brand_id ?? null };
 }
 
 export async function listBrainItems(q: { kind?: 'ai_fact' | 'build_prompt'; status?: string } = {}): Promise<BrainItemRow[]> {

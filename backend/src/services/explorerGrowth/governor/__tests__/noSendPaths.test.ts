@@ -126,6 +126,21 @@ const ALLOWED_IMPORT_PATTERNS: RegExp[] = [
   /^\.\.\/\.\.\/\.\.\/utils\/piiRedaction$/,
   /^\.\.\/\.\.\/access\//,                   // entitlement + staff, read-only
   /^\.\.\/\.\.\/consentService$/,            // consent verdicts, read-only
+  // Added 2026-11-23, and this is the "someone adds it and says why" the header
+  // asks for. The Governor reads Maya's cadence from the brain rules, and those
+  // rules became per-brand, so it needs to know which brand Explorer's
+  // population belongs to.
+  //
+  // WHY IT CANNOT REACH A SEND PATH, traced rather than assumed:
+  //   governor -> services/explorerIdentity -> modules/tenancy/tenantResolver
+  //            -> models
+  // `explorerIdentity` has exactly one import, `tenantResolver` has exactly one
+  // import, and that one is `models`. There is no mailer, scheduler, queue or
+  // campaign engine anywhere on the chain, and every FORBIDDEN_MODULE below is
+  // absent from it.
+  //
+  // It resolves a brand id from two slugs and caches it. That is a read.
+  /^\.\.\/\.\.\/explorerIdentity$/,
 ];
 
 /** Modules the Governor must never import, whatever they export. */
