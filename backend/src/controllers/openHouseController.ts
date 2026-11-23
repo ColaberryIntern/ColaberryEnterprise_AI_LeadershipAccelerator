@@ -6,7 +6,11 @@ import { createExplorerEnrollment } from '../services/enrollmentService';
 import { getCurrentOpenHouseEvent, OpenHouseEventInfo } from '../services/openHouseEventService';
 import { recordOpenHouseRegistration } from '../services/openHouseRegistrationStore';
 import { enrollInOpenHouseCountdown } from '../services/openHouseCountdown';
-import { captureSignupConsent, SIGNUP_CONSENT_TEXT, isAffirmative } from '../services/consent/captureSignupConsent';
+import { captureSignupConsent, SIGNUP_CONSENT_TEXT } from '../services/consent/captureSignupConsent';
+// From ./affirmative, NOT from captureSignupConsent: this file's own test replaces that module
+// with a two-key factory, so an import of anything else from it is undefined at run time. See
+// the header of services/consent/affirmative.ts - this is the bug that file exists to prevent.
+import { isAffirmative } from '../services/consent/affirmative';
 import { capturePhoneConsent } from '../services/consent/capturePhoneConsent';
 import { instantAccessFor, greetInBackground } from '../services/openHouse/instantAccess';
 

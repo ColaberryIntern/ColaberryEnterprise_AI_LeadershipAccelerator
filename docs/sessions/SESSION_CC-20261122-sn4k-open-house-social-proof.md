@@ -67,3 +67,34 @@ CI is the gate: there is no local jest or tsc here. What the tests would catch i
 rather than asserted as passing. **The ticket's own acceptance - a real opted-in lead rendering
 by first name - is still not met**, and will not be until somebody ticks the box on a real
 signup. This change is what makes that likely rather than near-impossible; it is not the proof.
+
+## Correction, same day: this broke 22 tests before it was right
+
+The first version of this change imported `isAffirmative` from `captureSignupConsent`, having
+exported it from there to avoid a second truthiness rule. That was the right intent and the
+wrong home.
+
+`openHousePublicSignup.test.ts` replaces that whole module with a factory listing two keys, so
+`isAffirmative` was `undefined` at run time. The controller called it and threw before
+answering, and **22 tests in that file failed** with "status never called" - a symptom that
+points nowhere near the cause, in a file I had not touched.
+
+Fixed properly rather than by adding the key to the mock:
+
+- `services/consent/affirmative.ts` is new and owns `ConsentChoice` and `isAffirmative`. Pure,
+  dependency-free, mocked nowhere, so importing it cannot do this again.
+- `captureSignupConsent.ts` re-exports the TYPE (capturePhoneConsent.ts and portalPhoneGate.ts
+  already import it from that path) and deliberately does NOT re-export the function, so the
+  trap cannot be walked into from there a second time.
+- The controller imports from `./affirmative`, with a comment saying why.
+
+Two test files added: `affirmative.test.ts` for the gate itself, including the negative side
+and a control proving it is not just returning false; and `openHouseSocialProofWiring.test.ts`,
+which pins the join the 22 failures were hiding - that the tick reaches
+`createExplorerEnrollment`. **It keeps the same two-key mock on purpose**, so it keeps
+reproducing the condition the production code now has to survive. Each case asserts HTTP 201
+first, because otherwise it would pass against a handler that threw - which is exactly what the
+original break looked like.
+
+Patching the test's mock would have made CI green while leaving the next caller to rediscover
+this the same way.

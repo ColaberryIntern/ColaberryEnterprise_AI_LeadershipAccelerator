@@ -26,14 +26,16 @@ import type { ConsentChannel, ConsentSubjectType } from '../../models/ConsentRec
  */
 
 /**
- * Whatever the caller has. Deliberately wide: a checkbox reaches a handler as a
- * boolean, "true" or "on" depending on the form, and a value arriving over the
- * wire from another service could be anything at all. `isAffirmative` below is
- * the single narrow gate - widening what may be PASSED does not widen what
- * COUNTS, and it keeps callers from having to cast (or worse, pre-filter, and
- * get the filter subtly wrong).
+ * Re-exported, not redeclared: `ConsentChoice` and `isAffirmative` now live in
+ * ./affirmative, which explains at length why a pure helper does not belong in a module
+ * that tests replace wholesale. Kept exported HERE because capturePhoneConsent.ts and
+ * portalPhoneGate.ts already import the type from this path.
+ *
+ * `isAffirmative` is deliberately NOT re-exported. A caller that wants it should import
+ * ./affirmative directly, so nobody reintroduces the mock trap by reaching for it here.
  */
-export type ConsentChoice = boolean | string | undefined | null;
+export type { ConsentChoice } from './affirmative';
+import { isAffirmative, type ConsentChoice } from './affirmative';
 
 export interface SignupConsentInput {
   email?: string;
@@ -106,18 +108,6 @@ export function resolveConsentSubject(
   }
   const p = normalizePhone(ids.phone);
   return p ? { subjectType: 'phone', subjectId: p } : null;
-}
-
-/**
- * A checkbox arrives as a boolean, "true", or "on" depending on the form.
- *
- * EXPORTED so a caller deciding a permission that is NOT a `consent_records` channel - the
- * snack-bar naming grant on `leads.social_proof_opt_in` - reads a tick the same way this module
- * does. A second truthiness rule elsewhere is how a form that sends "on" becomes a grant in one
- * place and a refusal in another, with nothing in the logs to say which the person meant.
- */
-export function isAffirmative(v: ConsentChoice): boolean {
-  return v === true || v === 'true' || v === 'on';
 }
 
 /**
