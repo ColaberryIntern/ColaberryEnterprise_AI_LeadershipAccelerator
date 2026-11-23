@@ -3,7 +3,7 @@ import type { NextLiveSession, OpenHouseView } from '../../services/onboardingAp
 import { getCertEvidence } from '../../services/certPrepApi';
 import { fetchGameTime } from './games/gameRoomApi';
 import type { GameTime } from './games/gameRoomApi';
-import { parseSessionTimeToHHMM } from '../../utils/sessionTime';
+import { sessionStartInstant } from '../../utils/sessionTime';
 import type { BuildingId, CampusAudience } from './campusMap';
 import type { Happening } from './BuildingCard';
 import { levelOfRung } from '../../services/bandLadder';
@@ -59,11 +59,10 @@ export function inLabel(ms: number, now: number): string {
   return `in ${Math.floor(h / 24)}d ${h % 24}h`;
 }
 
-/** The session's start, built the way the portal's own countdown builds it (NextLiveClassCard, PortalShell). */
+/** The session's start, built the way the portal's own countdown builds it (NextLiveClassCard, PortalShell): the stored digits are a CENTRAL wall clock, never the viewer's own zone. */
 export function sessionStartMs(s: Pick<NextLiveSession, 'session_date' | 'start_time'>): number | null {
-  if (!s.session_date) return null;
-  const hhmm = parseSessionTimeToHHMM(s.start_time || '09:00');
-  const t = hhmm ? new Date(`${s.session_date}T${hhmm}:00`).getTime() : NaN;
+  const iso = sessionStartInstant(s.session_date, s.start_time || '09:00');
+  const t = iso ? new Date(iso).getTime() : NaN;
   return Number.isNaN(t) ? null : t;
 }
 

@@ -11,7 +11,7 @@ import { joinFailureMessage, openTabForJoin } from '../../../utils/openTabForJoi
 import { emitPointsEarned } from '../../../services/pointsFx';
 import BroadcastWatchButton from '../../../components/portal/BroadcastWatchButton';
 import { useCountdown } from '../../../hooks/useCountdown';
-import { parseSessionTimeToHHMM, formatSessionTimeRange } from '../../../utils/sessionTime';
+import { sessionStartInstant, formatSessionTimeRange } from '../../../utils/sessionTime';
 import RoomRecordingsPanel from './RoomRecordingsPanel';
 
 // A chat-attached file's message content is always "📎 <title>" (see
@@ -97,11 +97,11 @@ const ClassSessionBanner: React.FC<{ sessionId: string; roomId: string }> = ({
   }, [sessionId]);
 
   const isLive = session?.status === 'live';
-  const target = (() => {
-    if (!session || isLive || !session.session_date) return null;
-    const hhmm = parseSessionTimeToHHMM(session.start_time || '09:00');
-    return hhmm ? `${session.session_date}T${hhmm}:00` : null;
-  })();
+  // Central wall clock, resolved through Central - never the viewer's own zone
+  // (see sessionStartInstant).
+  const target = (!session || isLive)
+    ? null
+    : sessionStartInstant(session.session_date, session.start_time || '09:00');
   const cd = useCountdown(target);
 
   const handleJoin = () => {

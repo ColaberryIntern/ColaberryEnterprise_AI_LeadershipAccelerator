@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useCountdown } from '../../../hooks/useCountdown';
-import { parseSessionTimeToHHMM, tzAbbrev, formatSessionTimeRange } from '../../../utils/sessionTime';
+import { sessionStartInstant, tzAbbrev, formatSessionTimeRange } from '../../../utils/sessionTime';
 import { NextLiveSession, joinSession } from '../../../services/onboardingApi';
 import { emitPointsEarned } from '../../../services/pointsFx';
 
@@ -13,14 +13,10 @@ import { emitPointsEarned } from '../../../services/pointsFx';
 const NextLiveClassCard: React.FC<{ session: NextLiveSession }> = ({ session }) => {
   const isLive = session.status === 'live';
 
-  // Same target construction as PortalSessionDetailPage: a 24h "HH:MM" from the
-  // (possibly 12-hour) start_time, joined to the session date. No countdown once
-  // the session is live.
-  const target = (() => {
-    if (isLive || !session.session_date) return null;
-    const hhmm = parseSessionTimeToHHMM(session.start_time || '09:00');
-    return hhmm ? `${session.session_date}T${hhmm}:00` : null;
-  })();
+  // The session's stored time is a CENTRAL wall clock, so the target has to be
+  // resolved through Central rather than parsed in the viewer's own zone - see
+  // sessionStartInstant. No countdown once the session is live.
+  const target = isLive ? null : sessionStartInstant(session.session_date, session.start_time || '09:00');
   const cd = useCountdown(target);
 
   // Open the meeting synchronously (popup-blocker safe), then record attendance

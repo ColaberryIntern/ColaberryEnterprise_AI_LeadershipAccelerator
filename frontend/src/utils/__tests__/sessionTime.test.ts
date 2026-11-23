@@ -1,4 +1,4 @@
-import { parseSessionTimeToHHMM, tzAbbrev, formatSessionTime, formatSessionTimeRange, formatCentralSessionTime, formatCentralSessionRange } from '../sessionTime';
+import { parseSessionTimeToHHMM, tzAbbrev, formatSessionTime, formatSessionTimeRange, formatCentralSessionTime, formatCentralSessionRange, sessionStartInstant } from '../sessionTime';
 
 describe('parseSessionTimeToHHMM', () => {
   it('converts 12-hour PM to 24-hour', () => {
@@ -145,5 +145,83 @@ describe('formatCentralSessionRange', () => {
 
   it('degrades to the raw strings rather than disappearing', () => {
     expect(formatCentralSessionRange('garbage', '20:30:00', '2026-08-10')).toMatch(/^garbage - 20:30:00/);
+  });
+});
+
+/**
+ * Every assertion here is an ABSOLUTE UTC instant, deliberately. A test that
+ * compared against a locally-constructed Date would agree with the old broken
+ * code on any Central-time machine - which is exactly why nobody caught this
+ * for months - and would also change its mind depending on where CI ran.
+ * Pinning the expected `...Z` value is what makes the viewer's zone irrelevant.
+ */
+describe('sessionStartInstant', () => {
+  it('reads the stored digits as Central in winter (CST, UTC-6)', () => {
+    expect(sessionStartInstant('2026-11-23', '18:30:00')).toBe('2026-11-24T00:30:00.000Z');
+  });
+
+  it('reads them as Central in summer (CDT, UTC-5), so DST is not a special case', () => {
+    expect(sessionStartInstant('2026-07-23', '18:30:00')).toBe('2026-07-23T23:30:00.000Z');
+  });
+
+  it('accepts the 12-hour shape as well as the stored HH:MM:SS', () => {
+    expect(sessionStartInstant('2026-11-23', '6:30 PM')).toBe('2026-11-24T00:30:00.000Z');
+    expect(sessionStartInstant('2026-11-23', '18:30')).toBe('2026-11-24T00:30:00.000Z');
+  });
+
+  /**
+   * The reported break, as arithmetic. A student on the Pacific coast opened
+   * Today at 5:38 PM PST on Sunday 2026-11-22 and the card counted down
+   * 1 day 0 hrs 51 min to a class that was 22 hrs 52 min away, because the
+   * browser read "18:30" as 6:30 PM Pacific. Two hours too long - exactly that
+   * viewer's distance from Central.
+   */
+  it('counts the real distance to the class, not the viewer-local one (ticket 2026-11-22)', () => {
+    const target = sessionStartInstant('2026-11-23', '18:30:00') as string;
+    const viewerClock = Date.parse('2026-11-23T01:38:00Z'); // 5:38 PM PST, Sun Nov 22
+    const minutesAway = Math.round((Date.parse(target) - viewerClock) / 60000);
+    expect(minutesAway).toBe(22 * 60 + 52);
+    expect(minutesAway).not.toBe(24 * 60 + 52); // what the card actually showed
+  });
+
+  it('resolves the offset at the TARGET, not at the naive timestamp', () => {
+    // Spring forward 2026-03-08: the 2am hour does not exist, and an evening
+    // class that day is already on CDT.
+    expect(sessionStartInstant('2026-03-08', '18:30:00')).toBe('2026-03-08T23:30:00.000Z');
+    // Still CST at 1:30 AM, before the jump.
+    expect(sessionStartInstant('2026-03-08', '01:30:00')).toBe('2026-03-08T07:30:00.000Z');
+  });
+
+  /**
+   * These two are the ONLY cases that tell one pass from two, and without them
+   * the second pass is untested code. The naive timestamp sits 5-6 hours before
+   * the real instant, so the passes disagree exactly when a DST transition
+   * falls inside that gap - a pre-dawn hour on changeover day. No class is
+   * scheduled at 3 AM, but the helper is general, and a line that no test can
+   * fail is a line nobody can safely keep.
+   */
+  it('re-reads the offset at the target when a DST change falls in between', () => {
+    // Fall back (07:00Z): one pass would answer 08:00Z, which is 2 AM, not 3.
+    expect(sessionStartInstant('2026-11-01', '03:00')).toBe('2026-11-01T09:00:00.000Z');
+    // Spring forward (08:00Z): one pass would answer 11:00Z, which is 6 AM, not 5.
+    expect(sessionStartInstant('2026-03-08', '05:00')).toBe('2026-03-08T10:00:00.000Z');
+  });
+
+  it('picks the earlier instant for the hour that repeats on fall-back night', () => {
+    // 2026-11-01 01:30 happens twice; the CDT one (06:30Z) wins, deterministically.
+    expect(sessionStartInstant('2026-11-01', '01:30:00')).toBe('2026-11-01T06:30:00.000Z');
+  });
+
+  it('handles midnight and noon without an off-by-twelve', () => {
+    expect(sessionStartInstant('2026-11-23', '12:00 AM')).toBe('2026-11-23T06:00:00.000Z');
+    expect(sessionStartInstant('2026-11-23', '12:00 PM')).toBe('2026-11-23T18:00:00.000Z');
+  });
+
+  it('returns null rather than an invalid date, so the caller hides the countdown', () => {
+    expect(sessionStartInstant(null, '18:30:00')).toBeNull();
+    expect(sessionStartInstant('2026-11-23', null)).toBeNull();
+    expect(sessionStartInstant('2026-11-23', 'garbage')).toBeNull();
+    expect(sessionStartInstant('23-11-2026', '18:30:00')).toBeNull();
+    expect(sessionStartInstant('', '')).toBeNull();
   });
 });

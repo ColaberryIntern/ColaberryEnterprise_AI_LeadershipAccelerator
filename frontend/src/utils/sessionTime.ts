@@ -88,6 +88,71 @@ export function formatSessionTime(raw: string | null | undefined): string | null
 export const CENTRAL_TZ = 'America/Chicago';
 
 /**
+ * How far ahead of UTC the Central clock is at a given instant, in ms (negative
+ * here, since Central is behind UTC). Read from Intl's own zone database rather
+ * than a hardcoded offset, so CST and CDT are both correct and the DST boundary
+ * needs no special case.
+ */
+function centralOffsetMs(atMs: number): number {
+  const p: Record<string, number> = {};
+  for (const part of new Intl.DateTimeFormat('en-US', {
+    timeZone: CENTRAL_TZ,
+    hourCycle: 'h23',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit',
+  }).formatToParts(new Date(atMs))) {
+    if (part.type !== 'literal') p[part.type] = Number(part.value);
+  }
+  // Some ICU builds render midnight as "24" even under h23 - the same guard
+  // backend/src/services/centralDate.ts carries, for the same reason.
+  const hour = p.hour === 24 ? 0 : p.hour;
+  return atMs - Date.UTC(p.year, p.month - 1, p.day, hour, p.minute);
+}
+
+/**
+ * The REAL INSTANT a class starts, as an ISO string ending in `Z`, from its
+ * stored Central wall-clock digits. Returns null when the date or time cannot
+ * be read, so a caller shows no countdown rather than a NaN one.
+ *
+ * WHY THIS EXISTS. Every "next class" countdown in the portal used to build its
+ * target as a bare `${session_date}T${hh}:${mm}:00` string and hand it to
+ * `new Date()`, which reads a string carrying no zone as the VIEWER'S OWN local
+ * time. The stored digits are Central (see CENTRAL_TZ above), so the countdown
+ * silently ran long by the viewer's distance from Central: two hours for a
+ * student on the Pacific coast, four for one in Hawaii, and nothing at all for
+ * the Central-time staff who read it every week, which is why it survived this
+ * long.
+ *
+ * Reported by a student 2026-11-22: the card read "1 day and 51 minutes" at
+ * 5:38 PM Pacific for a class 22 hours 52 minutes away. It printed the correct
+ * "6:30 PM CST" directly above that wrong number.
+ *
+ * It matters beyond the digits. The backend decides when a session flips to
+ * `live` using Central unconditionally (`centralDate.ts` `classInstant`), so a
+ * viewer-local countdown also disagreed with the server about whether class had
+ * started. Anchoring both to Central is what keeps them in step.
+ *
+ * TWO PASSES, because the offset in force at the naive timestamp is not
+ * necessarily the one in force at the target - the second pass re-reads it at
+ * the answer. Same shape as the proven converter in the Comms Hub composer
+ * (`components/admin/commsHub/compose/centralTime.ts`), which the portal has no
+ * way to reach; this is the shared home for the student-facing surfaces.
+ */
+export function sessionStartInstant(
+  dateStr: string | null | undefined,
+  rawTime: string | null | undefined,
+): string | null {
+  if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(String(dateStr))) return null;
+  const hhmm = parseSessionTimeToHHMM(rawTime);
+  if (!hhmm) return null;
+  const naive = Date.parse(`${dateStr}T${hhmm}:00Z`);
+  if (Number.isNaN(naive)) return null;
+  const firstPass = naive + centralOffsetMs(naive);
+  const ms = naive + centralOffsetMs(firstPass);
+  return Number.isNaN(ms) ? null : new Date(ms).toISOString();
+}
+
+/**
  * A stored session time rendered with its true, DST-aware zone label, e.g.
  * ("18:30:00", "2026-08-10") → "6:30 PM CDT".
  *

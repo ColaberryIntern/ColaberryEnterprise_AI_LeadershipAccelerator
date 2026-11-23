@@ -7,7 +7,7 @@ import { hudView } from './pointsHud';
 import { fetchSettings, readCachedAvatar } from '../../../services/portalSettingsApi';
 import { readParticipant, countdown, firstClassTargetMs } from './shellUtils';
 import { useNextLiveSession } from './useNextLiveSession';
-import { parseSessionTimeToHHMM } from '../../../utils/sessionTime';
+import { sessionStartInstant } from '../../../utils/sessionTime';
 import NotificationBell from '../community/NotificationBell';
 import BuildToast from '../projects/BuildToast';
 import ShellContactsRail from './ShellContactsRail';
@@ -333,10 +333,10 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
   const nextLiveSessionTargetMs = (() => {
     if (!nextLiveSessionHud) return null;
     if (nextLiveSessionHud.status === 'live') return now; // live now → 0d 0h
-    if (!nextLiveSessionHud.session_date) return null;
-    const hhmm = parseSessionTimeToHHMM(nextLiveSessionHud.start_time || '09:00');
-    if (!hhmm) return null;
-    const t = new Date(`${nextLiveSessionHud.session_date}T${hhmm}:00`).getTime();
+    // Central wall clock, resolved through Central (see sessionStartInstant).
+    const iso = sessionStartInstant(nextLiveSessionHud.session_date, nextLiveSessionHud.start_time || '09:00');
+    if (!iso) return null;
+    const t = new Date(iso).getTime();
     return isNaN(t) ? null : t;
   })();
   const fcCd = countdown(

@@ -17,7 +17,7 @@ import {
 export { itemClass } from './scheduleModel';
 import { useNextLiveSession } from '../today/useNextLiveSession';
 import { useCountdown } from '../../../hooks/useCountdown';
-import { parseSessionTimeToHHMM } from '../../../utils/sessionTime';
+import { sessionStartInstant } from '../../../utils/sessionTime';
 import { emitPointsEarned } from '../../../services/pointsFx';
 import './SchedulePage.css';
 
@@ -338,12 +338,10 @@ const SchedulePage: React.FC = () => {
   // Condensed-header content — the same real live_sessions source the Today
   // shell and the header's own "Next class" pill trust (see useNextLiveSession).
   const { session: nextLiveSession } = useNextLiveSession();
-  const nlsTarget = (!nextLiveSession || nextLiveSession.status === 'live' || !nextLiveSession.session_date)
+  // Central wall clock, resolved through Central (see sessionStartInstant).
+  const nlsTarget = (!nextLiveSession || nextLiveSession.status === 'live')
     ? null
-    : (() => {
-        const hhmm = parseSessionTimeToHHMM(nextLiveSession.start_time || '09:00');
-        return hhmm ? `${nextLiveSession.session_date}T${hhmm}:00` : null;
-      })();
+    : sessionStartInstant(nextLiveSession.session_date, nextLiveSession.start_time || '09:00');
   const nlsCd = useCountdown(nlsTarget);
   const handleJoinNext = () => {
     if (!nextLiveSession?.meeting_link) return;

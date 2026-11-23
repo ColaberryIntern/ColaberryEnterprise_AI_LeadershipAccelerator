@@ -81,7 +81,11 @@ describe('Lv N (Q5)', () => {
 });
 
 describe('Happening here and the urgent action, from real facts only', () => {
-  const now = new Date('2026-10-22T10:00:00').getTime();
+  // 10:00 Central on Oct 22, pinned as an absolute instant (CDT, UTC-5). The
+  // session times below are Central wall clocks, so "now" has to be Central too
+  // or the gap between them changes with the machine running the test. Do not
+  // "simplify" this back to a zone-less `new Date('2026-10-22T10:00:00')`.
+  const now = Date.parse('2026-10-22T15:00:00Z');
   const session = { id: 's1', session_number: 5, title: 'Build Day', session_date: '2026-10-23', start_time: '13:00', end_time: '15:00', status: 'scheduled' as const,
     meeting_link: null, meeting_provider: null, timezone: 'America/Chicago', room_id: null };
   it('counts down in the prototype\'s words', () => {
@@ -91,7 +95,9 @@ describe('Happening here and the urgent action, from real facts only', () => {
     expect(inLabel(now - 1, now)).toBe('now');
     expect(inLabel(now - 3 * 3600000, now)).toBe('earlier today'); // a start hours ago is never 'now'
     expect(inLabel(now - 2 * 86400000, now)).toBe('Oct 20');
-    expect(sessionStartMs(session)).toBe(new Date('2026-10-23T13:00:00').getTime());
+    // 1:00 PM Central on Oct 23 is 18:00Z (CDT). Asserted absolutely, because a
+    // zone-less expectation here would agree with the old viewer-local bug.
+    expect(sessionStartMs(session)).toBe(Date.parse('2026-10-23T18:00:00Z'));
   });
   it('the Classroom says ITS plan step (C13: never the day\'s total) and the next class; nothing is said without a source', () => {
     const stops = [{ key: 'a', title: 'Deep Dive', route: '/portal/runtime/c1', buildingId: 'lecture' as const, done: false, type: 'deep_dive', label: 'Deep Dive', minutes: 6, points: 15, ref: null, cardId: 'c1' }];
