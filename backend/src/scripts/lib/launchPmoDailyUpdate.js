@@ -865,7 +865,9 @@ async function runNurtureCycle(state, projectId) {
       } else if (want === 3) {
         label = 'ESCALATE_LEAD';
         body = `<div><strong style="color:#b45309">3 days overdue</strong> - due ${t.due_on}. Owner: ${owner}.</div>
-<div>Please post a status update here or reassign. CB will escalate to Ali at 5 days if no movement.</div>`;
+<div>Please post a status update here or reassign. This escalates to Ali at 5 days if no movement.</div>`;
+        // Never write the bare word "CB" here: this posts as Ali, and the CB dispatcher reads "CB" from Ali as a request
+        // (2026-11-23: 13 replies in one tick tripped its kill switch).
       } else { // 1
         label = 'REMINDER';
         body = `<div><strong style="color:#0284c7">Reminder</strong> - this was due ${t.due_on} (1 day overdue). Owner: ${owner}.</div>
