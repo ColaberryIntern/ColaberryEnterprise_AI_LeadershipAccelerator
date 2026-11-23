@@ -119,11 +119,21 @@ const personaName = (() => {
   return 'You';
 })();
 const roles = derived.roles || [];
-const personaRole = human(roles[roles.length - 1] || 'operator');
+// "As Dana, …" and "As a hygienist, …" both narrate a story; the article is optional.
+const reEsc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const narratedBy = (role) => new RegExp(`^\\s*As\\s+(?:an?\\s+)?${reEsc(role)}\\s*,`, 'i');
+// The demo is the screen of whoever narrates the most stories. ShiftFill v12 took the LAST
+// role instead, and showed Dana as "Hygienist" though 16 of 17 stories were hers.
+const ownRole = [...roles]
+  .map((role, i) => ({ role, i, n: (plan.stories || []).filter((s) => narratedBy(role).test(s.narrative || '')).length }))
+  .sort((a, b) => b.n - a.n || a.i - b.i)[0]?.role;
+// A role that is the person's own name ("Dana") is not a job title to print under it.
+const personaRole = !ownRole || ownRole.toLowerCase() === personaName.toLowerCase() ? 'Operator' : human(ownRole);
 
-const prefix = (name) => name.split('_').map((w) => w[0]).join('').toUpperCase();
+// Lower-case letters and digits, as DEMO_SPEC_CONTRACT.md requires ("g101", not "G-101").
+const prefix = (name) => name.split('_').map((w) => w[0]).join('').toLowerCase();
 const countFor = (e) => (e.isLog ? 10 : e.isPeople ? 8 : e.fields.some((f) => f.type === 'ref') ? 6 : 3);
-for (const [key, e] of Object.entries(entities)) e.rows = Array.from({ length: countFor(e) }, (_, i) => ({ id: `${prefix(key)}-${101 + i}` }));
+for (const [key, e] of Object.entries(entities)) e.rows = Array.from({ length: countFor(e) }, (_, i) => ({ id: `${prefix(key)}${101 + i}` }));
 
 const usedNames = new Set();
 function value(key, e, f, i) {
@@ -254,10 +264,11 @@ const nav = [
 
 // ---- the Human / Agent split, straight from the plan --------------------------
 const people = roles.map((role) => {
-  const re = new RegExp(`^\\s*As an?\\s+${role}\\s*,`, 'i');
+  const re = narratedBy(role);
+  const mine = role === ownRole;
   const decides = workStories.filter((s) => re.test(s.narrative || '')).map((s) => `${human(s.workspace.action || 'review')} in ${s.workspace.ref}`);
-  if (role.toLowerCase() === personaRole.toLowerCase()) agents.forEach((a) => (a.escalation_rules || []).forEach((r) => decides.push(r)));
-  return { role: human(role), decides, screen: queueKey && role.toLowerCase() === personaRole.toLowerCase() ? 'approvals' : undefined };
+  if (mine) agents.forEach((a) => (a.escalation_rules || []).forEach((r) => decides.push(r)));
+  return { role: human(role), decides, screen: queueKey && mine ? 'approvals' : undefined };
 }).filter((p) => p.decides.length);
 
 // One row per story: where a reviewer can see it, or an honest "not shown".
