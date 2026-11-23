@@ -41,7 +41,17 @@ const AdminFeedControlGovernancePage = lazy(() => import('../pages/admin/AdminFe
 const AdminCertPrepPage = lazy(() => import('../pages/admin/certprep/AdminCertPrepPage'));
 const AdminEventLedgerPage = lazy(() => import('../pages/admin/AdminEventLedgerPage'));
 const AdminCampaignsPage = lazy(() => import('../pages/admin/AdminCampaignsPage'));
-const ExplorerGrowthPage = lazy(() => import('../pages/admin/ExplorerGrowthPage'));
+/*
+ * The REDIRECT, not the page.
+ *
+ * `/admin/explorer-growth` now resolves to a component that reads the status
+ * registry and decides: with the journey dark or the registry unreadable it
+ * renders Explorer's page unchanged, and otherwise it forwards to the merged
+ * page. It is a lazy import like its neighbours, and it imports Explorer's page
+ * itself for the fallback - so the old bundle is only fetched when it is the
+ * answer.
+ */
+const ExplorerGrowthRedirect = lazy(() => import('../pages/admin/ExplorerGrowthRedirect'));
 const GrowthJourneyPage = lazy(() => import('../pages/admin/GrowthJourneyPage'));
 const GrowthJourneyHandoffPage = lazy(() => import('../pages/admin/HandoffDetailPage'));
 const AdminCampaignDetailPage = lazy(() => import('../pages/admin/AdminCampaignDetailPage'));
@@ -261,7 +271,7 @@ const adminRoutes = (
         <Route path="/admin/funnel" element={<AdminFunnelPage />} />
         <Route path="/admin/opportunities" element={<AdminOpportunitiesPage />} />
         <Route path="/admin/campaigns" element={<AdminCampaignsPage />} />
-        <Route path="/admin/explorer-growth" element={<ExplorerGrowthPage />} />
+        <Route path="/admin/explorer-growth" element={<ExplorerGrowthRedirect />} />
         <Route path="/admin/growth-journey/handoffs/:id" element={<GrowthJourneyHandoffPage />} />
         <Route path="/admin/growth-journey" element={<GrowthJourneyPage />} />
         <Route path="/admin/campaigns/build-cold" element={<CampaignBuilderPage />} />

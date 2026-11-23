@@ -176,8 +176,20 @@ describe('the derivation is real', () => {
     // the three routers and the comment is false with nothing red. That is the same
     // stale-figure defect this paragraph exists to describe, merely relocated from a log
     // into a comment. The CELL NAMES above are drift-proof; a tally is not.
-    expect(DECLARED.length).toBe(35);
+    //
+    // 35 -> 50 on 2026-11-22, when the brand-scoped Explorer reads landed:
+    // thirteen GETs under `${JOURNEY}/explorers` plus a GET and a PUT on
+    // `${JOURNEY}/brand-role`. The pin is RAISED, not loosened, and raising it
+    // was the second step - the first was finding that those routes were
+    // originally written with a local `const EXPLORERS` prefix and a bare
+    // `BRAND_ROLE` identifier, so thirteen derived with an unsubstituted prefix
+    // and two were invisible to this scanner entirely. The paths are spelled out
+    // in full in the route file now, with a comment there saying why.
+    expect(DECLARED.length).toBe(50);
+    // Still 8. The one write added is a PUT, which this cell does not count and
+    // the verb-aware cells below do.
     expect(DECLARED.filter((r) => r.verb === 'post').length).toBe(8);
+    expect(DECLARED.filter((r) => r.verb === 'put').length).toBe(1);
     expect(DECLARED.every((r) => r.pattern.startsWith(J))).toBe(true);
   });
 

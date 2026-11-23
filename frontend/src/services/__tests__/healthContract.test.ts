@@ -161,10 +161,16 @@ describe('the base path reaches the backend', () => {
     ['../growthJourneyApi.ts', 'the status and handoff-move client'],
     ['../growthJourneyInspectApi.ts', 'the nine inspect reads'],
     ['../growthJourneyQueueApi.ts', 'the queue and experiments reads'],
-    ['../growthJourneyControlsApi.ts', 'the only write client'],
+    // Was labelled "the only write client" until 2026-11-22. It is not any
+    // more: `growthJourneyBrandRoleApi` below carries the per-brand agent role
+    // PUT. Corrected rather than left, because a stale label in a test is read
+    // as a fact about the system.
+    ['../growthJourneyControlsApi.ts', 'the execution controls write client'],
     ['../growthJourneyPerformanceApi.ts', 'the performance reads'],
+    ['../growthJourneyExplorerApi.ts', "Explorer Growth's thirteen brand-scoped reads"],
+    ['../growthJourneyBrandRoleApi.ts', 'the per-brand agent role, read and write'],
   ])('%s (%s) carries the /api prefix', (rel) => {
-    // FIVE clients now reach this surface and every one needs the prefix. The
+    // SEVEN clients now reach this surface and every one needs the prefix. The
     // T615 split dropped the constant from a new file entirely, which tsc caught -
     // but a file with a WRONG prefix compiles fine and fails only in a browser, so
     // each one is pinned by name here rather than by whichever happened to exist

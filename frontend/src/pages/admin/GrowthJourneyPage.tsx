@@ -49,16 +49,27 @@ import { getStatusRegistry } from '../../services/growthJourneyApi';
  */
 
 
+/**
+ * Twelve tabs, in the order the execution contract lists them.
+ *
+ * Explorer Growth's six surfaces lead, because this page is now the only place
+ * they exist and they are the ones with data behind them. The journey's own five
+ * follow, and Brand setup sits last: it is configuration, consulted rarely,
+ * rather than something a reviewer opens every morning.
+ */
 const TABS: { key: TabKey; label: string; icon: string }[] = [
   { key: 'overview', label: 'Overview', icon: 'dashboard-line' },
-  { key: 'classification', label: 'Classification', icon: 'price-tag-3-line' },
+  { key: 'campus', label: 'Campus & outreach', icon: 'user-voice-line' },
+  { key: 'learners', label: 'Learners', icon: 'group-line' },
   { key: 'decisions', label: 'Decisions', icon: 'git-branch-line' },
+  { key: 'content', label: 'Content supply', icon: 'book-open-line' },
   { key: 'shadow', label: 'Shadow', icon: 'eye-line' },
-  { key: 'content', label: 'Content', icon: 'book-open-line' },
+  { key: 'classification', label: 'Classification', icon: 'price-tag-3-line' },
   { key: 'handoffs', label: 'Handoffs', icon: 'user-shared-line' },
   { key: 'experiments', label: 'Experiments', icon: 'flask-line' },
   { key: 'performance', label: 'Performance', icon: 'line-chart-line' },
   { key: 'controls', label: 'Controls', icon: 'settings-3-line' },
+  { key: 'brand-setup', label: 'Brand setup', icon: 'user-settings-line' },
 ];
 
 const isTabKey = (v: string | null): v is TabKey => TABS.some((t) => t.key === v);
@@ -213,6 +224,28 @@ export default function GrowthJourneyPage() {
           </li>
         ))}
       </ul>
+
+      {/*
+        * THE ALL-BRANDS NOTICE, SAID ONCE.
+        *
+        * It lived inside `ScopeState`, so a tab with two panels printed it twice
+        * and Overview printed it twice before any data arrived. The fact is
+        * about this page's brand selection, which is read here, so it belongs
+        * here - and before the seed runs this is the state the page opens in, so
+        * it is the first thing an operator should read.
+        */}
+      {!brandId && (
+        <div
+          className="alert alert-info py-2 px-3 small d-flex align-items-center gap-2"
+          role="status"
+        >
+          <i className="ri-information-line" aria-hidden="true" />
+          <span>
+            <strong>All brands.</strong> No brand is selected, so the figures below cover the
+            whole population rather than one brand.
+          </span>
+        </div>
+      )}
 
       {/*
         * ONE list, and this time it really is one.

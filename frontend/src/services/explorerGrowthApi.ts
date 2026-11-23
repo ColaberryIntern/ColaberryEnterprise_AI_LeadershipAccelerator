@@ -66,18 +66,11 @@ export type ExplorerActionType =
   | 'WAIT'
   | 'SUPPRESS_CONTACT';
 
-/** Ordered for display: the roster reads as a journey, not an alphabet. */
-export const PRIMARY_STATE_ORDER: ExplorerPrimaryState[] = [
-  'NEW_EXPLORER',
-  'NOT_STARTED',
-  'ACTIVATING',
-  'ACTIVE_LEARNER',
-  'ENGAGED_LEARNER',
-  'CONNECTED_TO_COMMUNITY',
-  'CONSIDERING_NEXT_STEP',
-  'ENROLLMENT_READY',
-  'CONVERTED',
-];
+/*
+ * `PRIMARY_STATE_ORDER` MOVED to `./explorerStates` and is re-exported here, so
+ * both of Explorer's own importers are unaffected. See that file for why.
+ */
+export { PRIMARY_STATE_ORDER } from './explorerStates';
 
 // ─── Overview ───────────────────────────────────────────────────────────────
 

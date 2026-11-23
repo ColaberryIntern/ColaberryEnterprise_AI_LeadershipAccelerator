@@ -49,30 +49,19 @@ import api from '../utils/api';
 
 const BASE = '/api/admin/growth-journey';
 
-/**
- * Query string from a sparse bag, skipping `undefined`/`''` so an untouched filter
- * is absent rather than sent empty. Copied in shape from `explorerGrowthApi.ts`'s
- * `params(q)`, which is the precedent on this surface; `growthJourneyApi.ts` has
- * none because none of its seven routes takes a parameter.
+/*
+ * `params` MOVED to `./queryParams` on 2026-11-22 and is re-exported here, so
+ * every existing importer is unaffected.
  *
- * Why it matters here: several of these endpoints answer a malformed value with a
- * 400 rather than an empty list, so sending `status=''` is a visible error, not a
- * no-op.
+ * It was declared in this file and imported from here by three sibling clients.
+ * That coupling is invisible until a test mocks this module: the Growth Journey
+ * page suite mocks it wholesale, so `params` became undefined and every cell in
+ * that suite failed - including states that touch none of these clients. The
+ * helper has no business being reachable only through one client.
  */
-export function params<T extends object>(q: T): string {
-  const sp = new URLSearchParams();
-  // Generic over the object rather than typed `Record<string, …>`: TypeScript gives
-  // a type ALIAS an implicit index signature but not an INTERFACE, so every one of
-  // the nine query interfaces below was rejected by a `Record` parameter. Widening
-  // here keeps the nine call-site types precise, which is where the precision is
-  // worth having - the alternative was nine type aliases and a looser contract.
-  (Object.entries(q) as [string, string | number | undefined][]).forEach(([k, v]) => {
-    if (v === undefined || v === '') return;
-    sp.set(k, String(v));
-  });
-  const s = sp.toString();
-  return s ? `?${s}` : '';
-}
+import { params } from './queryParams';
+
+export { params };
 
 /** Every one of the nine echoes the page it actually served. */
 export interface JourneyPage {
