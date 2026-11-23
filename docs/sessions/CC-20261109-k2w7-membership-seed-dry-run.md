@@ -111,8 +111,12 @@ membership seed plan (dry run — nothing written)
 **What it costs:** nothing. Nobody loses a surface they have today, and brand scoping starts
 working. 54 rows is 2 super-admin rows plus 7 admins and 6 sales across 4 tenants each.
 
-**I recommend B.** Option A trades a real loss of access for a tidier table, and closing the ramp
-is quite enough change for one deploy without also narrowing thirteen people's day.
+**Ali chose B on 2026-11-22.** Recorded here rather than left in a chat message, because the
+roster is the one input to this write and a decision that lives only in a transcript is a decision
+nobody can check later.
+
+Option A traded a real loss of access for a tidier table, and closing the ramp is quite enough
+change for one deploy without also narrowing thirteen people's day.
 
 The roles proposed: `super_admin` → `platform_super_admin`, `admin` → `tenant_admin`, `sales` →
 `tenant_viewer` (read-only across the tenant). If sales should be able to change things rather
