@@ -32,25 +32,98 @@ export function BuildArtifactBadge({ kind }: { kind: GovBuildArtifactKind }): Re
   );
 }
 
+const PREVIEW_H = 132;
+/** Kinds that render a live inline thumbnail in the card (the rest show a type tile). */
+const PREVIEWABLE: Record<GovBuildArtifactKind, boolean> = {
+  html: true, image: true, pdf: true, video: true, markdown: true, csv: true,
+  word: false, slides: false, spreadsheet: false, other: false,
+};
+
+/**
+ * ArtifactPreview — a small LIVE thumbnail of one submitted artifact, so the card reads like a viewer instead of a
+ * bare file chip. It fetches the file once through the injected `fetchFile` and renders by kind: image inline, HTML
+ * in a scaled SCRIPT-LESS sandboxed iframe (pointer-events off so the card stays the click target), PDF first page,
+ * video first frame, and Markdown/CSV as a text snippet. Binary office kinds keep a type tile (no fetch). Best-effort:
+ * a load failure falls back to the tile, never blocks the card.
+ */
+function ArtifactPreview(
+  { artifact, fetchFile }: { artifact: GovSubmittedArtifact; fetchFile: (id: string, opts?: { download?: boolean }) => Promise<Blob> },
+): React.ReactElement {
+  const kind = artifact.kind;
+  const blobUrlKind = kind === 'image' || kind === 'pdf' || kind === 'video';
+  const textKind = kind === 'html' || kind === 'markdown' || kind === 'csv';
+  const [objUrl, setObjUrl] = useState<string | null>(null);
+  const [text, setText] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (!PREVIEWABLE[kind]) return;
+    let live = true; let made: string | null = null;
+    fetchFile(artifact.id)
+      .then(async (blob) => {
+        if (!live) return;
+        if (blobUrlKind) { try { made = URL.createObjectURL(blob); setObjUrl(made); } catch { setFailed(true); } }
+        else { setText((await blob.text()).slice(0, 2000)); }
+      })
+      .catch(() => { if (live) setFailed(true); });
+    return () => { live = false; if (made) { try { URL.revokeObjectURL(made); } catch { /* noop */ } } };
+  }, [artifact.id, kind, blobUrlKind, fetchFile]);
+
+  const frame = { position: 'relative' as const, height: PREVIEW_H, borderRadius: 6, overflow: 'hidden', background: '#f1f5f9', border: '1px solid var(--gps-line,#e2e8f2)' };
+  const b = BADGE[kind] ?? BADGE.other;
+  const tile = (
+    <div style={{ ...frame, display: 'flex', alignItems: 'center', justifyContent: 'center' }} aria-hidden="true">
+      <i className={`ri-${b.icon}`} style={{ fontSize: 34, color: b.color }} />
+    </div>
+  );
+  if (!PREVIEWABLE[kind] || failed) return tile;
+
+  if (kind === 'image') return objUrl
+    ? <div style={frame}><img src={objUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></div>
+    : tile;
+  if (kind === 'html') return text !== null
+    ? <div style={frame}><iframe title="" srcDoc={text} sandbox="" tabIndex={-1} aria-hidden="true"
+        style={{ width: 400, height: 520, border: 0, background: '#fff', transform: 'scale(.33)', transformOrigin: 'top left', pointerEvents: 'none' }} /></div>
+    : tile;
+  if (kind === 'pdf') return objUrl
+    ? <div style={frame}><iframe title="" src={`${objUrl}#toolbar=0&view=FitH`} tabIndex={-1} aria-hidden="true"
+        style={{ width: '100%', height: 320, border: 0, pointerEvents: 'none' }} /></div>
+    : tile;
+  if (kind === 'video') return objUrl
+    ? <div style={frame}><video src={objUrl} muted preload="metadata" tabIndex={-1} aria-hidden="true" style={{ width: '100%', height: '100%', objectFit: 'cover', background: '#000' }} /></div>
+    : tile;
+  // markdown / csv — text snippet
+  return text !== null
+    ? <div style={{ ...frame, padding: '8px 10px' }}><pre className="gps-mono" style={{ margin: 0, fontSize: 9.5, lineHeight: 1.5, color: '#475569', whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: PREVIEW_H - 16, overflow: 'hidden' }}>{text.slice(0, 500)}</pre></div>
+    : tile;
+}
+
 export function BuildArtifactCards(
-  { artifacts, onOpen }: { artifacts: GovSubmittedArtifact[]; onOpen: (a: GovSubmittedArtifact) => void },
+  { artifacts, onOpen, fetchFile }:
+  { artifacts: GovSubmittedArtifact[]; onOpen: (a: GovSubmittedArtifact) => void; fetchFile?: (id: string, opts?: { download?: boolean }) => Promise<Blob> },
 ): React.ReactElement {
   return (
     <div className="gps-cards" data-testid="ev-build-artifact-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
       {artifacts.map((a) => (
-        <button
+        <div
           key={a.id}
-          type="button"
+          role="button"
+          tabIndex={0}
           data-testid="ev-build-artifact-card"
           data-kind={a.kind}
           className="gps-panel"
           onClick={() => onOpen(a)}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(a); } }}
+          aria-label={`Open ${a.title}`}
           style={{ textAlign: 'left', cursor: 'pointer', border: '1px solid var(--gps-line, #e2e8f2)', display: 'flex', flexDirection: 'column', gap: 6 }}
         >
-          <BuildArtifactBadge kind={a.kind} />
-          <b style={{ wordBreak: 'break-word' }}>{a.title}</b>
+          {fetchFile ? <ArtifactPreview artifact={a} fetchFile={fetchFile} /> : <BuildArtifactBadge kind={a.kind} />}
+          <div className="gps-row" style={{ gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+            {fetchFile && <BuildArtifactBadge kind={a.kind} />}
+            <b style={{ wordBreak: 'break-word' }}>{a.title}</b>
+          </div>
           <span className="gps-small gps-muted gps-mono" style={{ wordBreak: 'break-all' }}>{a.repoPath}</span>
-        </button>
+        </div>
       ))}
     </div>
   );

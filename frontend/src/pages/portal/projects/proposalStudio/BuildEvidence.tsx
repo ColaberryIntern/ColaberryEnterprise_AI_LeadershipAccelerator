@@ -172,7 +172,7 @@ export default function BuildEvidence(
             <b>Submitted from the repo</b>
             <span className="gps-small gps-muted">{submittedArtifacts.length} artifact{submittedArtifacts.length === 1 ? '' : 's'}</span>
           </div>
-          <BuildArtifactCards artifacts={submittedArtifacts} onOpen={setOpenArtifact} />
+          <BuildArtifactCards artifacts={submittedArtifacts} onOpen={setOpenArtifact} fetchFile={buildArtifactFetch} />
         </div>
       )}
       {openArtifact && <BuildArtifactViewer artifact={openArtifact} fetchFile={buildArtifactFetch} onClose={() => setOpenArtifact(null)} />}
