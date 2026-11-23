@@ -31,3 +31,19 @@ export function loginHrefPreserving(pathname: string): string {
   if (!here || here === '/portal/login' || here === '/portal/verify') return '/portal/login';
   return `/portal/login?next=${encodeURIComponent(here)}`;
 }
+
+/**
+ * Whether a 401 on this page should send the browser to the sign-in page.
+ *
+ * NOT on the class check-in page (Ali, 2026-11-23: "It should not be a login at all. They just put
+ * their name and email"). That page needs no sign-in, but the portal layout around it (live badge,
+ * mini-player, campus) still calls signed-in endpoints when the browser holds a portal token, and an
+ * EXPIRED token there used to throw the attendee onto the login page before they saw the form.
+ * The token is still cleared by the caller; only the redirect is skipped.
+ *
+ * Pure: reads no globals, throws nothing.
+ */
+export function redirectsToLoginOn401(pathname: string): boolean {
+  if (!pathname.startsWith('/portal')) return false;
+  return !pathname.startsWith('/portal/class-checkin/');
+}

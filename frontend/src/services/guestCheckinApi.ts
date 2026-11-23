@@ -27,6 +27,33 @@ export interface GuestJoinResult {
   class_window?: ClassWindow;
 }
 
+/** Public class info for the check-in page (GET /api/portal/sessions/:id/checkin-info). */
+export interface CheckinInfo {
+  title: string;
+  session_date: string;
+  start_time: string;
+  cohort_name: string;
+  room_id: string | null;
+  /** Canonical program name from the backend (canonicalCourse.ts). */
+  program_name?: string;
+  /** Absent from an older backend: treated as 'open'. */
+  class_window?: ClassWindow;
+  start_label?: string;
+  accepts_guests?: boolean;
+  /** Open House sessions only: the Zoom link. */
+  meeting_link?: string | null;
+}
+
+/**
+ * Read with the guest client, NOT portalApi (2026-11-23). portalApi attaches whatever portal token
+ * the browser holds and sends the page to the login screen on a 401, so a visitor with an expired
+ * sign-in was bounced off the check-in page before seeing the form.
+ */
+export async function getCheckinInfo(sessionId: string): Promise<CheckinInfo> {
+  const { data } = await guestApi.get<CheckinInfo>(`/api/portal/sessions/${sessionId}/checkin-info`);
+  return data;
+}
+
 /** What this phone remembers between scans: the pass, and who they said they were. */
 export interface SavedGuest { pass: string; name: string; email: string }
 
