@@ -34,13 +34,15 @@ jest.mock('../../../services/guestCheckinApi', () => ({
   guestPulse: jest.fn(),
   guestAsk: jest.fn(),
   guestRun: jest.fn(),
+  guestChatList: jest.fn().mockResolvedValue([]),
+  guestChatPost: jest.fn(),
   loadSavedGuest: jest.fn(),
   saveGuest: jest.fn(),
   forgetGuest: jest.fn(),
 }));
 
 import {
-  getCheckinInfo, guestCheckin, getGuestCompanionState, guestPulse, guestAsk, guestVote, loadSavedGuest, saveGuest,
+  getCheckinInfo, guestCheckin, getGuestCompanionState, guestPulse, guestAsk, guestVote, loadSavedGuest, saveGuest, guestChatList,
 } from '../../../services/guestCheckinApi';
 import { LIVE_PULSES } from '../../../components/portal/livePulse';
 import ClassCheckinPage, { CHECKIN_TAB_TITLE } from '../ClassCheckinPage';
@@ -83,6 +85,7 @@ beforeEach(() => {
   mockAsk.mockResolvedValue(undefined);
   mockVote.mockResolvedValue(undefined);
   mockLoadSaved.mockReturnValue(null);
+  (guestChatList as unknown as jest.Mock).mockResolvedValue([]);
 });
 
 const flush = async () => {

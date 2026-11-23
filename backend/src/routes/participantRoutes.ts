@@ -15,6 +15,9 @@ import {
 import {
   handleGuestJoinPage, handleGuestJoin, handleGuestState, handleGuestVote, handleGuestPulse, handleGuestAsk, handleGuestRun,
 } from '../controllers/sessionGuestController';
+import {
+  handleGuestChatList, handleGuestChatPost, handleChatEscalationsList, handleChatEscalationAnswer,
+} from '../controllers/liveChatController';
 import { handleRaffleDraw, handleRaffleWinners, handleFlashDiscount, handleEnrollmentFeed } from '../controllers/sessionRaffleController';
 import {
   handleGetInternshipStatus, handleStartInternshipApplication, handleSaveInternshipIntake,
@@ -475,6 +478,20 @@ const guestRunRateLimiter = rateLimit({
   message: { error: 'Too many runs at once. Try again in a minute.' },
 });
 router.post('/api/portal/sessions/:id/guest-run', guestRunRateLimiter, handleGuestRun);
+// Class live chat (services/liveChat, 2026-11-23): attendees read + post on their guest pass; the
+// presenter window answers the assistant's escalations with the deck kit token. The per-IP cap is
+// sized for a whole room on one venue IP; the service also caps per attendee.
+const guestChatRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many messages at once. Try again in a minute.' },
+});
+router.get('/api/portal/sessions/:id/guest-chat', handleGuestChatList);
+router.post('/api/portal/sessions/:id/guest-chat', guestChatRateLimiter, handleGuestChatPost);
+router.get('/api/portal/sessions/:id/chat-escalations', kitTokenOrAdmin, handleChatEscalationsList);
+router.post('/api/portal/sessions/:id/chat-escalations/:eid', kitTokenOrAdmin, handleChatEscalationAnswer);
 // Giveaway draws: drawn + recorded server-side (sessionRaffleService.ts). Deck
 // kit token or admin; full names/emails only to an admin (?full=1).
 router.post('/api/portal/sessions/:id/raffle-draw', kitTokenOrAdmin, handleRaffleDraw);

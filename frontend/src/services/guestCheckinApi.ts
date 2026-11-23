@@ -147,3 +147,27 @@ export async function guestRun(
   );
   return data.reply;
 }
+
+/** One message in the class live chat (backend services/liveChat). */
+export interface LiveChatMessage {
+  id: string;
+  kind: 'attendee' | 'assistant';
+  display_name: string;
+  content: string;
+  reply_to: string | null;
+  created_at: string;
+}
+
+export async function guestChatList(sessionId: string, pass: string): Promise<LiveChatMessage[]> {
+  const { data } = await guestApi.get<{ messages: LiveChatMessage[] }>(
+    `/api/portal/sessions/${sessionId}/guest-chat`, { headers: { 'X-Guest-Pass': pass } },
+  );
+  return data.messages || [];
+}
+
+export async function guestChatPost(sessionId: string, pass: string, text: string): Promise<LiveChatMessage> {
+  const { data } = await guestApi.post<{ message: LiveChatMessage }>(
+    `/api/portal/sessions/${sessionId}/guest-chat`, { text }, { headers: { 'X-Guest-Pass': pass } },
+  );
+  return data.message;
+}
