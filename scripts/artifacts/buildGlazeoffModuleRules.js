@@ -4,7 +4,12 @@
  *
  *   NODE_PATH=<repo>/node_modules ARTIFACT_CHROMIUM=<msedge.exe> node scripts/artifacts/buildGlazeoffModuleRules.js
  *
- * Writes docs/GLAZEOFF_MODULE_RULES_AIA_BILLING_2026-11-21.html and .pdf (at most 4 pages).
+ * Writes docs/GLAZEOFF_MODULE_RULES_AIA_BILLING_2026-11-23.html and .pdf (at most 5 pages).
+ *
+ * v2, 23 Nov 2026: Sai's reply (Mon 23 Nov, 3:32 AM CT) decided the three open questions, corrected
+ * labels and file paths to use the AIX Auth cid, added PM-level access, rounding and the pilot
+ * borrow/stub list, and approved every PROPOSED rule. Tags now read PLATFORM (his plan),
+ * AGREED (ours, approved 23 Nov) and SAI 23 NOV (added in his reply). v1 (21 Nov) stays in docs/.
  *
  * Sources (read 21 Nov 2026): Sai's "glazeoff-platform-tracker-FINAL.xlsx" (shared 16 Nov, built
  * from the Client Deployment Blueprint and Ram's 15 Nov Basecamp comments), the Read AI report of
@@ -17,17 +22,16 @@ const { baseCss, esc, SEV } = require('./artifactTheme');
 const { renderPdf, htmlDoc } = require('./renderArtifactPdf');
 
 const DOCS = path.join(__dirname, '..', '..', 'docs');
-const STEM = 'GLAZEOFF_MODULE_RULES_AIA_BILLING_2026-11-21';
+const STEM = 'GLAZEOFF_MODULE_RULES_AIA_BILLING_2026-11-23';
 
 const V = {
   same: { t: 'SAME PAGE', c: SEV.ok },
   adjust: { t: 'WE ADJUST', c: '#3d5a99' },
-  settle: { t: 'SETTLE WITH SAI', c: '#6d28d9' },
+  settle: { t: 'DECIDED 23 NOV', c: '#6d28d9' },
 };
 const chip = (v) => `<span class="chip" style="background:${V[v].c}">${V[v].t}</span>`;
-const tag = (s) => s === 'SAI'
-  ? '<span class="chip" style="background:#0f766e">SAI</span>'
-  : '<span class="chip" style="background:#b26a00">PROPOSED</span>';
+const TAGS = { SAI: ['PLATFORM', '#0f766e'], PROPOSED: ['AGREED', '#3d5a99'], ADDED: ['SAI 23 NOV', '#b26a00'] };
+const tag = (s) => `<span class="chip" style="background:${TAGS[s][1]}">${TAGS[s][0]}</span>`;
 
 // Topic | Sai's platform plan | Our December plan | verdict | what changes
 const COMPARE = [
@@ -35,13 +39,13 @@ const COMPARE = [
     'GCP project <code>glazeoff-billing</code>, set up by Karun on Thu 19 Nov and linked to billing.', 'same', 'Nothing.'],
   ['What "billing module" means', 'T3.10: per-client <b>usage</b> as invoice line items (GlazeOff billing its clients for cloud and AI use). Assigned to Ali.',
     'AIA <b>progress</b> billing: Middlesex PMs fill G702/G703 requisitions.', 'settle',
-    'Two different modules with the same word. Name them apart (page 3).'],
+    'Two modules: <code>aia-billing</code> now, <code>usage-billing</code> after T3.8 and T3.9. Sai updates the blueprint and deck.'],
   ['Sign-in', 'AIX Auth: passwordless email link, /check endpoint, <code>require()</code> on every route. <b>Not started</b> (T1.3, T1.4, T1.6).',
     'S6: our own logins so a PM sees only his jobs.', 'settle',
-    'Drop our own login. Build to the AIX Auth token now; agree a pilot fallback if it isn\'t live by 1 Dec.'],
+    'Drop our own login. Build to the AIX Auth token and <code>require()</code> now. Not live by Tue 1 Dec: a temporary passwordless issuer, pilot users only, deleted when AIX Auth ships.'],
   ['Data', 'Postgres, <code>client_id</code> on every row, row-level security (T2.2). Blueprint also mentions per-client databases.',
     'S2: tenants, jobs, schedule of values, requisitions, lines.', 'adjust',
-    'Add row-level security. Ask which: one database with RLS, or one per client.'],
+    'One database, <code>client_id</code> + RLS. The app runs as a non-superuser role. PM-level access via <code>contract_members</code>.'],
   ['Stack', 'Python / FastAPI back end, React front end (blueprint; "not fully finalized").',
     'Not chosen. The demo is one HTML file.', 'adjust', 'Build in FastAPI + React.'],
   ['Documents', 'Phase 2 document space: Uppy uploads, signed download links, path client/project/document/vN.',
@@ -50,14 +54,14 @@ const COMPARE = [
     'Four seats from the demo: PM, Brian Dempster, Nick Arena, Jamie.', 'adjust', 'The chain is per-client data, not code.'],
   ['Client differences', 'Configurable features, no custom UI per client (blueprint).',
     'Built around Middlesex.', 'adjust', 'Middlesex\'s choices live in a settings table.'],
-  ['Cost tracking', '<code>client=&lt;name&gt;</code> label on every resource; usage logged per client (T3.6, T3.8).',
+  ['Cost tracking', '<code>client=&lt;cid&gt;</code> label on every resource; usage logged per client (T3.6, T3.8).',
     'Not planned.', 'adjust', 'Label everything; emit usage events.'],
   ['Backups', 'Restore drill in Phase 4 (T4.4); owner not yet named.',
     'A timed restore before the pilot (S0 done-condition).', 'same', 'We do it earlier for our database.'],
   ['Isolation tests', 'Two test clients never see each other, tested in CI (T1.9).',
     'Not planned.', 'adjust', 'Add the two-client test to our CI.'],
   ['Timing', 'Middlesex moves onto the platform after Phases 1-2 (T3.11).',
-    'AIA pilot Tue 8 Dec.', 'settle', 'Our pilot runs ahead of the platform. Agree what it borrows and what it stubs.'],
+    'AIA pilot Tue 8 Dec.', 'settle', 'The pilot borrows and stubs per the list on the last page.'],
 ];
 
 // Thing | Rule | Example | source
@@ -66,14 +70,15 @@ const NAMES = [
   ['The other module', 'T3.10 usage invoicing gets its own key.', '<code>usage_billing</code> / <code>usage-billing</code>', 'PROPOSED'],
   ['GCP project', 'Project IDs cannot be renamed after creation.', '<code>glazeoff-billing</code> already exists (Karun, Thu 19 Nov). Keep it, and tell modules apart with the <code>module</code> label.', 'PROPOSED'],
   ['Cloud resources', '<code>&lt;module&gt;-&lt;role&gt;-&lt;env&gt;</code>', '<code>aia-billing-api-prod</code>, <code>aia-billing-web-prod</code>, <code>aia-billing-pg-prod</code>', 'PROPOSED'],
-  ['Labels', 'Every resource carries client, module and env.', '<code>client=middlesex-glass</code> <code>module=aia-billing</code> <code>env=prod</code>', 'SAI'],
-  ['Client', 'A uuid from AIX Auth plus a lowercase slug.', '<code>client_id</code> (uuid), <code>middlesex-glass</code>', 'SAI'],
+  ['Labels', 'Every resource carries client, module and env. The client is the <b>cid, never the name</b>.', '<code>client=&lt;cid&gt;</code> <code>module=aia-billing</code> <code>env=prod</code>', 'ADDED'],
+  ['Client', '<code>client_id</code> is the AIX Auth cid. The slug is for display only, never a key, label or path.', '<code>client_id</code> = cid; <code>middlesex-glass</code> on screen only', 'ADDED'],
   ['Database schema', 'Each module owns one Postgres schema. Platform tables stay in core; a module reads core ids and never writes core tables.', '<code>aia_billing.pay_applications</code>', 'PROPOSED'],
   ['Tables', 'snake_case, plural nouns, AIA vocabulary. The word "job" is reserved for GlazeOff\'s job contract.', '<code>contracts</code>, not <code>jobs</code>', 'PROPOSED'],
   ['API', '<code>/api/&lt;module&gt;/v1/&lt;plural-resource&gt;</code>, JSON in snake_case.', '<code>/api/aia-billing/v1/pay-applications</code>', 'PROPOSED'],
   ['Permissions', '<code>&lt;module&gt;:&lt;resource&gt;:&lt;action&gt;</code>, levels none / read / write / admin by user type.', '<code>aia_billing:pay_applications:approve</code>', 'SAI'],
   ['Events', '<code>&lt;module&gt;.&lt;resource&gt;.&lt;past-tense verb&gt;</code>', '<code>aia_billing.pay_application.submitted</code>', 'PROPOSED'],
-  ['Files', 'The platform path: client / project / document / version / file.', '<code>middlesex-glass/&lt;project&gt;/&lt;document&gt;/v2/G702.pdf</code>', 'SAI'],
+  ['Files', 'The platform path, keyed by cid: cid / project / document / version / file.', '<code>&lt;cid&gt;/&lt;project&gt;/&lt;document&gt;/v2/G702.pdf</code>', 'ADDED'],
+  ['Repo', 'One repo per module. Sai creates it and gives Ali write; Sai reviews the first PR.', '<code>colaberry/GlazeOff-AIA-Billing</code>', 'PROPOSED'],
   ['Migrations', 'Alembic, forward-only, one change per file.', '<code>0003_add_retainage_to_contracts</code>', 'PROPOSED'],
 ];
 
@@ -85,7 +90,8 @@ const TABLES = [
   ['pay_application_lines', 'The G703 rows: % complete, this period, stored materials.'],
   ['approval_steps', 'Per-client chain configuration: the seats and their order.'],
   ['approvals', 'Each approve or return action, by whom and when.'],
-  ['exports', 'Every generated .xlsx and PDF, pointing to the stored file.'],
+  ['contract_members', 'Which users (PMs) may see each contract. Checked alongside <code>require()</code>: RLS separates clients, this separates PMs.'],
+  ['exports', 'Every generated .xlsx and PDF, pointing to the stored file. One approved pay app can be exported many times.'],
   ['client_settings', 'Retainage %, the SOV format and other per-client choices.'],
   ['audit_events', 'Append-only record of every change.'],
 ];
@@ -97,30 +103,34 @@ const COLUMN_RULES = [
   ['Timestamps end in <code>_at</code> (timestamptz, UTC); dates end in <code>_on</code>; foreign keys are <code>&lt;singular&gt;_id</code>; booleans start with <code>is_</code> or <code>has_</code>', 'PROPOSED'],
   ['Every table has <code>created_at</code>, <code>updated_at</code> and <code>created_by</code> (the user id from the token)', 'PROPOSED'],
   ['A submitted value is never overwritten. A revision inserts a new row with <code>revision_no</code> and <code>supersedes_id</code>, so the original stays on record', 'PROPOSED'],
-  ['Status is text with a CHECK list: draft, submitted, approved, returned, finalized, exported', 'PROPOSED'],
+  ['Status is text with a CHECK list: draft, submitted, approved, returned, finalized. No <code>exported</code> status: exports are rows in <code>exports</code>', 'ADDED'],
+  ['Rounding: round half-up to cents per line, then sum. Tested against a real Middlesex requisition so totals match the paper G702/G703 exactly', 'ADDED'],
 ];
 
 const FORM_CHECKS = [
   ['Every route calls <code>require()</code> with a permission key, and refuses access when the check fails', 'SAI'],
   ['A two-client isolation test passes in CI: client B never sees client A\'s rows, files or exports, including on error paths', 'SAI'],
+  ['The app connects as a non-superuser role, and the isolation test runs as that role (superusers bypass RLS)', 'ADDED'],
+  ['A test proves PM A cannot see PM B\'s contracts (<code>contract_members</code>)', 'ADDED'],
   ['There is no <code>if client == "middlesex"</code> anywhere in the code; every difference is a <code>client_settings</code> row', 'PROPOSED'],
   ['Every cloud resource carries client, module and env labels', 'SAI'],
-  ['Usage events go out for the per-client usage report (T3.8)', 'SAI'],
+  ['Usage events go to a table for the per-client usage report (T3.8)', 'ADDED'],
   ['Any AI call goes through the platform LLM gateway, with de-identification (T5.2, T5.3); there is none in December', 'SAI'],
   ['Secrets live in Secret Manager, never in the repo', 'PROPOSED'],
   ['The schema is reviewed by the database owners (Karun, Harsh and Venkatesh, per the tracker) before migrations run', 'PROPOSED'],
   ['A restore has been run once and timed before real data goes in', 'PROPOSED'],
 ];
 
-const QUESTIONS = [
-  ['"Billing module" means two things', 'T3.10 is usage invoicing; Ram\'s 19 Nov ask was AIA progress billing for Middlesex.',
-    'Two modules, two keys: <code>aia-billing</code> now, and <code>usage-billing</code> (T3.10) after T3.8 and T3.9 land.'],
-  ['Sign-in before 8 Dec', 'AIX Auth is not started, and the pilot is in 17 days.',
-    'Build to the AIX Auth token shape and <code>require()</code> from day one. If AIX Auth is not live by Tue 1 Dec, the pilot uses a temporary issuer with the same token shape, deleted when AIX Auth ships.'],
-  ['One database or one per client', 'The tracker says client_id plus row-level security; the blueprint mentions per-client databases.',
-    'One module database with row-level security for the pilot. Revisit when the long-term deployment model is decided.'],
-  ['Where the code lives', 'The platform repos are colaberry/GlazeOff and GlazeOff-Client; ShopDraw is in karunswaroop/GlazeOff-Shopdraw.',
-    'Its own repo, <code>colaberry/GlazeOff-AIA-Billing</code>, in FastAPI + React, with Sai\'s review on the first PR.'],
+const DECISIONS = [
+  ['Two modules', '<code>aia-billing</code> now; <code>usage-billing</code> (T3.10) after T3.8 and T3.9. Sai updates the blueprint and deck.'],
+  ['Sign-in', 'Build to the AIX Auth token shape and <code>require()</code> from day one. If AIX Auth is not live by Tue 1 Dec, a temporary issuer with the same token shape: passwordless, limited to the pilot users, deleted when AIX Auth ships.'],
+  ['Database', 'One database with <code>client_id</code> and RLS for the pilot. The app runs as a non-superuser role, and isolation is tested with it.'],
+  ['Repo', 'Sai creates <code>colaberry/GlazeOff-AIA-Billing</code> and gives Ali write. Sai is on the first PR.'],
+];
+
+const PILOT = [
+  ['<b>Borrows:</b> the <code>glazeoff-billing</code> project, the labels, the AIX Auth token shape and <code>require()</code>.',
+    '<b>Stubs:</b> the temporary issuer; a minimal seeded <code>clients</code> / <code>projects</code> set that aia-billing only reads; exports in Cloud Storage at the platform path until the document space exists; usage events to a table for T3.8.'],
 ];
 
 function compareTable() {
@@ -157,11 +167,11 @@ const rows = (list) => list.map(([r, s]) => `<tr><td>${r}</td><td style="width:7
 
 function body() {
   return `
-  <h1>glazeoff.ai module rules: AIA progress billing</h1>
-  <div class="meta">For Ali, to agree with Sai · 21 Nov 2026 · Sources: Sai's platform tracker (16 Nov), the Client Deployment Blueprint meeting (17 Nov), Sai's email (21 Nov), Basecamp list 10443345153</div>
+  <h1>glazeoff.ai module rules: AIA progress billing (agreed)</h1>
+  <div class="meta">Agreed with Sai · v2, 23 Nov 2026 (v1 was 21 Nov) · Sources: Sai's platform tracker (16 Nov), the Client Deployment Blueprint meeting (17 Nov), Sai's emails (21 and 23 Nov), Basecamp list 10443345153</div>
   <div class="rule"></div>
   <div class="takeaway"><div class="label">Takeaway</div>
-    <div class="headline">Mostly the same page. Sai's platform already sets the hard rules: GCP, FastAPI + React, client_id with row-level security, AIX Auth and a shared file layout. Our plan bends to them in ${COMPARE.filter((r) => r[3] === 'adjust').length} places. ${COMPARE.filter((r) => r[3] === 'settle').length} need a word with Sai first. The biggest: in his tracker, the "billing module" assigned to you is usage invoicing, not AIA billing.</div></div>
+    <div class="headline">Same page, and agreed. On 23 Nov Sai approved every naming, table and column rule and decided all three open questions as recommended. One correction is now the rule: labels and file paths use the AIX Auth <b>cid, never the client name</b>. He added four things: PM-level access (<code>contract_members</code>), a non-superuser app role, half-up rounding per line, and no <code>exported</code> status.</div></div>
   <h2>Sai's plan vs ours</h2>
   ${compareTable()}
 
@@ -174,7 +184,7 @@ function body() {
   </tbody></table>
 
   <div class="pagebreak"></div>
-  <h2>Tables in the <code>aia_billing</code> schema (proposed)</h2>
+  <h2>Tables in the <code>aia_billing</code> schema (agreed)</h2>
   <table><thead><tr><th style="width:26%">Table</th><th>Holds</th></tr></thead><tbody>
   ${TABLES.map(([t, d]) => `<tr><td><code>${t}</code></td><td>${d}</td></tr>`).join('')}
   </tbody></table>
@@ -185,13 +195,15 @@ function body() {
   <div class="pagebreak"></div>
   <h2>A module is "in form" when</h2>
   <table><tbody>${rows(FORM_CHECKS)}</tbody></table>
-  <h2>Settle these with Sai before code starts</h2>
-  <table><thead><tr><th style="width:22%">Question</th><th style="width:32%">Why it's open</th><th>Recommendation</th></tr></thead><tbody>
-  ${QUESTIONS.map(([q, w, r]) => `<tr><td><b>${q}</b></td><td>${w}</td><td>${r}</td></tr>`).join('')}
+  <h2>Decided with Sai, 23 Nov</h2>
+  <table><tbody>
+  ${DECISIONS.map(([q, d]) => `<tr><td style="width:18%"><b>${q}</b></td><td>${d}</td></tr>`).join('')}
   </tbody></table>
+  <h2>What the 8 Dec pilot borrows and stubs</h2>
+  <table><tbody>${PILOT.map(([b, st]) => `<tr><td style="width:42%">${b}</td><td>${st}</td></tr>`).join('')}</tbody></table>
   <div class="note good"><b>What doesn't change:</b> the demo's screens, the four-seat approval order, the G702/G703 math, the 8 Dec two-PM pilot, and the restore test before real data goes in.</div>
-  <div class="note"><b>Access as of 21 Nov (Sai's second email):</b> Ali has write on colaberry/GlazeOff-Client and an invite to colaberry/GlazeOff. Karun still needs to add Ali to <code>glazeoff-billing</code> (adding people needs Owner; Sai has Editor) and to karunswaroop/GlazeOff-Shopdraw.</div>
-  <p class="meta">SAI = already in Sai's tracker or blueprint. PROPOSED = ours; nothing tagged PROPOSED is agreed until Sai says so.</p>`;
+  <div class="note"><b>Access as of 23 Nov:</b> Ali has write on colaberry/GlazeOff-Client and has accepted colaberry/GlazeOff. Per Sai, Karun's only open items are to add Ali adding Ali to <code>glazeoff-billing</code> as Editor (adding people needs Owner; Sai has Editor) and to karunswaroop/GlazeOff-Shopdraw.</div>
+  <p class="meta">PLATFORM = in Sai's tracker or blueprint. AGREED = proposed by us on 21 Nov, approved by Sai on 23 Nov. SAI 23 NOV = added or corrected in Sai's 23 Nov reply.</p>`;
 }
 
 (async () => {
@@ -200,8 +212,8 @@ function body() {
     table { margin: 4px 0 8px; }
     h2 { margin-top: 12px; }
     .takeaway .headline { font-size: 11pt; }`;
-  const html = htmlDoc({ title: 'glazeoff.ai module rules: AIA billing', css, body: body() });
+  const html = htmlDoc({ title: 'glazeoff.ai module rules: AIA billing (agreed)', css, body: body() });
   require('fs').writeFileSync(path.join(DOCS, `${STEM}.html`), html);
-  const r = await renderPdf({ html, outPath: path.join(DOCS, `${STEM}.pdf`), maxPages: 4, margin: '12mm' });
+  const r = await renderPdf({ html, outPath: path.join(DOCS, `${STEM}.pdf`), maxPages: 5, margin: '12mm' });
   console.log(JSON.stringify(r));
 })().catch((e) => { console.error(e.message); process.exit(1); });
