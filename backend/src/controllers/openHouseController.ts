@@ -7,6 +7,10 @@ import { getCurrentOpenHouseEvent, OpenHouseEventInfo } from '../services/openHo
 import { recordOpenHouseRegistration } from '../services/openHouseRegistrationStore';
 import { enrollInOpenHouseCountdown } from '../services/openHouseCountdown';
 import { captureSignupConsent, SIGNUP_CONSENT_TEXT } from '../services/consent/captureSignupConsent';
+// From ./affirmative, NOT from captureSignupConsent: this file's own test replaces that module
+// with a two-key factory, so an import of anything else from it is undefined at run time. See
+// the header of services/consent/affirmative.ts - this is the bug that file exists to prevent.
+import { isAffirmative } from '../services/consent/affirmative';
 import { capturePhoneConsent } from '../services/consent/capturePhoneConsent';
 import { instantAccessFor, greetInBackground } from '../services/openHouse/instantAccess';
 
@@ -259,6 +263,10 @@ export async function handlePublicOpenHouseSignup(req: Request, res: Response, n
       utm_campaign: payload.utm_campaign || 'open_house',
       page_url: payload.page_url,
       source: 'Open House signup (public)',
+      // The naming permission (SNACK-2), normalised with the SAME rule the consent helper uses
+      // rather than a second definition of "ticked". Absent means no grant, which is not a
+      // refusal: it simply leaves this signup showing as "Someone in <city>" like everyone else.
+      socialProofOptIn: isAffirmative(payload.social_proof_opt_in),
     });
 
     const attached = await attachToCurrentOpenHouse({

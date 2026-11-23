@@ -34,6 +34,11 @@ export interface SequenceStep {
    * tagged for them (attended or missed; untagged = everyone). It is never chained or enrolled.
    */
   audience?: 'attended' | 'missed';
+  /**
+   * OH1z: which approved fixed copy an Open House follow-up step falls back to when its AI draft
+   * fails the screen. Unset = the track's first email (thanks / catch_up).
+   */
+  copy_key?: 'thanks' | 'enroll' | 'last_call' | 'catch_up' | 'invite';
 }
 
 interface FollowUpSequenceAttributes {

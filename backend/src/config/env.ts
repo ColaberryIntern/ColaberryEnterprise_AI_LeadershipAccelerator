@@ -102,6 +102,8 @@ export const env = {
   // must not see AI Flotation's caller ID. Unset means "Call me now" is not offered and
   // the call is skipped with `no_agent_id`; the typed interview still runs.
   synthflowEnterpriseIntakeAgentId: process.env.SYNTHFLOW_ENTERPRISE_INTAKE_AGENT_ID || '',
+  // Agent comms tool: the Synthflow agent for place_ai_call. Unset = the AI Flotation shell agent.
+  synthflowAgentToolAgentId: process.env.SYNTHFLOW_AGENT_TOOL_AGENT_ID || '',
   // W29: the Basecamp "Colaberry Enterprise Intake" project. Unset = no client lists are written.
   enterpriseIntakeBcProjectId: process.env.BASECAMP_ENTERPRISE_INTAKE_PROJECT_ID || '',
   // Q4 A (Ali, 2026-11-20): Ali owns every client list. His Basecamp person id.
@@ -178,6 +180,9 @@ export const env = {
   mandrillWebhookUrl: process.env.MANDRILL_WEBHOOK_URL || '',
   mandrillApiKey: process.env.MANDRILL_API_KEY || '',
   mandrillInboundDomain: process.env.MANDRILL_INBOUND_DOMAIN || 'reply.colaberry.ai',
+  // Agent comms tool: the domain agents' From addresses show (Maya <maya@colaberry.com>). Replies go to
+  // <slug>@<mandrillInboundDomain>, which Mandrill receives.
+  agentEmailFromDomain: process.env.AGENT_EMAIL_FROM_DOMAIN || 'colaberry.com',
 
   // Google Calendar
   googleCalendarId: process.env.GOOGLE_CALENDAR_ID || '',
@@ -203,6 +208,9 @@ export const env = {
 
   // Feature Flags
   enableVoiceCalls: process.env.ENABLE_VOICE_CALLS === 'true',
+  // Agent comms tool (2026-11-22): the call paths allowed to dial when ENABLE_VOICE_CALLS is on,
+  // comma-separated path keys (brandSlug or callType). Unset = none (fail closed). See voice/voiceCallPaths.ts.
+  voiceCallPaths: process.env.VOICE_CALL_PATHS || '',
   enableVoiceCallForOverview: process.env.ENABLE_VOICE_CALL_FOR_OVERVIEW === 'true',
   enableAutoEmail: process.env.ENABLE_AUTO_EMAIL !== 'false', // default on
   enableHighIntentAlert: process.env.ENABLE_HIGH_INTENT_ALERT === 'true',
@@ -255,6 +263,15 @@ export const env = {
   // Deliberately NOT a boolean — the first audience for this is one account
   // being tested while a class is running on the same deployment.
   sbpAgentScoping: (process.env.SBP_AGENT_SCOPING ?? 'off').trim(),
+  // Who gets the Connected Demo story (STORY-900) on their build: a simulated,
+  // trust-instrumented walkthrough of the system they are building, generated from their own
+  // plan and data model. 'off' (default), 'all', or a comma-separated list of enrollment ids.
+  // Same three-way shape as SBP_AGENT_SCOPING above, for the same reason.
+  //
+  // OFF MEANS OFF FOR NEW BUILDS ONLY. Once a build has the row, it keeps it: see
+  // services/sbp/connectedDemoFlag.ts for why a read path that consulted this variable instead
+  // of the board would orphan a story the student had already been asked to build.
+  sbpConnectedDemo: (process.env.SBP_CONNECTED_DEMO ?? 'off').trim(),
   // Review-and-approve gate. When a build publishes for an enrollment in scope,
   // the project is held in `pending_approval`: the student reviews the whole
   // build and must Approve before the workspace unlocks. 'off' (default), 'all',

@@ -1,11 +1,13 @@
 /**
- * C123: assembles the weekly report HTML from the view model. Charts are inline SVG; the flow (Sankey) and the
- * decision tree are Mermaid, loaded from a pinned CDN build. Styling follows the baseline-ui tokens (navy/blue, calm).
+ * C123/C125: assembles the weekly report HTML from the view model. Charts are inline SVG; the flow (Sankey) and the
+ * decision tree are Mermaid, loaded from a pinned CDN build. Colors come from lib/brand.js, the Colaberry Training
+ * theme the landing page itself renders with; the earlier "baseline-ui navy/blue" was neither of those things.
  */
 'use strict';
 const M = require('./model');
 const I = require('./insights');
 const X = require('./charts');
+const HM = require('./heatmap');
 const { esc, C, STATUS } = X;
 
 const MERMAID = 'https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js';
@@ -80,7 +82,7 @@ function mermaidTree(cur) {
     '  P --> D & Q', '  D --> R & Y', '  R --> C', '  C --> A',
     `  classDef top fill:${C.navy},color:#fff,stroke:${C.navy}`,
     '  classDef good fill:#c6f6d5,color:#22543d,stroke:#2f855a', '  classDef bad fill:#fed7d7,color:#742a2a,stroke:#c53030',
-    '  classDef mid fill:#bee3f8,color:#2a4365,stroke:#2b6cb0'];
+    `  classDef mid fill:${X.B.bgCool},color:#1F4E63,stroke:${C.blue}`];
   return `<pre class="mermaid">${lines.join('\n')}</pre>`;
 }
 
@@ -90,9 +92,93 @@ function emailPanel(em) {
   return `<table class="tbl sm"><tbody>${rows.map(([l, v]) => `<tr><td>${l}</td><td class="num">${v}</td><td class="num">${M.pct(v, em.emails) ?? 0}%</td></tr>`).join('')}</tbody></table>`;
 }
 
+/** OH1y: every Open House since launch. All doors; "walk-ins" checked in without a registration for that session. */
+function sessionsTable(sessions) {
+  if (!sessions || !sessions.length) return '<p class="muted">No Open House sessions yet.</p>';
+  const h = (s, v) => (s.held ? v : 'n/a');
+  const tr = sessions.map((s) => {
+    const rate = `${M.pct(s.checked_in, s.registered) ?? 0}%`;
+    const took = s.interacted === undefined ? '' : `<td class="num">${h(s, s.interacted)}</td><td class="num">${h(s, `${s.answered_poll} / ${s.asked_question} / ${s.set_status_or_chat}`)}</td>`;
+    const paid = s.paid_after === undefined ? '' : `<td class="num">${h(s, s.paid_after)}</td><td class="num">${h(s, s.paid_after_checked_in)}</td>`;
+    return `<tr><td>${esc(s.date)}</td><td>${s.held ? 'Happened' : 'Upcoming'}</td><td class="num">${s.registered}</td><td class="num">${s.registered_lp}</td>
+      <td class="num">${h(s, s.checked_in)}</td><td class="num">${h(s, rate)}</td><td class="num">${h(s, s.checked_in_lp)}</td>
+      <td class="num">${h(s, s.walk_ins)}</td>${took}${paid}<td class="num">${s.followups_booked}</td><td class="num">${s.followups_sent}</td></tr>`;
+  }).join('');
+  const s0 = sessions[0];
+  const tookTh = s0.interacted === undefined ? '' : '<th>Took part</th><th>Poll / question / status</th>';
+  const paidTh = s0.paid_after === undefined ? '' : '<th>Paid after</th><th>Paid after, came</th>';
+  return `<table class="tbl"><thead><tr><th>Open House</th><th>State</th><th>Registered</th><th>From the ad page</th><th>Came</th><th>% came</th>
+    <th>Came, ad page</th><th>Walk-ins</th>${tookTh}${paidTh}<th>Follow-ups booked</th><th>Follow-ups sent</th></tr></thead><tbody>${tr}</tbody></table>
+    <p class="muted">${esc(M.ATTEND_FLOOR)} Walk-ins came without registering for that session. "Took part" counts everyone who did something in the room, walk-ins and members included. "Paid after" = registrants who paid to enroll after that Open House started. Follow-ups start with the 3 Dec Open House.</p>`;
+}
+
+/** OH1y: every payer this window, by where they came from. Counts only. */
+function payersPanel(p, prevP) {
+  if (!p) return '';
+  if (!p.total) return `<p class="muted">Nobody paid to enroll in this window.${prevP && prevP.total ? ` The week before: ${prevP.total}.` : ''}</p>`;
+  const tr = p.by_origin.map((o) => `<tr><td>${esc(I.ORIGIN[o.origin] || o.origin)}</td><td class="num">${o.n}</td><td class="num">${o.came}</td></tr>`).join('');
+  return `<p><b>${p.total}</b> people paid to enroll (${p.monthly} monthly, ${p.annual} annual)${prevP ? `; the week before, ${prevP.total}` : ''}. ${p.oh_registered} had registered for an Open House; ${p.came_before_paying} came to one before paying.</p>
+    <table class="tbl sm"><thead><tr><th>Where they came from</th><th>Paid</th><th>Came to an Open House first</th></tr></thead><tbody>${tr}</tbody></table>
+    <p class="muted">Paid = a PaySimple payment on a monthly or annual plan, first started in this window; comp plans are not counted. "From an ad sign-up" is the funnel above; every other row came in another way.</p>`;
+}
+
+/** Plain names for the messages the platform sends on its own (not campaign steps). */
+const MESSAGE_NAMES = {
+  open_house_welcome: 'Welcome email, right after sign-up',
+  portal_welcome: 'Account welcome email',
+  paid_member_welcome: 'Paid member welcome email',
+  'accelerator-session-reminder 24h': 'Open House reminder, the day before',
+  'accelerator-session-reminder 1h': 'Open House reminder, one hour before',
+};
+const CHANNEL = { email: '✉️ Email', sms: '💬 Text', voice: '📞 Call' };
+
+/**
+ * OH1y: every message this week's landing-page sign-ups received. A subject is shown only when every send carried the
+ * same one AND at least 3 people got it, so a subject written for one person (some carry a first name) never shows.
+ */
+function messageLabel(m) {
+  if (m.kind === 'campaign') return `${m.source}${m.step ? `, step ${m.step}` : ''}`;
+  return MESSAGE_NAMES[m.source] || m.source;
+}
+function subjectCell(m) {
+  if (m.channel !== 'email') return '<span class="muted">(text, no subject)</span>';
+  if (m.subjects === 1 && m.people >= 3 && m.subject) return `“${esc(m.subject)}”`;
+  return `<span class="muted">${m.subjects > 1 ? `written for each person, ${m.subjects} versions` : 'not shown'}</span>`;
+}
+function commsPanel(c) {
+  if (!c) return '<p class="muted">Messages were not read for this run.</p>';
+  if (!c.messages.length) return '<p class="muted">No messages went to this week\'s sign-ups yet.</p>';
+  const tr = c.messages.map((m) => `<tr><td>${esc(m.first_ct === m.last_ct ? m.first_ct : `${m.first_ct} → ${m.last_ct}`)}</td><td>${CHANNEL[m.channel] || esc(m.channel)}</td>
+    <td>${esc(messageLabel(m))}</td><td>${subjectCell(m)}</td><td class="num">${m.people}</td><td class="num">${m.sent}</td>
+    <td class="num">${m.not_sent ? `${m.not_sent} <span class="muted">(${esc(m.not_sent_status || '')})</span>` : '0'}</td></tr>`).join('');
+  const q = (c.queued || []).map((x) => `<tr><td>${esc(x.next_ct)} CT</td><td>${CHANNEL[x.channel] || esc(x.channel)}</td><td>${esc(x.source)}</td><td class="num">${x.people}</td><td class="num">${x.sends}</td></tr>`).join('');
+  return `<p>${c.reached} of ${c.people} sign-ups got at least one message. Each got a median of ${c.median_per_person ?? 0} (most: ${c.max_per_person ?? 0}).</p>
+    <table class="tbl"><thead><tr><th>When (CT)</th><th>Channel</th><th>Message</th><th>Subject</th><th>People</th><th>Sent</th><th>Not sent</th></tr></thead><tbody>${tr}</tbody></table>
+    ${q ? `<h3 style="margin-top:18px">Still to go out</h3><table class="tbl sm"><thead><tr><th>Next send</th><th>Channel</th><th>From</th><th>People</th><th>Messages</th></tr></thead><tbody>${q}</tbody></table>` : ''}
+    <p class="muted">Sent after each person signed up, until this window closed. Opens and clicks are read only for the welcome email (below).</p>`;
+}
+
+/**
+ * C125: the landing page heat map panel.
+ *
+ * The chart and the words sit side by side because neither is usable alone: the picture shows
+ * where the page is read and clicked, and the notes beside it carry what the picture cannot say
+ * for itself - that scrolling is recorded at five points, that one label covers three buttons,
+ * and that the click positions are measured rather than recorded.
+ */
+function heatPanel(h) {
+  if (!h.ok) return `<p class="muted">${esc(h.reason)}</p>`;
+  const notes = HM.heatNotes(h).map((n, i) => `<li${i === 0 ? ' class="lead"' : ''}>${esc(n)}</li>`).join('');
+  return `<div class="hmwrap">
+    <div>${HM.heatSvg(h)}${HM.heatLegend(h)}</div>
+    <div><ul class="hmnotes">${notes}</ul>
+      <div class="hmfacts">Measured on the live page at ${h.geom.viewport.width}x${h.geom.viewport.height}, the phone size almost every visitor uses, on ${esc(String(h.geom.measured_at).slice(0, 10))}. Scroll counts are people who had that part of the page on screen and are a floor, never a ceiling. The clicks carry no coordinates, so each one is drawn on the element it names.</div></div>
+  </div>`;
+}
+
 function shotsPanel(shots) {
   if (!shots || !shots.length) return '';
   return `<section><h2>📸 What the visitor sees</h2><p class="lede">Captured on a phone-sized screen, because most visitors are on a phone.</p><div class="shots">${shots.map((s) => `<figure><img src="${s.src}" alt="${esc(s.title)}"/><figcaption><b>${esc(s.title)}</b><br/>${esc(s.caption)}</figcaption></figure>`).join('')}</div></section>`;
 }
 
-module.exports = { kpiTiles, funnelTable, forkCards, mermaidSankey, mermaidTree, emailPanel, shotsPanel, MERMAID, PILL, STATUS, I, X, M };
+module.exports = { kpiTiles, funnelTable, forkCards, mermaidSankey, mermaidTree, emailPanel, sessionsTable, payersPanel, commsPanel, messageLabel, heatPanel, shotsPanel, MERMAID, PILL, STATUS, I, X, M, HM };

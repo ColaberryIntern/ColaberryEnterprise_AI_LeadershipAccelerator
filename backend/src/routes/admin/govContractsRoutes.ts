@@ -691,8 +691,8 @@ router.post('/api/admin/gov-contracts/:projectId/gold', requireSection('gov_cont
 router.get('/api/admin/gov-contracts/:projectId/needs', requireSection('gov_contracts'), async (req: Request, res: Response) => {
   try {
     const { collectProjectNeeds } = await import('../../services/factory/proposal/collectProjectNeeds');
-    const { groupNeeds } = await import('../../services/factory/proposal/aggregateNeeds');
-    const needs = await collectProjectNeeds(String(req.params.projectId));
+    const { groupNeeds, withNeedScope } = await import('../../services/factory/proposal/aggregateNeeds');
+    const needs = withNeedScope(await collectProjectNeeds(String(req.params.projectId)));
     res.json({ needs, ...groupNeeds(needs) });
   } catch {
     res.status(500).json({ error: 'Could not load the needs list.', error_class: 'NeedsLoadFailed' });

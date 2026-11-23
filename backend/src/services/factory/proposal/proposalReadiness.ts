@@ -24,6 +24,10 @@ export interface ReadinessDoc {
   docType?: string;
   /** Whether this document's latest version passes the six-check rule. */
   passes: boolean;
+  /** The document's weighted check score (0-100), from its latest version. When provided, the meter is the GRADUATED
+   *  average of these (so it moves with quality, like the per-document bars). A document with no scored version yet
+   *  contributes 0. Optional so a caller that only knows pass/fail still gets the old pass-fraction meter. */
+  score?: number;
 }
 
 export interface ProposalReadiness {
@@ -32,13 +36,26 @@ export interface ProposalReadiness {
   total: number;
 }
 
-/** Count the scored, in-scope documents that pass, and the readiness percentage. Pure + total. */
+/**
+ * The readiness percentage + the pass count over the scored, in-scope documents. Pure + total.
+ *
+ * `pct` is the GRADUATED average of the documents' weighted scores when any score is provided — so a substantive draft
+ * (every document near its target) reads as nearly ready instead of 0% until the last check flips a binary pass. This
+ * fixes the gauge sitting at 0% on a proposal that is clearly most of the way there: the pass gate is all-or-nothing
+ * (a single open gap or a sub-85 check fails the whole document), but the meter should reflect how close each document
+ * is. A document with no scored version yet contributes 0, so un-drafted work honestly pulls the number down. When no
+ * caller supplies scores, `pct` falls back to the old pass fraction. `passing`/`total` are always the pass count.
+ */
 export function proposalReadiness(docs: ReadinessDoc[]): ProposalReadiness {
   const eligible = (Array.isArray(docs) ? docs : []).filter(
     (d) => d && !d.adminOnly && !d.superseded && d.docType !== 'form',
   );
   const total = eligible.length;
   const passing = eligible.filter((d) => d.passes === true).length;
-  const pct = total === 0 ? 0 : Math.round((passing / total) * 100);
+  if (total === 0) return { pct: 0, passing, total };
+  const anyScore = eligible.some((d) => typeof d.score === 'number');
+  const pct = anyScore
+    ? Math.round(eligible.reduce((a, d) => a + (typeof d.score === 'number' ? Math.max(0, Math.min(100, d.score)) : 0), 0) / total)
+    : Math.round((passing / total) * 100);
   return { pct, passing, total };
 }

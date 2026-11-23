@@ -854,8 +854,8 @@ router.get(
   async (req: GovProjectRequest, res: Response) => {
     try {
       const { collectProjectNeeds } = await import('../services/factory/proposal/collectProjectNeeds');
-      const { groupNeeds, needsForViewer } = await import('../services/factory/proposal/aggregateNeeds');
-      const all = await collectProjectNeeds(String(req.params.projectId));
+      const { groupNeeds, needsForViewer, withNeedScope } = await import('../services/factory/proposal/aggregateNeeds');
+      const all = withNeedScope(await collectProjectNeeds(String(req.params.projectId)));
       const needs = needsForViewer(all, { includePricing: false, canApprove: false });
       res.json({ needs, ...groupNeeds(needs) });
     } catch {

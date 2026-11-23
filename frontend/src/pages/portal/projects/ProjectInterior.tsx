@@ -8,6 +8,8 @@ import { CorySpark } from '../../../components/portal/CoryMark';
 import { useIsExplorer } from '../useIsExplorer';
 import ProjectsNextStepHero from './ProjectsNextStepHero';
 import CaseStudyReadinessCard from './CaseStudyReadinessCard';
+import ConnectedDemoSharePanel from './ConnectedDemoSharePanel';
+import { CONNECTED_DEMO_STORY_ID } from './connectedDemoStoryId';
 import TimelineCard, { type TimelineFeedCard } from '../../../components/timeline/TimelineCard';
 import TimelineFeed from '../../../components/timeline/TimelineFeed';
 import { isPrepStory, DEMO_DAY_STORY_ID } from './DemoEvidencePanel';
@@ -154,6 +156,18 @@ const ProjectInterior: React.FC<{
   const prog = projectProgress(project);
   const rv = reqVerified(project);
   const nx = nextTask(project);
+
+  /*
+   * Does this build carry the Connected Demo story?
+   *
+   * Read off the TASKS the student actually has, not from a feature flag. The flag decides
+   * whether a NEW build gets the story; the board is what the student is looking at. A panel
+   * driven by the flag would appear for somebody with no such task the day the rollout widened,
+   * and vanish from somebody mid-build the day it narrowed.
+   */
+  const hasConnectedDemoStory = project.lists.some(
+    (l) => l.tasks.some((t) => t.storyId === CONNECTED_DEMO_STORY_ID),
+  );
 
   // stat tiles (whole project, regardless of filter)
   let open = 0, today = 0, overdue = 0, done = 0;
@@ -312,6 +326,19 @@ const ProjectInterior: React.FC<{
               on the ladder, and the training example is nobody's project. */}
           {!project.sample && project.origin === 'pipeline' && (
             <CaseStudyReadinessCard projectId={project.pipelineProjectId || project.id} />
+          )}
+
+          {/* The outward-facing demo link, beside the preview address for the same reason: both
+              are this project's public face. Gated on the same two conditions as the card above
+              (a real pipeline build, never the sample) and additionally on the build actually
+              carrying STORY-900, so a project without the Connected Demo story shows nothing
+              rather than a control for a story it does not have. The panel itself returns null
+              on that last condition, which is asserted in its test. */}
+          {!project.sample && project.origin === 'pipeline' && (
+            <ConnectedDemoSharePanel
+              projectId={project.pipelineProjectId || project.id}
+              hasConnectedDemoStory={hasConnectedDemoStory}
+            />
           )}
         </aside>
       </div>

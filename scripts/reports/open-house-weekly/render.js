@@ -33,8 +33,12 @@ function buildHtml(snap, targets = defaultTargets, shots = [], entries = S.load(
   const j = cur.journey, e = cur.engagement;
   const srcGrade = (r) => M.grade('signup', r.signups, r.visitors, targets);
 
-  const hero = `<header class="hero"><div class="wrap"><h1>🎯 Open House Funnel: Weekly Report</h1>
-    <div class="sub">From ad click to the first win, every person, every fork. Facebook and Instagram ads → landing page → Open House sign-up → account → welcome video → Quick check.</div>
+  const heat = P.HM.buildHeat(cur, P.HM.loadGeometry(snap));
+
+  const hero = `<header class="hero"><div class="wrap">
+    <div class="brandbar"><img src="${X.B.LOGO.onDark}" alt="${esc(X.B.LOGO.alt)}" height="30"/><span class="wm">${esc(X.B.WORDMARK)}</span></div>
+    <h1>🎯 Open House Funnel: Weekly Report</h1>
+    <div class="sub">From ad click to the first win, every person, every fork. Facebook and Instagram ads → landing page → Open House sign-up → account → welcome video → Quick check → the Open House itself.</div>
     <div class="chips"><span class="chip">📅 ${esc(cur.from_ct)} → ${esc(cur.to_ct)} CT (${cur.hours} h)</span>
     <span class="chip">${prev ? `↔️ compared with ${esc(prev.from_ct)} → ${esc(prev.to_ct)}` : '🚀 launch week: no earlier week to compare'}</span>
     <span class="chip">🕒 generated ${esc(snap.generated_ct)} CT</span><span class="chip">🔒 read-only, people not names</span></div></div></header>`;
@@ -59,6 +63,8 @@ function buildHtml(snap, targets = defaultTargets, shots = [], entries = S.load(
     section('📣 Where they come from', 'Visitors by ad source and device, with each one\'s sign-up rate (pill color = against the sign-up target).',
       `<div class="grid2"><div class="panel"><h3>By ad source</h3>${X.breakdownSvg(cur.by_source, srcGrade)}</div>
        <div class="panel"><h3>By device</h3>${X.breakdownSvg(cur.by_device, srcGrade)}</div></div>`, 'sec-source'),
+    section('🔥 The landing page, heat mapped', 'How far down the page people actually get, and where every recorded click lands. The page drawn to scale, shaded by how many people had that part of it on screen.',
+      P.heatPanel(heat), 'sec-heat'),
     section('📜 On the landing page', `Median visit ${cur.median_visit_s ?? 'n/a'} seconds.`,
       `<div class="grid2"><div class="panel"><h3>How far down they read</h3>${X.scrollSvg(cur.scroll, cur.visitors)}</div>
        <div class="panel"><h3>What they did</h3>${X.donutSvg([
@@ -73,6 +79,10 @@ function buildHtml(snap, targets = defaultTargets, shots = [], entries = S.load(
        <div class="panel"><h3>Timing (median)</h3><div class="stat">${j.median_min_signup_to_enter ?? 'n/a'} min</div><div class="statl">sign-up → in the account</div>
          <div class="stat" style="margin-top:10px">${j.median_min_enter_to_finish ?? 'n/a'} min</div><div class="statl">in the account → finished the video</div>
          <div class="stat" style="margin-top:10px">${j.returned_later}</div><div class="statl">came back on a later day</div></div></div>`, 'sec-account'),
+    j.oh_held === undefined ? '' : section('🎤 At the Open House', `This week's landing-page sign-ups: ${j.oh_held} had their Open House happen and ${j.attended} came${j.interacted !== undefined ? `, ${j.interacted} took part` : ''}${j.paid !== undefined ? `; ${j.paid} of all ${j.signups} have paid to enroll` : ''}; ${j.oh_upcoming} are still waiting for theirs. Below: every Open House since launch, all doors.`,
+      P.sessionsTable(snap.sessions), 'sec-openhouse'),
+    cur.payers === undefined ? '' : section('💰 Who paid this week', 'Everyone who paid to enroll, wherever they came from, not only the ad funnel.', P.payersPanel(cur.payers, prev && prev.payers), 'sec-paid'),
+    snap.comms === undefined ? '' : section('📨 Every message they received', 'Every email, text and call that went to this week\'s landing-page sign-ups, in order, grouped by message.', P.commsPanel(snap.comms), 'sec-comms'),
     section('📅 Day by day', 'Landing page door, by the day of the visit or sign-up (CT).', X.columnsSvg(cur.daily, [
       { key: 'visitors', label: 'Visitors', color: C.sky }, { key: 'signups', label: 'Sign-ups', color: C.blue },
       { key: 'entered', label: 'Entered', color: C.green }, { key: 'finished', label: 'Finished video', color: C.navy }])),

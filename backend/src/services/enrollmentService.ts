@@ -12,6 +12,7 @@ import {
 } from './readinessCampaignService';
 import { redactForLogs } from '../utils/piiRedaction';
 import { resolvePaidBatchPlacement } from './batch/batchPlacementService';
+import { recountCohortSeats } from './cohortSeatCounter';
 
 // Lazy import (the convention ghlService itself uses for aiEventService): a
 // top-level import pulls settingsService -> SystemSetting -> config/database and
@@ -98,10 +99,7 @@ export async function createInvoiceEnrollment(
   ).catch(err => console.error('[Project] Auto-create failed:', err.message));
 
   // Reserve seat immediately for invoice requests
-  await Cohort.increment('seats_taken', {
-    by: 1,
-    where: { id: data.cohort_id },
-  });
+  await recountCohortSeats([data.cohort_id]);
 
   // Auto-enroll in payment readiness campaign (non-blocking)
   enrollInPaymentCampaignIfUnpaid(enrollment)
@@ -167,6 +165,7 @@ export async function markEnrollmentPaid(
   // forty lines above already returned for any row that was paid, so reaching here IS the
   // unpaid -> paid transition. Passing the field would read it after the assignment above
   // set it to 'paid' and so would disable placement entirely.
+  const arrivedInCohortId = enrollment.cohort_id;
   const placedCohortId = await resolvePaidBatchPlacement({
     currentCohortId: enrollment.cohort_id,
     alreadyPaid: false,
@@ -177,10 +176,9 @@ export async function markEnrollmentPaid(
   await enrollment.save();
 
   // Increment seats on confirmed payment
-  await Cohort.increment('seats_taken', {
-    by: 1,
-    where: { id: enrollment.cohort_id },
-  });
+  // Recount, not +1 (cohortSeatCounter): the cohort they came from and the batch they
+  // were placed into both change.
+  await recountCohortSeats([arrivedInCohortId, enrollment.cohort_id]);
 
   // Auto-exit from payment readiness campaign (non-blocking)
   exitPaymentCampaign(enrollment.email)
@@ -310,7 +308,7 @@ export async function createAdminEnrollment(data: {
     notes: data.notes || 'Manually added by admin',
   });
 
-  await Cohort.increment('seats_taken', { by: 1, where: { id: data.cohort_id } });
+  await recountCohortSeats([data.cohort_id]);
 
   // Auto-create project (non-blocking)
   import('./projectService').then(ps =>
@@ -345,6 +343,14 @@ export async function createExplorerEnrollment(input: {
   utm_medium?: string;
   utm_campaign?: string;
   page_url?: string;
+  /**
+   * Permission to be NAMED in landing-page recent-signup notices. Absent writes `false`.
+   *
+   * NEVER inferred from a marketing opt-in: agreeing to be emailed is not agreeing to be shown
+   * by name on a public page, and that is the whole reason it is a separate tick with its own
+   * wording. services/marketing/snackbarFeedService.ts is what consumes it.
+   */
+  socialProofOptIn?: boolean;
 }): Promise<{ enrollment: Enrollment; created: boolean; cohort_id: string }> {
   const email = input.email.toLowerCase().trim();
   if (!email) throw new AppError('email is required', 400);
@@ -452,6 +458,11 @@ export async function createExplorerEnrollment(input: {
         utm_medium: input.utm_medium,
         utm_campaign: input.utm_campaign,
         page_url: input.page_url,
+        // In `defaults` ONLY, and here that is not a compromise: the snack bar selects on
+        // leads.created_at inside a rolling window, so a returning person's row - which keeps
+        // its ORIGINAL created_at - is outside that window whatever this says. There is no case
+        // where failing to update it costs somebody the naming they just agreed to.
+        social_proof_opt_in: input.socialProofOptIn === true,
       } as any,
     });
     leadId = (lead as any)?.id ?? null;

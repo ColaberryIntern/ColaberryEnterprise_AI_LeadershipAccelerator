@@ -477,7 +477,6 @@
     "frontend/src/pages/portal/community/Composer.tsx": 2,
     "frontend/src/pages/portal/community/PostCard.tsx": 1,
     "frontend/src/pages/portal/company/CompanyMemberDrilldown.tsx": 4,
-    "frontend/src/pages/portal/events/EventsPage.tsx": 1,
     "frontend/src/pages/portal/feed/todayFeed.ts": 4,
     "frontend/src/pages/portal/internship/InternshipCaseStudies.tsx": 2,
     "frontend/src/pages/portal/internship/InternshipCertification.tsx": 2,
@@ -580,7 +579,6 @@
   },
   "house-style-escaped-dash": {
     "frontend/src/components/admin/agentDetailV2/AgentEmailExplorerPreview.tsx": 5,
-    "frontend/src/components/admin/agentDetailV2/AgentEmailTab.tsx": 1,
     "frontend/src/components/admin/caseStudy/CaseStudyDraftPanel.tsx": 2,
     "frontend/src/components/admin/caseStudy/CaseStudyGateBand.tsx": 1,
     "frontend/src/components/admin/caseStudy/CaseStudyQuotesPanel.tsx": 1,

@@ -165,17 +165,28 @@ const ciConfig: Config = {
     // look identical from here, and guessing which is how the inference at the
     // top of this file got written.
     //
-    // `participantMagicLink` is the clearest example: 2 failures, both
+    // `participantMagicLink` WAS the clearest example: 2 failures, both
     // "Enrollment.findAll is not a function", because its own `models` mock
-    // lacks `findAll` while the service now calls it. Whether the service or
-    // the test is wrong is a question about intended behaviour.
+    // lacked `findAll` while the service now calls it. Whether the service or
+    // the test was wrong was a question about intended behaviour.
+    //
+    // ANSWERED 2026-11-22 and REMOVED FROM THIS LIST. The service was right:
+    // requestMagicLink moved deliberately from a recency-ordered findOne to
+    // findAll + pickBestEnrollment (T407), so a newer Explorer duplicate could
+    // not win the login link. The test was stale and had been dead ever since,
+    // which meant the portal's entire sign-in path carried NO CI coverage -
+    // found only because support ticket 20336934 sent someone to read it. The
+    // mock is repaired and the suite now runs here, 9 tests.
+    //
+    // The lesson for the rest of this list: a suite parked for a question
+    // nobody answers is indistinguishable from no test at all, and the gap it
+    // leaves is invisible precisely because the gate stays green.
     //
     // `communityCommentsLikesProfiles` and `phase10_5` HANG rather than fail
     // (killed at a 90 s cap), so their failure mode is unknown beyond that.
     'src/__tests__/models/reeseOutreachModel\\.test\\.ts',
     'src/__tests__/services/communityCommentsLikesProfiles\\.test\\.ts',
     'src/__tests__/services/duplicateAccountSweepService\\.test\\.ts',
-    'src/__tests__/services/participantMagicLink\\.test\\.ts',
     'src/middlewares/__tests__/mgmtRbac\\.test\\.ts',
     'src/seeds/__tests__/seedCurriculumCourseLinks\\.test\\.ts',
     'src/services/timeline/__tests__/timelineAdminService\\.test\\.ts',

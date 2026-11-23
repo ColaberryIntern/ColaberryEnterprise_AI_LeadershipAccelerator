@@ -1,5 +1,6 @@
 import { recordConsent, normalizeEmail, normalizePhone } from '../consentService';
 import type { ConsentChannel, ConsentSubjectType } from '../../models/ConsentRecord';
+import { isAffirmative, type ConsentChoice } from './affirmative';
 
 /**
  * Capture marketing consent at signup. One helper, called by every signup path,
@@ -26,14 +27,15 @@ import type { ConsentChannel, ConsentSubjectType } from '../../models/ConsentRec
  */
 
 /**
- * Whatever the caller has. Deliberately wide: a checkbox reaches a handler as a
- * boolean, "true" or "on" depending on the form, and a value arriving over the
- * wire from another service could be anything at all. `isAffirmative` below is
- * the single narrow gate - widening what may be PASSED does not widen what
- * COUNTS, and it keeps callers from having to cast (or worse, pre-filter, and
- * get the filter subtly wrong).
+ * Re-exported, not redeclared: `ConsentChoice` and `isAffirmative` now live in
+ * ./affirmative, which explains at length why a pure helper does not belong in a module
+ * that tests replace wholesale. Kept exported HERE because capturePhoneConsent.ts and
+ * portalPhoneGate.ts already import the type from this path.
+ *
+ * `isAffirmative` is deliberately NOT re-exported. A caller that wants it should import
+ * ./affirmative directly, so nobody reintroduces the mock trap by reaching for it here.
  */
-export type ConsentChoice = boolean | string | undefined | null;
+export type { ConsentChoice };
 
 export interface SignupConsentInput {
   email?: string;
@@ -106,11 +108,6 @@ export function resolveConsentSubject(
   }
   const p = normalizePhone(ids.phone);
   return p ? { subjectType: 'phone', subjectId: p } : null;
-}
-
-/** A checkbox arrives as a boolean, "true", or "on" depending on the form. */
-function isAffirmative(v: ConsentChoice): boolean {
-  return v === true || v === 'true' || v === 'on';
 }
 
 /**

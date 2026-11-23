@@ -289,6 +289,10 @@ describe('T208 — the tripwire: every file that builds a subject key is account
     // joined or compared as a subject reference. Found by this tripwire in the overnight full run.
     'backend/src/services/maya/mayaReplyDraftService.ts',
     'backend/src/services/mayaActionService.ts',
+    // Agent comms (2026-11-22): any agent's reply drafter. Same class as mayaReplyDraftService:
+    // `lead:<id>` (or `email:<addr>` for a sender with no lead) is only the recipient handle on the
+    // `maya_outbound_approvals` row; it is never looked up, joined or compared as a subject reference.
+    'backend/src/services/agents/email/agentReplyDraftService.ts',
   ];
 
   it('names every non-test file that constructs a subject key', () => {

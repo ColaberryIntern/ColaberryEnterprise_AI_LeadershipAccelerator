@@ -106,13 +106,68 @@ export async function requestMagicLink(
     return { success: true, message: 'If an active enrollment exists for this email, a link has been sent.' };
   }
 
-  const token = crypto.randomUUID();
-  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+  // REUSE a link that still works instead of replacing it.
+  //
+  // Minting unconditionally made every request kill the previous link, and the
+  // student cannot see that happen. Support ticket 20336934: two links were
+  // issued 32 seconds apart and BOTH emails display "9:27 AM", so only the
+  // second worked and nothing distinguished them. She clicked the dead one
+  // eight times. Her Saturday burst was 5 links in 5 minutes. Telling people
+  // "only the newest email works" (PortalVerifyPage) cannot be acted on when
+  // two emails share a minute - the only real fix is for the older one to work.
+  //
+  // This also makes the operation idempotent, which CLAUDE.md requires of any
+  // side-effecting path: asking twice now sends the same link twice, instead of
+  // invalidating the first as a side effect of the second.
+  //
+  // It does NOT extend a credential's life. The expiry is left exactly as
+  // minted, so a token still dies 24h after it was first issued no matter how
+  // often a link is requested - repeated requests cannot keep one alive. And
+  // exactly one token is live per enrollment either way, so the exposure is
+  // unchanged; what changes is only whether the student can tell which email
+  // holds it.
+  //
+  // REUSE_MIN_REMAINING_MS is why this is not simply "reuse if not expired": a
+  // token with four minutes left is technically live and useless in an email
+  // that may sit unread for an hour. Below the floor, mint a fresh one.
+  const REUSE_MIN_REMAINING_MS = 60 * 60 * 1000; // 1 hour
+  const existingExpiry = enrollment.portal_token_expires_at
+    ? new Date(enrollment.portal_token_expires_at)
+    : null;
+  const reusable = Boolean(
+    enrollment.portal_token
+      && existingExpiry
+      && existingExpiry.getTime() - Date.now() > REUSE_MIN_REMAINING_MS,
+  );
 
-  await enrollment.update({
-    portal_token: token,
-    portal_token_expires_at: expiresAt,
-  });
+  let token: string;
+  if (reusable) {
+    token = String(enrollment.portal_token);
+  } else {
+    token = crypto.randomUUID();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    await enrollment.update({
+      portal_token: token,
+      portal_token_expires_at: expiresAt,
+    });
+  }
+
+  // Observable on purpose, and never the token itself: a student reporting "the
+  // link does not work" is only diagnosable if the server recorded whether this
+  // request replaced the previous link or resent it. Reconstructing that from
+  // Mandrill click counts took hours on 20336934 and still could not tell two
+  // same-minute sends apart.
+  console.info(JSON.stringify({
+    timestamp: new Date().toISOString(),
+    level: 'info',
+    service: 'backend',
+    event: 'portal_magic_link_issued',
+    outcome: 'success',
+    context: {
+      enrollment_id: enrollment.id,
+      reused_existing_token: reusable,
+    },
+  }));
 
   await sendPortalMagicLink({
     to: enrollment.email,

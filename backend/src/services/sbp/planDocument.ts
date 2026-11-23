@@ -50,6 +50,7 @@ import {
 } from './planDocumentInsights';
 import { rolesFrom, guardrailGate, separateHardRules, type GuardrailKind } from './planPeople';
 import { rosterWithEveryStoryOwned } from './storyOwners';
+import { gateWaitingAgents } from './waitingGates';
 
 // Re-exported: these lived here first, and other modules import them from here.
 export { rolesFrom, guardrailGate, type GuardrailKind };
@@ -354,8 +355,11 @@ export function buildPlanDocument(source: BuildPlan, input: PlanDocInput = {}): 
   // Plans scoped before every story had to be owned by a roster agent (ShiftFill
   // v5's "AI Agent") get their orphan stories homed here, guardrails included.
   const owned = rosterWithEveryStoryOwned(source);
+  // An agent left waiting for a person with no gate takes the one its own
+  // escalation rule names (ShiftFill v6's Shift Offer Sender and overtime).
+  const roles = rolesFrom(owned.stories);
   const plan: BuildPlan = owned.agents
-    ? { ...owned, agents: separateHardRules(owned.agents, rolesFrom(owned.stories)) }
+    ? { ...owned, agents: gateWaitingAgents(separateHardRules(owned.agents, roles), owned.requirements, roles) }
     : owned;
   const dueByStory = new Map(
     (input.schedule?.tasks ?? []).map((t) => [t.storyId, dateOnly(t.dueOn)]),

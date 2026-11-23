@@ -109,7 +109,10 @@ describe('CH9.5 an Eventbrite event managed in the hub, for a member who already
   it('a registered member sees "You are registered" and "You\'re going", and no Sign up', async () => {
     await renderWith([managed({ is_registered: true })]);
     expect(container.textContent).toContain('You are registered');
-    expect(container.querySelector('[data-testid^="evt-going-"]')).not.toBeNull();
+    const going = container.querySelector('[data-testid^="evt-going-"]')!;
+    expect(going.textContent!.trim()).toBe('You’re going');
+    // The tick is a hidden icon, not a ✓ character that screen readers announce as "check mark".
+    expect(going.querySelector('svg')!.getAttribute('aria-hidden')).toBe('true');
     expect(links().some((t) => t.startsWith('Sign up'))).toBe(false);
     expect(container.textContent).toContain('14 signed up');
   });
@@ -119,5 +122,13 @@ describe('CH9.5 an Eventbrite event managed in the hub, for a member who already
     const signUp = Array.from(container.querySelectorAll('a')).find((a) => (a.textContent ?? '').trim().startsWith('Sign up'))!;
     expect(signUp.getAttribute('href')).toBe('https://www.eventbrite.com/e/ai-open-house-1992498063344');
     expect(container.textContent).not.toContain('You are registered');
+  });
+});
+
+describe('copy on the member Events page', () => {
+  it('no events: the empty state reads in plain sentences, with no dash', async () => {
+    await renderWith([]);
+    expect(container.textContent).toContain('Check back soon. New sessions are added most weeks.');
+    expect(container.textContent).not.toMatch(/[—–]/);
   });
 });

@@ -207,7 +207,7 @@ export default function StudioShell(
     case 'needs':
     case 'openitems':
     default:
-      center = <NeedsInbox projectId={projectId} docs={docs} studioApi={studioApi} onReload={onReload} onNavigate={go} onToast={toast} />;
+      center = <NeedsInbox projectId={projectId} docs={docs} studioApi={studioApi} onReload={onReload} onNavigate={go} onToast={toast} onOpenDossier={onOpenDossier} />;
       break;
   }
 

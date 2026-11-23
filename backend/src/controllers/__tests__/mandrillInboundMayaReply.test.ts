@@ -53,6 +53,9 @@ jest.mock('../../models/ScheduledEmail', () => ({ __esModule: true, default: {} 
 jest.mock('../../services/ghlService', () => ({ addContactNote: jest.fn().mockResolvedValue(undefined), sendSmsViaGhl: jest.fn() }));
 jest.mock('../../services/communicationSafetyService', () => ({ checkLeadSendable: jest.fn().mockResolvedValue({ sendable: false, reason: 'test' }) }));
 jest.mock('../../services/maya/mayaReplyDraftService', () => ({ maybeDraftMayaReply: (...a: unknown[]) => m.maya(...a) }));
+// Agent comms (2026-11-22): no agent owns these addresses here, so the router steps aside deterministically
+// (rather than by its DB lookup failing). Agent routing itself: mandrillInboundAgentRouting.test.ts.
+jest.mock('../../services/agents/email/agentEmailIdentity', () => ({ agentForRecipient: async () => null, isAgentOwnAddress: () => false }));
 
 import { Lead } from '../../models';
 import { handleMandrillInbound } from '../mandrillWebhookController';

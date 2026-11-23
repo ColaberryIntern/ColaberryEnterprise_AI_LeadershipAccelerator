@@ -10,6 +10,9 @@ const credited = (j) => (j.credited === undefined ? j.finished : j.credited);
 
 const pct = (n, d) => (d > 0 ? Math.round((1000 * n) / d) / 10 : null);
 
+/** Why attendance is a floor; said wherever the number appears. */
+const ATTEND_FLOOR = 'Counts people the platform saw in the room (checked in, entered the classroom or set a status); people who joined Zoom directly are not counted, so this is a floor.';
+
 /** Grade one rate against its target. Under minSample people it is 'low' (grey), never green or red. */
 function grade(key, n, d, targets) {
   const t = targets.rates[key];
@@ -42,8 +45,19 @@ function funnel(w, targets) {
     { icon: '✅', step: 'Took the Quick check', n: j.took_check, rate: 'check' },
     { icon: '🏆', step: 'Scored 5 of 5', n: j.aced, rate: 'ace' },
   ];
+  // OH1y: the Open House itself. Measured against every landing-page sign-up, not against the Quick check: coming to
+  // the session does not depend on the video. Absent from snapshots before 22 Nov 2026.
+  if (j.oh_held !== undefined) {
+    rows.push({ icon: '📅', step: 'Their Open House has happened', n: j.oh_held, base: 'signups' },
+      { icon: '🎤', step: 'Came to the Open House', n: j.attended, rate: 'attend', note: ATTEND_FLOOR });
+    // Interaction and payment (OH1y, second ask). Paid is measured against every ad sign-up, not against the step
+    // before: a person can pay without having come, or before their Open House, and the funnel must not hide that.
+    // Every payer from every source is in the "Who paid" section; this row is the ad funnel's share of them.
+    if (j.interacted !== undefined) rows.push({ icon: '🙋', step: 'Took part (poll, question or status)', n: j.interacted, rate: 'interact' });
+    if (j.paid !== undefined) rows.push({ icon: '💳', step: 'Paid to enroll (of every ad sign-up)', n: j.paid, rate: 'paid', base: 'signups' });
+  }
   return rows.map((r, i) => {
-    const prevN = i === 0 ? null : r.base === 'new_account' ? j.new_account : rows[i - 1].n;
+    const prevN = i === 0 ? null : r.base ? j[r.base] : rows[i - 1].n;
     const g = r.rate ? grade(r.rate, r.n, prevN, targets) : { status: 'none', pct: i === 0 ? null : pct(r.n, prevN) };
     return { ...r, prevN, pctPrev: i === 0 ? null : pct(r.n, prevN), pctTop: pct(r.n, w.visitors), status: g.status };
   });
@@ -90,6 +104,26 @@ function forks(w, email, targets) {
       { label: 'Opened another assignment', n: j.kept_going, good: true },
       { label: 'Stopped', n: Math.max(0, j.entered - j.kept_going), bad: true }] },
   ];
+  if (j.oh_held !== undefined) {
+    f.push({ id: 'attend', icon: '🎤', q: 'When their Open House happened, did they check in?', rate: 'attend', source: 'platform check-ins (a floor)', options: [
+      { label: 'Checked in', n: j.attended, good: true },
+      { label: 'Not seen in the room (or joined Zoom directly)', n: Math.max(0, j.oh_held - j.attended), bad: true }] });
+    if (j.interacted !== undefined) {
+      f.push({ id: 'interact', icon: '🙋', q: 'In the room, did they take part?', rate: 'interact', options: [
+        { label: 'Answered a poll, asked a question or set a status', n: j.interacted, good: true },
+        { label: 'Only watched', n: Math.max(0, j.attended - j.interacted) }] });
+    }
+    if (j.paid !== undefined) {
+      const co = j.checkout ?? j.checkout_held ?? 0;
+      const ti = j.paid_interacted, ta = Math.max(0, j.paid_attended - ti), tn = Math.max(0, j.paid - j.paid_attended);
+      f.push({ id: 'paid', icon: '💳', q: 'Which ad sign-ups paid to enroll?', rate: 'paid', options: [
+        { label: 'Paid, and took part at the Open House', n: ti, good: true },
+        { label: 'Paid, came but only watched', n: ta, good: true },
+        { label: 'Paid without coming (or before their Open House)', n: tn, good: true },
+        { label: 'Started checkout, did not pay', n: Math.max(0, co - j.paid) },
+        { label: 'Not yet', n: Math.max(0, j.signups - Math.max(j.paid, co)), bad: true }] });
+    }
+  }
   if (email && email.emails > 0) {
     f.splice(4, 0, { id: 'email', icon: '✉️', q: 'Did they open the welcome email?', rate: 'emailOpen', source: 'Mandrill', options: [
       { label: 'Opened', n: email.opened, good: true },
@@ -157,4 +191,4 @@ function exitBins(exits) {
   return EXIT_BINS.map(([lo, hi, label]) => ({ label, n: exits.filter((s) => s >= lo && s < hi).length }));
 }
 
-module.exports = { credited, pct, grade, delta, funnel, forks, people, sankey, exitBins };
+module.exports = { credited, pct, grade, delta, funnel, forks, people, sankey, exitBins, ATTEND_FLOOR };

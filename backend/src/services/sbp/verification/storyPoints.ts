@@ -21,12 +21,14 @@
 import { getPublishedPlan } from '../planStore';
 import type { BuildPlan } from '../planContract';
 import { COMMAND_CENTER_STORY_ID, COMMAND_CENTER_ACCEPTANCE } from '../commandCenterStory';
+import { CONNECTED_DEMO_STORY_ID, CONNECTED_DEMO_ACCEPTANCE } from '../connectedDemoStory';
 import {
   domainCommandCenterStoryId,
   COMMAND_CENTER_ACCEPTANCE as DOMAIN_COMMAND_CENTER_ACCEPTANCE,
 } from '../../agentDomain/agentDomainCommandCenterStory';
 import { domainKeyForProject } from '../../agentDomain/agentDomainCommandCenterForSync';
 import { getBudgetPerUnitXp } from '../../progression/pointsConfigService';
+import { connectedDemoMaterializedFor } from '../connectedDemoFlag';
 import { prepPointsMap } from './prepPoints';
 import type { PlanStorySpec } from './verifyDecision';
 
@@ -124,14 +126,33 @@ export function planStorySpecs(
     id: COMMAND_CENTER_STORY_ID,
     acceptance: [...COMMAND_CENTER_ACCEPTANCE],
   },
+  /**
+   * Append STORY-900's spec too. OMITTED MEANS OFF, so every existing caller judges exactly the
+   * stories it judges today.
+   *
+   * Without this the Connected Demo task can be materialized, built and pushed, and then never
+   * verified and never paid: the verifier only grades stories it has a spec for. That is
+   * precisely the gap AF3.9 hit for domain Command Centers, and it is being closed in the same
+   * change that creates the opportunity for it rather than after somebody loses a week's credit.
+   */
+  connectedDemo = false,
 ): PlanStorySpec[] {
   const planSpecs: PlanStorySpec[] = (plan.stories ?? []).map((s) => ({
     id: s.id,
     acceptance: Array.isArray(s.acceptance) ? s.acceptance.map(String) : [],
   }));
-  return planSpecs.some((s) => s.id === commandCenter.id)
+  const withCommandCenter = planSpecs.some((s) => s.id === commandCenter.id)
     ? planSpecs
     : [...planSpecs, { id: commandCenter.id, acceptance: [...commandCenter.acceptance] }];
+
+  if (!connectedDemo) return withCommandCenter;
+  // The same defensive dedup: a plan carrying its own STORY-900 is the authority on it.
+  return withCommandCenter.some((s) => s.id === CONNECTED_DEMO_STORY_ID)
+    ? withCommandCenter
+    : [...withCommandCenter, {
+      id: CONNECTED_DEMO_STORY_ID,
+      acceptance: [...CONNECTED_DEMO_ACCEPTANCE],
+    }];
 }
 
 export interface StoryPoints {
@@ -142,11 +163,35 @@ export interface StoryPoints {
   stories_in_plan: number;
 }
 
-/** The current rate for a project, or null when it has no published plan yet. */
+/**
+ * The current rate for a project, or null when it has no published plan yet.
+ *
+ * ── WHY STORY-900 IS RESOLVED HERE TOO, AND WHAT IT COST TO MISS IT ─────────
+ *
+ * This function is the SHOW side; `buildVerificationService` is the PAY side. The header of this
+ * file states the rule they both exist to keep: "A number advertised on a tile has to be the
+ * number the student is paid, so the two cannot be computed in two places."
+ *
+ * The first version of the Connected Demo wiring resolved the board row in the verifier and in
+ * the milestone count and left this one alone. An independent verifier worked out the
+ * consequence, which is arithmetic and not a style point: `getBudgetPerUnitXp` divides the build
+ * budget by `specs.length`, so for a build carrying STORY-900 the verifier would pay
+ * `budget / (N + 1)` while the project tree and the Today tile advertised `budget / N` for every
+ * story on that build. On a 600-point budget with four plan stories plus STORY-000 the tile said
+ * 120 and the student was paid 100. STORY-900 itself was absent from `story_ids`, so it showed no
+ * price at all while being paid one.
+ *
+ * Dormant only while no board carries the row, which is exactly the argument for fixing it in the
+ * change that turns the flag on rather than after somebody is short-changed.
+ */
 export async function storyPointsForProject(projectId: string): Promise<StoryPoints | null> {
   const stored = await getPublishedPlan(projectId);
   if (!stored) return null;
-  const specs = planStorySpecs(stored.plan, await commandCenterSpecForProject(projectId));
+  const specs = planStorySpecs(
+    stored.plan,
+    await commandCenterSpecForProject(projectId),
+    await connectedDemoMaterializedFor(projectId),
+  );
   const award = await getBudgetPerUnitXp(STORY_XP_KEY, specs.length);
   return { per_story: award.per_unit, story_ids: new Set(specs.map((s) => s.id)), stories_in_plan: specs.length };
 }

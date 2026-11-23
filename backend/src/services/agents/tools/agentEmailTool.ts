@@ -118,7 +118,9 @@ interface AgentGateRow {
  * `tools_granted` is jsonb and may be an array, a JSON string, or null depending on who wrote it
  * last; only an array containing the exact grant counts. A malformed value is not a grant.
  */
-export async function readAgentGate(agentName: string): Promise<AgentGate> {
+export async function readAgentGate(agentName: string, tool: string = AGENT_EMAIL_TOOL): Promise<AgentGate> {
+  // Agent comms (2026-11-22): the same gate serves the call tool ('place_ai_call'); the default keeps
+  // every existing caller on the email grant.
   let agent: AgentGateRow | null = null;
   try {
     agent = await AiAgent.findOne({
@@ -136,7 +138,7 @@ export async function readAgentGate(agentName: string): Promise<AgentGate> {
     : null;
 
   const granted = Array.isArray(agent.tools_granted)
-    && (agent.tools_granted as unknown[]).includes(AGENT_EMAIL_TOOL);
+    && (agent.tools_granted as unknown[]).includes(tool);
 
   if (agent.enabled !== true) {
     return { level, granted, usable: false, reason: 'agent_disabled' };

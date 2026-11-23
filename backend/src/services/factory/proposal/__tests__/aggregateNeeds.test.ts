@@ -1,8 +1,35 @@
-import { aggregateNeeds, groupNeeds, needsForViewer, isPricingNeed } from '../aggregateNeeds';
+import { aggregateNeeds, groupNeeds, needsForViewer, isPricingNeed, needScope, withNeedScope } from '../aggregateNeeds';
 import type { HumanNeed } from '../proposalReviewTypes';
 
 const need = (over: Partial<HumanNeed> & Pick<HumanNeed, 'key' | 'kind'>): HumanNeed => ({
   ask: 'ask', why: 'why', format: 'fmt', blocking: 'score', usedIn: [], ...over,
+});
+
+describe('needScope / withNeedScope (global vs this-bid)', () => {
+  it('records (references, key personnel) and company signatures are GLOBAL dossier assets', () => {
+    expect(needScope(need({ key: 'ref:1', kind: 'record', recordType: 'reference' }))).toBe('global');
+    expect(needScope(need({ key: 'person:1', kind: 'record', recordType: 'personnel' }))).toBe('global');
+    expect(needScope(need({ key: 'sig:exhibitB', kind: 'signature', ask: 'Executed certification' }))).toBe('global');
+  });
+  it('a firm-level fact is GLOBAL; a solicitation-specific fact is LOCAL', () => {
+    expect(needScope(need({ key: 'fact:security', kind: 'fact', ask: 'Describe your SSO and encryption / security posture.' }))).toBe('global');
+    expect(needScope(need({ key: 'fact:sla', kind: 'fact', ask: 'What support SLA does the firm offer?' }))).toBe('global');
+    expect(needScope(need({ key: 'fact:buildings', kind: 'fact', ask: 'How many buildings and facilities are covered?' }))).toBe('local');
+    expect(needScope(need({ key: 'fact:users', kind: 'fact', ask: 'The expected number of employee users.' }))).toBe('local');
+    expect(needScope(need({ key: 'fact:deadline', kind: 'fact', ask: 'The submission deadline and time zone.' }))).toBe('local');
+  });
+  it('a bare, unmatched fact defaults to LOCAL so the shared dossier is never polluted', () => {
+    expect(needScope(need({ key: 'fact:misc', kind: 'fact', ask: 'Provide the thing.' }))).toBe('local');
+  });
+  it('decisions / settings / approvals / files are bid-specific (LOCAL)', () => {
+    expect(needScope(need({ key: 'd', kind: 'decision', ask: 'Pick A or B' }))).toBe('local');
+    expect(needScope(need({ key: 'g', kind: 'approval', ask: 'Gold go' }))).toBe('local');
+  });
+  it('withNeedScope stamps scope on every need and does not drop any', () => {
+    const out = withNeedScope([need({ key: 'ref:1', kind: 'record', recordType: 'reference' }), need({ key: 'fact:buildings', kind: 'fact', ask: 'how many buildings' })]);
+    expect(out.map((n) => n.scope)).toEqual(['global', 'local']);
+    expect(out).toHaveLength(2);
+  });
 });
 
 describe('aggregateNeeds', () => {

@@ -76,7 +76,7 @@ export async function sendInboundAutoReply(args: InboundAutoReplyArgs): Promise<
     const campaignRecord = campaignId ? await (require('../../models').Campaign.findByPk(campaignId)) : null;
     const senderName = campaignRecord?.settings?.sender_name || 'Dhee - Colaberry Enterprise AI';
     const senderEmail = campaignRecord?.settings?.sender_email || env.emailFrom;
-    const replyDomain = env.mandrillInboundDomain || 'reply.colaberry.com';
+    const replyDomain = env.mandrillInboundDomain || 'reply.colaberry.ai';
     const replyToAddr = senderEmail.replace(/@[^@]+$/, '@' + replyDomain);
 
     const result = await generateMessage({

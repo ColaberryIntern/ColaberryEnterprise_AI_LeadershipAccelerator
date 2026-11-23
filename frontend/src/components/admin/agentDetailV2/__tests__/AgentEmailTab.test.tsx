@@ -21,6 +21,8 @@ jest.mock('../../../../services/agentEmailApi', () => ({
   getAgentEmailInbox: jest.fn(),
   approveAgentEmailDraft: jest.fn(),
   discardAgentEmailDraft: jest.fn(),
+  approveAgentReply: jest.fn(),
+  rejectAgentReply: jest.fn(),
 }));
 
 jest.mock('../../../../services/explorerGrowthApi', () => ({
@@ -147,5 +149,88 @@ describe('AgentEmailTab', () => {
       expect(text).toContain('Could not load');
       expect(text).not.toContain('No email for this agent');
     });
+  });
+});
+
+/* ── Agent comms (T12, 2026-11-22): identity, received mail, replies waiting on a person, calls ── */
+
+const IDENTITY = { fromHeader: '"Maya" <maya@colaberry.com>', replyTo: 'maya@reply.colaberry.ai' };
+const REPLY = {
+  id: 'r-1', toAddress: 'pat@acme.com', subject: 'Re: Question about the pilot',
+  body: '<p>Hi Pat,</p>\n<p>A pilot runs a few weeks &amp; we tailor it.</p>\n<p>Maya</p>',
+  status: 'pending_approval', createdAt: '2026-11-22T15:00:00Z', expiresAt: null,
+};
+
+async function flush(): Promise<void> {
+  await act(async () => { await Promise.resolve(); });
+}
+
+function buttonNamed(label: RegExp): HTMLButtonElement {
+  const b = Array.from(container.querySelectorAll('button')).find((x) => label.test(x.textContent ?? ''));
+  if (!b) throw new Error(`no button ${label}`);
+  return b as HTMLButtonElement;
+}
+
+describe('AgentEmailTab: agent comms', () => {
+  it('the identity line shows who she sends as and where replies go', () => {
+    emailApi.getAgentEmailInbox.mockResolvedValue(inbox({ identity: IDENTITY, inbound: { items: [], reason: null } }));
+    return render().then(() => {
+      const line = container.querySelector('[data-testid="agent-identity"]')?.textContent ?? '';
+      expect(line).toContain('"Maya" <maya@colaberry.com>');
+      expect(line).toContain('maya@reply.colaberry.ai');
+      expect(container.textContent).toContain('No replies yet.');
+    });
+  });
+
+  it('received mail and calls render as rows; the number is never shown in full', () => {
+    emailApi.getAgentEmailInbox.mockResolvedValue(inbox({
+      identity: IDENTITY,
+      inbound: { reason: null, items: [{ id: 'i-1', fromAddress: 'pat@acme.com', subject: 'Question about the pilot', preview: 'How long is a pilot?', leadId: null, receivedAt: '2026-11-22T14:00:00Z', draftOutcome: 'queued', draftReason: null }] },
+      calls: [{ id: 'c-1', leadId: 42, phoneLast4: '0142', status: 'delivered', purpose: 'Answer pilot questions', outcome: 'completed', summary: 'Pat asked about timing.', summaryState: 'summarized', createdAt: '2026-11-22T16:00:00Z' }],
+    }));
+    return render().then(() => {
+      const text = container.textContent ?? '';
+      expect(text).toContain('Received (1)');
+      expect(text).toContain('How long is a pilot?');
+      expect(text).toContain('Reply drafted, waiting on a person');
+      expect(text).toContain('Calls (1)');
+      expect(text).toContain('Pat asked about timing.');
+      expect(text).toContain('Completed');
+      expect(text).toContain('0142');
+    });
+  });
+
+  it('a waiting reply shows the EXACT words to be sent; Approve sends it through the review endpoint and the row leaves', async () => {
+    emailApi.getAgentEmailInbox.mockResolvedValueOnce(inbox({ identity: IDENTITY, pendingReplies: { items: [REPLY], reason: null } }))
+      .mockResolvedValue(inbox({ identity: IDENTITY, pendingReplies: { items: [], reason: null } }));
+    emailApi.approveAgentReply.mockResolvedValue({ ok: true, id: 'r-1', status: 'sent' });
+    await render();
+    const card = container.querySelector('[data-testid="pending-reply"]')?.textContent ?? '';
+    expect(card).toContain('A pilot runs a few weeks & we tailor it.');
+    expect(card).not.toContain('<p>');
+    await act(async () => { buttonNamed(/Approve and send as Maya/).click(); });
+    await flush();
+    expect(emailApi.approveAgentReply).toHaveBeenCalledWith('r-1');
+    expect(container.querySelector('[data-testid="pending-reply"]')).toBeNull();
+  });
+
+  it('a 403 (not Ali or a super admin) says so plainly and keeps the reply on screen', async () => {
+    emailApi.getAgentEmailInbox.mockResolvedValue(inbox({ identity: IDENTITY, pendingReplies: { items: [REPLY], reason: null } }));
+    emailApi.approveAgentReply.mockRejectedValue({ response: { status: 403 } });
+    await render();
+    await act(async () => { buttonNamed(/Approve and send/).click(); });
+    await flush();
+    expect(container.textContent).toContain('Only Ali or a super admin can approve sending this reply. Nothing was sent.');
+    expect(container.querySelector('[data-testid="pending-reply"]')).not.toBeNull();
+  });
+
+  it('Reject records a reason and removes the row', async () => {
+    emailApi.getAgentEmailInbox.mockResolvedValue(inbox({ identity: IDENTITY, pendingReplies: { items: [REPLY], reason: null } }));
+    emailApi.rejectAgentReply.mockResolvedValue({ ok: true, id: 'r-1', status: 'rejected' });
+    await render();
+    await act(async () => { buttonNamed(/^Reject$/).click(); });
+    await flush();
+    expect(emailApi.rejectAgentReply).toHaveBeenCalledWith('r-1', expect.any(String));
+    expect(container.querySelector('[data-testid="pending-reply"]')).toBeNull();
   });
 });

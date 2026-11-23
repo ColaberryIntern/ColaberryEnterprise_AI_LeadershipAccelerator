@@ -299,7 +299,8 @@ function AdminLayout() {
             >
               <i className="ri-menu-line" aria-hidden="true" />
             </button>
-            <span className="fw-bold" style={{ color: 'var(--red-500)' }}>Colaberry Admin</span>
+            {/* --red-700 (6.2:1 on white). The brand --red-500 is 3.85:1, under the 4.5:1 minimum for text. */}
+            <span className="fw-bold admin-mobile-header__brand" style={{ color: 'var(--red-700)' }}>Colaberry Admin</span>
           </div>
         )}
 

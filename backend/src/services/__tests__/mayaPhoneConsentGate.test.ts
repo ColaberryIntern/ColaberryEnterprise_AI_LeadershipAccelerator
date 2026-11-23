@@ -41,6 +41,8 @@ jest.mock('../../models', () => ({
   Lead: { findByPk: jest.fn(), findOne: jest.fn() },
   Visitor: { findByPk: jest.fn() },
   ChatMessage: { findAll: jest.fn(async (..._a: unknown[]) => []) },
+  // Agent comms (2026-11-22): Maya dials through place_ai_call, which needs her grant.
+  AiAgent: { findOne: jest.fn(async () => ({ autonomy_level: 'communicate', tools_granted: ['place_ai_call'], enabled: true, status: 'active' })) },
 }));
 jest.mock('../../models/AdmissionsActionLog', () => ({
   __esModule: true, default: { create: (...a: unknown[]) => mockActionLogCreate(...a) },
@@ -128,6 +130,17 @@ jest.mock('../maya/deliverOrQueue', () => ({
   })),
 }));
 jest.mock('../communicationLogService', () => ({ logCommunication: jest.fn(async (..._a: unknown[]) => undefined) }));
+// T9: the voice capability's MODE decides whether a phone rings. Default live here (these suites are
+// about what happens on the path where dialing is permitted); the shadow cases set it explicitly.
+let mockVoiceMode = 'live';
+jest.mock('../maya/mayaPromotion', () => {
+  const actual = jest.requireActual('../maya/mayaPromotion');
+  return {
+    ...actual,
+    resolveMayaMode: async (cap: string, ...rest: unknown[]) =>
+      (cap === 'placeVoiceCall' ? { capability: cap, mode: mockVoiceMode, reason: 'test' } : actual.resolveMayaMode(cap, ...rest)),
+  };
+});
 jest.mock('../settingsService', () => ({
   getTestOverrides: jest.fn(async (..._a: unknown[]) => ({ enabled: false, phone: null, email: null })),
 }));

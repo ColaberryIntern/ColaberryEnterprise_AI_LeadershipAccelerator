@@ -1,4 +1,4 @@
-import { Enrollment, Cohort } from '../models';
+import { Enrollment, Cohort, StudentNavigationEvent } from '../models';
 import { isNonPayingCohortName } from './subscriptionService';
 import { readBatchMonth } from './cohortBatchMonth';
 
@@ -7,7 +7,7 @@ import { readBatchMonth } from './cohortBatchMonth';
  * behind the Settings → Enrollment tab.
  *
  * Enrolling is SEPARATE from paying: selecting a cohort reserves the student's
- * place (sets enrollment.cohort_id) and costs nothing; payment on the
+ * place and costs nothing; payment on the
  * Subscription tab locks the seat and converts the Explorer to a member
  * (subscriptionService.activateByRef). Billing is anchored to the class start
  * date there, so enrolling + paying early never shortens the first period.
@@ -83,6 +83,48 @@ export const toOption = (c: any): EnrollmentCohortOption => ({
 const isRealClassCohort = (c: any | null): boolean =>
   !!c && !isNonPayingCohortName(c.name) && String(c.cohort_type ?? '').toLowerCase() !== 'business';
 
+/**
+ * ONLY PAID PEOPLE ARE IN A COHORT (Ali, 2026-11-22).
+ *
+ * Until this change, "Reserve my spot" wrote `enrollments.cohort_id` for an unpaid
+ * Explorer, which moved them into the class. Measured on prod 2026-11-22: Cohort -
+ * November 2026 showed 85 active enrollments, of which 28 had paid. 57 had not, and
+ * 40 of those 57 had never even started a checkout. Every cohort count, roster and
+ * class email read them as students.
+ *
+ * An unpaid pick is now recorded as a `class_seat_reserved` row in
+ * `student_navigation_events` and the enrollment stays where it is (the Explorer
+ * bucket). That row is two things at once, deliberately:
+ *   - the record of which date they picked, which this view reads back so the tab
+ *     still shows "your spot is reserved"; and
+ *   - a tier-4 buying-intent signal that `explorerSignalReader` scores, so Explorer
+ *     Growth and Maya see it.
+ *
+ * Nothing is lost by not writing `cohort_id` early: payment places the member by the
+ * month they paid in (`resolvePaidBatchPlacement`, C10.13), which never read the
+ * pre-payment pick anyway.
+ *
+ * Written through the model directly, NOT `recordLearnerSignal`: that writer is dark
+ * behind the `signalIngest` flag and dedupes on a 60s window, and the reservation is
+ * the system of record for the pick, so it cannot be dropped by a flag. The signal's
+ * source is `portal_enrollment`, not `student_navigation_events`, which keeps it out
+ * of `writableSignals()` and therefore out of the public signal route - a browser
+ * cannot forge a reservation.
+ */
+export const SEAT_RESERVED_EVENT = 'class_seat_reserved';
+export const SEAT_RESERVED_PAGE = 'settings/enrollment';
+
+/** The cohort id of the learner's most recent unpaid reservation, or null. */
+async function latestReservedCohortId(enrollmentId: string): Promise<string | null> {
+  const row = (await StudentNavigationEvent.findOne({
+    where: { enrollment_id: enrollmentId, event_type: SEAT_RESERVED_EVENT },
+    order: [['created_at', 'DESC']],
+    attributes: ['metadata'],
+  })) as { metadata: Record<string, unknown> | null } | null;
+  const id = row?.metadata?.cohort_id;
+  return typeof id === 'string' && id ? id : null;
+}
+
 /** Upcoming selectable cohorts: open, real paid classes, starting today or later. */
 async function listSelectableCohorts(now: Date): Promise<any[]> {
   const today = now.toISOString().slice(0, 10);
@@ -97,8 +139,14 @@ export async function getEnrollmentView(enrollmentId: string, now: Date = new Da
   if (!enrollment) return null;
 
   const current = enrollment.cohort_id ? await Cohort.findByPk(enrollment.cohort_id) : null;
-  const enrolledCohort = isRealClassCohort(current) ? current : null;
   const paid = enrollment.payment_status === 'paid';
+  let enrolledCohort = isRealClassCohort(current) ? current : null;
+  // Unpaid and not in a class: show the date they reserved, if any (see SEAT_RESERVED_EVENT).
+  if (!enrolledCohort && !paid) {
+    const reservedId = await latestReservedCohortId(enrollmentId);
+    const reserved = reservedId ? await Cohort.findByPk(reservedId) : null;
+    if (isRealClassCohort(reserved)) enrolledCohort = reserved;
+  }
 
   const selectable = await listSelectableCohorts(now);
   // The student's own cohort always shows in the list, even once it has started.
@@ -120,6 +168,11 @@ export async function getEnrollmentView(enrollmentId: string, now: Date = new Da
  * Reserve a place in a cohort (the "Enroll" action). Validates the target is a
  * real, open, upcoming paid cohort. Once the student has PAID, the class date
  * is locked (changing a paid seat is a support/admin action, not self-serve).
+ *
+ * Unpaid: records a reservation and leaves `cohort_id` alone (see
+ * SEAT_RESERVED_EVENT). Paid but still in the Explorer bucket: moved, as before.
+ * Idempotent both ways: re-picking the current cohort or the current reservation
+ * writes nothing.
  */
 export async function selectCohort(enrollmentId: string, cohortId: string, now: Date = new Date()): Promise<SelectCohortResult> {
   const enrollment = await Enrollment.findByPk(enrollmentId);
@@ -130,9 +183,14 @@ export async function selectCohort(enrollmentId: string, cohortId: string, now: 
     const view = await getEnrollmentView(enrollmentId, now);
     return { ok: true, changed: false, view: view! };
   }
+  const paid = enrollment.payment_status === 'paid';
+  if (!paid && (await latestReservedCohortId(enrollmentId)) === cohortId) {
+    const view = await getEnrollmentView(enrollmentId, now);
+    return { ok: true, changed: false, view: view! };
+  }
 
   const currentCohort = enrollment.cohort_id ? await Cohort.findByPk(enrollment.cohort_id) : null;
-  if (enrollment.payment_status === 'paid' && isRealClassCohort(currentCohort)) {
+  if (paid && isRealClassCohort(currentCohort)) {
     return { ok: false, reason: 'locked_after_payment' };
   }
 
@@ -142,6 +200,17 @@ export async function selectCohort(enrollmentId: string, cohortId: string, now: 
   if (!isRealClassCohort(cohort)) return { ok: false, reason: 'cohort_not_selectable' };
   const today = now.toISOString().slice(0, 10);
   if (String((cohort as any).start_date).slice(0, 10) < today) return { ok: false, reason: 'cohort_started' };
+
+  if (!paid) {
+    await StudentNavigationEvent.create({
+      enrollment_id: enrollmentId,
+      event_type: SEAT_RESERVED_EVENT,
+      page: SEAT_RESERVED_PAGE,
+      metadata: { cohort_id: cohortId, cohort_name: (cohort as any).name ?? null },
+    } as any);
+    const view = await getEnrollmentView(enrollmentId, now);
+    return { ok: true, changed: true, view: view! };
+  }
 
   await enrollment.update({ cohort_id: cohortId });
 

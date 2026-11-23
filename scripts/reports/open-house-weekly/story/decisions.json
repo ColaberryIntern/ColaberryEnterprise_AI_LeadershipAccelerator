@@ -140,6 +140,44 @@
       "ticket": "https://app.basecamp.com/3945211/buckets/7463955/todos/10500110271",
       "title": "Collecting the credit runs at 88.4% across all 43 learners who earned it, not the 67% a three-person week suggested",
       "detail": "The 12 Nov edition starred \"1 watched 75%+ and never collected the credit\" and graded the step at 66.7% (2 of 3). Measured across every learner with progress on the welcome video: 43 have watched 75%+, 38 collected, 5 did not - 88.4% against the 90% target, so the step is close to target and the weekly figure was small-sample noise. Of the 5, four never signed in again after crossing the threshold, so they left mid-session rather than being refused; the credit stays collectable because watchVerdictFor reads the stored watch state and returns met=true whenever they return. Exactly one crossed 100% and signed in again 14 minutes later without collecting, which is the only real signal here and is n=1. Also worth saying plainly: 0 learners hold the credit with under 75% watched, so the gate is sound, and the insight wording \"the platform did not count it\" overstates a deliberate design - 75% unlocks the button and the click awards the points."
+    },
+    {
+      "id": "C-2026-11-22-timeout",
+      "date": "2026-11-22 08:30",
+      "kind": "correction",
+      "ticket": "https://app.basecamp.com/3945211/buckets/47502609/todos/10535929836",
+      "title": "The report's data pull had started timing out; it now runs in 4 seconds",
+      "detail": "Run on 22 Nov, collect.sql hit its 60 s statement timeout at the visitor-session lookup, so the 25 Nov email would have failed and sent Ali an alert instead. visitor_sessions has no visitor_id index and the query looked it up once per landing-page visitor (144k sessions x about 700 visitors). It now reads the landing-page sessions for both windows once into a temp table and looks visitors up there. Same definitions, same numbers; a test pins one read of visitor_sessions."
+    },
+    {
+      "id": "B-2026-11-22-OH1y",
+      "date": "2026-11-22 08:30",
+      "kind": "build",
+      "ticket": "https://app.basecamp.com/3945211/buckets/47502609/todos/10535929836",
+      "title": "OH1y: the funnel now runs past sign-up to the Open House itself",
+      "detail": "Ali: the Open House is a step, taking part at the Open House is a step, then paid enrollment; and show every communication. New last steps: their Open House has happened, came (seen in the room: checked in, entered the classroom or set a status; the same rule the attended/missed follow-up uses), took part (poll, question or status), then paid to enroll (a PaySimple payment after sign-up, comp plans excluded, measured against everyone whose Open House happened). A per-session table, a who-paid fork, and every message the week's sign-ups received (email, text, call), grouped by message, with what is still queued. Attendance is a floor: people who join Zoom directly are not seen."
+    },
+    {
+      "id": "M-2026-11-22-attendance",
+      "date": "2026-11-22 08:30",
+      "kind": "measurement",
+      "ticket": "https://app.basecamp.com/3945211/buckets/47502609/todos/10535929836",
+      "title": "First Open House (19 Nov): 17 of 228 registrants were seen in the room (7.5%), plus 7 walk-ins; 22 took part; nobody has paid yet",
+      "detail": "Of the 123 who registered through the ad landing page, 5 came. Six registrants who entered the classroom or set a status had been marked absent by the system for skipping check-in; they count as there now, in the report and in the follow-up email. 22 people took part (13 answered polls, 3 asked questions, 12 set a status). No registrant has paid to enroll since. Attendance is a floor: the 19 Nov session ran on a Zoom meeting separate from the platform's, so people who joined Zoom directly were not counted. Finishing the welcome video did not go with showing up yet (1 of 21 video finishers came, 3 of 53 others); too few to judge."
+    },
+    {
+      "id": "H-2026-11-22-attend",
+      "date": "2026-11-22 08:30",
+      "kind": "hypothesis",
+      "ticket": "https://app.basecamp.com/3945211/buckets/47502609/todos/10535929836",
+      "title": "Once every join goes through the check-in page, at least 40% of sign-ups whose Open House happened are counted as there",
+      "detail": "Today's 4.8% mixes two things: people who did not come, and people who came through Zoom directly. Routing every reminder and the Today card through the check-in page separates them.",
+      "test": {
+        "metric": "attend",
+        "op": ">=",
+        "value": 40
+      },
+      "status": "proposed"
     }
   ]
 }

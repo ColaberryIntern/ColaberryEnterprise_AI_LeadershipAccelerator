@@ -37,4 +37,8 @@ router.post(
   handleDiscardAgentEmailDraft,
 );
 
+// Agent comms (2026-11-22): reply drafts to mail sent to the agent's address are shown by GET above
+// (pendingReplies) and decided ONLY through /api/admin/maya/outbound/:id/approve|reject
+// (mayaOutboundRoutes.ts), the single pinned doorway for the outbound queue.
+
 export default router;

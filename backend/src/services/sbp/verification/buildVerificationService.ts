@@ -45,6 +45,7 @@ import { evaluateForEnrollment } from '../../progression/promotionService';
 import { classifyError } from '../../../utils/errorClassifier';
 import { getBudgetPerUnitXp } from '../../progression/pointsConfigService';
 import { planStorySpecs, STORY_XP_KEY, commandCenterSpecForProject } from './storyPoints';
+import { connectedDemoMaterializedFor } from '../connectedDemoFlag';
 import { award as awardPoints } from '../../pointsService';
 import { env } from '../../../config/env';
 import { parseProgressFile, ProgressParseErrorClass } from './progressContract';
@@ -269,6 +270,13 @@ export async function verifyBuildFromRepo(
   const specs: PlanStorySpec[] = planStorySpecs(
     stored.plan,
     await commandCenterSpecForProject(projectId),
+    /*
+     * STORY-900 is judged when, and only when, the board actually carries it. The paragraph above
+     * is the precedent: resolved from the project, never assumed from a setting. Had this read the
+     * env flag, narrowing the rollout would have left every demo already materialized unjudgeable
+     * and therefore unpaid, which is the same defect one feature further on.
+     */
+    await connectedDemoMaterializedFor(projectId),
   );
 
   let inputs;

@@ -7,8 +7,9 @@
  *   ... --preview <out.html>            # both emails as they will read, for Ali's copy review
  *   ... --session <sessionId>           # read-only: who would get which email for that Open House
  *   ... --replay <sessionId> <url> --apply   # sets the recording link the "missed" email carries
- *   ... --book <sessionId>              # books that session's follow-ups now (only if the campaign is active)
+ *   ... --book <sessionId> [--start YYYY-MM-DD] [--apply]   # dry run unless --apply; --start = day 0 at 10:00 AM CT that date
  *   ... --upgrade-rebuild [--apply]     # OH1w: tag Ali's rebuilt steps attended/missed, replace placeholders, add the hard rules
+ *   ... --add-steps [--apply]           # OH1z: append reserve-your-seat (day 3), invite (day 5), last call (day 7)
  *
  * The campaign reuses the countdown campaign's sender (Maya), tenant, brand and send window, and
  * sends under the event_reminder category. Ali approves and activates it in Admin > Campaigns;
@@ -19,7 +20,8 @@ import * as fs from 'fs';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import { findOpenHouseCountdownCampaign, EVENT_REMINDER_CATEGORY } from '../services/openHouseCountdown';
-import { OPEN_HOUSE_FOLLOWUP_KEY, FOLLOWUP_PEOPLE_SQL, findFollowupCampaign, bookOpenHouseFollowups } from '../services/openHouseFollowup';
+import { OPEN_HOUSE_FOLLOWUP_KEY, FOLLOWUP_PEOPLE_SQL, FOLLOWUP_SEND_CLOCK, findFollowupCampaign, bookOpenHouseFollowups } from '../services/openHouseFollowup';
+import { classInstant } from '../services/centralDate';
 import { followupCopy, screenFollowupCopy } from '../services/openHouseFollowupCopy';
 
 const NAME = 'Open House Follow-up (Maya)';
@@ -160,8 +162,35 @@ async function main(): Promise<void> {
     return;
   }
 
+  // --book <sessionId> [--start YYYY-MM-DD] [--apply]: dry run unless --apply (OH1z). --start sets
+  // day 0 to 10:00 AM Central that date, for an Open House whose morning-after has passed.
   const book = arg('--book');
-  if (book) { console.log(JSON.stringify(await bookOpenHouseFollowups(book))); return; }
+  if (book) {
+    const start = arg('--start');
+    if (start !== null && !/^\d{4}-\d{2}-\d{2}$/.test(start)) throw new Error('--start must be YYYY-MM-DD');
+    const startAt = start ? classInstant(start, FOLLOWUP_SEND_CLOCK) : undefined;
+    const r = await bookOpenHouseFollowups(book, { startAt, dryRun: !apply });
+    log(`book${apply ? '' : ' (dry run)'}: ${JSON.stringify(r)}${startAt ? ` day 0 = ${startAt.toISOString()}` : ''}`);
+    return;
+  }
+
+  // OH1z: append the enroll / last call / invite steps. Dry run by default; --apply saves.
+  if (has('--add-steps')) {
+    const c = await findFollowupCampaign();
+    if (!c || !c.sequence_id) throw new Error('No follow-up campaign with a sequence');
+    const row = await one<{ steps: any[] }>(`SELECT steps FROM follow_up_sequences WHERE id = :id`, { id: c.sequence_id });
+    const { addFollowupSteps } = await import('../services/openHouseFollowupUpgrade');
+    const up = addFollowupSteps(row?.steps || []);
+    if (!up.changes.length) { log('add-steps: already there, nothing to change'); return; }
+    for (const ch of up.changes) log(`add-steps: ${ch}`);
+    up.steps.forEach((s, i) => log(`add-steps: step ${i + 1} [${s.audience}/${s.copy_key}] day ${s.delay_days} "${s.subject}"`));
+    if (apply) {
+      await sequelize.query(`UPDATE follow_up_sequences SET steps = CAST(:steps AS jsonb), updated_at = NOW() WHERE id = :id`,
+        { replacements: { steps: JSON.stringify(up.steps), id: c.sequence_id } });
+      log('add-steps: saved');
+    }
+    return;
+  }
 
   if (has('--upgrade-rebuild')) {
     const c = await findFollowupCampaign();

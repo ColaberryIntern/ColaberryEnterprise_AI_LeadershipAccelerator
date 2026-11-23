@@ -169,9 +169,9 @@ describe('T2 the refused capabilities have no dial at all', () => {
     expect(parseRecord(stored).capabilities).toEqual({});
   });
 
-  it('the refused list is exactly SMS, voice and campaign enrolment', () => {
+  it('the refused list is exactly SMS and campaign enrolment (voice moved to shadow 2026-11-22)', () => {
     expect([...REFUSED_CAPABILITIES].sort())
-      .toEqual(['enrollInCampaign', 'placeVoiceCall', 'sendSmsSummary']);
+      .toEqual(['enrollInCampaign', 'sendSmsSummary']);
   });
 });
 

@@ -71,55 +71,59 @@ export interface DocumentDraftReq { canonicalReqId: string; statement: string; }
 export interface DocumentDraftInput { docKey: string; title: string; requirements: DocumentDraftReq[]; title_opportunity?: string | null; buyer?: string | null; agency?: string | null; /** P5: the grounding (blueprint weights/rules, section plans, artifacts, approved facts) — the ONLY specific facts the draft may assert. */ grounding?: Grounding | null; }
 export interface DocumentDraftResult { html: string; cached: boolean; generatedAt: string; error?: string; /** P5: structured questions the draft could not answer from the grounding (never asserted facts). */ gaps?: Array<{ question: string; suggestions: string[] }>; }
 
-/** Draft a full proposal document as sanitized HTML. FAIL SOFT; never throws. */
-export async function generateProposalDocumentDraftAI(input: DocumentDraftInput): Promise<DocumentDraftResult> {
-  const now = () => new Date().toISOString();
-  const reqs = (Array.isArray(input.requirements) ? input.requirements : []).filter((r) => r && r.statement);
-  if (!process.env.OPENAI_API_KEY) return { html: '', cached: false, generatedAt: now(), error: 'AI drafting is unavailable (no API key configured).' };
-  if (reqs.length === 0) return { html: '', cached: false, generatedAt: now(), error: 'This document has no requirements to draft from yet.' };
+// Overall ceiling on requirements drafted for ONE document, and the per-model-call batch size. A single call with
+// ~40 requirements overran the 4000-token response budget, truncating the JSON so it parsed to nothing and the whole
+// document failed. Drafting DRAFT_BATCH_SIZE requirements per call keeps each response within budget; the sections
+// are stitched into one document. MAX_REQS_TOTAL bounds a pathological requirement set (and the per-doc runtime).
+const MAX_REQS_TOTAL = 160;
+const DRAFT_BATCH_SIZE = 12;
 
-  // Tag each requirement so the model applies the right rule: write real methodology for [TECHNICAL] requirements,
-  // and only a one-line compliance note for [SUBMISSION-INSTRUCTION] ones (never a technical approach for logistics).
-  const reqBlock = reqs.slice(0, 40).map((r) => `- [${r.canonicalReqId}] [${isSubmissionInstructionRequirement(r.statement) ? 'SUBMISSION-INSTRUCTION' : 'TECHNICAL'}] ${clampStr(r.statement, 500)}`).join('\n');
-  const groundingText = input.grounding ? groundingToPromptText(input.grounding) : '';
-  const key = 'docdraftai:' + hash({ k: input.docKey, t: input.title, r: reqBlock, b: input.buyer ?? null, a: input.agency ?? null, g: groundingText });
-  const hit = cacheGet<DocumentDraftResult>(key);
-  if (hit) return { ...hit, cached: true };
+const DRAFT_SYSTEM_PROMPT =
+  'You draft a complete, professional government-proposal document for a small firm. Write the full document that ' +
+  'satisfies ALL of the listed requirements, organized with clear headings. ' +
+  // SUBSTANCE OVER RESTATEMENT. This is the difference between a winning technical response and a hollow one.
+  'SUBSTANCE RULE: for every TECHNICAL or FUNCTIONAL requirement, write a real, specific RESPONSE, not a restatement ' +
+  'of the requirement. Each answer must give: the proposed approach; the concrete workflow or architecture (the ' +
+  'actual steps, roles and data flow); how data moves and how any named system is integrated (mapping, ' +
+  'authentication, synchronization direction and conflict/error handling); the applicable security/access control; ' +
+  'the implementation step that delivers it; and a verifiable ACCEPTANCE TEST that proves it works. When a ' +
+  'requirement NAMES a specific system, standard, or integration target, address it BY NAME with the proposed ' +
+  'integration approach — proposing HOW you would integrate a named system is a method, not a fabricated fact, so do ' +
+  'it rather than speaking generically. NEVER answer a technical requirement with bare compliance language ("we ' +
+  'comply", "we understand", "the system shall ...") or a Benefit/Proof/Compliance restatement template — that earns ' +
+  'zero. ' +
+  // TRACEABILITY: one heading per requirement, carrying its canonical id, so each answer maps back to the
+  // requirement it satisfies (the coverage check credits a requirement by its own section's substance).
+  'STRUCTURE RULE: begin the response to EACH requirement with its own heading in the exact form ' +
+  '"<h3>REQ-ID: short title</h3>" using that requirement\'s canonical id (for example "<h3>REQ-012: GIS ' +
+  'integration</h3>"), then the full response beneath it. Exactly one heading per requirement, and never merge two ' +
+  'requirements under one heading. ' +
+  // Submission instructions are NOT technical strategy. This is the exact failure an independent review caught.
+  'SUBMISSION-INSTRUCTION RULE: a requirement that only governs HOW, WHEN, WHERE or in WHAT FORMAT the proposal is ' +
+  'submitted (email vs portal, number of copies, file type, page/font limits, deadlines, labeling) is an ' +
+  'administrative compliance item, NOT a technical delivery strategy. Do NOT write a technical approach, workflow or ' +
+  'acceptance test for it, and never present a submission instruction as if it were part of the solution. Note it in ' +
+  'one short compliance sentence (it belongs to the compliance matrix) and spend your words on the real technical ' +
+  'requirements. ' +
+  'CRITICAL (no fabrication): use ONLY general, verifiable statements and the approaches you propose; do NOT invent any ' +
+  'specific fact - no client names, project names, metrics, dates, dollar figures, certifications, or personnel. ' +
+  'Whenever a strong document WOULD need such a specific fact, insert a visible placeholder exactly like ' +
+  '[PLACEHOLDER: what the firm must provide] rather than inventing it. ' +
+  'EXCEPTION for grouped records: for a PAST-PERFORMANCE or REFERENCES entry do NOT write a separate [PLACEHOLDER] ' +
+  'per field; write ONE grouped marker [RECORD: reference] for each reference the section needs (exactly one if the ' +
+  'solicitation does not state a number). For a KEY-PERSON entry write [RECORD: personnel]. A [RECORD] marker is ' +
+  'answered as a whole record (client, scope, period, outcome / name, role, experience) and must NEVER be split ' +
+  'into per-field placeholders. ' +
+  'Return STRICT JSON {"html":"...","gaps":[{"question":"...","suggestions":["..."]}]} where html uses ONLY these ' +
+  'tags: h2, h3, h4, p, ul, ol, li, strong, em, table, thead, tbody, tr, th, td, blockquote, br. No attributes, no ' +
+  '<script>, no <style>, no links or images. `gaps` lists each specific fact you needed but could not find in the ' +
+  'grounding (you wrote a [PLACEHOLDER] for it) — never invent the fact.';
 
-  const system =
-    'You draft a complete, professional government-proposal document for a small firm. Write the full document that ' +
-    'satisfies ALL of the listed requirements, organized with clear headings. ' +
-    // SUBSTANCE OVER RESTATEMENT. This is the difference between a winning technical response and a hollow one.
-    'SUBSTANCE RULE: for every TECHNICAL or FUNCTIONAL requirement, write a real, specific RESPONSE, not a restatement ' +
-    'of the requirement. Each answer must give: the proposed approach; the concrete workflow or architecture (the ' +
-    'actual steps, roles and data flow); how data moves and how any named system is integrated (mapping, ' +
-    'authentication, synchronization direction and conflict/error handling); the applicable security/access control; ' +
-    'the implementation step that delivers it; and a verifiable ACCEPTANCE TEST that proves it works. When a ' +
-    'requirement NAMES a specific system, standard, or integration target, address it BY NAME with the proposed ' +
-    'integration approach — proposing HOW you would integrate a named system is a method, not a fabricated fact, so do ' +
-    'it rather than speaking generically. NEVER answer a technical requirement with bare compliance language ("we ' +
-    'comply", "we understand", "the system shall ...") or a Benefit/Proof/Compliance restatement template — that earns ' +
-    'zero. ' +
-    // Submission instructions are NOT technical strategy. This is the exact failure an independent review caught.
-    'SUBMISSION-INSTRUCTION RULE: a requirement that only governs HOW, WHEN, WHERE or in WHAT FORMAT the proposal is ' +
-    'submitted (email vs portal, number of copies, file type, page/font limits, deadlines, labeling) is an ' +
-    'administrative compliance item, NOT a technical delivery strategy. Do NOT write a technical approach, workflow or ' +
-    'acceptance test for it, and never present a submission instruction as if it were part of the solution. Note it in ' +
-    'one short compliance sentence (it belongs to the compliance matrix) and spend your words on the real technical ' +
-    'requirements. ' +
-    'CRITICAL (no fabrication): use ONLY general, verifiable statements and the approaches you propose; do NOT invent any ' +
-    'specific fact - no client names, project names, metrics, dates, dollar figures, certifications, or personnel. ' +
-    'Whenever a strong document WOULD need such a specific fact, insert a visible placeholder exactly like ' +
-    '[PLACEHOLDER: what the firm must provide] rather than inventing it. ' +
-    'EXCEPTION for grouped records: for a PAST-PERFORMANCE or REFERENCES entry do NOT write a separate [PLACEHOLDER] ' +
-    'per field; write ONE grouped marker [RECORD: reference] for each reference the section needs (exactly one if the ' +
-    'solicitation does not state a number). For a KEY-PERSON entry write [RECORD: personnel]. A [RECORD] marker is ' +
-    'answered as a whole record (client, scope, period, outcome / name, role, experience) and must NEVER be split ' +
-    'into per-field placeholders. ' +
-    'Return STRICT JSON {"html":"...","gaps":[{"question":"...","suggestions":["..."]}]} where html uses ONLY these ' +
-    'tags: h2, h3, h4, p, ul, ol, li, strong, em, table, thead, tbody, tr, th, td, blockquote, br. No attributes, no ' +
-    '<script>, no <style>, no links or images. `gaps` lists each specific fact you needed but could not find in the ' +
-    'grounding (you wrote a [PLACEHOLDER] for it) — never invent the fact.';
+interface BatchResult { html: string; gaps: Array<{ question: string; suggestions: string[] }>; error?: string; }
+
+/** Draft ONE batch of requirements as sanitized HTML. FAIL SOFT: returns an error string, never throws. */
+async function draftRequirementBatch(input: DocumentDraftInput, batch: DocumentDraftReq[], groundingText: string): Promise<BatchResult> {
+  const reqBlock = batch.map((r) => `- [${r.canonicalReqId}] [${isSubmissionInstructionRequirement(r.statement) ? 'SUBMISSION-INSTRUCTION' : 'TECHNICAL'}] ${clampStr(r.statement, 500)}`).join('\n');
   const user = [
     `Document to draft: "${input.title}"`,
     input.title_opportunity ? `Opportunity: ${input.title_opportunity}` : '',
@@ -128,27 +132,68 @@ export async function generateProposalDocumentDraftAI(input: DocumentDraftInput)
     reqBlock,
     groundingText ? `\nGROUNDING — the ONLY specific facts you may assert:\n${groundingText}` : '',
   ].filter(Boolean).join('\n');
-
   try {
     const client = getInstrumentedOpenAI({ workflow_id: 'gov_proposal_document_draft' }, { timeout: 120000, maxRetries: 1 });
     const res = await client.chat.completions.create({
       model: DEFAULT_MODEL, temperature: 0.3, max_tokens: 4000, response_format: { type: 'json_object' },
-      messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+      messages: [{ role: 'system', content: DRAFT_SYSTEM_PROMPT }, { role: 'user', content: user }],
     });
     let parsed: any = {};
     try { parsed = JSON.parse(res.choices?.[0]?.message?.content || '{}'); } catch { parsed = {}; }
     const html = sanitizeProposalHtml(parsed?.html);
-    if (!html) return { html: '', cached: false, generatedAt: now(), error: 'The AI returned no usable content. Try again.' };
     const gaps = Array.isArray(parsed?.gaps)
       ? parsed.gaps.filter((g: any) => g && typeof g.question === 'string').map((g: any) => ({ question: String(g.question), suggestions: Array.isArray(g.suggestions) ? g.suggestions.map(String) : [] }))
       : [];
-    const result: DocumentDraftResult = { html, cached: false, generatedAt: now(), gaps };
-    cacheSet(key, result);
-    return result;
+    if (!html) return { html: '', gaps: [], error: 'The AI returned no usable content. Try again.' };
+    return { html, gaps };
   } catch (err) {
-    console.error(JSON.stringify({ timestamp: now(), level: 'error', service: 'backend', event: 'gov_proposal_document_draft', outcome: 'failure', error_class: (err as any)?.constructor?.name ?? 'Error', context: { message: (err as any)?.message, doc_key: input.docKey } }));
-    return { html: '', cached: false, generatedAt: now(), error: 'The AI draft could not be generated right now.' };
+    console.error(JSON.stringify({ timestamp: new Date().toISOString(), level: 'error', service: 'backend', event: 'gov_proposal_document_draft', outcome: 'failure', error_class: (err as any)?.constructor?.name ?? 'Error', context: { message: (err as any)?.message, doc_key: input.docKey } }));
+    return { html: '', gaps: [], error: 'The AI draft could not be generated right now.' };
   }
+}
+
+/** Split requirements into batches of at most `size` (pure; preserves order). */
+export function batchRequirements(reqs: DocumentDraftReq[], size: number): DocumentDraftReq[][] {
+  const n = Math.max(1, size);
+  const out: DocumentDraftReq[][] = [];
+  for (let i = 0; i < reqs.length; i += n) out.push(reqs.slice(i, i + n));
+  return out;
+}
+
+/** Draft a full proposal document as sanitized HTML. FAIL SOFT; never throws. Large documents are drafted in
+ *  batches (each model response stays within the token budget) and the sections are stitched together. */
+export async function generateProposalDocumentDraftAI(input: DocumentDraftInput): Promise<DocumentDraftResult> {
+  const now = () => new Date().toISOString();
+  const reqs = (Array.isArray(input.requirements) ? input.requirements : []).filter((r) => r && r.statement);
+  if (!process.env.OPENAI_API_KEY) return { html: '', cached: false, generatedAt: now(), error: 'AI drafting is unavailable (no API key configured).' };
+  if (reqs.length === 0) return { html: '', cached: false, generatedAt: now(), error: 'This document has no requirements to draft from yet.' };
+
+  const useReqs = reqs.slice(0, MAX_REQS_TOTAL);
+  const groundingText = input.grounding ? groundingToPromptText(input.grounding) : '';
+  // Cache over the WHOLE requirement set (not just the first 40), so a large doc caches its full stitched draft.
+  const reqKeyBlock = useReqs.map((r) => `${r.canonicalReqId}:${clampStr(r.statement, 120)}`).join('|');
+  const key = 'docdraftai:' + hash({ k: input.docKey, t: input.title, r: reqKeyBlock, b: input.buyer ?? null, a: input.agency ?? null, g: groundingText });
+  const hit = cacheGet<DocumentDraftResult>(key);
+  if (hit) return { ...hit, cached: true };
+
+  const batches = batchRequirements(useReqs, DRAFT_BATCH_SIZE);
+  const htmlParts: string[] = [];
+  const gapsAll: Array<{ question: string; suggestions: string[] }> = [];
+  let lastError: string | null = null;
+  for (const batch of batches) {
+    const r = await draftRequirementBatch(input, batch, groundingText);
+    if (r.error) { lastError = r.error; continue; } // a failed batch is skipped; the rest still contribute content
+    if (r.html) htmlParts.push(r.html);
+    for (const g of r.gaps) gapsAll.push(g);
+  }
+  const html = htmlParts.join('\n').trim();
+  if (!html) return { html: '', cached: false, generatedAt: now(), error: lastError || 'The AI returned no usable content. Try again.' };
+  // Dedupe gaps by question so a fact asked across batches surfaces once.
+  const seen = new Set<string>();
+  const gaps = gapsAll.filter((g) => { const k = g.question.toLowerCase().trim(); if (!k || seen.has(k)) return false; seen.add(k); return true; });
+  const result: DocumentDraftResult = { html, cached: false, generatedAt: now(), gaps };
+  cacheSet(key, result);
+  return result;
 }
 
 /** Test seam: clear the in-memory cache. */

@@ -56,7 +56,8 @@ async function recordMayaReplyOnLead(row: MayaOutboundApproval, providerMessageI
       lead_id: leadId, channel: 'email', direction: 'outbound', delivery_mode: 'live', status: 'sent',
       to_address: row.recipient_address, from_address: null, subject: row.subject ?? null, body: row.body,
       provider: 'mandrill', provider_message_id: providerMessageId,
-      metadata: { maya_reply: true, outbound_approval_id: row.id, decided_by: row.decided_by ?? null },
+      // agent_name: the agent dashboard's Sent list (agent comms, 2026-11-22).
+      metadata: { maya_reply: true, agent_name: 'Maya', outbound_approval_id: row.id, decided_by: row.decided_by ?? null },
     });
     await logActivity({
       lead_id: leadId, type: 'email_sent', subject: `Maya replied: ${row.subject ?? ''}`.slice(0, 250),
@@ -102,6 +103,9 @@ export async function deliverOutboundRow(row: MayaOutboundApproval): Promise<Out
     if (block) throw new ExplorerSendBlockedError(block);
   }
 
+  // Agent comms: the identity the message went out as, resolved ONCE inside the send and reused for
+  // the record, so nothing after a delivered send can query, throw, or mark it failed.
+  let sentAsIdentity: import('../agents/email/agentEmailIdentity').AgentEmailIdentity | null = null;
   const result = await sendOnce(
     {
       recipient: row.recipient_address,
@@ -112,6 +116,22 @@ export async function deliverOutboundRow(row: MayaOutboundApproval): Promise<Out
       correlationId: row.correlation_id,
     },
     async () => {
+      // Agent comms (Ali, 2026-11-22: "Maya would be maya@colaberry.com"): an agent's reply, and Maya's
+      // campaign reply, go out AS the agent. Lazy, so the approve path's import graph is unchanged.
+      if (isMayaReplyRow(row) || String(row.composed_by || '').startsWith('agent_reply:')) {
+        const { identityForRow, isAgentReplyRow, inReplyToOfRow } = await import('../agents/email/agentReplyDelivery');
+        const identity = await identityForRow(row);
+        if (identity) {
+          sentAsIdentity = identity;
+          const { sendAgentEmail } = await import('../agents/email/agentEmailTransport');
+          const sentAs = await sendAgentEmail({ identity, to: row.recipient_address, subject: row.subject ?? '', html: row.body, inReplyTo: inReplyToOfRow(row) });
+          return sentAs.ok
+            ? { ok: true, messageId: sentAs.messageId ?? undefined }
+            : { ok: false, error: sentAs.error, errorClass: sentAs.errorClass ?? 'ProviderRejected' };
+        }
+        // An agent reply has no other sender; refuse rather than mail it as someone else.
+        if (isAgentReplyRow(row)) return { ok: false, error: 'the agent has no email identity', errorClass: 'ContractViolation' };
+      }
       const sent = await sendPreRenderedEmail({
         to: row.recipient_address,
         subject: row.subject ?? '',
@@ -128,6 +148,16 @@ export async function deliverOutboundRow(row: MayaOutboundApproval): Promise<Out
 
   if (result.outcome === 'sent') {
     if (isMayaReplyRow(row)) await recordMayaReplyOnLead(row, result.messageId ?? null);
+    if (sentAsIdentity && String(row.composed_by || '').startsWith('agent_reply:')) {
+      // recordAgentReply never throws; the import is guarded so a load failure cannot fail a delivered send.
+      try {
+        const { recordAgentReply } = await import('../agents/email/agentReplyDelivery');
+        await recordAgentReply(row, sentAsIdentity, result.messageId ?? null);
+      } catch (err) {
+        console.warn(JSON.stringify({ level: 'warn', service: 'agent-email', event: 'agent_reply_record_failed', outcome: 'failure',
+          error_class: (err as Error)?.name || 'UnknownError', context: { id: row.id } }));
+      }
+    }
     if (explorer) await (await import('../explorerGrowth/send/explorerSendGuards')).recordExplorerSend(row, result.messageId ?? null);
     return { providerRef: result.messageId ?? null };
   }

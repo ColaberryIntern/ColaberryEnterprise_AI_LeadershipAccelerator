@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Sunday, November 22, 2026 at 12:11 PM</div>
-    <div><span class="sid">CC-20261120-e2fc</span><span class="count">11 changes</span></div>
+    <div class="meta">Generated Sunday, November 22, 2026 at 6:52 PM</div>
+    <div><span class="sid">CC-20261120-e2fc</span><span class="count">19 changes</span></div>
   </header>
   <main>
     
@@ -211,6 +211,121 @@
         <div class="card-body">
           <div class="row"><span class="k">What changed</span><span class="v">these are the v5c rebuild&#39;s plan-data findings, each checked against v5&#39;s plan.json.</span></div>
           <div class="row"><span class="k">Verification</span><span class="v ver">`planDataFindings.test.ts` 9/9 (holiday case mutation-checked); 367 suites / 5,453 tests pass; tsc clean.</span></div>
+          
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">12</span>
+          <h2>#4313 deployed: plan-data fixes live</h2>
+          <span class="badge">2026-11-22</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">deployed 0f1eb2bfb (registry mode, marker `offHoliday` in `buildSchedule.js`). An earlier image build was cancelled by a later merge; the deployed image contains #4313. No code change in this entry. BC L12.11 closed.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">run inside the live backend: outline buttons come out as &quot;It starts when something arrives.&quot; and &quot;When it isn&#39;t sure, it should flag it for me.&quot;; the release story prompt carries the no-invented-API rule; 10,400 due dates across 400 publish days, 0 on a holiday. Home 200.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">no new ShiftFill run yet, so the fixes have not been seen on a fresh plan end to end.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">13</span>
+          <h2>ShiftFill v6 run: the plan-data fixes checked on a fresh plan</h2>
+          <span class="badge">2026-11-22</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">ran ShiftFill v6 end to end on prod (project 8e3adf6d). A cold agent built its Command Center from Story 000. No code change in this entry.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">v6&#39;s plan stores outline buttons as sentences (&quot;It starts when something arrives.&quot;, &quot;When it isn&#39;t sure, it should flag it for me.&quot;). 0 of 16 due dates fall on a holiday. The temp-agency stories use Gmail. Every story is owned by a roster agent. Served locally, the Command Center has 9 tabs and no script errors. Its 10 agent cards have 0 mid-word breaks and 0 overflow at 360px and 1280px. The 13-arrow workflow has no overlapping label: labels sit on their arrows at full width and switch to a numbered key at 360px.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the no-invented-system rule only half held. STORY-002 says &quot;Integrate with the leave management system&quot;, though neither the scope document nor the intake says where approved leave is recorded. The rule covered outside parties, not unnamed data sources. v6&#39;s Command Center uses ES modules, so the local one-file bundler cannot inline it, and it was checked over a local server instead.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">14</span>
+          <h2>Plan: a waiting agent names its gate, stories never guess where data lives</h2>
+          <span class="badge">2026-11-22</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">three v6 findings, each checked against v6&#39;s plan.json.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`planV6Findings.test.ts` 7/7 on v6&#39;s agents verbatim (the gate repair is mutation-checked); sbp + factory + delivery + runbook coverage 377 suites / 5,786 tests pass; backend tsc clean with the backend&#39;s own TypeScript; `checkTestTypecheck` shows only the 3 known files.</span></div>
+          
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">15</span>
+          <h2>PR #4327 (another workstream&#39;s): banned-word check fixed at Ali&#39;s request</h2>
+          <span class="badge">2026-11-22</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">on `workstream/paid-out-of-explorer`, commit 40239dad5 rewords the note `backend/src/scripts/fixPaidOutOfExplorerCohort.js` writes from &quot;free-access (comp) grant&quot; to &quot;comp (complimentary access) grant&quot;. `bannedWordOutboundCopy.test.ts` had rejected it as a new banned-word occurrence. Behavior is unchanged. This entry was first pushed to #4328&#39;s branch after it merged, so it is restored here.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`bannedWordOutboundCopy.test.ts` fails on the original file and passes 17/17 with the fix. CI run 45078773230 on 40239dad5 passes all 9 jobs. #4327 is merged.</span></div>
+          
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">16</span>
+          <h2>#4328 deployed: v6&#39;s waiting agent carries its gate on prod</h2>
+          <span class="badge">2026-11-22</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">deployed 66770932c (registry mode, marker `gateWaitingAgents` in `planDocument.js`); it includes #4327. No code change in this entry. BC L12.12 closed, and its comment corrects the test count in the ticket description (5,786).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">v6, re-rendered on prod. Shift Offer Sender waits on REQ-008, and no agent is left at `acts_with_approval` without a gate. The Story 000 brief shows &quot;Waits for a person because of: REQ-008&quot; on its card, and its CONSTRAINT note says &quot;stories that USE the tool&quot;. Home 200.</span></div>
+          
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">17</span>
+          <h2>ShiftFill v7 run: every plan fix holds on a fresh plan</h2>
+          <span class="badge">2026-11-22</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">ran ShiftFill v7 end to end on prod (project 99bca55a). A cold agent built its Command Center from Story 000. No code change in this entry.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">in v7&#39;s plan:</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">STORY-008 says &quot;the paging system&quot; because the scope says &quot;page Dana&quot;. It is borderline and left as is.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">18</span>
+          <h2>Agents: every input comes from another agent or from outside</h2>
+          <span class="badge">2026-11-22</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`agentInputsProduced.test.ts` 6/6 on v7&#39;s agents verbatim (detector mutation-checked); `planAgentHonesty` asserts the new prompt rule; sbp + factory + delivery + runbook coverage 379 suites / 5,810 tests pass; backend tsc clean; `checkTestTypecheck` shows only the 3 known files.</span></div>
+          
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">19</span>
+          <h2>#4342 deployed: v7&#39;s missing hand-offs named on prod</h2>
+          <span class="badge">2026-11-22</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">deployed af2c40e7b (registry mode, marker `unproducedInputs` in `commandCenterAgentsTab.js`; the scoping rule is present in `scopeAgents.js`). No code change in this entry. BC L12.13 closed.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">the v7 Story 000 brief on prod lists Schedule Updater, Summary Reporter and Performance Monitor reading &quot;Shift acceptance&quot;, which no agent produces, as questions, with &quot;a marker, not an arrow&quot;. Home 200.</span></div>
           
           
         </div>

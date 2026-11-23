@@ -4,6 +4,7 @@ import { getTestOverrides } from './settingsService';
 import { isKillSwitchActive } from './launchSafety';
 import { redactForLogs } from '../utils/piiRedaction';
 import { classifyError } from '../utils/errorClassifier';
+import { isVoicePathAllowed, voiceCallPathKey } from './voice/voiceCallPaths';
 
 // Lazy import (matches alertDeliveryService.ts's convention): avoids pulling
 // the full Sequelize/model graph into every synthflowService import.
@@ -143,8 +144,14 @@ export function resolveAgentId(params: { callType: VoiceCallType; brandSlug?: st
     return env.synthflowInternshipAgentId || env.synthflowAiFlotationAgentId;
   }
   if (params.brandSlug === 'ai-flotation') return env.synthflowAiFlotationAgentId;
-  // W28: the Enterprise intake. Its own agent and number, NO fallback (see env.ts).
-  if (params.brandSlug === 'enterprise-intake') return env.synthflowEnterpriseIntakeAgentId;
+  // W28: the Enterprise intake. Ali, 2026-11-22: "let's use that agent" - with no agent of its
+  // own configured it BORROWS the prompt-only shell (AI Flotation / "Edu: Cory - Outbound"), the
+  // same precedent as internship and CPN. The call prompt names the caller, so a shared caller ID
+  // is honest. Its own SYNTHFLOW_ENTERPRISE_INTAKE_AGENT_ID still wins when set.
+  if (params.brandSlug === 'enterprise-intake') return env.synthflowEnterpriseIntakeAgentId || env.synthflowAiFlotationAgentId;
+  // Agent comms tool: the shared place_ai_call tool any granted agent uses. Same shell agent
+  // unless it is given its own; the per-call prompt carries the agent's persona and purpose.
+  if (params.brandSlug === 'agent-tool') return env.synthflowAgentToolAgentId || env.synthflowAiFlotationAgentId;
 
   // OpportunityLift. Its own slot when configured, otherwise it BORROWS THE AI
   // FLOTATION SHELL - and the distinction between those two fallbacks is the whole
@@ -189,6 +196,15 @@ export async function triggerVoiceCall(params: VoiceCallParams): Promise<Synthfl
   if (!env.enableVoiceCalls) {
     console.log('[Synthflow] Voice calls disabled via ENABLE_VOICE_CALLS. Skipping.');
     return { success: true, data: { skipped: true, reason: 'feature_disabled' } };
+  }
+
+  // Agent comms tool (Ali, 2026-11-22): only the call paths named in VOICE_CALL_PATHS may dial.
+  // Fail closed: an unset list dials no one, so ENABLE_VOICE_CALLS alone cannot wake every path.
+  const pathKey = voiceCallPathKey(params);
+  if (!isVoicePathAllowed(pathKey)) {
+    console.warn(JSON.stringify({ level: 'warn', service: 'synthflow', event: 'voice_path_not_allowed', outcome: 'skipped',
+      context: { path: pathKey || '(none)', call_type: params.callType } }));
+    return { success: true, data: { skipped: true, reason: 'path_not_allowed' } };
   }
 
   if (!params.phone) {

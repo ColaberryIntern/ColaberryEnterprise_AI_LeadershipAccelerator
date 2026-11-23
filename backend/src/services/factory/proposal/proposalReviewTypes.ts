@@ -51,6 +51,12 @@ export interface HumanNeed {
   groupSlug?: string;
   conceptId?: string;
   subject?: string;
+  /** Where this input is curated (set on read by `needScope`): `global` = a reusable COMPANY-dossier asset whose one
+   *  answer serves every bid (a past-performance reference, a key person, a company certification, a firm-level fact
+   *  like security posture or SLA); `local` = specific to THIS solicitation (counts, this buyer/contact/deadline, a
+   *  bid decision/setting). Drives the needs inbox's global/local split and the "where to add it" link. Optional so
+   *  every pre-existing need literal stays valid. */
+  scope?: 'global' | 'local';
 }
 
 /** A finding from a check. `fatal` blocks export whatever the score (over page limit, price leak, missing required

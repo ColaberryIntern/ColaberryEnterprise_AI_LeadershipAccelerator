@@ -1,7 +1,8 @@
 /**
- * P7-T1.3 — the source-overflow block, and the proof that it is inert until it is switched on.
+ * P7-T1.3 and L9.6: the source-overflow block, now ON, and the proof that it refuses the right
+ * inputs and only those.
  *
- * ## The decision was pre-registered, then measured
+ * ## The decision was pre-registered, then measured, then re-measured
  *
  * `plan-phase7.md` §3.3 fixed the rule BEFORE the data was seen, because "with no decision rule
  * pre-committed, any measurement justifies any outcome including the status quo":
@@ -9,16 +10,36 @@
  *   any build in the last 90 days over the cap  -> implement a BLOCKING overflow behind the flag
  *   zero                                        -> keep detect-only, ship a tripwire
  *
- * Measured on production 16 October 2026 with the SHIPPED `buildBriefText` over the stored
- * `build_intake` rows, not with a SQL approximation of it:
+ * The October measurement that this file used to quote (48 rows, p90 27,772, 11 over) was taken
+ * against a 20,000 character brief cap. L12.2 then raised `MAX_BRIEF_CHARS` to 150,000 so the
+ * questions step could read a whole scope document, which moved the cap 7.5x and left that
+ * paragraph describing a limit the code no longer has. It is replaced rather than kept, because
+ * a justification that no longer refers to the shipped constants is not evidence.
  *
- *   rows                 48          <- the denominator, and the whole corpus; 90 days is all time
- *   p50 / p90 / p95      5,737 / 27,772 / 28,844
- *   max                  41,679      <- more than double the cap
- *   over MAX_BRIEF_CHARS 11 of 48, every one inside 90 days
+ * Re-measured 20 November 2026 against `accelerator_prod`, read-only, at the budgets this module
+ * actually exports:
  *
- * So roughly a quarter of real student briefs are being clipped in production today, p90 sits
- * well above the cap, and the blocking branch fires.
+ *   build_intake.idea              56 rows   max 19,996   over budget 0   over intake cap 0
+ *   assembled intake               56 rows   max 38,820   over budget 0
+ *   project_understandings.items   26 rows   max 80,613   over budget 0   (cap 200,000)
+ *
+ * `build_plans.plan_json` reaches 497,062 and is excluded on purpose: it is generation OUTPUT,
+ * and these budgets do not govern it.
+ *
+ * ## Why ON is safe, in two arguments rather than one
+ *
+ * 56 rows is a modest sample, so the structural argument is stated first and does not depend on
+ * it: the intake cap is 60,000 and the brief budget is 150,000, so a brief cannot reach the limit
+ * by construction. The measured argument is the second: 7.5x of headroom on the largest real
+ * brief, 2.5x on the largest expansion. Turning this on cannot fail a STUDENT build that succeeds
+ * today.
+ *
+ * "STUDENT" is the correction. This line read "a build" and the measurement behind it counted
+ * only SBP tables, while `factory/govBuildPlanAI.ts` is a second non-test caller of
+ * `decomposeBuild` whose input nothing bounds the same way. See `featureFlags.ts` for the scope
+ * and what is owed; the gov path's refusal is classified and actionable rather than measured.
+ * What it can do is refuse an input the system has never yet received, which is precisely the
+ * case where silent clipping would do the most damage.
  *
  * ## Why the refusal lives inside `sourceBlocks`
  *
@@ -50,15 +71,15 @@ function withFlag<T>(on: boolean, fn: () => T): T {
   }
 }
 
-describe('the flag DEFAULTS OFF, and off means byte-for-byte unchanged', () => {
-  it('defaults to off, because the env var is unset in every environment that has not opted in', () => {
-    // Asserted against the real module rather than the local helper. A flag that shipped on
-    // would change a live student-facing path on the next deploy.
-    expect(FLAGS.sbpSourceOverflowBlock).toBe(false);
-    expect(process.env.ENABLE_SBP_SOURCE_OVERFLOW_BLOCK).not.toBe('true');
+describe('the flag DEFAULTS ON, and the escape hatch still works', () => {
+  it('defaults to ON, so a student brief is never quietly half-read', () => {
+    // Asserted against the real module rather than the local helper, and in the form the module
+    // uses: `!== 'false'`. An env var left unset must now mean ON, which is the whole flip.
+    expect(FLAGS.sbpSourceOverflowBlock).toBe(true);
+    expect(process.env.ENABLE_SBP_SOURCE_OVERFLOW_BLOCK).not.toBe('false');
   });
 
-  it('with the flag OFF an over-long brief is clipped and labelled, exactly as before', () => {
+  it('with the flag OFF an over-long brief is clipped and labelled, as it did before the flip', () => {
     const out = withFlag(false, () => sourceBlocks(OVER));
 
     expect(out).toContain(`…[truncated at ${MAX_BRIEF_CHARS} chars]`);

@@ -44,6 +44,7 @@ import showcaseArtifactRoutes from './routes/showcaseArtifactRoutes';
 import buildArtifactRoutes from './routes/buildArtifactRoutes';
 import buildLogDraftRoutes from './routes/buildLogDraftRoutes';
 import publicPortfolioRoutes from './routes/publicPortfolioRoutes';
+import demoRoutes from './routes/demoRoutes';
 import publicCareerPortfolioRoutes from './routes/publicCareerPortfolioRoutes';
 import internVideoStreamRoutes from './routes/internVideoStreamRoutes';
 import publicHireTalentRoutes from './routes/publicHireTalentRoutes';
@@ -95,6 +96,7 @@ import { ensureProjectApprovalSchema } from './db/ensureProjectApprovalSchema';
 import { ensureContractTrackSchema } from './db/ensureContractTrackSchema';
 import { ensureProjectTenantSchema } from './db/ensureProjectTenantSchema';
 import { ensureProjectLifecycleSchema } from './db/ensureProjectLifecycleSchema';
+import { ensureConnectedDemoSchema } from './db/ensureConnectedDemoSchema';
 import { ensureGovQualificationSchema } from './db/ensureGovQualificationSchema';
 import { ensureGovOpportunityDismissalSchema } from './db/ensureGovOpportunityDismissalSchema';
 import { ensureGovSourceBundleSchema } from './db/ensureGovSourceBundleSchema';
@@ -149,6 +151,7 @@ import { ensureAiAgentIdentitySchema } from './db/ensureAiAgentIdentitySchema';
 import { ensureAiAgentReportsToSchema } from './db/ensureAiAgentReportsToSchema';
 import { ensureAiAgentHierarchySchema } from './db/ensureAiAgentHierarchySchema';
 import { ensureAiAgentAutonomyLevelSchema } from './db/ensureAiAgentAutonomyLevelSchema';
+import { ensureAgentCommsSchema } from './db/ensureAgentCommsSchema';
 import { ensureAiAgentAutonomySourceSchema } from './db/ensureAiAgentAutonomySourceSchema';
 import { ensureAiAgentAbacOverrideSchema } from './db/ensureAiAgentAbacOverrideSchema';
 import { ensureAiAgentReportsToAuditSchema } from './db/ensureAiAgentReportsToAuditSchema';
@@ -308,6 +311,8 @@ app.use(showcaseArtifactRoutes);
 app.use(buildArtifactRoutes);
 app.use(buildLogDraftRoutes);
 app.use(publicPortfolioRoutes);
+// The public Connected Demo. Unauthenticated, gated on demo_share_enabled, which defaults false.
+app.use(demoRoutes);
 app.use(advisorRoutes);
 app.use(alumniReferralRoutes);
 app.use(qrRedirectRoutes);
@@ -3002,6 +3007,16 @@ async function start(): Promise<void> {
   // and a project created between the two would be unattributable for no reason.
   await ensureProjectTenantSchema();
   await ensureProjectLifecycleSchema();
+  // The Connected Demo's three columns on `projects`. Additive, every statement IF NOT EXISTS,
+  // and `demo_share_enabled` defaults false so no existing project becomes public on deploy.
+  // Wrapped, like every ensure here, because a demo feature must never take the platform down.
+  // Unlike the lifecycle ensure above, this one REJECTS rather than warning, so the catch below
+  // receives a real failure instead of a log line nobody reads.
+  try {
+    await ensureConnectedDemoSchema();
+  } catch (err: any) {
+    console.warn('[boot] connected demo schema unavailable:', err?.error_class || err?.message);
+  }
   // AI Project Factory Phase 2: the Enterprise-owned gov qualification model (gov_qualifications,
   // build_authorizations, gov_opportunity_aliases). Additive NEW tables that FK to delivery_projects
   // (and the qualification table itself) — no existing table is altered; placed after the contract
@@ -3258,6 +3273,8 @@ async function start(): Promise<void> {
   // AI Workforce Reset, Phase C — autonomy_level (docs/ai-governance/abac-design.md's
   // 4-level ladder), required at agent reactivation time. Additive, idempotent, no flag.
   await ensureAiAgentAutonomyLevelSchema();
+  // Agent comms tool (2026-11-22): agent email identities + agent attribution index.
+  await ensureAgentCommsSchema();
   // Fleet-wide autonomy-level auto-classification, Phase 2 — autonomy_level_source
   // ('auto'|'manual'|null), distinguishing a classifier-set level from a real human
   // decision. Additive, idempotent, no flag.
@@ -3868,6 +3885,9 @@ async function start(): Promise<void> {
   } catch (err: any) {
     console.warn('[CommsHub] worker failed to start (non-fatal):', err?.message);
   }
+
+  // Agent comms (T10): finish place_ai_call rows whose completion webhook never arrived (20/run, 3 tries, then dead-letter).
+  cron.schedule('*/15 * * * *', async () => { try { const { runAgentCommsSweep, defaultSweepDeps } = await import('./services/agents/agentCommsSweep'); await runAgentCommsSweep(defaultSweepDeps()); } catch (err: unknown) { console.warn(JSON.stringify({ level: 'warn', service: 'agent-comms-sweep', event: 'agent_comms_sweep_crashed', outcome: 'failure', error_class: err instanceof Error ? err.constructor.name : 'UnknownError', context: { message: String((err as Error)?.message ?? err).slice(0, 200) } })); } });
 
   // AI Ops Command Center metrics_daily rollup — runs on the 5-minute
   // cadence so the Today's Pulse tile stays fresh during the day. The

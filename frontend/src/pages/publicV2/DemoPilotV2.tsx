@@ -11,7 +11,7 @@ import {
   DEPARTMENTS,
   EMPTY,
   PilotForm,
-  SERVICES,
+  SERVICE_CHOICES,
   START_TIMINGS,
   WHAT_HAPPENS,
   toIntakeBody,
@@ -213,28 +213,36 @@ export function DemoPilotV2(): React.ReactElement {
                 <label htmlFor="dp-phone-consent">{PHONE_CONSENT_TEXT}</label>
               </div>
 
-              <fieldset className="cbv2-field5 cbv2-field5--set">
-                <legend>
-                  Which service are you considering? <small>optional</small>
-                </legend>
+              {/* R23 Phase 5: an answer is required and the stored value is the plan key.
+                  "Not sure yet" is a real answer, so requiring one asks for a click, not a
+                  commitment. `aria-describedby` points at the error only when there is one,
+                  because a dangling reference is read out as nothing by some screen readers
+                  and as the whole form by others. */}
+              <fieldset
+                className="cbv2-field5 cbv2-field5--set"
+                aria-invalid={Boolean(errors.service)}
+                aria-describedby={errors.service ? 'dp-service-err' : undefined}
+              >
+                <legend>Which service are you considering?</legend>
                 <div className="cbv2-chips5">
-                  {SERVICES.map((s) => {
-                    const id = `dp-service-${s.toLowerCase().replace(/[^a-z]+/g, '-')}`;
+                  {SERVICE_CHOICES.map((choice) => {
+                    const id = `dp-service-${choice.value.replace(/[^a-z]+/g, '-')}`;
                     return (
-                      <label key={s} htmlFor={id}>
+                      <label key={choice.value} htmlFor={id}>
                         <input
                           type="radio"
                           id={id}
                           name="service"
-                          value={s}
-                          checked={form.service === s}
+                          value={choice.value}
+                          checked={form.service === choice.value}
                           onChange={change}
                         />
-                        {s}
+                        {choice.label}
                       </label>
                     );
                   })}
                 </div>
+                {err('service', 'dp-service-err')}
               </fieldset>
 
               <div className="cbv2-fgrid5">

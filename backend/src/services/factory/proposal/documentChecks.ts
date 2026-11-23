@@ -146,6 +146,63 @@ export function checkLocationCoverage(input: DocumentCheckInput): { score: numbe
   return { score: Math.round((located / denom.length) * 100) };
 }
 
+/** PURE: the index in `contentHtml` where the answer to `id` begins, or -1. Two anchors are recognized: the stable
+ *  FORWARD anchor the drafter now emits — a heading whose text carries the canonical id, e.g. `<h3>REQ-012: …</h3>` —
+ *  and the LEGACY phrasing already in stored drafts — "responds to requirement REQ-012". `\b` boundaries keep REQ-1
+ *  from matching REQ-10. Total; never throws. */
+function requirementAnchorIndex(contentHtml: string, id: string): number {
+  if (typeof contentHtml !== 'string' || !id) return -1;
+  const esc = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`<h[1-4]>[^<]*\\b${esc}\\b|responds?\\s+to\\s+requirement\\s+${esc}\\b`, 'i');
+  const m = re.exec(contentHtml);
+  return m ? m.index : -1;
+}
+
+/** PURE: split a whole-document draft into per-requirement content slices, keyed by canonical requirement id. Each
+ *  requirement's slice runs from its anchor to the next requirement's anchor (or the document end), so a single
+ *  content blob is traced back to the requirement each part answers. A requirement with no anchor is omitted — its
+ *  section stays empty and is correctly scored as uncovered. Deterministic; the fix for coverage reading 0 on a
+ *  substantive whole-document draft. */
+export function extractRequirementSections(contentHtml: string | null | undefined, requirementIds: string[]): Map<string, string> {
+  const out = new Map<string, string>();
+  const html = typeof contentHtml === 'string' ? contentHtml : '';
+  if (!html.trim() || !Array.isArray(requirementIds) || requirementIds.length === 0) return out;
+  const anchors = requirementIds
+    .map((id) => ({ id, at: requirementAnchorIndex(html, id) }))
+    .filter((a) => a.at >= 0)
+    .sort((a, b) => a.at - b.at);
+  for (let i = 0; i < anchors.length; i++) {
+    const start = anchors[i].at;
+    const end = i + 1 < anchors.length ? anchors[i + 1].at : html.length;
+    out.set(anchors[i].id, html.slice(start, end).trim());
+  }
+  return out;
+}
+
+/** PURE: fill any section whose authored content is empty with the per-requirement slice extracted from the
+ *  whole-document draft, so SUBSTANTIVE coverage credits a requirement answered inside the single content blob. A
+ *  section that already carries authored content is left untouched (a human/section-level edit wins); a sliced
+ *  requirement with no section row is appended. When nothing can be sliced, the sections are returned unchanged, so
+ *  the behavior degrades to exactly the old scoring (no regression). Deterministic. */
+export function hydrateSectionAnswers(
+  sections: Array<{ sectionKey: string; contentHtml?: string }>,
+  contentHtml: string | null | undefined,
+  requirementIds: string[],
+): Array<{ sectionKey: string; contentHtml?: string }> {
+  const src = Array.isArray(sections) ? sections : [];
+  const slices = extractRequirementSections(contentHtml, requirementIds);
+  if (slices.size === 0) return src;
+  const present = new Set(src.map((s) => s.sectionKey));
+  const result = src.map((s) => {
+    const hasContent = typeof s.contentHtml === 'string' && s.contentHtml.trim() !== '';
+    if (hasContent) return s;
+    const slice = slices.get(s.sectionKey);
+    return slice ? { ...s, contentHtml: slice } : s;
+  });
+  for (const [id, slice] of slices) if (!present.has(id)) result.push({ sectionKey: id, contentHtml: slice });
+  return result;
+}
+
 /** Format: page count within the page limit (over = FATAL), a file name is set, body has headings. Pure. */
 export function checkFormat(input: DocumentCheckInput): { score: number; findings: CheckFinding[] } {
   const findings: CheckFinding[] = [];

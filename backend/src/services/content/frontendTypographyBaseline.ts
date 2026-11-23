@@ -117,7 +117,10 @@ export const FRONTEND_TYPOGRAPHY_BASELINE_TOTALS: Readonly<Record<string, number
   // 2026-11-19: 2095 -> 2089. The class check-in's live view moved out of ClassCheckinPage
   // into the new CheckinLiveController, and its copy was written to house style on the move
   // (dashes became colons, full stops or commas). ClassCheckinPage's entry (6) is DELETED.
-  [DASH_RULE.id]: 2089,
+  //
+  // 2026-11-22: 2089 -> 2088. The member Events page's empty state ("Check back soon. New
+  // sessions are added most weeks.") lost its dash. EventsPage's entry (1) is DELETED.
+  [DASH_RULE.id]: 2088,
   // 2026-11-15: 74 -> 72. The v5 site adoption rewrote HomeV2 and ServicesV2,
   // and the four new pages were written to house style, so the two entries
   // those files held are gone rather than carried over.
@@ -139,7 +142,11 @@ export const FRONTEND_TYPOGRAPHY_BASELINE_TOTALS: Readonly<Record<string, number
   // dropped its "repo &mdash; and their demo videos once recorded" clause (demo videos
   // now have their own block above it), so its entry drops 2 -> 1. The header blurb keeps
   // its one escaped dash.
-  [ESCAPED_DASH_RULE.id]: 66,
+  //
+  // 2026-11-22: 66 -> 65. Agent comms: the Email tab's "no address" paragraph moved into the new
+  // AgentEmailSections.tsx and was written to house style on the move (the escaped dash became a
+  // colon). AgentEmailTab's entry (1) is DELETED.
+  [ESCAPED_DASH_RULE.id]: 65,
   // 2026-11-16: 659 -> 657. TV-2 deleted `TvManager.tsx`, the in-campus playlist editor
   // that TV-1 left unreachable when the Manage button started opening the marketing
   // library instead. Its two emoji went with the file, so its entry is DELETED rather

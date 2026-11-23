@@ -5,9 +5,15 @@ Ticket L8.1 · Acceptance LC-18 · Approver: Ali · Drafted 2026-11-02, session 
 > **Success metric (the ticket's own words):** "The exact reviewed head is identified, and the
 > rollback is a command someone can run, not a paragraph."
 
-**Status: DRAFT, and it cannot close tonight.** L8.1's stated input is L7.6, which is still open
-because its remaining half is an *independent* scope-and-evidence review — a second pair of eyes,
-not a check that can be run. Everything below is ready for the morning.
+**Status: DRAFT, amended 2026-11-22 by the spine closeout, and it still cannot close.** L8.1's
+stated input is L7.6, whose remaining half is an *independent* scope-and-evidence review, a second
+pair of eyes rather than a check that can be run. That is still the open input, and this amendment
+does not claim otherwise.
+
+What the amendment does change is section 2. **The draft said this release carried no migration.
+That is no longer true**, and a release packet that understates its own schema change is worse than
+no packet, because the reader stops looking. The spine closeout adds three columns to `projects`.
+Section 2 is rewritten against that, and section 1 carries this branch's head.
 
 ---
 
@@ -29,16 +35,73 @@ fc70cb41627c13712eac300ca314dc659f0d1c35
 That is the commit to roll back *to* if either merge turns out badly. Record the value that is
 `origin/main` immediately **before** the merges, not this one, if anything else lands first.
 
+### The spine closeout head (amended 2026-11-22)
+
+| PR | Branch | Head SHA | Checks |
+|---|---|---|---|
+| [#4311](https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/4311) | `workstream/spine-closeout-connected-demo` | `aa1df0c79f067925e5c3d4bcc228540fbc9db14e` | recorded on the PR |
+
+- **Reviewed head SHA:** `aa1df0c79f067925e5c3d4bcc228540fbc9db14e`
+
+**Read that value as of packet time, not as of merge time.** A branch head moves with every
+further commit, so the authoritative value is always
+`gh pr view <n> --json headRefOid --jq .data`, exactly as the two rows above were read. The SHA
+recorded here is the head this packet was written against, pinned to an exact 40-hex literal by a
+test, which additionally resolves it against the object database wherever the object is present.
+That last part is conditional for an honest reason: a shallow clone does not hold the object, and
+this worktree is itself shallow, so the test says which of the two it did rather than reporting a
+proof it could not run.
+
+**Prior SHA, the rollback target for this release.** `origin/main` immediately before the merge,
+which is the value to read on the day rather than one to copy from here. The rule from the draft
+stands: record what `origin/main` actually was before the merge, not a value written in advance.
+
 ## 2. Migration order
 
-**There is no migration in these two PRs.** Both are test-only or additive-with-no-caller:
+### The spine closeout release (amended 2026-11-22)
+
+**This release carries one migration.** `ensureConnectedDemoSchema` adds three columns to
+`projects`:
+
+| column | type | default |
+|---|---|---|
+| `demo_share_token` | `TEXT` | null |
+| `demo_share_enabled` | `BOOLEAN NOT NULL` | **`false`** |
+| `demo_spec` | `JSONB` | null |
+
+Four properties of it decide the order, and each is a property of the code rather than a promise:
+
+1. **It is additive.** Every statement is `ADD COLUMN IF NOT EXISTS`. No existing column is
+   altered and no row is rewritten, so there is no backfill and no lock beyond the catalog update.
+2. **It is idempotent.** A second run is a no-op, which is what makes a re-deploy and a rollback
+   safe to repeat.
+3. **It runs at boot**, from `server.ts`, before the routes bind. There is no separate migration
+   step to remember and therefore no window in which the code is live and the columns are not.
+4. **It REJECTS on failure**, unlike `ensureProjectLifecycleSchema` next door, which applies its
+   DDL warn-only and whose caller discards the result. The boot call site still catches and warns,
+   because a demo feature must never take the platform down, but the failure is now a value the
+   caller could act on rather than a log line nobody reads.
+
+**So the order is: deploy, and the schema applies itself on the way up.** The honest caveat is the
+one property above that is not costless: because the boot call site warns rather than exits, a database
+where the `ALTER` was refused will serve traffic with the feature broken. What stops that being
+silent is `demo_share_enabled` defaulting to `false`. Nothing is public until somebody turns one
+on, so the first symptom of a failed migration is a demo that will not publish, not a leak.
+
+**A rollback does not drop the columns.** Three unused additive columns on `projects` cost nothing
+and dropping them would be the destructive half of a change whose point was to be reversible.
+The rollback target in section 4 is therefore a code rollback only.
+
+### The two earlier PRs in this packet's original scope
+
+Both are test-only or additive-with-no-caller:
 
 - #3595 adds test files only. No product file changes behaviour.
 - #3598 adds `promotionContract.ts` and `promotionSecondSignature.ts` and splits
   `promotionCriteria.ts`. The new gate has **zero callers**, so no runtime path changes.
 
-So the order is simply: merge, then deploy. Neither PR requires a schema change, a backfill, or a
-data migration, and neither needs the other to land first — they touch different subtrees.
+Neither requires a schema change, a backfill, or a data migration, and neither needs the other to
+land first: they touch different subtrees.
 
 The Phase 5 lifecycle tables are already applied and are **additive**. A rollback does not drop
 them, which matters for step 4 below.

@@ -2,9 +2,11 @@
  * OH1u: book Maya's follow-up email after an Open House (copy: openHouseFollowupCopy.ts).
  *
  * Who gets which email (FOLLOWUP_PEOPLE_SQL):
- *   attended  checked in on the platform for that session: a session_guests row that is not
- *             awaiting_class, or a present/late attendance_records row of a signed-in member.
- *   missed    registered for that Open House (open_house_registrations) and not in the above.
+ *   attended  in the room for that session: a session_guests row that is not awaiting_class, a
+ *             present/late attendance_records row, a classroom_enter presence event or a status
+ *             (session_pulse) of a signed-in member. Staff addresses (@colaberry.com) never count.
+ *   missed    registered for that Open House (open_house_registrations) and not in the above
+ *             (staff registrations excluded).
  * Attended wins, so nobody gets both.
  *
  * Gates, in order (fail closed at each):
@@ -29,7 +31,9 @@ import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import { classInstant, formatCentralClock } from './centralDate';
 import { longSessionDate } from './email/sessionReminderEmail';
-import { followupCopy, firstNameOf, screenFollowupCopy, FollowupTrack, NextOpenHouse, OPEN_HOUSE_SIGNUP_URL } from './openHouseFollowupCopy';
+import {
+  followupStepCopy, firstNameOf, screenFollowupCopy, FollowupTrack, FollowupCopyKey, NextOpenHouse, OPEN_HOUSE_SIGNUP_URL, PORTAL_PLANS_URL,
+} from './openHouseFollowupCopy';
 import type { SequenceStep } from '../models/FollowUpSequence';
 
 export const OPEN_HOUSE_FOLLOWUP_KEY = 'open_house_followup';
@@ -57,17 +61,28 @@ export async function findFollowupCampaign(): Promise<FollowupCampaign | null> {
   return rows[0] ?? null;
 }
 
+// OH1y (22 Nov 2026): a signed-in member who entered the classroom or set their status was in the room even when the
+// system marked them absent for skipping the check-in button: six registrants of the 19 Nov Open House were. Staff
+// (@colaberry.com) are never attendees of their own Open House.
 export const FOLLOWUP_PEOPLE_SQL = `
 WITH here AS (
-  SELECT g.email_lower AS email FROM session_guests g
-   WHERE g.session_id = :sid AND NOT g.awaiting_class AND g.email_lower IS NOT NULL
-  UNION
-  SELECT LOWER(e.email) FROM attendance_records ar JOIN enrollments e ON e.id = ar.enrollment_id
-   WHERE ar.session_id = :sid AND ar.status::text IN ('present', 'late') AND e.email IS NOT NULL
+  SELECT email FROM (
+    SELECT g.email_lower AS email FROM session_guests g
+     WHERE g.session_id = :sid AND NOT g.awaiting_class AND g.email_lower IS NOT NULL
+    UNION
+    SELECT LOWER(e.email) FROM attendance_records ar JOIN enrollments e ON e.id = ar.enrollment_id
+     WHERE ar.session_id = :sid AND ar.status::text IN ('present', 'late') AND e.email IS NOT NULL
+    UNION
+    SELECT LOWER(e.email) FROM session_presence_events pe JOIN enrollments e ON e.id = pe.enrollment_id
+     WHERE pe.session_id = :sid AND pe.event_type = 'classroom_enter' AND e.email IS NOT NULL
+    UNION
+    SELECT LOWER(e.email) FROM session_pulse sp JOIN enrollments e ON e.id = sp.enrollment_id
+     WHERE sp.session_id = :sid AND e.email IS NOT NULL
+  ) h WHERE email NOT LIKE '%@colaberry.com'
 ), reg AS (
   SELECT DISTINCT r.email_lower AS email FROM open_house_registrations r
     JOIN live_sessions s ON s.open_house_event_id = r.event_id
-   WHERE s.id = :sid AND r.email_lower IS NOT NULL
+   WHERE s.id = :sid AND r.email_lower IS NOT NULL AND r.email_lower NOT LIKE '%@colaberry.com'
 ), people AS (
   SELECT email, 'attended' AS track FROM here
   UNION ALL
@@ -116,10 +131,31 @@ async function nextOpenHouseAfter(sessionDate: string): Promise<{ when_label: st
 export interface FollowupBookResult {
   outcome: 'booked' | 'no_campaign' | 'not_active' | 'no_session' | 'not_open_house' | 'not_ended';
   attended: number; missed: number; booked: number; no_lead: number; screened_out: number; errors: number;
+  /** OH1z: in a running campaign that takes precedence (a countdown to the next Open House, payment or class readiness); left there. */
+  held_by_other: number;
+  /** Rows booked (or, on a dry run, that would be), by step copy_key. */
+  rows: Record<string, number>;
 }
 
 const empty = (outcome: FollowupBookResult['outcome']): FollowupBookResult =>
-  ({ outcome, attended: 0, missed: 0, booked: 0, no_lead: 0, screened_out: 0, errors: 0 });
+  ({ outcome, attended: 0, missed: 0, booked: 0, no_lead: 0, screened_out: 0, errors: 0, held_by_other: 0, rows: {} });
+
+/**
+ * OH1z: someone the follow-up must NOT pull out: a running membership in a campaign that takes
+ * precedence AND still has something queued for them that is not about THIS Open House. A Nov 19
+ * registrant counting down to Dec 3 keeps their Dec 3 reminders; a payment- or class-readiness
+ * member keeps theirs. But the countdown to the Open House being followed up (its sends done or
+ * cancelled at the start) never holds anyone: that is the big move after every Open House.
+ */
+export const HELD_BY_PRECEDENCE_SQL = `
+SELECT 1 FROM campaign_leads cl JOIN campaigns c ON c.id = cl.campaign_id
+ WHERE cl.lead_id = :leadId AND cl.campaign_id <> :campaignId AND cl.status IN ('enrolled', 'active')
+   AND c.status = 'active' AND c.archived_at IS NULL AND (c.settings->>'takes_precedence') = 'true'
+   AND EXISTS (SELECT 1 FROM scheduled_emails se
+                WHERE se.campaign_id = cl.campaign_id AND se.lead_id = cl.lead_id
+                  AND se.status IN ('pending', 'processing', 'paused')
+                  AND COALESCE(se.metadata->>'event_session_id', '') <> CAST(:sid AS text))
+ LIMIT 1`;
 
 /**
  * OH1w: which of the follow-up sequence's steps this person gets. A sequence with audience tags
@@ -141,7 +177,32 @@ export function stepsForTrack(steps: SequenceStep[] | null | undefined, track: F
  */
 export function followupAiNotes(input: {
   track: FollowupTrack; eventDate: string; next: NextOpenHouse | null; replayUrl: string | null; todayUrl: string; signupUrl: string;
+  copyKey?: FollowupCopyKey; plansUrl?: string;
 }): { notes: string; allowed: string[]; primary: string } {
+  // OH1z: the later steps carry exactly one link each. Enroll and last call: the plans page (the
+  // product shows the price; Maya never names one). Invite: the Open House sign-up page.
+  if (input.copyKey === 'enroll' || input.copyKey === 'last_call') {
+    const plans = input.plansUrl || PORTAL_PLANS_URL;
+    return {
+      notes: [`OPEN HOUSE FOLLOW-UP. This person came to the Colaberry Open House on ${input.eventDate}.`,
+        input.copyKey === 'enroll'
+          ? 'Invite them to reserve their seat in the Forward Deployed AI Engineer Accelerator. Warm, no pressure, no urgency, no deadline.'
+          : 'A last, short check-in: invite any question that is holding them back, and say where to reserve a seat when they are ready. No pressure, no deadline.',
+        'Never name a price, a discount, an offer, a deadline or a number of seats. The plans page shows the price.',
+        `Where to reserve a seat: ${plans}`,
+        `Links: use ONLY this one, exactly as written: ${plans}. Never write a placeholder like [insert link].`].join('\n'),
+      allowed: [plans], primary: plans,
+    };
+  }
+  if (input.copyKey === 'invite') {
+    return {
+      notes: [`OPEN HOUSE FOLLOW-UP. This person registered for the Colaberry Open House on ${input.eventDate} but we did not see them check in. Never say they were absent.`,
+        input.next ? `Invite them to the next Open House, ${input.next.when_label}.` : 'Invite them to the next Open House; do not name a date.',
+        `Where to save a spot: ${input.signupUrl}`,
+        `Links: use ONLY this one, exactly as written: ${input.signupUrl}. Never write a placeholder like [insert link].`].join('\n'),
+      allowed: [input.signupUrl], primary: input.signupUrl,
+    };
+  }
   const lines = [
     `OPEN HOUSE FOLLOW-UP. The Colaberry Open House was on ${input.eventDate}.`,
     input.track === 'attended'
@@ -173,8 +234,32 @@ export function followupAiNotes(input: {
   return { notes: lines.join('\n'), allowed, primary };
 }
 
+/**
+ * OH1z: has this address paid to enroll? A PaySimple payment on a non-comp subscription (where
+ * every payer since the ads launched lives), or the older enrollments.payment_status = 'paid'.
+ * Used by the scheduler to stop the later follow-up steps once someone has paid.
+ */
+export const PAID_MEMBER_SQL = `
+SELECT EXISTS (
+  SELECT 1 FROM subscriptions sb JOIN enrollments en ON en.id = sb.enrollment_id
+   WHERE LOWER(en.email) = LOWER(:email) AND sb.plan::text <> 'comp' AND sb.paysimple_payment_id IS NOT NULL
+     AND sb.status::text IN ('active', 'past_due')
+) OR EXISTS (
+  SELECT 1 FROM enrollments en WHERE LOWER(en.email) = LOWER(:email) AND en.payment_status::text = 'paid'
+) AS paid`;
+
+export async function hasPaidMembership(email: string): Promise<boolean> {
+  const [r] = await sequelize.query<{ paid: boolean }>(PAID_MEMBER_SQL, { replacements: { email }, type: QueryTypes.SELECT });
+  return !!r?.paid;
+}
+
 /** Book the follow-ups for one Open House session (or one person in it). Never throws for a single person. */
-export async function bookOpenHouseFollowups(sessionId: string, opts: { now?: Date; log?: Log; leadId?: number } = {}): Promise<FollowupBookResult> {
+/**
+ * opts.startAt (OH1z): the day-0 send time, instead of 10:00 CT the morning after. For booking an
+ * Open House whose morning-after has passed (Nov 19, booked on Nov 22 to start Nov 23).
+ * opts.dryRun: compute everything, write nothing; result.rows says what would be booked.
+ */
+export async function bookOpenHouseFollowups(sessionId: string, opts: { now?: Date; log?: Log; leadId?: number; startAt?: Date; dryRun?: boolean } = {}): Promise<FollowupBookResult> {
   const now = opts.now ?? new Date();
   const log = opts.log ?? defaultLog;
   const campaign = await findFollowupCampaign();
@@ -193,7 +278,7 @@ export async function bookOpenHouseFollowups(sessionId: string, opts: { now?: Da
   );
   const replayUrl = String(campaign.settings?.replay_urls?.[sessionId] || '') || null;
   const next = await nextOpenHouseAfter(s.session_date);
-  const sendAt = followupSendAt(s.session_date, now);
+  const sendAt = opts.startAt && opts.startAt.getTime() > now.getTime() ? opts.startAt : followupSendAt(s.session_date, now);
   const eventDate = longSessionDate(s.session_date);
   const result = empty('booked');
   const { ScheduledEmail, CampaignLead } = await import('../models');
@@ -212,34 +297,49 @@ export async function bookOpenHouseFollowups(sessionId: string, opts: { now?: Da
       if (p.track === 'attended') result.attended += 1; else result.missed += 1;
       if (!p.lead_id) { result.no_lead += 1; continue; }
       const nextFor: NextOpenHouse | null = next ? { when_label: next.when_label, registered: next.emails.has(p.email) } : null;
-      const copy = followupCopy({ track: p.track, firstName: firstNameOf(p.name), eventDate, replayUrl, next: nextFor });
-      const problems = screenFollowupCopy(copy);
-      if (problems.length) {
+      const base = { track: p.track, firstName: firstNameOf(p.name), eventDate, replayUrl, next: nextFor };
+      // OH1z: every step has its own approved fallback copy and links. A step whose copy is null is
+      // not booked for this person (an invite to someone already registered for the next one).
+      const planned = stepsForTrack(seq?.steps, p.track).map(({ index, step }) => {
+        const key = step?.copy_key;
+        const copy = followupStepCopy(base, key);
+        return { index, step, key, copy, problems: copy ? screenFollowupCopy(copy) : [] };
+      }).filter((x) => x.copy);
+      const bad = planned.filter((x) => x.problems.length);
+      if (bad.length) {
         result.screened_out += 1;
-        log('followup_screened_out', { outcome: 'failure', error_class: 'ContractViolation', context: { lead_id: p.lead_id, track: p.track, problems } });
+        log('followup_screened_out', { outcome: 'failure', error_class: 'ContractViolation', context: { lead_id: p.lead_id, track: p.track, problems: bad.map((x) => `${x.key || 'first'}: ${x.problems.join('; ')}`) } });
         continue;
       }
-      const ai = followupAiNotes({ track: p.track, eventDate, next: nextFor, replayUrl, todayUrl: PORTAL_TODAY_URL, signupUrl: OPEN_HOUSE_SIGNUP_URL });
+      const held = await sequelize.query(HELD_BY_PRECEDENCE_SQL, { replacements: { leadId: p.lead_id, campaignId: campaign.id, sid: sessionId }, type: QueryTypes.SELECT, transaction: t });
+      if (held.length) { result.held_by_other += 1; continue; }
+      if (opts.dryRun) {
+        result.booked += 1;
+        for (const x of planned) result.rows[x.key || 'first'] = (result.rows[x.key || 'first'] || 0) + 1;
+        continue;
+      }
       try {
         await grantEventReminderPermission(campaign.id, Number(p.lead_id));
         // One campaign at a time: the follow-up takes them out of the countdown (and anything else).
         await admitToCampaign(campaign.id, Number(p.lead_id), { supersede: true });
-        const steps = stepsForTrack(seq?.steps, p.track);
         // A savepoint per person: in Postgres one failed insert aborts the whole transaction,
         // so without it a single bad row would fail everyone after it.
         await sequelize.transaction({ transaction: t }, async (sp) => {
-          for (const { index, step } of steps) {
+          for (const { index, step, key, copy } of planned) {
+            const ai = followupAiNotes({ track: p.track, eventDate, next: nextFor, replayUrl, todayUrl: PORTAL_TODAY_URL, signupUrl: OPEN_HOUSE_SIGNUP_URL, copyKey: key });
             await ScheduledEmail.create({
               lead_id: p.lead_id, sequence_id: campaign.sequence_id, campaign_id: campaign.id, step_index: index,
-              channel: 'email', subject: step?.subject || copy.subject,
+              channel: 'email', subject: step?.subject || copy!.subject,
               // The approved fixed copy is the body until (and unless) the AI draft passes the screen.
-              body: copy.body, to_email: p.email, to_phone: null,
+              body: copy!.body, to_email: p.email, to_phone: null,
               max_attempts: 1, attempts_made: 0,
               scheduled_for: new Date(sendAt.getTime() + (step?.delay_days || 0) * 86_400_000),
               status: 'pending', ai_instructions: step?.ai_instructions || null,
               metadata: {
                 event_followup: true, followup_track: p.track, event_session_id: sessionId, event_title: s.title, event_date: s.session_date,
-                step_goal: step?.step_goal || null, ai_tone: step?.ai_tone || null,
+                step_goal: step?.step_goal || null, ai_tone: step?.ai_tone || null, copy_key: key || null,
+                // OH1z: every step after the first stops for someone who has paid by then (scheduler guard).
+                stop_if_paid: !!key && key !== 'thanks' && key !== 'catch_up',
                 ai_context_notes: [ai.notes, step?.ai_context_notes].filter(Boolean).join('\n'),
                 allowed_links: ai.allowed, primary_link: ai.primary,
               },
@@ -247,12 +347,13 @@ export async function bookOpenHouseFollowups(sessionId: string, opts: { now?: Da
           }
           const [cl, created] = await CampaignLead.findOrCreate({
             where: { campaign_id: campaign.id, lead_id: p.lead_id } as any,
-            defaults: { campaign_id: campaign.id, lead_id: p.lead_id, status: 'active', total_steps: steps.length } as any,
+            defaults: { campaign_id: campaign.id, lead_id: p.lead_id, status: 'active', total_steps: planned.length } as any,
             transaction: sp,
           });
           if (!created && (cl as any).status === 'completed') await cl.update({ status: 'active', completed_at: null } as any, { transaction: sp });
         });
         result.booked += 1;
+        for (const x of planned) result.rows[x.key || 'first'] = (result.rows[x.key || 'first'] || 0) + 1;
       } catch (err: any) {
         result.errors += 1;
         log('followup_book_failed', { outcome: 'failure', error_class: err?.name || 'DatabaseError', context: { lead_id: p.lead_id, message: err?.message } });

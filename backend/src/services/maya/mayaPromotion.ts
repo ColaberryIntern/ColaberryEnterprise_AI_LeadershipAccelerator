@@ -101,12 +101,16 @@ const HISTORY_LIMIT = 200;
  * no state a person can set that changes it, because `setCapabilityState` refuses them too.
  *
  * The difference between "defaults to off" and "refused" is the difference between a switch in
- * the off position and no switch at all, and each of these three earned the second:
+ * the off position and no switch at all, and each of these earned the second:
  *
  *   sendSmsSummary   Ali, 2026-11-13: SMS stays refused by name. This covers EVERY caller,
  *                    including the GoHighLevel workflow that `scheduleStrategyCall` fires as a
  *                    side effect, which is how SMS was reaching people without a tool call.
- *   placeVoiceCall   same instruction, same reason. `ENABLE_VOICE_CALLS` stays false.
+ *   (placeVoiceCall was refused here until 2026-11-22. Ali then chose "Only granted agents,
+ *                    consent required" for AI calls: it is now a dial, shipped 'shadow', and dials
+ *                    only through the shared place_ai_call tool, with Maya's grant, recorded phone
+ *                    consent, the VOICE_CALL_PATHS allowlist and the dial guard. 'live' is set by
+ *                    Ali explicitly; nothing in code turns it on.)
  *   enrollInCampaign a queue row is only an approval of a message if the row IS the message.
  *                    Enrolment is not: it writes a `CampaignLead`, which two crons turn into
  *                    `scheduled_emails`, whose bodies `generateAIContent()` composes AT SEND
@@ -117,7 +121,6 @@ const HISTORY_LIMIT = 200;
  */
 export const REFUSED_CAPABILITIES = Object.freeze([
   'sendSmsSummary',
-  'placeVoiceCall',
   'enrollInCampaign',
 ] as const);
 
@@ -168,6 +171,9 @@ export const DEFAULT_STATES: Readonly<Record<PromotableCapability, PromotionStat
   // already in the conversation sees. `live` is their honest state and always has been; this run
   // gives them a dial, it does not withdraw them.
   captureVisitorRecord: 'live',
+  // Agent comms (Ali, 2026-11-22): out of the refused list. Ships 'shadow' (records what she would
+  // have done, dials nothing); 'live' only by Ali's explicit setCapabilityState.
+  placeVoiceCall: 'shadow',
   readSiteChatCatalog: 'live',
   composeMarketingDraft: 'live',
   requestHumanCallback: 'live',
