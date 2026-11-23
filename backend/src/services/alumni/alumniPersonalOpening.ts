@@ -36,11 +36,23 @@ const MONTHS: Record<string, string> = {
   jul: 'July', aug: 'August', sep: 'September', oct: 'October', nov: 'November', dec: 'December',
 };
 
+/** Words kept in capitals when an all-caps class name is tidied ("SQLBI BOOTCAMP" -> "SQL BI Bootcamp"). */
+const ACRONYMS: Record<string, string> = { SQL: 'SQL', BI: 'BI', MS: 'MS', SQLBI: 'SQL BI', AI: 'AI', ETL: 'ETL', SSIS: 'SSIS', SSRS: 'SSRS', SSAS: 'SSAS', BA: 'BA', II: 'II', I: 'I' };
+
+function tidyProgram(head: string): string {
+  return head.replace(/\s+/g, ' ').trim().split(' ').map((w) => {
+    const up = w.toUpperCase();
+    if (ACRONYMS[up]) return ACRONYMS[up];
+    if (/^bootcamp$/i.test(w)) return 'Bootcamp';
+    return w === up && /[A-Z]/.test(w) ? w.charAt(0) + w.slice(1).toLowerCase() : w;
+  }).join(' ');
+}
+
 /** "Data Analytics Bootcamp - Jul 11 2020 (ONLINE)" -> program + "July 2020". Lenient; nulls when unreadable. */
 export function openingContextFrom(alumni: Record<string, any> | null | undefined): AlumniOpeningContext {
   const raw = String(alumni?.class_name || '').trim();
   const [head, tail = ''] = raw.split(/\s+-\s+/);
-  const program = head ? head.replace(/\s+/g, ' ').replace(/\b([A-Z])([A-Z]+)\b/g, (_m, a, b) => a + b.toLowerCase()).trim() : null;
+  const program = head ? tidyProgram(head) : null;
   const m = tail.match(/([A-Za-z]{3})[a-z]*\s+\d{1,2},?\s+(\d{4})/);
   const month = m ? MONTHS[m[1].toLowerCase()] : null;
   const year = m ? m[2] : null;
@@ -56,18 +68,21 @@ export function buildOpeningPrompt(ctx: AlumniOpeningContext, theme: string): { 
   ].filter(Boolean).join(' ');
   return {
     system: [
-      'You write ONLY the first one or two sentences of a personal email from Ali Muwwakkil, who founded Colaberry, to a former student.',
-      'The greeting ("Hi <name>,") is already written: do not greet. The rest of the email is already written: do not summarize it.',
-      `Warm, plain, first person, American English, at most ${MAX_WORDS - 10} words.`,
+      'You write ONLY the first one or two short sentences of a personal email from Ali Muwwakkil, who founded Colaberry, to a former student.',
+      'The greeting ("Hi <name>,") is already written: do not greet. The rest of the email is already written: do not preview or summarize it, and do not mention holidays or the season (the email does that).',
+      'Ali ran the school; he did not take the class with them. Never say "we" were in the class, "together", or that they graduated (not everyone finished).',
+      'Ali does not know what they have done since the class: never assume their progress, career or how far they have come, and never imply he has been in touch with them recently.',
+      'Tie the sentence to what this email is about, so each of the ten openings is different. Sound like a real person writing one note, not a template: do not start with "I hope", "It\'s been a while" or "I wanted to reach out".',
+      `Plain, warm, first person, American English, at most ${MAX_WORDS - 15} words.`,
       'You may mention their program and class month and year naturally. Nothing else factual.',
-      'Never mention: a price, discount, offer, deal, special, percent, dollar amount, salary, statistic, any number except their class year, any company, a link, a promise or guarantee, or the word "free". No dashes.',
+      'Never mention: a price, discount, offer or offerings, deal, special, percent, dollar amount, salary, statistic, any number except their class year, any company, a link, a promise or guarantee, or the word "free". No dashes.',
       'Return only the sentences, no quotes.',
     ].join(' '),
     user: `${facts}\nThis email is about: ${theme}\nWrite the opening.`,
   };
 }
 
-const BANNED = /\b(price|pricing|cost|discount|offer|deal|special|percent|salary|salaries|guarantee|guaranteed|promise|free|million|billion|anthropic|claude|gartner|indeed|levels\.fyi)\b|%|\$|https?:|www\.|@/i;
+const BANNED = /\b(price|pricing|cost|discount\w*|offer\w*|deal\w*|special|percent|salary|salaries|guarantee\w*|promise\w*|free|million|billion|anthropic|claude|gartner|indeed|levels\.fyi|together|graduat\w*|thanksgiving|christmas|holiday\w*|finds you well)\b|%|\$|https?:|www\.|@/i;
 
 /** Every rule an opening breaks; empty when it may be sent. */
 export function screenOpening(text: string, ctx: AlumniOpeningContext): string[] {
@@ -84,27 +99,53 @@ export function screenOpening(text: string, ctx: AlumniOpeningContext): string[]
   if (numbers.length) problems.push(`numbers: ${numbers.join(', ')}`);
   if (/[–—]/.test(t)) problems.push('dash');
   if (/^(hi|hello|dear|hey)\b/i.test(t)) problems.push('greets');
+  if (/^i hope\b|^it'?’?s been a while|reach(ing)? out/i.test(t.replace(/’/g, "'"))) problems.push('template opener');
+  // Ali does not know their story since the class, or whether they finished it.
+  if (/how far you|progress you|your career|complet\w*|wrapped up|finish\w*|hearing how/i.test(t)) problems.push('assumes their story');
   return problems;
 }
 
 /** Plain openings, one per email, used whenever the AI draft cannot be. */
 const FALLBACKS = [
-  'I hope this finds you well.',
-  'I hope you are having a good week.',
+  'I wanted you to hear this from me directly.',
+  'You have been on my mind this week.',
   'I wanted to share something with you directly.',
   'I have been thinking a lot about where our alumni are headed.',
-  'I hope you are doing well.',
+  'Here is something I think you will want to see.',
   'I wanted to pass along something I think you will find interesting.',
-  'I hope your December is off to a good start.',
+  'A quick note from me today.',
   'I wanted to follow up with a few thoughts.',
-  'I hope you are getting some time to rest this season.',
-  'I hope you are enjoying the holidays.',
+  'I have been looking back on this year.',
+  'One more note from me.',
 ];
 export function fallbackOpening(stepIndex: number): string {
   return FALLBACKS[Math.abs(stepIndex) % FALLBACKS.length];
 }
 
-export interface OpeningResult { text: string; source: 'ai' | 'fallback'; problems: string[] }
+/**
+ * The "template" mode: one fixed sentence per email, built around the person's own class. Personal
+ * (their program and class month and year), different in every email, and always true, because
+ * nothing in it is generated. Without a readable class it says "your class with us".
+ */
+export function templateOpening(ctx: AlumniOpeningContext, stepIndex: number): string {
+  const cls = ctx.program ? `${ctx.program} class${ctx.classMonthYear ? ` in ${ctx.classMonthYear}` : ''}` : 'class with us';
+  const of = ctx.program ? `${ctx.program} class${ctx.classMonthYear ? ` of ${ctx.classMonthYear}` : ''}` : 'class with us';
+  const lines = [
+    `Since your ${cls}, the analyst role has changed a lot, and I want you to hear my take on it.`,
+    `This week I am thinking about everyone who has come through Colaberry, including your ${of}.`,
+    `When you sat in our ${cls}, most people had never heard of this next role.`,
+    `Much of what your ${cls} covered now lives inside one platform I built.`,
+    `Your ${cls} gave you a foundation, and here is how to show employers what you can build on top of it.`,
+    `The skills you started building in our ${cls} are getting serious attention right now.`,
+    `If you came into our ${cls} with an eye on BI work, this note is for you.`,
+    `If I were starting from your ${of} today, this is the plan I would follow.`,
+    `As the year winds down, I am thinking about people from every class, including your ${of}.`,
+    `One more note to you and the rest of your ${of}.`,
+  ];
+  return lines[Math.abs(stepIndex) % lines.length];
+}
+
+export interface OpeningResult { text: string; source: 'ai' | 'fallback' | 'template'; problems: string[] }
 
 export type OpeningModel = (system: string, user: string) => Promise<string>;
 

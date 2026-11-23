@@ -49,8 +49,9 @@ async function one<T extends object>(sql: string, replacements: Record<string, u
   return (rows[0] as T) ?? null;
 }
 
-async function findCampaign(): Promise<{ id: string; status: string; sequence_id: string | null } | null> {
-  return one(`SELECT id, status::text AS status, sequence_id FROM campaigns WHERE settings->>'campaign_key' = :k AND archived_at IS NULL ORDER BY created_at LIMIT 1`, { k: DA_ALUMNI_CAMPAIGN_KEY });
+async function findCampaign(): Promise<{ id: string; status: string; sequence_id: string | null; opening_mode: string | null } | null> {
+  return one(`SELECT id, status::text AS status, sequence_id, settings->>'opening_mode' AS opening_mode FROM campaigns
+               WHERE settings->>'campaign_key' = :k AND archived_at IS NULL ORDER BY created_at LIMIT 1`, { k: DA_ALUMNI_CAMPAIGN_KEY });
 }
 
 async function ensureCampaign(apply: boolean, log: (s: string) => void): Promise<void> {
@@ -77,6 +78,8 @@ async function ensureCampaign(apply: boolean, log: (s: string) => void): Promise
     campaign_key: DA_ALUMNI_CAMPAIGN_KEY,
     sender_email: 'ali@colaberry.com', sender_name: 'Ali Muwwakkil',
     ali_signature: true, hide_ps: true,
+    // 'template' (default): a fixed sentence per email around the person's class. 'ai': AI-written, screened.
+    opening_mode: 'template',
     stop_rule: src.settings?.stop_rule || { max_unsubscribe_rate: 2, max_bounce_rate: 5 },
     max_leads_per_cycle: 200, delay_between_sends: 0,
     send_timezone: 'America/Chicago', send_time_start: '08:00', send_time_end: '20:00', send_active_days: [0, 1, 2, 3, 4, 5, 6],
@@ -130,7 +133,8 @@ export async function bookAlumni(apply: boolean, now = new Date()): Promise<Book
             lead_id: p.lead_id, sequence_id: c.sequence_id, campaign_id: c.id, step_index: x.i,
             channel: 'email', subject: x.s.subject, body: alumniStepBody(x.s, first), to_email: p.email, to_phone: null,
             max_attempts: 1, attempts_made: 0, scheduled_for: x.at, status: 'pending', ai_instructions: null,
-            metadata: { alumni_holiday: true, alumni_step: x.i + 1, personal_opening: true, opening_theme: x.s.theme, stop_if_paid: true },
+            metadata: { alumni_holiday: true, alumni_step: x.i + 1, personal_opening: true, opening_theme: x.s.theme,
+              opening_mode: c.opening_mode === 'ai' ? 'ai' : 'template', stop_if_paid: true },
           } as any, { transaction: t });
           out.per_step[x.i] += 1;
         }

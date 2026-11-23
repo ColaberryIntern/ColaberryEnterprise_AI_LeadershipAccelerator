@@ -856,7 +856,11 @@ async function processScheduledActions(): Promise<void> {
         const P = await import('./alumni/alumniPersonalOpening');
         const lead = await Lead.findByPk(action.lead_id);
         const ctx = P.openingContextFrom((lead as any)?.alumni_context);
-        const opening = await P.writeOpening(ctx, String(action.metadata?.opening_theme || action.subject || ''), Number(action.step_index || 0));
+        const step = Number(action.step_index || 0);
+        // opening_mode 'template' (default): the fixed per-email sentence around their class. 'ai': written and screened.
+        const opening = action.metadata?.opening_mode === 'ai'
+          ? await P.writeOpening(ctx, String(action.metadata?.opening_theme || action.subject || ''), step)
+          : { text: P.templateOpening(ctx, step), source: 'template' as const, problems: [] as string[] };
         await action.update({
           body: P.fillPersonalOpening(action.body, opening.text),
           metadata: { ...(action.metadata || {}), opening_source: opening.source, opening_problems: opening.problems },

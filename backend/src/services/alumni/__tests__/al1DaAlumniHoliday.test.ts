@@ -5,7 +5,7 @@
  */
 jest.mock('../../llmCallWrapper', () => ({ getOpenAI: jest.fn() }));
 
-import { openingContextFrom, screenOpening, writeOpening, fillPersonalOpening, fallbackOpening, buildOpeningPrompt, OPENING_PLACEHOLDER } from '../alumniPersonalOpening';
+import { openingContextFrom, screenOpening, writeOpening, fillPersonalOpening, fallbackOpening, buildOpeningPrompt, templateOpening, OPENING_PLACEHOLDER } from '../alumniPersonalOpening';
 import { DA_ALUMNI_STEPS, alumniStepBody, ALUMNI_SIGNUP_URL } from '../daAlumniHolidayCopy';
 import { AUDIENCE_SQL } from '../../../scripts/ensureDaAlumniHolidayCampaign';
 
@@ -15,7 +15,9 @@ describe('reading the alumni record', () => {
   it('turns the CCPP class name into a program and a class month and year', () => {
     expect(CTX).toEqual({ program: 'Data Analytics Bootcamp', classMonthYear: 'July 2020', classYear: '2020', careerStage: 'placed' });
     expect(openingContextFrom({ class_name: 'DATA ANALYTICS BOOTCAMP - MAR 6 2021 (ONLINE)' })).toMatchObject({ program: 'Data Analytics Bootcamp', classMonthYear: 'March 2021' });
-    expect(openingContextFrom({ class_name: 'Data Analytics I with MS SQL Server BI - Jul 14 2018 (ONLINE)' }).classMonthYear).toBe('July 2018');
+    expect(openingContextFrom({ class_name: 'Data Analytics I with MS SQL Server BI - Jul 14 2018 (ONLINE)' })).toMatchObject({ program: 'Data Analytics I with MS SQL Server BI', classMonthYear: 'July 2018' });
+    expect(openingContextFrom({ class_name: 'SQLBI BOOTCAMP - MAR 4 2017 (ONLINE)' }).program).toBe('SQL BI Bootcamp');
+    expect(openingContextFrom({ class_name: 'BI BootCamp' }).program).toBe('BI Bootcamp');
   });
   it('says less, never something wrong, when the record is thin', () => {
     expect(openingContextFrom(null)).toEqual({ program: null, classMonthYear: null, classYear: null, careerStage: null });
@@ -38,6 +40,17 @@ describe('the opening screen', () => {
     ['a greeting', 'Hi Ana, hope you are well.'],
     ['a dash', 'Your class — July 2020 — was special.'],
     ['a company claim', 'Anthropic is hiring for this.'],
+    // Seen in the first real run on prod, Nov 22:
+    ['"we were in the class together"', 'It feels like just yesterday we were in the bootcamp together.'],
+    ['"graduated" (not everyone finished)', 'Since graduating from the Data Analytics Bootcamp in July 2019, a lot has changed.'],
+    ['"offerings"', 'We are incorporating AI to enhance our offerings.'],
+    ['a holiday line the email already has', 'As we approach Thanksgiving, I am grateful for you.'],
+    // Second real run, Nov 22:
+    ['assumed progress', 'I have been thinking about the amazing progress you have made since July 2020.'],
+    ['assumed career', 'It is great to see how far you have come in your career.'],
+    ['"completed" (not everyone finished)', 'Since you completed the SQL BI Bootcamp in March 2017, things have changed.'],
+    ['the repeated opener', "It's been a while since your time in the Data Analytics Bootcamp."],
+    ['the repeated opener, curly apostrophe', 'It’s been a while since your class.'],
   ])('rejects %s', (_label, text) => {
     expect(screenOpening(text, CTX).length).toBeGreaterThan(0);
   });
@@ -45,8 +58,10 @@ describe('the opening screen', () => {
 
 describe('writing the opening', () => {
   it('uses the AI line when it passes', async () => {
-    const r = await writeOpening(CTX, 'the role change', 0, async () => 'I hope you are well since your July 2020 bootcamp.');
-    expect(r).toEqual({ text: 'I hope you are well since your July 2020 bootcamp.', source: 'ai', problems: [] });
+    const line = 'Your July 2020 bootcamp class has been on my mind this week.';
+    const r = await writeOpening(CTX, 'the role change', 0, async () => line);
+    expect(r).toEqual({ text: line, source: 'ai', problems: [] });
+    expect(screenOpening('I hope you are well since your July 2020 bootcamp.', CTX)).toContain('template opener');
   });
   it('falls back to the plain line for that email when the draft breaks a rule', async () => {
     const r = await writeOpening(CTX, 'x', 3, async () => 'Get 50% off now!');
@@ -65,6 +80,20 @@ describe('writing the opening', () => {
   });
   it('every fallback passes its own screen', () => {
     for (let i = 0; i < 10; i++) expect(screenOpening(fallbackOpening(i), CTX)).toEqual([]);
+  });
+});
+
+describe('the fixed per-email openings (template mode, the default)', () => {
+  it('names their own class, differs in every email, and passes the same check as an AI line', () => {
+    const lines = Array.from({ length: 10 }, (_, i) => templateOpening(CTX, i));
+    expect(new Set(lines).size).toBe(10);
+    expect(lines[2]).toBe('When you sat in our Data Analytics Bootcamp class in July 2020, most people had never heard of this next role.');
+    for (const l of lines) expect(screenOpening(l, CTX)).toEqual([]);
+  });
+  it('without a readable class it says "your class with us", never a blank', () => {
+    const thin = openingContextFrom(null);
+    expect(templateOpening(thin, 0)).toBe('Since your class with us, the analyst role has changed a lot, and I want you to hear my take on it.');
+    for (let i = 0; i < 10; i++) expect(templateOpening(thin, i)).not.toMatch(/undefined|null|  /);
   });
 });
 
