@@ -540,3 +540,94 @@ tests)**, is absent from this branch's diff, was last touched on 2026-11-18 by o
 fails with a Sequelize model-registry `TypeError` in the Zoom recording path. It reads as an
 ordering flake under the full parallel run. **I did not prove it also flakes on `main`**, so it
 is recorded as unattributed rather than as pre-existing.
+
+---
+
+## T16 — the membership seed and the brand-context backfill, 2026-11-23
+
+**Session:** CC-20261109-k2w7
+**What changed:** Two production data writes, both authorised by Ali in this session.
+`tenant_memberships` 0 to 54 (Option B), and 939 `lead_tenant_contexts` rows created so every
+Explorer profile is stored under Colaberry Training.
+**Verification:** below, each with a control.
+
+### Why the seed had to happen for any of this to be visible
+
+Every brand selection answered 403, Colaberry Training included, and the page rendered a named
+configuration state with zero rows. That was fail-closed and correct, but it meant the whole
+by-brand build was invisible.
+
+The cause is precise and worth keeping, because it is not obvious from the flag being on.
+`tenantAuthorization.ts` computes
+`permitted = Boolean(tenantId) && (authorizedBrandIds === null || includes(...))`.
+With zero memberships no tenant resolves, so `Boolean(tenantId)` is false and the expression
+short-circuits **ahead of the super-admin escape**. A platform super-admin was refused every
+brand too.
+
+### The seed, measured rather than recalled
+
+Dry run re-run immediately before the write and matched 2026-11-22 exactly: 15 identities,
+15 links, **54 memberships**, 35 lock-outs, **0 human**. Written: identities created 14 /
+existing 1, links created 15 / conflicts 0, memberships created 54 / existing 0.
+
+| Check | Result |
+|---|---|
+| `tenant_memberships` | **54** — 28 `tenant_admin`, 24 `tenant_viewer`, 2 `platform_super_admin` |
+| People / tenants | 15 / 4 |
+| Ali's own account | **1** membership, `platform_super_admin`, tenant `colaberry` |
+| Humans with no membership | **0** |
+| CONTROL: `ai_staff` with no membership | **35** — proves the check can find people |
+
+That control matters: "0 humans locked out" is only meaningful beside a number the same query
+**did** find. Without it, a broken join reads as a clean result.
+
+Ali holds exactly **one** membership, which is what makes the page work:
+`authorizedTenantIds.length === 1` is the branch that resolves `tenantId` when the frontend
+sends no tenant, and the frontend never sends one.
+
+### The backfill, and the thing it deliberately did not do
+
+Ali, 2026-11-23: *"Everything that exists today should be stored under Colaberry training."*
+
+Measured first: of 1,221 Explorer profiles, 282 already carried a Colaberry Training context,
+939 carried none, and **zero belonged to any other brand**. So this recorded an attribution
+that was already true rather than deciding a new one.
+
+Written through `ensureLeadTenantContext`, the app's own writer, not an INSERT. Three reasons,
+all of which matter:
+
+1. It is already the one place brand relationships are created, so the backfill cannot drift
+   from how the product does it.
+2. It is idempotent by construction, over a unique index on `(lead_id, tenant_id, brand_id)`.
+3. **It defaults `consent_contact` to false.** Its own comment says why: *"Inheriting consent
+   from another brand relationship would be a CAN-SPAM problem wearing a data-model costume."*
+
+| Check | Result |
+|---|---|
+| Created / existing / failed | **939 / 0 / 0** |
+| Explorer profiles resolving to Colaberry Training | **1,221 of 1,221** |
+| Still without a context | 0 |
+| Idempotency: re-run | finds **0** to write; control shows 1,221 already have one |
+| Other brands | untouched: 20 / 6 / 1 / 1, unchanged |
+| **Consent on the 939 new rows** | **all false**, 0 `consent_at`, 0 `consent_source` |
+
+### A verification of mine that was wrong, and how it was caught
+
+The first consent check counted every Colaberry Training context with `consent_contact = true`
+and returned **203**. Read quickly, that says the backfill made 203 people contactable. It did
+not: those rows were created between 3 and 10 November by real forms.
+
+The query was asking the wrong question. Re-scoped to rows created in the last hour, the answer
+is 939 rows, **all false**, with a control confirming exactly 939 rows written in that window.
+
+**A number that looks alarming is worth a second query before it is worth a sentence.**
+
+### What this does not do
+
+The 939 rows record attribution. They grant nothing: no consent, no contactability, no change
+to any sending path. The backfill touched no other brand, and `explorer_*` tables were not
+renamed, altered, copied or migrated, so AD-1 holds.
+
+The seed closed the cross-tenant migration ramp for every admin, which is the one-way-feeling
+part. It is reversible: the ramp condition is `(await TenantMembership.count()) === 0`, so
+deleting the rows re-opens it.
