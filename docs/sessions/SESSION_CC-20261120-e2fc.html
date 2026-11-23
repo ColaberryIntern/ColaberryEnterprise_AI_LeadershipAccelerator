@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Monday, November 23, 2026 at 10:15 AM</div>
-    <div><span class="sid">CC-20261120-e2fc</span><span class="count">27 changes</span></div>
+    <div class="meta">Generated Monday, November 23, 2026 at 12:17 PM</div>
+    <div><span class="sid">CC-20261120-e2fc</span><span class="count">28 changes</span></div>
   </header>
   <main>
     
@@ -442,6 +442,20 @@
         <div class="card-body">
           <div class="row"><span class="k">What changed</span><span class="v">production config only, approved by Ali (Q1: B). Added `SBP_CONNECTED_DEMO=aced5b39-0b47-496a-b172-e1f5c042bf8a` (Ali&#39;s own enrollment, used by the ShiftFill test runs) to `/opt/colaberry-accelerator/.env`; backup at `.env.bak-20261123-connecteddemo`. Shipped in the deploy of e716c50ff, which also carries #4364. No student account is affected. To roll back, delete the line and redeploy the backend. BC L12.17 closed.</span></div>
           <div class="row"><span class="k">Verification</span><span class="v ver">`printenv SBP_CONNECTED_DEMO` in the running backend shows the id; marker `namesOutsideSystem` is present. v12 (project 4f79be29) has STORY-900 in its docs and progress. A cold build (a separate agent working only in the student repo) produced Story 000, then STORY-900. Served locally, both load with no script errors; the demo has no sideways scroll at 360 or 1280px. The Command Center&#39;s Overview carries the &quot;Preview the finished app&quot; card. Its only 404s are the 17 optional enrichment probes.</span></div>
+          
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">28</span>
+          <h2>Requirements: a guard on contacting someone gets the step that contacts them</h2>
+          <span class="badge">2026-11-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`contactGaps.test.ts` 9/9 covers each dropped run&#39;s wording verbatim, the focused round adding the quoted step, refusing an invented one, no extra call without a gap or after a failure, and the round bound. Over the saved v6–v12 plans it flags exactly v7, v9 and v12. Three mutations were each caught. sbp + factory + delivery + runbook coverage 382 suites / 5,847 tests pass; backend tsc and `checkTestTypecheck` show only the 3 known files.</span></div>
           
           
         </div>
