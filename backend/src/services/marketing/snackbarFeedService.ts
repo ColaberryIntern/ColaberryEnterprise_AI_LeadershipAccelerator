@@ -14,11 +14,17 @@ import type { SnackbarConfig } from './landingPageSnackbar';
  * before they reach the response: first name + last initial at most, city at most, never an
  * email, surname, lead id or timestamp precise enough to re-identify someone.
  *
- * NOBODY IS OPTED IN TODAY, so in production this only ever says "Someone in <city>". `opted_in`
- * reads leads.social_proof_opt_in, which no signup form writes (see
- * db/ensureLandingPageSnackbarSchema.ts), so it is `false` on every row and the by-name branch in
- * composeSignupEvents never runs. The unit tests pass `opted_in: true` rows directly, which is why
- * that branch is covered by tests and still unreachable through the real query.
+ * THE CONSENT IS COLLECTED NOW, BUT NOBODY HAS GIVEN IT YET. `opted_in` reads
+ * leads.social_proof_opt_in. Since SNACK-2 (PR #4173, in the running image 2026-11-18) the portal
+ * signup form at /portal/signup writes it from an optional, unchecked box, so the by-name branch in
+ * composeSignupEvents is reachable through the real query for the first time. It has not fired yet:
+ * measured 2026-11-22, 0 of 25,701 lead rows are opted in.
+ *
+ * That zero is not a defect, and the arithmetic matters before anyone re-diagnoses it. Only
+ * /portal/signup carries the box, and it produced 3 of the 123 leads taken since the deploy; the
+ * other 118 arrived through Open House registration, which never asks. So this still says
+ * "Someone in <city>" nearly always, and will keep doing so until the consent is asked for on the
+ * path most signups actually take.
  *
  * Failure: the route catches any error from here, logs it with an error_class, and returns
  * `{ events: [] }`. A broken feed costs the page its snack bar, never the page itself.
@@ -72,10 +78,11 @@ export function composeSignupEvents(rows: SignupRow[], config: SnackbarConfig, n
   for (const row of rows) {
     const city = cleanCity(row.city);
     const { first, initial } = splitName(row.name);
-    // Both lines below are DEAD AGAINST REAL DATA today, on purpose: `opted_in` is false on every
-    // row because no form collects the consent, so `opted_in_only` drops everything and `named` is
-    // never true. Do not "simplify" this to assume names are shown, and do not read an empty bar
-    // on an `opted_in_only` page as a feed bug. The display side is finished; the consent is not.
+    // Both lines below became reachable when SNACK-2 shipped the consent box (2026-11-18), but
+    // neither has yet fired against real data: 0 of 25,701 lead rows were opted in when last
+    // measured, 2026-11-22. So an `opted_in_only` page still drops every row and shows NO BAR AT
+    // ALL. Do not read that as a feed bug, and do not "simplify" this on the assumption that names
+    // are shown now. Both halves are built; the consent is simply unused so far.
     if (config.name_format === 'opted_in_only' && !row.opted_in) continue;
     const named = config.name_format !== 'city_only' && row.opted_in && first;
     let title: string;
