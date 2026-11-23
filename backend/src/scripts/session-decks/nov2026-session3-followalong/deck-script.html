@@ -160,6 +160,85 @@
       .then(function(){ escal = escal.filter(function(x){ return x.id !== id; }); delete escBusy[id]; renderPresenter(); setTimeout(loadEscalations, 500); });
   }
   function qKey(x){ return String(x.at) + '|' + String(x.text).slice(0, 40); }
+
+  /* ---- one questions list (Ali, 2026-11-23: "slick and easy to clear, not bubbly") ----
+     Private questions (the Ask box) and the chat assistant's escalations in one flat list. Click a
+     row to open it: suggested answers post with one click, or type your own and Post, or
+     "Answered out loud" clears it. It lives in its own #qp container and redraws only when the
+     list changes, so typing is never wiped by the once-a-second redraw of the rest. */
+  var qOpen = null, qDrafts = {}, qBusy = {}, qErr = {}, qSig = '';
+  var POST_URL = K.broadcastUrl ? K.broadcastUrl.replace(/\/broadcast$/, '/chat-post') : null;
+  function qItems(){
+    var out = escal.map(function(x){ return { key: 'e:' + x.id, kind: 'chat', id: x.id, text: x.question, who: x.asked_by || '', options: x.options || [] }; });
+    ((live && live.questions) || []).slice().reverse().forEach(function(x){
+      var k = qKey(x); if (!qDone[k]) out.push({ key: 'p:' + k, kind: 'private', id: k, text: x.text, who: x.name || '', options: [] });
+    });
+    return out;
+  }
+  function qFind(key){ var all = qItems(); for (var n = 0; n < all.length; n++) if (all[n].key === key) return all[n]; return null; }
+  function qClose(item){
+    if (qOpen === item.key) qOpen = null;
+    delete qDrafts[item.key];
+    if (item.kind === 'private') { qDone[item.id] = true; renderQuestions(true); }
+    else answerEsc(item.id, 'skip');
+  }
+  function qPost(item, body){
+    if (qBusy[item.key]) return;
+    qBusy[item.key] = true; renderQuestions(true);
+    var url = item.kind === 'chat' ? ESC_URL + '/' + encodeURIComponent(item.id) : POST_URL;
+    var payload = item.kind === 'chat' ? body : { text: body.text, question: item.text };
+    fetch(url + '?t=' + encodeURIComponent(K.token), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      .then(function(r){ return r.ok || r.status === 409; }, function(){ return false; })
+      .then(function(ok){
+        delete qBusy[item.key];
+        // Not posted: keep the question and the typed draft, and say so. Nothing is lost.
+        if (!ok) { qErr[item.key] = true; renderQuestions(true); return; }
+        delete qErr[item.key]; delete qDrafts[item.key]; if (qOpen === item.key) qOpen = null;
+        if (item.kind === 'private') qDone[item.id] = true;
+        else escal = escal.filter(function(x){ return x.id !== item.id; });
+        renderQuestions(true); setTimeout(loadEscalations, 500);
+      });
+  }
+  function renderQuestions(force){
+    if (!pw || pw.closed) return;
+    var doc = pw.document, box = doc.getElementById('qp');
+    if (!box) { var pv = doc.getElementById('pv'); if (!pv) return; box = doc.createElement('div'); box.id = 'qp'; pv.parentNode.insertBefore(box, pv); }
+    var items = qItems();
+    var sig = JSON.stringify([items.map(function(x){ return x.key + x.options.length; }), qOpen, qBusy, qErr]);
+    if (!force && sig === qSig) return;
+    qSig = sig;
+    var h = '<div class="qh"><span>Questions' + (items.length ? ' <b>' + items.length + '</b>' : '') + '</span>' + (items.length ? '<button class="qlink" data-qclearall>Clear all</button>' : '') + '</div>';
+    if (!items.length) h += '<div class="qnone">No open questions. Chat and private questions land here; only you see this.</div>';
+    items.slice(0, 8).forEach(function(x){
+      var open = qOpen === x.key, busy = !!qBusy[x.key];
+      h += '<div class="qi ' + x.kind + (open ? ' open' : '') + '">' +
+        '<div class="qrow" data-qopen="' + esc(x.key) + '"><div class="qt">' + esc(x.text) + '</div><div class="qm">' + (x.kind === 'chat' ? 'Chat' : 'Private') + (x.who ? ' · ' + esc(x.who) : '') + '<span class="qchev">' + (open ? 'Close' : 'Answer') + '</span></div></div>';
+      if (open) {
+        h += '<div class="qx">';
+        x.options.forEach(function(o, k){ h += '<button class="qopt" data-qans="' + esc(x.key) + '" data-k="' + k + '"' + (busy ? ' disabled' : '') + '>' + esc(o) + '</button>'; });
+        h += '<textarea class="qin" rows="2" data-qdraft="' + esc(x.key) + '" placeholder="' + (x.options.length ? 'Or type your own answer' : 'Type your answer') + '"></textarea>' +
+          '<div class="qacts"><button class="qpost" data-qpost="' + esc(x.key) + '"' + (busy ? ' disabled' : '') + '>' + (busy ? 'Posting…' : 'Post to chat') + '</button>' +
+          '<button class="qlink" data-qclear="' + esc(x.key) + '"' + (busy ? ' disabled' : '') + '>Answered out loud</button></div>' +
+          (qErr[x.key] ? '<div class="qnote" style="color:#ff6a71">Not posted. Try again.</div>' : '') +
+          (x.kind === 'private' ? '<div class="qnote">Posts the question and your answer. Never who asked.</div>' : '') + '</div>';
+      }
+      h += '</div>';
+    });
+    box.innerHTML = h;
+    var ta = box.querySelector('[data-qdraft]');
+    if (ta) { ta.value = qDrafts[ta.getAttribute('data-qdraft')] || ''; }
+  }
+  function onPresenterInput(e){
+    var t = e.target; if (t && t.getAttribute && t.getAttribute('data-qdraft')) qDrafts[t.getAttribute('data-qdraft')] = t.value;
+  }
+  function onQuestionClick(e){
+    var o = e.target.closest('[data-qopen]'); if (o) { var k = o.getAttribute('data-qopen'); qOpen = qOpen === k ? null : k; renderQuestions(true); var ta = pw.document.querySelector('[data-qdraft]'); if (ta && qOpen) ta.focus(); return true; }
+    var a = e.target.closest('[data-qans]'); if (a) { var it = qFind(a.getAttribute('data-qans')); if (it) qPost(it, { choice: Number(a.getAttribute('data-k')) }); return true; }
+    var p = e.target.closest('[data-qpost]'); if (p) { var key = p.getAttribute('data-qpost'), it2 = qFind(key), txt = (qDrafts[key] || '').trim(); if (it2 && txt) qPost(it2, { text: txt }); return true; }
+    var c = e.target.closest('[data-qclear]'); if (c) { var it3 = qFind(c.getAttribute('data-qclear')); if (it3) qClose(it3); return true; }
+    if (e.target.closest('[data-qclearall]')) { qItems().forEach(qClose); qOpen = null; renderQuestions(true); return true; }
+    return false;
+  }
   var PCSS = 'body{margin:0;background:#0b1220;color:#e7eef6;font-family:"Segoe UI",Roboto,Arial,sans-serif;font-size:16px;line-height:1.45}' +
     '#pv{padding:12px 14px 80px}.top{display:flex;align-items:baseline;gap:10px}.num{font-size:34px;font-weight:900;color:#ff6a71}.of{color:#7f93ab;font-weight:700}' +
     '.ttl{font-size:20px;font-weight:800;margin:2px 0 10px;line-height:1.25}' +
@@ -175,8 +254,14 @@
     'button{font:inherit;font-weight:800;border:none;border-radius:999px;padding:9px 14px;cursor:pointer;background:#27405f;color:#fff}button.pri{background:#FB2832}' +
     '.link{background:#16233a;font-size:13px;word-break:break-all}.link .lab{color:#9fb3c8}' +
     '.next{color:#9fb3c8;font-size:14px;margin-top:12px}.next b{color:#e7eef6}' +
-    '.esc{background:#0d2a4a;border:2px solid #7aa2ff}.esc .lab{color:#9cc0ff}.esc .one{border-bottom:1px solid #22406a;padding:6px 0 10px;margin-bottom:6px}.esc .one:last-child{border-bottom:none;margin-bottom:0}.esc .qq{font-size:16px;font-weight:800;color:#fff}.esc .qq small{display:block;font-weight:500;color:#9cc0ff;font-size:12px}.esc .opt{display:block;width:100%;text-align:left;margin-top:6px;background:#16365e;border-radius:10px;padding:8px 10px;font-weight:600;font-size:14px;line-height:1.35}.esc .opt b{color:#9cc0ff;margin-right:6px}.esc .skip{margin-top:6px;background:transparent;border:1px solid #22406a;font-size:12px;padding:5px 10px}' +
-    '.qs{background:#2a1d00;border:2px solid #F5C542}.qs .lab{color:#F5C542}.qs ul{list-style:none;margin:0;padding:0}.qs li{display:flex;gap:8px;align-items:flex-start;padding:7px 4px;border-bottom:1px solid #4a3a10;font-size:16px;font-weight:700;color:#fff3c4}.qs li:last-child{border-bottom:none}.qs li small{display:block;font-weight:500;color:#e8c768;font-size:12px}.qs li button{flex:none;padding:5px 10px;font-size:12px;background:#4a3a10}.qs .none{color:#e8c768;font-size:13px;font-weight:500}' +
+    '#qp{padding:10px 14px 0}.qh{display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:900;letter-spacing:2px;text-transform:uppercase;color:#9fb3c8;padding-bottom:6px;border-bottom:1px solid #22324d}.qh b{color:#fff;background:#FB2832;border-radius:4px;padding:1px 6px;margin-left:4px;letter-spacing:0}' +
+    '.qnone{font-size:13px;color:#7f93ab;padding:8px 0}' +
+    '.qi{border-bottom:1px solid #1c2a40;border-left:3px solid #4f8cff}.qi.private{border-left-color:#F5C542}.qi.open{background:#111b2d}' +
+    '.qrow{padding:9px 8px 8px 10px;cursor:pointer}.qrow:hover{background:#111b2d}.qt{font-size:15px;font-weight:700;color:#fff;line-height:1.35}' +
+    '.qm{display:flex;font-size:11.5px;color:#7f93ab;margin-top:2px}.qchev{margin-left:auto;color:#9cc0ff;font-weight:700}' +
+    '.qx{padding:2px 8px 10px 10px}.qopt{display:block;width:100%;text-align:left;background:transparent;border:none;border-radius:0;border-top:1px solid #1c2a40;color:#dbe6f0;font-weight:500;font-size:14px;line-height:1.4;padding:8px 2px}.qopt:hover{color:#fff;background:#16233a}' +
+    '.qin{width:100%;box-sizing:border-box;margin-top:8px;background:#0b1220;border:1px solid #2a3a55;border-radius:4px;color:#fff;font:inherit;font-size:14px;padding:7px 8px;resize:vertical}' +
+    '.qacts{display:flex;gap:8px;align-items:center;margin-top:6px}.qpost{border-radius:4px;padding:7px 12px;font-size:13px;background:#FB2832}.qlink{background:transparent;border-radius:0;padding:4px 2px;font-size:12px;font-weight:700;color:#9fb3c8;text-decoration:underline}.qnote{font-size:11px;color:#7f93ab;margin-top:4px}' +
     '.pulse{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:8px 0}.pulse div{background:#16233a;border-radius:10px;padding:6px 8px;text-align:center}.pulse b{display:block;font-size:20px}.pulse span{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#9fb3c8;font-weight:800}.pulse .stuck b{color:#ff6a71}' +
     '.nav{position:fixed;left:0;right:0;bottom:0;display:flex;gap:8px;padding:10px 14px;background:#0b1220;border-top:1px solid #22324d}.nav button{flex:1;font-size:18px;padding:12px}' +
     '.live{font-size:12px;color:#9fb3c8;margin-left:auto}';
@@ -192,11 +277,13 @@
       pw.document.close();
       pw.document.addEventListener('keydown', onKey);
       pw.document.addEventListener('click', onPresenterClick);
+      pw.document.addEventListener('input', onPresenterInput);
     }
     pnbtn.classList.add('hide');
     renderPresenter();
   }
   function onPresenterClick(e){
+    if (onQuestionClick(e)) return;
     var n = e.target.closest('[data-nav]'); if (n) { show(i + Number(n.getAttribute('data-nav'))); return; }
     var li = e.target.closest('[data-say]');
     if (li) { var k = Number(li.getAttribute('data-say')); checked[i] = checked[i] || {}; checked[i][k] = !checked[i][k]; renderPresenter(); return; }
@@ -218,9 +305,7 @@
       '<div class="clocks"><div class="clk ' + clockClass(slideUsed, budget) + '"><span>This slide</span><b>' + mmss(slideUsed) + ' / ' + d.min + ':00</b></div>' +
       '<div class="clk ' + (drift <= 0 ? 'ok' : drift <= 3 ? 'warn' : 'over') + '"><span>Class</span><b>' + (classStart ? mmss(elapsed) : '0:00') + '</b><span>' + (classStart ? (drift > 0 ? drift + ' min behind' : drift < 0 ? (-drift) + ' min ahead' : 'on time') : 'starts on next slide') + '</span></div></div>';
     if (live) h += '<div class="pulse"><div><b>' + (live.present || 0) + '</b><span>In</span></div><div class="stuck"><b>' + (live.stuck || 0) + '</b><span>Stuck</span></div><div><b>' + (live.finished || 0) + '</b><span>Finished</span></div></div>';
-    if (escal.length) h += '<div class="box esc"><div class="lab">The class assistant needs you · ' + escal.length + '</div>' + escal.slice(0, 4).map(function(x){ var busy = escBusy[x.id]; return '<div class="one"><div class="qq">' + esc(x.question) + '<small>' + esc(x.asked_by || '') + ' asked in the chat. ' + ((x.options || []).length ? 'Tap the answer to post it.' : 'No suggested answers: answer it out loud, then tap Skip.') + '</small></div>' + (x.options || []).map(function(o, k){ return '<button class="opt" data-esc="' + esc(x.id) + '" data-ch="' + k + '"' + (busy ? ' disabled' : '') + '><b>' + String.fromCharCode(65 + k) + '</b>' + esc(o) + '</button>'; }).join('') + '<button class="skip" data-esc="' + esc(x.id) + '" data-ch="skip"' + (busy ? ' disabled' : '') + '>Skip</button></div>'; }).join('') + '</div>';
-    var qs = ((live && live.questions) || []).slice().reverse().filter(function(x){ return !qDone[qKey(x)]; });
-    h += '<div class="box qs"><div class="lab">Questions from phones' + (qs.length ? ' · ' + qs.length + ' open' : '') + '</div>' + (qs.length ? '<ul>' + qs.slice(0, 6).map(function(x){ return '<li><span style="flex:1">' + esc(x.text) + '<small>' + esc(x.name || '') + '</small></span><button data-qdone="' + esc(qKey(x)) + '">Done</button></li>'; }).join('') + '</ul>' : '<div class="none">None yet. They appear here only, never on the shared screen.</div>') + '</div>';
+    renderQuestions();
     if (d.do) h += '<div class="box do"><div class="lab">Do</div>' + esc(d.do) + '</div>';
     if (d.say && d.say.length) h += '<div class="box say"><div class="lab">Say these</div><ul>' + d.say.map(function(x, k){ var done = checked[i] && checked[i][k]; return '<li data-say="' + k + '" class="' + (done ? 'done' : '') + '"><i>' + (done ? '✓' : '') + '</i><span>' + esc(x) + '</span></li>'; }).join('') + '</ul></div>';
     if (d.read) h += '<div class="box read"><div class="lab">Read this out loud</div>' + esc(d.read) + '</div>';
@@ -268,6 +353,9 @@
     broadcast(); render(); renderPresenter(); poll();
   }
   function onKey(e){
+    // Typing an answer in the presenter window must never drive the slides (space, P, J, N, Q...).
+    var tag = e.target && e.target.tagName;
+    if (tag === 'TEXTAREA' || tag === 'INPUT') return;
     if (!autoTried && /^(ArrowRight|ArrowLeft| |PageDown|PageUp)$/.test(e.key)) { autoTried = true; if (!pw) openPresenter(); }
     if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); show(i + 1); }
     else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); show(i - 1); }
