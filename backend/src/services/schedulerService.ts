@@ -808,6 +808,12 @@ async function processScheduledActions(): Promise<void> {
         console.log(`[Scheduler] ${channel} action ${action.id} outside send window, deferred to business hours`);
         continue;
       }
+      // AL1: a campaign with min_send_gap_minutes never sends two emails closer than that.
+      const { sentTooRecently } = await import('./campaignSendGap');
+      if (await sentTooRecently(action.campaign_id, campaignSettings)) {
+        await action.update({ status: 'pending', processing_started_at: null, processor_id: null } as any);
+        continue;
+      }
     }
 
     // Call schedule: skip voice actions outside call window
