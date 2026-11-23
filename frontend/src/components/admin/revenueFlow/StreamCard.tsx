@@ -1,12 +1,29 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import FlowSparkline from './FlowSparkline';
 import type { TimelineEvent } from './FlowTimeline';
+import DemandPath from './DemandPath';
+import StreamTimelinePanel from './StreamTimelinePanel';
 import { paintFor, streamPaint } from './flowTokens';
 import type { ClassMap, Stream } from './flowBoardTypes';
 
 /**
- * One revenue stream: its headline, its funnel, and why it says what it says.
+ * One revenue stream: the path into its number, its funnel, and then the number.
+ *
+ * ── THE NUMBER COMES LAST, WHICH IS THE WHOLE POINT OF THE CARD ──────────────────────────
+ *
+ * Ali, 2026-11-23: "Can we show that so we can see the path before they reach the final
+ * revenue number."
+ *
+ * Until now this card printed its headline figure in the header, ABOVE the funnel, so the page
+ * read number-then-stages: the conclusion first and the working underneath it. The reading
+ * order is now what he asked for, and it is the same for every stream rather than only the one
+ * that has a demand path, because a layout that moved its headline depending on the data would
+ * read as a bug and would be two layouts to keep right.
+ *
+ * `demandPathRender.test.tsx` asserts the ORDER by comparing indices in the markup, because
+ * this is a regression that looks like a refactor: moving the headline back to the top would
+ * break no behavioural test and no screenshot anyone compares.
  *
  * ── STAGE ORDER IS THE BACKEND'S AND IS NEVER RE-SORTED HERE ─────────────────────────────
  *
@@ -22,16 +39,29 @@ import type { ClassMap, Stream } from './flowBoardTypes';
  * this file decides what a colour means, which is what stops the page and the legend
  * disagreeing on the same screen. An unknown key falls back to muted and a bullet rather than
  * rendering blank.
+ *
+ * ── WHAT THIS FILE OWNS ──────────────────────────────────────────────────────────────────
+ *
+ * Three pieces of expansion state and nothing else. Which demand source is open, whether the
+ * timeline is drilled into, and which record the timeline is focused on. They live here rather
+ * than in the panels so only one source can be open at a time and so each panel stays a pure
+ * function of its props, which is the only way `renderToStaticMarkup` can assert both states
+ * of a drill-in that no test here can click (see `StreamTimelinePanel`).
  */
 export default function StreamCard({
-  stream, events, classMap,
+  stream, events, classMap, windowDays,
 }: {
   stream: Stream;
   /** This stream's own events, already filtered by the caller. Drives the sparkline. */
   events: TimelineEvent[];
   classMap: ClassMap;
+  windowDays: number;
 }) {
   const s = stream;
+  const [openSourceKey, setOpenSourceKey] = useState<string | null>(null);
+  const [timelineOpen, setTimelineOpen] = useState(false);
+  const [focusEntityKey, setFocusEntityKey] = useState<string | null>(null);
+
   return (
     <div className="card border-0 shadow-sm mb-4" data-testid={`stream-${s.key}`}>
       <div className="card-body p-3">
@@ -47,7 +77,6 @@ export default function StreamCard({
               />
               {s.label}
             </h2>
-            <div style={{ fontSize: 20, fontWeight: 700 }}>{s.headline.display}</div>
           </div>
           <div style={{ minWidth: 220 }}>
             <FlowSparkline
@@ -57,6 +86,16 @@ export default function StreamCard({
             />
           </div>
         </div>
+
+        {/* ── THE PATH INTO THE NUMBER, WHERE THERE IS ONE ──────────────────────────────── */}
+        {s.demand && s.demand.length > 0 && (
+          <DemandPath
+            streamKey={s.key}
+            bands={s.demand}
+            openSourceKey={openSourceKey}
+            onPickSource={setOpenSourceKey}
+          />
+        )}
 
         <div className="table-responsive">
           <table className="table table-sm mb-2" style={{ fontSize: 12 }}>
@@ -91,6 +130,21 @@ export default function StreamCard({
           </table>
         </div>
 
+        {/* ── AND ONLY THEN THE NUMBER ──────────────────────────────────────────────────── */}
+        <div
+          className="pt-2"
+          data-testid={`headline-${s.key}`}
+          style={{ borderTop: '2px solid var(--surface-sunken)' }}
+        >
+          <div
+            className="text-muted"
+            style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}
+          >
+            What this stream is worth
+          </div>
+          <div style={{ fontSize: 20, fontWeight: 700 }}>{s.headline.display}</div>
+        </div>
+
         <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{s.provenance}</div>
         {s.caveat && (
           <div
@@ -106,17 +160,47 @@ export default function StreamCard({
             {s.caveat}
           </div>
         )}
-        {s.drillDownKey && (
-          <Link
-            className="btn btn-outline-primary btn-sm mt-2"
-            to={`/admin/revenue-room/${s.drillDownKey}`}
-            data-testid={`drill-${s.key}`}
+
+        {/* ── DRILL INTO THIS SOURCE'S OWN EVENTS, IN PLACE ─────────────────────────────── */}
+        <div className="d-flex flex-wrap gap-2 mt-2">
+          <button
+            type="button"
+            className="btn btn-outline-secondary btn-sm"
+            onClick={() => {
+              setTimelineOpen((v) => !v);
+              setFocusEntityKey(null);
+            }}
+            aria-expanded={timelineOpen}
+            data-testid={`timeline-toggle-${s.key}`}
           >
-            Drill into {s.label}
-          </Link>
+            {timelineOpen
+              ? `Hide the ${events.length} dated events`
+              : `Show the ${events.length} dated events`}
+          </button>
+          {s.drillDownKey && (
+            <Link
+              className="btn btn-outline-primary btn-sm"
+              to={`/admin/revenue-room/${s.drillDownKey}`}
+              data-testid={`drill-${s.key}`}
+            >
+              Drill into {s.label}
+            </Link>
+          )}
+        </div>
+
+        {timelineOpen && (
+          <StreamTimelinePanel
+            streamKey={s.key}
+            streamLabel={s.label}
+            events={events}
+            classMap={classMap}
+            focusEntityKey={focusEntityKey}
+            onPickEntity={(_stream, entityKey) => setFocusEntityKey(entityKey)}
+            onClearFocus={() => setFocusEntityKey(null)}
+            windowDays={windowDays}
+          />
         )}
       </div>
     </div>
   );
 }
-

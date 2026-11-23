@@ -48,6 +48,14 @@ import type { Board, ClassMap } from './flowBoardTypes';
  *
  * The timeline, the table view and the two pricing panels were already their own components
  * and were not touched.
+ *
+ * ── THE TIMELINE AT THE BOTTOM IS KEPT, ALONGSIDE THE PER-STREAM ONES ────────────────────
+ *
+ * Each stream card now drills into its own events, with its legend scoped to the
+ * classifications those events carry. This list stays because it is the only CROSS-stream
+ * view: it is where a reader sees a government award and a membership payment land in the same
+ * week, and it is the only place the table view lives, which the palette's contrast WARN
+ * obliges this page to ship. Deleting it as now-redundant would remove both.
  */
 export default function RevenueFlowDashboard() {
   const [board, setBoard] = useState<Board | null>(null);
@@ -116,6 +124,7 @@ export default function RevenueFlowDashboard() {
             stream={s}
             events={board.events.filter((e) => e.stream === s.key)}
             classMap={classMap}
+            windowDays={board.windowDays}
           />
         ))}
 
