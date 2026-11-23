@@ -54,14 +54,28 @@ async function findCampaign(): Promise<{ id: string; status: string; sequence_id
                WHERE settings->>'campaign_key' = :k AND archived_at IS NULL ORDER BY created_at LIMIT 1`, { k: DA_ALUMNI_CAMPAIGN_KEY });
 }
 
+/** AL1: a Colaberry Training campaign (Ali, Nov 22: "This is for the Colaberry Training - not enterprise"). */
+export const TRAINING_BRAND_SLUG = 'colaberry-training';
+
 async function ensureCampaign(apply: boolean, log: (s: string) => void): Promise<void> {
+  const brand = await one<{ id: string; tenant_id: string }>(`SELECT id, tenant_id FROM brands WHERE slug = :s AND status = 'active'`, { s: TRAINING_BRAND_SLUG });
+  if (!brand) throw new Error(`No active brand "${TRAINING_BRAND_SLUG}"`);
   const existing = await findCampaign();
-  if (existing) { log(`campaign: exists ${existing.id} (${existing.status})`); return; }
-  // Tenant and brand from Ali's existing outreach campaigns, so this one lands in the same place.
-  const src = await one<{ tenant_id: string; brand_id: string; settings: Record<string, any> }>(
-    `SELECT tenant_id, brand_id, settings FROM campaigns WHERE type::text = 'executive_outreach' AND settings->>'sender_email' = 'ali@colaberry.com'
+  if (existing) {
+    const row = await one<{ brand_id: string | null }>(`SELECT brand_id FROM campaigns WHERE id = :id`, { id: existing.id });
+    if (row?.brand_id === brand.id) { log(`campaign: exists ${existing.id} (${existing.status}), brand Colaberry Training`); return; }
+    log(`campaign: exists ${existing.id} (${existing.status}); brand moved to Colaberry Training`);
+    if (apply) {
+      await sequelize.query(`UPDATE campaigns SET brand_id = :b, tenant_id = :t, updated_at = NOW() WHERE id = :id`,
+        { replacements: { b: brand.id, t: brand.tenant_id, id: existing.id } });
+    }
+    return;
+  }
+  // Settings (stop rule) from Ali's existing outreach campaigns; brand and tenant are Colaberry Training.
+  const prior = await one<{ settings: Record<string, any> }>(
+    `SELECT settings FROM campaigns WHERE type::text = 'executive_outreach' AND settings->>'sender_email' = 'ali@colaberry.com'
       ORDER BY created_at DESC LIMIT 1`);
-  if (!src) throw new Error('No earlier campaign from Ali to copy the tenant and brand from');
+  const src = { tenant_id: brand.tenant_id, brand_id: brand.id, settings: prior?.settings || {} };
   const steps = DA_ALUMNI_STEPS.map((s, i) => ({
     delay_days: Math.round((classInstant(s.date, SEND_CLOCK).getTime() - classInstant(DA_ALUMNI_STEPS[0].date, SEND_CLOCK).getTime()) / 86_400_000),
     channel: 'email', subject: s.subject, step_goal: s.theme,

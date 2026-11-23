@@ -6,21 +6,21 @@
 jest.mock('../../llmCallWrapper', () => ({ getOpenAI: jest.fn() }));
 
 import { openingContextFrom, screenOpening, writeOpening, fillPersonalOpening, fallbackOpening, buildOpeningPrompt, templateOpening, OPENING_PLACEHOLDER } from '../alumniPersonalOpening';
-import { DA_ALUMNI_STEPS, alumniStepBody, ALUMNI_SIGNUP_URL } from '../daAlumniHolidayCopy';
-import { AUDIENCE_SQL } from '../../../scripts/ensureDaAlumniHolidayCampaign';
+import { DA_ALUMNI_STEPS, alumniStepBody, ALUMNI_SIGNUP_URL, TRAINING_ACCELERATOR_URL } from '../daAlumniHolidayCopy';
+import { AUDIENCE_SQL, TRAINING_BRAND_SLUG } from '../../../scripts/ensureDaAlumniHolidayCampaign';
 
 const CTX = openingContextFrom({ class_name: 'Data Analytics Bootcamp - Jul 11 2020 (ONLINE)', career_stage: 'placed' });
 
 describe('reading the alumni record', () => {
   it('turns the CCPP class name into a program and a class month and year', () => {
-    expect(CTX).toEqual({ program: 'Data Analytics Bootcamp', classMonthYear: 'July 2020', classYear: '2020', careerStage: 'placed' });
+    expect(CTX).toEqual({ program: 'Data Analytics Bootcamp', classMonthYear: 'July 2020', classYear: '2020', careerStage: 'placed', placementMonthYear: null });
     expect(openingContextFrom({ class_name: 'DATA ANALYTICS BOOTCAMP - MAR 6 2021 (ONLINE)' })).toMatchObject({ program: 'Data Analytics Bootcamp', classMonthYear: 'March 2021' });
     expect(openingContextFrom({ class_name: 'Data Analytics I with MS SQL Server BI - Jul 14 2018 (ONLINE)' })).toMatchObject({ program: 'Data Analytics I with MS SQL Server BI', classMonthYear: 'July 2018' });
     expect(openingContextFrom({ class_name: 'SQLBI BOOTCAMP - MAR 4 2017 (ONLINE)' }).program).toBe('SQL BI Bootcamp');
     expect(openingContextFrom({ class_name: 'BI BootCamp' }).program).toBe('BI Bootcamp');
   });
   it('says less, never something wrong, when the record is thin', () => {
-    expect(openingContextFrom(null)).toEqual({ program: null, classMonthYear: null, classYear: null, careerStage: null });
+    expect(openingContextFrom(null)).toEqual({ program: null, classMonthYear: null, classYear: null, careerStage: null, placementMonthYear: null });
     expect(buildOpeningPrompt(openingContextFrom(null), 'x').user).toMatch(/They are a Colaberry alum\./);
   });
 });
@@ -94,6 +94,41 @@ describe('the fixed per-email openings (template mode, the default)', () => {
     const thin = openingContextFrom(null);
     expect(templateOpening(thin, 0)).toBe('Since your class with us, the analyst role has changed a lot, and I want you to hear my take on it.');
     for (let i = 0; i < 10; i++) expect(templateOpening(thin, i)).not.toMatch(/undefined|null|  /);
+  });
+});
+
+describe('placement date: the day they started their career (Ali, Nov 22)', () => {
+  const PLACED = openingContextFrom({ class_name: 'Data Analytics Bootcamp - Jul 11 2020 (ONLINE)', hired_date: '2021-03-15' });
+  it('reads the CCPP placement (hired) date as month and year', () => {
+    expect(PLACED.placementMonthYear).toBe('March 2021');
+    expect(openingContextFrom({ hired_date: 'not a date' }).placementMonthYear).toBeNull();
+  });
+  it('openings anchor on placement, never the class start, when there is one; all ten differ and pass the check', () => {
+    const lines = Array.from({ length: 10 }, (_, i) => templateOpening(PLACED, i));
+    expect(lines[0]).toBe('Since you started your career in March 2021, the analyst role has changed a lot, and I want you to hear my take on it.');
+    expect(new Set(lines).size).toBe(10);
+    for (const l of lines) {
+      expect(l).toContain('March 2021');
+      expect(l).not.toContain('July 2020');
+      // The fixed lines may name their career: it comes from the placement date, a fact, not
+      // from the AI. Every other rule (numbers, links, prices, dashes, template openers) holds.
+      expect(screenOpening(l, PLACED).filter((x) => x !== 'assumes their story')).toEqual([]);
+    }
+  });
+  it('no placement date: falls back to their class', () => {
+    expect(templateOpening(CTX, 2)).toContain('class in July 2020');
+  });
+});
+
+describe('Colaberry Training, not Enterprise', () => {
+  it('every email points to the Training Accelerator page; the claim step stays on the portal', () => {
+    for (const s of DA_ALUMNI_STEPS) {
+      const b = alumniStepBody(s, 'Ana');
+      expect(b).toContain(TRAINING_ACCELERATOR_URL);
+      expect(b).toContain(ALUMNI_SIGNUP_URL);
+    }
+    expect(TRAINING_ACCELERATOR_URL).toBe('https://training.colaberry.com/accelerator');
+    expect(TRAINING_BRAND_SLUG).toBe('colaberry-training');
   });
 });
 
