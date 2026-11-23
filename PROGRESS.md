@@ -18767,3 +18767,13 @@ Branch `workstream/career-prep-r2r3`, one PR (https://github.com/ColaberryIntern
   - What changed: tables `session_live_chat` + `session_chat_escalations` (db/ensureLiveSessionSchema.ts); `services/liveChat/` (liveChatStore SQL, liveChatAgent verdict + answer/escalate, liveChatService rules: guest pass, 500 chars, 1 per 2s, 60 per class, escalation answered once); `controllers/liveChatController.ts`; routes GET/POST `/api/portal/sessions/:id/guest-chat` (guest pass) and GET/POST `/api/portal/sessions/:id/chat-escalations[/:eid]` (deck kit token or admin). Frontend: `CheckinChat.tsx` (docked right column at 1100px and wider, Chat button + full-screen panel below), `guestChatList`/`guestChatPost`, mounted on the check-in page once checked in.
   - Verification: liveChat 10 tests (verdict sanitizing, answer vs escalate vs ignore, model failure never throws, 401/400/429, answer posts once with the asker's name, 409 on a second answer, 400 bad choice); CheckinChat 4/4, ClassCheckinPage 24/24, CheckinRunHere 5/5; frontend copy + typography ratchets 42/42; backend tsc clean apart from the local install's missing modules.
   - Notes: Ali, 2026-11-23: chat on the page, right side on a computer and a button on a phone; an agent answers what it is confident in and asks Ali with multiple choice when unsure. OpenAI via runtimeAi.chatJson (LIVE_CHAT_MODEL, default gpt-4o), the provider Ali chose for tonight. Zoom chat is not connected; attendees are directed to the QR page.
+- [x] Live chat assistant: escalation options are concrete answers Ali can tap, and an unsure question is never dropped
+  - Date: 2026-11-23
+  - Session: CC-20261118-e16w
+  - What changed: `liveChatAgent.ts` prompt asks for three different, concrete answers (never "I'm not sure" or "ask Ali", since Ali is the one choosing); an unsure question with fewer than two usable options now escalates with none (question + Skip) instead of being dropped.
+  - Verification: liveChat tests updated and green (45 with the learner-writer tripwire). Production e2e on PR #4385 found the weak options ("I'm not sure ... ask Ali") this fixes.
+- [x] Live chat: the instructor can type his own answer to an escalation, and answer a private question in the chat (question shown, asker never)
+  - Date: 2026-11-23
+  - Session: CC-20261118-e16w
+  - What changed: `answerEscalation` accepts a typed `text` (posts as "Ali", addressed to the asker); new `postAsInstructor` + POST `/api/portal/sessions/:id/chat-post` (deck kit token or admin) posts "Q: ... A: ..." for a private question.
+  - Verification: liveChat suite + learner-writer tripwire 48/48 (3 new: typed answer, private Q and A without the asker, empty/over-long refused).

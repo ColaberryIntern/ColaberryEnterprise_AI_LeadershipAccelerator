@@ -59,17 +59,38 @@ export async function listEscalationsForPresenter(sessionId: string): Promise<{ 
   return { escalations: await listPendingEscalations(sessionId) };
 }
 
-/** The instructor picks option `choice` (0-based) or skips. The chosen answer is posted by the assistant. */
-export async function answerEscalation(sessionId: string, escalationId: string, choice: unknown): Promise<{ posted: boolean }> {
-  const skip = choice === 'skip';
-  const idx = typeof choice === 'number' && Number.isInteger(choice) && choice >= 0 && choice < 3 ? choice : null;
-  if (!skip && idx === null) throw new GuestError(400, 'Choose an answer or skip');
-  const row = await resolveEscalation(sessionId, escalationId, skip ? 'skipped' : 'answered', skip ? null : idx);
+/** Name on a message the instructor posts himself (a typed answer). */
+export const INSTRUCTOR_NAME = 'Ali';
+
+/**
+ * Close an escalation. `choice` is an option index (0-2) or 'skip' (answered out loud, or not
+ * needed); `text` is the instructor's own typed answer and wins over `choice`. A chosen option posts
+ * as the class assistant, a typed answer under the instructor's name; both are addressed to the asker.
+ */
+export async function answerEscalation(sessionId: string, escalationId: string, choice: unknown, text?: unknown): Promise<{ posted: boolean }> {
+  const typed = typeof text === 'string' ? text.trim() : '';
+  if (typed.length > CHAT_LIMITS.chars) throw new GuestError(400, `Keep the answer under ${CHAT_LIMITS.chars} characters`);
+  const skip = !typed && choice === 'skip';
+  const idx = !typed && typeof choice === 'number' && Number.isInteger(choice) && choice >= 0 && choice < 3 ? choice : null;
+  if (!typed && !skip && idx === null) throw new GuestError(400, 'Choose an answer, type one, or skip');
+  const row = await resolveEscalation(sessionId, escalationId, skip ? 'skipped' : 'answered', idx);
   if (!row) throw new GuestError(409, 'Already answered');
   if (skip) return { posted: false };
-  const options = Array.isArray(row.options) ? row.options : [];
-  const answer = options[idx as number];
+  const answer = typed || (Array.isArray(row.options) ? row.options : [])[idx as number];
   if (!answer) return { posted: false };
-  await insertMessage(sessionId, 'assistant', ASSISTANT_NAME, row.asked_by ? `@${row.asked_by} ${answer}` : answer, { replyTo: row.message_id });
+  const body = row.asked_by ? `@${row.asked_by} ${answer}` : answer;
+  await insertMessage(sessionId, 'assistant', typed ? INSTRUCTOR_NAME : ASSISTANT_NAME, body, { replyTo: row.message_id });
+  return { posted: true };
+}
+
+/**
+ * The instructor posts to the class chat directly, e.g. a typed answer to a PRIVATE question. The
+ * private question is shown with the answer, never with who asked it.
+ */
+export async function postAsInstructor(sessionId: string, text: unknown, question?: unknown): Promise<{ posted: boolean }> {
+  const t = typeof text === 'string' ? text.trim() : '';
+  if (!t || t.length > CHAT_LIMITS.chars) throw new GuestError(400, `Write an answer (up to ${CHAT_LIMITS.chars} characters)`);
+  const q = typeof question === 'string' ? question.trim().slice(0, CHAT_LIMITS.chars) : '';
+  await insertMessage(sessionId, 'assistant', INSTRUCTOR_NAME, q ? `Q: ${q}\nA: ${t}` : t);
   return { posted: true };
 }

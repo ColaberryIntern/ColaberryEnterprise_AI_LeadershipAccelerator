@@ -16,7 +16,7 @@ import {
   handleGuestJoinPage, handleGuestJoin, handleGuestState, handleGuestVote, handleGuestPulse, handleGuestAsk, handleGuestRun,
 } from '../controllers/sessionGuestController';
 import {
-  handleGuestChatList, handleGuestChatPost, handleChatEscalationsList, handleChatEscalationAnswer,
+  handleGuestChatList, handleGuestChatPost, handleChatEscalationsList, handleChatEscalationAnswer, handleChatInstructorPost,
 } from '../controllers/liveChatController';
 import { handleRaffleDraw, handleRaffleWinners, handleFlashDiscount, handleEnrollmentFeed } from '../controllers/sessionRaffleController';
 import {
@@ -492,6 +492,7 @@ router.get('/api/portal/sessions/:id/guest-chat', handleGuestChatList);
 router.post('/api/portal/sessions/:id/guest-chat', guestChatRateLimiter, handleGuestChatPost);
 router.get('/api/portal/sessions/:id/chat-escalations', kitTokenOrAdmin, handleChatEscalationsList);
 router.post('/api/portal/sessions/:id/chat-escalations/:eid', kitTokenOrAdmin, handleChatEscalationAnswer);
+router.post('/api/portal/sessions/:id/chat-post', kitTokenOrAdmin, handleChatInstructorPost);
 // Giveaway draws: drawn + recorded server-side (sessionRaffleService.ts). Deck
 // kit token or admin; full names/emails only to an admin (?full=1).
 router.post('/api/portal/sessions/:id/raffle-draw', kitTokenOrAdmin, handleRaffleDraw);
