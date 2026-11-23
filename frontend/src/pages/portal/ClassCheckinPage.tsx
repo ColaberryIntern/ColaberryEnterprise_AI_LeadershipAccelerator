@@ -1,13 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
-  ClassWindow, SavedGuest, CheckinInfo, getCheckinInfo, guestCheckin, getGuestCompanionState, guestVote, guestPulse, guestAsk, guestRun,
+  ClassWindow, SavedGuest, CheckinInfo, getCheckinInfo, guestCheckin, getGuestCompanionState, guestVote, guestPulse, guestAsk, guestRun, guestChatList, guestChatPost,
   loadSavedGuest, saveGuest, forgetGuest,
 } from '../../services/guestCheckinApi';
 import { CBCK_CSS } from './classCheckinStyles';
 import ColaberryLockup from '../../components/brand/ColaberryLockup';
 import CheckinLiveController, { LiveClient } from './CheckinLiveController';
 import CheckinGuestForm from './CheckinGuestForm';
+import CheckinChat from './CheckinChat';
 
 // Public live-class check-in (`/portal/class-checkin/:sessionId`): NAME AND EMAIL, NOTHING ELSE.
 //
@@ -140,6 +141,8 @@ const ClassCheckinPage: React.FC = () => {
     run: (m) => guestRun(sessionId, guestPass, m),
     vote: (k, c) => guestVote(sessionId, guestPass, k, c),
   }), [sessionId, guestPass]);
+  const chatLoad = useCallback(() => guestChatList(sessionId, guestPass), [sessionId, guestPass]);
+  const chatSend = useCallback((t: string) => guestChatPost(sessionId, guestPass, t), [sessionId, guestPass]);
 
   const startsAt = info ? (info.start_label || formatTime(info.start_time)) : '';
   const when = info ? `${formatDate(info.session_date)}${startsAt ? ` · ${startsAt}` : ''}` : '';
@@ -251,6 +254,9 @@ const ClassCheckinPage: React.FC = () => {
         )}
 
         {phase === 'ready' && info && renderReady(info)}
+
+        {/* The class live chat: everyone checked in, docked right on a computer, a button on a phone. */}
+        {phase === 'ready' && guestPhase === 'in' && guest && classWindow !== 'ended' && <CheckinChat load={chatLoad} send={chatSend} />}
 
         {/* Colaberry Training, whichever site the link came from; the program name comes from
             the backend's canonical course (canonicalCourse.ts). */}

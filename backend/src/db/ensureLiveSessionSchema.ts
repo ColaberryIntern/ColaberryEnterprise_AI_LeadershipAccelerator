@@ -214,6 +214,35 @@ export async function ensureLiveSessionSchema(): Promise<void> {
      )`,
     `CREATE INDEX IF NOT EXISTS idx_session_guest_questions_session_created ON session_guest_questions (session_id, created_at)`,
 
+    // ---- session_live_chat + session_chat_escalations (class live chat, services/liveChat) ----
+    // 2026-11-23: a chat everyone checked in can see. kind 'guest' is an attendee (display name
+    // only, "Ana R."); kind 'assistant' is the class assistant, which answers what it is sure of
+    // and escalates the rest to the presenter window as multiple choice.
+    `CREATE TABLE IF NOT EXISTS session_live_chat (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       session_id UUID NOT NULL REFERENCES live_sessions(id),
+       kind VARCHAR(20) NOT NULL CHECK (kind IN ('guest', 'assistant')),
+       guest_id UUID REFERENCES session_guests(id),
+       display_name VARCHAR(100) NOT NULL,
+       content TEXT NOT NULL,
+       reply_to UUID,
+       created_at TIMESTAMPTZ DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_session_live_chat_session_created ON session_live_chat (session_id, created_at)`,
+    `CREATE TABLE IF NOT EXISTS session_chat_escalations (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       session_id UUID NOT NULL REFERENCES live_sessions(id),
+       message_id UUID NOT NULL REFERENCES session_live_chat(id),
+       question TEXT NOT NULL,
+       options JSONB NOT NULL,
+       status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'answered', 'skipped')),
+       chosen INTEGER,
+       created_at TIMESTAMPTZ DEFAULT NOW(),
+       resolved_at TIMESTAMPTZ
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS uq_session_chat_escalations_message ON session_chat_escalations (message_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_session_chat_escalations_pending ON session_chat_escalations (session_id, status)`,
+
     // ---- session_raffle_winners (live giveaway draws, sessionRaffleService.ts) ----
     // One row per (session, draw, draw_number): a re-click or a reloaded deck
     // returns the stored winner instead of drawing again. The two partial
