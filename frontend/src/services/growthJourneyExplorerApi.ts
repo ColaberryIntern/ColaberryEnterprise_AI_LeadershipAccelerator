@@ -1,5 +1,5 @@
 import api from '../utils/api';
-import { params } from './growthJourneyInspectApi';
+import { params } from './queryParams';
 import type {
   DecisionsQuery,
   ExplorerContentHealth,

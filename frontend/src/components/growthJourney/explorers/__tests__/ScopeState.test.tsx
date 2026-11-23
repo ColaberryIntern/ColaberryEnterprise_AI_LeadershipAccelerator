@@ -159,12 +159,22 @@ describe('THE RULE: a 403 never falls back to data', () => {
 });
 
 describe('the other three states render distinctly', () => {
-  it('state 1: no brand selected, labelled all-brands, rows DO render', () => {
+  it('state 1: no brand selected, rows DO render', () => {
     show(ready({ reason: 'all_brands' }), { brandSelected: false });
 
     expect(rowCount()).toBe(1);
     expect(text()).toContain(String(CT_COUNT));
-    expect(text()).toContain('All brands.');
+  });
+
+  it('does NOT print the all-brands notice itself', () => {
+    // It used to, and a tab with two panels printed the same sentence twice -
+    // caught in a test's own DOM dump rather than by review. The notice is about
+    // the PAGE's brand selection, so `GrowthJourneyPage` says it once above the
+    // tab body. `unscoped` stays a distinct kind because the page reads it.
+    show(ready({ reason: 'all_brands' }), { brandSelected: false });
+
+    expect(text()).not.toContain('All brands.');
+    expect(resolveScopeState(ready({ reason: 'all_brands' }), false).kind).toBe('unscoped');
   });
 
   it('state 3: 200 with data null names the brand and renders zero rows', () => {

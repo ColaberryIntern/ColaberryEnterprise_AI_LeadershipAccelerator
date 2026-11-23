@@ -195,18 +195,18 @@ export default function ScopeState<T>({
   // whole component exists to prevent.
   if (!resolved.mayRenderRows || !state.data?.data) return null;
 
-  return (
-    <>
-      {resolved.kind === 'unscoped' && (
-        <div className="alert alert-info py-2 px-3 small d-flex align-items-center gap-2" role="status">
-          <i className="ri-information-line" aria-hidden="true" />
-          <span>
-            <strong>All brands.</strong> No brand is selected, so these figures cover the whole
-            population rather than one brand.
-          </span>
-        </div>
-      )}
-      {children(state.data.data, state.data.scope)}
-    </>
-  );
+  /*
+   * NO ALL-BRANDS BANNER HERE, and that is a correction.
+   *
+   * It used to render inside this component, so a tab with two panels showed the
+   * same sentence twice and the Overview tab showed it twice before any data -
+   * visible in a test's own DOM dump, which is how it was caught. The fact it
+   * states is about the PAGE's brand selection, not about one panel, so
+   * `GrowthJourneyPage` says it once above the tab body.
+   *
+   * `unscoped` stays a distinct kind rather than collapsing into `ready`,
+   * because the page reads it and because "nothing is narrowed" and "this brand
+   * was served" are different facts even when they render the same rows.
+   */
+  return <>{children(state.data.data, state.data.scope)}</>;
 }

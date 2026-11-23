@@ -77,6 +77,43 @@ jest.mock('../../../services/growthJourneyControlsApi', () => {
   return { ...actual, listControls: jest.fn(), createPause: jest.fn(), createRollout: jest.fn(), clearPause: jest.fn(), clearRollout: jest.fn() };
 });
 
+/*
+ * THE SIXTH AND SEVENTH MOCKS, added 2026-11-22 with the Explorer Growth merge.
+ *
+ * Six of the twelve tabs now render brand-scoped Explorer panels, and those
+ * panels fetch through two NEW clients. Without these mocks this suite issues
+ * real requests out of a test - which this file forbids outright - and the cells
+ * still pass, because a rejected read renders as a scope or error panel and the
+ * headings asserted below are above it.
+ *
+ * Every read resolves the SCOPED ENVELOPE rather than a bare payload: `data`
+ * plus `scope`. That is the contract `ScopeState` branches on, so a stub that
+ * answered a bare payload would exercise a shape the server never sends.
+ */
+jest.mock('../../../services/growthJourneyExplorerApi', () => {
+  const actual = jest.requireActual('../../../services/growthJourneyExplorerApi');
+  return {
+    ...actual,
+    getExplorerSummary: jest.fn(),
+    getExplorerDistribution: jest.fn(),
+    getExplorerCampus: jest.fn(),
+    getExplorerOutreach: jest.fn(),
+    getExplorerLearners: jest.fn(),
+    getExplorerLearner: jest.fn(),
+    getExplorerLearnerSignals: jest.fn(),
+    getExplorerLearnerDecisions: jest.fn(),
+    getExplorerEligibility: jest.fn(),
+    getExplorerDecisions: jest.fn(),
+    getExplorerWhy: jest.fn(),
+    getExplorerShadow: jest.fn(),
+    getExplorerContent: jest.fn(),
+  };
+});
+jest.mock('../../../services/growthJourneyBrandRoleApi', () => {
+  const actual = jest.requireActual('../../../services/growthJourneyBrandRoleApi');
+  return { ...actual, getBrandRole: jest.fn(), putBrandRole: jest.fn() };
+});
+
 jest.mock('../../../services/growthJourneyInspectApi', () => ({
   listClassifications: jest.fn(),
   listDecisions: jest.fn(),
@@ -103,6 +140,10 @@ const queue = require('../../../services/growthJourneyQueueApi') as Record<strin
 const perf = require('../../../services/growthJourneyPerformanceApi') as Record<string, jest.Mock>;
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const ctrl = require('../../../services/growthJourneyControlsApi') as Record<string, jest.Mock>;
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const explorers = require('../../../services/growthJourneyExplorerApi') as Record<string, jest.Mock>;
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const brandRole = require('../../../services/growthJourneyBrandRoleApi') as Record<string, jest.Mock>;
 
 /**
  * EVERY IMPLEMENTATION IS SET PER TEST, NEVER IN THE FACTORY.
@@ -184,6 +225,72 @@ beforeEach(() => {
   perf.getOutcomes.mockResolvedValue({ ...emptyPage, scope });
   perf.getByJourney.mockResolvedValue({ journeys: [], scope: { ...scope, start: null, end: null } });
   ctrl.listControls.mockResolvedValue({ controls: [], count: 0 });
+
+  /*
+   * The six Explorer tabs. Every read answers the SCOPED ENVELOPE - `data` plus
+   * `scope` - because that is what `ScopeState` branches on, and a stub that
+   * answered a bare payload would exercise a shape the server never sends.
+   *
+   * `reason: 'all_brands'` with `in_scope: true` is the state these cells run
+   * in: the suite's URLs carry no `?brand=`, so nothing is narrowed, which is
+   * also the state production is in before the membership seed.
+   */
+  const inScope = {
+    tenant_id: 't-1', brand_id: null, program_id: null,
+    in_scope: true, reason: 'all_brands' as const,
+  };
+  const scoped = <T,>(data: T) => ({ data, scope: inScope });
+
+  explorers.getExplorerSummary.mockResolvedValue(
+    scoped({
+      decision_date: null, modes: [], total: 0, waited: 0, actionable: 0,
+      with_content: 0, executed: 0, gaps: 0, learners_with_profile: 0,
+    }),
+  );
+  explorers.getExplorerDistribution.mockResolvedValue(
+    scoped({ today: [], overlays: [], trend: [] }),
+  );
+  // The REAL `CampusActivity` shape. My first stub invented one, and the campus
+  // cell failed on `a.assignments.people.toLocaleString()` - a stub that is the
+  // wrong shape fails for the wrong reason and teaches nothing.
+  explorers.getExplorerCampus.mockResolvedValue(
+    scoped({
+      explorers: 0,
+      open_house: { people: 0, rsvps: 0, last_7_days: 0 },
+      assignments: { completed: 0, people: 0, last_7_days: 0 },
+      admissions_calls: { booked: 0, upcoming: 0, cancelled: 0, people: 0 },
+      tours: { started: 0, finished: 0, by_stop: [] },
+      on_campus: { last_24h: 0, last_7_days: 0 },
+      tracked_since: '2026-10-26',
+    }),
+  );
+  explorers.getExplorerOutreach.mockResolvedValue(
+    scoped({ view: 'reach_out', rows: [], tracked_since: '2026-10-26', total: 0, offset: 0 }),
+  );
+  explorers.getExplorerLearners.mockResolvedValue(scoped(emptyPage));
+  explorers.getExplorerDecisions.mockResolvedValue(
+    scoped({ ...emptyPage, decision_date: null }),
+  );
+  explorers.getExplorerShadow.mockResolvedValue(
+    scoped({ ...emptyPage, decision_date: null }),
+  );
+  explorers.getExplorerContent.mockResolvedValue(
+    scoped({
+      total: 0, active: 0, emailable: 0, matrix: [], purposes: [],
+      decision_gaps: { gap_count: 0, decision_date: null, named: [] },
+    }),
+  );
+  // The drawer's four reads and the Why modal: unreachable without a row to
+  // click, stubbed so a stray render cannot reach the network.
+  for (const fn of ['getExplorerLearner', 'getExplorerLearnerSignals',
+    'getExplorerLearnerDecisions', 'getExplorerEligibility', 'getExplorerWhy']) {
+    explorers[fn].mockResolvedValue(scoped(null));
+  }
+
+  brandRole.getBrandRole.mockResolvedValue({
+    brand_id: 'b-cpn', status: 'default', source: 'kind_default',
+    role: { title: 'Enrollment Specialist', description: 'Reaches out.', updated_at: null },
+  });
 });
 
 afterEach(() => {
@@ -294,8 +401,42 @@ describe('loaded', () => {
    * One cell per key gets a fresh root from the outer `beforeEach`, hence a fresh
    * MemoryRouter, hence the URL the cell is named for.
    */
-  it.each(['overview', 'classification', 'decisions', 'shadow', 'content',
-    'handoffs', 'experiments', 'performance', 'controls'])(
+  /*
+   * THE ALL-BRANDS NOTICE, AND WHY IT IS ASSERTED HERE.
+   *
+   * It used to render inside `ScopeState`, so a tab with two panels printed the
+   * same sentence twice. Moving it to the page fixed that and would have left it
+   * with no test at all - behaviour moved out of a covered component into an
+   * uncovered one. These two cells are the replacement.
+   */
+  it('says once that nothing is narrowed, when no brand is selected', async () => {
+    await act(async () => {
+      root.render(
+        <MemoryRouter initialEntries={['/admin/growth-journey?tab=overview']}>
+          <GrowthJourneyPage />
+        </MemoryRouter>,
+      );
+    });
+
+    const hits = (text().match(/All brands\./g) ?? []).length;
+    // ONCE. Two panels on this tab, one notice.
+    expect(hits).toBe(1);
+  });
+
+  it('does not say it when a brand IS selected', async () => {
+    await act(async () => {
+      root.render(
+        <MemoryRouter initialEntries={['/admin/growth-journey?tab=overview&brand=b-cpn']}>
+          <GrowthJourneyPage />
+        </MemoryRouter>,
+      );
+    });
+
+    expect(text()).not.toContain('All brands.');
+  });
+
+  it.each(['overview', 'campus', 'learners', 'decisions', 'content', 'shadow',
+    'classification', 'handoffs', 'experiments', 'performance', 'controls', 'brand-setup'])(
     '?tab=%s has a view behind it, so the fallback panel is unreachable',
     async (key) => {
       await act(async () => {
@@ -321,11 +462,31 @@ describe('loaded', () => {
    * A component that works in isolation and is unreachable from its page is not
    * shipped. These cells are the only thing standing between that and a repeat.
    */
+  /*
+   * THREE STRINGS CHANGED HERE ON 2026-11-22, AND NOTHING ELSE DID.
+   *
+   * `decisions`, `shadow` and `content` now render EXPLORER'S panels rather than
+   * the journey's, per the execution contract's assumption 1, so they genuinely
+   * answer different questions and carry different headings. `shadow` is the one
+   * whose words really moved: "Did the shadow runs happen?" asked whether the
+   * cron ran; the panel now shows what would have gone out.
+   *
+   * `campus`, `learners` and `brand-setup` are new rows for new tabs.
+   *
+   * Every other assertion in this file is unchanged. The fallback-panel loop
+   * above still covers all twelve keys, the switched-off and unseeded states are
+   * untouched, and the no-unmocked-request guarantee is STRENGTHENED by the two
+   * client mocks at the top rather than relaxed.
+   */
   it.each([
-    ['classification', 'was classified'],
+    ['overview', 'How the population looks now'],
+    ['campus', 'What explorers are doing'],
+    ['learners', 'Learners'],
     ['decisions', 'What was decided'],
-    ['shadow', 'Did the shadow runs happen?'],
     ['content', 'What may be said'],
+    ['shadow', 'What would have gone out'],
+    ['brand-setup', 'Brand setup'],
+    ['classification', 'was classified'],
     ['handoffs', 'Who is waiting for a human'],
     ['experiments', 'Did withholding content change anything?'],
     ['performance', 'How the handoff pipeline is performing'],

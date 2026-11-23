@@ -1,5 +1,5 @@
 import api from '../utils/api';
-import { params } from './growthJourneyInspectApi';
+import { params } from './queryParams';
 
 /**
  * The per-brand agent role: one read, one write.
