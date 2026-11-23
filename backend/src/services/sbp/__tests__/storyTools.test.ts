@@ -4,7 +4,7 @@
  * Google Sheets and Twilio SMS, nothing else. Story text and the CONSTRAINT
  * below are v10's, verbatim.
  */
-import { markUnnamedApis, unnamedApis, unnamedApiNote } from '../storyTools';
+import { markUnnamedTools, unnamedTools, unnamedToolNote } from '../storyTools';
 import { PlanRequirement, PlanStory } from '../planContract';
 
 const CONSTRAINT = {
@@ -22,38 +22,58 @@ const V10_005 = story(
 
 describe('APIs the student never named', () => {
   it('marks v10 STORY-005 with both, by their own names', () => {
-    const [out] = markUnnamedApis([V10_005], [CONSTRAINT]);
+    const [out] = markUnnamedTools([V10_005], [CONSTRAINT]);
     expect(out.task_guidance).toContain('Use Google Maps API for commute distance.');
     expect(out.task_guidance).toContain('Ask before building: "Commute distance API", "Google Maps API" are not among the tools this project names.');
   });
 
   it('leaves the named tools alone, however they are written', () => {
     const named = story('S', 'Use Gmail API to send. Update via the Google Sheets API. Post with the Slack API. Text with the Twilio SMS API. If the API fails, retry.');
-    const [out] = markUnnamedApis([named], [CONSTRAINT]);
+    const [out] = markUnnamedTools([named], [CONSTRAINT]);
     expect(out).toBe(named);
   });
 
   it('still catches an outside party\'s API when the party is named but its API is not (v5)', () => {
-    expect(unnamedApis('Integrate with the temp agencies\' APIs.', new Set(['gmail']))).toEqual(['temp agencies\' API']);
+    expect(unnamedTools('Integrate with the temp agencies\' APIs.', new Set(['gmail']))).toEqual(['temp agencies\' API']);
   });
 
   it('never joins words across lines', () => {
-    expect(unnamedApis('data is incomplete\nCommute distance API fails', new Set())).toEqual(['Commute distance API']);
+    expect(unnamedTools('data is incomplete\nCommute distance API fails', new Set())).toEqual(['Commute distance API']);
   });
 
   it('is idempotent and returns untouched stories as the same objects', () => {
-    const once = markUnnamedApis([V10_005], [CONSTRAINT]);
-    const twice = markUnnamedApis(once, [CONSTRAINT]);
+    const once = markUnnamedTools([V10_005], [CONSTRAINT]);
+    const twice = markUnnamedTools(once, [CONSTRAINT]);
     expect(twice[0]).toBe(once[0]);
     expect(V10_005.task_guidance).not.toContain('Ask before building');
   });
 
   it('marks nothing without CONSTRAINT requirements to check against, or with no stories', () => {
-    expect(markUnnamedApis([V10_005], [])[0]).toBe(V10_005);
-    expect(markUnnamedApis([], [CONSTRAINT])).toEqual([]);
+    expect(markUnnamedTools([V10_005], [])[0]).toBe(V10_005);
+    expect(markUnnamedTools([], [CONSTRAINT])).toEqual([]);
+  });
+
+  it('marks an outside system by name (v11 STORY-002, v6 STORY-002), verbatim', () => {
+    const v11 = story('STORY-002', 'Consult the approved leave list from the HR system. Use Twilio SMS to send texts, ensuring leave list is checked first.');
+    expect(markUnnamedTools([v11], [CONSTRAINT])[0].task_guidance).toContain('Ask before building: "HR system" is not among the tools');
+    expect(unnamedTools('Integrate with the leave management system to access the approved leave list.', new Set())).toEqual(['leave management system']);
+    expect(unnamedTools('Read the roster from the Dentrix database.', new Set())).toEqual(['Dentrix database']);
+  });
+
+  it('leaves the product\'s own system alone: every phrase ShiftFill v6-v11 used for it', () => {
+    const own = [
+      'When the system receives a text, then the system opens a gap.', 'Create a gap entry in the system\'s database.',
+      'Use a notification system and an approval system.', 'Given the paging system is down, retry.', 'Can monitor system load.',
+      'Notification system sends the alert.', 'Hygienists never need an app.', 'Store it in the database.',
+    ];
+    for (const t of own) expect(unnamedTools(t, new Set())).toEqual([]);
+  });
+
+  it('leaves a named tool\'s platform alone', () => {
+    expect(unnamedTools('Post it on the Slack platform.', new Set(['slack']))).toEqual([]);
   });
 
   it('writes one phrase in the singular', () => {
-    expect(unnamedApiNote(['Google Maps API'])).toBe('Ask before building: "Google Maps API" is not among the tools this project names. Check with the project owner whether to use it or where that data already lives.');
+    expect(unnamedToolNote(['Google Maps API'])).toBe('Ask before building: "Google Maps API" is not among the tools this project names. Check with the project owner whether to use it or where that data already lives.');
   });
 });

@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Monday, November 23, 2026 at 7:31 AM</div>
-    <div><span class="sid">CC-20261120-e2fc</span><span class="count">25 changes</span></div>
+    <div class="meta">Generated Monday, November 23, 2026 at 8:30 AM</div>
+    <div><span class="sid">CC-20261120-e2fc</span><span class="count">26 changes</span></div>
   </header>
   <main>
     
@@ -414,6 +414,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">in v11 (project 101b597f), the temp agency step was kept a second time in a row (REQ-018, STORY-011). The only APIs named are Gmail, Google Sheets and Slack, all named by the student, so nothing was marked. There are no due dates on weekends or holidays and no agent input that comes from nowhere. Home 200.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">STORY-006 also cites REQ-007 (the overtime rule) without a test for it; STORY-005 has the test. Judged a loose citation, not a defect.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">26</span>
+          <h2>Stories: mark outside systems the student never named, not only APIs</h2>
+          <span class="badge">2026-11-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`storyTools` (renamed `markUnnamedTools` / `unnamedTools` / `unnamedToolNote`) now also marks &quot;&lt;name&gt; system | portal | database | platform&quot; when the name is unmistakably someone else&#39;s: an acronym, a capitalised word after a lowercase one, or &quot;… management&quot;. Lowercase descriptions of the product (&quot;the system&quot;, &quot;notification system&quot;, &quot;the system&#39;s database&quot;) are left alone. The v11 Command Center build surfaced STORY-002&#39;s &quot;approved leave list from the HR system&quot;. Runbook row updated. BC L12.17 (https://app.basecamp.com/3945211/buckets/7463955/todos/10537992468).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`storyTools.test.ts` 10/10, including v11&#39;s text verbatim and every product-self phrase seen in v6–v11. The saved v6–v11 plans mark exactly v6 &quot;leave management system&quot;, v10/v11 &quot;HR system&quot; and v10 &quot;Google Maps API&quot;. Each of the three rules was mutation-checked. sbp + factory + delivery + runbook coverage 381 suites / 5,838 tests pass; backend tsc and `checkTestTypecheck` show only the 3 known files.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">a lowercase outside system (&quot;the scheduling system&quot; meaning the dentists&#39; own software) is not caught. That form is indistinguishable from describing the product itself, and catching it would mark nearly every story.</span></div>
           
         </div>
       </article>

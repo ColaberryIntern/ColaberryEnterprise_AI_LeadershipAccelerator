@@ -41,7 +41,7 @@ import { completeRequirements, contentWords } from './requirementCoverage';
 import { alignMeasuresToDemos } from './outlineAlignment';
 import { adoptNamedPerson } from './planPeople';
 import { RELEASE_STORIES_JSON_SCHEMA, buildReleaseStoriesPrompt, keepStoriesInTheirRelease } from './releaseStories';
-import { markUnnamedApis } from './storyTools';
+import { markUnnamedTools } from './storyTools';
 
 /** Average non-constraint requirements per release before another release is opened. */
 export const REQUIREMENTS_PER_RELEASE = 6;
@@ -420,7 +420,7 @@ export async function generateStagedPlan(opts: StagedOptions): Promise<StagedRes
 
   // 5. Assemble.
   // Named people are judged against the student's own words, never the generated document.
-  const stories = markUnnamedApis(adoptNamedPerson(
+  const stories = markUnnamedTools(adoptNamedPerson(
     assembleStories(perRelease, requirements),
     [opts.brief, ...requirements.map((r) => r.statement)].join('\n'),
   ), requirements);
