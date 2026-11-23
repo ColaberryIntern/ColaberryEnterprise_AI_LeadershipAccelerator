@@ -115,7 +115,10 @@ describe('the pulse (renderPresence)', () => {
   });
 });
 
-const T0 = new Date('2026-10-22T10:00:00').getTime();
+// 10:00 Central on Oct 22 (CDT, UTC-5), pinned absolutely: the session times
+// below are Central wall clocks, so a zone-less T0 would drift against them on
+// any machine outside Central.
+const T0 = Date.parse('2026-10-22T15:00:00Z');
 const session = (date: string, time: string, status: 'scheduled' | 'live' = 'scheduled') => ({ id: 's', session_number: 1, title: 'Build Day', session_date: date,
   start_time: time, end_time: '23:00', status, meeting_link: null, meeting_provider: null, timezone: 'America/Chicago', room_id: null });
 const agenda = (s: ReturnType<typeof session> | null, eventDays: number | null): HomeAgenda => ({

@@ -132,7 +132,10 @@ describe('people on the map', () => {
 });
 
 describe('what is next on the map (members), and the quiet look', () => {
-  const now = new Date('2026-10-22T10:00:00').getTime();
+  // 10:00 Central on Oct 22 (CDT, UTC-5), pinned absolutely: the session times
+  // below are Central wall clocks, so a zone-less "now" would drift against
+  // them on any machine outside Central.
+  const now = Date.parse('2026-10-22T15:00:00Z');
   const session = (date: string, time: string, status: 'scheduled' | 'live' = 'scheduled') => ({ id: 's', session_number: 1, title: 'Build Day', session_date: date,
     start_time: time, end_time: '23:00', status, meeting_link: null, meeting_provider: null, timezone: 'America/Chicago', room_id: null });
   it('"Class in 1d 3h", "In 15d"; within 15 minutes the badge turns red and the ring pulses; live says Live now', () => {

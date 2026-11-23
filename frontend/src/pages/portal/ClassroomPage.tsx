@@ -24,7 +24,7 @@ import { PaywallScreen } from '../../components/paywall/PageGate';
 import { GATED_FEATURES } from '../../components/paywall/gatedFeatures';
 import { useNextLiveSession } from './today/useNextLiveSession';
 import { useCountdown } from '../../hooks/useCountdown';
-import { parseSessionTimeToHHMM, tzAbbrev, formatSessionTimeRange } from '../../utils/sessionTime';
+import { sessionStartInstant, tzAbbrev, formatSessionTimeRange } from '../../utils/sessionTime';
 import type { Band } from '../../services/bandLadder';
 import ClassSessions, { useMySessions } from '../../components/campus/classroom/ClassSessions';
 
@@ -86,12 +86,10 @@ const ClassroomPage: React.FC = () => {
   // hooks) the Today shell uses via NextLiveClassCard, not a hardcoded
   // "next Thursday 10am" schedule guess.
   const { session: nextSession } = useNextLiveSession();
-  const nextSessionTarget = (!nextSession || nextSession.status === 'live' || !nextSession.session_date)
+  // Central wall clock, resolved through Central (see sessionStartInstant).
+  const nextSessionTarget = (!nextSession || nextSession.status === 'live')
     ? null
-    : (() => {
-        const hhmm = parseSessionTimeToHHMM(nextSession.start_time || '09:00');
-        return hhmm ? `${nextSession.session_date}T${hhmm}:00` : null;
-      })();
+    : sessionStartInstant(nextSession.session_date, nextSession.start_time || '09:00');
   const liveCd = useCountdown(nextSessionTarget);
 
   const load = useCallback(async () => {
