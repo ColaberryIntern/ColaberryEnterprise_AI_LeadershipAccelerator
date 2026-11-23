@@ -1,7 +1,15 @@
 const membershipFindAll = jest.fn();
+const brandFindByPk = jest.fn();
 
 jest.mock('../../../models', () => ({
   TenantMembership: { findAll: (...a: unknown[]) => membershipFindAll(...a) },
+  // `Brand` joined this mock when a named brand began resolving its own tenant.
+  // Worth knowing if a future export is added: the production code wraps the
+  // lookup in try/catch and fails closed, so a model missing from THIS mock does
+  // not throw - it silently denies, and the cells below would pass for the wrong
+  // reason. `expect(brandFindByPk).toHaveBeenCalled()` is asserted where the
+  // lookup is supposed to happen, so that cannot go unnoticed.
+  Brand: { findByPk: (...a: unknown[]) => brandFindByPk(...a) },
 }));
 
 import {
@@ -31,6 +39,159 @@ function membership(tenant: string, role: string, brand: string | null = null) {
 
 beforeEach(() => {
   membershipFindAll.mockReset();
+  brandFindByPk.mockReset();
+});
+
+/**
+ * A named brand names its own tenant.
+ *
+ * ─── THE PRODUCTION FAULT THIS FIXES ────────────────────────────────────────
+ *
+ * Measured 2026-11-23: 13 of 15 admin identities hold memberships in four
+ * tenants and are not super-admins, and the admin client sends `brand_id` but
+ * never `tenant_id`. `tenantId` resolved only for single-tenant operators, so
+ * `Boolean(tenantId)` short-circuited the brand check and all thirteen were
+ * refused every brand. The page worked for the two super-admins and silently
+ * 403'd for everyone else.
+ *
+ * ─── THE CELL THAT MATTERS MOST IS THE REFUSAL, NOT THE GRANT ───────────────
+ *
+ * The obvious fix - adopt the brand's tenant - is a privilege escalation if it
+ * skips the membership test. Every membership row in production carries
+ * `brand_id` NULL, so `authorizedBrandsOf` returns null (unrestricted) for
+ * everyone; with a tenant resolved from the brand alone, any operator with any
+ * membership could read any brand. "Refuses a brand in a tenant they do not
+ * belong to" is therefore the load-bearing assertion here, and a version that
+ * drops the check passes every other cell in this block.
+ */
+describe('buildRequestContext: resolving a tenant from a named brand', () => {
+  const brandIn = (tenant: string) => ({ id: BRAND_TRAINING, tenant_id: tenant });
+
+  it('lets a MULTI-tenant operator use a brand in a tenant they belong to', async () => {
+    membershipFindAll.mockResolvedValue([
+      membership(COLABERRY, TENANT_ROLES.TENANT_ADMIN),
+      membership(CPN, TENANT_ROLES.TENANT_ADMIN),
+      membership(FLOTATION, TENANT_ROLES.TENANT_VIEWER),
+    ]);
+    brandFindByPk.mockResolvedValue(brandIn(COLABERRY));
+
+    const ctx = await buildRequestContext({
+      platformIdentityId: IDENTITY,
+      requestedBrandId: BRAND_TRAINING,
+    });
+
+    expect(ctx.tenantId).toBe(COLABERRY);
+    expect(ctx.brandId).toBe(BRAND_TRAINING);
+    // The lookup must actually have happened. Without this, a mock that never
+    // resolved would still produce a passing-looking failure elsewhere.
+    expect(brandFindByPk).toHaveBeenCalledWith(BRAND_TRAINING);
+  });
+
+  it('REFUSES a brand whose tenant they do not belong to', async () => {
+    // The security cell. A CPN and Flotation operator naming a Colaberry brand.
+    membershipFindAll.mockResolvedValue([
+      membership(CPN, TENANT_ROLES.TENANT_ADMIN),
+      membership(FLOTATION, TENANT_ROLES.TENANT_VIEWER),
+    ]);
+    brandFindByPk.mockResolvedValue(brandIn(COLABERRY));
+
+    await expect(
+      buildRequestContext({ platformIdentityId: IDENTITY, requestedBrandId: BRAND_TRAINING }),
+    ).rejects.toBeInstanceOf(TenantAccessError);
+  });
+
+  it('refuses a brand that does not exist', async () => {
+    membershipFindAll.mockResolvedValue([
+      membership(COLABERRY, TENANT_ROLES.TENANT_ADMIN),
+      membership(CPN, TENANT_ROLES.TENANT_ADMIN),
+    ]);
+    brandFindByPk.mockResolvedValue(null);
+
+    await expect(
+      buildRequestContext({ platformIdentityId: IDENTITY, requestedBrandId: BRAND_ENTERPRISE }),
+    ).rejects.toBeInstanceOf(TenantAccessError);
+  });
+
+  it('fails closed when the brand cannot be read at all', async () => {
+    membershipFindAll.mockResolvedValue([
+      membership(COLABERRY, TENANT_ROLES.TENANT_ADMIN),
+      membership(CPN, TENANT_ROLES.TENANT_ADMIN),
+    ]);
+    brandFindByPk.mockRejectedValue(new Error('db down'));
+
+    // A database outage must not become a grant. Same stance as the membership
+    // read above it, which returns an empty context rather than throwing.
+    await expect(
+      buildRequestContext({ platformIdentityId: IDENTITY, requestedBrandId: BRAND_TRAINING }),
+    ).rejects.toBeInstanceOf(TenantAccessError);
+  });
+
+  it('does not look the brand up at all when one tenant already resolved', async () => {
+    // The pre-existing path for single-tenant operators is untouched, and pays
+    // no extra query. Asserted on the lookup NOT happening, because "it still
+    // works" would also be true of a version that queried needlessly on every
+    // request to the hot path.
+    membershipFindAll.mockResolvedValue([membership(COLABERRY, TENANT_ROLES.TENANT_ADMIN)]);
+
+    const ctx = await buildRequestContext({
+      platformIdentityId: IDENTITY,
+      requestedBrandId: BRAND_TRAINING,
+    });
+
+    expect(ctx.tenantId).toBe(COLABERRY);
+    expect(ctx.brandId).toBe(BRAND_TRAINING);
+    expect(brandFindByPk).not.toHaveBeenCalled();
+  });
+
+  it('does not look the brand up when the caller named a tenant themselves', async () => {
+    membershipFindAll.mockResolvedValue([
+      membership(COLABERRY, TENANT_ROLES.TENANT_ADMIN),
+      membership(CPN, TENANT_ROLES.TENANT_ADMIN),
+    ]);
+
+    const ctx = await buildRequestContext({
+      platformIdentityId: IDENTITY,
+      requestedTenantId: COLABERRY,
+      requestedBrandId: BRAND_TRAINING,
+    });
+
+    expect(ctx.tenantId).toBe(COLABERRY);
+    expect(brandFindByPk).not.toHaveBeenCalled();
+  });
+
+  it('a super-admin in several tenants reaches a brand in any of them', async () => {
+    // Super-admins resolved already, by holding exactly one membership. This
+    // pins that they keep working if they ever hold more than one.
+    membershipFindAll.mockResolvedValue([
+      membership(COLABERRY, TENANT_ROLES.PLATFORM_SUPER_ADMIN),
+      membership(CPN, TENANT_ROLES.PLATFORM_SUPER_ADMIN),
+    ]);
+    brandFindByPk.mockResolvedValue(brandIn(FLOTATION));
+
+    const ctx = await buildRequestContext({
+      platformIdentityId: IDENTITY,
+      requestedBrandId: BRAND_TRAINING,
+    });
+
+    // A super-admin may operate in any tenant, so the brand's own tenant is
+    // adopted even though they hold no membership in it.
+    expect(ctx.tenantId).toBe(FLOTATION);
+    expect(ctx.brandId).toBe(BRAND_TRAINING);
+  });
+
+  it('still refuses when no brand was requested and several tenants are held', async () => {
+    // Unchanged behaviour: naming nothing resolves nothing, because silently
+    // defaulting would let someone act on the wrong tenant without noticing.
+    membershipFindAll.mockResolvedValue([
+      membership(COLABERRY, TENANT_ROLES.TENANT_ADMIN),
+      membership(CPN, TENANT_ROLES.TENANT_ADMIN),
+    ]);
+
+    const ctx = await buildRequestContext({ platformIdentityId: IDENTITY });
+
+    expect(ctx.tenantId).toBeNull();
+    expect(brandFindByPk).not.toHaveBeenCalled();
+  });
 });
 
 describe('buildRequestContext', () => {
