@@ -54,9 +54,18 @@ function cleanText(max: number, label: string) {
 export const ROLE_TITLE_MAX = 80;
 export const ROLE_DESCRIPTION_MAX = 280;
 
-export const brandRoleParamsSchema = z.object({
-  brand_id: z.string().uuid(),
-});
+/**
+ * The brand is a QUERY parameter and it is mandatory.
+ *
+ * `.strict()` because a typo'd key here is a caller aiming at a brand and
+ * missing: `?brandId=` silently ignored would read as "no brand requested",
+ * which on the write path is how somebody renames the wrong brand's agent.
+ */
+export const brandRoleQuerySchema = z
+  .object({
+    brand_id: z.string().uuid(),
+  })
+  .strict();
 
 /**
  * `.strict()`: an unknown key is a 400, not ignored.
@@ -83,5 +92,5 @@ export const brandRoleBodySchema = z
   .strict()
   .brand<'BrandRoleBody'>();
 
-export type BrandRoleParams = z.infer<typeof brandRoleParamsSchema>;
+export type BrandRoleQuery = z.infer<typeof brandRoleQuerySchema>;
 export type BrandRoleBody = z.infer<typeof brandRoleBodySchema>;

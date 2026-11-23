@@ -162,7 +162,18 @@ jest.mock('../../../models', () => {
 jest.mock('../../../config/database', () => {
   const { Sequelize } = require('sequelize');
   const sequelize = new Sequelize('postgres://u:p@127.0.0.1:5432/x', { logging: false });
-  sequelize.query = jest.fn(async () => [[poison], {}]);
+  /*
+   * `QueryTypes.SELECT` RESOLVES TO THE ROWS, NOT TO `[rows, metadata]`.
+   *
+   * The first version always answered the pair, so any route running a raw
+   * SELECT destructured a row out of an array and threw a TypeError deep inside
+   * the service - a 500 that read as a route defect and was the stub's. It went
+   * unnoticed because no journey route ran a raw SELECT until the brand-scoped
+   * Explorer reads arrived. Real Sequelize distinguishes the two, so this does.
+   */
+  sequelize.query = jest.fn(async (_sql, options) =>
+    options && options.type === 'SELECT' ? [poison] : [[poison], {}],
+  );
   return { sequelize };
 });
 
@@ -174,8 +185,20 @@ jest.mock('../../../services/ledgerService', () => ({
 
 /** Every membership the caller could want, so scope never turns a route into a 403. */
 jest.mock('../../../modules/tenancy/adminScopeBridge', () => ({
-  contextFromAdminRequest: jest.fn(async () => ({
-    tenantId: 't-cola', brandId: null, authorizedTenantIds: ['t-cola'],
+  /*
+   * THE REQUESTED BRAND IS GRANTED, which is what "every membership the caller
+   * could want" has to mean in practice.
+   *
+   * `scopedContext` compares `ctx.brandId` to the brand the request named and
+   * refuses when they differ, so a hardcoded `null` here answers 403 to EVERY
+   * brand-scoped route - before its body is ever reached, and therefore before
+   * this sweep can see what that body would have contained. The first draft did
+   * exactly that, and it went unnoticed until the first route requiring a brand
+   * arrived (`/brand-role`), which the sweep then recorded as "not answered"
+   * rather than as a privacy result.
+   */
+  contextFromAdminRequest: jest.fn(async (_admin?: unknown, req?: { requestedBrandId?: string | null }) => ({
+    tenantId: 't-cola', brandId: req?.requestedBrandId ?? null, authorizedTenantIds: ['t-cola'],
     authorizedBrandIds: null, isPlatformSuperAdmin: true, identityId: 'staff-1',
   })),
 }));
@@ -211,6 +234,20 @@ const concrete = (pattern: string): string =>
   pattern
     .replace(':leadId', '4711')
     .replace(/:[A-Za-z]+/g, '30000000-0000-4000-8000-000000000001');
+
+/**
+ * Routes that cannot be exercised with a bare path, and the query they need.
+ *
+ * The sweep assumed every GET answers 200 with no query string. `/brand-role`
+ * does not: its brand is MANDATORY and absent is a 400, deliberately, because
+ * "set the role for whichever brand you happen to be scoped to" is how somebody
+ * renames the wrong brand's agent. Without this map that route contributes a
+ * 400 body with no `@` in it, which reads as privacy where there is only a
+ * rejected request - the exact vacuity this suite's last cell exists to refuse.
+ */
+const REQUIRED_QUERY: Record<string, Record<string, string>> = {
+  [`${J}/brand-role`]: { brand_id: '20000000-0000-4000-8000-000000000002' },
+};
 
 const app = () => {
   const a = express();
@@ -262,10 +299,36 @@ describe('the read surface never echoes an address', () => {
     [`${J}/handoffs`]: 'echoes reason, evidence, talking_points, disposition_reason',
     [`${J}/handoffs/:id`]: 'echoes reason, evidence, talking_points, disposition_reason',
     [`${J}/execution/controls`]: 'echoes the control row whole, reason included',
+    /*
+     * ─── THE BRAND-SCOPED EXPLORER READS, ADDED 2026-11-22 ──────────────────
+     *
+     * These five serve EXPLORER GROWTH'S OWN RESPONSE, unchanged, which is what
+     * Ali asked for: one page showing Explorer's data as it stands today, by
+     * brand. The payload is the one `/admin/explorer-growth` already returns to
+     * the same admin audience, so NOTHING NEW IS EXPOSED here - the journey
+     * surface is strictly narrower, because it is brand-scoped by membership
+     * where Explorer's own routes are `requireAdmin` alone.
+     *
+     * They are listed for the same reason the nine above are: scrubbing them
+     * would make the merged page less capable than the page it replaces, and
+     * that is a product decision with Explorer's existing consumers to check,
+     * not something a privacy sweep should do quietly. It is Ali's call and it
+     * is in the packet. Each entry is asserted to STILL leak, so the day
+     * Explorer's payload is scrubbed these entries fail and get deleted.
+     *
+     * The eight Explorer reads NOT listed here are genuinely clean and are
+     * asserted so by the cell below - they return aggregates, series and
+     * scores, not rows.
+     */
+    [`${J}/explorers/learners`]: "echoes Explorer's learner rows, email among them - the outreach list exists to contact people",
+    [`${J}/explorers/learners/:enrollmentId`]: "echoes Explorer's learner profile, email and contact evidence included",
+    [`${J}/explorers/decisions`]: 'echoes candidates, contact_evidence and reason, as the journey decisions route above does',
+    [`${J}/explorers/decisions/:id`]: 'echoes the decision reason, which quotes free text',
+    [`${J}/explorers/shadow`]: 'echoes the same decision rows as /explorers/decisions',
   };
 
   it.each(DECLARED)('%s carries no `@`', async (pattern) => {
-    const res = await request(app()).get(concrete(pattern)).set('Authorization', `Bearer ${token()}`);
+    const res = await request(app()).get(concrete(pattern)).query(REQUIRED_QUERY[pattern] ?? {}).set('Authorization', `Bearer ${token()}`);
     const text = res.text ?? '';
     results.push({ route: pattern, status: res.status, text });
     if (pattern in KNOWN_UNSCRUBBED) {
@@ -352,7 +415,7 @@ describe('the read surface never echoes an address', () => {
     const offenders: string[] = [];
     for (const pattern of collections) {
       mockReadLog.length = 0;
-      const res = await request(app()).get(concrete(pattern)).set('Authorization', `Bearer ${token()}`);
+      const res = await request(app()).get(concrete(pattern)).query(REQUIRED_QUERY[pattern] ?? {}).set('Authorization', `Bearer ${token()}`);
       if (res.status !== 200) continue;
       const reads = [...mockReadLog];
       const budget = SUMMARY_BUDGET[pattern] ?? 3;

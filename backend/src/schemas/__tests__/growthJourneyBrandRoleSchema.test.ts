@@ -1,6 +1,6 @@
 import {
   brandRoleBodySchema,
-  brandRoleParamsSchema,
+  brandRoleQuerySchema,
   stripRoleText,
   ROLE_TITLE_MAX,
   ROLE_DESCRIPTION_MAX,
@@ -93,9 +93,9 @@ describe('the body contract', () => {
 
 describe('the params contract', () => {
   it('requires a uuid brand', () => {
-    expect(brandRoleParamsSchema.safeParse({ brand_id: 'colaberry-training' }).success).toBe(false);
+    expect(brandRoleQuerySchema.safeParse({ brand_id: 'colaberry-training' }).success).toBe(false);
     expect(
-      brandRoleParamsSchema.safeParse({ brand_id: '10ebfb01-dc51-450d-bbef-a2c10e42efa8' }).success
+      brandRoleQuerySchema.safeParse({ brand_id: '10ebfb01-dc51-450d-bbef-a2c10e42efa8' }).success
     ).toBe(true);
   });
 });

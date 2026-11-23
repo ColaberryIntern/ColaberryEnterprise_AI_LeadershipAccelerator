@@ -20,6 +20,25 @@ import {
   getJourneySnapshotsHandler,
   getJourneyTransitionsHandler,
 } from '../../controllers/growthJourneyInspectController';
+import {
+  getExplorerCampusHandler,
+  getExplorerContentHandler,
+  getExplorerDecisionsHandler,
+  getExplorerDistributionHandler,
+  getExplorerEligibilityHandler,
+  getExplorerLearnerDecisionsHandler,
+  getExplorerLearnerHandler,
+  getExplorerLearnerSignalsHandler,
+  getExplorerLearnersHandler,
+  getExplorerOutreachHandler,
+  getExplorerShadowHandler,
+  getExplorerSummaryHandler,
+  getExplorerWhyHandler,
+} from '../../controllers/growthJourneyExplorerController';
+import {
+  getBrandRoleHandler,
+  putBrandRoleHandler,
+} from '../../controllers/growthJourneyBrandRoleController';
 
 /**
  * The journey's performance reads (Phase 6, T605).
@@ -102,6 +121,13 @@ const INSPECT_GROUPS = [
   '/api/admin/growth-journey/content',
   '/api/admin/growth-journey/handoffs',
   '/api/admin/growth-journey/experiments',
+  // Explorer Growth's reads, brand-scoped, and the per-brand agent role. They
+  // join the loop rather than getting a `router.use` of their own precisely
+  // because of the paragraph above: a sixth and seventh narrow prefix cannot
+  // revoke the status registry's exemption from the master-flag 404, and a
+  // broad guard would be one mount-order change from doing exactly that.
+  '/api/admin/growth-journey/explorers',
+  '/api/admin/growth-journey/brand-role',
 ] as const;
 for (const prefix of INSPECT_GROUPS) {
   router.use(prefix, requireAdmin);
@@ -127,5 +153,65 @@ router.get(`${JOURNEY}/handoffs/policies`, getJourneyQueuePoliciesHandler);
 router.get(`${JOURNEY}/handoffs/ownership`, getJourneyOwnershipHandler);
 // T608. A read: the policies in scope and the lift each has measured. Nothing here writes one.
 router.get(`${JOURNEY}/experiments`, getJourneyExperimentsHandler);
+
+/* ── Explorer Growth's reads, brand-scoped ──────────────────────────────────── */
+
+/**
+ * Thirteen GETs, one per read in `EXPLORER_BRAND_READS`, and the count equality
+ * is asserted by a test rather than maintained by hand.
+ *
+ * That assertion is not decoration. In this build's own plan the read list grew
+ * from six to eleven to thirteen while this task still said eight paths, which
+ * left four UI panels with no reachable route - a drift a table in a document
+ * cannot prevent and a test can.
+ *
+ * ORDER IS LOAD-BEARING WITHIN THIS GROUP. `/learners/:enrollmentId` would
+ * swallow nothing here, but `/learners` must be registered before it would in a
+ * router that matched loosely, and the two sub-paths under
+ * `/learners/:enrollmentId/` must come before the bare one for the same reason
+ * the file's own header gives about `/handoffs/:id`. Express matches in
+ * registration order, so the specific paths are registered first and a test
+ * asserts each one resolves to its OWN handler rather than to a sibling.
+ *
+ * ─── THE PREFIX IS SPELLED IN FULL, NOT VIA A LOCAL CONST ───────────────────
+ *
+ * `growthJourneyRateLimitMount.phase6.test.ts` derives the route matrix by
+ * scanning this file for `router.<verb>(` followed by a TEMPLATE LITERAL, and it
+ * substitutes exactly two names: `BASE` and `JOURNEY`. A local
+ * `const EXPLORERS = ...` leaves the interpolation unsubstituted, so the derived
+ * pattern never starts with the journey prefix; a BARE identifier
+ * (`router.get(BRAND_ROLE, ...)`) does not match that regex at all and the route
+ * vanishes from the matrix in silence - which is exactly the "route HIDDEN from
+ * the derivation" hazard that suite's own comment describes. Both happened here:
+ * thirteen routes derived with an unsubstituted prefix and the two brand-role
+ * routes were invisible, until that suite's exact count pin caught it.
+ *
+ * So the prefix is repeated in full. Longer, and checkable.
+ */
+router.get(`${JOURNEY}/explorers/summary`, getExplorerSummaryHandler);
+router.get(`${JOURNEY}/explorers/distribution`, getExplorerDistributionHandler);
+router.get(`${JOURNEY}/explorers/campus`, getExplorerCampusHandler);
+router.get(`${JOURNEY}/explorers/outreach`, getExplorerOutreachHandler);
+router.get(`${JOURNEY}/explorers/learners/:enrollmentId/signals`, getExplorerLearnerSignalsHandler);
+router.get(`${JOURNEY}/explorers/learners/:enrollmentId/decisions`, getExplorerLearnerDecisionsHandler);
+router.get(`${JOURNEY}/explorers/learners/:enrollmentId`, getExplorerLearnerHandler);
+router.get(`${JOURNEY}/explorers/learners`, getExplorerLearnersHandler);
+router.get(`${JOURNEY}/explorers/eligibility/:enrollmentId`, getExplorerEligibilityHandler);
+router.get(`${JOURNEY}/explorers/decisions/:id`, getExplorerWhyHandler);
+router.get(`${JOURNEY}/explorers/decisions`, getExplorerDecisionsHandler);
+router.get(`${JOURNEY}/explorers/shadow`, getExplorerShadowHandler);
+router.get(`${JOURNEY}/explorers/content`, getExplorerContentHandler);
+
+/* ── The per-brand agent role: the one write in this build ──────────────────── */
+
+/**
+ * A GET and a PUT, both behind the same three guards the reads carry.
+ *
+ * `PUT` rather than `POST`: the operation replaces one brand's role with the
+ * value supplied, is idempotent, and has no notion of creating a second role for
+ * the same brand. A POST would imply otherwise.
+ */
+router.get(`${JOURNEY}/brand-role`, getBrandRoleHandler);
+router.put(`${JOURNEY}/brand-role`, putBrandRoleHandler);
 
 export default router;
