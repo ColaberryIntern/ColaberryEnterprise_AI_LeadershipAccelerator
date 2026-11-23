@@ -343,6 +343,14 @@ export async function createExplorerEnrollment(input: {
   utm_medium?: string;
   utm_campaign?: string;
   page_url?: string;
+  /**
+   * Permission to be NAMED in landing-page recent-signup notices. Absent writes `false`.
+   *
+   * NEVER inferred from a marketing opt-in: agreeing to be emailed is not agreeing to be shown
+   * by name on a public page, and that is the whole reason it is a separate tick with its own
+   * wording. services/marketing/snackbarFeedService.ts is what consumes it.
+   */
+  socialProofOptIn?: boolean;
 }): Promise<{ enrollment: Enrollment; created: boolean; cohort_id: string }> {
   const email = input.email.toLowerCase().trim();
   if (!email) throw new AppError('email is required', 400);
@@ -450,6 +458,11 @@ export async function createExplorerEnrollment(input: {
         utm_medium: input.utm_medium,
         utm_campaign: input.utm_campaign,
         page_url: input.page_url,
+        // In `defaults` ONLY, and here that is not a compromise: the snack bar selects on
+        // leads.created_at inside a rolling window, so a returning person's row - which keeps
+        // its ORIGINAL created_at - is outside that window whatever this says. There is no case
+        // where failing to update it costs somebody the naming they just agreed to.
+        social_proof_opt_in: input.socialProofOptIn === true,
       } as any,
     });
     leadId = (lead as any)?.id ?? null;

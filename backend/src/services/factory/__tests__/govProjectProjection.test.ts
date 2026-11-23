@@ -537,16 +537,18 @@ describe('assembleProposalDocuments (pure) — B.1 per-doc summary + readiness',
     expect(parity.comments.length).toBe(1);
   });
 
-  it('readiness counts scored (non-pricing, non-superseded, non-form) passing docs — same number for everyone', () => {
+  it('readiness is the graduated average of scored (non-pricing, non-superseded, non-form) docs — same number for everyone', () => {
+    const all = (n: number) => ({ coverage: n, evaluator: n, proof: n, clarity: n, format: n, fact: n }); // weightedTotal === n (weights sum to 100)
     const src: ProposalDocSummarySource[] = [
-      { view: mkView({ key: 'technical', docType: 'derived' }), latest: mkVersion({ id: 'v1', passes: true }), gates: [], openGapCount: 0, latestRun: null },
-      { view: mkView({ key: 'past_performance', docType: 'derived' }), latest: mkVersion({ id: 'v2', passes: false }), gates: [], openGapCount: 0, latestRun: null },
-      { view: mkView({ key: 'pricing', adminOnly: true }), latest: mkVersion({ id: 'v3', passes: true }), gates: [], openGapCount: 0, latestRun: null },
-      { view: mkView({ key: 'form_ciq', docType: 'form', superseded: true }), latest: mkVersion({ id: 'v4', passes: true }), gates: [], openGapCount: 0, latestRun: null },
-      { view: mkView({ key: 'form_hsp', docType: 'form' }), latest: mkVersion({ id: 'v5', passes: true }), gates: [], openGapCount: 0, latestRun: null },
+      { view: mkView({ key: 'technical', docType: 'derived' }), latest: mkVersion({ id: 'v1', passes: true, scores: all(100) }), gates: [], openGapCount: 0, latestRun: null },
+      { view: mkView({ key: 'past_performance', docType: 'derived' }), latest: mkVersion({ id: 'v2', passes: false, scores: all(60) }), gates: [], openGapCount: 0, latestRun: null },
+      { view: mkView({ key: 'pricing', adminOnly: true }), latest: mkVersion({ id: 'v3', passes: true, scores: all(100) }), gates: [], openGapCount: 0, latestRun: null },
+      { view: mkView({ key: 'form_ciq', docType: 'form', superseded: true }), latest: mkVersion({ id: 'v4', passes: true, scores: all(100) }), gates: [], openGapCount: 0, latestRun: null },
+      { view: mkView({ key: 'form_hsp', docType: 'form' }), latest: mkVersion({ id: 'v5', passes: true, scores: all(100) }), gates: [], openGapCount: 0, latestRun: null },
     ];
-    expect(assembleProposalDocuments(src, true).readiness).toEqual({ pct: 50, passing: 1, total: 2 });
-    expect(assembleProposalDocuments(src, false).readiness).toEqual({ pct: 50, passing: 1, total: 2 });
+    // Only technical (100) + past_performance (60) are scored; pricing/form/superseded excluded. Avg (100+60)/2 = 80.
+    expect(assembleProposalDocuments(src, true).readiness).toEqual({ pct: 80, passing: 1, total: 2 });
+    expect(assembleProposalDocuments(src, false).readiness).toEqual({ pct: 80, passing: 1, total: 2 });
   });
 
   it('carries no author/reviewer identity in the summary', () => {

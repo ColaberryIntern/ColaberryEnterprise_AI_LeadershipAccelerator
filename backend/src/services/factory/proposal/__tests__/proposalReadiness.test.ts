@@ -45,3 +45,31 @@ describe('proposalReadiness', () => {
     expect(proposalReadiness([null as unknown as ReadinessDoc, d({ passes: true })])).toEqual({ pct: 100, passing: 1, total: 1 });
   });
 });
+
+describe('proposalReadiness — graduated pct (the gauge fix)', () => {
+  it('pct is the average of eligible documents weighted scores when scores are provided', () => {
+    const docs = [d({ score: 90, passes: true }), d({ score: 60, passes: false })]; // (90+60)/2 = 75
+    expect(proposalReadiness(docs)).toEqual({ pct: 75, passing: 1, total: 2 });
+  });
+  it('a substantive draft reads near-ready instead of 0% (every doc scored ~70, none fully passes)', () => {
+    const docs = [d({ score: 70, passes: false }), d({ score: 68, passes: false }), d({ score: 72, passes: false })];
+    const r = proposalReadiness(docs);
+    expect(r.pct).toBe(70); // was 0 under the old pass-fraction meter
+    expect(r.passing).toBe(0); // the pass count is still honest
+  });
+  it('a document with no scored version yet contributes 0 to the average', () => {
+    const docs = [d({ score: 80, passes: false }), d({ passes: false })]; // (80+0)/2 = 40
+    expect(proposalReadiness(docs).pct).toBe(40);
+  });
+  it('clamps an out-of-range score into 0..100', () => {
+    expect(proposalReadiness([d({ score: 140, passes: true })]).pct).toBe(100);
+    expect(proposalReadiness([d({ score: -5, passes: false })]).pct).toBe(0);
+  });
+  it('excluded docs (form / admin-only / superseded) are not in the average', () => {
+    const docs = [d({ score: 90 }), d({ score: 10, docType: 'form' })]; // form excluded -> avg is just 90
+    expect(proposalReadiness(docs).pct).toBe(90);
+  });
+  it('falls back to the pass fraction when NO document carries a score (older callers unchanged)', () => {
+    expect(proposalReadiness([d({ passes: true }), d({ passes: false })]).pct).toBe(50);
+  });
+});

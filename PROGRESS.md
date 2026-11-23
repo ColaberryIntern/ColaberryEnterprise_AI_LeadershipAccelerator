@@ -18707,6 +18707,12 @@ Branch `workstream/career-prep-r2r3`, one PR (https://github.com/ColaberryIntern
   - What changed: `HqPanel.tsx` and `HqInside.tsx` render "Leave view-as" and "LEAVE VIEW-AS" on a room the management bridge withholds, instead of "Viewing as" and "VIEWING AS". The old wording labelled the state the viewer was already in, so beside a padlock it read as a denial of the room.
   - Verification: the two assertions in `hqRoomLinkViewAs.test.tsx` updated to the new strings; the surrounding guarantees are untouched, including that the plate still must not contain "OPEN" when blocked (which is why the shorter wording was chosen over "LEAVE VIEW-AS TO OPEN"). Non-ASCII glyph inventory of both files is identical to main, so the frozen typography baseline is unchanged in either direction.
   - Notes: raised by Ali, who read "VIEWING AS" off a campus screenshot and concluded a builder's Marketing access was broken. It was not: her `community_members` row carries `role: staff` and `mgmt_role: marketing`, and the chip can only read that way when the room is open. The wording, not the access, was the defect.
+- [ ] Gov Proposal readiness gauge: show graduated quality, not a binary pass-count stuck at 0%
+  - Date: 2026-11-23
+  - Session: CC-20261122-c0v3
+  - What changed: `proposalReadiness.ts` — `pct` was `passing/total` (fraction of documents that FULLY pass the 95 gate), so on any real draft every document reads passes=false (one open gap or a sub-85 check fails the whole doc) and the gauge sat at 0% even at coverage 99. It is now the GRADUATED average of the documents' weighted scores (new optional `score` per doc; an un-drafted doc contributes 0; falls back to the old pass-fraction when no score is supplied). `govProjectProjection.ts` feeds each doc's `weightedTotal(latest.scores)`. `passing`/`total` still report the honest pass count. The ring, ContractBar, StageRail and StageDetail all read this one meter, so all four move now.
+  - Verification: PENDING CI (backend tsc+jest.ci+test-typecheck). Graduated logic validated standalone (avg/undrafted-0/clamp/form-excluded/fallback; OLMS-like 9 docs @65 -> 65%, was 0); 6 new jest cases; existing pass-fraction tests unchanged (no score -> fallback).
+  - Notes: diagnosed from the live OLMS cockpit (pct 0, passing 0, total 9, every doc cov 99-100 but passes=false). No frontend change needed; the gauge reads the backend meter.
 - [x] AF12.18 a view-as session can see what the person it is viewing can reach in admin
   - Date: 2026-11-22
   - Session: CC-20261119-bpb
