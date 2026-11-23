@@ -754,9 +754,9 @@ async function processScheduledActions(): Promise<void> {
       continue;
     }
 
-    // OH1z: the later Open House follow-up steps (reserve your seat, last call, next Open House)
-    // are never sent to someone who has paid to enroll by then.
-    if (action.metadata?.event_followup && action.metadata?.stop_if_paid && action.to_email) {
+    // OH1z / AL1: a step marked stop_if_paid (the later Open House follow-ups, the DA alumni
+    // campaign) is never sent to someone who has paid to enroll by then.
+    if (action.metadata?.stop_if_paid && action.to_email) {
       const { hasPaidMembership } = await import('./openHouseFollowup');
       if (await hasPaidMembership(action.to_email)) {
         await cancelScheduledMessage(action, 'enrollment_already_paid');
@@ -848,6 +848,25 @@ async function processScheduledActions(): Promise<void> {
         generateAIContent(action),
         new Promise((_, reject) => setTimeout(() => reject(new Error('AI content generation timed out after 60s')), 60000)),
       ]);
+
+      // AL1: a "hybrid" step is Ali's approved text with one AI-written personal opening. The
+      // opening is written and screened here (never throws; falls back to a plain line), and how
+      // it was made is recorded on the row.
+      if (action.metadata?.personal_opening && typeof action.body === 'string' && action.body.includes('{{personal_opening}}')) {
+        const P = await import('./alumni/alumniPersonalOpening');
+        const lead = await Lead.findByPk(action.lead_id);
+        const ctx = P.openingContextFrom((lead as any)?.alumni_context);
+        const step = Number(action.step_index || 0);
+        // opening_mode 'template' (default): the fixed per-email sentence around their class. 'ai': written and screened.
+        const opening = action.metadata?.opening_mode === 'ai'
+          ? await P.writeOpening(ctx, String(action.metadata?.opening_theme || action.subject || ''), step)
+          : { text: P.templateOpening(ctx, step), source: 'template' as const, problems: [] as string[] };
+        await action.update({
+          body: P.fillPersonalOpening(action.body, opening.text),
+          metadata: { ...(action.metadata || {}), opening_source: opening.source, opening_problems: opening.problems },
+        } as any);
+        await action.reload();
+      }
 
       // Step 2: Communication safety check (test mode, unsubscribe, rate limit)
       const safetyDecision = await evaluateSend({
@@ -1180,6 +1199,9 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
   let campaignType = '';
 
   let senderProfileId: string | null = null;
+  // AL1: Ali's own signature already appended (no second signature), and the campaign asked for no PS line.
+  let aliSigned = false;
+  let hidePs = false;
   let campaignTenantId: string | null = null;
   let campaignBrandId: string | null = null;
 
@@ -1254,9 +1276,11 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
       }
 
       // Append Ali's signature for executive_outreach campaigns
+      hidePs = settings.hide_ps === true;
       if (settings.ali_signature && campaignType === 'executive_outreach') {
         const { ALI_SIGNATURE } = require('./aliPersonalOutreachService');
         emailBody = `${emailBody}${ALI_SIGNATURE}`;
+        aliSigned = true;
       }
     }
   }
@@ -1288,7 +1312,7 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
 
   // Executive outreach: minimal wrapper (personal email feel, no corporate footer)
   let html = campaignType === 'executive_outreach'
-    ? wrapPersonalEmailHtml(emailBody, { campaignId: action.campaign_id, campaignType, leadId: action.lead_id, unsubscribeUrl })
+    ? wrapPersonalEmailHtml(emailBody, { campaignId: action.campaign_id, campaignType, leadId: action.lead_id, unsubscribeUrl, hidePs })
     : wrapEmailHtml(emailBody, { campaignId: action.campaign_id, campaignType, leadId: action.lead_id, senderName, senderEmail, unsubscribeUrl });
 
   // Deterministic validator for Ali personal emails — ensure no corporate artifacts
@@ -1311,7 +1335,9 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
   // minimal personal wrapper, so append the same clean signature here (after the strip) so
   // those personal emails also carry the company name + website. No duplication: only one
   // path runs per send.
-  if (campaignType === 'executive_outreach') {
+  // AL1: a campaign that carries Ali's own signature (settings.ali_signature) gets only that one;
+  // the short table below would sign the email twice.
+  if (campaignType === 'executive_outreach' && !aliSigned) {
     const sig = `
   <table cellpadding="0" cellspacing="0" border="0" style="margin-top:26px;border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;">
     <tr><td style="border-left:3px solid #1a365d;padding-left:14px;">
@@ -1783,7 +1809,7 @@ function injectCampaignTracking(
 }
 
 /** Minimal wrapper for personal emails — no corporate footer, no unsubscribe, looks like Gmail/Outlook */
-function wrapPersonalEmailHtml(body: string, tracking?: { campaignId?: string; campaignType?: string; leadId?: number; unsubscribeUrl?: string }): string {
+export function wrapPersonalEmailHtml(body: string, tracking?: { campaignId?: string; campaignType?: string; leadId?: number; unsubscribeUrl?: string; hidePs?: boolean }): string {
   // Aggressively strip ANY team/company sign-offs the AI generates
   let cleaned = body
     // Strip "The Colaberry Enterprise AI team" and all variants (with or without HTML tags)
@@ -1825,7 +1851,7 @@ function wrapPersonalEmailHtml(body: string, tracking?: { campaignId?: string; c
 <body style="font-family: Arial, sans-serif; font-size: 14px; color: #222222; line-height: 1.5; margin: 0; padding: 0;">
   <div style="max-width: 600px; padding: 12px 0;">
     ${cleaned}
-    <p style="font-size: 12px; color: #a0aec0; margin-top: 16px;">PS - Curious what AI could look like at your company? <a href="${advisorUrl}" style="color: #3b82f6;">Try our 5-minute AI org designer</a></p>
+    ${tracking?.hidePs ? '' : `<p style="font-size: 12px; color: #a0aec0; margin-top: 16px;">PS - Curious what AI could look like at your company? <a href="${advisorUrl}" style="color: #3b82f6;">Try our 5-minute AI org designer</a></p>`}
     ${unsubLine}
   </div>
 </body>
