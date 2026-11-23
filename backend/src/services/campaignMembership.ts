@@ -25,6 +25,7 @@
  */
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
+import type { CancellationReason } from './scheduling/cancelScheduledMessage';
 
 type Log = (event: string, context?: Record<string, unknown>) => void;
 const defaultLog: Log = (event, context = {}) => {
@@ -107,7 +108,12 @@ export async function otherRunningMemberships(leadId: number, exceptCampaignId: 
  * paused_idle (paused with nothing left for them), stale_queue (everything queued for them
  * overdue by more than STALE_QUEUE_DAYS, so it will never send).
  */
-export type FinishReason = 'finished' | 'moved' | 'cleanup' | 'campaign_over' | 'paused_idle' | 'stale_queue';
+export type FinishReason = 'finished' | 'moved' | 'cleanup' | 'campaign_over' | 'paused_idle' | 'stale_queue' | 'paid';
+
+/** Why the queue is cancelled when a membership ends this way; none for the rest. */
+const CANCEL_REASON: Partial<Record<FinishReason, CancellationReason>> = {
+  moved: 'moved_to_another_campaign', stale_queue: 'stale_overdue', paid: 'enrollment_already_paid',
+};
 
 /** Rows touched by a raw UPDATE: Postgres hands back its Result ({ rowCount }), other dialects a number. */
 function rowsChanged(meta: unknown): number {
@@ -122,10 +128,10 @@ function rowsChanged(meta: unknown): number {
  * row changes.
  */
 export async function finishMembership(campaignId: string, leadId: number, reason: FinishReason, opts: { transaction?: any; detail?: Record<string, unknown> } = {}): Promise<boolean> {
-  if (reason === 'moved' || reason === 'stale_queue') {
+  const cancelReason = CANCEL_REASON[reason];
+  if (cancelReason) {
     const { cancelScheduledMessagesWhere } = await import('./scheduling/cancelScheduledMessage');
-    await cancelScheduledMessagesWhere({ campaign_id: campaignId, lead_id: leadId },
-      reason === 'moved' ? 'moved_to_another_campaign' : 'stale_overdue', { transaction: opts.transaction });
+    await cancelScheduledMessagesWhere({ campaign_id: campaignId, lead_id: leadId }, cancelReason, { transaction: opts.transaction });
   }
   const [, n] = await sequelize.query(
     `UPDATE campaign_leads SET status = 'completed', completed_at = NOW(), outcome = COALESCE(outcome, :reason),
@@ -164,11 +170,20 @@ export async function admitToCampaign(campaignId: string, leadId: number, opts: 
  *                  rule Ali approved for the Nov 21 cleanup, category 2b).
  *   stale_queue    running campaign, but everything queued for them is over STALE_QUEUE_DAYS
  *                  overdue, so it will never send; the queue is cancelled (stale_overdue).
+ *   paid           AL1 (Ali, Nov 23: "Remove people that actually make a payment"): a running
+ *                  campaign with settings.remove_if_paid, and the person has paid (the same test
+ *                  as hasPaidMembership: a real PaySimple subscription, never comp, or a paid
+ *                  enrollment). Removed at once; the queue is cancelled (enrollment_already_paid).
  * Draft campaigns are never touched: nothing has started.
  */
 export const FINISHED_MEMBERS_SQL = `
 WITH m AS (
   SELECT cl.campaign_id, cl.lead_id, cl.status AS member_status, cl.enrolled_at, c.settings,
+         (COALESCE(c.settings->>'remove_if_paid', '') = 'true' AND COALESCE(ld.email, '') <> '' AND (
+           EXISTS (SELECT 1 FROM subscriptions sb JOIN enrollments en ON en.id = sb.enrollment_id
+                    WHERE LOWER(en.email) = LOWER(ld.email) AND sb.plan::text <> 'comp' AND sb.paysimple_payment_id IS NOT NULL
+                      AND sb.status::text IN ('active', 'past_due'))
+           OR EXISTS (SELECT 1 FROM enrollments en WHERE LOWER(en.email) = LOWER(ld.email) AND en.payment_status::text = 'paid'))) AS paid,
          c.status::text AS campaign_status, c.archived_at, COALESCE(c.campaign_mode::text, '') AS campaign_mode,
          COALESCE(s.queued, false) AS queued, COALESCE(s.queued_fresh, false) AS queued_fresh, COALESCE(s.any_send, false) AS any_send,
          s.event_session_id,
@@ -176,6 +191,7 @@ WITH m AS (
            < NOW() - make_interval(hours => COALESCE(NULLIF(c.settings->>'exit_grace_hours', '')::int, :defaultGrace)) AS idle,
          COALESCE(s.event_at, '-infinity'::timestamptz) < NOW() - make_interval(hours => :eventHours) AS event_past
     FROM campaign_leads cl JOIN campaigns c ON c.id = cl.campaign_id
+    LEFT JOIN leads ld ON ld.id = cl.lead_id
     LEFT JOIN LATERAL (
       SELECT bool_or(se.status IN ('pending', 'processing', 'paused')) AS queued,
              bool_or(se.status IN ('pending', 'processing', 'paused') AND se.scheduled_for >= NOW() - make_interval(days => :staleDays)) AS queued_fresh,
@@ -189,6 +205,7 @@ WITH m AS (
 )
 SELECT campaign_id, lead_id, settings, event_session_id,
        CASE WHEN archived_at IS NOT NULL OR campaign_status IN ('completed', 'archived', 'cancelled') THEN 'campaign_over'
+            WHEN campaign_status = 'active' AND paid THEN 'paid'
             WHEN campaign_status = 'paused' THEN 'paused_idle'
             WHEN queued THEN 'stale_queue'
             ELSE 'finished' END AS exit_kind
@@ -198,6 +215,7 @@ SELECT campaign_id, lead_id, settings, event_session_id,
     OR (campaign_status = 'active' AND NOT queued AND idle AND event_past
         AND (member_status = 'active' OR any_send OR campaign_mode <> 'autonomous'))
     OR (campaign_status = 'active' AND queued AND NOT queued_fresh)
+    OR (campaign_status = 'active' AND paid)
  ORDER BY campaign_id, lead_id
  LIMIT :limit`;
 

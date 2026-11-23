@@ -182,6 +182,25 @@ describe('the hourly exit sweep', () => {
     expect(reasons).toEqual(['campaign_over', 'paused_idle', 'stale_queue']);
   });
 
+  it('AL1: a payer in a remove_if_paid campaign is removed at once, their queue cancelled, and never moved on', async () => {
+    rulesOn();
+    const move = { remove_if_paid: true, on_complete: { action: 'move', move_to_campaign_id: 'c2' } };
+    sweepDb([{ campaign_id: 'cAL', lead_id: 9, settings: move, event_session_id: null, exit_kind: 'paid' }], { id: 'c2', key: null });
+    const r = await sweepFinishedMembers({ log: quiet });
+    expect(r).toMatchObject({ finished: 1, moved: 0, by_reason: { paid: 1 } });
+    expect(enroll).not.toHaveBeenCalled();
+    expect(cancelWhere).toHaveBeenCalledWith({ campaign_id: 'cAL', lead_id: 9 }, 'enrollment_already_paid', expect.anything());
+  });
+
+  it('AL1: the paid exit applies only to a running campaign that opted in, with the same paid test as the send guard', () => {
+    expect(FINISHED_MEMBERS_SQL).toMatch(/COALESCE\(c\.settings->>'remove_if_paid', ''\) = 'true'/);
+    expect(FINISHED_MEMBERS_SQL).toMatch(/sb\.plan::text <> 'comp' AND sb\.paysimple_payment_id IS NOT NULL/);
+    expect(FINISHED_MEMBERS_SQL).toMatch(/en\.payment_status::text = 'paid'/);
+    expect(FINISHED_MEMBERS_SQL).toMatch(/WHEN campaign_status = 'active' AND paid THEN 'paid'/);
+    expect(FINISHED_MEMBERS_SQL).toMatch(/OR \(campaign_status = 'active' AND paid\)/);
+    expect(FINISHED_MEMBERS_SQL).toMatch(/LEFT JOIN leads ld ON ld\.id = cl\.lead_id/);
+  });
+
   it('OH1z: counts a Postgres UPDATE result ({ rowCount }), not NaN', async () => {
     rulesOn();
     query.mockImplementation(async (sql: string) => {

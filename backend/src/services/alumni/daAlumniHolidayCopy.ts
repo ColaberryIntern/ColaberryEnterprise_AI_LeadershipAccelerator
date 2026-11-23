@@ -1,6 +1,6 @@
 /**
  * AL1 (Ali, 2026-11-22): the Data Analytics alumni holiday campaign. Ten emails from Ali, about two
- * a week, Tue Nov 24 to Thu Dec 24 2026, every one offering verified alumni 50% off the yearly
+ * a week, Tue Nov 24 to Thu Dec 31 2026 (spacing rules: alumniSendSlots.ts), every one offering verified alumni 50% off the yearly
  * membership (the alumni_annual_2026 account credit: $894 off $1,788, granted automatically when
  * the alum's account email matches their alumni record; it closes on its own at year end, which
  * the emails deliberately do not say).
@@ -25,7 +25,13 @@ export const ALUMNI_SIGNUP_URL = 'https://enterprise.colaberry.ai/portal/signup'
  */
 export const TRAINING_ACCELERATOR_URL = 'https://training.colaberry.com/accelerator';
 
-/** openingAfter: how many of Ali's paragraphs come before the personal opening (1 for "Happy Thanksgiving."). */
+/**
+ * date: the FIRST day this email may go out (Central). AL1 send spacing (Ali, Nov 23): one send
+ * every 5 minutes, 6 AM to 11 PM CT on weekdays, so each email reaches everyone over two to three
+ * days (services/alumni/alumniSendSlots.ts). Only two dates bind: Email 2 waits until after
+ * Thanksgiving ("I hope you had a good Thanksgiving") and Email 10 until Dec 28 ("Happy New Year").
+ * openingAfter: how many of Ali's paragraphs come before the personal opening (1 on the holiday emails).
+ */
 export interface AlumniStep { date: string; subject: string; theme: string; paragraphs: string[]; openingAfter?: number }
 
 const OFFER = 'I\'m letting all of our alumni know: verified Colaberry alumni get 50% off the yearly membership. That\'s $894 instead of $1,788.';
@@ -40,13 +46,13 @@ export const DA_ALUMNI_STEPS: AlumniStep[] = [
       'That\'s why we built the Forward Deployed AI Engineer Accelerator. It takes what you already know about data and turns it into the skill set companies are hiring for right now.',
       OFFER, CLAIM,
       'Over the next few weeks I\'ll share why I believe this is the right move for people like you.'] },
-  { date: '2026-11-26', subject: 'A Thanksgiving Special for Colaberry alumni', theme: 'Thanksgiving, gratitude for our alumni', openingAfter: 1,
+  { date: '2026-11-27', subject: 'A Thanksgiving Special for Colaberry alumni', theme: 'Thanksgiving, gratitude for our alumni', openingAfter: 1,
     paragraphs: [
-      'Happy Thanksgiving.',
-      'Today I\'m thankful for everyone who has trusted Colaberry with their career, and that includes you.',
-      'So I\'m making this week a Thanksgiving Special. I\'m letting all alumni know that verified alumni get 50% off the yearly membership in the Forward Deployed AI Engineer Accelerator: $894 instead of $1,788.',
+      'I hope you had a good Thanksgiving.',
+      'This time of year I\'m thankful for everyone who has trusted Colaberry with their career, and that includes you.',
+      'So I\'m making this a Thanksgiving Special. I\'m letting all alumni know that verified alumni get 50% off the yearly membership in the Forward Deployed AI Engineer Accelerator: $894 instead of $1,788.',
       'If you\'ve felt uncertain about where the analyst role is heading, this is a way to get ahead of it with a team you already know.',
-      CLAIM, 'Enjoy the day with your family.'] },
+      CLAIM, 'I hope you enjoy the holiday season with your family.'] },
   { date: '2026-11-30', subject: 'What a Forward Deployed Engineer makes', theme: 'the Forward Deployed Engineer role',
     paragraphs: [
       'There\'s a role most analysts haven\'t heard of yet: the Forward Deployed Engineer. These are the people who sit with a business, understand its data and its problems, and build AI systems that actually get used.',
@@ -80,14 +86,14 @@ export const DA_ALUMNI_STEPS: AlumniStep[] = [
       'Spend the next three months building. One real AI project a month, on real business problems, each one added to your hire.refactored.ai portfolio. By spring you would have work you can show an employer, in one of the most sought-after roles in tech, instead of a line on a resume.',
       'That\'s what the Forward Deployed AI Engineer Accelerator is built for: live sessions, a community building alongside you, and projects you build on the platform from week one.',
       OFFER_SHORT, CLAIM] },
-  { date: '2026-12-21', subject: 'A Christmas Special for our alumni', theme: 'the holidays and starting the new year',
+  { date: '2026-12-18', subject: 'A Holiday Special for our alumni', theme: 'the holidays and starting the new year',
     paragraphs: [
       'As the year winds down, I wanted to do something for the people who have been part of Colaberry along the way.',
-      'So here\'s my Christmas Special. I\'m letting all alumni know that verified alumni get 50% off the yearly membership in the Forward Deployed AI Engineer Accelerator: $894 instead of $1,788. Start the new year already building toward one of the most sought-after roles in tech.',
-      CLAIM, 'Merry Christmas.'] },
-  { date: '2026-12-24', subject: 'Merry Christmas, and one last note', theme: 'Christmas Eve, a closing note', openingAfter: 1,
+      'So here\'s my Holiday Special. I\'m letting all alumni know that verified alumni get 50% off the yearly membership in the Forward Deployed AI Engineer Accelerator: $894 instead of $1,788. Start the new year already building toward one of the most sought-after roles in tech.',
+      CLAIM, 'Happy holidays.'] },
+  { date: '2026-12-28', subject: 'Happy New Year, and one last note', theme: 'the new year, a closing note', openingAfter: 1,
     paragraphs: [
-      'Merry Christmas to you and your family.',
+      'Happy New Year to you and your family.',
       'This is my last note in this series. After so much uncertainty around the analyst role, I believe the Forward Deployed Engineer path is the clearest opportunity our alumni have had in years, and I would love for you to take it with us.',
       'I\'m letting all alumni know one more time: verified alumni get 50% off the yearly membership, $894 instead of $1,788.',
       CLAIM, 'If you have a question, just reply. I read every one.'] },

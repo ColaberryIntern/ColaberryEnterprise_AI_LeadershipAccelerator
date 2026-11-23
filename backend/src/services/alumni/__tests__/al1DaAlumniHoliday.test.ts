@@ -141,10 +141,20 @@ describe('Colaberry Training, not Enterprise', () => {
 });
 
 describe("Ali's ten emails", () => {
-  it('ten emails, Nov 24 to Dec 24, with Thanksgiving and Christmas Specials on the right days', () => {
-    expect(DA_ALUMNI_STEPS.map((s) => s.date)).toEqual(['2026-11-24', '2026-11-26', '2026-11-30', '2026-12-03', '2026-12-07', '2026-12-10', '2026-12-14', '2026-12-17', '2026-12-21', '2026-12-24']);
-    expect(DA_ALUMNI_STEPS[1].subject).toMatch(/Thanksgiving Special/);
-    expect(DA_ALUMNI_STEPS[8].subject).toMatch(/Christmas Special/);
+  it('ten emails; the dates are the first day each may go, in order', () => {
+    expect(DA_ALUMNI_STEPS.map((s) => s.date)).toEqual(['2026-11-24', '2026-11-27', '2026-11-30', '2026-12-03', '2026-12-07', '2026-12-10', '2026-12-14', '2026-12-17', '2026-12-18', '2026-12-28']);
+    expect([...DA_ALUMNI_STEPS.map((s) => s.date)].sort()).toEqual(DA_ALUMNI_STEPS.map((s) => s.date));
+  });
+  it('the holiday emails read right on any day they land (spacing spreads each over two to three days)', () => {
+    // Email 2 lands Nov 27 to Dec 1: after Thanksgiving, never "Happy Thanksgiving" or "today".
+    const tg = DA_ALUMNI_STEPS[1];
+    expect(tg.subject).toMatch(/Thanksgiving Special/);
+    expect(tg.paragraphs[0]).toBe('I hope you had a good Thanksgiving.');
+    expect(tg.paragraphs.join(' ')).not.toMatch(/Happy Thanksgiving|\bToday\b|this week|the day/);
+    // Email 9 lands around Dec 24 to 29, Email 10 Dec 29 to 31: no "Christmas" dated wording.
+    expect(DA_ALUMNI_STEPS[8].subject).toBe('A Holiday Special for our alumni');
+    expect(DA_ALUMNI_STEPS[9].subject).toBe('Happy New Year, and one last note');
+    for (const s of DA_ALUMNI_STEPS.slice(8)) expect(`${s.subject} ${s.paragraphs.join(' ')}`).not.toMatch(/Christmas/);
   });
   it('every email says Ali is letting all alumni know, offers 50% ($894 instead of $1,788) and says how to claim it', () => {
     for (const s of DA_ALUMNI_STEPS) {
@@ -164,7 +174,8 @@ describe("Ali's ten emails", () => {
   });
   it('the opening sits after the greeting, or after the holiday line on holiday emails; the name is escaped', () => {
     expect(alumniStepBody(DA_ALUMNI_STEPS[0], 'Ana')).toMatch(/^<p>Hi Ana,<\/p>\n<p>\{\{personal_opening\}\}<\/p>/);
-    expect(alumniStepBody(DA_ALUMNI_STEPS[1], 'Ana')).toMatch(/^<p>Hi Ana,<\/p>\n<p>Happy Thanksgiving\.<\/p>\n<p>\{\{personal_opening\}\}<\/p>/);
+    expect(alumniStepBody(DA_ALUMNI_STEPS[1], 'Ana')).toMatch(/^<p>Hi Ana,<\/p>\n<p>I hope you had a good Thanksgiving\.<\/p>\n<p>\{\{personal_opening\}\}<\/p>/);
+    expect(alumniStepBody(DA_ALUMNI_STEPS[9], 'Ana')).toMatch(/^<p>Hi Ana,<\/p>\n<p>Happy New Year to you and your family\.<\/p>\n<p>\{\{personal_opening\}\}<\/p>/);
     expect(alumniStepBody(DA_ALUMNI_STEPS[0], '<b>')).toContain('Hi &lt;b&gt;,');
     expect(alumniStepBody(DA_ALUMNI_STEPS[0], null)).toMatch(/^<p>Hi,<\/p>/);
   });

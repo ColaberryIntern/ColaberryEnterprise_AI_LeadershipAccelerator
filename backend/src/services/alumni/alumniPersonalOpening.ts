@@ -57,6 +57,28 @@ function tidyProgram(head: string): string {
   }).join(' ');
 }
 
+/** A real calendar date "YYYY-MM-DD..." as epoch ms (00:00 UTC), or null (2021-02-30 is not a date). */
+function calendarDay(raw: unknown): number | null {
+  const s = String(raw || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const t = Date.parse(`${s}T00:00:00Z`);
+  return Number.isFinite(t) && new Date(t).toISOString().slice(0, 10) === s ? t : null;
+}
+
+/**
+ * AL1 (Ali, 2026-11-23): "Make sure you don't put anyone in with invalid placement dates." Valid
+ * means a real calendar date (CCPP HiredDate, alumni_context.hired_date), year MIN_PLACEMENT_YEAR or
+ * later (so never the 1/1/1900 placeholder), not in the future, and not before they registered.
+ * A missing date is invalid too: every email's opening is anchored on it.
+ */
+export function hasValidPlacementDate(alumni: Record<string, any> | null | undefined, now: Date = new Date()): boolean {
+  const hired = calendarDay(alumni?.hired_date);
+  if (hired === null) return false;
+  if (new Date(hired).getUTCFullYear() < MIN_PLACEMENT_YEAR || hired > now.getTime()) return false;
+  const registered = calendarDay(alumni?.register_date);
+  return registered === null || hired >= registered;
+}
+
 /** "Data Analytics Bootcamp - Jul 11 2020 (ONLINE)" -> program + "July 2020". Lenient; nulls when unreadable. */
 export function openingContextFrom(alumni: Record<string, any> | null | undefined): AlumniOpeningContext {
   const raw = String(alumni?.class_name || '').trim();
