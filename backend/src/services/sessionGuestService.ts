@@ -25,6 +25,7 @@ import jwt from 'jsonwebtoken';
 import { env } from '../config/env';
 import LiveSession from '../models/LiveSession';
 import { getBroadcast, PollLockedError, isValidPulseState, PulseState, BroadcastPrompt } from './sessionLiveStateService';
+import type { FollowAlong } from './liveFollowAlong';
 import {
   findGuest, getGuestChoice, recordGuestVote, upsertGuest, setGuestPulse, getGuestPulse, addGuestQuestion,
 } from './sessionGuestStore';
@@ -195,6 +196,8 @@ export interface GuestState {
   };
   prompt?: BroadcastPrompt | null;
   broadcast_prompts?: string[];
+  /** The slide's plain-words follow-along card (liveFollowAlong.ts), in every phase. */
+  follow: FollowAlong | null;
   my_pulse: PulseState | null;
 }
 
@@ -204,7 +207,7 @@ export async function getGuestState(sessionId: string, pass: string | undefined)
   const bc = await getBroadcast(sessionId);
   const pulse = await getGuestPulse(sessionId, guest.id);
   const my_pulse = isValidPulseState(pulse) ? pulse : null;
-  const base = { name: guest.name, title: bc?.title || '', my_pulse };
+  const base = { name: guest.name, title: bc?.title || '', follow: bc?.follow || null, my_pulse };
   if (bc?.phase === 'prompt') return { ...base, phase: 'prompt', question: null, prompt: bc.prompt || null };
   if (bc?.phase === 'broadcast') return { ...base, phase: 'broadcast', question: null, broadcast_prompts: bc.broadcast_prompts };
   if (!bc || bc.phase !== 'question' || !bc.question) return { ...base, phase: 'status', question: null };

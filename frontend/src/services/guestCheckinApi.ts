@@ -70,6 +70,7 @@ interface GuestStateWire {
   };
   prompt?: CompanionState['prompt'];
   broadcast_prompts?: string[];
+  follow?: CompanionState['follow'];
   my_pulse?: PulseState | null;
 }
 
@@ -89,6 +90,7 @@ export async function getGuestCompanionState(sessionId: string, pass: string): P
     } : null,
     prompt: data.prompt ?? null,
     broadcast_prompts: data.broadcast_prompts,
+    follow: data.follow ?? null,
     my_pulse: data.my_pulse ?? null,
   };
 }
