@@ -18737,3 +18737,9 @@ Branch `workstream/career-prep-r2r3`, one PR (https://github.com/ColaberryIntern
   - What changed: new `services/alumni/alumniSendSlots.ts` (one send per 5-min slot, 6 AM-11 PM CT Mon-Fri, all ten per person by Dec 31 or none), `hasValidPlacementDate`, holiday copy fitted to landing days (Email 2 after Thanksgiving, 9 Holiday Special, 10 Happy New Year), `campaignMembership` 'paid' exit for `remove_if_paid` campaigns, new `campaignSendGap.ts` scheduler burst guard, campaign settings patch.
   - Verification: 91 tests green across al1SendSlots (new), campaignSendGap (new), al1DaAlumniHoliday, campaignMembership; scheduler/banned-word suites 143 green; backend tsc clean; 3 mutations (weekend filter, paid cancel, register-date check) each caught.
   - Notes: Ali chose waking hours over around-the-clock; 8 AM-8 PM cannot fit 5,640 sends by Dec 31. Assumptions: a missing placement date is invalid; the gap guard allows 1 minute of tick slack.
+- [x] Basecamp token health check heals the 14-day expiry gap before alerting
+  - Date: 2026-11-23
+  - Session: CC-20261123-q7vk
+  - What changed: `scripts/bcTokenHealthCheck.sh` now, on a failed probe, runs `refreshBasecampTokenFromVault.sh --commit`, re-probes, and emails Ali only if the token is still unhealthy (the email now carries the refresh tail and the re-auth link). New `scripts/__tests__/bcTokenHealthCheck.test.sh` (stubbed docker + refresh).
+  - Verification: 11/11 shell tests pass; the old script fails 6 of them; new script run on prod against the live container probed 200 as Ali #17454835, exit 0.
+  - Notes: The 2026-11-23 13:00 UTC "UNHEALTHY" email was the token's real expiry at 12:58 UTC (the advisor only mints after expiry), two minutes before this check. By 13:08 a fresh token (exp 2026-12-07 12:58 UTC) was active. Without this change the same email fires every 14 days. Prod host copy is NOT updated until deploy (host scripts come from `git pull`).
