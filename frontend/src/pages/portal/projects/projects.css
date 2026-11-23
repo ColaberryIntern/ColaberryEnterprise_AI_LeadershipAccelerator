@@ -575,6 +575,10 @@
 .pj-olrow .nm{flex:1;min-width:0;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pj-olrow .ct{font-family:var(--mono);font-size:12px;color:var(--text-muted);flex:none}
 .pj-olrow.active .ct{color:var(--cherry-deep)}
+/* AF12.19: the disclosure for sections that hold nothing. Quiet on purpose - it is a way
+   to look at the rungs ahead, not a thing to do, and it sits under rows that are. */
+.pj-olmore .nm{font-size:12px;color:var(--text-muted);white-space:normal}
+.pj-olmore{padding-top:6px;padding-bottom:6px}
 
 /* landing right-side dashboard: per-build rows with mini progress */
 .pj-sidebuild{display:flex;align-items:center;gap:11px;width:100%;text-align:left;cursor:pointer;font-family:inherit;
