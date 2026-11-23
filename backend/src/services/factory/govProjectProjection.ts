@@ -19,6 +19,7 @@ import type { ProposalDocumentSection, ProposalDocType } from './proposal/govPro
 import type { ProposalBlueprint } from './proposal/proposalBlueprintTypes';
 import type { CheckScores, GovProposalGate, GateStatus } from './proposal/proposalReviewTypes';
 import { proposalReadiness, type ProposalReadiness } from './proposal/proposalReadiness';
+import { weightedTotal } from './proposal/proposalReviewConfig';
 import type { RepoDeliverable } from './repoDeliverables';
 import type { GovBuildArtifact } from './govBuildArtifacts';
 import type { GovDemoVideo } from './govDemoVideos';
@@ -410,7 +411,7 @@ export function assembleProposalDocuments(
         cycle: s.latestRun ? { status: s.latestRun.status, runId: s.latestRun.id } : null,
       };
     });
-  const readiness = proposalReadiness(list.map((s) => ({ adminOnly: s.view.adminOnly, superseded: s.view.superseded, docType: s.view.docType, passes: !!s.latest?.passes })));
+  const readiness = proposalReadiness(list.map((s) => ({ adminOnly: s.view.adminOnly, superseded: s.view.superseded, docType: s.view.docType, passes: !!s.latest?.passes, score: s.latest?.scores ? weightedTotal(s.latest.scores) : undefined })));
   return { documents, readiness };
 }
 
