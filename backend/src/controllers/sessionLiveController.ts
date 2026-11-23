@@ -1,9 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
 import {
   recordPulse, getLiveState, isValidPulseState,
-  setBroadcast, getCompanionState, recordPollResponse, sessionInCohort, BroadcastState, PollLockedError,
+  setBroadcast, recordPollResponse, sessionInCohort, BroadcastState, PollLockedError,
   getPresenterNotes,
 } from '../services/sessionLiveStateService';
+import { getCompanionState } from '../services/sessionCompanionState';
+import { sanitizeFollowAlong } from '../services/liveFollowAlong';
 import { renderPresenterPage } from '../services/sessionKitDocService';
 import { recordClipMarker } from '../services/broadcast/broadcastClipMarkerService';
 
@@ -110,6 +112,8 @@ export async function handleSetBroadcast(req: Request, res: Response, next: Next
       // the slide) rendered "No set-up notes" instead of the deck's own text.
       presenter_preface: typeof b.presenter_preface === 'string' ? b.presenter_preface : undefined,
       next_title: typeof b.next_title === 'string' ? b.next_title : undefined,
+      // Attendee-facing, so sanitized; a malformed card is dropped, never a 400.
+      follow: sanitizeFollowAlong(b.follow),
       diagram_fullscreen: !!b.diagram_fullscreen,
       // Ordering stamp — see BroadcastState.seq. Only honoured when both halves
       // are well-formed, so a deck that sends neither keeps last-write-wins.

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { CompanionState, PulseState } from '../../services/onboardingApi';
 import { LinkState, linkStateAfterFailure } from './classroomLinkState';
 import { LIVE_PULSES } from '../../components/portal/livePulse';
+import { FollowCard, GetClaudeHelp, PopOutButton, claudePromptUrl, CBFA_CSS } from './CheckinFollowAlong';
 
 /**
  * The checked-in view of the class check-in page: the phone that mirrors the instructor's deck
@@ -167,6 +168,11 @@ const CheckinLiveController: React.FC<Props> = ({ title, meta, eyebrow, client, 
       <p className="cbck-eyebrow">{eyebrow}</p>
       <h1 className="cbck-title">{title}</h1>
       <p className="cbck-meta">{meta}</p>
+      <style>{CBFA_CSS}</style>
+
+      {/* FOLLOW ALONG: the deck's plain-words card for the slide on screen right now */}
+      {companion?.follow && <FollowCard follow={companion.follow} />}
+      <GetClaudeHelp openByDefault={!!companion?.follow?.install} />
 
       {/* ── CONNECTION — only ever shown when something is actually wrong ── */}
       {link !== 'live' && (
@@ -239,6 +245,16 @@ const CheckinLiveController: React.FC<Props> = ({ title, meta, eyebrow, client, 
           <button type="button" className="cbck-btn cbck-copy-btn" onClick={() => copyPrompt(companion.prompt!.prompt)}>
             {copyState === 'copied' ? 'Copied ✓' : `Copy · paste into ${companion.prompt.pasteWhere || 'Claude Code'}`}
           </button>
+          {/* Opens Claude on the web with the prompt typed in. On a phone, Copy then the app is the sure path. */}
+          <a
+            className="cbfa-open"
+            href={claudePromptUrl(companion.prompt.prompt)}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-testid="open-in-claude"
+          >
+            Open in Claude
+          </a>
           {companion.prompt.expectedResult && (
             <p className="cbck-prompt-meta"><b>You should see:</b> {companion.prompt.expectedResult}</p>
           )}
@@ -280,6 +296,8 @@ const CheckinLiveController: React.FC<Props> = ({ title, meta, eyebrow, client, 
           <p className="cbck-text cbck-text-sub">Your instructor sees this on screen, so no need to interrupt.</p>
         </div>
       )}
+
+      <PopOutButton />
 
       {onEnter && (
         <button type="button" className="cbck-btn cbck-btn-ghost" onClick={onEnter} data-testid="checkin-enter">Open the live room</button>

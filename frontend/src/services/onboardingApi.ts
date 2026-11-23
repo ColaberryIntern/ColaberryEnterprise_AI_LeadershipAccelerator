@@ -400,7 +400,20 @@ export interface CompanionState {
   } | null;
   broadcast_prompts?: string[];
   prompt?: BroadcastPrompt | null;
+  /** The slide's plain-words follow-along card. Absent from an older backend. */
+  follow?: FollowAlong | null;
   my_pulse: PulseState | null;
+}
+
+/** One slide's "what is happening now" card, pushed by the deck (backend liveFollowAlong.ts). */
+export interface FollowAlong {
+  step?: string;
+  icon?: string;
+  heading: string;
+  body?: string;
+  bullets?: string[];
+  /** Open the "Get Claude" helper by default on this slide. */
+  install?: boolean;
 }
 
 export async function getCompanionState(sessionId: string): Promise<CompanionState> {
