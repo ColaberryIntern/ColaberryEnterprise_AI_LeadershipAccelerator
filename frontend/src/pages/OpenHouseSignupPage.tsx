@@ -10,7 +10,7 @@ import { identifyVisitor } from '../utils/tracker';
 import { loadMetaPixel } from '../services/metaPixel';
 import { CBOH_CSS } from './openHouseStyles';
 import { OPEN_HOUSE_LEAD_PATH } from './OpenHouseLeadPage';
-import { SIGNUP_CONSENT_TEXT, PHONE_CONSENT_TEXT } from '../config/consentText';
+import { SIGNUP_CONSENT_TEXT, PHONE_CONSENT_TEXT, SOCIAL_PROOF_CONSENT_TEXT } from '../config/consentText';
 import ColaberryLockup from '../components/brand/ColaberryLockup';
 import { phoneProblem } from '../utils/phone';
 
@@ -104,6 +104,9 @@ function OpenHouseSignupPage(): React.ReactElement {
   // no marketing consent, so blocking the signup on it would trade signups for
   // permissions - not a trade this page gets to make.
   const [marketingOptIn, setMarketingOptIn] = useState(false);
+  // SNACK-2: permission to be NAMED in the recent-signup notices on our landing pages.
+  // Unticked, optional, and never a condition of registering.
+  const [socialProofOptIn, setSocialProofOptIn] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -142,6 +145,9 @@ function OpenHouseSignupPage(): React.ReactElement {
         // Sent ONLY when ticked. An absent key records nothing, which is not the same
         // as recording a refusal - and a `false` would be a grant row saying "no".
         ...(phoneConsent ? { phone_consent: true } : {}),
+        // Same rule and the same reason: sent ONLY when ticked, so an absence records nothing
+        // rather than writing down a "no" that nobody actually said.
+        ...(socialProofOptIn ? { social_proof_opt_in: true } : {}),
       };
       const acquisition = openHouseAcquisitionFields();
       let res;
@@ -254,6 +260,19 @@ function OpenHouseSignupPage(): React.ReactElement {
                 placeholder="Your name" value={fullName}
                 onChange={(e) => setFullName(e.target.value)} disabled={loading}
               />
+
+              {/* Under the NAME field, because the name is what it is about - the placement
+                  PortalFreeSignupPage settled on. Unticked and optional: leaving it alone costs
+                  the person nothing, their signup simply shows as "Someone in <city>" like
+                  everyone else's. */}
+              <label className="cboh-consent" htmlFor="cboh-social-proof">
+                <input
+                  id="cboh-social-proof" className="cboh-check" type="checkbox"
+                  checked={socialProofOptIn} onChange={(ev) => setSocialProofOptIn(ev.target.checked)}
+                  disabled={loading}
+                />
+                <span>{SOCIAL_PROOF_CONSENT_TEXT}</span>
+              </label>
               <label className="cboh-label" htmlFor="cboh-email">Email</label>
               <input
                 id="cboh-email" className="cboh-input" type="email" autoComplete="email"

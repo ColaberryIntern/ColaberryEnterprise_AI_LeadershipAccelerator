@@ -106,6 +106,16 @@ export interface OpenHouseSignupBody {
   phone: string;
   /** Absent or false records NO consent. It is not a revocation and not a default to flip on. */
   marketing_opt_in?: boolean;
+  /**
+   * Permission to CALL OR TEXT. Sent only when ticked.
+   *
+   * This key was missing from the interface while the page was already sending it: `person` is
+   * built as a const and then spread, so TypeScript's excess-property check never saw it and the
+   * comment above claiming this mirrors the schema was quietly false. Declared now.
+   */
+  phone_consent?: boolean;
+  /** Permission to be NAMED in recent-signup notices (SNACK-2). Sent only when ticked. */
+  social_proof_opt_in?: boolean;
   utm_source?: string;
   utm_campaign?: string;
   page_url?: string;

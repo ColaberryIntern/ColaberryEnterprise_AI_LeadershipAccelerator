@@ -79,6 +79,17 @@ export const openHousePublicSignupSchema = z
     // 400 for the whole signup - and the tick would be lost between the box and the
     // table with nothing logged.
     phone_consent: z.union([z.boolean(), z.string().max(10)]).optional(),
+    // PERMISSION TO BE NAMED in the recent-signup notices a landing page shows. The odd one
+    // out of the three: the two above authorise a SEND and become `consent_records` rows with
+    // the wording attached, while this authorises a DISPLAY and lands on the Lead column
+    // `social_proof_opt_in`. Declared here for exactly the reason given on the key above - the
+    // schema is `.strict()`, so an undeclared key is a 400 for the WHOLE signup and the tick
+    // would be lost between the box and the table with nothing logged.
+    //
+    // SNACK-2, 2026-11-22: until now this was asked for only on /portal/signup, which produced
+    // 3 of the last 123 signups while Open House registration brought 118 and never asked. The
+    // snack bar exists to name recent signups, so it was built on the path almost nobody takes.
+    social_proof_opt_in: z.union([z.boolean(), z.string().max(10)]).optional(),
   })
   .strict();
 
