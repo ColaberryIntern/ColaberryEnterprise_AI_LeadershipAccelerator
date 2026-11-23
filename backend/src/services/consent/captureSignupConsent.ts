@@ -1,5 +1,6 @@
 import { recordConsent, normalizeEmail, normalizePhone } from '../consentService';
 import type { ConsentChannel, ConsentSubjectType } from '../../models/ConsentRecord';
+import { isAffirmative, type ConsentChoice } from './affirmative';
 
 /**
  * Capture marketing consent at signup. One helper, called by every signup path,
@@ -34,8 +35,7 @@ import type { ConsentChannel, ConsentSubjectType } from '../../models/ConsentRec
  * `isAffirmative` is deliberately NOT re-exported. A caller that wants it should import
  * ./affirmative directly, so nobody reintroduces the mock trap by reaching for it here.
  */
-export type { ConsentChoice } from './affirmative';
-import { isAffirmative, type ConsentChoice } from './affirmative';
+export type { ConsentChoice };
 
 export interface SignupConsentInput {
   email?: string;
