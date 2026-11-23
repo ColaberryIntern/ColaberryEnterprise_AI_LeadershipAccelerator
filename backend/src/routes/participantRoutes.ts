@@ -13,7 +13,7 @@ import {
   handleGetPresenterPage,
 } from '../controllers/sessionLiveController';
 import {
-  handleGuestJoinPage, handleGuestJoin, handleGuestState, handleGuestVote, handleGuestPulse, handleGuestAsk,
+  handleGuestJoinPage, handleGuestJoin, handleGuestState, handleGuestVote, handleGuestPulse, handleGuestAsk, handleGuestRun,
 } from '../controllers/sessionGuestController';
 import { handleRaffleDraw, handleRaffleWinners, handleFlashDiscount, handleEnrollmentFeed } from '../controllers/sessionRaffleController';
 import {
@@ -464,6 +464,17 @@ const guestAskRateLimiter = rateLimit({
   message: { error: 'Too many questions at once. Try again in a minute.' },
 });
 router.post('/api/portal/sessions/:id/guest-ask', guestAskRateLimiter, handleGuestAsk);
+// "Run it here" on the class follow-along page (liveGuestRun.ts). Each call costs an LLM request,
+// so it is capped per IP here and per attendee in the service. A room shares one venue IP, so the
+// IP cap is sized for a full class running the same prompt at once.
+const guestRunRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many runs at once. Try again in a minute.' },
+});
+router.post('/api/portal/sessions/:id/guest-run', guestRunRateLimiter, handleGuestRun);
 // Giveaway draws: drawn + recorded server-side (sessionRaffleService.ts). Deck
 // kit token or admin; full names/emails only to an admin (?full=1).
 router.post('/api/portal/sessions/:id/raffle-draw', kitTokenOrAdmin, handleRaffleDraw);

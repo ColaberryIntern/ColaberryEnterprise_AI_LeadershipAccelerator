@@ -33,6 +33,7 @@ jest.mock('../../../services/guestCheckinApi', () => ({
   guestVote: jest.fn(),
   guestPulse: jest.fn(),
   guestAsk: jest.fn(),
+  guestRun: jest.fn(),
   loadSavedGuest: jest.fn(),
   saveGuest: jest.fn(),
   forgetGuest: jest.fn(),

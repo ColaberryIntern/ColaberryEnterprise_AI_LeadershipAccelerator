@@ -3,6 +3,7 @@ import type { CompanionState, PulseState } from '../../services/onboardingApi';
 import { LinkState, linkStateAfterFailure } from './classroomLinkState';
 import { LIVE_PULSES } from '../../components/portal/livePulse';
 import { FollowCard, GetClaudeHelp, PopOutButton, claudePromptUrl, CBFA_CSS } from './CheckinFollowAlong';
+import CheckinRunHere, { CBRUN_CSS, type RunFn } from './CheckinRunHere';
 
 /**
  * The checked-in view of the class check-in page: the phone that mirrors the instructor's deck
@@ -19,6 +20,13 @@ export interface LiveClient {
   pulse: (state: PulseState) => Promise<void>;
   ask: (text: string) => Promise<void>;
   vote: (pollKey: string, choice: number) => Promise<void>;
+  /** Runs the slide's prompt on this page (guest pass only). Absent: Copy / Open in Claude only. */
+  run?: RunFn;
+}
+
+/** A phone-sized screen, where Open in Claude would take the attendee off the class page. */
+function isNarrow(): boolean {
+  return typeof window !== 'undefined' && window.innerWidth < 900;
 }
 
 interface Props {
@@ -168,7 +176,7 @@ const CheckinLiveController: React.FC<Props> = ({ title, meta, eyebrow, client, 
       <p className="cbck-eyebrow">{eyebrow}</p>
       <h1 className="cbck-title">{title}</h1>
       <p className="cbck-meta">{meta}</p>
-      <style>{CBFA_CSS}</style>
+      <style>{CBFA_CSS + CBRUN_CSS}</style>
 
       {/* FOLLOW ALONG: the deck's plain-words card for the slide on screen right now */}
       {companion?.follow && <FollowCard follow={companion.follow} />}
@@ -242,19 +250,24 @@ const CheckinLiveController: React.FC<Props> = ({ title, meta, eyebrow, client, 
           <div className="cbck-prompt-box">
             <pre>{companion.prompt.prompt}</pre>
           </div>
-          <button type="button" className="cbck-btn cbck-copy-btn" onClick={() => copyPrompt(companion.prompt!.prompt)}>
+          {/* Run on this page first: the answer appears right here, nobody leaves the class. */}
+          {client.run && <CheckinRunHere prompt={companion.prompt.prompt} run={client.run} />}
+          <button type="button" className={`cbck-btn cbck-copy-btn${client.run ? ' cbck-btn-ghost' : ''}`} onClick={() => copyPrompt(companion.prompt!.prompt)}>
             {copyState === 'copied' ? 'Copied ✓' : `Copy · paste into ${companion.prompt.pasteWhere || 'Claude Code'}`}
           </button>
-          {/* Opens Claude on the web with the prompt typed in. On a phone, Copy then the app is the sure path. */}
-          <a
-            className="cbfa-open"
-            href={claudePromptUrl(companion.prompt.prompt)}
-            target="_blank"
-            rel="noopener noreferrer"
-            data-testid="open-in-claude"
-          >
-            Open in Claude
-          </a>
+          {/* Opens Claude on the web with the prompt typed in. Not on a phone when Run it here exists:
+              there it would take the attendee off the class page (Ali, 2026-11-23). */}
+          {!(client.run && isNarrow()) && (
+            <a
+              className="cbfa-open"
+              href={claudePromptUrl(companion.prompt.prompt)}
+              target="_blank"
+              rel="noopener noreferrer"
+              data-testid="open-in-claude"
+            >
+              Open in Claude
+            </a>
+          )}
           {companion.prompt.expectedResult && (
             <p className="cbck-prompt-meta"><b>You should see:</b> {companion.prompt.expectedResult}</p>
           )}

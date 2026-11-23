@@ -133,3 +133,17 @@ export async function guestPulse(sessionId: string, pass: string, state: PulseSt
 export async function guestAsk(sessionId: string, pass: string, text: string): Promise<void> {
   await guestApi.post(`/api/portal/sessions/${sessionId}/guest-ask`, { text }, { headers: { 'X-Guest-Pass': pass } });
 }
+
+/**
+ * "Run it here" (backend liveGuestRun.ts): send the conversation, get the answer text back.
+ * Errors carry the server's own message in `response.data.error`, which the page shows as is.
+ * Longer timeout than the other guest calls: an answer can take several seconds.
+ */
+export async function guestRun(
+  sessionId: string, pass: string, messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+): Promise<string> {
+  const { data } = await guestApi.post<{ reply: string }>(
+    `/api/portal/sessions/${sessionId}/guest-run`, { messages }, { headers: { 'X-Guest-Pass': pass }, timeout: 60_000 },
+  );
+  return data.reply;
+}

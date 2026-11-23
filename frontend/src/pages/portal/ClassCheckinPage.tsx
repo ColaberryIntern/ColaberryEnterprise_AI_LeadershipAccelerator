@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
-  ClassWindow, SavedGuest, CheckinInfo, getCheckinInfo, guestCheckin, getGuestCompanionState, guestVote, guestPulse, guestAsk,
+  ClassWindow, SavedGuest, CheckinInfo, getCheckinInfo, guestCheckin, getGuestCompanionState, guestVote, guestPulse, guestAsk, guestRun,
   loadSavedGuest, saveGuest, forgetGuest,
 } from '../../services/guestCheckinApi';
 import { CBCK_CSS } from './classCheckinStyles';
@@ -137,6 +137,7 @@ const ClassCheckinPage: React.FC = () => {
     getState: () => getGuestCompanionState(sessionId, guestPass),
     pulse: (s) => guestPulse(sessionId, guestPass, s),
     ask: (t) => guestAsk(sessionId, guestPass, t),
+    run: (m) => guestRun(sessionId, guestPass, m),
     vote: (k, c) => guestVote(sessionId, guestPass, k, c),
   }), [sessionId, guestPass]);
 

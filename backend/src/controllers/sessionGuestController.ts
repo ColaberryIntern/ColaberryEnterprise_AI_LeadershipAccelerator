@@ -103,3 +103,16 @@ export async function handleGuestVote(req: Request, res: Response, next: NextFun
     res.json({ success: true, choice: body.data.choice });
   } catch (err) { fail(res, err, next); }
 }
+
+/**
+ * POST /api/portal/sessions/:id/guest-run (X-Guest-Pass) {messages:[{role,content}]} -> {reply}.
+ * "Run it here" on the class follow-along page (liveGuestRun.ts). The conversation is validated
+ * there as a whole; this only checks the session id and that a body was sent.
+ */
+export async function handleGuestRun(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!SessionParam.safeParse(req.params.id).success) return res.status(404).json({ error: 'Not found' });
+    const { runAsGuest } = await import('../services/liveGuestRun');
+    res.json(await runAsGuest(req.params.id as string, passFrom(req), req.body?.messages));
+  } catch (err) { fail(res, err, next); }
+}
