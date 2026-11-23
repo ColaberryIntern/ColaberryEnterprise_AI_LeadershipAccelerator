@@ -10,7 +10,7 @@
 import { itemsFromIntake, outlineStatement } from '../intakeTruth';
 import { buildReleaseStoriesPrompt } from '../stagedGeneration';
 import { buildSchedule } from '../buildSchedule';
-import { isHoliday, offHoliday } from '../scheduleHolidays';
+import { isHoliday, isWorkingDay, toWorkingDay } from '../scheduleHolidays';
 
 const d = (s: string) => new Date(`${s}T00:00:00Z`);
 const iso = (x: Date) => x.toISOString().slice(0, 10);
@@ -63,19 +63,30 @@ describe('a story never invents an integration', () => {
   });
 });
 
-describe('no story is due on a major holiday', () => {
+describe('no story is due on a weekend or a major holiday', () => {
   it('knows the four holidays, Thanksgiving included', () => {
     expect(['2026-12-25', '2027-01-01', '2027-07-04', '2026-11-26', '2027-11-25'].every((s) => isHoliday(d(s)))).toBe(true);
     expect(['2026-12-24', '2026-11-27', '2026-11-19', '2027-07-05'].some((s) => isHoliday(d(s)))).toBe(false);
   });
 
-  it('moves a holiday a day earlier, or later when earlier is before the window', () => {
-    expect(iso(offHoliday(d('2026-12-25')))).toBe('2026-12-24');
-    expect(iso(offHoliday(d('2027-01-01'), d('2027-01-01')))).toBe('2027-01-02');
-    expect(iso(offHoliday(d('2026-12-10'), d('2026-12-01')))).toBe('2026-12-10');
+  it('moves a day off to the working day before it, or after when before is outside the window', () => {
+    expect(iso(toWorkingDay(d('2026-12-25')))).toBe('2026-12-24');
+    // Friday holiday with no room before: past the weekend to Monday.
+    expect(iso(toWorkingDay(d('2027-01-01'), d('2027-01-01')))).toBe('2027-01-04');
+    expect(iso(toWorkingDay(d('2026-12-10'), d('2026-12-01')))).toBe('2026-12-10');
   });
 
-  it('never dates a story on a holiday, whatever day the plan is published', () => {
+  it('moves weekends too (ShiftFill v8 STORY-008 fell on Saturday 2027-01-09)', () => {
+    expect(iso(toWorkingDay(d('2027-01-09'), d('2026-11-30')))).toBe('2027-01-08');
+    expect(iso(toWorkingDay(d('2027-01-10')))).toBe('2027-01-08');
+    // Sunday July 4 2027: Saturday is no better, so Friday the 2nd.
+    expect(iso(toWorkingDay(d('2027-07-04')))).toBe('2027-07-02');
+    expect(iso(toWorkingDay(d('2027-01-09'), d('2027-01-09')))).toBe('2027-01-11');
+    expect(isWorkingDay(d('2027-01-08'))).toBe(true);
+    expect(isWorkingDay(d('2027-01-09'))).toBe(false);
+  });
+
+  it('never dates a story on a weekend or holiday, whatever day the plan is published', () => {
     // v5's shape: five one-week releases, 13 stories.
     const releases = [0, 1, 2, 3, 4].map((i) => ({ key: `r${i}`, name: `R${i}`, week_start: i + 1, week_end: i + 1 }));
     const storiesByRelease = new Map<string, string[]>();
@@ -88,7 +99,7 @@ describe('no story is due on a major holiday', () => {
       for (const roadmapAfterDemo of [false, true]) {
         const s = buildSchedule({ window: { cohortStart, asOf }, releases, storiesByRelease, roadmapAfterDemo });
         for (const t of s.tasks) {
-          expect(isHoliday(t.dueOn)).toBe(false);
+          expect(isWorkingDay(t.dueOn)).toBe(true);
           checked += 1;
         }
       }

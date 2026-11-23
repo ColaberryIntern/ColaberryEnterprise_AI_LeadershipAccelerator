@@ -28,7 +28,7 @@
  *     where you'll be on stage, and here is what comes next".
  */
 
-import { offHoliday } from './scheduleHolidays';
+import { toWorkingDay } from './scheduleHolidays';
 
 /** What a student can realistically finish in a week alongside coursework. */
 export const TASKS_PER_WEEK_LOW = 1;
@@ -274,7 +274,7 @@ export function buildSchedule(input: ScheduleInput): Schedule {
     if (roadmap.has(rel.key)) {
       for (const storyId of ids) {
         afterDemo += 1;
-        tasks.push({ storyId, releaseKey: rel.key, dueOn: offHoliday(addDays(demoDay, afterDemo * ROADMAP_DAYS_PER_STORY), demoDay) });
+        tasks.push({ storyId, releaseKey: rel.key, dueOn: toWorkingDay(addDays(demoDay, afterDemo * ROADMAP_DAYS_PER_STORY), demoDay) });
       }
       continue;
     }
@@ -294,7 +294,7 @@ export function buildSchedule(input: ScheduleInput): Schedule {
       const clamped = due.getTime() < buildStart.getTime() ? buildStart
         : due.getTime() > buildEnd.getTime() ? buildEnd
           : due;
-      tasks.push({ storyId, releaseKey: rel.key, dueOn: offHoliday(clamped, buildStart) });
+      tasks.push({ storyId, releaseKey: rel.key, dueOn: toWorkingDay(clamped, buildStart) });
     });
   }
 

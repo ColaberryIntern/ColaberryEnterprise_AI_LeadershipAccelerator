@@ -40,6 +40,7 @@ import { extractRequirements } from './requirementExtraction';
 import { completeRequirements, contentWords } from './requirementCoverage';
 import { alignMeasuresToDemos } from './outlineAlignment';
 import { adoptNamedPerson } from './planPeople';
+import { RELEASE_STORIES_JSON_SCHEMA, buildReleaseStoriesPrompt, keepStoriesInTheirRelease } from './releaseStories';
 
 /** Average non-constraint requirements per release before another release is opened. */
 export const REQUIREMENTS_PER_RELEASE = 6;
@@ -208,72 +209,8 @@ export function normaliseOutline(outline: ReleaseOutline, requirements: PlanRequ
 }
 
 // ── stage 4: stories for one release ─────────────────────────────────────────
-
-export const RELEASE_STORIES_JSON_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['stories'],
-  properties: { stories: { type: 'array', items: planProps.stories.items } },
-} as const;
-
-export function buildReleaseStoriesPrompt(
-  inputs: DecomposeInputs,
-  release: PlanRelease,
-  mine: PlanRequirement[],
-  all: PlanRequirement[],
-  previousKeyStory: string | null,
-): string {
-  const others = all.filter((r) => !mine.some((m) => m.id === r.id));
-  return [
-    `Write the vertical-slice stories for ONE release of a larger plan: ${release.key} "${release.name}".`,
-    `Goal: ${release.goal}`,
-    `Demo: ${release.demo}`,
-    '',
-    'Write as many stories as it takes to deliver EVERY requirement assigned to this release, and no',
-    'more: usually one story per one to three closely related requirements. Every requirement below',
-    'must appear in some story\'s `fulfills`. Never pad, never write a story for a requirement that is',
-    'not assigned here, and never a story that only bundles others.',
-    'Ids: number your stories S1, S2, … within this release. `blocked_by` may cite only earlier',
-    'stories of THIS release (by those S ids) or be empty; gating between releases is added for you.',
-    `Every story's \`release\` is "${release.key}".`,
-    // Named ids, not "every requirement": live (2026-11-20) the story writer skipped all four
-    // NFR targets it was given, which leaves `must_uncovered` for repair to clean up.
-    `Before you answer, check that each of these ids appears in at least one story's \`fulfills\`: ${mine.map((r) => r.id).join(', ')}.`,
-    'An NFR (a target, a volume, a time limit, a way users must be able to use it) is not a story of',
-    'its own: cite it in the `fulfills` of the story whose behaviour it constrains, and make one of',
-    'that story\'s acceptance lines test the number.',
-    release.key === 'r0'
-      ? 'This is r0: it must include the story that proves the guardrail or correctness guarantee end to end. That story\'s "Trust" acceptance line names the audit log entry it writes.'
-      : `The previous release ends with ${previousKeyStory ?? 'its last story'}; do not repeat its work.`,
-    'Use CONSTRAINT requirements as context in task_guidance (the tools to use), and you may cite them',
-    'in `fulfills` alongside the work they serve.',
-    // ShiftFill v5: STORY-012 told the student to "integrate with the temp agencies' APIs";
-    // nothing the student wrote says the agencies have one. An invented integration is a
-    // build task nobody can do.
-    'Reach outside parties (agencies, vendors, customers) only through a tool the requirements name',
-    '(for example, email them through Gmail). Never invent an API, portal or system the inputs do not name.',
-    // ShiftFill v6: STORY-002 said "integrate with the leave management system" when nothing
-    // the student wrote says where approved leave is recorded. The rule above covered
-    // outside parties, not data whose home is unstated.
-    'When the inputs do not say where some data lives (who is on leave, who is licensed where),',
-    'do not name a system for it: say in task_guidance to ask the named person where it is kept,',
-    'and use a tool the requirements name (such as a Google Sheet) only if the inputs say it is kept there.',
-    // ShiftFill v3: one story said "As a scheduler … alert the scheduler" while every other
-    // story, and every requirement, named Dana. Two names for one person reads as two people.
-    'When the requirements name a person ("Dana"), write for that person by name ("As Dana, …") and',
-    'alert, page or escalate to them by name. Never swap in a job title for someone already named.',
-    '',
-    '<ASSIGNED_TO_THIS_RELEASE>',
-    ...mine.map((r) => `- ${r.id} [${r.kind}/${r.priority}] ${r.statement}`),
-    '</ASSIGNED_TO_THIS_RELEASE>',
-    '',
-    '<CONSTRAINTS_AND_OTHER_RELEASES (context only, do not write stories for these)>',
-    ...others.map((r) => `- ${r.id} [${r.kind}] ${r.statement}`),
-    '</CONSTRAINTS_AND_OTHER_RELEASES>',
-    '',
-    sourceBlocks(inputs),
-  ].join('\n');
-}
+// Lives in `releaseStories.ts`; re-exported so existing imports keep working.
+export { RELEASE_STORIES_JSON_SCHEMA, buildReleaseStoriesPrompt };
 
 // ── stage 5: assembly ────────────────────────────────────────────────────────
 
@@ -458,14 +395,15 @@ export async function generateStagedPlan(opts: StagedOptions): Promise<StagedRes
 
   // 4. Stories, one release per call. Sequential knowledge of the previous key story is not
   //    needed for the prompt to be right (assembly applies the gating), so these run in parallel.
-  const perRelease = await mapBounded(outline.releases, STORY_CALL_CONCURRENCY, async (release, i) => {
+  const releaseOf = new Map(outline.assignments.map((a) => [a.requirement_id, a.release]));
+  const written = await mapBounded(outline.releases, STORY_CALL_CONCURRENCY, async (release, i) => {
     const mineIds = new Set(outline.assignments.filter((a) => a.release === release.key).map((a) => a.requirement_id));
     const mine = requirements.filter((r) => mineIds.has(r.id));
     const res = await modelJsonCall<{ stories: PlanStory[] }>({
       schemaName: 'release_stories',
       schema: RELEASE_STORIES_JSON_SCHEMA as unknown as Record<string, unknown>,
       systemPrompt: DECOMPOSE_SYSTEM_PROMPT,
-      userPrompt: buildReleaseStoriesPrompt(opts, release, mine, requirements, i > 0 ? `release r${i - 1}` : null),
+      userPrompt: buildReleaseStoriesPrompt(opts, release, mine, requirements, i > 0 ? `release r${i - 1}` : null, releaseOf),
       isShaped: isStories,
       shapeProblem: 'the JSON had no stories',
       model, client,
@@ -476,6 +414,8 @@ export async function generateStagedPlan(opts: StagedOptions): Promise<StagedRes
     attempts += res.attempts;
     return { release, stories: res.value.stories };
   });
+  // ShiftFill v8: a release named for work that moved elsewhere wrote that work again.
+  const perRelease = keepStoriesInTheirRelease(written, releaseOf, requirements);
 
   // 5. Assemble.
   // Named people are judged against the student's own words, never the generated document.
