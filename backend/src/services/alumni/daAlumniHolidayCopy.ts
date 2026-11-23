@@ -18,13 +18,19 @@
  */
 export const DA_ALUMNI_CAMPAIGN_KEY = 'da_alumni_holiday_2026';
 export const ALUMNI_SIGNUP_URL = 'https://enterprise.colaberry.ai/portal/signup';
+/**
+ * AL1 (Ali, 2026-11-22): this is a Colaberry Training campaign. "Learn more" goes to the Training
+ * site's Accelerator page; the claim step stays on the portal, the only place the 50% applies
+ * automatically (Ali chose "Training + portal").
+ */
+export const TRAINING_ACCELERATOR_URL = 'https://training.colaberry.com/accelerator';
 
 /** openingAfter: how many of Ali's paragraphs come before the personal opening (1 for "Happy Thanksgiving."). */
 export interface AlumniStep { date: string; subject: string; theme: string; paragraphs: string[]; openingAfter?: number }
 
 const OFFER = 'I\'m letting all of our alumni know: verified Colaberry alumni get 50% off the yearly membership. That\'s $894 instead of $1,788.';
 const OFFER_SHORT = 'I\'m letting all alumni know that verified alumni get 50% off the yearly membership: $894 instead of $1,788.';
-const CLAIM = `To claim it, sign in or create your account at <a href="${ALUMNI_SIGNUP_URL}">${ALUMNI_SIGNUP_URL}</a> and choose the yearly plan under Subscription. Your 50% applies automatically when your email matches our alumni records. If you studied with us under a different email, just reply and I'll take care of it.`;
+const CLAIM = `You can see what the Accelerator covers at <a href="${TRAINING_ACCELERATOR_URL}">${TRAINING_ACCELERATOR_URL}</a>. To claim your 50%, sign in or create your account at <a href="${ALUMNI_SIGNUP_URL}">${ALUMNI_SIGNUP_URL}</a> and choose the yearly plan under Subscription. Your 50% applies automatically when your email matches our alumni records. If you studied with us under a different email, just reply and I'll take care of it.`;
 
 export const DA_ALUMNI_STEPS: AlumniStep[] = [
   { date: '2026-11-24', subject: 'The Data Analyst job is changing. Here\'s what I\'m doing about it.', theme: 'how the Data Analyst and BI Developer roles are changing, and why I am writing to every alum',

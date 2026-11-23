@@ -29,7 +29,16 @@ export interface AlumniOpeningContext {
   classYear: string | null;
   /** CCPP career stage label, e.g. "placed", "job_seeking". */
   careerStage: string | null;
+  /**
+   * AL1 (Ali, 2026-11-22): "They started their career on the placement date." The CCPP HiredDate
+   * (ADF_ClassSignups.HiredDate, carried as alumni_context.hired_date), as "March 2021". People took
+   * 6 to 18+ months to go through the program, so the class start is the wrong anchor.
+   */
+  placementMonthYear?: string | null;
 }
+
+/** Placement dates before this year are CCPP's 1/1/1900 "no date" placeholder (Colaberry began well after). */
+export const MIN_PLACEMENT_YEAR = 2000;
 
 const MONTHS: Record<string, string> = {
   jan: 'January', feb: 'February', mar: 'March', apr: 'April', may: 'May', jun: 'June',
@@ -57,7 +66,14 @@ export function openingContextFrom(alumni: Record<string, any> | null | undefine
   const month = m ? MONTHS[m[1].toLowerCase()] : null;
   const year = m ? m[2] : null;
   const stage = String(alumni?.career_stage || '').trim() || null;
-  return { program: program || null, classMonthYear: month && year ? `${month} ${year}` : null, classYear: year, careerStage: stage };
+  const hired = String(alumni?.hired_date || '').match(/^(\d{4})-(\d{2})-\d{2}/);
+  const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  // Ali, Nov 22: "don't use any placement dates that say 1/1/1900. If that's the case, use class
+  // start date." CCPP writes 1/1/1900 as "no date"; a timezone shift can make it 12/31/1899. Any
+  // year before MIN_PLACEMENT_YEAR is that placeholder, never a real placement.
+  const placementMonthYear = hired && Number(hired[1]) >= MIN_PLACEMENT_YEAR && Number(hired[2]) >= 1 && Number(hired[2]) <= 12
+    ? `${MONTH_NAMES[Number(hired[2]) - 1]} ${hired[1]}` : null;
+  return { program: program || null, classMonthYear: month && year ? `${month} ${year}` : null, classYear: year, careerStage: stage, placementMonthYear };
 }
 
 /** The step's subject or theme, so the opening leads into what the email is about. */
@@ -95,7 +111,8 @@ export function screenOpening(text: string, ctx: AlumniOpeningContext): string[]
   if (sentences > 2) problems.push(`more than two sentences (${sentences})`);
   const banned = t.match(BANNED);
   if (banned) problems.push(`banned: ${banned[0]}`);
-  const numbers = (t.match(/\d+/g) || []).filter((n) => n !== ctx.classYear);
+  const placementYear = (ctx.placementMonthYear || '').match(/\d{4}$/)?.[0] || null;
+  const numbers = (t.match(/\d+/g) || []).filter((n) => n !== ctx.classYear && n !== placementYear);
   if (numbers.length) problems.push(`numbers: ${numbers.join(', ')}`);
   if (/[–—]/.test(t)) problems.push('dash');
   if (/^(hi|hello|dear|hey)\b/i.test(t)) problems.push('greets');
@@ -128,6 +145,23 @@ export function fallbackOpening(stepIndex: number): string {
  * nothing in it is generated. Without a readable class it says "your class with us".
  */
 export function templateOpening(ctx: AlumniOpeningContext, stepIndex: number): string {
+  // Placed alumni: anchored on the day they started their career (Ali, Nov 22).
+  const p = ctx.placementMonthYear;
+  if (p) {
+    const placed = [
+      `Since you started your career in ${p}, the analyst role has changed a lot, and I want you to hear my take on it.`,
+      `This week I am thinking about everyone who has come through Colaberry, including you and the career you started in ${p}.`,
+      `When you started your career in ${p}, most people had never heard of this next role.`,
+      `Much of what we taught before you started your career in ${p} now lives inside one platform I built.`,
+      `What you learned with us got your career started in ${p}, and here is how to show employers what you can build next.`,
+      `The skills that helped you start your career in ${p} are getting serious attention right now.`,
+      `If your work since ${p} has been anywhere near BI, this note is for you.`,
+      `Here is the plan I would follow today if I had started my career in ${p}, like you did.`,
+      `As the year winds down, I am thinking about our alumni, including you and everything since ${p}.`,
+      `One more note to you, and to everyone who started their career with Colaberry, like you did in ${p}.`,
+    ];
+    return placed[Math.abs(stepIndex) % placed.length];
+  }
   const cls = ctx.program ? `${ctx.program} class${ctx.classMonthYear ? ` in ${ctx.classMonthYear}` : ''}` : 'class with us';
   const of = ctx.program ? `${ctx.program} class${ctx.classMonthYear ? ` of ${ctx.classMonthYear}` : ''}` : 'class with us';
   const lines = [
