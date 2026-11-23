@@ -46,20 +46,38 @@ const BRAND_CT = '10ebfb01-dc51-450d-bbef-a2c10e42efa8';
 const BRAND_CE = '8e8c4054-322f-4030-8c0f-c8eeafbcdd22';
 const BRAND_NO_PROGRAMME = '00000000-0000-4000-8000-000000000000';
 
-/** A programme row whose `update` behaves like Sequelize's: it applies the patch. */
+/**
+ * A programme row whose `update` behaves like Sequelize's: it applies the patch.
+ *
+ * The type is DECLARED rather than inferred, because `update` closes over `row`
+ * and an inferred shape is therefore circular - TypeScript gives up and widens
+ * the whole helper to `any`, which `tsc --noEmit` never sees (it excludes test
+ * files) and `tsconfig.test.json` catches as TS7022/TS7024. A test helper typed
+ * `any` would have quietly stopped checking every assertion built on it.
+ *
+ * `update` resolves to `void`: nothing in the service reads its return value,
+ * and returning the row is what made the inference circular in the first place.
+ */
+interface FakeProgram {
+  id: string;
+  brand_id: string;
+  kind: 'learner' | 'business' | 'consulting';
+  metadata: Record<string, unknown> | null;
+  update: jest.Mock<Promise<void>, [Record<string, unknown>]>;
+}
+
 function programRow(opts: {
   brand_id?: string;
   kind?: 'learner' | 'business' | 'consulting';
   metadata?: unknown;
-}) {
-  const row = {
+}): FakeProgram {
+  const row: FakeProgram = {
     id: 'prog-1',
     brand_id: opts.brand_id ?? BRAND_CT,
     kind: opts.kind ?? 'learner',
     metadata: opts.metadata as Record<string, unknown> | null,
     update: jest.fn(async (patch: Record<string, unknown>) => {
       Object.assign(row, patch);
-      return row;
     }),
   };
   return row;
