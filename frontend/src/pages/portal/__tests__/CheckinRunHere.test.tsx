@@ -80,7 +80,7 @@ describe('Run it here', () => {
     expect(q('run-start')).not.toBeNull();
     await act(async () => { q('run-start')!.click(); });
     await settle();
-    expect(q('run-answer')!.querySelector('.cbrun-text')!.textContent).toBe('ok');
+    expect(q('run-answer')!.querySelector('.cbrun-md')!.textContent).toBe('ok');
   });
 
   it('on a phone, does not offer Open in Claude (it would leave the class page)', async () => {

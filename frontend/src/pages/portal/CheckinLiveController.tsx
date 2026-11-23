@@ -3,7 +3,7 @@ import type { CompanionState, PulseState } from '../../services/onboardingApi';
 import { LinkState, linkStateAfterFailure } from './classroomLinkState';
 import { LIVE_PULSES } from '../../components/portal/livePulse';
 import { FollowCard, GetClaudeHelp, PopOutButton, claudePromptUrl, CBFA_CSS } from './CheckinFollowAlong';
-import CheckinRunHere, { CBRUN_CSS, type RunFn } from './CheckinRunHere';
+import CheckinRunHere, { CBRUN_CSS, CBRUN_LAST_CSS, LastResult, type RunFn, type RunTurn, type SavedRun } from './CheckinRunHere';
 
 /**
  * The checked-in view of the class check-in page: the phone that mirrors the instructor's deck
@@ -38,6 +38,18 @@ interface Props {
   signedOut: { body: string; action: string; onAction: () => void };
   /** The session's Commons room — signed-in students only; a guest pass opens nothing there. */
   onEnter?: () => void;
+  /** localStorage key for this class's Run it here conversations (shared with the side window). */
+  historyKey?: string;
+}
+
+type RunHistory = Record<string, SavedRun>;
+
+function loadHistory(key?: string): RunHistory {
+  if (!key) return {};
+  try {
+    const v = JSON.parse(localStorage.getItem(key) || '{}');
+    return v && typeof v === 'object' ? v : {};
+  } catch { return {}; }
 }
 
 /**
@@ -85,8 +97,22 @@ function PulseGrid({ pulse, onTap, style }: PulseGridProps): React.ReactElement 
   );
 }
 
-const CheckinLiveController: React.FC<Props> = ({ title, meta, eyebrow, client, signedOut, onEnter }) => {
+const CheckinLiveController: React.FC<Props> = ({ title, meta, eyebrow, client, signedOut, onEnter, historyKey }) => {
   const [pulse, setPulse] = useState<PulseState | null>(null);
+
+  // Run it here conversations, per prompt, kept for the whole class on this device so a vote
+  // slide can show the result the attendee just made, and a prompt slide resumes where it was.
+  const [runs, setRuns] = useState<RunHistory>(() => loadHistory(historyKey));
+  const saveRun = useCallback((promptText: string, label: string, turns: RunTurn[]) => {
+    setRuns((prev) => {
+      const next = { ...prev };
+      if (turns.length) next[promptText] = { label, turns, at: Date.now() };
+      else delete next[promptText];
+      if (historyKey) { try { localStorage.setItem(historyKey, JSON.stringify(next)); } catch { /* convenience only */ } }
+      return next;
+    });
+  }, [historyKey]);
+  const lastRun = Object.values(runs).filter((r) => r.turns.some((t) => t.role === 'assistant')).sort((a, b) => b.at - a.at)[0] || null;
   const [question, setQuestion] = useState('');
   const [qState, setQState] = useState<'idle' | 'sending' | 'sent'>('idle');
 
@@ -176,7 +202,7 @@ const CheckinLiveController: React.FC<Props> = ({ title, meta, eyebrow, client, 
       <p className="cbck-eyebrow">{eyebrow}</p>
       <h1 className="cbck-title">{title}</h1>
       <p className="cbck-meta">{meta}</p>
-      <style>{CBFA_CSS + CBRUN_CSS}</style>
+      <style>{CBFA_CSS + CBRUN_CSS + CBRUN_LAST_CSS}</style>
 
       {/* FOLLOW ALONG: the deck's plain-words card for the slide on screen right now */}
       {companion?.follow && <FollowCard follow={companion.follow} />}
@@ -242,6 +268,8 @@ const CheckinLiveController: React.FC<Props> = ({ title, meta, eyebrow, client, 
                 ? 'Vote locked. Waiting for the reveal'
                 : companion.question.my_choice != null ? 'Locked in ✓. You can change it' : 'Tap your answer'}
           </p>
+          {/* A vote is often about the result they just made: keep it one glance away. */}
+          {lastRun && <LastResult run={lastRun} openByDefault />}
         </div>
       ) : companion?.phase === 'prompt' && companion.prompt ? (
         /* ── BUILD MODE PROMPT — copy-ready, no need to read it off the screen ── */
@@ -251,7 +279,15 @@ const CheckinLiveController: React.FC<Props> = ({ title, meta, eyebrow, client, 
             <pre>{companion.prompt.prompt}</pre>
           </div>
           {/* Run on this page first: the answer appears right here, nobody leaves the class. */}
-          {client.run && <CheckinRunHere prompt={companion.prompt.prompt} run={client.run} />}
+          {client.run && (
+            <CheckinRunHere
+              key={companion.prompt.prompt}
+              prompt={companion.prompt.prompt}
+              run={client.run}
+              initial={runs[companion.prompt.prompt]?.turns}
+              onChange={(t) => saveRun(companion.prompt!.prompt, companion.prompt!.label, t)}
+            />
+          )}
           <button type="button" className={`cbck-btn cbck-copy-btn${client.run ? ' cbck-btn-ghost' : ''}`} onClick={() => copyPrompt(companion.prompt!.prompt)}>
             {copyState === 'copied' ? 'Copied ✓' : `Copy · paste into ${companion.prompt.pasteWhere || 'Claude Code'}`}
           </button>
@@ -307,6 +343,7 @@ const CheckinLiveController: React.FC<Props> = ({ title, meta, eyebrow, client, 
             </button>
           </div>
           <p className="cbck-text cbck-text-sub">Your instructor sees this on screen, so no need to interrupt.</p>
+          {lastRun && <LastResult run={lastRun} openByDefault={false} />}
         </div>
       )}
 
