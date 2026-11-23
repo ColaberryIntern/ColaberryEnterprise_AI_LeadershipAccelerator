@@ -282,7 +282,9 @@ const DATA = slides.map((s) => ({
 }));
 const safeJson = (v) => JSON.stringify(v).replace(/</g, '\\u003c');
 
-const runtime = fs.readFileSync(path.join(__dirname, 'runtime.js'), 'utf8');
+// Browser code, kept as an HTML fragment (like the Open House template's <script>) so the
+// server-side timer scan (platformOperations/scanTimers) never mistakes its setIntervals for server timers.
+const deckScript = fs.readFileSync(path.join(__dirname, 'deck-script.html'), 'utf8');
 
 const deck = `<!DOCTYPE html>
 <html lang="en">
@@ -301,7 +303,7 @@ const deck = `<!DOCTYPE html>
 <div id="notes"></div>
 ${slides.map(section).join('\n')}
 <script type="application/json" id="deckdata">${safeJson(DATA)}</script>
-<script>${runtime}</script>
+${deckScript}
 </body>
 </html>
 `;
