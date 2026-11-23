@@ -194,6 +194,23 @@ describe('generateStagedPlan', () => {
     expect(blockingViolations(gate.violations)).toEqual([]);
   });
 
+  it('marks an API the student never named, on the real generation path (ShiftFill v10)', async () => {
+    const { create } = fakeClient(4); // constraints name Vendor5..Vendor7
+    const wrapped = jest.fn(async (req: any) => {
+      const res = await create(req);
+      if (req.response_format.json_schema.name !== 'release_stories') return res;
+      const body = JSON.parse(res.choices[0].message.content);
+      body.stories = body.stories.map((s: PlanStory) => ({ ...s, task_guidance: 'Use Google Maps API for distance. Write to the Vendor5 API.' }));
+      return { choices: [{ message: { content: JSON.stringify(body) } }] };
+    });
+    const out = await generateStagedPlan({ brief: 'b', document: '', targets: { releases: 2 }, model: 'm', client: { create: wrapped } as any });
+    expect(out.plan.stories.length).toBeGreaterThan(0);
+    for (const s of out.plan.stories) {
+      expect(s.task_guidance).toContain('Ask before building: "Google Maps API" is not among the tools this project names.');
+      expect(s.task_guidance).not.toContain('"Vendor5 API"');
+    }
+  });
+
   it('keeps a small project small: the tier floor, not padding', async () => {
     const { client } = fakeClient(11);
     const out = await generateStagedPlan({ brief: 'b', document: '', targets: { releases: 5 }, model: 'm', client });

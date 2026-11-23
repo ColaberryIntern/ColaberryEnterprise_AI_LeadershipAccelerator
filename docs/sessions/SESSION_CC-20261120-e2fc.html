@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Monday, November 23, 2026 at 5:55 AM</div>
-    <div><span class="sid">CC-20261120-e2fc</span><span class="count">22 changes</span></div>
+    <div class="meta">Generated Monday, November 23, 2026 at 6:59 AM</div>
+    <div><span class="sid">CC-20261120-e2fc</span><span class="count">24 changes</span></div>
   </header>
   <main>
     
@@ -370,6 +370,35 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">`requirementCoverage.test.ts` asserts both new lines; sbp + factory + delivery + runbook coverage 380 suites / 5,827 tests pass; backend tsc baseline only.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">this is model guidance, and the step was kept in 2 of 4 earlier runs, so one passing plan proves little. Several runs would. No code check is possible: the fragment shares &quot;temp agencies&quot; with the approval requirement, so word overlap reads it as covered.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">23</span>
+          <h2>#4353 deployed; ShiftFill v10 kept the temp agency step</h2>
+          <span class="badge">2026-11-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">deployed a631c69cf (registry mode, marker `Every fallback, in order` in `requirementCoverage.js`). No code change in this entry.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">in v10 (project fc6a04b4), REQ-018 &quot;offer shifts to the two temp agencies if no hygienists accept&quot; was added by the completeness audit (prod log: 17 extracted, 2 added, 0 refused). STORY-017 offers the shift through Gmail after Dana approves. 19 requirements, each with exactly one story; no due dates on weekends or holidays; every agent input produced by another agent.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">one run. The step was kept in 2 of 4 runs before the fix, so this is a good sign, not proof. Closing BC L12.15 is pending: Basecamp returned 401 &quot;token expired (old age)&quot; at 12:58Z.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">24</span>
+          <h2>Stories: mark any API the student never named</h2>
+          <span class="badge">2026-11-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `storyTools.markUnnamedApis`, which runs after `adoptNamedPerson` on the staged path. Any &quot;&lt;name&gt; API&quot; in a story whose name is not a word of a CONSTRAINT requirement gets one &quot;Ask before building&quot; note appended to `task_guidance`. It annotates and never rewrites. Fixes v10 STORY-005 (&quot;Use Google Maps API for commute distance&quot;, plus a failure path &quot;Commute distance API fails&quot;). Runbook row added.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`storyTools.test.ts` 7/7 on v10&#39;s text verbatim; `stagedGeneration.test.ts` runs it on the real generation path; over the saved v6–v10 plans it marks only v10 STORY-005. The detector and wiring mutations are both caught. sbp + factory + delivery + runbook coverage 381 suites / 5,835 tests pass; backend tsc and `checkTestTypecheck` show only the 3 known files.</span></div>
+          
           
         </div>
       </article>
