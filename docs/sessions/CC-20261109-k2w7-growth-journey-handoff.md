@@ -54,7 +54,7 @@ to check.
 
 Choose **Colaberry Enterprise**, or any other brand.
 
-You should see an **honest empty state naming that brand** — not Colaberry Training's rows.
+You should see an **honest empty state naming that brand**, not Colaberry Training's rows.
 This is the single most important thing to confirm. If you ever see 1,221 learners under
 another brand's name, stop and report it: that is the exact failure this build exists to
 prevent.
@@ -83,7 +83,7 @@ It forwards to the merged page. A bookmark carrying `?tab=brain`, `?tab=settings
 
 ## What is NOT brand-scoped, deliberately
 
-- **The brain inventory** — what each shelf can choose from — is one library.
+- **The brain inventory**, meaning what each shelf can choose from, is one library.
 - **The already-given list** is Explorer's population, which is Colaberry Training's.
 - **Explorer Growth's system controls** on the Settings tab are system-wide.
 
@@ -95,7 +95,7 @@ the UI is required to state rather than imply away.
 ## What was never proven, and what would prove it
 
 **Nobody has exercised the signed-in page.** Every `/api/admin` path returns 401 to an
-unauthenticated request — including a route that does not exist — because `requireAdmin` runs
+unauthenticated request, including a route that does not exist, because `requireAdmin` runs
 ahead of the router. So an HTTP status carries no information about whether a route exists, and
 route presence was proven from inside the running container instead.
 
@@ -131,7 +131,7 @@ in is the only thing that settles those, which is why step 2 above exists.
 
 | Symptom | First thing to check |
 |---|---|
-| Every brand shows the configuration state | `SELECT count(*) FROM tenant_memberships;` — if 0, the seed was undone |
+| Every brand shows the configuration state | `SELECT count(*) FROM tenant_memberships;` and if 0, the seed was undone |
 | One brand shows another brand's learners | Stop. This is the failure the build prevents. Capture the URL and report it |
 | The Brain tab is missing | `?tab=brain` on the merged page; if absent, the frontend bundle is stale and nginx needs a redeploy |
 | A merged change is not live | A merged frontend route is not live until nginx rebuilds |
