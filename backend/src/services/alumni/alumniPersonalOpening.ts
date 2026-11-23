@@ -75,7 +75,7 @@ export function buildOpeningPrompt(ctx: AlumniOpeningContext, theme: string): { 
       'Tie the sentence to what this email is about, so each of the ten openings is different. Sound like a real person writing one note, not a template: do not start with "I hope", "It\'s been a while" or "I wanted to reach out".',
       `Plain, warm, first person, American English, at most ${MAX_WORDS - 15} words.`,
       'You may mention their program and class month and year naturally. Nothing else factual.',
-      'Never mention: a price, discount, offer or offerings, deal, special, percent, dollar amount, salary, statistic, any number except their class year, any company, a link, a promise or guarantee, or the word "free". No dashes.',
+      'Never mention: a price, discount, offer or offerings, deal, special, percent, dollar amount, salary, statistic, any number except their class year, any company, a link, a promise or guarantee, or that anything costs nothing. No dashes.',
       'Return only the sentences, no quotes.',
     ].join(' '),
     user: `${facts}\nThis email is about: ${theme}\nWrite the opening.`,
