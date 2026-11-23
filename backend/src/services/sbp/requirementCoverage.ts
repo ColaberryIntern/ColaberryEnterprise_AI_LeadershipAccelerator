@@ -30,6 +30,7 @@
 import { BUILD_PLAN_JSON_SCHEMA, PlanRequirement, RequirementKind } from './planContract';
 import { PROMPT_SECTIONS, composeSystemPrompt, sourceBlocks, DecomposeInputs } from './decomposePrompt';
 import { modelJsonCall, type ChatClient } from './modelJsonCall';
+import { contactGapFocus, uncontactedParties } from './contactGaps';
 
 /**
  * What counts as a requirement, said concretely. Sent to the extraction stage and to the audit,
@@ -124,10 +125,11 @@ export const COVERAGE_SYSTEM_PROMPT = composeSystemPrompt([
 ]);
 
 /** The audit's user message: the checklist, the current set, then the source. */
-export function buildCoveragePrompt(inputs: DecomposeInputs, requirements: PlanRequirement[]): string {
+export function buildCoveragePrompt(inputs: DecomposeInputs, requirements: PlanRequirement[], focus = ''): string {
   return [
     REQUIREMENT_CHECKLIST,
     '',
+    ...(focus ? [focus, ''] : []),
     'Read the source line by line. For every statement that asks the system to do, never do, measure,',
     'report, explain, escalate, integrate with or respect something, check whether a requirement below',
     'already captures it, including its specifics (a requirement that drops the numbers, the approver',
@@ -291,15 +293,16 @@ export async function completeRequirements(
   let current = requirements;
   const allAdded: CoverageMerge['added'] = [];
   let rounds = 0;
-  for (let round = 1; round <= MAX_COVERAGE_ROUNDS; round++) {
-    rounds = round;
+
+  /** One audit round. Null when the call failed (already logged), so the caller stops. */
+  const runRound = async (round: number, focus: string): Promise<CoverageMerge | null> => {
     let missed: MissedRequirement[];
     try {
       const result = await modelJsonCall<{ missing: MissedRequirement[] }>({
         schemaName: 'requirement_coverage',
         schema: COVERAGE_JSON_SCHEMA as unknown as Record<string, unknown>,
         systemPrompt: COVERAGE_SYSTEM_PROMPT,
-        userPrompt: buildCoveragePrompt(opts, current),
+        userPrompt: buildCoveragePrompt(opts, current, focus),
         isShaped: (v: unknown): v is { missing: MissedRequirement[] } => (
           !!v && Array.isArray((v as { missing?: unknown }).missing)
         ),
@@ -307,7 +310,7 @@ export async function completeRequirements(
         model: opts.model,
         client: opts.client,
         eventPrefix: 'sbp_requirement_coverage',
-        log: (event, outcome, ctx) => log(event, opts.correlationId, outcome, { round, ...ctx }),
+        log: (event, outcome, ctx) => log(event, opts.correlationId, outcome, { round, focused: !!focus, ...ctx }),
         describe: (v) => ({ proposed: v.missing.length }),
       });
       missed = result.value.missing;
@@ -317,18 +320,35 @@ export async function completeRequirements(
         error_class: (err as { errorClass?: string; name?: string })?.errorClass ?? (err as Error)?.name ?? 'Error',
         message: err instanceof Error ? err.message : String(err),
       });
-      break;
+      return null;
     }
     const merged = mergeMissed(current, missed, source);
     log('sbp_requirement_coverage_merged', opts.correlationId, 'success', {
       round,
+      focused: !!focus,
       before: current.length,
       added: merged.added.map((a) => a.id),
       refused: merged.refused.map((r) => r.reason),
     });
     current = merged.requirements;
     allAdded.push(...merged.added);
+    return merged;
+  };
+
+  let failed = false;
+  for (let round = 1; round <= MAX_COVERAGE_ROUNDS; round++) {
+    rounds = round;
+    const merged = await runRound(round, '');
+    if (!merged) { failed = true; break; }
     if (merged.added.length < COVERAGE_CONTINUE_AT) break;
+  }
+  // ShiftFill v7/v9/v12: a guard on messaging the temp agencies, and no step that contacts them.
+  // One extra round, named and bounded; it never runs twice and never after a failed call.
+  const gaps = failed ? [] : uncontactedParties(current);
+  if (gaps.length) {
+    rounds += 1;
+    log('sbp_requirement_coverage_contact_gap', opts.correlationId, 'partial', { gaps });
+    await runRound(rounds, contactGapFocus(gaps));
   }
   return { requirements: current, added: allAdded, rounds };
 }

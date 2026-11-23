@@ -131,15 +131,20 @@ describe('completeRequirements', () => {
   it('keeps reading while a round yields real additions, and stops on a trickle', async () => {
     const create = jest.fn()
       .mockResolvedValueOnce(reply([temp, target, speed]))
+      .mockResolvedValueOnce(reply([]))
       .mockResolvedValueOnce(reply([]));
     const out = await completeRequirements(EXISTING, { brief: SOURCE, document: '', model: 'm', client: { create } as any });
-    expect(create).toHaveBeenCalledTimes(2);
+    // Two normal rounds, then one focused round: `temp` guards messaging an agency nothing contacts,
+    // and this source never says to contact one, so that round adds nothing.
+    expect(create).toHaveBeenCalledTimes(3);
+    expect(create.mock.calls[2][0].messages[1].content).toContain('guards contacting "temp agency"');
     expect(out.added.map((a) => a.id)).toEqual(['REQ-003', 'REQ-004', 'REQ-005']);
     expect(out.requirements[2].kind).toBe('SAFE');
   });
 
   it('a round of one or two additions ends the audit', async () => {
-    const create = jest.fn().mockResolvedValueOnce(reply([temp]));
+    // Not `temp`: a guard on messaging an agency nobody contacts earns one focused round (contactGaps).
+    const create = jest.fn().mockResolvedValueOnce(reply([target]));
     await completeRequirements(EXISTING, { brief: SOURCE, document: '', model: 'm', client: { create } as any });
     expect(create).toHaveBeenCalledTimes(1);
   });
