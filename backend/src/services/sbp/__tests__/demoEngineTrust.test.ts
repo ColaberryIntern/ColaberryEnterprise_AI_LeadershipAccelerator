@@ -148,6 +148,13 @@ describe('the banner is in the rendered page, on every path', () => {
     expect(appText).toContain('Simulated, not live');
   });
 
+  it('says "sample data" in so many words, as STORY-900\'s acceptance asks (v12)', () => {
+    const { dom } = boot(spec([event()]));
+    expect(dom.window.document.querySelector('.demo-strip')?.textContent).toContain('Sample data only.');
+    const { appText } = boot(spec([], { nav: null }));
+    expect(appText).toContain('Sample data only.');
+  });
+
   it('names the app in the banner when the spec names one', () => {
     const { dom } = boot(spec([event()]));
     expect(dom.window.document.querySelector('.demo-strip')?.textContent).toContain('ShiftFill');

@@ -273,3 +273,41 @@ describe('the contract document the student reads matches the contract the code 
     expect(doc()).toContain('`production` is not a permitted value');
   });
 });
+
+/**
+ * ShiftFill v12 (2026-11-23): the scaffold gave every record an id like "G-101", which the
+ * contract it ships beside forbids, and showed Dana as "Hygienist": it took the LAST role in
+ * `derived.roles` (["Dana", "hygienist"]) though 16 of 17 stories were told as Dana's.
+ */
+describe('the scaffold follows its own contract and picks the right person (v12)', () => {
+  const V12 = {
+    ...PLAN,
+    derived: { ...(PLAN.derived || {}), roles: ['Dana', 'hygienist'] },
+    stories: PLAN.stories.map((s: { narrative: string }, i: number) => ({
+      ...s,
+      narrative: i === 0 ? 'As a hygienist, I want offers by text, so that I never need an app.' : `As Dana, ${s.narrative.replace(/^As an? [^,]+,\s*/, '')}`,
+    })),
+  };
+  let spec: { entities: Record<string, { rows: Array<{ id: string }> }>; app: { persona: { name: string; role: string } }; people: Array<{ role: string; screen?: string }> };
+  beforeAll(() => { spec = runScaffold(V12).spec as typeof spec; });
+
+  it('writes every record id as lower-case letters and digits, as the contract says', () => {
+    const ids = Object.values(spec.entities).flatMap((e) => e.rows.map((r) => r.id));
+    expect(ids.length).toBeGreaterThan(0);
+    expect(ids.filter((id) => !/^[a-z0-9]+$/.test(id))).toEqual([]);
+  });
+
+  it('shows the person whose stories these are, never the minority role', () => {
+    expect(spec.app.persona.role).not.toBe('Hygienist');
+    expect(spec.app.persona.role).toBe('Operator');
+    // Dana's own stories count now that "As Dana," (no article) is read as narration; the
+    // fixture's data model has no approval queue, so no one is given the approvals screen.
+    const dana = spec.people.find((p) => p.role === 'Dana') as { decides: string[] } | undefined;
+    expect(dana?.decides.length).toBeGreaterThan(0);
+  });
+
+  it('keeps a real job title when the most-narrated role is one', () => {
+    const titled = { ...V12, derived: { ...V12.derived, roles: ['hygienist', 'operations manager'] }, stories: PLAN.stories.map((s: object) => ({ ...s, narrative: 'As an operations manager, I want x, so that y.' })) };
+    expect((runScaffold(titled).spec as typeof spec).app.persona.role).toBe('Operations manager');
+  });
+});
