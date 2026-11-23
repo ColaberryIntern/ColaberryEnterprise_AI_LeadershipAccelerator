@@ -95,18 +95,26 @@ describe('finishMembership', () => {
 
 describe('the hourly exit sweep', () => {
   it('does nothing while the rules are off', async () => {
-    expect(await sweepFinishedMembers({ log: quiet })).toEqual({ finished: 0, moved: 0, move_failed: 0, errors: 0 });
+    expect(await sweepFinishedMembers({ log: quiet })).toEqual({ finished: 0, moved: 0, move_failed: 0, errors: 0, by_reason: {} });
     expect(query).not.toHaveBeenCalled();
   });
 
-  it('finished = nothing pending, something handled, past the grace and past any event', () => {
-    expect(FINISHED_MEMBERS_SQL).toMatch(/NOT EXISTS[\s\S]*status IN \('pending', 'processing', 'paused'\)/);
-    // an 'active' member with no messages is stuck and finishes; an 'enrolled' one is a queue
-    expect(FINISHED_MEMBERS_SQL).toMatch(/cl\.status = 'active'\s+OR EXISTS \(SELECT 1 FROM scheduled_emails/);
+  it('finished = nothing queued, past the grace and past any event; enrolled-with-nothing finishes except in a ramp', () => {
+    expect(FINISHED_MEMBERS_SQL).toMatch(/campaign_status = 'active' AND NOT queued AND idle AND event_past/);
+    expect(FINISHED_MEMBERS_SQL).toMatch(/member_status = 'active' OR any_send OR campaign_mode <> 'autonomous'/);
     expect(FINISHED_MEMBERS_SQL).toMatch(/cl\.enrolled_at/);
     expect(FINISHED_MEMBERS_SQL).toMatch(/exit_grace_hours/);
-    expect(FINISHED_MEMBERS_SQL).toMatch(/event_starts_at[\s\S]*:eventHours/);
-    expect(FINISHED_MEMBERS_SQL).toMatch(/c\.status = 'active'/);
+    expect(FINISHED_MEMBERS_SQL).toMatch(/s\.event_at, '-infinity'::timestamptz\) < NOW\(\) - make_interval\(hours => :eventHours\)/);
+    expect(FINISHED_MEMBERS_SQL).toMatch(/MAX\(\(se\.metadata->>'event_starts_at'\)::timestamptz\) AS event_at/);
+    expect(FINISHED_MEMBERS_SQL).toMatch(/se\.status IN \('pending', 'processing', 'paused'\)/);
+  });
+
+  it('OH1z: every way of being done is caught: campaign over, paused and idle, a queue that will never send', () => {
+    expect(FINISHED_MEMBERS_SQL).toMatch(/archived_at IS NOT NULL OR campaign_status IN \('completed', 'archived', 'cancelled'\)\)\s*\n\s*OR \(campaign_status = 'paused' AND NOT queued AND idle\)/);
+    expect(FINISHED_MEMBERS_SQL).toMatch(/campaign_status = 'active' AND queued AND NOT queued_fresh/);
+    expect(FINISHED_MEMBERS_SQL).toMatch(/make_interval\(days => :staleDays\)/);
+    expect(FINISHED_MEMBERS_SQL).toMatch(/c\.status::text <> 'draft'/);
+    expect(FINISHED_MEMBERS_SQL).toMatch(/THEN 'campaign_over'[\s\S]*THEN 'paused_idle'[\s\S]*THEN 'stale_queue'[\s\S]*ELSE 'finished'/);
   });
 
   function sweepDb(rows: any[], target: any = null) {
@@ -120,7 +128,7 @@ describe('the hourly exit sweep', () => {
 
   it('remove (default): finishes the member', async () => {
     rulesOn(); sweepDb([{ campaign_id: 'c1', lead_id: 7, settings: {}, event_session_id: null }]);
-    expect(await sweepFinishedMembers({ log: quiet })).toEqual({ finished: 1, moved: 0, move_failed: 0, errors: 0 });
+    expect(await sweepFinishedMembers({ log: quiet })).toEqual({ finished: 1, moved: 0, move_failed: 0, errors: 0, by_reason: { finished: 1 } });
     expect(book).not.toHaveBeenCalled();
     expect(enroll).not.toHaveBeenCalled();
   });
@@ -155,6 +163,33 @@ describe('the hourly exit sweep', () => {
   it('never throws: a failing read is counted', async () => {
     rulesOn(); query.mockRejectedValue(new Error('db down'));
     expect((await sweepFinishedMembers({ log: quiet })).errors).toBe(1);
+  });
+
+  it('OH1z: each way out is recorded; a dead queue is cancelled; a paused campaign removes without the move', async () => {
+    rulesOn();
+    const move = { on_complete: { action: 'move', move_to_campaign_id: 'c2' } };
+    sweepDb([
+      { campaign_id: 'cA', lead_id: 1, settings: {}, event_session_id: null, exit_kind: 'campaign_over' },
+      { campaign_id: 'cP', lead_id: 2, settings: move, event_session_id: null, exit_kind: 'paused_idle' },
+      { campaign_id: 'cS', lead_id: 3, settings: {}, event_session_id: null, exit_kind: 'stale_queue' },
+    ], { id: 'c2', key: null });
+    const r = await sweepFinishedMembers({ log: quiet });
+    expect(r).toMatchObject({ finished: 3, moved: 0, by_reason: { campaign_over: 1, paused_idle: 1, stale_queue: 1 } });
+    expect(enroll).not.toHaveBeenCalled(); // paused_idle never moves
+    expect(cancelWhere).toHaveBeenCalledWith({ campaign_id: 'cS', lead_id: 3 }, 'stale_overdue', expect.anything());
+    expect(cancelWhere).toHaveBeenCalledTimes(1);
+    const reasons = query.mock.calls.filter((c) => /UPDATE campaign_leads/.test(String(c[0]))).map((c) => JSON.parse(c[1].replacements.meta).exit.reason);
+    expect(reasons).toEqual(['campaign_over', 'paused_idle', 'stale_queue']);
+  });
+
+  it('OH1z: counts a Postgres UPDATE result ({ rowCount }), not NaN', async () => {
+    rulesOn();
+    query.mockImplementation(async (sql: string) => {
+      if (sql === FINISHED_MEMBERS_SQL) return [{ campaign_id: 'c1', lead_id: 7, settings: {}, event_session_id: null, exit_kind: 'finished' }];
+      if (/UPDATE campaign_leads/.test(sql)) return [[], { rowCount: 1 }];
+      return [];
+    });
+    expect((await sweepFinishedMembers({ log: quiet })).finished).toBe(1);
   });
 });
 

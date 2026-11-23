@@ -162,6 +162,11 @@ describe('booking an older Open House (Nov 19, booked Nov 22 to start Nov 23)', 
     expect(createEmail.mock.calls.every((c) => c[0].lead_id === 1)).toBe(true);
     expect(HELD_BY_PRECEDENCE_SQL).toMatch(/takes_precedence'\) = 'true'/);
     expect(HELD_BY_PRECEDENCE_SQL).toMatch(/cl\.campaign_id <> :campaignId/);
+    // the countdown to THIS Open House never holds anyone (the big move after every Open House):
+    // only something still queued for another session, or not tied to a session, holds them.
+    expect(HELD_BY_PRECEDENCE_SQL).toMatch(/se\.status IN \('pending', 'processing', 'paused'\)\s+AND COALESCE\(se\.metadata->>'event_session_id', ''\) <> CAST\(:sid AS text\)/);
+    const call = query.mock.calls.find((c) => c[0] === HELD_BY_PRECEDENCE_SQL);
+    expect(call[1].replacements.sid).toBe('sess-1');
   });
 
   it('a dry run counts what it would book and writes nothing', async () => {
