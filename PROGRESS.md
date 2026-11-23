@@ -18777,3 +18777,9 @@ Branch `workstream/career-prep-r2r3`, one PR (https://github.com/ColaberryIntern
   - Session: CC-20261118-e16w
   - What changed: `answerEscalation` accepts a typed `text` (posts as "Ali", addressed to the asker); new `postAsInstructor` + POST `/api/portal/sessions/:id/chat-post` (deck kit token or admin) posts "Q: ... A: ..." for a private question.
   - Verification: liveChat suite + learner-writer tripwire 48/48 (3 new: typed answer, private Q and A without the asker, empty/over-long refused).
+- [x] Run it here: answers render as crisp Markdown (tables, bold, lists), and the attendee's latest result shows on the next vote slide
+  - Date: 2026-11-23
+  - Session: CC-20261118-e16w
+  - What changed: new `CheckinMarkdown.tsx` (safe Markdown to React: fences unwrapped, tables, headings, lists, bold, code; never HTML); `CheckinRunHere.tsx` renders answers with it, keeps each prompt's conversation (initial + onChange) and adds `LastResult`; `CheckinLiveController.tsx` keeps Run it here history per class in localStorage (`historyKey`, shared with the side window), resumes a prompt's conversation, and shows "Your result from <prompt>" on vote slides (open) and status slides (collapsed).
+  - Verification: CheckinMarkdown 5 (table, fence unwrapped, bold/lists/headings, raw HTML stays text, saved and shown on a vote slide), CheckinRunHere 5, ClassCheckinPage 24, CheckinFollowAlong 3, CheckinChat 4; copy + typography ratchets 42.
+  - Notes: Ali, 2026-11-23: on a phone the vote "how many mistakes can you spot" asks about a table the attendee cannot see on that slide; the result now follows them.

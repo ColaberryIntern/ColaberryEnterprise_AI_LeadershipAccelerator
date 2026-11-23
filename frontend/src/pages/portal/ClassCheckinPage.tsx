@@ -175,6 +175,7 @@ const ClassCheckinPage: React.FC = () => {
       const first = guest.name.split(' ')[0];
       return (
         <CheckinLiveController
+          historyKey={`class-run-history-${sessionId}`}
           title={i.title}
           meta={joinedWindow === 'before' ? `${when}. Class starts soon: keep this page open.` : `${i.cohort_name}${startsAt ? ` · ${startsAt}` : ''}`}
           eyebrow={`You’re checked in, ${first}`}
