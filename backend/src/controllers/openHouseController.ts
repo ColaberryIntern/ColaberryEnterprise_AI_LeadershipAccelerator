@@ -6,7 +6,7 @@ import { createExplorerEnrollment } from '../services/enrollmentService';
 import { getCurrentOpenHouseEvent, OpenHouseEventInfo } from '../services/openHouseEventService';
 import { recordOpenHouseRegistration } from '../services/openHouseRegistrationStore';
 import { enrollInOpenHouseCountdown } from '../services/openHouseCountdown';
-import { captureSignupConsent, SIGNUP_CONSENT_TEXT } from '../services/consent/captureSignupConsent';
+import { captureSignupConsent, SIGNUP_CONSENT_TEXT, isAffirmative } from '../services/consent/captureSignupConsent';
 import { capturePhoneConsent } from '../services/consent/capturePhoneConsent';
 import { instantAccessFor, greetInBackground } from '../services/openHouse/instantAccess';
 
@@ -259,6 +259,10 @@ export async function handlePublicOpenHouseSignup(req: Request, res: Response, n
       utm_campaign: payload.utm_campaign || 'open_house',
       page_url: payload.page_url,
       source: 'Open House signup (public)',
+      // The naming permission (SNACK-2), normalised with the SAME rule the consent helper uses
+      // rather than a second definition of "ticked". Absent means no grant, which is not a
+      // refusal: it simply leaves this signup showing as "Someone in <city>" like everyone else.
+      socialProofOptIn: isAffirmative(payload.social_proof_opt_in),
     });
 
     const attached = await attachToCurrentOpenHouse({

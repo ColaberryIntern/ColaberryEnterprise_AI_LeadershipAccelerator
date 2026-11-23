@@ -108,8 +108,15 @@ export function resolveConsentSubject(
   return p ? { subjectType: 'phone', subjectId: p } : null;
 }
 
-/** A checkbox arrives as a boolean, "true", or "on" depending on the form. */
-function isAffirmative(v: ConsentChoice): boolean {
+/**
+ * A checkbox arrives as a boolean, "true", or "on" depending on the form.
+ *
+ * EXPORTED so a caller deciding a permission that is NOT a `consent_records` channel - the
+ * snack-bar naming grant on `leads.social_proof_opt_in` - reads a tick the same way this module
+ * does. A second truthiness rule elsewhere is how a form that sends "on" becomes a grant in one
+ * place and a refusal in another, with nothing in the logs to say which the person meant.
+ */
+export function isAffirmative(v: ConsentChoice): boolean {
   return v === true || v === 'true' || v === 'on';
 }
 
