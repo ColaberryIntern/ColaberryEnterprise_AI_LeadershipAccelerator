@@ -59,7 +59,7 @@ export default function ContentPanel({ brandId, brandName }: Props) {
           <div className="col-12">
             <div className="d-flex gap-2 flex-wrap align-items-center">
               <label className="form-label small mb-0" htmlFor="gj-content-gap-date">
-                Gap panel — run of
+                Gap panel, run of
               </label>
               <input
                 id="gj-content-gap-date"
@@ -152,7 +152,7 @@ export default function ContentPanel({ brandId, brandName }: Props) {
             <SectionCard
               title="Stage × audience"
               icon="grid-line"
-              subtitle="Who can actually receive what — the cross-tab that explains the gap above."
+              subtitle="Who can actually receive what: the cross-tab that explains the gap above."
             >
               <Matrix matrix={h.matrix} />
             </SectionCard>
@@ -169,8 +169,8 @@ export default function ContentPanel({ brandId, brandName }: Props) {
                   <thead className="table-light">
                     <tr>
                       <th>Purpose</th>
-                      <th className="text-end">Free</th>
-                      <th className="text-end">Full</th>
+                      <th className="text-end">Preview</th>
+                      <th className="text-end">Full access</th>
                       <th />
                     </tr>
                   </thead>
@@ -185,8 +185,8 @@ export default function ContentPanel({ brandId, brandName }: Props) {
                             </div>
                           )}
                         </td>
-                        <td className="text-end">{p.supported ? p.free_preview : '—'}</td>
-                        <td className="text-end">{p.supported ? p.full_access : '—'}</td>
+                        <td className="text-end">{p.supported ? p.free_preview : 'n/a'}</td>
+                        <td className="text-end">{p.supported ? p.full_access : 'n/a'}</td>
                         <td>
                           {p.supported ? (
                             <StatusBadge label="supported" tone="success" />

@@ -182,3 +182,44 @@ surviving); adding an import of the service to `maya/mayaPortalPrompt.ts` killed
 the loose `admissionsMayaService.ts` killed 1 — and that third one is the proof the pattern scan
 earns its keep, because the prompt-name scan did not catch it and a directory scan would not have
 either.
+
+### T3 hardening after independent verification — commit `cc2ce1903`
+
+T3 scored **11/12, PASS**, graded by `loop-task-verifier` on evidence it gathered itself. Five
+findings, all taken rather than deferred, because T4 is the controller that would have paid for
+the first one.
+
+1. **`brandRoleBodySchema` is now branded** and `setBrandRole` takes `BrandRoleBody`. The
+   inferred type was `{ title: string; description: string }`, which TypeScript satisfies
+   structurally — so a controller that forgot to `parse` would have compiled, stored unbounded
+   markup, and failed no test. Proven with a throwaway probe module: an unvalidated object is now
+   `error TS2345`. That is a compile-time guarantee where a test would have been a hope.
+2. **The pre-write log line no longer claims success.** It is emitted before the update and it is
+   the designated rollback record; claiming `success` there meant a write that threw still read
+   as one, and the line could not distinguish "about to write" from "wrote". Now
+   `brand_role_write_starting` / `partial`, with a second line after the update claiming the
+   success, and the ambiguous-programme line reclassified as `failure` with an `error_class`.
+3. **A wrong measurement in my own comment, corrected.** It said "77 maya-matching files plus 189
+   under `agents/`"; those counts include the `__tests__` files this scanner's walk skips.
+   Re-measured independently under the scanner's own rules: **43, 164, union 207**. The `> 150`
+   floor was and is honest, but a floor justified by the wrong measurement is one nobody can
+   check.
+4. **The leak scan now catches a dynamic `await import(...)`**, which the verifier demonstrated
+   slipping past the first regex. Each spelling — static, type-only, `require`, dynamic — is
+   proven by a cell rather than by reading the pattern, and the file carries the "what this
+   provably cannot see" section `redactionAndFlags.test.ts` sets the precedent for: a re-export
+   shim remains invisible, because the Maya file would never name this module.
+5. **Two missing cells added:** idempotency (CLAUDE.md's fourth mandatory type) and the
+   ambiguous-programme refusal on the **write** path, asserting neither candidate row was written
+   to.
+
+Verification after hardening: **3 suites, 52 tests passed**; blast radius
+`npx jest src/services/growthJourney src/schemas` → **130 suites, 2,899 tests passed**;
+`tsc --noEmit` 0 errors. Mutation A still kills 3 cells; the dynamic-import evasion now kills the
+leak cell by name.
+
+**One product question deferred to Ali, not a defect.** `execution-contract.md` assumption 4 says
+a programme-less brand should "show the role as unset and offer to set it". The read half ships;
+the set half is refused, because there is no row to write to. Either those four brands stay
+read-only-unset, or somebody decides to create journey programmes for them — a decision, not
+code.

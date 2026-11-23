@@ -27,12 +27,26 @@ import type { ExplorerLearnerRow } from '../../../services/explorerGrowthApi';
  * them, which is the part least likely to change and the easiest to compare.
  */
 
+/*
+ * NO EM DASHES, AND NO BARE DASH AS A PLACEHOLDER.
+ *
+ * `frontendTypographyLint` is a tree-wide shrink-only ratchet: any NEW file with
+ * an em or en dash in rendered copy fails it, and house style is "a comma, a
+ * full stop, a colon or the word 'to'". Explorer's own components use an em dash
+ * freely and are in its recorded baseline; these files are new, so they are not.
+ *
+ * The constraint turned out to be an improvement. Explorer renders an em dash for
+ * every absent value, which says only "there is nothing here" - it cannot
+ * distinguish a learner who has never been scored from one whose score is
+ * unrecorded from a field that does not apply. These panels say the word
+ * instead: `not scored`, `not recorded`, `none`, `n/a`.
+ */
 function Score({ label, value }: { label: string; value: number | null }) {
   return (
     <span className="d-inline-block me-2 text-nowrap" title={label}>
       <span className="text-muted small">{label}</span>{' '}
-      {/* An em dash, not 0: a learner with no score is not a learner scoring zero. */}
-      <span className="fw-semibold">{value ?? '—'}</span>
+      {/* A word, not 0: a learner with no score is not a learner scoring zero. */}
+      <span className="fw-semibold">{value ?? 'n/a'}</span>
     </span>
   );
 }
@@ -82,7 +96,7 @@ export default function LearnersTable({ rows, onOpen }: Props) {
                 {r.primary_state ? (
                   <StatusBadge label={r.primary_state.replace(/_/g, ' ')} tone="info" />
                 ) : (
-                  <span className="text-muted">—</span>
+                  <span className="text-muted">none</span>
                 )}
               </td>
               <td>
@@ -106,7 +120,7 @@ export default function LearnersTable({ rows, onOpen }: Props) {
                 <Score label="F" value={r.f_score} />
               </td>
               <td className="text-end">
-                {r.days_since_last_activity ?? <span className="text-muted">—</span>}
+                {r.days_since_last_activity ?? <span className="text-muted">not recorded</span>}
               </td>
             </tr>
           ))}

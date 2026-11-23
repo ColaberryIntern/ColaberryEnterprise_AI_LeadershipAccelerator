@@ -59,7 +59,7 @@ export default function DistributionPanel({ brandId, brandName, days = 30 }: Pro
             <div>No learners have been classified yet.</div>
             <div className="small mt-1">
               The nightly recompute populates this. If it has never run, there is nothing to show
-              — which is different from every learner being in no state.
+              , which is different from every learner being in no state.
             </div>
           </div>
         ) : (
@@ -74,7 +74,7 @@ export default function DistributionPanel({ brandId, brandName, days = 30 }: Pro
               <SectionCard
                 title="Overlays"
                 icon="stack-line"
-                subtitle="Independent of primary state — a learner can carry several."
+                subtitle="Independent of primary state: a learner can carry several."
               >
                 {d.overlays.length === 0 ? (
                   <div className="text-muted small">No overlays are set on any learner.</div>
@@ -99,7 +99,7 @@ export default function DistributionPanel({ brandId, brandName, days = 30 }: Pro
               <SectionCard
                 title="Trend"
                 icon="line-chart-line"
-                subtitle="Newest day first. From the append-only nightly snapshots — the only source that can say what last week looked like."
+                subtitle="Newest day first. From the append-only nightly snapshots: the only source that can say what last week looked like."
               >
                 <Trend trend={d.trend} />
               </SectionCard>

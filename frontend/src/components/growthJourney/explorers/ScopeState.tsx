@@ -171,7 +171,7 @@ export default function ScopeState<T>({
         <i className="ri-error-warning-line fs-5" aria-hidden="true" />
         <div className="flex-grow-1">
           <div className="fw-semibold">
-            This request failed — the data below is not missing, it is unknown.
+            This request failed: the data below is not missing, it is unknown.
           </div>
           <div className="small mt-1">
             {message}

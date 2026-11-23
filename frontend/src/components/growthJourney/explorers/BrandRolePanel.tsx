@@ -212,7 +212,7 @@ export default function BrandRolePanel({ brandId, brandName }: Props) {
 
       {!role.loading && role.error && !forbidden && (
         <div className="alert alert-danger small" role="alert">
-          <div className="fw-semibold">This request failed — the role is unknown, not unset.</div>
+          <div className="fw-semibold">This request failed: the role is unknown, not unset.</div>
           <div className="mt-1">{role.error.message}</div>
         </div>
       )}

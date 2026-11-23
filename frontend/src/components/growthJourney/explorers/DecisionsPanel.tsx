@@ -123,7 +123,7 @@ export default function DecisionsPanel({ brandId, brandName }: Props) {
         )}
 
         <div className="ms-auto text-muted small">
-          Defaults to the most recent run, not to today — the recompute is nightly.
+          Defaults to the most recent run, not to today: the recompute is nightly.
         </div>
       </div>
 
@@ -140,7 +140,7 @@ export default function DecisionsPanel({ brandId, brandName }: Props) {
                 <i className="ri-inbox-line fs-3 d-block mb-2" aria-hidden="true" />
                 <div>No decisions match this filter.</div>
                 <div className="small mt-1">
-                  The request succeeded — this is an empty result, not a failure.
+                  The request succeeded: this is an empty result, not a failure.
                 </div>
               </div>
             ) : (

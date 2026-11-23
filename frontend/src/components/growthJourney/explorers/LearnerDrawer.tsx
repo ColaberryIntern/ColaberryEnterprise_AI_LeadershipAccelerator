@@ -121,7 +121,7 @@ export default function LearnerDrawer({
                                   tone="info"
                                 />
                               ) : (
-                                '—'
+                                'none'
                               )}
                             </td>
                           </tr>
@@ -146,20 +146,20 @@ export default function LearnerDrawer({
                           <tr>
                             <td className="text-muted">E / I / F</td>
                             <td className="fw-semibold">
-                              {p.e_score ?? '—'} / {p.i_score ?? '—'} / {p.f_score ?? '—'}
+                              {p.e_score ?? 'n/a'} / {p.i_score ?? 'n/a'} / {p.f_score ?? 'n/a'}
                             </td>
                           </tr>
                           <tr>
                             <td className="text-muted">Idle</td>
                             <td>
                               {p.days_since_last_activity === null
-                                ? '—'
+                                ? 'not recorded'
                                 : `${p.days_since_last_activity} days`}
                             </td>
                           </tr>
                           <tr>
                             <td className="text-muted">In state since</td>
-                            <td>{p.state_entered_at ?? '—'}</td>
+                            <td>{p.state_entered_at ?? 'not recorded'}</td>
                           </tr>
                         </tbody>
                       </table>
@@ -193,7 +193,7 @@ export default function LearnerDrawer({
                         {e.note && <div className="text-muted small">{e.note}</div>}
                         {e.as_of_decision_date && (
                           <div className="form-text">
-                            As resolved on {e.as_of_decision_date} — read from that decision, not
+                            As resolved on {e.as_of_decision_date}, read from that decision, not
                             re-evaluated now.
                           </div>
                         )}
@@ -244,7 +244,7 @@ export default function LearnerDrawer({
                                   <td className="text-nowrap">{r.decision_date}</td>
                                   <td>
                                     <StatusBadge
-                                      label={r.selected_action ?? '—'}
+                                      label={r.selected_action ?? 'none'}
                                       tone={r.selected_action === 'WAIT' ? 'neutral' : 'info'}
                                     />
                                   </td>

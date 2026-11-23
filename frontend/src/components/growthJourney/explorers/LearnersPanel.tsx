@@ -194,7 +194,7 @@ export default function LearnersPanel({ brandId, brandName }: Props) {
                   <i className="ri-inbox-line fs-3 d-block mb-2" aria-hidden="true" />
                   <div>No learners match this filter.</div>
                   <div className="small mt-1">
-                    The request succeeded — this is an empty result, not a failure.
+                    The request succeeded: this is an empty result, not a failure.
                   </div>
                 </div>
               ) : (
@@ -212,7 +212,7 @@ export default function LearnersPanel({ brandId, brandName }: Props) {
                       Previous
                     </button>
                     <span className="text-muted small">
-                      {offset + 1}–{Math.min(offset + p.rows.length, p.total)} of {p.total}
+                      {offset + 1} to {Math.min(offset + p.rows.length, p.total)} of {p.total}
                     </span>
                     <button
                       type="button"

@@ -87,13 +87,13 @@ export default function DecisionRows({
                 </td>
                 <td>
                   <StatusBadge
-                    label={r.selected_action ?? '—'}
+                    label={r.selected_action ?? 'none'}
                     tone={r.selected_action === 'WAIT' ? 'neutral' : 'info'}
                   />
                   {r.channel && <div className="text-muted small mt-1">via {r.channel}</div>}
                 </td>
                 <td className="small">
-                  {r.primary_state ? r.primary_state.replace(/_/g, ' ') : '—'}
+                  {r.primary_state ? r.primary_state.replace(/_/g, ' ') : 'none'}
                 </td>
                 <td className="text-end">
                   {r.asset_count > 0 ? (
@@ -113,7 +113,7 @@ export default function DecisionRows({
                           : undefined
                       }
                     >
-                      {r.selected_action && r.selected_action !== 'WAIT' ? 'gap' : '—'}
+                      {r.selected_action && r.selected_action !== 'WAIT' ? 'gap' : 'none'}
                     </span>
                   )}
                 </td>
@@ -148,7 +148,7 @@ export default function DecisionRows({
           Previous
         </button>
         <span className="text-muted small">
-          {offset + 1}–{Math.min(offset + page.rows.length, page.total)} of{' '}
+          {offset + 1} to {Math.min(offset + page.rows.length, page.total)} of{' '}
           {page.total.toLocaleString()}
           {page.decision_date && <> · run of {page.decision_date}</>}
         </span>
