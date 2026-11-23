@@ -45,8 +45,9 @@ export function sanitizeVerdict(raw: unknown): Verdict | null {
   const answer = clip(r.answer, 800);
   const options = Array.isArray(r.options) ? r.options.map((o) => clip(o, 300)).filter(Boolean).slice(0, 3) : [];
   const confident = r.confident === true && !!answer;
-  if (!confident && options.length < 2) return null;
-  return { kind, confident, answer, options };
+  // An unsure question with no usable options still goes to the instructor (question + Skip only):
+  // dropping it would mean nobody ever sees it (2026-11-23).
+  return { kind, confident, answer, options: confident ? options : options.length >= 2 ? options : [] };
 }
 
 function systemPrompt(slideTitle: string, slideNote: string): string {
@@ -62,8 +63,11 @@ function systemPrompt(slideTitle: string, slideNote: string): string {
     'For a question: set confident true ONLY when you are sure and the answer does not depend on Colaberry',
     'policy, prices, schedules, enrollment, refunds, certificates, or anything about this specific class you were',
     'not told. Then write answer: 1 to 3 short, friendly sentences in plain words, no jargon.',
-    'When you are not sure, set confident false and write options: three different short answers the instructor',
-    'could choose from, each one complete and ready to post as is. Never invent facts about Colaberry.',
+    'When you are not sure, set confident false and write options: three DIFFERENT, CONCRETE answers that Ali,',
+    'who does know the facts, might give, so he only has to tap the true one. Each option takes a clear position',
+    'and is ready to post as is, for example "Yes, the recording is on the class page within 24 hours.", "Yes, we',
+    'email the recording to everyone tomorrow.", "Not this time. Come live next Monday at 6:30 PM Central."',
+    'Never write an option that says you are unsure, do not know, or that they should ask Ali: Ali is the one choosing.',
   ].join(' ');
 }
 

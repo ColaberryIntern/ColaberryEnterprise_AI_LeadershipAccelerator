@@ -43,9 +43,10 @@ describe('sanitizeVerdict', () => {
     expect(sanitizeVerdict({ kind: 'question', confident: true, answer: 'In a note.', options: [] })).toEqual({ kind: 'question', confident: true, answer: 'In a note.', options: [] });
     expect(sanitizeVerdict({ kind: 'other' })).toEqual({ kind: 'other', confident: false, answer: '', options: [] });
   });
-  it('treats an unsure question as an escalation and needs at least two options', () => {
+  it('treats an unsure question as an escalation, with options only when there are at least two', () => {
     expect(sanitizeVerdict({ kind: 'question', confident: false, options: ['A', 'B', 'C', 'D'] })!.options).toEqual(['A', 'B', 'C']);
-    expect(sanitizeVerdict({ kind: 'question', confident: false, options: ['A'] })).toBeNull();
+    // Too few options: still escalated, with none, so the instructor sees the question and can skip it.
+    expect(sanitizeVerdict({ kind: 'question', confident: false, options: ['A'] })).toEqual({ kind: 'question', confident: false, answer: '', options: [] });
   });
   it('does not trust "confident" without an answer, or an unknown kind', () => {
     expect(sanitizeVerdict({ kind: 'question', confident: true, answer: '', options: ['A', 'B'] })!.confident).toBe(false);
