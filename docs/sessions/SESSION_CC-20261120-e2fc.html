@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Monday, November 23, 2026 at 6:59 AM</div>
-    <div><span class="sid">CC-20261120-e2fc</span><span class="count">24 changes</span></div>
+    <div class="meta">Generated Monday, November 23, 2026 at 7:31 AM</div>
+    <div><span class="sid">CC-20261120-e2fc</span><span class="count">25 changes</span></div>
   </header>
   <main>
     
@@ -399,6 +399,21 @@
           <div class="row"><span class="k">What changed</span><span class="v">new `storyTools.markUnnamedApis`, which runs after `adoptNamedPerson` on the staged path. Any &quot;&lt;name&gt; API&quot; in a story whose name is not a word of a CONSTRAINT requirement gets one &quot;Ask before building&quot; note appended to `task_guidance`. It annotates and never rewrites. Fixes v10 STORY-005 (&quot;Use Google Maps API for commute distance&quot;, plus a failure path &quot;Commute distance API fails&quot;). Runbook row added.</span></div>
           <div class="row"><span class="k">Verification</span><span class="v ver">`storyTools.test.ts` 7/7 on v10&#39;s text verbatim; `stagedGeneration.test.ts` runs it on the real generation path; over the saved v6–v10 plans it marks only v10 STORY-005. The detector and wiring mutations are both caught. sbp + factory + delivery + runbook coverage 381 suites / 5,835 tests pass; backend tsc and `checkTestTypecheck` show only the 3 known files.</span></div>
           
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">25</span>
+          <h2>#4358 deployed; ShiftFill v11 clean</h2>
+          <span class="badge">2026-11-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">deployed 6e0a830d5, which carries #4358. Its own image build (0bdd3e461) was cancelled by two later merges. Marker `markUnnamedApis` is present in `stagedGeneration.js`. No code change in this entry. When Basecamp came back on the CCPP fallback, L12.15 was closed, and L12.16 was filed, then closed.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">in v11 (project 101b597f), the temp agency step was kept a second time in a row (REQ-018, STORY-011). The only APIs named are Gmail, Google Sheets and Slack, all named by the student, so nothing was marked. There are no due dates on weekends or holidays and no agent input that comes from nowhere. Home 200.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">STORY-006 also cites REQ-007 (the overtime rule) without a test for it; STORY-005 has the test. Judged a loose citation, not a defect.</span></div>
           
         </div>
       </article>
