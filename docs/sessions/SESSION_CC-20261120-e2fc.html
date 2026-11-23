@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Sunday, November 22, 2026 at 8:11 PM</div>
-    <div><span class="sid">CC-20261120-e2fc</span><span class="count">20 changes</span></div>
+    <div class="meta">Generated Monday, November 23, 2026 at 5:55 AM</div>
+    <div><span class="sid">CC-20261120-e2fc</span><span class="count">22 changes</span></div>
   </header>
   <main>
     
@@ -341,6 +341,35 @@
           <div class="row"><span class="k">What changed</span><span class="v"></span></div>
           <div class="row"><span class="k">Verification</span><span class="v ver">`planV8Findings.test.ts` 10/10 on v8&#39;s releases; the weekend cases in `planDataFindings`; three mutations each caught; sbp + factory + delivery + runbook coverage 380 suites / 5,827 tests pass; backend tsc and `checkTestTypecheck` show only the 3 known files.</span></div>
           
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">21</span>
+          <h2>#4348 deployed and proven on ShiftFill v9</h2>
+          <span class="badge">2026-11-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">deployed 028bf767e (registry mode, marker `keepStoriesInTheirRelease` in `releaseStories.js`). No code change in this entry. BC L12.14 closed.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">v9 (project e0e323c0), generated on the new code. Each of the 19 requirements is fulfilled by exactly one story, none of the 17 due dates falls on a weekend or holiday, and every agent input is produced by another agent.</span></div>
+          
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">22</span>
+          <h2>Requirement checklist: keep the fallback the student names</h2>
+          <span class="badge">2026-11-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`REQUIREMENT_CHECKLIST` (read by both requirement extraction and the completeness audit) now names fallbacks. A short sentence that only names who comes next (&quot;Then our two temp agencies.&quot;) is a requirement, and an approval rule about contacting someone is not the step that contacts them. v7 and v9 dropped the temp agency step at both stages: prod logs for v9 show 18 extracted, 1 proposed by the audit, 0 refused. Runbook row updated. BC L12.15 (https://app.basecamp.com/3945211/buckets/7463955/todos/10537430341).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`requirementCoverage.test.ts` asserts both new lines; sbp + factory + delivery + runbook coverage 380 suites / 5,827 tests pass; backend tsc baseline only.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">this is model guidance, and the step was kept in 2 of 4 earlier runs, so one passing plan proves little. Several runs would. No code check is possible: the fragment shares &quot;temp agencies&quot; with the approval requirement, so word overlap reads it as covered.</span></div>
           
         </div>
       </article>

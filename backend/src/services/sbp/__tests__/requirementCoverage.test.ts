@@ -25,6 +25,9 @@ describe('the checklist', () => {
     expect(REQUIREMENT_CHECKLIST).toMatch(/"never" rule/);
     expect(REQUIREMENT_CHECKLIST).toMatch(/report, summary, explanation/);
     expect(REQUIREMENT_CHECKLIST).toMatch(/deferred, put out of scope/);
+    // ShiftFill v7/v9 lost "Then our two temp agencies." at both stages.
+    expect(REQUIREMENT_CHECKLIST).toMatch(/Every fallback, in order/);
+    expect(REQUIREMENT_CHECKLIST).toMatch(/approval rule about contacting someone is not the step that contacts them/);
   });
 
   it('is sent to the extraction stage and the audit alike', () => {

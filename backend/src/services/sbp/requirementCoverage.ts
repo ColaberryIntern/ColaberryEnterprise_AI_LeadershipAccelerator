@@ -40,6 +40,13 @@ export const REQUIREMENT_CHECKLIST = [
   '- Every step of the workflow they describe: what starts it, what it reads, what it decides, who it',
   '  contacts, what it updates, and the specifics they gave (counts, waves, time windows, who wins,',
   '  who is told afterwards).',
+  // ShiftFill v7 and v9 (2026-11-22/23) dropped "Then our two temp agencies.", the fallback
+  // after the hygienists, at both extraction and audit; v6 and v8 kept it. Without it the plan
+  // has an approval gate for agency messages and no step that ever sends one.
+  '- Every fallback, in order: who or what it turns to when the first choice is not enough. A short',
+  '  sentence that only names who comes next ("Then our two temp agencies.") continues the step',
+  '  before it and is a requirement: write that step with the fallback in it, never drop it. An',
+  '  approval rule about contacting someone is not the step that contacts them; both are needed.',
   '- Every success target or measurable outcome, WITH its numbers. Kind NFR, and the statement keeps',
   '  the numbers ("Gaps are filled within 30 minutes on 9 mornings out of 10").',
   '- The volumes and timing it must handle ("8 to 10 a week, almost all between 6 and 7 am"). Kind NFR.',
