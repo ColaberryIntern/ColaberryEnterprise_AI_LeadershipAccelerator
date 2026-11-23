@@ -109,6 +109,12 @@ in is the only thing that settles those, which is why step 2 above exists.
 
 ## Known limitations
 
+- **For about six hours this page worked for two people only.** The membership seed gave each
+  of the 15 humans all four tenants, and a tenant resolved only for single-tenant operators, so
+  the 13 who are not super-admins were refused every brand. Fixed: a requested `brand_id` now
+  resolves that brand's own tenant, gated on the caller already holding a membership in it. If
+  a colleague reports a 403 on brand selection, check that the fix is deployed before checking
+  anything else.
 - **939 of 1,221 profiles carry no attribution beyond the backfill.** They now hold a Colaberry
   Training context, created 2026-11-23, with no first-touch history. The attribution is
   correct; the provenance is "backfilled", not "observed".
@@ -132,6 +138,7 @@ in is the only thing that settles those, which is why step 2 above exists.
 | Symptom | First thing to check |
 |---|---|
 | Every brand shows the configuration state | `SELECT count(*) FROM tenant_memberships;` and if 0, the seed was undone |
+| One colleague gets 403 on every brand, you do not | They are probably not a super-admin. Confirm the brand-to-tenant resolution fix is deployed, then that they hold a membership in that brand's tenant |
 | One brand shows another brand's learners | Stop. This is the failure the build prevents. Capture the URL and report it |
 | The Brain tab is missing | `?tab=brain` on the merged page; if absent, the frontend bundle is stale and nginx needs a redeploy |
 | A merged change is not live | A merged frontend route is not live until nginx rebuilds |
