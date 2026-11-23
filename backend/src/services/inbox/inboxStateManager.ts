@@ -10,6 +10,7 @@ import { evaluateHardRules } from './hardRuleEngine';
 import { classifyWithLLM } from './llmClassificationService';
 import { logAuditEvent } from './inboxAuditService';
 import { archiveEmail } from './autoArchiveService';
+import { shouldArchiveSilentHold } from './silentHoldPolicy';
 import { toPersistableRuleId } from './ruleIdPersistence';
 
 const LOG_PREFIX = '[InboxCOS][StateManager]';
@@ -266,7 +267,21 @@ async function dispatchByState(
       break;
 
     case 'SILENT_HOLD':
-      // No action — email is stored and accessible but not surfaced
+      // "Not surfaced" means out of the inbox. Until 2026-11-23 this was a
+      // no-op, so every SILENT_HOLD message stayed in the inbox. Ali's own
+      // BCC receipts are the one exception; see silentHoldPolicy.ts.
+      if (!shouldArchiveSilentHold(email.from_address)) break;
+      try {
+        await archiveEmail({
+          id: email.id,
+          provider: email.provider,
+          provider_message_id: email.provider_message_id,
+        });
+      } catch (error: any) {
+        // archiveEmail logs and audits its own failures; this catch only guards
+        // the dispatcher so one message cannot stop the batch.
+        console.error(`${LOG_PREFIX} SILENT_HOLD archive dispatch failed for ${email.id}: ${error.message}`);
+      }
       break;
 
     default:
