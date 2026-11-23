@@ -84,7 +84,7 @@ Output goes to `docs/screenshots/<YYYY-MM-DD>-<slug>/`. Full protocol lives in t
 | `verifyBuildTiers.js` | Build tier correctness |
 | `verifyDemoRevival.js` | Demo content revival |
 | `e2ePipelineSoak.js` | Pipeline soak test |
-| `bcTokenHealthCheck.sh` | Basecamp token health |
+| `bcTokenHealthCheck.sh` | Basecamp token health: on a failed probe it runs the vault refresh and re-probes, and emails only if still unhealthy (test: `scripts/__tests__/bcTokenHealthCheck.test.sh`) |
 
 ## Backfills and data operations
 
