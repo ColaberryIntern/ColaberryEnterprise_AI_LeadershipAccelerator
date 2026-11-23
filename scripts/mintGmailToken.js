@@ -30,7 +30,15 @@
  *
  * USAGE
  *   cd <repo> && set -a && . ./.env && set +a
- *   node scripts/mintGmailToken.js .
+ *   node scripts/mintGmailToken.js .              # ali@colaberry.com      -> GMAIL_REFRESH_TOKEN
+ *   node scripts/mintGmailToken.js . --personal   # alimuwwakkil@gmail.com -> GMAIL_PERSONAL_REFRESH_TOKEN
+ *
+ * --personal (added 2026-11-23, CC-20261123-8lfn): the Inbox COS personal
+ * mailbox died on 2026-09-22 with invalid_grant. Prod uses the SAME OAuth
+ * client for both mailboxes (GMAIL_PERSONAL_CLIENT_ID == GMAIL_CLIENT_ID), so
+ * the same registered redirect works. In this mode the script refuses to write
+ * unless the signed-in mailbox IS alimuwwakkil@gmail.com: signing in as the
+ * work account would silently point the personal sync at the wrong mailbox.
  *
  * NOTE: that is bash. In PowerShell the `&&` is a parse error - source the env
  * another way, or let an agent run it, which is the normal case here.
@@ -60,7 +68,14 @@ const SCOPES = [
   'https://www.googleapis.com/auth/gmail.send',
 ];
 
-const ENV_PATH = path.resolve(process.argv[2] || process.cwd(), '.env');
+const PERSONAL = process.argv.includes('--personal');
+const TARGET_VAR = PERSONAL ? 'GMAIL_PERSONAL_REFRESH_TOKEN' : 'GMAIL_REFRESH_TOKEN';
+const EXPECTED_MAILBOX = PERSONAL ? 'alimuwwakkil@gmail.com' : null;
+// Give up if nobody approves, so a forgotten run never holds the port forever.
+const WAIT_MS = Number(process.env.MINT_WAIT_MS || 30 * 60 * 1000);
+
+const repoArg = process.argv.slice(2).find((a) => !a.startsWith('--'));
+const ENV_PATH = path.resolve(repoArg || process.cwd(), '.env');
 
 if (!CID || !CSEC) {
   console.error('missing GMAIL_CLIENT_ID / GMAIL_CLIENT_SECRET - source the repo .env first');
@@ -79,6 +94,7 @@ const authUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' + new URLSearchP
   access_type: 'offline',
   prompt: 'consent',            // force a refresh token even if one was issued before
   include_granted_scopes: 'true',
+  ...(EXPECTED_MAILBOX ? { login_hint: EXPECTED_MAILBOX } : {}),
 }).toString();
 
 console.log('\n1. Open this URL and approve. Sign in as the mailbox you want to manage:\n');
@@ -125,6 +141,19 @@ const server = http.createServer(async (req, res) => {
     console.log('scopes   :');
     granted.forEach((s) => console.log('   ' + s));
 
+    // tokeninfo does not expose the address under gmail-only scopes; the
+    // profile endpoint is the authoritative answer to "which mailbox is this".
+    const prof = await (await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
+      headers: { authorization: 'Bearer ' + j.access_token },
+    })).json();
+    const mailbox = String(prof.emailAddress || '').toLowerCase();
+    console.log('profile  : ' + (mailbox || '(unknown)'));
+    if (EXPECTED_MAILBOX && mailbox !== EXPECTED_MAILBOX) {
+      console.error('\nSigned in as ' + (mailbox || 'an unknown mailbox') + ', expected ' + EXPECTED_MAILBOX
+        + '. Nothing written. Re-run and choose the right Google account.');
+      process.exit(1);
+    }
+
     if (!haveModify) {
       console.error('\ngmail.modify was NOT granted. Nothing written. Re-run and approve all boxes.');
       process.exit(1);
@@ -134,13 +163,14 @@ const server = http.createServer(async (req, res) => {
     fs.copyFileSync(ENV_PATH, ENV_PATH + '.bak-' + stamp);
 
     const raw = fs.readFileSync(ENV_PATH, 'utf8');
-    const line = 'GMAIL_REFRESH_TOKEN=' + j.refresh_token;
-    const next = /^GMAIL_REFRESH_TOKEN=.*$/m.test(raw)
-      ? raw.replace(/^GMAIL_REFRESH_TOKEN=.*$/m, line)
+    const line = TARGET_VAR + '=' + j.refresh_token;
+    const varRe = new RegExp('^' + TARGET_VAR + '=.*$', 'm');
+    const next = varRe.test(raw)
+      ? raw.replace(varRe, () => line)
       : raw.replace(/\s*$/, '\n') + line + '\n';
     fs.writeFileSync(ENV_PATH, next);
 
-    console.log('\nWritten to ' + ENV_PATH);
+    console.log('\nWritten ' + TARGET_VAR + ' to ' + ENV_PATH);
     console.log('Backup     : ' + path.basename(ENV_PATH + '.bak-' + stamp));
     console.log('\nThe token itself was not printed. Archiving should now work from any claude.ai account.');
     process.exit(0);
@@ -151,3 +181,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT);
+setTimeout(() => {
+  console.error('No approval within ' + Math.round(WAIT_MS / 60000) + ' minutes. Nothing written. Re-run when ready.');
+  process.exit(1);
+}, WAIT_MS).unref();
