@@ -104,7 +104,7 @@ const iv = (over: Partial<Iv> = {}): Iv => ({ id: 'iv-1', enrollment_id: 'enr-an
   starts_at: START, minutes: 30, interviewer_emails: ['kim@acme.example', 'PAT@acme.example'], booker_tz: 'America/New_York', room_provider_id: null, room_url: null,
   confirm_attempts: 0, confirm_last_attempt_at: null, confirm_done_at: null, updated_at: NOW, full_name: 'Ann Marie Lee', personal_email: 'ann.personal@mail.example',
   job_address: 'ann.jobs@mail.example', ...over });
-type Sent = { to: string; subject: string; text: string; replyTo?: string; icalEvent: { content: string } };
+type Sent = { to: string; subject: string; text: string; replyTo?: string; icalEvent: { content: string }; headers: Record<string, string> };
 const sent = () => mockMail.mock.calls.map((c) => c[0] as Sent);
 const meetings = new Map<string, { providerEventId: string; joinUrl: string }>();
 
@@ -130,6 +130,7 @@ describe('finishBooking: room and invites after the commit', () => {
     expect(db.iv[0]).toMatchObject({ room_provider_id: 'zm-1', room_url: SENTINEL_PROVIDER_URL, confirm_done_at: NOW, confirm_attempts: 1 });
     expect(sent().map((m) => [m.to, m.subject])).toEqual([['ann.personal@mail.example', LEARNER_SUBJECT], ['pat@acme.example', EMPLOYER_SUBJECT], ['kim@acme.example', EMPLOYER_SUBJECT]]);
     expect(sent().slice(1).every((m) => m.replyTo === 'ann.jobs@mail.example')).toBe(true);
+    expect(sent().every((m) => m.headers['X-MC-Track'] === 'opens')).toBe(true); // secret room links never pass through Mandrill's http click tracker
     expect(db.events.map((e) => e.src)).toEqual(['booking_confirm_done:iv-1:2026-11-23T15:00:00.000Z']);
   });
   it('CP9.1: the read-back after create is stored for THAT meeting: what Zoom stored, or NULL (cannot tell) on a replayed create', async () => {

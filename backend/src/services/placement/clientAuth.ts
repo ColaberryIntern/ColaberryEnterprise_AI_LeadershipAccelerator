@@ -7,6 +7,7 @@ import { checkRateLimit, GENERIC_LINK_INVALID, hashToken, mintToken, normalizeEm
 import { isSwitchOn, SWITCHES, type Read } from './darkSwitches';
 import { bookingLinkBase } from './bookingReply';
 import * as store from './clientStore';
+import { NO_CLICK_TRACKING } from './mailTracking';
 
 /**
  * Career Prep v27, CP10.2 (kit "Employer portal", contract assumption 2): employer sign-in by emailed link, reusing the
@@ -60,7 +61,7 @@ export function signinEmailText(link: string): string {
 async function deliver(to: string, token: string): Promise<ProviderResult> {
   const routed = await resolveEmailRecipient(to, SIGNIN_SUBJECT);
   const info = await guardedSendMail({ from: `"Refactored.ai" <${env.emailFrom}>`, to: routed.to, subject: routed.subject,
-    text: signinEmailText(signinLink(token)), headers: { 'X-MC-Tags': 'hire-client-signin' } });
+    text: signinEmailText(signinLink(token)), headers: { 'X-MC-Tags': 'hire-client-signin', ...NO_CLICK_TRACKING } });
   return info?.messageId ? { ok: true, messageId: String(info.messageId) } : { ok: false, errorClass: 'SendBlocked', error: 'blocked by kill switch or dev guard' };
 }
 
