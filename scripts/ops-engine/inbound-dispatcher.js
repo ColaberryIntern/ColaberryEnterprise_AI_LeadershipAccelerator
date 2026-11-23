@@ -90,6 +90,12 @@ const AUTOMATED_CARD_HEADER_RE = /^\s*CB System\s*:\s*automated response/i;
 // tripped the kill switch. Anchored at the start so the phrase appearing inside a
 // human's prose does not get suppressed.
 const CB_RUNNER_OUTPUT_RE = /^\s*CB System (is starting this task|first-pass deliverable|hit an error drafting)/i;
+// The Launch PMO overdue nurture (backend/src/scripts/lib/launchPmoDailyUpdate.js) posts its reminders under
+// Ali's identity, an allowed requester. Its 3-day text said "CB will escalate to Ali", which the plain-text
+// isCBMention matched, so on 2026-11-23 the dispatcher answered 13 of them in one tick, created 2 to-dos, and
+// the runaway guard tripped the kill switch. They are status nudges, never requests. Anchored at the start on
+// the four headers that file writes, so a human writing "3 days overdue" mid-sentence is not suppressed.
+const PMO_NURTURE_RE = /^\s*(Reminder - this was due|\d+ days overdue - due|Escalation \(5 days overdue\)|CRITICAL RISK - this task is \d+ days overdue)/i;
 function isAutomatedAgentCard(content) {
   if (!content) return false;
   const stripped = content
@@ -99,6 +105,7 @@ function isAutomatedAgentCard(content) {
     .trim();
   if (AUTOMATED_CARD_HEADER_RE.test(stripped)) return true;
   if (CB_RUNNER_OUTPUT_RE.test(stripped)) return true;
+  if (PMO_NURTURE_RE.test(stripped)) return true;
   // Structural fallback: the card always pairs an "Anticipated goal" with a
   // "Proposed plan" and a "Claude Code prompt" block. All three together is a
   // machine-generated card; any one alone is too loose to suppress on.

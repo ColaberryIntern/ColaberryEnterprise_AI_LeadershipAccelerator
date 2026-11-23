@@ -92,3 +92,27 @@ test('does NOT suppress a human who references the runner phrase mid-sentence', 
   assert.equal(isAutomatedAgentCard('<div>@CB did the CB System first-pass deliverable land for the LandJet task yet?</div>'), false);
   assert.equal(isAutomatedAgentCard('<div>CB, is the system starting this task or not?</div>'), false);
 });
+
+// --- Launch PMO overdue nurture (2026-11-23 auto-trip) ---------------------
+// launchPmoDailyUpdate.js posts these as Ali. The 3-day text said "CB will escalate", the dispatcher answered 13 of them in
+// one tick, created 2 to-dos, and the runaway guard tripped. Verbatim HTML of the bodies that file writes.
+const NURTURE_3D = `<div><strong style="color:#b45309">3 days overdue</strong> - due 2026-11-20. Owner: Taiwo Oludimimu.</div>
+<div>Please post a status update here or reassign. CB will escalate to Ali at 5 days if no movement.</div>`;
+const NURTURE_1D = `<div><strong style="color:#0284c7">Reminder</strong> - this was due 2026-11-22 (1 day overdue). Owner: Ali Muwwakkil.</div>
+<div>Quick status check: where are we on this?</div>`;
+const NURTURE_5D = `<div><strong style="color:#d97706">Escalation (5 days overdue)</strong> - due 2026-11-18. Owner: Sam.</div>
+<div><bc-attachment sgid="x"></bc-attachment> please review.</div>`;
+const NURTURE_7D = `<div><strong style="color:#dc2626">CRITICAL RISK</strong> - this task is 7 days overdue (due 2026-11-16). Owner: Sam. Marking on Launch Readiness Dashboard.</div>`;
+
+test('the old 3-day nurture text trips isCBMention (why the guard is needed)', () => {
+  assert.equal(isCBMention(NURTURE_3D), true);
+});
+
+test('skips every Launch PMO overdue nurture level', () => {
+  for (const body of [NURTURE_1D, NURTURE_3D, NURTURE_5D, NURTURE_7D]) assert.equal(isAutomatedAgentCard(body), true);
+});
+
+test('does NOT suppress a human who mentions being overdue mid-sentence', () => {
+  assert.equal(isAutomatedAgentCard('<div>@CB this is 3 days overdue - due Friday, can you extend it?</div>'), false);
+  assert.equal(isAutomatedAgentCard('<div>CB, send a reminder - this was due last week</div>'), false);
+});
