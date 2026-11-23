@@ -356,6 +356,10 @@ export const NAV_GROUPS: NavGroup[] = [
     { path: '/admin/governance-policy', label: 'Governance Policies', icon: 'shield-star-line' },
   ]},
   { label: 'System', section: 'system', links: [
+    // Platform Operations. The link is what classifies /admin/system/operations as 'system'
+    // for sectionForPath(); without an entry here it would fall through to null and
+    // ProtectedRoute would admit every identity except a plain sales login.
+    { path: '/admin/system/operations', label: 'Platform Operations', icon: 'pulse-line' },
     { path: '/admin/tickets', label: 'Tickets', icon: 'ticket-2-line' },
     { path: '/admin/reports', label: 'Automated Reports', icon: 'mail-send-line' },
     { path: '/admin/settings', label: 'Settings', icon: 'settings-3-line' },

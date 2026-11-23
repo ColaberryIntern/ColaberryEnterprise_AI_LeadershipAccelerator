@@ -1,4 +1,4 @@
-import { TenantMembership } from '../../models';
+import { Brand, TenantMembership } from '../../models';
 import {
   TenantPermission,
   isPlatformSuperAdminRole,
@@ -105,6 +105,49 @@ export async function buildRequestContext(input: {
     // because silently defaulting would make it possible to act on the wrong tenant
     // without noticing.
     tenantId = authorizedTenantIds[0];
+  }
+
+  // ─── A NAMED BRAND NAMES ITS OWN TENANT ───────────────────────────────────
+  //
+  // A multi-tenant operator who names a BRAND has, in effect, named a tenant:
+  // `brands` rows carry exactly one `tenant_id`. Without this, they fall through
+  // the branch above with `tenantId` null, `Boolean(tenantId)` short-circuits in
+  // the brand check below, and they are refused a brand they are entitled to.
+  //
+  // Measured on production 2026-11-23: 13 of 15 admin identities hold
+  // memberships in four tenants and are not super-admins, and the admin client
+  // sends `brand_id` but never `tenant_id`. So every one of them was refused
+  // every brand, while the two super-admins were not. The page worked for two
+  // people and silently 403'd for thirteen.
+  //
+  // ─── WHY THIS DOES NOT WIDEN ANYTHING ─────────────────────────────────────
+  //
+  // The brand's tenant is adopted ONLY when the caller already holds a
+  // membership in it, which is the same test `requestedTenantId` passes through
+  // above. A CPN viewer naming a Colaberry brand resolves no tenant and is still
+  // refused, because the comparison is against their OWN memberships rather than
+  // against the brand.
+  //
+  // Dropping the membership test here would be the whole bug: it would let any
+  // operator with any membership read any brand, since `authorizedBrandsOf`
+  // returns null (unrestricted) for everyone whose memberships carry no
+  // `brand_id`, which is all 54 rows in production today. A test asserts the
+  // cross-tenant refusal directly for that reason.
+  //
+  // It stays silent on failure. An unresolvable or unknown brand leaves
+  // `tenantId` null and the existing guard below refuses, so the failure mode is
+  // the one that was already there.
+  if (!tenantId && input.requestedBrandId) {
+    try {
+      const brand = await Brand.findByPk(input.requestedBrandId);
+      const brandTenantId = brand?.tenant_id ?? null;
+      if (brandTenantId && (isSuper || authorizedTenantIds.includes(brandTenantId))) {
+        tenantId = brandTenantId;
+      }
+    } catch {
+      // Fail closed, exactly like the membership read above: if the brand cannot
+      // be read, nothing is proven and nothing is granted.
+    }
   }
 
   // Roles that apply to the tenant actually being operated in — not the union across

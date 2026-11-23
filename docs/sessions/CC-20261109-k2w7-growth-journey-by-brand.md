@@ -631,3 +631,75 @@ renamed, altered, copied or migrated, so AD-1 holds.
 The seed closed the cross-tenant migration ramp for every admin, which is the one-way-feeling
 part. It is reversible: the ramp condition is `(await TenantMembership.count()) === 0`, so
 deleting the rows re-opens it.
+
+---
+
+## T17 — a named brand names its own tenant, 2026-11-23
+
+**Session:** CC-20261109-k2w7
+**What changed:** `buildRequestContext` now resolves a tenant from a requested `brand_id` when
+no tenant resolved otherwise, but only when the caller already holds a membership in that
+brand's tenant.
+**Verification:** 47 cells in `tenantAuthorization.test.ts` (was 39); the privilege-escalation
+mutation kills exactly 1, and it is the security cell; 6 tenancy suites / 115 tests;
+`tsc` clean, proven with a planted `TS2322` control.
+
+### The fault, found by the independent verifier and not by me
+
+Phase I cycle 2 measured production: **13 of 15 admin identities hold memberships in four
+tenants and are not super-admins**, and the admin client sends `brand_id` but never
+`tenant_id`. `tenantId` resolved only via `authorizedTenantIds.length === 1`, so for those
+thirteen it stayed null, `Boolean(tenantId)` short-circuited the brand check, and every brand
+selection answered 403.
+
+The page worked for the two super-admins and silently refused everyone else.
+
+### It is a consequence of a recommendation I made
+
+Option B of the membership seed gave each person all four tenants, which I argued for because
+nobody loses access to the cpn, ai-flotation and refactored surfaces. That was true. What I did
+not think through is that **four tenants is as unresolvable as zero** under
+`length === 1`, so the roster that preserved everyone's access is the roster that left nobody
+able to resolve a tenant. Option A would have given each person one tenant and the page would
+have worked for all fifteen.
+
+Nothing got worse: before the seed everyone got 403 anyway. But it was not fixed for them, and
+I reported the seed as the thing that unblocked the page when it unblocked it for two people.
+
+### The fix, and the half of it that is the actual work
+
+Adopting the brand's own tenant is the obvious move and is a **privilege escalation** if it
+stops there. Every membership row in production carries `brand_id` NULL, so
+`authorizedBrandsOf` returns null (unrestricted) for everyone. With a tenant resolved from the
+brand alone, any operator with any membership could read any brand.
+
+So the adoption is gated on the caller already holding a membership in that tenant, which is
+the same test `requestedTenantId` passes through. A CPN viewer naming a Colaberry brand still
+resolves nothing and is still refused.
+
+**The load-bearing test is the refusal, not the grant.** A version that drops the membership
+check passes every other cell in the new block. The mutation that drops it kills exactly one
+test of 47, and that one is "REFUSES a brand whose tenant they do not belong to".
+
+### Two smaller things the tests pin
+
+- The brand is **not** looked up when a tenant already resolved, asserted on the lookup *not*
+  happening. "It still works" would also be true of a version that queried on every request to
+  an authorization hot path.
+- A failed brand read **fails closed**, the same stance as the membership read above it. A
+  database outage must not become a grant.
+
+### A note for whoever adds the next model import here
+
+`Brand` joined the `jest.mock('../../../models', ...)` factory in that suite. The production
+code wraps the lookup in try/catch and fails closed, so a model missing from that mock does
+**not** throw: it silently denies, and the cells would pass for the wrong reason.
+`expect(brandFindByPk).toHaveBeenCalledWith(...)` is asserted where the lookup is supposed to
+happen so that cannot go unnoticed.
+
+### An environment artifact worth recording
+
+Running the suites in the orphaned `wt-growth-brand` worktree, whose git registration another
+session had pruned, failed `ownerIsConfiguration.test.ts` on a repo-wide scan **including its
+own positive control**. The same suite passes in a clean worktree. A positive control failing
+alongside the assertion is the signal that the scan, not the code, is what broke.

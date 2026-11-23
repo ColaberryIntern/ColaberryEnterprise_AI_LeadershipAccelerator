@@ -7,6 +7,8 @@ const CareerReviewPage = lazy(() => import('../pages/admin/CareerReviewPage'));
 const PlacementStudentsPage = lazy(() => import('../pages/admin/PlacementStudentsPage'));
 const CareerDeskPage = lazy(() => import('../pages/admin/careerDesk/CareerDeskPage'));
 const CommsHubLayout = lazy(() => import('../components/admin/commsHub/CommsHubLayout'));
+const PlatformOperationsLayout = lazy(() => import('../pages/admin/system/operations/PlatformOperationsLayout'));
+const OperationsFleetTab = lazy(() => import('../pages/admin/system/operations/FleetTab'));
 const CommsHubTodayTab = lazy(() => import('../components/admin/commsHub/TodayTab'));
 const CommsHubEventsTab = lazy(() => import('../components/admin/commsHub/EventsTab'));
 const CommsHubComposeTab = lazy(() => import('../components/admin/commsHub/ComposeTab'));
@@ -224,6 +226,13 @@ const adminRoutes = (
         <Route path="/admin/placement/inboxes" element={<CareerDeskPage />} />
         <Route path="/admin/placement/bookings" element={<CareerDeskPage />} />
         <Route path="/admin/placement/fees" element={<CareerDeskPage />} />
+        {/* Platform Operations (/admin/system/operations). Layout plus child routes, the same
+            shape as Comms Hub below, so a refresh keeps the tab. Seven tabs are designed;
+            Fleet is the one that is built, and the strip says so rather than linking to six
+            empty screens. Section is 'system', derived from the NavLink in adminNav.ts. */}
+        <Route path="/admin/system/operations" element={<PlatformOperationsLayout />}>
+          <Route index element={<OperationsFleetTab />} />
+        </Route>
         {/* Communications Hub (CH1.3): one route, four tabs as child routes so a refresh keeps the tab. */}
         <Route path="/admin/comms-hub" element={<CommsHubLayout />}>
           <Route index element={<CommsHubTodayTab />} />

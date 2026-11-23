@@ -1,0 +1,312 @@
+/**
+ * Platform Operations — the design template, as CSS.
+ *
+ * Every value here was measured from `Platform Operations dashboard screens.html`, the seven
+ * rendered screens this page is built to match. Nothing is approximated and nothing is
+ * substituted from `tokens.css`: this surface has its own palette, and it is a deliberately
+ * different one. The admin cherry `#FB2832` on white is 3.85:1, which fails WCAG AA for body
+ * text; every pair below was measured and the worst is 5.72:1.
+ *
+ * Why CSS rather than the template's inline styles: inline styles cannot express `:hover` or
+ * `:focus-visible`, and a keyboard user needs a focus ring. The values are identical.
+ *
+ * Everything is scoped under `.platform-ops` so it cannot leak into the rest of the admin.
+ */
+
+@font-face {
+  font-family: 'Bricolage Grotesque';
+  font-style: normal;
+  font-weight: 700;
+  font-stretch: 100%;
+  font-display: swap;
+  /* Self-hosted, like every other font in this app. They were moved off
+     fonts.googleapis.com because that handed a visitor's IP to Google before the
+     consent banner was answered; adding this one back there would undo that. */
+  src: url('../../../../fonts/bricolage-grotesque-latin-700.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}
+
+.platform-ops {
+  --ops-page: #FBF6F6;
+  --ops-card: #FFFFFF;
+  --ops-strip: #F3EAEB;
+  --ops-bar: #2C2326;
+  --ops-bar-ink: #FBF6F6;
+  --ops-chip: #45383C;
+  --ops-chip-border: #8C7B80;
+  --ops-ink: #261A1C;
+  --ops-muted: #5E5054;
+  --ops-border: #E5D8DA;
+  --ops-divider: #EFE4E5;
+  --ops-btn-border: #D9C8CB;
+  --ops-propose: #C98A12;
+  --ops-action: #B00D1C;
+  --ops-heading: #A30B19;
+
+  --ops-ok-fg: #256B0C;   --ops-ok-bg: #E6F3DC;
+  --ops-bad-fg: #A30B19;  --ops-bad-bg: #FFE3E5;
+  --ops-warn-fg: #7A4E00; --ops-warn-bg: #FFF0CC;
+  --ops-off-fg: #5E5054;  --ops-off-bg: #EFE7E8;
+
+  --ops-sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --ops-mono: 'IBM Plex Mono', 'Consolas', monospace;
+  --ops-display: 'Bricolage Grotesque', 'IBM Plex Sans', sans-serif;
+
+  background: var(--ops-page);
+  color: var(--ops-ink);
+  font-family: var(--ops-sans);
+  font-size: 14px;
+  line-height: 1.45;
+  /* Pull out of AdminLayout's content padding so the bar and strip run full bleed,
+     exactly as they do in the template. */
+  margin: -1.5rem -0.75rem;
+}
+
+.platform-ops a { color: var(--ops-muted); }
+.platform-ops a:hover { color: var(--ops-heading); }
+
+/* --- top bar ---------------------------------------------------------------------- */
+.ops-bar {
+  background: var(--ops-bar);
+  color: var(--ops-bar-ink);
+  padding: 12px 24px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+.ops-bar strong { font-size: 15px; }
+.ops-route {
+  font-family: var(--ops-mono);
+  font-size: 12px;
+  background: var(--ops-chip);
+  border-radius: 6px;
+  padding: 3px 10px;
+}
+.ops-standing {
+  margin-left: auto;
+  font-size: 12px;
+  border: 1px solid var(--ops-chip-border);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+
+/* --- tab strip -------------------------------------------------------------------- */
+.ops-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 24px;
+  background: var(--ops-strip);
+  border-bottom: 1px solid var(--ops-border);
+}
+.ops-tab {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;           /* touch target, template value */
+  padding: 0 16px;
+  border-radius: 8px;
+  border: 1px solid var(--ops-border);
+  background: var(--ops-card);
+  color: var(--ops-ink);
+  text-decoration: none;
+  font-weight: 500;
+}
+.ops-tab:hover { color: var(--ops-ink); border-color: var(--ops-btn-border); }
+.ops-tab[aria-current='page'] {
+  border-color: var(--ops-action);
+  background: var(--ops-action);
+  color: #FFFFFF;
+  font-weight: 600;
+}
+/* A tab whose screen is designed but not built. It is not a link, and it says why on hover
+   rather than pretending to be clickable and going nowhere. */
+.ops-tab[aria-disabled='true'] {
+  color: var(--ops-muted);
+  background: transparent;
+  border-style: dashed;
+  cursor: not-allowed;
+}
+
+/* --- page ------------------------------------------------------------------------- */
+.ops-main {
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 28px 24px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.ops-question {
+  margin: 0;
+  font-family: var(--ops-display);
+  font-size: 34px;
+  line-height: 1.1;
+  font-weight: 700;
+}
+.ops-subtitle { margin: 6px 0 0; color: var(--ops-muted); font-size: 15px; }
+
+.ops-grid { display: flex; flex-wrap: wrap; gap: 16px; }
+
+/* --- card ------------------------------------------------------------------------- */
+.ops-card {
+  /* min() rather than a bare 480px: a flex-basis wider than the viewport makes this card's
+     min-content contribution 480px, and the admin shell's content column is a flex item
+     without min-width:0, so it refuses to shrink below that and the WHOLE page scrolls
+     sideways on a phone. */
+  /* 440, not the template's 480. The template was drawn full-bleed at 1280; inside
+     AdminLayout the sidebar takes 248px and the two containers another 96, leaving 936.
+     Two 480px cards plus the gap need 976, so at exactly 1280 the four cards stacked into
+     a long scroll and lost the two-by-two the design is built around. 440 keeps it. */
+  flex: 1 1 min(440px, 100%);
+  min-width: 0;               /* without this a long mono string overflows the row */
+  background: var(--ops-card);
+  border: 1px solid var(--ops-border);
+  border-radius: 12px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ops-card--wide { flex-basis: 100%; }
+.ops-card--third { flex-basis: min(340px, 100%); }
+/* A six-column table does not fit a list-sized card. At 440 the error-class column fell off
+   the right edge, and that column is the coverage gap the card exists to show, so it is the
+   one that must not be the casualty. The template wraps its table in overflow-x:auto and so
+   do we, but scrolling to reach a key column is a last resort, not a layout. */
+.ops-card--table { flex-basis: min(760px, 100%); }
+
+.ops-card > div { min-width: 0; }
+
+.ops-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+.ops-card-head h2 { margin: 0; font-size: 17px; color: var(--ops-heading); font-weight: 600; }
+.ops-basis { font-size: 12px; color: var(--ops-muted); }
+.ops-note { margin: 0; color: var(--ops-muted); font-size: 13px; }
+
+/* --- rows ------------------------------------------------------------------------- */
+.ops-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 9px 0;
+  border-top: 1px solid var(--ops-divider);
+}
+.ops-row--stacked { flex-direction: column; align-items: stretch; gap: 8px; padding: 10px 0; }
+.ops-row-main { min-width: 0; }
+.ops-row-title { font-weight: 500; overflow-wrap: anywhere; }
+.ops-row-sub {
+  font-family: var(--ops-mono);
+  font-size: 12px;
+  color: var(--ops-muted);
+  /* A file path is one unbroken token, so its min-content width is its full length. Left
+     alone, `backend/src/services/inbox/inboxScheduler.ts:88` sets the floor for the card,
+     the grid and every ancestor up to the page. */
+  overflow-wrap: anywhere;
+}
+.ops-proposal {
+  border: 1px dashed var(--ops-propose);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-family: var(--ops-mono);
+  font-size: 12px;
+  color: var(--ops-muted);
+  overflow-wrap: anywhere;
+}
+
+/* --- pill ------------------------------------------------------------------------- */
+.ops-pill {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.ops-pill--ok   { color: var(--ops-ok-fg);   background: var(--ops-ok-bg); }
+.ops-pill--bad  { color: var(--ops-bad-fg);  background: var(--ops-bad-bg); }
+.ops-pill--warn { color: var(--ops-warn-fg); background: var(--ops-warn-bg); }
+.ops-pill--off  { color: var(--ops-off-fg);  background: var(--ops-off-bg); }
+
+/* --- table ------------------------------------------------------------------------ */
+.ops-table-wrap {
+  overflow-x: auto;
+  /* `width: 0; min-width: 100%` is doing real work, not belt and braces.
+     `overflow-x: auto` lets the table SCROLL, but the wrapper still reports the table's
+     min-content width upward, and the admin shell's content column is a flex item without
+     `min-width: 0`, so it refuses to shrink below that: at 390px the whole page scrolled
+     sideways to 586px while every other admin page stayed at 390. Measured, bisected to
+     this card, and fixed here. `width: 0` drops the min-content contribution; `min-width:
+     100%` gives the width back from the parent, which is a definite size. */
+  width: 0;
+  min-width: 100%;
+}
+.ops-table { width: 100%; border-collapse: collapse; }
+.ops-table th {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ops-muted);
+  font-weight: 600;
+  text-align: left;
+  padding: 0 12px 6px 0;
+  white-space: nowrap;
+}
+.ops-table td {
+  font-size: 13px;
+  padding: 9px 12px 9px 0;
+  border-top: 1px solid var(--ops-divider);
+  vertical-align: top;
+}
+.ops-table .ops-mono { font-family: var(--ops-mono); font-size: 12px; }
+.ops-table .ops-nowrap { white-space: nowrap; }
+.ops-table .ops-name { font-weight: 500; }
+.ops-outcome-ok { color: var(--ops-ok-fg); font-weight: 600; }
+.ops-outcome-bad { color: var(--ops-bad-fg); font-weight: 600; }
+.ops-outcome-off { color: var(--ops-muted); font-weight: 600; }
+
+/* --- actions ---------------------------------------------------------------------- */
+.ops-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: auto;           /* floors the button row so cards in a row line up */
+}
+.ops-btn {
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 8px;
+  border: 1px solid var(--ops-btn-border);
+  background: var(--ops-card);
+  color: var(--ops-ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ops-btn--primary { border-color: var(--ops-action); background: var(--ops-action); color: #FFFFFF; }
+.ops-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.platform-ops :focus-visible {
+  outline: 3px solid var(--ops-action);
+  outline-offset: 2px;
+}
+
+/* --- states ----------------------------------------------------------------------- */
+.ops-empty { color: var(--ops-muted); font-size: 13px; padding: 10px 0; }
+.ops-failed {
+  border: 2px solid var(--ops-action);
+  border-radius: 12px;
+  background: var(--ops-card);
+  padding: 18px 20px;
+}
+.ops-failed h2 { margin: 0 0 6px; font-size: 17px; color: var(--ops-heading); }
+
+@media (prefers-reduced-motion: reduce) {
+  .platform-ops * { transition: none !important; animation: none !important; }
+}
