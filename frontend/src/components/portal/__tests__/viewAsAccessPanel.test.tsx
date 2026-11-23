@@ -25,14 +25,18 @@ import ReadOnlyBanner from '../ReadOnlyBanner';
 
 const tok = (claims: Record<string, unknown>): string => `h.${btoa(JSON.stringify(claims))}.s`;
 
-let authToken: string | null = null;
+// The `mock` prefix on these two is REQUIRED, not a style choice. `jest.mock` is hoisted above
+// every declaration in the file, so babel-plugin-jest-hoist refuses a factory that closes over an
+// ordinary variable ("not allowed to reference any out-of-scope variables") and only exempts names
+// beginning with `mock`. Renaming either one back makes the whole suite fail to run.
+let mockAuthToken: string | null = null;
 jest.mock('../../../contexts/ParticipantAuthContext', () => ({
-  useParticipantAuth: () => ({ token: authToken }),
+  useParticipantAuth: () => ({ token: mockAuthToken }),
 }));
 
-let mgmt = { is_mgmt: true, role: 'marketing', label: 'Marketing', sections: ['dashboard', 'campaigns', 'brands', 'agents'], loading: false };
+let mockMgmt = { is_mgmt: true, role: 'marketing', label: 'Marketing', sections: ['dashboard', 'campaigns', 'brands', 'agents'], loading: false };
 jest.mock('../../../pages/portal/useMgmtStatus', () => ({
-  useMgmtStatus: () => ({ ...mgmt, canSection: (s: string) => mgmt.sections.includes(s) }),
+  useMgmtStatus: () => ({ ...mockMgmt, canSection: (s: string) => mockMgmt.sections.includes(s) }),
 }));
 
 /** Sarbjit's real grants: `mgmt_role: marketing` plus the one extra section. */
@@ -41,8 +45,8 @@ const SARBJIT = ['dashboard', 'campaigns', 'brands', 'agents'];
 let container: HTMLDivElement;
 let root: Root;
 beforeEach(() => {
-  authToken = null;
-  mgmt = { is_mgmt: true, role: 'marketing', label: 'Marketing', sections: [...SARBJIT], loading: false };
+  mockAuthToken = null;
+  mockMgmt = { is_mgmt: true, role: 'marketing', label: 'Marketing', sections: [...SARBJIT], loading: false };
   container = document.createElement('div');
   document.body.appendChild(container);
 });
@@ -155,14 +159,14 @@ describe('the scoped-access panel', () => {
 
 describe('the read-only banner that opens it', () => {
   it('renders nothing at all outside a read-only session', async () => {
-    authToken = tok({ sub: 'member-sub' });
+    mockAuthToken = tok({ sub: 'member-sub' });
     await mount(<ReadOnlyBanner />);
     expect(text()).toBe('');
     expect(q('[data-testid="ro-see-access"]')).toBeNull();
   });
 
   it('offers the button in a read-only session, at a label that does not grow with an email', async () => {
-    authToken = tok({ sub: 'member-sub', read_only: true, email: 'sarbjitsaini83@yahoo.com' });
+    mockAuthToken = tok({ sub: 'member-sub', read_only: true, email: 'sarbjitsaini83@yahoo.com' });
     await mount(<ReadOnlyBanner />);
     const btn = q('[data-testid="ro-see-access"]');
     expect(btn?.textContent).toBe('What can they reach?');
@@ -171,7 +175,7 @@ describe('the read-only banner that opens it', () => {
   });
 
   it('opens the panel on click, for the person being viewed', async () => {
-    authToken = tok({ sub: 'member-sub', read_only: true, email: 'sarbjitsaini83@yahoo.com' });
+    mockAuthToken = tok({ sub: 'member-sub', read_only: true, email: 'sarbjitsaini83@yahoo.com' });
     await mount(<ReadOnlyBanner />);
     expect(q('[role="dialog"]')).toBeNull(); // not mounted until asked, so no request is made
     await act(async () => { (q('[data-testid="ro-see-access"]') as HTMLButtonElement).click(); });
@@ -180,7 +184,7 @@ describe('the read-only banner that opens it', () => {
   });
 
   it('renders the dialog OUTSIDE the aria-live banner, not inside it', async () => {
-    authToken = tok({ sub: 'member-sub', read_only: true, email: 'x@example.com' });
+    mockAuthToken = tok({ sub: 'member-sub', read_only: true, email: 'x@example.com' });
     await mount(<ReadOnlyBanner />);
     await act(async () => { (q('[data-testid="ro-see-access"]') as HTMLButtonElement).click(); });
     const banner = q('.ro-banner');
@@ -192,7 +196,7 @@ describe('the read-only banner that opens it', () => {
   });
 
   it('closes again from the panel', async () => {
-    authToken = tok({ sub: 'member-sub', read_only: true, email: 'x@example.com' });
+    mockAuthToken = tok({ sub: 'member-sub', read_only: true, email: 'x@example.com' });
     await mount(<ReadOnlyBanner />);
     await act(async () => { (q('[data-testid="ro-see-access"]') as HTMLButtonElement).click(); });
     await act(async () => { (q('[data-testid="va-close"]') as HTMLButtonElement).click(); });
