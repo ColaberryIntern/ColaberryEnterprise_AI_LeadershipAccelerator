@@ -35,7 +35,7 @@ function errorProblems(err: any): string[] {
   return [err?.response?.data?.error || err?.message || 'Something went wrong'];
 }
 
-export function RulesEditor({ initial, hardRules, onSaved }: { initial: MayaBrainRules; hardRules: string; onSaved?: (r: MayaBrainRules) => void }) {
+export function RulesEditor({ initial, hardRules, onSaved, brandId = null }: { initial: MayaBrainRules; hardRules: string; onSaved?: (r: MayaBrainRules) => void; brandId?: string | null }) {
   const [rules, setRules] = useState<MayaBrainRules>(initial);
   const [neverSay, setNeverSay] = useState(initial.neverSay.join('\n'));
   const [problems, setProblems] = useState<string[]>([]);
@@ -54,7 +54,7 @@ export function RulesEditor({ initial, hardRules, onSaved }: { initial: MayaBrai
     setBusy(true); setProblems([]); setSaved(false);
     try {
       const next = { ...rules, neverSay: neverSay.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean) };
-      const r = await saveBrainRules(next);
+      const { rules: r } = await saveBrainRules(next, brandId);
       setRules(r); setNeverSay(r.neverSay.join('\n')); setSaved(true);
       onSaved?.(r);
     } catch (err) {
@@ -270,7 +270,14 @@ function ApprovalShelf() {
   );
 }
 
-export default function BrainTab() {
+/**
+ * `brandId` is OPTIONAL and defaults to null, which reads and writes the shared
+ * rule set. Explorer Growth's own page renders `<BrainTab />` with no props and
+ * is therefore unchanged by the per-brand work - AD-1 holds without that page
+ * being edited at all. The merged Growth Journey workspace passes the brand it
+ * has selected.
+ */
+export default function BrainTab({ brandId = null }: { brandId?: string | null } = {}) {
   const [c, setC] = useState<BrainControl | null>(null);
   const [error, setError] = useState(false);
   const [sample, setSample] = useState<BrainSampleResult | null>(null);
@@ -278,9 +285,13 @@ export default function BrainTab() {
   const [sampleProblems, setSampleProblems] = useState<string[]>([]);
   useEffect(() => {
     let live = true;
-    getBrainControl().then((x) => { if (live) setC(x); }).catch(() => { if (live) setError(true); });
+    // Cleared first, so switching brand shows the loading state rather than the
+    // PREVIOUS brand's rules sitting there looking like this brand's.
+    setC(null);
+    setError(false);
+    getBrainControl(brandId).then((x) => { if (live) setC(x); }).catch(() => { if (live) setError(true); });
     return () => { live = false; };
-  }, []);
+  }, [brandId]);
 
   const write = async () => {
     setSampling(true); setSampleProblems([]);
@@ -298,7 +309,17 @@ export default function BrainTab() {
         {c.rules_problems.length > 0 && <div className="text-warning mt-1">{c.rules_problems.join(' · ')}</div>}
         {!c.rules_stored && <div className="text-muted mt-1">These are the built-in rules; saving makes them yours.</div>}
       </div>
-      <SectionCard title="Rules" icon="settings-4-line"><RulesEditor initial={c.rules} hardRules={c.hard_rules} /></SectionCard>
+      <SectionCard title="Rules" icon="settings-4-line">
+        {/* Keyed on the source as well as the brand: when a brand falls back to
+            the shared set and then saves its own, the editor must remount with
+            the brand's rules rather than keep the fallback it was seeded with. */}
+        <RulesEditor
+          key={`${brandId ?? 'global'}:${c.rules_source}`}
+          initial={c.rules}
+          hardRules={c.hard_rules}
+          brandId={brandId}
+        />
+      </SectionCard>
       <SectionCard title="What the brain can choose from" icon="stack-line"><InventoryBody c={c} /></SectionCard>
       <SectionCard title="Approval shelf (AI facts and build prompts)" icon="checkbox-circle-line"><ApprovalShelf /></SectionCard>
       <SectionCard title="What each Explorer already got" icon="history-line"><GivenBody c={c} /></SectionCard>

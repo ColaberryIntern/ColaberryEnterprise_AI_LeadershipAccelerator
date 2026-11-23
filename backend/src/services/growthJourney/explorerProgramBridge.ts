@@ -2,6 +2,7 @@ import { ExplorerJourneyProfile, JourneyProgram, GrowthJourneyEnrollment } from 
 import { subjectRef } from '../../models/GrowthJourneyEnrollment';
 import { resolveBrandBySlug } from '../../modules/tenancy/tenantResolver';
 import { PROGRAM_SLUGS } from '../../seeds/growthJourney/journeyProgramDefinitions';
+import { EXPLORER_BRAND } from '../explorerIdentity';
 
 /**
  * Map the existing Explorer population onto the generic programme (T205).
@@ -51,10 +52,22 @@ import { PROGRAM_SLUGS } from '../../seeds/growthJourney/journeyProgramDefinitio
  * when there is something real to base it on.
  */
 
-/** Explorer's own programme identity: Colaberry Training's learner journey. */
+/**
+ * Explorer's own programme identity: Colaberry Training's learner journey.
+ *
+ * The two BRAND slugs now come from `services/explorerIdentity`, so there is one
+ * definition of which brand Explorer's population belongs to rather than two
+ * that can drift. They moved because `explorerGrowth` needs the same identity to
+ * read that brand's Maya rules, and `growthJourney` already imports
+ * `explorerGrowth`, so importing this file from there would have closed a cycle.
+ * The programme slug stays here: it is the journey's concern, and pulling it
+ * into the shared module would drag this tree's dependencies in with it.
+ *
+ * Every existing importer of `EXPLORER_PROGRAM` is untouched by that move.
+ */
 export const EXPLORER_PROGRAM = {
-  tenantSlug: 'colaberry',
-  brandSlug: 'colaberry-training',
+  tenantSlug: EXPLORER_BRAND.tenantSlug,
+  brandSlug: EXPLORER_BRAND.brandSlug,
   programSlug: PROGRAM_SLUGS.colaberryTraining,
 } as const;
 

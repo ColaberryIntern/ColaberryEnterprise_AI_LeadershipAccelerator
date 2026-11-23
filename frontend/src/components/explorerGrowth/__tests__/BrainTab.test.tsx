@@ -24,6 +24,10 @@ const rules: MayaBrainRules = {
 
 const control: BrainControl = {
   rules, rules_problems: [], rules_stored: false, hard_rules: 'HARD RULES\n- Never sell.', send_enabled: false,
+  // `default` and null, because this fixture is Explorer Growth's own page,
+  // which reads the shared rule set and names no brand. Those are the values
+  // the server returns for that case.
+  rules_source: 'default', brand_id: null,
   inventory: {
     builders: [{ id: 'builder:a', name: 'Kesete', role: null, title: 'Intake agent', url: 'https://hire.refactored.ai/case-studies/a' }],
     events: [{ id: 'event:x', title: 'AI Build Night', when: 'Thursday, November 20, 6:30 PM CT', openHouse: false }],

@@ -89,7 +89,13 @@ function defaultDeps(): ExplorerSendGuardDeps {
       );
       return r?.last ? (Date.now() - new Date(r.last).getTime()) / 3_600_000 : null;
     },
-    minHours: async () => (await (await import('../brainRules')).loadBrainRules()).rules.brainPickMinHours,
+    // Explorer's brand first, global as the fallback - the same resolution the
+    // draft renderer and the governor use, so one cadence governs all three
+    // rather than the guard quietly enforcing a different number.
+    minHours: async () => {
+      const brandId = await (await import('../../explorerIdentity')).resolveExplorerBrandId();
+      return (await (await import('../brainRules')).loadBrainRules(brandId)).rules.brainPickMinHours;
+    },
     draftCurrent: async (id) => {
       const [r] = await sequelize.query<{ status: string }>(
         `SELECT status FROM scheduled_emails WHERE id::text = :id LIMIT 1`,

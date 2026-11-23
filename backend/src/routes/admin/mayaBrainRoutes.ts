@@ -117,6 +117,18 @@ router.post(`${BASE}/items/:id/retire`, requireFullAdmin, async (req: Request, r
  * PUT  /api/admin/maya-brain/rules       save the rules (422 with every problem; nothing saved)
  * POST /api/admin/maya-brain/sample      { people 1-5, emails_each 1-3 } -> drafts, nothing written or sent
  */
+/**
+ * Optional brand scope on the read and the write.
+ *
+ * ABSENT MEANS THE GLOBAL SET, not "any brand". That is the behaviour every
+ * existing caller already gets, so this parameter cannot change what an
+ * un-updated client sees.
+ *
+ * `.strict()` so a typo like `?brandId=` is a 400 rather than silently editing
+ * the global rules while the operator believes they are editing one brand's.
+ */
+const BrandQuery = z.object({ brand_id: z.string().uuid().optional() }).strict();
+
 const SampleBody = z.object({
   people: z.coerce.number().int().min(1).max(5).optional(),
   emails_each: z.coerce.number().int().min(1).max(3).optional(),
@@ -131,20 +143,27 @@ const RulesBody = z.object({
   openHouseHold: z.literal(true).optional(),
 }).strict();
 
-router.get(`${BASE}/control`, async (_req: Request, res: Response) => {
+router.get(`${BASE}/control`, async (req: Request, res: Response) => {
+  const q = BrandQuery.safeParse(req.query);
+  if (!q.success) { res.status(400).json({ error: 'invalid query', issues: q.error.flatten() }); return; }
   try {
     const { getBrainControl } = await import('../../services/explorerGrowth/brainControl');
-    res.json(await getBrainControl());
+    res.json(await getBrainControl(q.data.brand_id ?? null));
   } catch (e: any) { fail(res, e); }
 });
 
 router.put(`${BASE}/rules`, requireFullAdmin, async (req: Request, res: Response) => {
   const parsed = RulesBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: 'invalid body', issues: parsed.error.flatten() }); return; }
+  const q = BrandQuery.safeParse(req.query);
+  if (!q.success) { res.status(400).json({ error: 'invalid query', issues: q.error.flatten() }); return; }
   try {
     const { saveBrainRules, BrainRulesError } = await import('../../services/explorerGrowth/brainRules');
     try {
-      res.json({ rules: await saveBrainRules(parsed.data, who(req)) });
+      // The brand is echoed back, so a client cannot show "saved" against a
+      // brand it did not actually write to.
+      const saved = await saveBrainRules(parsed.data, who(req), q.data.brand_id ?? null);
+      res.json({ rules: saved, brand_id: q.data.brand_id ?? null });
     } catch (e: any) {
       if (e instanceof BrainRulesError) { res.status(422).json({ error: e.message, problems: e.problems }); return; }
       throw e;

@@ -24,6 +24,58 @@ import { EXPLORER_MAYA_VOICE, NURTURE_ROTATION } from './explorerBrainPick';
 
 export const BRAIN_RULES_SETTING = 'maya_brain_rules';
 
+/**
+ * Where a brand's own rules live.
+ *
+ * ─── A SUFFIXED KEY, NOT A NEW TABLE ────────────────────────────────────────
+ *
+ * Maya's role changes by brand - an Enrollment Specialist on Colaberry Training,
+ * a Business Development Specialist on Colaberry Enterprise - and her voice,
+ * never-say list, shelf rotation and cadence are what actually carry that. Until
+ * now they were ONE setting shared by everyone, so the per-brand role shipped in
+ * `brand-setup` was display copy sitting on top of one global personality.
+ *
+ * A new table would be a schema change, which this repo puts behind an
+ * escalation. A suffixed key in the settings store the rules already live in is
+ * a row, not a migration: reversible by deleting it, and invisible to anything
+ * that does not ask for it.
+ *
+ * ─── THE PROPERTY THAT MAKES THIS SAFE TO SHIP ──────────────────────────────
+ *
+ * `loadBrainRules()` with no brand reads exactly the key it always read. A brand
+ * with no row of its own falls back to the global one. So with no brand rows
+ * set - which is every brand on the day this ships - **behaviour is identical to
+ * before, byte for byte**. Per-brand rules begin to matter only when somebody
+ * saves one, and the first save affects only that brand.
+ *
+ * That is deliberate: this change touches the path that decides what Maya says,
+ * and a change there should do nothing until it is asked to.
+ */
+export function brainRulesKeyFor(brandId: string | null | undefined): string {
+  return brandId ? `${BRAIN_RULES_SETTING}:${brandId}` : BRAIN_RULES_SETTING;
+}
+
+/**
+ * Which rules a reader actually got.
+ *
+ * `brand` - this brand has its own set.
+ * `global` - it has none, so the shared set applied.
+ * `default` - nothing is stored anywhere, or the store could not be read, so the
+ *   built-in defaults applied. Distinct from `global` because "nobody has ever
+ *   set these" and "the saved set is in force" are different facts, and an
+ *   operator told the wrong one will edit the wrong thing.
+ */
+export type BrainRulesSource = 'brand' | 'global' | 'default';
+
+export interface LoadedBrainRules {
+  rules: MayaBrainRules;
+  problems: string[];
+  stored: boolean;
+  source: BrainRulesSource;
+  /** Echoed back so a caller cannot mistake whose rules these are. */
+  brand_id: string | null;
+}
+
 /** The shelves an Explorer email can rotate across (their_progress and week_ahead are chosen by rule, not rotation). */
 export const ROTATABLE_SHELVES: readonly BrainPiece[] = [
   'builder_spotlight', 'build_prompt', 'ai_fact', 'community_pulse', 'live_event',
@@ -186,14 +238,49 @@ function defaultDeps(): BrainRulesDeps {
   };
 }
 
-/** The rules in force. An unreadable setting is the defaults (which are today's behavior), and says so. */
-export async function loadBrainRules(deps: BrainRulesDeps = defaultDeps()): Promise<{ rules: MayaBrainRules; problems: string[]; stored: boolean }> {
+/**
+ * The rules in force, for a brand or globally.
+ *
+ * An unreadable setting is the defaults (which are today's behavior), and says so.
+ *
+ * Called with no brand it reads exactly the key it always read, so every existing
+ * caller keeps its current behavior without being edited. Called with a brand it
+ * prefers that brand's own set and falls back to the global one, reporting which
+ * it used rather than leaving the caller to guess.
+ *
+ * The fallback is a read of a SECOND key, not a merge. Half a brand's voice and
+ * half another's would be a personality nobody chose, and no operator could
+ * predict what Maya would say.
+ */
+export async function loadBrainRules(
+  brandId: string | null = null,
+  deps: BrainRulesDeps = defaultDeps()
+): Promise<LoadedBrainRules> {
   try {
+    if (brandId) {
+      const own = await deps.getSetting(brainRulesKeyFor(brandId));
+      // `!= null` on purpose: a saved set is an object, and a brand that saved
+      // one must not fall through to the global set just because some field is
+      // falsy.
+      if (own != null) {
+        return { ...resolveBrainRules(own), stored: true, source: 'brand', brand_id: brandId };
+      }
+    }
     const stored = await deps.getSetting(BRAIN_RULES_SETTING);
-    const r = resolveBrainRules(stored);
-    return { ...r, stored: stored != null };
+    return {
+      ...resolveBrainRules(stored),
+      stored: stored != null,
+      source: stored != null ? 'global' : 'default',
+      brand_id: brandId,
+    };
   } catch (err: any) {
-    return { rules: resolveBrainRules(null).rules, problems: [`the rules could not be read (${err?.message ?? 'error'}); using the defaults`], stored: false };
+    return {
+      rules: resolveBrainRules(null).rules,
+      problems: [`the rules could not be read (${err?.message ?? 'error'}); using the defaults`],
+      stored: false,
+      source: 'default',
+      brand_id: brandId,
+    };
   }
 }
 
@@ -201,11 +288,27 @@ export class BrainRulesError extends Error {
   constructor(public problems: string[]) { super('The brain rules were not saved'); }
 }
 
-/** Save a rule set. Strict: throws BrainRulesError with every problem, and writes nothing, on any problem. */
-export async function saveBrainRules(input: unknown, adminId: string, deps: BrainRulesDeps = defaultDeps()): Promise<MayaBrainRules> {
+/**
+ * Save a rule set, for one brand or globally.
+ *
+ * Strict: throws BrainRulesError with every problem, and writes nothing, on any
+ * problem.
+ *
+ * With a brand it writes ONLY that brand's key. It never touches the global set,
+ * and it never writes the other brands' keys, so saving Colaberry Enterprise's
+ * voice cannot change what Maya says to a Colaberry Training learner. That
+ * isolation is the whole point of the change and is asserted directly in the
+ * tests rather than inferred from the key name.
+ */
+export async function saveBrainRules(
+  input: unknown,
+  adminId: string,
+  brandId: string | null = null,
+  deps: BrainRulesDeps = defaultDeps()
+): Promise<MayaBrainRules> {
   const problems = validateBrainRules(input);
   if (problems.length) throw new BrainRulesError(problems);
   const { rules } = resolveBrainRules(input);
-  await deps.setSetting(BRAIN_RULES_SETTING, rules, adminId);
+  await deps.setSetting(brainRulesKeyFor(brandId), rules, adminId);
   return rules;
 }

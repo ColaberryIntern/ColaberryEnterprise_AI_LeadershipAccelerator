@@ -63,13 +63,13 @@ describe('brain rules: saving is strict', () => {
   });
   it('writes nothing when there is a problem, and every problem is named', async () => {
     const setSetting = jest.fn();
-    await expect(saveBrainRules({ ...valid(), brainPickMinHours: 1 }, 'ali@colaberry.com', { getSetting: jest.fn(), setSetting }))
+    await expect(saveBrainRules({ ...valid(), brainPickMinHours: 1 }, 'ali@colaberry.com', null, { getSetting: jest.fn(), setSetting }))
       .rejects.toBeInstanceOf(BrainRulesError);
     expect(setSetting).not.toHaveBeenCalled();
   });
   it('saves the cleaned rules under the one setting, with who saved them', async () => {
     const setSetting = jest.fn(async () => undefined);
-    const saved = await saveBrainRules({ ...valid(), neverSay: [' circle back ', 'Circle Back'] }, 'ali@colaberry.com', { getSetting: jest.fn(), setSetting });
+    const saved = await saveBrainRules({ ...valid(), neverSay: [' circle back ', 'Circle Back'] }, 'ali@colaberry.com', null, { getSetting: jest.fn(), setSetting });
     expect(saved.neverSay).toEqual(['circle back']);
     expect(setSetting).toHaveBeenCalledWith('maya_brain_rules', expect.objectContaining({ openHouseHold: true }), 'ali@colaberry.com');
   });
@@ -86,7 +86,7 @@ describe('brain rules: reading never fails', () => {
     expect(resolveBrainRules('{nope').rules.brainPickMinHours).toBe(72);
   });
   it('an unreadable setting is the defaults, flagged', async () => {
-    const r = await loadBrainRules({ getSetting: async () => { throw new Error('db down'); }, setSetting: jest.fn() });
+    const r = await loadBrainRules(null, { getSetting: async () => { throw new Error('db down'); }, setSetting: jest.fn() });
     expect(r.rules).toEqual(resolveBrainRules(null).rules);
     expect(r.problems[0]).toContain('could not be read');
   });
