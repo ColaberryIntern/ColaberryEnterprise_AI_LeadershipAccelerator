@@ -49,7 +49,7 @@ export async function postChatAsGuest(
   if (r.n >= CHAT_LIMITS.perGuest) throw new GuestError(429, 'You have reached the chat limit for this class.');
   recent.set(key, { n: r.n + 1, last: now });
 
-  const message = await insertMessage(sessionId, 'guest', formatDisplayName(guest.name), content, { guestId: guest.id });
+  const message = await insertMessage(sessionId, 'attendee', formatDisplayName(guest.name), content, { guestId: guest.id });
   // Fire and forget: the assistant must never hold up, or fail, the attendee's post.
   void runAgent(sessionId, message);
   return { message };

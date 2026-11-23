@@ -8,7 +8,7 @@ import type { LiveChatMessage } from '../../../services/guestCheckinApi';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const M = (id: string, kind: 'guest' | 'assistant', name: string, content: string): LiveChatMessage => ({ id, kind, display_name: name, content, reply_to: null, created_at: 'now' });
+const M = (id: string, kind: 'attendee' | 'assistant', name: string, content: string): LiveChatMessage => ({ id, kind, display_name: name, content, reply_to: null, created_at: 'now' });
 
 let host: HTMLDivElement;
 let root: Root;
@@ -35,16 +35,16 @@ async function typeAndSend(text: string) {
 
 describe('class live chat', () => {
   it('on a computer, is docked open and shows guest and assistant messages', async () => {
-    const load = jest.fn().mockResolvedValue([M('1', 'guest', 'Ana R.', 'Where do I save it?'), M('2', 'assistant', 'Class assistant', '@Ana R. In a note.')]);
+    const load = jest.fn().mockResolvedValue([M('1', 'attendee', 'Ana R.', 'Where do I save it?'), M('2', 'assistant', 'Class assistant', '@Ana R. In a note.')]);
     await mount(load, jest.fn(), 1400);
     expect(q('chat-panel')).not.toBeNull();
     expect(q('chat-open')).toBeNull();
-    expect(q('chat-guest')!.textContent).toContain('Where do I save it?');
+    expect(q('chat-attendee')!.textContent).toContain('Where do I save it?');
     expect(q('chat-assistant')!.textContent).toContain('Class assistant');
   });
 
   it('on a phone, is a Chat button with an unread count that opens the panel', async () => {
-    const load = jest.fn().mockResolvedValue([M('1', 'guest', 'Ana R.', 'hi'), M('2', 'guest', 'Ben K.', 'hello')]);
+    const load = jest.fn().mockResolvedValue([M('1', 'attendee', 'Ana R.', 'hi'), M('2', 'attendee', 'Ben K.', 'hello')]);
     await mount(load, jest.fn(), 390);
     expect(q('chat-panel')).toBeNull();
     expect(q('chat-open')!.textContent).toContain('2');
@@ -56,11 +56,11 @@ describe('class live chat', () => {
   });
 
   it('sends a message and shows it straight away', async () => {
-    const send = jest.fn().mockResolvedValue(M('9', 'guest', 'Ana R.', 'my question'));
+    const send = jest.fn().mockResolvedValue(M('9', 'attendee', 'Ana R.', 'my question'));
     await mount(jest.fn().mockResolvedValue([]), send, 1400);
     await typeAndSend('my question');
     expect(send).toHaveBeenCalledWith('my question');
-    expect(q('chat-guest')!.textContent).toContain('my question');
+    expect(q('chat-attendee')!.textContent).toContain('my question');
     expect((q('chat-input') as HTMLInputElement).value).toBe('');
   });
 

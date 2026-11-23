@@ -7,7 +7,7 @@ import { sequelize } from '../../config/database';
 
 export interface ChatMessage {
   id: string;
-  kind: 'guest' | 'assistant';
+  kind: 'attendee' | 'assistant';
   display_name: string;
   content: string;
   reply_to: string | null;
@@ -24,7 +24,7 @@ export interface ChatEscalation {
 }
 
 export async function insertMessage(
-  sessionId: string, kind: 'guest' | 'assistant', displayName: string, content: string,
+  sessionId: string, kind: 'attendee' | 'assistant', displayName: string, content: string,
   opts: { guestId?: string | null; replyTo?: string | null } = {},
 ): Promise<ChatMessage> {
   const [row] = await sequelize.query<ChatMessage>(

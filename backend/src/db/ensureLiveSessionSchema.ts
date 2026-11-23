@@ -215,13 +215,13 @@ export async function ensureLiveSessionSchema(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS idx_session_guest_questions_session_created ON session_guest_questions (session_id, created_at)`,
 
     // ---- session_live_chat + session_chat_escalations (class live chat, services/liveChat) ----
-    // 2026-11-23: a chat everyone checked in can see. kind 'guest' is an attendee (display name
+    // 2026-11-23: a chat everyone checked in can see. kind 'attendee' is a checked-in attendee (display name
     // only, "Ana R."); kind 'assistant' is the class assistant, which answers what it is sure of
     // and escalates the rest to the presenter window as multiple choice.
     `CREATE TABLE IF NOT EXISTS session_live_chat (
        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
        session_id UUID NOT NULL REFERENCES live_sessions(id),
-       kind VARCHAR(20) NOT NULL CHECK (kind IN ('guest', 'assistant')),
+       kind VARCHAR(20) NOT NULL CHECK (kind IN ('attendee', 'assistant')),
        guest_id UUID REFERENCES session_guests(id),
        display_name VARCHAR(100) NOT NULL,
        content TEXT NOT NULL,

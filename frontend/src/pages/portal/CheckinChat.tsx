@@ -82,7 +82,7 @@ export default function CheckinChat({ load, send }: Props): React.ReactElement {
       <div className="cbchat-list">
         {messages.length === 0 && <p className="cbchat-empty">No messages yet. Say hello.</p>}
         {messages.map((m) => (
-          <div key={m.id} className={`cbchat-msg${m.kind === 'assistant' ? ' is-ai' : ''}`} data-testid={m.kind === 'assistant' ? 'chat-assistant' : 'chat-guest'}>
+          <div key={m.id} className={`cbchat-msg${m.kind === 'assistant' ? ' is-ai' : ''}`} data-testid={m.kind === 'assistant' ? 'chat-assistant' : 'chat-attendee'}>
             <p className="cbchat-who">{m.display_name}</p>
             <p className="cbchat-text">{m.content}</p>
           </div>

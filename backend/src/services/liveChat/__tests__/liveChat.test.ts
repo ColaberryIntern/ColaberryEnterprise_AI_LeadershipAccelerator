@@ -22,7 +22,7 @@ const mockFind = findGuest as unknown as jest.Mock;
 const mockChat = chatJson as unknown as jest.Mock;
 const S = store as unknown as Record<string, jest.Mock>;
 const SID = '5b8a95b7-1a88-42d5-b257-fd786d071f6e';
-const MSG = { id: 'm1', kind: 'guest', display_name: 'Ana R.', content: 'Where do I save the skill?', reply_to: null, created_at: 'now' };
+const MSG = { id: 'm1', kind: 'attendee', display_name: 'Ana R.', content: 'Where do I save the skill?', reply_to: null, created_at: 'now' };
 
 async function status(p: Promise<unknown>): Promise<number> {
   try { await p; return 200; } catch (e) { return e instanceof GuestError ? e.status : -1; }
@@ -79,7 +79,7 @@ describe('postChatAsGuest', () => {
   it('saves the message under the redacted name and hands it to the assistant', async () => {
     const agent = jest.fn().mockResolvedValue('answered');
     const r = await postChatAsGuest(SID, 'pass', '  hello  ', agent);
-    expect(S.insertMessage).toHaveBeenCalledWith(SID, 'guest', 'Ana R.', 'hello', { guestId: 'g1' });
+    expect(S.insertMessage).toHaveBeenCalledWith(SID, 'attendee', 'Ana R.', 'hello', { guestId: 'g1' });
     expect(agent).toHaveBeenCalledWith(SID, r.message);
   });
   it('refuses no pass (401), empty or long text (400) and fast repeats (429)', async () => {

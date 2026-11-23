@@ -151,7 +151,7 @@ export async function guestRun(
 /** One message in the class live chat (backend services/liveChat). */
 export interface LiveChatMessage {
   id: string;
-  kind: 'guest' | 'assistant';
+  kind: 'attendee' | 'assistant';
   display_name: string;
   content: string;
   reply_to: string | null;
