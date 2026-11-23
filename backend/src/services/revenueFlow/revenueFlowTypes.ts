@@ -8,7 +8,7 @@
  * dependency graph acyclic, which the repo's composition rule asks for explicitly.
  */
 import { TileStatus } from '../commercialization/commercializationTiles';
-import { ClassificationKey, FlowStreamKey } from './revenueClassifications';
+import { ClassificationKey, FlowStreamKey, FlowTone } from './revenueClassifications';
 
 /**
  * A money figure, carried as cents AND as a formatted string.
@@ -75,6 +75,108 @@ export interface FunnelStage {
   definition: string;
 }
 
+/**
+ * Which half of the path into a revenue number a source sits in.
+ *
+ * `asked` is what we did: a campaign went out to a list. `arrived` is who turned up and paid.
+ * They are two bands rather than one list because NOTHING IN THE SCHEMA JOINS THEM, and a
+ * single list would imply it did.
+ */
+export type DemandBandKey = 'asked' | 'arrived';
+
+/**
+ * One campaign or one acquisition channel, as the path in front of a revenue number shows it.
+ *
+ * ── WHY THERE IS NO MONEY FIELD ON THIS TYPE, AT ALL ─────────────────────────────────────
+ *
+ * This is the single most important decision in the demand path, and it is structural rather
+ * than a matter of taste.
+ *
+ * A source could plausibly carry the MRR of the members attributable to it. `channelTruth`
+ * already computes exactly that. But the stream this band sits in front of prints its own
+ * headline figure, derived differently: per PERSON, annualized, over active rows carrying a
+ * PaySimple payment id. A per-channel monthly sum and a per-person annualized headline do not
+ * reconcile, and two revenue numbers disagreeing by a reconciliation step on one screen is how
+ * a reader stops trusting both.
+ *
+ * So money stays in the one place that owns it, and this type counts PEOPLE and MESSAGES.
+ * There is no field here for a figure, which means the band cannot drift into a second opinion
+ * about revenue even if someone later wants it to. The absence is load bearing and is asserted
+ * in the tests.
+ */
+export interface DemandSource {
+  key: string;
+  label: string;
+  /** The headline count for this source. */
+  count: number;
+  /**
+   * What `count` counts, in words, because the units genuinely differ between sources and
+   * between measures. The alumni re-engagement campaign sent 1,200 emails to 557 people: a
+   * column headed "sent" beside a column headed "asked" invites the reader to subtract them.
+   */
+  countLabel: string;
+  /** Further measures in reading order. `count: null` means not recorded, never zero. */
+  measures: DemandMeasure[];
+  status: TileStatus;
+  /**
+   * Whether this source can be tied to a downstream revenue record at all.
+   *
+   * False for every campaign, and that is a fact about the schema rather than about the
+   * campaign: `subscriptions` carries no campaign, source or UTM column, only `enrollment_id`.
+   */
+  attributable: boolean;
+  /** One sentence a reader can act on. Why this number is what it is, or why it is absent. */
+  note: string;
+  /**
+   * The tone this source wears.
+   *
+   * ── WHY A TONE AND NOT A CLASSIFICATION KEY ──────────────────────────────────────────
+   *
+   * Every other coloured thing on this board carries a `ClassificationKey` and looks its
+   * colour up in the registry shipped alongside. A demand source deliberately does not, for
+   * two reasons that point the same way.
+   *
+   * The registry's job is to let an EVENT carry nothing but a key and still be readable: the
+   * label, glyph and meaning live in one place so a pill and the legend cannot disagree. A
+   * demand source is not an event and will not become one. Nothing in the schema holds a
+   * dated "this campaign asked this person on this day" row that `events[]` could carry, so a
+   * classification minted for these sources would appear in the legend explaining a meaning no
+   * pill on the timeline ever wears. The registry's own header forbids exactly that kind of
+   * aspirational entry.
+   *
+   * And a source is already self-describing. It ships its own label, its own units, its own
+   * note and its own status, so it needs no legend to be read. The tone carries the one thing
+   * left, which is how worried to be, and the frontend maps tone to paint as it already does
+   * everywhere else. The backend still owns the meaning and the frontend still owns the paint.
+   */
+  tone: FlowTone;
+}
+
+/** One measure under a source. Null is "nobody recorded this", which is not zero. */
+export interface DemandMeasure {
+  label: string;
+  count: number | null;
+  note: string;
+}
+
+/** One band of the path: everything we asked, or everyone who arrived. */
+export interface DemandBand {
+  key: DemandBandKey;
+  label: string;
+  /** What this band may and may not claim, in one sentence. */
+  definition: string;
+  sources: DemandSource[];
+  /**
+   * On the `asked` band: why these numbers cannot reach the revenue figure below them.
+   * Null on `arrived`, whose numbers can.
+   *
+   * Rendered as a visible break between the bands rather than a footnote, because the whole
+   * question this path answers is "what led to this number", and the honest answer contains a
+   * gap. A gap drawn is a finding; a gap omitted is a claim.
+   */
+  attributionBreak: string | null;
+}
+
 /** One revenue stream: its headline, its funnel, and why it says what it says. */
 export interface RevenueStream {
   key: FlowStreamKey;
@@ -87,6 +189,14 @@ export interface RevenueStream {
   caveat: string | null;
   /** The existing Revenue Room drill-down this stream opens into. */
   drillDownKey: string | null;
+  /**
+   * The path in front of this stream's number: what we asked, then who arrived.
+   *
+   * Undefined where no demand path can be built, which is most streams today. Undefined
+   * rather than an empty array, so "this stream has no measurable demand path" cannot be
+   * rendered as "nobody was asked".
+   */
+  demand?: DemandBand[];
   /**
    * The individual bids behind the government stream, so the page can offer a price control
    * next to the count of unpriced ones.

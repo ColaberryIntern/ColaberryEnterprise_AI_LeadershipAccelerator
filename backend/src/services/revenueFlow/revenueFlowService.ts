@@ -48,6 +48,7 @@ import {
   classificationFor,
 } from './revenueClassifications';
 import { buildEnterpriseFlow } from './enterpriseFlow';
+import { getMembershipDemandPath } from './demandPathService';
 import { buildGovFlow } from './govBidFlow';
 import { buildIdeaFlows } from './ideaFlow';
 import { buildMembershipFlow } from './membershipFlow';
@@ -113,7 +114,7 @@ export async function getRevenueFlowBoard(
   const windowStart = new Date(now.getTime() - windowDays * 24 * 60 * 60 * 1000);
   const caveats: string[] = [];
 
-  const [membership, gov, enterprise, ideas] = await Promise.all([
+  const [membership, gov, enterprise, ideas, demand] = await Promise.all([
     buildMembershipFlow(windowStart).catch((e: Error) => {
       caveats.push(`The membership stream could not be built: ${e.message}`);
       return null;
@@ -130,6 +131,17 @@ export async function getRevenueFlowBoard(
       caveats.push(`The declared-but-unbuilt sources could not be built: ${e.message}`);
       return null;
     }),
+    // The path in front of the membership number: what we asked, then who arrived. Built
+    // beside the streams rather than inside `membershipFlow` because it spans marketing and
+    // revenue, and because the honesty assertion in `demandPath` throws by design - losing the
+    // band and a caveat is the right cost, losing the stream is not.
+    getMembershipDemandPath().catch((e: Error) => {
+      caveats.push(
+        'The path in front of the membership number could not be built, so the campaigns and '
+        + `channels feeding it are not shown: ${e.message}`,
+      );
+      return undefined;
+    }),
   ]);
 
   // Order is the page's reading order and is fixed: what earns today, then what might, then
@@ -141,8 +153,16 @@ export async function getRevenueFlowBoard(
   // the intake is live - so grouping it with the declared-but-unbuilt sources would say
   // something false about it. It has simply produced nothing yet, which is a different and
   // more actionable fact than "not set up".
+  // The demand path rides on the membership stream, which is the only stream whose demand can
+  // be measured today: `leads.source` resolves for every person currently paying. Attached
+  // without mutating the builder's object, and omitted entirely rather than set to an empty
+  // array, so "no measurable path" never renders as "nobody was asked".
+  const membershipStream = membership?.stream
+    ? { ...membership.stream, ...(demand ? { demand } : {}) }
+    : undefined;
+
   const streams = [
-    membership?.stream, gov?.stream, enterprise?.stream, ...(ideas?.streams ?? []),
+    membershipStream, gov?.stream, enterprise?.stream, ...(ideas?.streams ?? []),
   ].filter(Boolean) as RevenueFlowBoard['streams'];
   for (const s of streams) if (s.caveat) caveats.push(s.caveat);
 
