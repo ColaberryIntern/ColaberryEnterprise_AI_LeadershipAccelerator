@@ -84,6 +84,8 @@ export type CancellationReason =
   | 'lead_removed_from_campaign'
   // OH1w: one campaign at a time. Joining a campaign as a MOVE ends the old membership.
   | 'moved_to_another_campaign'
+  // OH1z: everything queued for this member was over a week overdue and would never send.
+  | 'stale_overdue'
   // Sequence lifecycle
   | 'sequence_deleted'
   | 'sequence_reenrolled'
