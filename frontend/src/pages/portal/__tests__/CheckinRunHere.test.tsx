@@ -101,3 +101,14 @@ describe('Run it here', () => {
     expect(q('open-in-claude')).not.toBeNull();
   });
 });
+
+describe('install help (2026-11-23)', () => {
+  it('a phone with Run it here gets no "get the Claude app" help', async () => {
+    await mount(client(jest.fn()), 390);
+    expect(q('get-claude')).toBeNull();
+  });
+  it('a computer keeps the help, for anyone who prefers claude.ai', async () => {
+    await mount(client(jest.fn()), 1400);
+    expect(q('get-claude')).not.toBeNull();
+  });
+});
