@@ -88,6 +88,9 @@ describe('a hard rule is not an approval gate', () => {
     await scopeAgents(PLAN(), { client });
     const system = (client.create.mock.calls[0] as any)[0].messages[0].content as string;
     expect(system).toMatch(/EXACTLY that agent's output name/);
+    // ShiftFill v7: three agents read "Shift acceptance", which no agent output.
+    expect(system).toMatch(/Every input must be either another agent's output \(by its exact name\) or something that/);
+    expect(system).toMatch(/list what it passes\s+on as one of its outputs/);
   });
 
   it('re-sorts a plan scoped before the split, and doing it twice changes nothing', () => {

@@ -155,6 +155,28 @@ export function handoffsFor(agents: readonly PlanAgent[] | null | undefined): Ag
     .sort((a, b) => cmp(a.from_agent, b.from_agent) || cmp(a.to_agent, b.to_agent) || cmp(a.via, b.via));
 }
 
+/**
+ * Inputs no other agent produces, by the same name rule as `handoffsFor`.
+ *
+ * ShiftFill v7 (2026-11-22): Schedule Updater, Summary Reporter and Performance
+ * Monitor all read "Shift acceptance", and no agent output it. The diagram drew
+ * Schedule Updater as a starting point, which was true to the data and hid the
+ * break. Each entry is either a missing hand-off or something that arrives from
+ * outside; only the student knows which, so this names it and never guesses.
+ */
+export function unproducedInputs(agents: readonly PlanAgent[] | null | undefined): Array<{ agent: string; input: string }> {
+  const list = agents ?? [];
+  const out: Array<{ agent: string; input: string }> = [];
+  for (const a of list) {
+    const produced = list.filter((o) => o !== a).flatMap((o) => o.outputs ?? []);
+    for (const input of a.inputs ?? []) {
+      if (!input.trim() || produced.some((p) => readsWhatIsProduced(input, p))) continue;
+      out.push({ agent: a.name, input: input.trim() });
+    }
+  }
+  return out;
+}
+
 export interface PlanArtifact {
   /** The thing, as the plan first names it. */
   name: string;

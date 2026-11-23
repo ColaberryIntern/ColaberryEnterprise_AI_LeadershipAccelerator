@@ -144,6 +144,12 @@ const SYSTEM_PROMPT = [
   '- When an agent works on something another agent produces, list it in its inputs using',
   '  EXACTLY that agent\'s output name. If one agent outputs "Gap record", the agent that',
   '  ranks people for that gap reads "Gap record", not "gap details", and not nothing.',
+  // ShiftFill v7: three agents read "Shift acceptance", which no agent output. The agent
+  // that handled the hygienists' replies listed only the offer it sent.
+  '- Every input must be either another agent\'s output (by its exact name) or something that',
+  '  arrives from outside, which goes in that agent\'s trigger instead ("A hygienist replies YES").',
+  '  If an agent receives replies or results and other agents act on them, list what it passes',
+  '  on as one of its outputs ("Shift acceptance"), not only what it sends out.',
 ].join('\n');
 
 function userPrompt(plan: BuildPlan): string {

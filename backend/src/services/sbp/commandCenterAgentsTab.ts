@@ -5,6 +5,7 @@
  * same context in, byte-identical lines out.
  */
 import { AUTONOMY_LABEL, bullet, good, type TabContext } from './commandCenterTabContext';
+import { unproducedInputs } from './planDocumentInsights';
 
 export interface WorkflowArrow { from: string; to: string; labels: string[] }
 
@@ -93,6 +94,19 @@ export function agentsTab(c: TabContext): string[] {
           + 'This is where labels collide, so check it first.',
         ));
       }
+      lines.push('');
+    }
+    const loose = unproducedInputs(agents);
+    if (loose.length) {
+      // ShiftFill v7: three agents read "Shift acceptance", which no agent produced.
+      lines.push('Inputs no agent produces. Each is a missing hand-off or something that arrives from outside; the plan does not say which:');
+      loose.forEach((l) => lines.push(bullet(`${l.agent} reads "${l.input}"`)));
+      lines.push(
+        'Show each one on its agent card and as a marker on that agent\'s node in the diagram, '
+        + 'labelled "no agent produces this yet" (a marker, not an arrow), and list it in the Knowledge base as a question for you: '
+        + 'which agent should pass it on, or where does it come from? Never draw an arrow the plan '
+        + 'does not state.',
+      );
       lines.push('');
     }
     lines.push(
