@@ -23,6 +23,8 @@ import DecisionsPanel from './explorers/DecisionsPanel';
 import ShadowPanel from './explorers/ShadowPanel';
 import ContentPanel from './explorers/ContentPanel';
 import BrandRolePanel from './explorers/BrandRolePanel';
+import BrainPanel from './explorers/BrainPanel';
+import SettingsPanel from './explorers/SettingsPanel';
 import type { JourneyTerminology } from './journeyWords';
 import type { TabKey } from './tabKeys';
 
@@ -121,6 +123,12 @@ export const TAB_VIEWS: Partial<Record<TabKey, (ctx: TabContext) => React.ReactN
   content: (c) => <ContentPanel brandId={c.brandId || null} brandName={c.brandName} />,
   shadow: (c) => <ShadowPanel brandId={c.brandId || null} brandName={c.brandName} />,
   'brand-setup': (c) => <BrandRolePanel brandId={c.brandId || null} brandName={c.brandName} />,
+  // Brain and Settings take the brand only to NAME it in their notice. Neither
+  // filters by it, because the surfaces behind them are global. Passing the id
+  // rather than hiding it is what lets the notice say "the selector reads
+  // Colaberry Enterprise and this is not Colaberry Enterprise's".
+  brain: (c) => <BrainPanel brandId={c.brandId || null} brandName={c.brandName} />,
+  settings: (c) => <SettingsPanel brandId={c.brandId || null} brandName={c.brandName} />,
 
   /* ── The journey's own tabs, unchanged ──────────────────────────────────── */
   classification: (c) => (

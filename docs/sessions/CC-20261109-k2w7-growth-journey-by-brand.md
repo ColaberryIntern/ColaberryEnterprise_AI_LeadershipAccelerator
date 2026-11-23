@@ -223,3 +223,225 @@ a programme-less brand should "show the role as unset and offer to set it". The 
 the set half is refused, because there is no row to write to. Either those four brands stay
 read-only-unset, or somebody decides to create journey programmes for them — a decision, not
 code.
+
+---
+
+## T12 — deployed to production, 2026-11-23
+
+**Session:** CC-20261109-k2w7
+**What changed:** PR #4351 merged and deployed; `GROWTH_JOURNEY_ENABLED=true` set in the
+production backend environment. Reads only.
+**Verification:** 19 in-container checks passed, each with a control that must come back
+absent. Full evidence in
+`.loop-architect/runs/20261121-growth-journey-by-brand/deployment-log.md`.
+
+### The deployed commit is not the merge commit, and that is not a mistake
+
+PR #4351 merged as `abfcf1b98` at 11:58:39 UTC. PR #4352 merged **11 seconds later**, and
+GitHub cancelled the superseded `Build images` run — so no image was ever published for
+`abfcf1b98`. `deploy-prod.sh` runs in registry mode, which needs an image for the exact
+commit and refuses rather than silently shipping an older one. The deploy therefore rode
+main HEAD, `f6b7ed30f`.
+
+Proven rather than assumed, in both directions:
+
+```
+git merge-base --is-ancestor abfcf1b9819e origin/main   -> true
+git merge-base --is-ancestor f6b7ed30f9a4 abfcf1b9819e  -> false   (control)
+```
+
+The reverse check is there so that "is an ancestor" cannot be a test that returns true for
+anything handed to it.
+
+Production was 20 commits behind, so this release also carries other sessions' merged work.
+That is what deploying main means; it is worth stating rather than discovering later.
+
+### The host .env edit alone would not have switched the flag on
+
+Measured in that order on purpose. After appending `GROWTH_JOURNEY_ENABLED=true` to
+`/opt/colaberry-accelerator/.env` (line 315, backup at `.env.bak-20261123T120127Z`) and
+**before** deploying:
+
+```
+docker exec accelerator-backend printenv GROWTH_JOURNEY_ENABLED   ->   (nothing)
+```
+
+The compose file already warns about this — *"a bare host-.env edit may not recreate"* —
+and other flags there are written as literals in `environment:` for exactly that reason.
+The flag took effect because the deploy replaced the container with a new image, not
+because the file changed.
+
+**The consequence for whoever flips a flag next:** editing `.env` is not a deploy. A flag
+change without a container recreate reads as a flag that does not work.
+
+### Before and after, from the box
+
+| Fact | Before | After |
+|---|---|---|
+| Backend image | `sha256:475d5653…` | `sha256:bf59709f…` |
+| nginx image | `sha256:f646b3c7…` | `sha256:5e3b4391…` |
+| `GROWTH_JOURNEY_ENABLED` in container | unset | `true` |
+| `growthJourneyExplorerController` in running `dist` | 0 | 14 |
+
+The deploy printed `Container accelerator-backend Running` while nginx said `Recreated`,
+which reads as a skipped backend recreate and is not one: the image digest changed and the
+running `dist` went from 0 to 14. The digest is the evidence. Compose's wording is not.
+
+### Unauthenticated HTTP cannot verify this surface at all
+
+Every probe returns 401, **including a route that does not exist**:
+
+```
+401  /api/admin/growth-journey/explorers/summary
+401  /api/admin/growth-journey/brand-role
+401  /api/admin/explorer-growth/summary
+401  /api/admin/this-route-does-not-exist-control    <- the control
+```
+
+`requireAdmin` runs ahead of the router mount, so the status code says nothing about
+whether a route exists. The control is what makes that visible; without it, four 401s look
+like a failed deploy. Route presence is proven from inside the container and nowhere else.
+
+Minting an admin token to get past this was not done — a production secret operation,
+out of bounds for this run. So the honest ceiling is: **the code and the flag are provably
+in the running containers; the surface itself is proven only as far as a signed-in operator
+loading the page.**
+
+### One verification check failed, and the failure was the check
+
+`Brand not in scope` asserted against `dist/controllers/growthJourneyExplorerController.js`
+returned 0. The string lives in `tenantAuthorization.js`, which the controller delegates to;
+the controller never spells it. Re-pointed at the right file: present 3 times.
+
+Recorded because a check naming the wrong file reports a defect that does not exist — and
+the same mistake in the other direction passes silently.
+
+### Also recorded: two-word patterns do not survive the quoting chain
+
+`grep -e "Brand setup"` sent through PowerShell to ssh to sh arrives split, and grep reads
+`setup` as a path. It fails loudly here (`No such file or directory`) but a pattern that
+happens to match a real path would fail **quietly and wrongly**. All verification runs
+through a scp'd script for that reason.
+
+### State after this deploy, before the membership seed
+
+| Request | Result |
+|---|---|
+| `/admin/growth-journey`, no brand | 200, whole population, labelled "All brands" |
+| `…?brand=<any brand>` | 403, rendered as a named configuration state, zero rows |
+| `/admin/explorer-growth` | forwards to the merged page with no brand param |
+
+`tenant_memberships` holds zero rows, so `scopedContext` refuses any request naming a
+brand. Fail-closed and intended. The seed is Option B, 54 memberships, zero human
+lock-outs, and remains Ali's to run:
+`docs/sessions/CC-20261109-k2w7-membership-seed-dry-run.md`.
+
+No sub-flag set. No journey programme activated. No `explorer_*` table touched. Nothing can
+send.
+
+---
+
+## T14 — the Brain and Settings tabs, restored, 2026-11-23
+
+**Session:** CC-20261109-k2w7
+**What changed:** `brain` and `settings` added to `/admin/growth-journey` (12 tabs to 14);
+Maya's Brain client split out of `explorerGrowthApi.ts` into `mayaBrainApi.ts`; a
+`GlobalScopeNotice` on both tabs; `TAB_MAP` in the Explorer redirect now carries both keys.
+**Verification:** frontend 20 suites / 393 passed (was 19 / 383), Explorer's own 16 suites /
+203 passed, both copy ratchets 42 passed with baselines untouched, `tsc` clean with a planted
+control, notice mutation kills 9 of 10 cells.
+
+### The gap, and why no test caught it
+
+Ali, 2026-11-23: *"We are also missing the brain which is a very important part."*
+
+The execution contract excluded Explorer's write surfaces, and the PR body stated that as
+*"reachable nowhere in this build"* as though it were a parking decision. **It was not a
+deferral, it was a removal**, and the thing that turned one into the other was the redirect
+shipped in the same PR: `/admin/explorer-growth` no longer renders Explorer's page, so the
+only route to the Brain stopped existing. Its backend routes stayed mounted and live the whole
+time with nothing able to reach them.
+
+Worse, a bookmark to `?tab=brain` did not break. `TAB_MAP` had no entry, so it fell back to
+`shadow` and rendered a working page. **A missing surface that silently lands somewhere
+plausible is the worst shape for this kind of bug** — nothing announces it, and the operator
+concludes they misremembered where the tab was.
+
+The independent production verifier found the same thing from the other direction on the same
+day, before Ali's message arrived. Two findings, one cause.
+
+### Why the Brain mattered more than the role field I shipped
+
+The original ask was that Maya's role and job change by brand. What T3 shipped was a role
+**title and description** in `journey_programs.metadata` — display copy. The Brain is where
+the substance lives: her voice, her never-say list, which shelves she draws from, how often,
+and the Monday email. Restoring it is closer to the original request than the field built for
+it.
+
+### The Brain is global, and that is now stated on its face
+
+`saveBrainRules` persists through `setSetting(BRAIN_RULES_SETTING, ...)` — **one system
+setting shared by every brand**. So saving the rules changes what Maya says everywhere, and
+the inventory and already-given list are Explorer's population, which is Colaberry Training's.
+
+Under a brand selector all of that reads as "this brand's". An operator who picks Colaberry
+Enterprise, edits the voice and saves has just rewritten Colaberry Training's outreach and
+been told nothing. **That is the same class of error as rendering one brand's learners under
+another's name** — the failure `ScopeState` exists to prevent — except the mismatch is in the
+label rather than the fetch.
+
+Nothing in code can prevent it; it is a property of the storage. So `GlobalScopeNotice` names
+the selected brand and says the tab does not follow it, and a mutation that makes the notice
+render nothing **kills 9 of the 10 cells**. The survivor is the one asserting the settings
+body renders, which is exactly the cell that should survive — a mutation killing everything
+would mean the tests were coupled rather than discriminating.
+
+Per-brand rules are the next increment and need brand-keyed storage, which is a storage
+change rather than a client change. Ali chose that sequencing deliberately: restore access
+first, then per-brand rules, rather than mixing a port with a storage change in one diff.
+
+### The safety check Ali asked for, done from source
+
+He approved all writes including the sample generator, on condition its no-send behaviour was
+proven from the backend rather than from its comment. It was:
+
+`DraftRenderDeps` has exactly **three** write-capable members, and the sample neutralizes all
+three — `commitDraft` and `recommitDraft` replaced with an in-memory capture returning a fake
+`sample-N` id, and `enqueueForApproval` set to `undefined`. The other fifteen members are
+loaders, one model call, or pure validators. `gatherBrainPiece`, the one whose name suggests
+it records a pick, delegates to `openHouseBrain.ts`, which contains **zero** write-shaped
+calls in the whole file — verified with a control proving the grep actually ran rather than
+matching nothing.
+
+No `scheduled_emails` row is created, so nothing exists for a send worker to collect. There is
+a second, independent protection: in `liveDeps`, `enqueueForApproval` is itself gated on
+`explorer_growth_send_enabled`, so even un-overridden it would be inert. The sample does spend
+model tokens, capped at 5 people by 3 emails, which is why its route is `requireFullAdmin`.
+
+**Settings turned out not to be a write surface at all.** Its own header records that the mode
+dropdown is deliberately absent, because its upper values are what would let the system email
+real learners. Restoring it cannot enable sending.
+
+### Splitting the client, which the size rule required anyway
+
+The Brain's client sat in `explorerGrowthApi.ts` at **786 lines**, past this repo's 500-line
+hard ceiling and grandfathered until touched. Two pages need the Brain now, so a copy would
+have been two definitions of one contract. Extracted unchanged to `mayaBrainApi.ts` (156
+lines), with `explorerGrowthApi.ts` re-exporting it via `export *` so **not one Explorer
+component was edited** — the cheapest way to guarantee AD-1 is to not touch it. That file is
+now 713 lines: still over the ceiling, reduced rather than fixed, and left there because
+splitting the rest is not this change's job.
+
+The extraction was done with `head`/`tail` reconstruction rather than in-place surgery,
+because index-based string edits broke JSX twice earlier in this build.
+
+### Two process notes worth keeping
+
+**A clean `tsc` and a `tsc` that never ran look identical.** The extraction was validated by
+planting `export const CONTROL_ERROR: number = "..."` and confirming `TS2322` at that exact
+line before trusting the clean run.
+
+**`jest.clearAllMocks()` in `afterEach` removes the implementation, not just the call
+record.** A `mockResolvedValue` declared in the `jest.mock` factory survives exactly one test;
+every later one receives `undefined` and fails as `Cannot read properties of undefined
+(reading 'then')` deep inside the hook, far from the cause. Set it in `beforeEach`.

@@ -60,9 +60,14 @@ const TAB_MAP: Record<string, string> = {
   decisions: 'decisions',
   shadow: 'shadow',
   content: 'content',
-  // `brain` and `settings` are Explorer's WRITE surfaces, which the contract
-  // defers: "they stay reachable nowhere in this build". They fall back with
-  // everything else rather than landing on a tab that does not exist.
+  // Added 2026-11-23. These were left out as "write surfaces the contract
+  // defers", and the comment here used to read "they stay reachable nowhere in
+  // this build" as though that were a parking decision. It was not: this
+  // redirect is what makes it a removal, because Explorer's page is no longer
+  // where the operator lands. The Brain in particular is the surface that sets
+  // what Maya says, and a bookmark to it was silently landing on Shadow.
+  brain: 'brain',
+  settings: 'settings',
 };
 
 /**

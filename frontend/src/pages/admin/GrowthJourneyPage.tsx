@@ -52,10 +52,18 @@ import { getStatusRegistry } from '../../services/growthJourneyApi';
 /**
  * Twelve tabs, in the order the execution contract lists them.
  *
- * Explorer Growth's six surfaces lead, because this page is now the only place
- * they exist and they are the ones with data behind them. The journey's own five
- * follow, and Brand setup sits last: it is configuration, consulted rarely,
- * rather than something a reviewer opens every morning.
+ * Explorer Growth's surfaces lead, because this page is now the only place they
+ * exist and they are the ones with data behind them. The journey's own five
+ * follow, and the two configuration tabs sit last: Brand setup and Settings are
+ * consulted rarely, rather than opened every morning by a reviewer.
+ *
+ * Brain sits inside Explorer's group rather than with the configuration tabs,
+ * even though it is where the rules are set. It is the surface that decides what
+ * Maya actually says, so it belongs beside the decisions and drafts it produces,
+ * not two clicks away under a settings heading.
+ *
+ * Brain and Settings are the only tabs here that do not follow the brand
+ * selector; each states that on its face (`GlobalScopeNotice`).
  */
 const TABS: { key: TabKey; label: string; icon: string }[] = [
   { key: 'overview', label: 'Overview', icon: 'dashboard-line' },
@@ -64,12 +72,17 @@ const TABS: { key: TabKey; label: string; icon: string }[] = [
   { key: 'decisions', label: 'Decisions', icon: 'git-branch-line' },
   { key: 'content', label: 'Content supply', icon: 'book-open-line' },
   { key: 'shadow', label: 'Shadow', icon: 'eye-line' },
+  { key: 'brain', label: 'Brain', icon: 'brain-line' },
   { key: 'classification', label: 'Classification', icon: 'price-tag-3-line' },
   { key: 'handoffs', label: 'Handoffs', icon: 'user-shared-line' },
   { key: 'experiments', label: 'Experiments', icon: 'flask-line' },
   { key: 'performance', label: 'Performance', icon: 'line-chart-line' },
   { key: 'controls', label: 'Controls', icon: 'settings-3-line' },
   { key: 'brand-setup', label: 'Brand setup', icon: 'user-settings-line' },
+  // Explorer's own page gives Settings `settings-3-line`, but `controls` above
+  // already holds that icon here. Two tabs wearing one icon is a nav that has to
+  // be read rather than recognised, so this one differs on purpose.
+  { key: 'settings', label: 'Settings', icon: 'equalizer-line' },
 ];
 
 const isTabKey = (v: string | null): v is TabKey => TABS.some((t) => t.key === v);

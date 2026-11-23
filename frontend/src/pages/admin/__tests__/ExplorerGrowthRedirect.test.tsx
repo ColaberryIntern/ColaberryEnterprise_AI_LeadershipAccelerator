@@ -220,6 +220,13 @@ describe('the tab mapping', () => {
     ['decisions', 'decisions'],
     ['shadow', 'shadow'],
     ['content', 'content'],
+    // Added 2026-11-23. These two used to fall back to `shadow`, which is how a
+    // bookmark to the Brain quietly landed somewhere else: the tabs were left out
+    // of the merge as deferred write surfaces, but this redirect turned that
+    // deferral into a removal, because Explorer's own page is no longer where the
+    // operator arrives.
+    ['brain', 'brain'],
+    ['settings', 'settings'],
   ])('%s -> %s', (from, to) => {
     expect(mapTab(from)).toBe(to);
   });
@@ -231,11 +238,30 @@ describe('the tab mapping', () => {
     expect(mapTab(null)).toBe('shadow');
   });
 
-  it.each(['brain', 'settings', 'nonsense', ''])('%p falls back to `shadow`', (raw) => {
-    // `brain` and `settings` are Explorer's WRITE surfaces, which this build
-    // defers - they have no tab on the merged page, so they fall back with
-    // everything unknown rather than landing on a tab that does not exist.
-    expect(mapTab(raw)).toBe('shadow');
+  it.each(['nonsense', '', 'brain-setup', 'BRAIN'])(
+    '%p falls back to `shadow`',
+    (raw) => {
+      // Only genuinely unknown values fall back now. `brain-setup` and `BRAIN`
+      // are here on purpose: they are near-misses of real keys, and a mapping
+      // that matched them loosely would send a typo somewhere confident rather
+      // than somewhere honest.
+      expect(mapTab(raw)).toBe('shadow');
+    }
+  );
+
+  it('maps every tab Explorer itself offers, so no bookmark falls back silently', () => {
+    // The real regression this guards: `brain` and `settings` were absent from
+    // TAB_MAP for a day, and nothing failed. A bookmark to them landed on Shadow
+    // and looked like a working page, which is the worst shape for a missing
+    // surface - it does not announce itself.
+    //
+    // Explorer's own eight keys, from `ExplorerGrowthPage.tsx`'s TabKey union.
+    const EXPLORER_TABS = [
+      'overview', 'campus', 'journey', 'decisions', 'shadow', 'content', 'brain', 'settings',
+    ];
+    const fellBack = EXPLORER_TABS.filter((t) => mapTab(t) === 'shadow' && t !== 'shadow');
+    // Named rather than counted, so a failure says which bookmark broke.
+    expect(fellBack).toEqual([]);
   });
 
   it('carries the mapped tab through the real redirect, not just through mapTab', async () => {
