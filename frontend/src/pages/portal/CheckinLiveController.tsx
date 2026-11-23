@@ -206,7 +206,9 @@ const CheckinLiveController: React.FC<Props> = ({ title, meta, eyebrow, client, 
 
       {/* FOLLOW ALONG: the deck's plain-words card for the slide on screen right now */}
       {companion?.follow && <FollowCard follow={companion.follow} />}
-      <GetClaudeHelp openByDefault={!!companion?.follow?.install} />
+      {/* Phones run prompts here (Run it here), so they never need the Claude app: no install help
+          on a phone when Run it here is available (Ali, 2026-11-23). Computers keep it for claude.ai. */}
+      {!(client.run && isNarrow()) && <GetClaudeHelp openByDefault={!!companion?.follow?.install} />}
 
       {/* ── CONNECTION — only ever shown when something is actually wrong ── */}
       {link !== 'live' && (
