@@ -223,3 +223,118 @@ a programme-less brand should "show the role as unset and offer to set it". The 
 the set half is refused, because there is no row to write to. Either those four brands stay
 read-only-unset, or somebody decides to create journey programmes for them — a decision, not
 code.
+
+---
+
+## T12 — deployed to production, 2026-11-23
+
+**Session:** CC-20261109-k2w7
+**What changed:** PR #4351 merged and deployed; `GROWTH_JOURNEY_ENABLED=true` set in the
+production backend environment. Reads only.
+**Verification:** 19 in-container checks passed, each with a control that must come back
+absent. Full evidence in
+`.loop-architect/runs/20261121-growth-journey-by-brand/deployment-log.md`.
+
+### The deployed commit is not the merge commit, and that is not a mistake
+
+PR #4351 merged as `abfcf1b98` at 11:58:39 UTC. PR #4352 merged **11 seconds later**, and
+GitHub cancelled the superseded `Build images` run — so no image was ever published for
+`abfcf1b98`. `deploy-prod.sh` runs in registry mode, which needs an image for the exact
+commit and refuses rather than silently shipping an older one. The deploy therefore rode
+main HEAD, `f6b7ed30f`.
+
+Proven rather than assumed, in both directions:
+
+```
+git merge-base --is-ancestor abfcf1b9819e origin/main   -> true
+git merge-base --is-ancestor f6b7ed30f9a4 abfcf1b9819e  -> false   (control)
+```
+
+The reverse check is there so that "is an ancestor" cannot be a test that returns true for
+anything handed to it.
+
+Production was 20 commits behind, so this release also carries other sessions' merged work.
+That is what deploying main means; it is worth stating rather than discovering later.
+
+### The host .env edit alone would not have switched the flag on
+
+Measured in that order on purpose. After appending `GROWTH_JOURNEY_ENABLED=true` to
+`/opt/colaberry-accelerator/.env` (line 315, backup at `.env.bak-20261123T120127Z`) and
+**before** deploying:
+
+```
+docker exec accelerator-backend printenv GROWTH_JOURNEY_ENABLED   ->   (nothing)
+```
+
+The compose file already warns about this — *"a bare host-.env edit may not recreate"* —
+and other flags there are written as literals in `environment:` for exactly that reason.
+The flag took effect because the deploy replaced the container with a new image, not
+because the file changed.
+
+**The consequence for whoever flips a flag next:** editing `.env` is not a deploy. A flag
+change without a container recreate reads as a flag that does not work.
+
+### Before and after, from the box
+
+| Fact | Before | After |
+|---|---|---|
+| Backend image | `sha256:475d5653…` | `sha256:bf59709f…` |
+| nginx image | `sha256:f646b3c7…` | `sha256:5e3b4391…` |
+| `GROWTH_JOURNEY_ENABLED` in container | unset | `true` |
+| `growthJourneyExplorerController` in running `dist` | 0 | 14 |
+
+The deploy printed `Container accelerator-backend Running` while nginx said `Recreated`,
+which reads as a skipped backend recreate and is not one: the image digest changed and the
+running `dist` went from 0 to 14. The digest is the evidence. Compose's wording is not.
+
+### Unauthenticated HTTP cannot verify this surface at all
+
+Every probe returns 401, **including a route that does not exist**:
+
+```
+401  /api/admin/growth-journey/explorers/summary
+401  /api/admin/growth-journey/brand-role
+401  /api/admin/explorer-growth/summary
+401  /api/admin/this-route-does-not-exist-control    <- the control
+```
+
+`requireAdmin` runs ahead of the router mount, so the status code says nothing about
+whether a route exists. The control is what makes that visible; without it, four 401s look
+like a failed deploy. Route presence is proven from inside the container and nowhere else.
+
+Minting an admin token to get past this was not done — a production secret operation,
+out of bounds for this run. So the honest ceiling is: **the code and the flag are provably
+in the running containers; the surface itself is proven only as far as a signed-in operator
+loading the page.**
+
+### One verification check failed, and the failure was the check
+
+`Brand not in scope` asserted against `dist/controllers/growthJourneyExplorerController.js`
+returned 0. The string lives in `tenantAuthorization.js`, which the controller delegates to;
+the controller never spells it. Re-pointed at the right file: present 3 times.
+
+Recorded because a check naming the wrong file reports a defect that does not exist — and
+the same mistake in the other direction passes silently.
+
+### Also recorded: two-word patterns do not survive the quoting chain
+
+`grep -e "Brand setup"` sent through PowerShell to ssh to sh arrives split, and grep reads
+`setup` as a path. It fails loudly here (`No such file or directory`) but a pattern that
+happens to match a real path would fail **quietly and wrongly**. All verification runs
+through a scp'd script for that reason.
+
+### State after this deploy, before the membership seed
+
+| Request | Result |
+|---|---|
+| `/admin/growth-journey`, no brand | 200, whole population, labelled "All brands" |
+| `…?brand=<any brand>` | 403, rendered as a named configuration state, zero rows |
+| `/admin/explorer-growth` | forwards to the merged page with no brand param |
+
+`tenant_memberships` holds zero rows, so `scopedContext` refuses any request naming a
+brand. Fail-closed and intended. The seed is Option B, 54 memberships, zero human
+lock-outs, and remains Ali's to run:
+`docs/sessions/CC-20261109-k2w7-membership-seed-dry-run.md`.
+
+No sub-flag set. No journey programme activated. No `explorer_*` table touched. Nothing can
+send.
