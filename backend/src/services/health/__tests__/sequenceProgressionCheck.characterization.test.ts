@@ -82,7 +82,9 @@ describe('the extracted bodies are the ones that left systemHealthService', () =
     const body = shippedBody('sequenceProgressionCheck.ts', 'checkSequenceProgression');
     // OH1s: was d35ab8ad0cb0b537ecb38e85d2268806 (the T609 move). Changed on purpose:
     // any next-step row counts as "not a gap", and pre-scheduled sequences are excluded.
-    expect(md5(body)).toBe('dbfda9e32e1a78e17f29c31d59e798b1');
+    // 2026-11-24: was dbfda9e32e1a78e17f29c31d59e798b1 (OH1s). Changed on purpose:
+    // audience-tagged follow-ups (attended/missed steps) are excluded as well.
+    expect(md5(body)).toBe('d21851e1a3ac47790728b9f5ac559db2');
     // the two forced edits, asserted as the ONLY path change - an unqualified
     // `./sequenceService` or `../models` here would resolve from the wrong directory
     expect(body).toContain("require('../sequenceService')");
@@ -191,6 +193,16 @@ describe('checkSequenceProgression: OH1s, a cancelled step is a decision, not a 
     expect(sql).toContain("st->>'minutes_before_call' IS NOT NULL");
     expect(sql).toContain("st->>'days_before_cohort_start' IS NOT NULL");
     expect(sql).toContain("COALESCE(NULLIF(st->>'delay_days', ''), '0')::numeric <> 0");
+  });
+
+  it('audience-tagged follow-ups (attended/missed steps) are excluded: an attendee skipping step 1 is correct', async () => {
+    const sql = await sqlSent();
+    // Must sit inside the follow_up_sequences EXISTS, ANDed with the countdown exclusion,
+    // so it filters the sequence rather than the sent row.
+    const seqClause = sql.slice(sql.indexOf('SELECT 1 FROM follow_up_sequences fs'));
+    expect(seqClause).toContain(
+      "AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(fs.steps) st WHERE st->>'audience' IN ('attended', 'missed'))",
+    );
   });
 });
 
