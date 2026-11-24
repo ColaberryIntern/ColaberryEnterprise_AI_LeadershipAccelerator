@@ -72,6 +72,7 @@ const AdminCommunityRolesPage = lazy(() => import('../pages/admin/AdminCommunity
 const AdminStudentStoryPage = lazy(() => import('../pages/admin/AdminStudentStoryPage'));
 const AdminKnowledgeOpsPage = lazy(() => import('../pages/admin/AdminKnowledgeOpsPage'));
 const AdminOrchestrationPage = lazy(() => import('../pages/admin/AdminOrchestrationPage'));
+const OrchestrationHealthPage = lazy(() => import('../pages/admin/OrchestrationHealthPage'));
 const WorkforceOSPage = lazy(() => import('../pages/admin/workforce/WorkforceOSPage'));
 // AF2.1 - the landing a domain owner sees after bridging in from the portal.
 const AdminMyDomainPage = lazy(() => import('../pages/admin/AdminMyDomainPage'));
@@ -318,6 +319,9 @@ const adminRoutes = (
         <Route path="/admin/students" element={<AdminStudentStoryPage />} />
         <Route path="/admin/knowledge-ops" element={<AdminKnowledgeOpsPage />} />
         <Route path="/admin/orchestration" element={<AdminOrchestrationPage />} />
+        {/* Read-only health view on its own path, so it can carry its own section.
+            See OrchestrationHealthPage for why this is not a deep link to ?tab=health. */}
+        <Route path="/admin/orchestration-health" element={<OrchestrationHealthPage />} />
         {/* Operations Center is merged into AI Organization (Mission Control is its home). */}
         <Route path="/admin/ops-center" element={<Navigate to="/admin/workforce" replace />} />
         <Route path="/admin/workforce" element={<WorkforceOSPage />} />

@@ -16,7 +16,7 @@ export const SECTION_LABEL: Record<string, string> = {
   lead_ingestion: 'Lead Ingestion', inbox_content: 'Inbox & Content', program: 'Program', intelligence: 'Intelligence',
   system: 'System', students: 'Student Story', leads: 'Leads', career_review: 'Portfolio Review', internship: 'AI Internship',
   brands: 'Brands', agents: 'Agents', gov_contracts: 'Gov Contracts', placement: 'Placement',
-  comms_hub: 'Communications Hub',
+  comms_hub: 'Communications Hub', orchestration_health: 'Orchestration Health (read-only)',
 };
 
 export interface ExtraSectionsEditorProps {
