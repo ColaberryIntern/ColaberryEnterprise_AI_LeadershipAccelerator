@@ -262,6 +262,8 @@ describe('Engine A protocol: the caller acts while a tool is running (VS2.3, ver
     expect(h.spoken()).not.toMatch(/Sorry, I had trouble/);
     expect(h.logs.filter((l) => l.event === 'voice_llm_turn_failed')).toHaveLength(0);
     expect(h.tools).toEqual([expect.objectContaining({ toolCallId: 'toolu_9', afterClose: false })]); // still recorded
+    // The round went stale while the tool ran: it is dropped, never replayed after the caller's newer words.
+    expect(JSON.stringify(h.calls[h.calls.length - 1].messages)).not.toContain('toolu_9');
   });
 });
 
