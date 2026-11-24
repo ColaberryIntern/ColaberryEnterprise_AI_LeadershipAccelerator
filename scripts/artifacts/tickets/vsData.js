@@ -6,6 +6,127 @@
 const SESSION = 'CC-20261124-2ptc';
 
 module.exports = {
+  'VS1.1': {
+    code: 'VS1.1', short: 'Every voice call goes through one function',
+    title: 'R00 Inventory: every caller, consumer, route, cron and config of voice in the repo',
+    docName: 'VOICE_INVENTORY', date: '2026-11-24', session: SESSION, status: 'PASS 11/12 (verifier attempt 2); closes at the Phase 1 deploy',
+    asked: 'Find every place the codebase places, guards, receives or consumes AI voice calls, so the new gateway can replace Synthflow without missing a caller.',
+    delivered: 'A repeatable classifier (npm run voice:inventory, --check fails on drift) over 200 files, a hand-read INVENTORY.md with every caller, guard, cron and consumer, a 12-route migration matrix seed, and 7 findings. Independent verifier: 11 of 12 on attempt 2.',
+    takeaway: 'The migration has one choke point: all 11 callers reach a single function, triggerVoiceCall, so the new gateway can replace its body without touching them. But five dial paths skip the shared consent check today, and the voice consent gate is shadow-only, so the gateway must enforce one fail-closed policy for every path.',
+    cards: [
+      { n: '200', k: 'voice files classified' },
+      { n: '1', k: 'function places every call', color: '#2e7d32' },
+      { n: '11', k: 'callers' },
+      { n: '6', k: 'crons that can dial' },
+      { n: '5', k: 'dial paths skip evaluateSend', color: '#c62828' },
+    ],
+    decision: 'Nothing new to decide here. The findings feed VS1.5 (one fail-closed policy for every path) and VS1.6 (remove the dead runLeadAutomation dial path). Your open decisions are on M0.',
+    ladder: ['active', 'waiting', 'todo', 'todo', 'todo', 'todo'],
+    bars: { title: 'Files by role (classifier snapshot)', max: 100, rows: [
+      { label: 'Mention only', value: 99, color: '#b8c0cc' }, { label: 'Consumer', value: 39, color: '#5a6b85' },
+      { label: 'UI', value: 22, color: '#5a6b85' }, { label: 'Config', value: 19, color: '#5a6b85' },
+      { label: 'Caller', value: 11, color: '#e0a100' }, { label: 'Guard', value: 6, color: '#2e7d32' },
+      { label: 'Ingest', value: 3, color: '#5a6b85' }, { label: 'Dispatch', value: 1, color: '#c62828' },
+    ] },
+    checks: [
+      ['Every hit of the directive search set is classified (0 unclassified of 200)', true],
+      ['Each route row records shell vs prohibited-fallback semantics', true],
+      ['voice:inventory --check exits 0 twice on a clean tree (idempotent)', true],
+      ['Baseline 21 voice suites still pass; tsc clean; no phone digits added', true],
+    ],
+    diagramTitle: 'All roads lead to one dispatch',
+    mermaid: `flowchart LR
+  S[Scheduler crons] --> T[triggerVoiceCall]
+  CB[Callback hub: flotation, enterprise, CPN] --> T
+  M[Maya voice tool] --> T
+  I[Internship + SBP discovery] --> T
+  A[Alerts to staff] --> T
+  Q[Campaign test harnesses] --> T
+  T --> G[dial guard + kill switch]
+  G --> SF[Synthflow API]
+  SF -.webhook.-> W[synthflowWebhookController]`,
+    evidenceLine: 'commits 78715717c + 24c7a40f3; voice:inventory --check exit 0 twice; jest 23/23 suites; tsc exit 0; loop-task-verifier 11/12.',
+    sections: [
+      { h: 'Findings carried into the gateway', rows: [
+        ['F-01', 'Your number is on 32 public repo lines (M0 Q5)'],
+        ['F-02', 'Five dial paths skip evaluateSend; three staff paths have no consent gate by design'],
+        ['F-03', 'alertDeliveryService logs "sent" on a skipped call'],
+        ['F-04', 'Unknown callback sources are skipped as no_prompt (training-site callbacks cannot dial)'],
+        ['F-05', 'Voice consent gate is shadow-only unless consent_enforcement=enforce (fails open)'],
+        ['F-06', 'Dead dial code: runLeadAutomation (no callers, no consent), runAdmissionsSynthflowCall'],
+        ['F-07', 'Internal alerts borrow customer-facing sales agents'],
+      ], head: ['ID', 'Finding'] },
+      { h: 'Crons that can dial', ul: ['ScheduledActionsProcessor every 5 min (campaign and Open House voice steps)', 'HotLeadEscalation (when hot_lead_voice_enabled)', 'SystemHealthMonitor (Cory to the admin alert phone)', 'enterpriseIntakeSweep every 5 min (intake reminder calls)', 'CampaignQAAgent and CampaignSelfHealingAgent (test calls)', 'Indirect: any critical alert to the voice channel'] },
+      { h: 'How the verifier caught a real defect', p: ['Attempt 1 scored 7 of 12: the committed snapshot had been generated before the classifier itself was committed, and the classifier matched its own search terms, so --check failed on the committed tree while the session log claimed it passed. The fix excludes the tooling by path, widens the search to the directive\'s full list, and the log now carries the correction with its own evidence.'] },
+    ],
+    evidence: [
+      ['Inventory', '200 files; DISPATCH 1, CALLER 11, GUARD 6, INGEST 3, CONSUMER 39, CONFIG 19, UI 22, MENTION 99'],
+      ['Drift check', 'npm run voice:inventory -- --check: exit 0, twice, clean tree'],
+      ['Tests', '23 suites / 345 tests (baseline 327 + new)'],
+      ['Verifier', 'attempt 1: 7/12 FAIL; attempt 2: 11/12 PASS'],
+    ],
+    notEstablished: [
+      'Runtime behavior: this is a static reading of the code, not a trace of production traffic.',
+      'Which Synthflow assistant serves which route: that needs the vendor API (VS5.1).',
+      'Callers outside this repo (Kes\'s GHL agent, Cora) are not inventoried here.',
+    ],
+  },
+  'VS1.2': {
+    code: 'VS1.2', short: 'Why Synthflow calls fail, and what we already own',
+    title: 'R00 Legacy failure root cause, Twilio voice readiness (non-dial), vendor docs and rate cards',
+    docName: 'READINESS_AND_COST', date: '2026-11-24', session: SESSION, status: 'PASS 11/12 (verifier attempt 2); closes at the Phase 1 deploy',
+    asked: 'Prove why Synthflow calls stopped ringing, check (without dialing) whether we can place calls from numbers we own, and price both engines from official pages.',
+    delivered: 'READINESS.md (account, 69 owned numbers by route, caller-ID usability per group and per Synthflow number, a dated call log proving zero dials), COST_MODEL.md (17 cited prices, per-minute and monthly low/base/high), DECISIONS.md vendor facts, and voice:docs-check that fails any uncited price.',
+    takeaway: 'The October outage is explained: Synthflow dials Cory-Outbound, ...3242 and Little Ali from numbers that are not on our Twilio account and not verified, which Twilio refuses as error 32204. Our own account is active with 69 voice numbers, so the new platform dials from numbers we own and that error cannot happen. Engine A costs about 0.085 to 0.115 USD per connected minute.',
+    cards: [
+      { n: '3', k: 'Synthflow numbers not on our account', color: '#c62828' },
+      { n: '69', k: 'voice numbers we own' },
+      { n: '0', k: 'calls placed by this work', color: '#2e7d32' },
+      { n: '0.085-0.115', k: 'USD per min, engine A' },
+      { n: '17', k: 'prices, each with URL + date' },
+    ],
+    decision: 'M0 Q3: reuse one of the 9 idle numbers we own ($0, recommended) or buy one (1.15 USD a month). The cost range narrows after LIVE-01 shows whether ElevenLabs is billed inside ConversationRelay.',
+    ladder: ['active', 'waiting', 'todo', 'todo', 'todo', 'todo'],
+    bars: { title: 'Engine A monthly cost at 10,000 connected minutes (USD)', max: 1200, rows: [
+      { label: 'Low (voice in Relay)', value: 850, color: '#2e7d32' }, { label: 'Base (midpoint)', value: 1000, color: '#5a6b85' }, { label: 'High (ElevenLabs apart)', value: 1150, color: '#e0a100' },
+    ] },
+    checks: [
+      ['Every price and model ID cites an official URL and a read date (voice:docs-check exit 0)', true],
+      ['Per-number caller-ID usability: owner, voice-capable, usable yes/no', true],
+      ['Zero calls placed: 0 outbound-api calls in the dated window', true],
+      ['Synthflow contract comparison', false],
+    ],
+    diagramTitle: 'Why the Synthflow numbers fail, and the new path',
+    mermaid: `flowchart LR
+  SF[Synthflow] -->|SIP trunk, From = Synthflow-bought number| TW[Our Twilio account]
+  TW -->|From not owned, not verified| X[Refused: error 32204]
+  VS[Voice Studio] -->|REST API, From = a number we own| TW
+  TW --> OK[Call allowed]`,
+    evidenceLine: 'commits e3b5103a5 + 5725bd214; Twilio probes GET-only on 2026-11-24; voice:docs-check exit 0; loop-task-verifier 11/12.',
+    sections: [
+      { h: 'Caller-ID usability', rows: [
+        ['54 numbers on app.colaberry.com', 'usable, but in use'], ['8 numbers on the Twilio placeholder', 'usable and idle (M0 Q3 candidates)'],
+        ['5 GoHighLevel numbers (incl. ...2754, ...1028)', 'usable, but in use by GHL'], ['Verified caller ID ...7435', 'usable, not recommended'],
+        ['Synthflow ...2568 (Edu: Cory - Outbound)', 'NOT usable: not ours, not verified'], ['Synthflow ...3242', 'NOT usable'], ['Synthflow ...0787 (Little Ali)', 'NOT usable'],
+      ], head: ['Number or group', 'Caller ID'] },
+      { h: 'Per connected minute', rows: [
+        ['Engine A: Twilio voice + ConversationRelay', '0.084 USD (published)'], ['Engine A: Claude Haiku replies', '0.0013 USD (estimate)'],
+        ['Engine A: ElevenLabs if billed apart', '0.030 USD (estimate)'], ['Engine B: Twilio voice + Media Streams', '0.0184 USD (published)'], ['Engine B: OpenAI Realtime', 'unmeasured until LIVE-02'],
+      ], head: ['Component', 'Cost'] },
+      { h: 'A correction to the 23 Nov note', p: ['The ROI Architect number ...2754 IS on our account (through the GHL trunk), so its Synthflow failures need a different explanation; VS5.1 checks each Synthflow number individually.'] },
+    ],
+    evidence: [
+      ['Account', 'active, Full; 69 owned voice-capable numbers; 13 SIP trunks; 1 verified caller ID'],
+      ['Call log, 2026-11-24', '69 calls, 0 of direction outbound-api (the only kind a REST dial creates)'],
+      ['Prices', 'official Twilio, ElevenLabs, OpenAI and Anthropic pages, read 2026-11-24'],
+      ['Verifier', 'attempt 1: 10/12 FAIL; attempt 2: 11/12 PASS'],
+    ],
+    notEstablished: [
+      'Our actual Synthflow contract cost and included minutes (needed for the comparison; VS5.1 / M4).',
+      'Whether ElevenLabs is billed inside ConversationRelay, and Engine B per-minute cost: both measured in live tests.',
+      'Carrier spam labelling or answer rates of any number.',
+    ],
+  },
   M0: {
     code: 'M0', short: 'Five calls only you can make before Phase 2 dials anything',
     title: 'Escalations before Phase 2: direction, paid services, a Twilio voice number, the test number, and the public phone-number exposure',
