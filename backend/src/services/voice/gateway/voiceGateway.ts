@@ -54,7 +54,8 @@ async function fact<T>(name: string, f: () => Promise<T>): Promise<{ ok: true; v
 export async function authorizeVoiceCall(raw: unknown, deps: GatewayDeps): Promise<AuthorizeResult> {
   const req = parseContract(VoiceRequestSchema, 'VoiceRequest', raw);
   let ks: 'on' | 'off' | 'unreadable' = 'unreadable';
-  try { ks = (await deps.killSwitch()) ? 'on' : 'off'; } catch { ks = 'unreadable'; }
+  // Off ONLY when the reader returns exactly false; true is on; anything else (undefined, a string) is unreadable.
+  try { const k: unknown = await deps.killSwitch(); ks = k === false ? 'off' : k === true ? 'on' : 'unreadable'; } catch { ks = 'unreadable'; }
 
   const dest = await fact('destination', () => deps.resolveDestination(req.recipientRef));
   if (!dest.ok) return { outcome: 'blocked', reason: 'fact_unavailable', detail: dest.name };
@@ -111,7 +112,8 @@ export async function dispatchAuthorized(
   const callId = auth.dispatch.callId;
   // The switch may have been flipped between authorize and dial: check it again, strictly.
   try {
-    if (await deps.killSwitch()) { await deps.transition(auth.reservationId, 'expire'); return { outcome: 'blocked', callId, reason: 'kill_switch_active' }; }
+    const k: unknown = await deps.killSwitch();
+    if (k !== false) { await deps.transition(auth.reservationId, 'expire'); return { outcome: 'blocked', callId, reason: k === true ? 'kill_switch_active' : 'kill_switch_unreadable' }; }
   } catch {
     await deps.transition(auth.reservationId, 'expire');
     return { outcome: 'blocked', callId, reason: 'kill_switch_unreadable' };

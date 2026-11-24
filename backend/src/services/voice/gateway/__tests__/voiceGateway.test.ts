@@ -90,6 +90,11 @@ describe('authorizeVoiceCall', () => {
     expect(input.destinationHash).not.toContain('5555550123');
   });
 
+  it('a kill-switch reader that returns undefined is treated as unreadable, not off', async () => {
+    const { d } = deps({ killSwitch: (async () => undefined) as unknown as GatewayDeps['killSwitch'] });
+    expect(await authorizeVoiceCall(request, d)).toEqual({ outcome: 'blocked', reason: 'kill_switch_unreadable' });
+  });
+
   it('a staff destination whose consent read throws is BLOCKED (no blanket staff exemption)', async () => {
     const { d } = deps({ exemptionFor: async () => 'staff', consentFor: async () => { throw new Error('x'); } });
     expect(await authorizeVoiceCall(request, d)).toEqual({ outcome: 'blocked', reason: 'consent_unknown' });

@@ -44,6 +44,20 @@ describe('voicePolicy: ordered, fail-closed verdicts', () => {
     expect(v({ exemption: 'staff', consent })).toEqual({ ok: false, reason });
   });
 
+  it.each([['GRANTED'], [''], ['pending'], [undefined], [null]])(
+    'an unexpected consent value %j fails closed (allowlist; verifier VS1.5 attempt 2)', (consent) => {
+      expect(v({ consent: consent as never })).toEqual({ ok: false, reason: 'consent_unknown' });
+      expect(v({ consent: consent as never, exemption: 'staff' })).toEqual({ ok: false, reason: 'consent_unknown' });
+    });
+
+  it.each([[undefined], ['no'], [0]])('an unexpected suppression value %j fails closed', (suppressed) => {
+    expect(v({ suppressed: suppressed as never })).toEqual({ ok: false, reason: 'suppression_unknown' });
+  });
+
+  it('an unexpected kill-switch value fails closed', () => {
+    expect(v({ killSwitch: undefined as never })).toEqual({ ok: false, reason: 'kill_switch_unreadable' });
+  });
+
   it('a test destination still needs consent and hours (no blanket exemption)', () => {
     expect(v({ exemption: 'test', consent: 'missing' })).toEqual({ ok: false, reason: 'consent_missing' });
     expect(v({ exemption: 'test', now: at('03:00') })).toEqual({ ok: false, reason: 'outside_call_hours' });

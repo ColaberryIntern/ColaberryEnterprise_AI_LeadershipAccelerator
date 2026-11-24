@@ -68,19 +68,23 @@ const inWindow = (m: number | null, w: { startMinute: number; endMinute: number 
 
 export function evaluateVoicePolicy(f: PolicyFacts): PolicyVerdict {
   if (f.killSwitch === 'on') return { ok: false, reason: 'kill_switch_active' };
-  if (f.killSwitch === 'unreadable') return { ok: false, reason: 'kill_switch_unreadable' };
+  if (f.killSwitch !== 'off') return { ok: false, reason: 'kill_switch_unreadable' };
   if (!f.voiceEnabled) return { ok: false, reason: 'feature_disabled' };
   if (!f.pathAllowed) return { ok: false, reason: 'path_not_allowed' };
   if (!f.destinationE164 || !/^\+[1-9]\d{6,14}$/.test(f.destinationE164)) return { ok: false, reason: 'invalid_destination' };
-  if (f.suppressed === null) return { ok: false, reason: 'suppression_unknown' };
-  if (f.suppressed) return { ok: false, reason: 'suppressed' };
+  // ALLOWLIST, not a blocklist: only an explicit `false` means clear. undefined, null or anything odd is unknown.
+  if (f.suppressed === true) return { ok: false, reason: 'suppressed' };
+  if (f.suppressed !== false) return { ok: false, reason: 'suppression_unknown' };
 
-  // Consent applies to EVERYONE. The only difference for staff is that an internal-alert consent counts.
-  if (f.consent === 'revoked') return { ok: false, reason: 'consent_revoked' };
-  if (f.consent === 'expired') return { ok: false, reason: 'consent_expired' };
-  if (f.consent === 'unknown') return { ok: false, reason: 'consent_unknown' };
-  if (f.consent === 'missing') return { ok: false, reason: 'consent_missing' };
-  if (f.consent === 'staff_internal' && f.exemption !== 'staff') return { ok: false, reason: 'consent_missing' };
+  // Consent applies to EVERYONE, as an ALLOWLIST: only 'granted', or 'staff_internal' for a staff destination,
+  // lets a call continue. Known bad values keep their specific reason; any unexpected value is unknown.
+  const consentOk = f.consent === 'granted' || (f.consent === 'staff_internal' && f.exemption === 'staff');
+  if (!consentOk) {
+    if (f.consent === 'revoked') return { ok: false, reason: 'consent_revoked' };
+    if (f.consent === 'expired') return { ok: false, reason: 'consent_expired' };
+    if (f.consent === 'missing' || f.consent === 'staff_internal') return { ok: false, reason: 'consent_missing' };
+    return { ok: false, reason: 'consent_unknown' };
+  }
 
   if (f.exemption === 'staff') return { ok: true }; // hours exemption, as voiceDialGuard does today
   if (!inWindow(minuteOfDayIn(f.now, LEGACY_WINDOW.tz), LEGACY_WINDOW)) return { ok: false, reason: 'outside_call_hours' };
