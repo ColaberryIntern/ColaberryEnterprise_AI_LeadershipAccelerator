@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Tuesday, November 24, 2026 at 6:37 AM</div>
-    <div><span class="sid">CC-20261120-e2fc</span><span class="count">31 changes</span></div>
+    <div class="meta">Generated Tuesday, November 24, 2026 at 7:25 AM</div>
+    <div><span class="sid">CC-20261120-e2fc</span><span class="count">32 changes</span></div>
   </header>
   <main>
     
@@ -498,6 +498,20 @@
         <div class="card-body">
           <div class="row"><span class="k">What changed</span><span class="v">`scaffold-demo-spec.mjs` gains `keepRowCoherent`, which reads EVERY enum on a row, not only one status field.</span></div>
           <div class="row"><span class="k">Verification</span><span class="v ver">v13&#39;s own data model went from 3 contradictory agency rows to 0, held offers have no send or reply, and output stays deterministic. Trust screen at 320px and 360px: no sideways scroll on v13&#39;s real spec (headless Edge). `demoKitScaffoldContract` +5 tests on v13&#39;s tables, the ordering check across 12 seeds. Coherence pass off, waiting-reply-unsends and ordering off are each caught. 382 suites / 5,856 tests pass; backend tsc and `checkTestTypecheck` show only the 3 known files.</span></div>
+          
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">32</span>
+          <h2>#4390 deployed: coherent demo sample rows live</h2>
+          <span class="badge">2026-11-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">deployed 489db0293 (registry mode). `keepRowCoherent` is present in the live `demoKitAssets.generated.js`, and `SBP_CONNECTED_DEMO` is still the test enrollment only. No code change in this entry. BC L12.20 closed.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">v13&#39;s repo files, downloaded from production after the deploy, carry the new scaffold and the wrapping evidence codes. Run on v13&#39;s own data model, that scaffold gives 0 agency messages sent while not approved (3 before). Home 200.</span></div>
           
           
         </div>
