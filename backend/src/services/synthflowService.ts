@@ -277,11 +277,11 @@ export async function triggerVoiceCall(params: VoiceCallParams): Promise<Synthfl
 
   // Normalize to E.164 before it leaves for Synthflow. Synthflow forwards the
   // number to Twilio as-is, only prepending a bare '+' if there is none — so a
-  // 10-digit US number typed on the form ('6825975784') went out as
-  // '+6825975784', which Twilio reads as country code +682 (Cook Islands) and
+  // 10-digit US number typed on the form ('2025550123') went out as
+  // '+2025550123', which Twilio reads as a foreign country code (+20, Egypt, here) and
   // rejects with 32205 "No International Permission". A US internship applicant's
   // interview call therefore never connected. normalizePhone turns that into
-  // '+16825975784'; an already-'+'-prefixed number is left as it is.
+  // '+12025550123'; an already-'+'-prefixed number is left as it is.
   const dialPhone = normalizePhone(actualPhone);
   if (!dialPhone) {
     // Fewer than 7 digits, or otherwise unusable. Dialing it would burn a call on

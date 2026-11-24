@@ -39,7 +39,18 @@ async function findLeadByNormalizedPhone(phone: string | undefined, excludeId?: 
 
 /* ── Warm campaign auto-enrollment ──────────────────────────────── */
 
-const TEST_BYPASS_PHONES = ['6825975784'];
+/**
+ * Phones that skip the duplicate-lead POLICY checks so a tester can re-run the full
+ * lead flow. Read from LEAD_TEST_BYPASS_PHONES (comma-separated, any formatting) at
+ * call time and normalized with `normalizePhone`, the same function applied to the
+ * incoming phone. Unset or empty means nothing bypasses.
+ */
+export function getTestBypassPhones(): string[] {
+  return (process.env.LEAD_TEST_BYPASS_PHONES || '')
+    .split(',')
+    .map(p => normalizePhone(p.trim()))
+    .filter((p): p is string => !!p);
+}
 
 // Sources that should NOT auto-enroll in campaigns — external sites
 // with their own marketing flows. Only enterprise.colaberry.ai leads
@@ -181,7 +192,7 @@ export function calculateLeadScore(lead: LeadInput): number {
 
 export async function createLead(data: LeadInput) {
   // Skip duplicate checks for test bypass phones so full flow can be re-tested
-  const isBypassPhone = data.phone && TEST_BYPASS_PHONES.includes(normalizePhone(data.phone) || '');
+  const isBypassPhone = data.phone && getTestBypassPhones().includes(normalizePhone(data.phone) || '');
 
   if (!isBypassPhone) {
     // Duplicate check: same email within 24 hours

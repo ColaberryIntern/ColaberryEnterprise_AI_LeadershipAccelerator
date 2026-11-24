@@ -2,7 +2,7 @@
  * Inbox COS Alert Service.
  *
  * REPURPOSED 2026-06-01: previously sent SMS via T-Mobile email-to-SMS
- * gateway (6825975784@tmomail.net). Ali asked to disable - the alerts
+ * gateway (the owner's address, INBOX_COS_SMS_TO). Ali asked to disable - the alerts
  * were too frequent and the VIP alerts duplicated the new
  * vipInboxWatcher -> Mandrill -> gmail push system.
  *

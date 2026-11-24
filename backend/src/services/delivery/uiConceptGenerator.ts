@@ -71,8 +71,8 @@ export const CONCEPT_LABEL = 'Concept';
 /**
  * Contact details must not appear in a shareable artifact.
  *
- * Digits are compared with punctuation stripped, because "(682) 597-5784" and
- * "+16825975784" are the same phone number and only one of them would ever be caught by a
+ * Digits are compared with punctuation stripped, because "(202) 555-0123" and
+ * "+12025550123" are the same phone number and only one of them would ever be caught by a
  * literal search.
  */
 export function contactLeakViolation(html: string, contact: ConceptContactDetails): string | null {

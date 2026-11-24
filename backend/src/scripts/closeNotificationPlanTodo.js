@@ -25,7 +25,7 @@ const PLAN_COMMENT = `<div>
 <li><strong>P1 SMS allowlist</strong>: Ram, Karun, Luda, Lakeesha, Sai Tejesh, Jackie, Vivek + <strong>Que (added)</strong></li>
 <li><strong>Quiet hours</strong>: 10 PM &ndash; 6 AM CT</li>
 <li><strong>Session-changelog delivery</strong>: email to all 3 inboxes + Basecamp comment on a meta tracking todo</li>
-<li><strong>SMS target</strong>: 6825975784@tmomail.net (already in prod env as INBOX_COS_SMS_TO)</li>
+<li><strong>SMS target</strong>: the owner's T-Mobile SMS gateway address (INBOX_COS_SMS_TO, already in prod env)</li>
 <li><strong>Build phase 1</strong>: greenlit (but see status note below — most of phase 1 is already shipped under a different rail)</li>
 </ul>
 

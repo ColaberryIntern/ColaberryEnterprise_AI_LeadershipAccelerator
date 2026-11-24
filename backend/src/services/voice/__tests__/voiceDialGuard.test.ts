@@ -3,7 +3,7 @@
  */
 const query = jest.fn();
 jest.mock('../../../config/database', () => ({ sequelize: { query: (...a: unknown[]) => query(...a) } }));
-jest.mock('../../../config/env', () => ({ env: { adminAlertPhone: '+16825975784' } }));
+jest.mock('../../../config/env', () => ({ env: { adminAlertPhone: '+12025550123' } }));
 jest.mock('../../settingsService', () => ({ getSetting: jest.fn(async () => '"+12145550100"') }));
 
 import { withinDialHours, dialVerdict, checkDialGuard, MAX_DIALS_PER_NUMBER_PER_DAY } from '../voiceDialGuard';
@@ -54,7 +54,7 @@ describe('checkDialGuard (with the database)', () => {
   });
   it('exempts ADMIN_ALERT_PHONE and the executive phone setting, even at night', async () => {
     query.mockRejectedValue(new Error('db down'));
-    expect(await checkDialGuard('+16825975784', ct(23))).toEqual({ ok: true });
+    expect(await checkDialGuard('+12025550123', ct(23))).toEqual({ ok: true });
     expect(await checkDialGuard('+12145550100', ct(23))).toEqual({ ok: true });
   });
 });

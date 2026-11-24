@@ -20,10 +20,10 @@ import { triggerVoiceCall } from '../synthflowService';
  *
  * WHY THIS EXISTS. Synthflow forwards the number to Twilio as-is, prepending only
  * a bare '+' when there is none. A US internship applicant typed a 10-digit number
- * on the form ('6825975784'); it reached Twilio as '+6825975784' — country code
- * +682, Cook Islands — and Twilio rejected it 32205 "No International Permission".
+ * on the form ('2025550123'); it reached Twilio as '+2025550123' — country code
+ * +20, Egypt, for this example — and Twilio rejected it 32205 "No International Permission".
  * The interview call never connected. These tests pin that the service now dials
- * '+16825975784', and that a number too short to dial is skipped, not sent.
+ * '+12025550123', and that a number too short to dial is skipped, not sent.
  */
 describe('the number sent to Synthflow is E.164', () => {
   function okResponse() {
@@ -44,31 +44,31 @@ describe('the number sent to Synthflow is E.164', () => {
   it('prepends +1 to a bare 10-digit US number', async () => {
     const fetchSpy = jest.spyOn(global as any, 'fetch').mockImplementation(okResponse as any);
     const res = await triggerVoiceCall({
-      name: 'Ali', phone: '6825975784', callType: 'internship_interview',
+      name: 'Ali', phone: '2025550123', callType: 'internship_interview',
       brandSlug: 'colaberry-internship', prompt,
     } as any);
     expect(res.success).toBe(true);
-    expect(bodyOf(fetchSpy).phone).toBe('+16825975784');
+    expect(bodyOf(fetchSpy).phone).toBe('+12025550123');
     fetchSpy.mockRestore();
   });
 
   it('leaves an already-E.164 number alone', async () => {
     const fetchSpy = jest.spyOn(global as any, 'fetch').mockImplementation(okResponse as any);
     await triggerVoiceCall({
-      name: 'Ali', phone: '+16825975784', callType: 'internship_interview',
+      name: 'Ali', phone: '+12025550123', callType: 'internship_interview',
       brandSlug: 'colaberry-internship', prompt,
     } as any);
-    expect(bodyOf(fetchSpy).phone).toBe('+16825975784');
+    expect(bodyOf(fetchSpy).phone).toBe('+12025550123');
     fetchSpy.mockRestore();
   });
 
   it('normalizes a formatted number with punctuation', async () => {
     const fetchSpy = jest.spyOn(global as any, 'fetch').mockImplementation(okResponse as any);
     await triggerVoiceCall({
-      name: 'Ali', phone: '(682) 597-5784', callType: 'internship_interview',
+      name: 'Ali', phone: '(202) 555-0123', callType: 'internship_interview',
       brandSlug: 'colaberry-internship', prompt,
     } as any);
-    expect(bodyOf(fetchSpy).phone).toBe('+16825975784');
+    expect(bodyOf(fetchSpy).phone).toBe('+12025550123');
     fetchSpy.mockRestore();
   });
 
