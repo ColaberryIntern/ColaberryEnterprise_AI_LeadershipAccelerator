@@ -12,6 +12,31 @@ jest.mock('../../launchSafety', () => ({ isKillSwitchActiveStrict: jest.fn(async
 jest.mock('../voiceDialGuard', () => ({ isStaffAlertNumber: jest.fn(async () => false) }));
 
 const KEYS = ['VOICE_GATEWAY_LEGACY_ENABLED', 'VOICE_TEST_MAX_ATTEMPTS', 'VOICE_DESTINATION_HASH_KEY'];
+
+/** A raw read of a validated VOICE_* key: dot access, bracket access, or destructuring from process.env. */
+const VALIDATED_KEY = /VOICE_GATEWAY_LEGACY_ENABLED|VOICE_DESTINATION_HASH_KEY|VOICE_STUDIO_ENABLED|VOICE_TEST_[A-Z_]+|VOICE_ENGINE_DEFAULT/;
+export function readsValidatedVoiceKeyRaw(src: string): boolean {
+  const dot = /process\.env\.(\w+)/g;
+  const bracket = /process\.env\[\s*['"`](\w+)['"`]\s*\]/g;
+  const destructure = /\{([^}]*)\}\s*=\s*process\.env\b/g;
+  for (const re of [dot, bracket]) for (const m of src.matchAll(re)) if (VALIDATED_KEY.test(m[1])) return true;
+  for (const m of src.matchAll(destructure)) if (VALIDATED_KEY.test(m[1])) return true;
+  return false;
+}
+
+describe('readsValidatedVoiceKeyRaw (control)', () => {
+  it.each([
+    ["const on = process.env.VOICE_GATEWAY_LEGACY_ENABLED === 'true';"],
+    ["const on = process.env['VOICE_GATEWAY_LEGACY_ENABLED'];"],
+    ['const { VOICE_DESTINATION_HASH_KEY } = process.env;'],
+    ['const { A, VOICE_TEST_MAX_ATTEMPTS: n } = process.env;'],
+  ])('flags %j', (src) => expect(readsValidatedVoiceKeyRaw(src)).toBe(true));
+  it.each([
+    ['const x = process.env.VOICE_CALL_PATHS;'],
+    ["const x = process.env['DATABASE_URL'];"],
+    ['const { DATABASE_URL } = process.env;'],
+  ])('does not flag unvalidated keys: %j', (src) => expect(readsValidatedVoiceKeyRaw(src)).toBe(false));
+});
 function withEnv(vars: Record<string, string>, fn: () => void) {
   const saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
   for (const k of KEYS) delete process.env[k];
@@ -63,7 +88,7 @@ describe('validated voice config is the single source of truth', () => {
         const p = path.join(d, e.name);
         if (e.isDirectory()) { if (e.name !== '__tests__' && e.name !== 'node_modules') walk(p); continue; }
         if (!/\.(ts|js)$/.test(e.name) || p.endsWith('voiceConfig.ts')) continue;
-        if (/process\.env\.(VOICE_GATEWAY_LEGACY_ENABLED|VOICE_DESTINATION_HASH_KEY|VOICE_STUDIO_ENABLED|VOICE_TEST_[A-Z_]+|VOICE_ENGINE_DEFAULT)\b/.test(fs.readFileSync(p, 'utf8'))) {
+        if (readsValidatedVoiceKeyRaw(fs.readFileSync(p, 'utf8'))) {
           offenders.push(path.relative(root, p).replace(/\\/g, '/'));
         }
       }
