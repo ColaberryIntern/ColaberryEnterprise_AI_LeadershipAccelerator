@@ -111,12 +111,43 @@ discriminate rather than being coupled to one another.
 to exactly 1 row, so the new null-tenant guard cannot change what the four existing
 `resolveExplorerBrandId` call sites see.
 
-## What this does not do
+## The 26 were backfilled, on Ali's instruction
 
-It does not backfill the 26. They stay contextless until something writes them, and
-`repairAllExplorerBridges` does not write relationships. The forward path is fixed; the 26
-need a separate deliberate run, which is a prod write and therefore Ali's call.
+Ali, 2026-11-24: **"backfill the 26"**. Run the same afternoon, before this PR merged, so
+the forward fix and the history repair are independent of one another.
 
-It also does not address the single `ccpp_winback` row. That door reaches
-`ensureLeadTenantContext` through `leadIngestionService`, so one contextless row there is a
-different question from the 25 and is not diagnosed here.
+It reused the script that wrote the 939 rows on 11-23 rather than a fresh one, because that
+script already carries the guards this write needed: it goes through `ensureLeadTenantContext`
+(the declared sole writer, so the rows cannot drift from how the product makes them), it is
+dry-run by default, it aborts if its own control comes back zero, and it never passes consent.
+
+Dry run first: 26 to write, control 1,221 already holding one. Then the write:
+`created=26 existing=0 failed=0`.
+
+**Verified independently afterwards, not taken from the script's own report:**
+
+| Check | Result |
+|---|---|
+| Explorer profiles with a context | **1,247 of 1,247**, 0 missing |
+| rows created today granting consent | **0** |
+| with `consent_at` set | **0** |
+| with `consent_source` set | **0** |
+| tenant / brand / relationship of all 26 | one group: `colaberry` / `colaberry-training` / `learner` |
+| `lead_tenant_contexts` total | 1,281 to **1,307**, exactly +26 |
+| **control:** consented rows exist all-time | **222**, so the zeros above are real and not an unpopulated column |
+| idempotency: second run | finds **0** to do, control 1,247 |
+| all five sub-flags / master flag | unset / exactly `true` |
+| control: `printenv` works | `NODE_ENV=production` |
+| AD-1: Explorer Growth still mounted | yes |
+
+The control row is the one that matters. Without it, "0 rows granted consent" is equally
+consistent with a consent column nobody ever writes, and the safety claim would rest on
+nothing.
+
+## What this still does not do
+
+It does not address the single `ccpp_winback` row's *cause*. That row now has a context like
+the rest, but its door reaches `ensureLeadTenantContext` through `leadIngestionService`, so
+why it arrived without one is a different question from the 25 and is not diagnosed here. If
+a contextless `ccpp_winback` profile appears again after this PR ships, that is the thread to
+pull.
