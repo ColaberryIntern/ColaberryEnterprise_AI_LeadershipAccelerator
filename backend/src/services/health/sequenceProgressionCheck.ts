@@ -67,6 +67,20 @@ import type { HealthCheck } from '../systemHealthService';
  *    with the same rule written in SQL.
  */
 
+/*
+ * ─── 2026-11-24: AUDIENCE-TAGGED FOLLOW-UPS ARE EXCLUDED TOO ────────────────
+ *
+ * An audience-tagged follow-up (any step with audience 'attended' or 'missed';
+ * see sequenceService.isAudienceTaggedSequence) books every step a person gets
+ * up front, and its steps alternate audiences: an attendee gets 0, 2, 4 and
+ * never 1 or 3. So "step 0 sent, no step 1" is the correct end state for every
+ * attendee, and scheduleNextStep deliberately refuses to chain it (chaining
+ * would send an attendee the "you missed it" email). Without this exclusion the
+ * check reported every attendee as stalled, the auto-fix recovered 0, and the
+ * Open House Follow-up (Maya) raised a CRITICAL for 7 days after each event
+ * (23 attendees on 2026-11-24, all verified as 0:sent 2:pending 4:pending).
+ */
+
 // ── 1. Sequence Progression Gaps ────────────────────────────────────────────
 // Detects leads that completed a step but have no next step scheduled.
 // This means scheduleNextStep() silently failed after send.
@@ -97,6 +111,8 @@ export async function checkSequenceProgression(checks: HealthCheck[]): Promise<v
                              OR st->>'minutes_before_call' IS NOT NULL
                              OR st->>'days_before_cohort_start' IS NOT NULL)
             )
+            AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(fs.steps) st
+                            WHERE st->>'audience' IN ('attended', 'missed'))
         )
     `);
 
