@@ -10,10 +10,10 @@ import { activeBootCall } from './helpers/bootCalls';
 const SQL = voiceStudioStatements().join('\n');
 
 describe('Voice Studio schema: additive and scoped', () => {
-  it('creates exactly the 13 voice_* tables and nothing else', () => {
+  it('creates exactly the 14 voice_* tables and nothing else', () => {
     const created = (SQL.match(/CREATE TABLE IF NOT EXISTS (\w+)/g) || []).map((s) => s.replace('CREATE TABLE IF NOT EXISTS ', ''));
     expect(created).toEqual([...VOICE_STUDIO_TABLES]);
-    expect(created).toHaveLength(13);
+    expect(created).toHaveLength(14);
     for (const t of created) expect(t).toMatch(/^voice_/);
   });
 
@@ -32,7 +32,7 @@ describe('Voice Studio schema: additive and scoped', () => {
   });
 
   it('call-scoped tables cascade from voice_calls so a retention delete removes them', () => {
-    for (const t of ['voice_call_events', 'voice_turns', 'voice_tool_runs', 'voice_artifacts', 'voice_usage']) {
+    for (const t of ['voice_call_events', 'voice_turns', 'voice_tool_runs', 'voice_artifacts', 'voice_usage', 'voice_token_uses']) {
       const spec = VOICE_TABLE_SPECS.find((s) => s.table === t)!;
       expect(createTableSql(spec)).toMatch(/REFERENCES voice_calls\(id\) ON DELETE CASCADE/);
     }
@@ -40,7 +40,7 @@ describe('Voice Studio schema: additive and scoped', () => {
 
   it('creates voice_calls before any table that references it (dependency order)', () => {
     const order = VOICE_TABLE_SPECS.map((s) => s.table);
-    for (const t of ['voice_call_events', 'voice_turns', 'voice_tool_runs', 'voice_artifacts', 'voice_usage']) {
+    for (const t of ['voice_call_events', 'voice_turns', 'voice_tool_runs', 'voice_artifacts', 'voice_usage', 'voice_token_uses']) {
       expect(order.indexOf('voice_calls')).toBeLessThan(order.indexOf(t));
     }
     expect(order.indexOf('voice_agent_profiles')).toBeLessThan(order.indexOf('voice_agent_versions'));

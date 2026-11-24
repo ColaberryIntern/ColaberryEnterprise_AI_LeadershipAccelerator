@@ -13,6 +13,7 @@ import deliveryAdminRoutes from './routes/deliveryAdminRoutes';
 import leadRoutes from './routes/leadRoutes';
 import enrollmentRoutes from './routes/enrollmentRoutes';
 import webhookRoutes from './routes/webhookRoutes';
+import voiceWebhookRoutes from './routes/voiceWebhookRoutes';
 import unsubscribeRoutes from './routes/unsubscribeRoutes';
 import broadcastRoutes from './routes/broadcastRoutes';
 import broadcastMediaRoutes from './routes/broadcastMediaRoutes';
@@ -261,6 +262,8 @@ app.use(traceMiddleware);
 
 // Webhook routes — each sub-route handles its own body parsing
 app.use(webhookRoutes);
+// Voice AI Studio Twilio webhooks (VS2.1): absent unless a voice flag is on; Twilio-signed; own body parser.
+app.use(voiceWebhookRoutes);
 
 // Public one-click unsubscribe — mounted before the JSON parser; the POST
 // (RFC 8058 one-click) handles its own urlencoded body parsing.

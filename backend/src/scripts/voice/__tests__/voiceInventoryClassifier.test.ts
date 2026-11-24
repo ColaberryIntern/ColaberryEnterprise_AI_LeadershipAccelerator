@@ -23,6 +23,11 @@ describe('voiceInventoryClassifier', () => {
     expect(r.role).not.toBe('DISPATCH');
   });
 
+  it('marks a POST to the Twilio Calls API as DISPATCH (VS2.1 carrier), but not a Twilio Messages send', () => {
+    expect(classifyVoiceFile('backend/src/services/x.ts', "const API = 'https://api.twilio.com/2010-04-01'; fetch(`${API}/Accounts/${a}/Calls.json`, { method: 'POST' })").role).toBe('DISPATCH');
+    expect(classifyVoiceFile('backend/src/services/sms.ts', "fetch('https://api.twilio.com/2010-04-01/Accounts/A/Messages.json', { method: 'POST' })").role).not.toBe('DISPATCH');
+  });
+
   it('marks a direct POST to the Synthflow API as DISPATCH even without triggerVoiceCall', () => {
     const r = classifyVoiceFile('backend/src/services/rogue.ts', "fetch('https://api.synthflow.ai/v2/calls', { method: 'POST', body })");
     expect(r.role).toBe('DISPATCH');

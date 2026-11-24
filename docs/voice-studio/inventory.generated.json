@@ -1,15 +1,15 @@
 {
  "generatedFrom": "git ls-files",
- "total": 214,
+ "total": 221,
  "byRole": {
-  "DISPATCH": 2,
+  "DISPATCH": 3,
   "INGEST": 3,
   "GUARD": 6,
   "CALLER": 11,
   "CONFIG": 20,
   "UI": 22,
-  "CONSUMER": 44,
-  "MENTION": 106
+  "CONSUMER": 46,
+  "MENTION": 110
  },
  "rows": [
   {
@@ -99,6 +99,16 @@
    "role": "MENTION",
    "callTypes": [],
    "envVars": []
+  },
+  {
+   "path": "backend/src/controllers/voiceTwilioWebhookController.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_PUBLIC_BASE_URL",
+    "VOICE_STUDIO_ENABLED",
+    "VOICE_TEST_ENABLED"
+   ]
   },
   {
    "path": "backend/src/db/ensureAgentCommsSchema.ts",
@@ -308,6 +318,14 @@
    "role": "MENTION",
    "callTypes": [],
    "envVars": []
+  },
+  {
+   "path": "backend/src/routes/voiceWebhookRoutes.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_ROUTE_TABLE"
+   ]
   },
   {
    "path": "backend/src/routes/webhookRoutes.ts",
@@ -1201,12 +1219,44 @@
    ]
   },
   {
+   "path": "backend/src/services/voice/providers/twilioCarrier.ts",
+   "role": "DISPATCH",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
    "path": "backend/src/services/voice/synthflowWebhookAuth.ts",
    "role": "GUARD",
    "callTypes": [],
    "envVars": [
     "SYNTHFLOW_WEBHOOK_TOKEN"
    ]
+  },
+  {
+   "path": "backend/src/services/voice/twilio/correlationToken.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/twilio/twilioSignature.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_PUBLIC_BASE_URL"
+   ]
+  },
+  {
+   "path": "backend/src/services/voice/twilio/twilioStatusMap.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/twilio/voiceCallStore.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
   },
   {
    "path": "backend/src/services/voice/voiceCallPaths.ts",
