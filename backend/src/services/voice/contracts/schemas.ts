@@ -25,7 +25,8 @@ export type CallState = z.infer<typeof CallStateSchema>;
 /** States a call never leaves once reached (first terminal wins; see callStateReducer). */
 export const TERMINAL_STATES: ReadonlySet<CallState> = new Set(['blocked', 'completed', 'busy', 'no_answer', 'failed', 'canceled']);
 
-const uuid = z.string().uuid();
+/** UUIDs are compared as identities everywhere, so they are lowercased at the boundary (an uppercase copy is the same call). */
+const uuid = z.string().uuid().transform((s) => s.toLowerCase());
 /** Opaque reference to a recipient (lead/contact id or approved-destination id). Never a raw phone number. */
 const recipientRef = z.string().min(1).max(200).refine((s) => !/\d{7,}/.test(s.replace(/[\s().+-]/g, '')), {
   message: 'recipientRef must be an opaque reference, not a phone number',

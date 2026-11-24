@@ -12,7 +12,8 @@
  *    validate with CanonicalCallEventSchema first; this is a guard, not the contract.
  *
  * Rules (directive sections 3, 5 and 7):
- *  1. Duplicates (same eventKey) are ignored.
+ *  1. Exact duplicates are ignored; same eventKey with different content keeps both (see above).
+    Events for a different callId (compared case-insensitively) are not applied and are counted in foreignEvents.
  *  2. First terminal wins, by real time (Date.parse, so '...30Z' and '...30.500Z' compare correctly),
  *     ties broken by eventKey. Every other terminal with a different state counts as a conflict.
  *  3. Otherwise the highest-ranked non-terminal state wins; a late, older event cannot pull the call back.
@@ -53,6 +54,8 @@ export interface CallRecord {
   eventKeyConflicts: number;
   /** Events dropped because occurredAt did not parse. */
   invalidEvents: number;
+  /** Events addressed to a different callId (not applied). */
+  foreignEvents: number;
   lastErrorClass?: string;
 }
 
@@ -78,16 +81,19 @@ const PRE_DISPATCH: ReadonlySet<CallState> = new Set(['requested', 'reserved', '
 /** Rule 6: does this one event show the call reached the phone network? */
 function showsCallExisted(e: CanonicalCallEvent): boolean {
   if (e.providerCallId || e.answeredBy) return true;
-  if (e.source === 'gateway' || PRE_DISPATCH.has(e.state)) return false;
+  if (e.source === 'gateway') return false;
+  // Any carrier event, whatever its state, means the carrier knew about the call.
+  if (e.source === 'carrier') return true;
+  if (PRE_DISPATCH.has(e.state)) return false;
   if (e.source === 'reconciler' && e.errorClass === RECONCILED_NOT_CREATED) return false;
   return true;
 }
 
 export function initialCallRecord(callId: string): CallRecord {
-  return derive(callId, [], 0);
+  return derive(callId.toLowerCase(), [], 0, 0);
 }
 
-function derive(callId: string, events: CanonicalCallEvent[], invalidEvents: number): CallRecord {
+function derive(callId: string, events: CanonicalCallEvent[], invalidEvents: number, foreignEvents: number): CallRecord {
   const sorted = [...events].sort(byTime);
   const keys = sorted.map((e) => e.eventKey);
   const eventKeyConflicts = keys.length - new Set(keys).size;
@@ -131,17 +137,19 @@ function derive(callId: string, events: CanonicalCallEvent[], invalidEvents: num
     terminalConflicts,
     eventKeyConflicts,
     invalidEvents,
+    foreignEvents,
     lastErrorClass: withError.length ? withError[withError.length - 1].errorClass : undefined,
   };
 }
 
 /** Apply one event. Returns a new record; never mutates the input. */
 export function applyCallEvent(rec: CallRecord, ev: CanonicalCallEvent): CallRecord {
-  if (ev.callId !== rec.callId) return rec;
-  if (Number.isNaN(ms(ev.occurredAt))) return derive(rec.callId, rec.events, rec.invalidEvents + 1);
-  const c = content(ev);
-  if (rec.events.some((e) => e.eventKey === ev.eventKey && content(e) === c)) return rec;
-  return derive(rec.callId, [...rec.events, ev], rec.invalidEvents);
+  if (ev.callId.toLowerCase() !== rec.callId) return derive(rec.callId, rec.events, rec.invalidEvents, rec.foreignEvents + 1);
+  if (Number.isNaN(ms(ev.occurredAt))) return derive(rec.callId, rec.events, rec.invalidEvents + 1, rec.foreignEvents);
+  const norm: CanonicalCallEvent = { ...ev, callId: rec.callId };
+  const c = content(norm);
+  if (rec.events.some((e) => e.eventKey === norm.eventKey && content(e) === c)) return rec;
+  return derive(rec.callId, [...rec.events, norm], rec.invalidEvents, rec.foreignEvents);
 }
 
 /** Fold a batch. Same result as applying the events one at a time, in any arrival order. */

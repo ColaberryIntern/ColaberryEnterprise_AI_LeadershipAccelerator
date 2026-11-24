@@ -207,6 +207,34 @@ describe('adversarial round 2: any evidence of a call blocks redial, in every ar
     expect(r.state).toBe('answered');
   });
 
+  it('scenario 5 (attempt 3): an UPPERCASE copy of the callId is the same call, so its evidence blocks redial', () => {
+    const upper = { ...mk('ringing', 'carrier', '02', 'cr', { providerCallId: 'CAxxxx0005' }), callId: CALL.toUpperCase() };
+    const events = [upper, mk('failed', 'gateway', '03', 'gf')];
+    for (const order of permutations(events)) {
+      const r = order.reduce(applyCallEvent, initialCallRecord(CALL));
+      expect(r.callExisted).toBe(true);
+      expect(r.foreignEvents).toBe(0);
+      for (const outcome of [undefined, 'refused', 'unknown'] as const) expect(mayRedial(r, outcome)).toBe(false);
+    }
+  });
+
+  it('an uppercase exact duplicate is still a duplicate (no false key conflict)', () => {
+    const e = mk('ringing', 'carrier', '02', 'k');
+    const r = reduceCallEvents(CALL, [e, { ...e, callId: CALL.toUpperCase() }]);
+    expect(r.events).toHaveLength(1);
+    expect(r.eventKeyConflicts).toBe(0);
+  });
+
+  it('events for a genuinely different call are counted in foreignEvents, not silently dropped', () => {
+    const r = reduceCallEvents(CALL, [{ ...mk('ringing', 'carrier', '02', 'x'), callId: '33333333-3333-4333-8333-333333333333' }]);
+    expect(r.foreignEvents).toBe(1);
+    expect(r.state).toBe('requested');
+  });
+
+  it('a carrier-sourced event of ANY state (even blocked) means the carrier knew about the call', () => {
+    expect(mayRedial(reduceCallEvents(CALL, [mk('blocked', 'carrier', '02', 'cb')]))).toBe(false);
+  });
+
   it('a gateway-only block, with no evidence anywhere, stays redialable (no false lockout)', () => {
     expect(mayRedial(reduceCallEvents(CALL, [mk('reserved', 'gateway', '00', 'r'), mk('blocked', 'gateway', '01', 'b')]))).toBe(true);
   });
