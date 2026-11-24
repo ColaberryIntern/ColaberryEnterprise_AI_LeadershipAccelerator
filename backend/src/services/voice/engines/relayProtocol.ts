@@ -65,6 +65,14 @@ export function textToken(token: string, last: boolean): string {
   return JSON.stringify({ type: 'text', token, last });
 }
 
+/** Languages the test profile may switch to mid-call (Twilio language message). */
+export const SUPPORTED_LANGUAGES: ReadonlySet<string> = new Set(['en-US', 'es-US']);
+
+/** Switch Relay's speech recognition and voice language for the rest of the call. */
+export function languageSwitch(lang: string): string {
+  return JSON.stringify({ type: 'language', ttsLanguage: lang, transcriptionLanguage: lang });
+}
+
 export function endSession(handoffData?: string): string {
   return JSON.stringify(handoffData ? { type: 'end', handoffData } : { type: 'end' });
 }

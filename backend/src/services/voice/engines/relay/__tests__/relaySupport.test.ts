@@ -1,10 +1,10 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { buildRelayTwiml, endSession, parseRelayMessage, textToken, MAX_INBOUND_BYTES } from '../relayProtocol';
-import { decideUpgrade, signHandshake, RELAY_PATH } from '../voiceWsServer';
-import { classifyLlmError } from '../claudeVoiceLlm';
-import { formatSlotsForSpeech } from '../toolBroker';
-import { persistToolRun } from '../voiceRuntime';
-import { TEST_PROFILE } from '../voiceProfiles';
+import { buildRelayTwiml, endSession, parseRelayMessage, textToken, MAX_INBOUND_BYTES } from '../../relayProtocol';
+import { decideUpgrade, signHandshake, RELAY_PATH } from '../../voiceWsServer';
+import { classifyLlmError } from '../../claudeVoiceLlm';
+import { formatSlotsForSpeech } from '../../toolBroker';
+import { persistToolRun } from '../../voiceRuntime';
+import { TEST_PROFILE } from '../../voiceProfiles';
 
 const TOKEN = 'auth-token-for-tests-0123456789';
 const ON = { VOICE_TEST_ENABLED: 'true', VOICE_TEST_ALLOWED_NUMBER: '+15555550100', VOICE_WS_BASE_URL: 'wss://enterprise.colaberry.ai', TWILIO_AUTH_TOKEN: TOKEN };

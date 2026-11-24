@@ -22,7 +22,7 @@ import type { SessionHandle, SessionWorker } from '../session/sessionWorker';
 import type { TokenClaims } from '../twilio/correlationToken';
 import { verifyToken } from '../twilio/correlationToken';
 import type { VoiceLlm, VoiceMessage } from './claudeVoiceLlm';
-import { endSession, parseRelayMessage, textToken, type RelayInbound } from './relayProtocol';
+import { endSession, languageSwitch, parseRelayMessage, SUPPORTED_LANGUAGES, textToken, type RelayInbound } from './relayProtocol';
 import type { ToolBroker } from './toolBroker';
 import type { VoiceProfile } from './voiceProfiles';
 
@@ -55,6 +55,7 @@ export class RelayConnection {
   private malformed = 0;
   private settingUp = false;
   private closed = false;
+  private lang: string | null = null;
 
   constructor(private readonly t: RelayTransport, private readonly d: RelayDeps) {}
 
@@ -74,12 +75,26 @@ export class RelayConnection {
       return;
     }
     switch (m.type) {
-      case 'prompt': if (m.last && m.voicePrompt.trim()) await this.callerTurn(m.voicePrompt); break;
+      case 'prompt':
+        if (m.last && m.voicePrompt.trim()) {
+          this.switchLanguage(m.lang);
+          await this.callerTurn(m.voicePrompt);
+        }
+        break;
       case 'dtmf': await this.callerTurn(`(The caller pressed ${m.digit} on the keypad.)`); break;
       case 'interrupt': this.interrupt(m.utteranceUntilInterrupt); break;
       case 'error': this.log('warn', 'voice_relay_provider_error', { error_class: 'RelayProviderError' }); break;
       default: break; // info, or a second setup: ignored
     }
+  }
+
+  /** The caller is speaking a different supported language: switch Relay's recognition and voice once. */
+  private switchLanguage(lang: string | undefined): void {
+    const current = this.lang ?? this.d.profile.language;
+    if (!lang || lang === current || !SUPPORTED_LANGUAGES.has(lang)) return;
+    this.lang = lang;
+    this.t.send(languageSwitch(lang));
+    this.log('info', 'voice_relay_language_switched', { lang });
   }
 
   /** The socket closed (caller hung up, network, Twilio ended). */
@@ -186,8 +201,6 @@ export class RelayConnection {
       }
       if (r.stopReason === 'refusal') { say(SAFE_DECLINE, true); return this.finishAnswer(h, genId, spoken); }
       if (r.stopReason !== 'tool_use' || r.toolCalls.length === 0) { say('', true); return this.finishAnswer(h, genId, spoken); }
-      this.push({ role: 'assistant', content: r.assistantContent });
-      spoken = ''; // already in history inside assistantContent; do not add it twice
       const results = await Promise.all(r.toolCalls.map(async (c) => {
         h.toolStarted(c.id, c.name);
         const out = await this.broker!.run(c.id, c.name, c.input);
@@ -195,8 +208,14 @@ export class RelayConnection {
         if (out.errorClass) this.log('warn', 'voice_tool_failed', { tool: c.name, error_class: out.errorClass });
         return { type: 'tool_result' as const, tool_use_id: c.id, content: out.content, is_error: out.isError };
       }));
-      this.push({ role: 'user', content: results });
+      // The tool round enters history ATOMICALLY and only if this answer is still current. While the
+      // tool ran, the caller may have spoken (a new turn) or interrupted: their message is already in
+      // history, and a tool_use separated from its tool_result is a 400 from the API on every later
+      // turn (verifier attempt 1). A stale round is dropped; the tool run itself was still recorded.
       if (signal.aborted || (started && !h.accepts(turnId, genId))) return;
+      this.push({ role: 'assistant', content: r.assistantContent });
+      this.push({ role: 'user', content: results });
+      spoken = ''; // already in history inside assistantContent; do not add it twice
     }
     say(SORRY, true);
     this.finishAnswer(h, genId, spoken);

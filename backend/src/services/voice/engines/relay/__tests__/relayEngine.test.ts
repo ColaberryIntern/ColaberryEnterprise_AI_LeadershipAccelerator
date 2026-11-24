@@ -1,13 +1,37 @@
-import { RelayConnection, MAX_MALFORMED, type RelayDeps } from '../conversationRelayEngine';
-import type { LlmTurnResult, VoiceLlm, VoiceMessage } from '../claudeVoiceLlm';
-import { ToolBroker, nextOpenSlotsTool } from '../toolBroker';
-import { TEST_PROFILE } from '../voiceProfiles';
-import { SessionWorker } from '../../session/sessionWorker';
-import { correlationKey, mintToken } from '../../twilio/correlationToken';
+import { RelayConnection, MAX_MALFORMED, type RelayDeps } from '../../conversationRelayEngine';
+import type { LlmTurnResult, VoiceLlm, VoiceMessage } from '../../claudeVoiceLlm';
+import { ToolBroker, nextOpenSlotsTool } from '../../toolBroker';
+import { TEST_PROFILE } from '../../voiceProfiles';
+import { SessionWorker } from '../../../session/sessionWorker';
+import { correlationKey, mintToken } from '../../../twilio/correlationToken';
 
 const ACCOUNT = 'AC' + 'a7'.repeat(16);
 const SID = 'CA' + 'b8'.repeat(16);
 const CALL = '0b1c2d3e-4f50-4617-8899-aabbccddeeff';
+
+/**
+ * The Messages API's structural rule, enforced by the fake exactly as the real API's 400 would:
+ * every assistant tool_use is IMMEDIATELY followed by a user message whose content begins with the
+ * matching tool_result blocks, and no tool_result appears anywhere else.
+ */
+export function historyIsValid(messages: VoiceMessage[]): boolean {
+  const blocks = (m: VoiceMessage) => (Array.isArray(m.content) ? (m.content as Array<{ type: string; id?: string; tool_use_id?: string }>) : []);
+  for (let i = 0; i < messages.length; i++) {
+    const uses = blocks(messages[i]).filter((b) => b.type === 'tool_use').map((b) => b.id);
+    const results = blocks(messages[i]).filter((b) => b.type === 'tool_result').map((b) => b.tool_use_id);
+    if (results.length) {
+      const prevUses = i > 0 ? blocks(messages[i - 1]).filter((b) => b.type === 'tool_use').map((b) => b.id) : [];
+      if (messages[i].role !== 'user' || JSON.stringify([...results].sort()) !== JSON.stringify([...prevUses].sort())) return false;
+    }
+    if (uses.length) {
+      const next = messages[i + 1];
+      if (!next || next.role !== 'user') return false;
+      const nextResults = blocks(next).filter((b) => b.type === 'tool_result').map((b) => b.tool_use_id);
+      if (JSON.stringify([...nextResults].sort()) !== JSON.stringify([...uses].sort())) return false;
+    }
+  }
+  return true;
+}
 
 /** A scripted model turn: deltas, optional gate before each delta, then a stop. */
 interface Script { deltas?: string[]; gateAt?: number; ignoreAbort?: boolean; tool?: { id: string; name: string; input?: unknown }; stop?: string; fail?: string }
@@ -18,6 +42,7 @@ function scriptedLlm(scripts: Script[]) {
   const llm: VoiceLlm = {
     async streamTurn({ messages, tools, signal, onText }): Promise<LlmTurnResult> {
       calls.push({ messages: JSON.parse(JSON.stringify(messages)), tools: tools.length });
+      if (!historyIsValid(messages)) return { ok: false, errorClass: 'LlmRequestRejected', aborted: false }; // what the real API's 400 becomes
       const s = scripts.shift() ?? { deltas: ['ok.'] };
       if (s.fail) return { ok: false, errorClass: s.fail, aborted: false };
       const deltas = s.deltas ?? [];
@@ -36,7 +61,7 @@ function scriptedLlm(scripts: Script[]) {
   return { llm, calls, release: () => release() };
 }
 
-function harness(scripts: Script[], over: Partial<RelayDeps> = {}) {
+function harness(scripts: Script[], over: Partial<RelayDeps> = {}, slotGate?: Promise<void>) {
   const sent: Array<Record<string, unknown>> = [];
   const closes: number[] = [];
   const logs: Record<string, unknown>[] = [];
@@ -48,7 +73,7 @@ function harness(scripts: Script[], over: Partial<RelayDeps> = {}) {
   const used = new Set<string>();
   const deps: RelayDeps = {
     worker, llm, profile: TEST_PROFILE,
-    broker: () => new ToolBroker([nextOpenSlotsTool(async () => { slotCalls++; return { timezone: 'America/Chicago', dates: [{ date: '2026-12-01', slots: [{ start: '2026-12-01T16:00:00Z', end: '2026-12-01T16:30:00Z' }] }] }; })]),
+    broker: () => new ToolBroker([nextOpenSlotsTool(async () => { slotCalls++; if (slotGate) await slotGate; return { timezone: 'America/Chicago', dates: [{ date: '2026-12-01', slots: [{ start: '2026-12-01T16:00:00Z', end: '2026-12-01T16:30:00Z' }] }] }; })]),
     accountSid: () => ACCOUNT,
     consumeSessionRef: async (c) => { if (used.has(c.nonce)) return 'replay'; used.add(c.nonce); return 'consumed'; },
     callMatches: async (_id, sid) => sid === SID,
@@ -208,6 +233,64 @@ describe('Engine A protocol: the read-only tool (VS2.3)', () => {
     await h.prompt('slots?');
     expect(h.calls.map((c) => c.tools)).toEqual([1, 1, 0]); // last round offers no tools
     expect(h.spoken()).toBe('final');
+  });
+});
+
+describe('Engine A protocol: the caller acts while a tool is running (VS2.3, verifier attempt 1)', () => {
+  const tick = () => new Promise((r) => setImmediate(r));
+  function gated() { let open: () => void = () => undefined; const gate = new Promise<void>((r) => { open = r; }); return { gate, open: () => open() }; }
+
+  it.each([
+    ['speaks again (a new turn)', (h: ReturnType<typeof harness>) => h.prompt('actually never mind')],
+    ['interrupts the filler line', (h: ReturnType<typeof harness>) => h.conn.onMessage(JSON.stringify({ type: 'interrupt', utteranceUntilInterrupt: 'Let me' }))],
+  ])('caller %s mid-tool: history stays valid, the tool ran once, and later turns are answered normally', async (_n, act) => {
+    const g = gated();
+    const h = harness([
+      { deltas: ['Let me check. '], tool: { id: 'toolu_9', name: 'next_open_strategy_slots' } },
+      { deltas: ['No problem.'] }, { deltas: ['Sure, here.'] }, { deltas: ['Third answer.'] },
+    ], {}, g.gate);
+    await h.setup();
+    const first = h.prompt('slots?');
+    await tick(); await tick(); // the model asked for the tool; the tool is now blocked
+    const during = act(h);
+    g.open(); // the tool finishes AFTER the caller acted
+    await first; await during;
+    await h.prompt('one more thing');
+    await h.prompt('and another');
+    expect(h.slotCalls()).toBe(1);
+    expect(h.calls.every((c) => historyIsValid(c.messages))).toBe(true);
+    expect(h.spoken()).not.toMatch(/Sorry, I had trouble/);
+    expect(h.logs.filter((l) => l.event === 'voice_llm_turn_failed')).toHaveLength(0);
+    expect(h.tools).toEqual([expect.objectContaining({ toolCallId: 'toolu_9', afterClose: false })]); // still recorded
+  });
+});
+
+describe('Engine A protocol: DTMF, provider errors, language (VS2.3)', () => {
+  it('a keypad press becomes a caller turn the model can answer', async () => {
+    const h = harness([{ deltas: ['You pressed five.'] }]);
+    await h.setup();
+    await h.conn.onMessage(JSON.stringify({ type: 'dtmf', digit: '5' }));
+    expect(h.calls[0].messages[h.calls[0].messages.length - 1]).toEqual({ role: 'user', content: '(The caller pressed 5 on the keypad.)' });
+    expect(h.spoken()).toBe('You pressed five.');
+  });
+
+  it('a provider error frame is logged with an error class and the call continues', async () => {
+    const h = harness([{ deltas: ['Still here.'] }]);
+    await h.setup();
+    await h.conn.onMessage(JSON.stringify({ type: 'error', description: 'tts hiccup' }));
+    expect(h.logs).toContainEqual(expect.objectContaining({ event: 'voice_relay_provider_error', error_class: 'RelayProviderError' }));
+    await h.prompt('hello?');
+    expect(h.spoken()).toBe('Still here.');
+    expect(h.closes).toEqual([]);
+  });
+
+  it('a supported language change switches Relay once; an unsupported one is ignored', async () => {
+    const h = harness([{ deltas: ['Hola.'] }, { deltas: ['Claro.'] }, { deltas: ['Ok.'] }]);
+    await h.setup();
+    await h.conn.onMessage(JSON.stringify({ type: 'prompt', voicePrompt: 'hola', lang: 'es-US', last: true }));
+    await h.conn.onMessage(JSON.stringify({ type: 'prompt', voicePrompt: 'gracias', lang: 'es-US', last: true }));
+    await h.conn.onMessage(JSON.stringify({ type: 'prompt', voicePrompt: 'bonjour', lang: 'fr-FR', last: true }));
+    expect(h.sent.filter((m) => m.type === 'language')).toEqual([{ type: 'language', ttsLanguage: 'es-US', transcriptionLanguage: 'es-US' }]);
   });
 });
 
