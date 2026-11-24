@@ -15,7 +15,7 @@
 import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
-import { VOICE_SEARCH, classifyVoiceFile, sortInventory, summarize } from './voiceInventoryClassifier';
+import { VOICE_SEARCH, classifyVoiceFile, isInventoryCandidate, sortInventory, summarize } from './voiceInventoryClassifier';
 
 const SCOPE = /^(backend\/src|frontend\/src|scripts|nginx)\/|^docker-compose[^/]*\.yml$|^\.github\//;
 const EXCLUDE = /__tests__\/|\.test\.|\.spec\.|\.md$|^scripts\/artifacts\/tickets\/vs/;
@@ -26,7 +26,7 @@ function repoRoot(): string {
 
 export function buildInventory(root: string) {
   const files = execFileSync('git', ['ls-files'], { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
-    .split('\n').filter((f) => f && SCOPE.test(f) && !EXCLUDE.test(f));
+    .split('\n').filter((f) => f && SCOPE.test(f) && !EXCLUDE.test(f) && isInventoryCandidate(f));
   const rows = [];
   for (const f of files) {
     let content: string;

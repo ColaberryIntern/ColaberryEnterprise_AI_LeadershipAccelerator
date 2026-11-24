@@ -1,15 +1,15 @@
 {
  "generatedFrom": "git ls-files",
- "total": 137,
+ "total": 200,
  "byRole": {
   "DISPATCH": 1,
   "INGEST": 3,
-  "GUARD": 5,
+  "GUARD": 6,
   "CALLER": 11,
-  "CONFIG": 11,
-  "UI": 15,
-  "CONSUMER": 25,
-  "MENTION": 66
+  "CONFIG": 19,
+  "UI": 22,
+  "CONSUMER": 39,
+  "MENTION": 99
  },
  "rows": [
   {
@@ -41,8 +41,26 @@
    "envVars": []
   },
   {
+   "path": "backend/src/controllers/campaignDiagnosticsController.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/controllers/campaignSimulationController.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
    "path": "backend/src/controllers/enterpriseIntakeController.ts",
    "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/controllers/ghlWebhookController.ts",
+   "role": "MENTION",
    "callTypes": [],
    "envVars": []
   },
@@ -55,6 +73,12 @@
   {
    "path": "backend/src/controllers/mandrillWebhookController.ts",
    "role": "INGEST",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/controllers/openHouseController.ts",
+   "role": "CONSUMER",
    "callTypes": [],
    "envVars": []
   },
@@ -84,6 +108,18 @@
   },
   {
    "path": "backend/src/db/ensureInternshipSchema.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/db/ensureMultiTenantSchema.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/db/ensureProjectDiscoveryCallSchema.ts",
    "role": "CONSUMER",
    "callTypes": [],
    "envVars": []
@@ -119,13 +155,43 @@
    "envVars": []
   },
   {
+   "path": "backend/src/models/AutomationLog.ts",
+   "role": "CONFIG",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
    "path": "backend/src/models/CallContactLog.ts",
    "role": "CONFIG",
    "callTypes": [],
    "envVars": []
   },
   {
+   "path": "backend/src/models/CommunicationLog.ts",
+   "role": "CONFIG",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/models/CommunicationPreference.ts",
+   "role": "CONFIG",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
    "path": "backend/src/models/DeliveryDiscovery.ts",
+   "role": "CONFIG",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/models/EnterpriseIntake.ts",
+   "role": "CONFIG",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/models/FollowUpSequence.ts",
    "role": "CONFIG",
    "callTypes": [],
    "envVars": []
@@ -149,8 +215,32 @@
    "envVars": []
   },
   {
+   "path": "backend/src/models/ProjectDiscoveryCallRequest.ts",
+   "role": "CONFIG",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
    "path": "backend/src/models/ProjectUnderstandingRecord.ts",
    "role": "CONFIG",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/models/ScheduledEmail.ts",
+   "role": "CONFIG",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/models/index.ts",
+   "role": "CONFIG",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/modules/communications/brandPreferenceGate.ts",
+   "role": "MENTION",
    "callTypes": [],
    "envVars": []
   },
@@ -163,6 +253,18 @@
   {
    "path": "backend/src/routes/admin/kbRoutes.ts",
    "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/routes/admin/leadRoutes.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/routes/admin/productionCleanupRoute.ts",
+   "role": "CONSUMER",
    "callTypes": [],
    "envVars": []
   },
@@ -204,6 +306,12 @@
   },
   {
    "path": "backend/src/scripts/closeNotificationPlanTodo.js",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/scripts/ensureOpenHouseCountdownCampaign.ts",
    "role": "MENTION",
    "callTypes": [],
    "envVars": []
@@ -252,6 +360,42 @@
   },
   {
    "path": "backend/src/scripts/sendSmsVoicePlanEmail.js",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/seeds/explorerGrowth/explorerSequenceDefinitions.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/seeds/seedColdOutboundCampaign.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/seeds/seedDefaultSequence.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/seeds/seedExecutiveBriefingCampaign.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/seeds/seedMayaCampaigns.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/seeds/seedNoShowCampaign.ts",
    "role": "MENTION",
    "callTypes": [],
    "envVars": []
@@ -329,6 +473,18 @@
    "envVars": []
   },
   {
+   "path": "backend/src/services/agents/admissions/admissionsEmailAgent.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/agents/admissions/admissionsSMSAgent.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
    "path": "backend/src/services/agents/admissions/admissionsSynthflowCallAgent.ts",
    "role": "CALLER",
    "callTypes": [
@@ -339,6 +495,12 @@
   {
    "path": "backend/src/services/agents/agentCommsSweep.ts",
    "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/agents/email/agentReplyDelivery.ts",
+   "role": "MENTION",
    "callTypes": [],
    "envVars": []
   },
@@ -421,8 +583,44 @@
    "envVars": []
   },
   {
+   "path": "backend/src/services/campaignBuilderService.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
    "path": "backend/src/services/campaignHealthScanner.ts",
    "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/campaignLifecycleService.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/campaignRebuildService.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/campaignWatchdogService.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/communicationLogService.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/communicationSafetyService.ts",
+   "role": "GUARD",
    "callTypes": [],
    "envVars": []
   },
@@ -451,6 +649,12 @@
    "envVars": []
   },
   {
+   "path": "backend/src/services/dashboardService.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
    "path": "backend/src/services/dashboardThresholdWatcherService.ts",
    "role": "MENTION",
    "callTypes": [],
@@ -469,6 +673,22 @@
    "envVars": []
   },
   {
+   "path": "backend/src/services/delivery/projectUnderstanding.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_INTAKE_MAP"
+   ]
+  },
+  {
+   "path": "backend/src/services/delivery/projectUnderstandingExtractor.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_INTAKE_MAP"
+   ]
+  },
+  {
    "path": "backend/src/services/delivery/recordProjectUnderstanding.ts",
    "role": "CONSUMER",
    "callTypes": [],
@@ -477,6 +697,18 @@
   {
    "path": "backend/src/services/email/mayaEmailTransport.ts",
    "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/emailService.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/enrollmentService.ts",
+   "role": "CONSUMER",
    "callTypes": [],
    "envVars": []
   },
@@ -491,6 +723,12 @@
   {
    "path": "backend/src/services/enterpriseIntake/enterpriseIntakeSource.ts",
    "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/enterpriseIntake/enterpriseIntakeSync.ts",
+   "role": "CONSUMER",
    "callTypes": [],
    "envVars": []
   },
@@ -515,7 +753,67 @@
    "envVars": []
   },
   {
+   "path": "backend/src/services/explorerGrowth/send/explorerSendGuards.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/freeSignupService.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
    "path": "backend/src/services/governanceService.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/growthJourney/conversationOwnershipService.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/growthJourney/execution/aliOutreachContext.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/growthJourney/execution/planExecution.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/growthJourney/governor/contactEvidence.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/growthJourney/handoffs/handoffSignals.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/inbound/agentRecipientRouter.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/inbound/inboundAutoReply.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/interactionService.ts",
    "role": "MENTION",
    "callTypes": [],
    "envVars": []
@@ -575,6 +873,12 @@
   {
    "path": "backend/src/services/maya/mayaMemory.ts",
    "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/maya/mayaOutboundDelivery.ts",
+   "role": "MENTION",
    "callTypes": [],
    "envVars": []
   },
@@ -669,6 +973,12 @@
    "envVars": []
   },
   {
+   "path": "backend/src/services/personHistoryService.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
    "path": "backend/src/services/reese/agentToolCapabilities.ts",
    "role": "CONSUMER",
    "callTypes": [],
@@ -682,6 +992,12 @@
   },
   {
    "path": "backend/src/services/reporting/campaignGraphService.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/routingActionsService.ts",
    "role": "CONSUMER",
    "callTypes": [],
    "envVars": []
@@ -710,6 +1026,12 @@
    ]
   },
   {
+   "path": "backend/src/services/sbp/projectDiscoveryTranscript.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
    "path": "backend/src/services/schedulerService.ts",
    "role": "CALLER",
    "callTypes": [
@@ -726,6 +1048,12 @@
    "envVars": [
     "ENABLE_VOICE_CALLS"
    ]
+  },
+  {
+   "path": "backend/src/services/sequenceService.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
   },
   {
    "path": "backend/src/services/settingsService.ts",
@@ -813,6 +1141,18 @@
    "envVars": []
   },
   {
+   "path": "backend/src/services/welcome/paidMemberWelcomeService.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/welcome/sendPortalWelcome.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
    "path": "backend/src/utils/errorClassifier.ts",
    "role": "MENTION",
    "callTypes": [],
@@ -837,13 +1177,37 @@
    ]
   },
   {
+   "path": "frontend/src/components/CommunicationLogPanel.tsx",
+   "role": "UI",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
    "path": "frontend/src/components/admin/ActivityTimeline.tsx",
    "role": "UI",
    "callTypes": [],
    "envVars": []
   },
   {
+   "path": "frontend/src/components/admin/intelligence/CampaignNodeDetailsPanel.tsx",
+   "role": "UI",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "frontend/src/components/admin/internship/FlotationIntakePanel.tsx",
+   "role": "UI",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
    "path": "frontend/src/components/admin/internship/SpokenIntake.tsx",
+   "role": "UI",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "frontend/src/components/admin/internship/flotationIntakeSession.ts",
    "role": "UI",
    "callTypes": [],
    "envVars": []
@@ -861,6 +1225,12 @@
    "envVars": []
   },
   {
+   "path": "frontend/src/components/campaign/SequenceStepEditor.tsx",
+   "role": "UI",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
    "path": "frontend/src/components/explorerGrowth/ControlsCard.tsx",
    "role": "UI",
    "callTypes": [],
@@ -868,6 +1238,12 @@
   },
   {
    "path": "frontend/src/pages/admin/AdminAISettingsPage.tsx",
+   "role": "UI",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "frontend/src/pages/admin/AdminDashboardPage.tsx",
    "role": "UI",
    "callTypes": [],
    "envVars": []
@@ -916,6 +1292,12 @@
   },
   {
    "path": "frontend/src/services/explorerGrowthApi.ts",
+   "role": "UI",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "frontend/src/services/intelligenceApi.ts",
    "role": "UI",
    "callTypes": [],
    "envVars": []

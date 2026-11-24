@@ -1,6 +1,16 @@
-import { classifyVoiceFile, sortInventory, summarize, VOICE_SEARCH } from '../voiceInventoryClassifier';
+import { classifyVoiceFile, isInventoryCandidate, sortInventory, summarize, VOICE_SEARCH } from '../voiceInventoryClassifier';
 
 describe('voiceInventoryClassifier', () => {
+  it('excludes its own tooling so committing it cannot make the snapshot stale (regression: VS1.1 attempt 1)', () => {
+    expect(isInventoryCandidate('backend/src/scripts/voice/voiceInventoryClassifier.ts')).toBe(false);
+    expect(isInventoryCandidate('backend\\src\\scripts\\voice\\docsCheck.ts')).toBe(false);
+    expect(isInventoryCandidate('backend/src/services/synthflowService.ts')).toBe(true);
+  });
+
+  it('search set also covers the directive\'s call_id, CommunicationLog and VOICE_* variants', () => {
+    for (const s of ['row.call_id', 'CommunicationLog.findAll', 'VOICE_TEST_ENABLED']) expect(VOICE_SEARCH.test(s)).toBe(true);
+  });
+
   it('marks the triggerVoiceCall definition as DISPATCH (happy path)', () => {
     const r = classifyVoiceFile('backend/src/services/synthflowService.ts',
       "export async function triggerVoiceCall(p) { return fetch('https://api.synthflow.ai/v2/calls'); }");

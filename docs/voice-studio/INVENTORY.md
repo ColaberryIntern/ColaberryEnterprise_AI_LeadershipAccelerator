@@ -12,18 +12,20 @@ Status: **IMPLEMENTED_UNVERIFIED** until the VS1.1 task verifier passes.
 
 Other network touches: `fetchSynthflowCall` (GET one call, same file, used by pollers) and `systemHealthService.ts:294` (GET health probe, 5 s timeout; not a dial).
 
-## Classifier snapshot (137 files matching the search set)
+## Classifier snapshot (200 files matching the search set)
+
+Search set (the directive's list): synthflow, syntheflow, triggerVoiceCall, place_ai_call, voiceCall, SYNTHFLOW_*, ENABLE_VOICE_CALLS, VOICE_CALL_PATHS, call_id, CommunicationLog, VOICE_*. Scope: tracked non-test files under backend/src, frontend/src, scripts, nginx, docker-compose*.yml and .github. Excluded: tests, markdown, and the Voice Studio's own tooling (backend/src/scripts/voice/), which names every search term by design.
 
 | Role | Files |
 |---|---|
 | DISPATCH | 1 |
 | CALLER | 11 |
-| GUARD | 5 |
+| GUARD | 6 |
 | INGEST | 3 |
-| CONSUMER | 25 |
-| CONFIG | 11 |
-| UI | 15 |
-| MENTION | 66 |
+| CONSUMER | 39 |
+| CONFIG | 19 |
+| UI | 22 |
+| MENTION | 99 |
 
 The hand reading below is wider than the classifier, because indirect callers (that reach `triggerVoiceCall` through `requestInstantCallback`, `requestEnterpriseIntakeCall` or `requestProjectDiscoveryCall`) never mention Synthflow. They are listed under "Indirect callers".
 

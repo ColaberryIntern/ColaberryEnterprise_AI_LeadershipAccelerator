@@ -22,7 +22,18 @@ export interface VoiceInventoryRow {
 }
 
 /** What makes a file part of the inventory at all. Mirrors the search set in INVENTORY.md. */
-export const VOICE_SEARCH = /synthflow|syntheflow|triggerVoiceCall|place_ai_call|voiceCall|SYNTHFLOW_|ENABLE_VOICE_CALLS|VOICE_CALL_PATHS/i;
+export const VOICE_SEARCH = /synthflow|syntheflow|triggerVoiceCall|place_ai_call|voiceCall|SYNTHFLOW_|ENABLE_VOICE_CALLS|VOICE_CALL_PATHS|\bcall_id\b|CommunicationLog|\bVOICE_[A-Z][A-Z0-9_]*/i;
+
+/**
+ * The Voice Studio's own tooling (this classifier, the CLI, docs-check) mentions every search term by
+ * design. Counting it would make the committed snapshot stale the moment the tooling itself is
+ * committed (VS1.1 verifier finding, attempt 1), so it is out of scope by path.
+ */
+export const TOOLING_PATH = /^backend\/src\/scripts\/voice\//;
+
+export function isInventoryCandidate(path: string): boolean {
+  return !TOOLING_PATH.test(path.replace(/\\/g, '/'));
+}
 
 const DISPATCH_DEF = /export\s+(async\s+)?function\s+triggerVoiceCall\b/;
 /** A Synthflow URL is only a dispatch when it is POSTed to; a GET (e.g. the health check) only reads. */
