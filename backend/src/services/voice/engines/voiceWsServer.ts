@@ -1,14 +1,15 @@
 /**
- * Voice WebSocket endpoint (VS2.3): accepts Twilio ConversationRelay connections on
- * /api/voice-ws/relay (nginx forwards /api/voice-ws/ with upgrade headers).
+ * Voice WebSocket endpoints: Twilio ConversationRelay on /api/voice-ws/relay (VS2.3) and Twilio Media
+ * Streams on /api/voice-ws/stream (VS2.4). nginx forwards /api/voice-ws/ with upgrade headers.
  *
  * The upgrade is refused before any WebSocket exists unless ALL hold:
  *   - a voice flag is on (else 404: the endpoint does not exist),
  *   - TWILIO_AUTH_TOKEN, VOICE_WS_BASE_URL are configured (else 403 ConfigMissing, fail closed),
  *   - X-Twilio-Signature validates for the URL Twilio connected to. Twilio documents a signature on
  *     the handshake but not the exact URL form, so both forms of OUR configured URL are accepted:
- *     wss://host/path?query and https://host/path?query. Both name only our own host; the query
- *     carries nothing secret (the session ref is in the setup message, single-use).
+ *     wss://host/path?query and https://host/path?query, each also with a trailing slash on the path
+ *     (Twilio's security page advises that for Media Streams handshakes). All name only our own
+ *     host; the session ref travels in the first message, single-use, never in the URL.
  * The single-use session ref, account and CallSid are then checked on the first (setup) message.
  *
  * Upgrades for any other path are left alone (no other handler exists today; nothing is destroyed).
@@ -20,8 +21,10 @@ import { loadVoiceConfig } from '../voiceConfig';
 import { computeTwilioSignature, isValidTwilioSignature } from '../twilio/twilioSignature';
 import { twilioAuthToken } from '../twilio/twilioCredentials';
 import { RelayConnection, type RelayDeps } from './conversationRelayEngine';
+import { RealtimeBridge, type RealtimeDeps } from './realtime/openaiRealtimeEngine';
 
 export const RELAY_PATH = '/api/voice-ws/relay';
+export const STREAM_PATH = '/api/voice-ws/stream';
 const MAX_PAYLOAD = 64 * 1024;
 
 export type UpgradeDecision = { accept: true } | { accept: false; status: 403 | 404; errorClass: string };
@@ -35,8 +38,13 @@ export function decideUpgrade(req: Pick<IncomingMessage, 'url' | 'headers'>, env
   const sig = req.headers['x-twilio-signature'];
   const given = Array.isArray(sig) ? sig[0] : sig;
   const host = new URL(c.VOICE_WS_BASE_URL).hostname;
-  const pathAndQuery = req.url || '';
-  const ok = [`wss://${host}${pathAndQuery}`, `https://${host}${pathAndQuery}`].some((u) => isValidTwilioSignature(token, u, {}, given));
+  const url = req.url || '';
+  const qi = url.indexOf('?');
+  const path = qi < 0 ? url : url.slice(0, qi);
+  const q = qi < 0 ? '' : url.slice(qi);
+  const paths = path.endsWith('/') ? [path] : [path, `${path}/`];
+  const candidates = paths.flatMap((p) => [`wss://${host}${p}${q}`, `https://${host}${p}${q}`]);
+  const ok = candidates.some((u) => isValidTwilioSignature(token, u, {}, given));
   return ok ? { accept: true } : { accept: false, status: 403, errorClass: 'TwilioSignatureInvalid' };
 }
 
@@ -48,11 +56,13 @@ function refuse(socket: Duplex, status: 403 | 404): void {
   socket.destroy();
 }
 
-export function attachVoiceWsServer(server: Server, deps: () => RelayDeps, log: (line: Record<string, unknown>) => void): WebSocketServer {
+export interface VoiceWsDeps { relay: () => RelayDeps; stream: () => RealtimeDeps }
+
+export function attachVoiceWsServer(server: Server, deps: VoiceWsDeps, log: (line: Record<string, unknown>) => void): WebSocketServer {
   const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_PAYLOAD });
   server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     const path = (req.url || '').split('?')[0];
-    if (path !== RELAY_PATH) return;
+    if (path !== RELAY_PATH && path !== STREAM_PATH) return;
     const d = decideUpgrade(req);
     if (!d.accept) {
       log({ level: 'warn', service: 'voice-studio', event: 'voice_ws_upgrade_refused', outcome: 'failure', error_class: d.errorClass, status: d.status });
@@ -60,9 +70,16 @@ export function attachVoiceWsServer(server: Server, deps: () => RelayDeps, log: 
       return;
     }
     wss.handleUpgrade(req, socket, head, (ws) => {
-      const conn = new RelayConnection({ send: (t) => { if (ws.readyState === ws.OPEN) ws.send(t); }, close: (code) => ws.close(code) }, deps());
-      ws.on('message', (data: Buffer) => { void conn.onMessage(data); });
-      ws.on('close', () => conn.onClose());
+      const sock = { send: (t: string) => { if (ws.readyState === ws.OPEN) ws.send(t); }, close: (code?: number) => ws.close(code) };
+      if (path === RELAY_PATH) {
+        const conn = new RelayConnection(sock, deps.relay());
+        ws.on('message', (data: Buffer) => { void conn.onMessage(data); });
+        ws.on('close', () => conn.onClose());
+      } else {
+        const bridge = new RealtimeBridge(sock, deps.stream());
+        ws.on('message', (data: Buffer) => { void bridge.onTwilio(data); });
+        ws.on('close', () => bridge.onTwilioClose());
+      }
       ws.on('error', (e: Error) => log({ level: 'warn', service: 'voice-studio', event: 'voice_ws_socket_error', outcome: 'failure', error_class: e.name || 'SocketError' }));
     });
   });

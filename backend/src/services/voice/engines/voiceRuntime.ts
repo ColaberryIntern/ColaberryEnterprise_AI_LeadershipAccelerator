@@ -6,9 +6,13 @@
  *   - Tool runs are written to voice_tool_runs idempotently (ON CONFLICT on (call_id, idempotency_key)),
  *     with up to 3 attempts and backoff, so a committed action survives a brief database blip
  *     (carry from VS2.2). After that it is logged as voice_tool_record_lost for manual triage.
- *   - The answer TwiML for a call depends on its engine (voice_calls.engine). Engine B joins in VS2.4.
+ *   - The answer TwiML for a call depends on its engine (voice_calls.engine): ConversationRelay for
+ *     Engine A, a bidirectional Media Stream for Engine B (VS2.4).
+ *   - Engine B's model connection: wss to OpenAI Realtime with the server-side OPENAI_API_KEY, a 10 s
+ *     handshake timeout, and no retry (a reconnect mid-call would lose the conversation; the call ends).
  */
 import type { Server } from 'http';
+import WebSocket from 'ws';
 import { performance } from 'perf_hooks';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../../../config/database';
@@ -23,7 +27,9 @@ import type { RelayDeps } from './conversationRelayEngine';
 import { buildRelayTwiml } from './relayProtocol';
 import { nextOpenSlotsTool, ToolBroker } from './toolBroker';
 import { TEST_PROFILE } from './voiceProfiles';
-import { attachVoiceWsServer, RELAY_PATH } from './voiceWsServer';
+import { attachVoiceWsServer, RELAY_PATH, STREAM_PATH } from './voiceWsServer';
+import type { ModelHandlers, RealtimeDeps, SocketLike } from './realtime/openaiRealtimeEngine';
+import { buildStreamTwiml } from './realtime/streamProtocol';
 
 const HANGUP = '<?xml version="1.0" encoding="UTF-8"?><Response><Hangup/></Response>';
 const log = (line: Record<string, unknown>): void => {
@@ -80,11 +86,47 @@ export function relayDeps(): RelayDeps {
   return {
     worker: getWorker(),
     llm: createClaudeVoiceLlm(c.VOICE_ENGINE_A_MODEL),
-    broker: () => new ToolBroker([nextOpenSlotsTool(() => getAvailableSlots(14, admissionsCalendar()))]),
+    broker: slotTool,
     profile: TEST_PROFILE,
     accountSid: () => process.env.TWILIO_ACCOUNT_SID || undefined,
     consumeSessionRef: consumeToken,
     callMatches,
+    now: () => Date.now(),
+    log,
+  };
+}
+
+const slotTool = () => new ToolBroker([nextOpenSlotsTool(() => getAvailableSlots(14, admissionsCalendar()))]);
+
+/** Open the OpenAI Realtime WebSocket. The key never leaves the server and is never logged. */
+export function connectOpenAiRealtime(model: string, h: ModelHandlers): SocketLike {
+  const ws = new WebSocket(`wss://api.openai.com/v1/realtime?model=${encodeURIComponent(model)}`, {
+    headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY ?? ''}` },
+    handshakeTimeout: 10_000,
+    maxPayload: 4 * 1024 * 1024,
+  });
+  const pending: string[] = [];
+  ws.on('open', () => { for (const m of pending.splice(0)) ws.send(m); });
+  ws.on('message', (data: Buffer) => h.onMessage(data));
+  ws.on('close', (code: number) => h.onClose(`code_${code}`));
+  ws.on('error', (e: Error) => { log({ level: 'warn', event: 'voice_realtime_socket_error', outcome: 'failure', error_class: e.name || 'SocketError' }); });
+  return {
+    send: (t) => { if (ws.readyState === ws.OPEN) ws.send(t); else if (ws.readyState === ws.CONNECTING && pending.length < 200) pending.push(t); },
+    close: (code) => { if (ws.readyState === ws.OPEN || ws.readyState === ws.CONNECTING) ws.close(code ?? 1000); },
+  };
+}
+
+export function realtimeDeps(): RealtimeDeps {
+  const c = loadVoiceConfig();
+  return {
+    worker: getWorker(),
+    broker: slotTool,
+    profile: TEST_PROFILE,
+    voice: c.VOICE_REALTIME_VOICE,
+    accountSid: () => process.env.TWILIO_ACCOUNT_SID || undefined,
+    consumeSessionRef: consumeToken,
+    callMatches,
+    connectModel: (h) => connectOpenAiRealtime(c.VOICE_ENGINE_B_MODEL, h),
     now: () => Date.now(),
     log,
   };
@@ -103,11 +145,14 @@ export async function connectTwimlFor(callId: string): Promise<string> {
       voice: c.VOICE_RELAY_VOICE,
     });
   }
+  if (rows[0]?.engine === 'openai_realtime' && c.VOICE_WS_BASE_URL) {
+    return buildStreamTwiml(new URL(STREAM_PATH, c.VOICE_WS_BASE_URL).toString(), mintToken(callId, 'session', 120));
+  }
   log({ level: 'warn', event: 'voice_connect_unsupported_engine', outcome: 'skipped', error_class: 'UnsupportedEngine', call_id: callId, engine: rows[0]?.engine ?? null });
   return HANGUP;
 }
 
 /** Called once at boot with the HTTP server. Cheap when voice is off: the upgrade handler only reads config per request. */
 export function installVoiceRuntime(server: Server): void {
-  attachVoiceWsServer(server, relayDeps, log);
+  attachVoiceWsServer(server, { relay: relayDeps, stream: realtimeDeps }, log);
 }

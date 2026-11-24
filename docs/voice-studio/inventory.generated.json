@@ -1,6 +1,6 @@
 {
  "generatedFrom": "git ls-files",
- "total": 227,
+ "total": 229,
  "byRole": {
   "DISPATCH": 3,
   "INGEST": 3,
@@ -8,7 +8,7 @@
   "CALLER": 11,
   "CONFIG": 20,
   "UI": 22,
-  "CONSUMER": 49,
+  "CONSUMER": 51,
   "MENTION": 113
  },
  "rows": [
@@ -1183,6 +1183,18 @@
    "envVars": []
   },
   {
+   "path": "backend/src/services/voice/engines/realtime/openaiRealtimeEngine.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/engines/realtime/realtimeProtocol.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
    "path": "backend/src/services/voice/engines/voiceProfiles.ts",
    "role": "MENTION",
    "callTypes": [],
@@ -1194,6 +1206,8 @@
    "callTypes": [],
    "envVars": [
     "VOICE_ENGINE_A_MODEL",
+    "VOICE_ENGINE_B_MODEL",
+    "VOICE_REALTIME_VOICE",
     "VOICE_RELAY_VOICE",
     "VOICE_WS_BASE_URL"
    ]
@@ -1320,9 +1334,11 @@
    "envVars": [
     "VOICE_DESTINATION_HASH_KEY",
     "VOICE_ENGINE_A_MODEL",
+    "VOICE_ENGINE_B_MODEL",
     "VOICE_ENGINE_DEFAULT",
     "VOICE_GATEWAY_LEGACY_ENABLED",
     "VOICE_PUBLIC_BASE_URL",
+    "VOICE_REALTIME_VOICE",
     "VOICE_RELAY_VOICE",
     "VOICE_STUDIO_ENABLED",
     "VOICE_TEST_ALLOWED_NUMBER",
