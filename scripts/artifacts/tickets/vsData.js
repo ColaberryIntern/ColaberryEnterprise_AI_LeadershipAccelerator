@@ -209,6 +209,55 @@ module.exports = {
       'URLs assembled at runtime are a documented limit of the static check; the import rule covers the likely path.',
     ],
   },
+  'VS2.2': {
+    code: 'VS2.2', short: 'One brain for every live call: it can be interrupted, and never talks over itself',
+    title: 'R02 Shared realtime session state machine and session worker module',
+    docName: 'SESSION_ENGINE', date: '2026-11-24', session: SESSION, status: 'PASS 12/12 (verifier attempt 2); closes at the Phase 2 deploy',
+    asked: 'Build the session logic both voice engines share: the states of a live call, turn and answer identity so a late answer can never be spoken into the wrong moment, cancellation, timeouts, limits, per-agent concurrency, tool bookkeeping, and a clean shutdown.',
+    delivered: 'A pure state machine (9 states, every allowed and forbidden move in one table) and a session worker that owns every live call: a cancel token per answer, a bounded outbound queue that pushes back instead of dropping, per-state and whole-call timeouts on a monotonic clock, response-length cut-off, concurrency caps, and a shutdown that refuses new calls, waits for live ones, then force-closes and reconciles the rest.',
+    takeaway: 'When a caller interrupts, the answer in progress is canceled and nothing from it can be spoken afterwards, whatever order the network delivers things in. If the caller hangs up while the agent is booking something, the booking is still recorded. A server restart ends calls cleanly instead of cutting them mid-word.',
+    cards: [
+      { n: '99 of 99', k: 'state x event moves checked against the table', color: '#2e7d32' },
+      { n: '0', k: 'sessions or timers left after 1,000 calls', color: '#2e7d32' },
+      { n: '8 of 8', k: "verifier's planted bugs caught" },
+      { n: '1', k: 'real bug the tests found (shutdown count)' },
+      { n: '3 min', k: 'test call ceiling, enforced here too' },
+    ],
+    decision: 'Nothing new.',
+    ladder: ['done', 'active', 'todo', 'todo', 'todo', 'todo'],
+    bars: { title: 'What ends a turn early', max: 4, rows: [
+      { label: 'caller interrupts', value: 1, color: '#2e7d32' }, { label: 'caller speaks again', value: 1, color: '#2e7d32' },
+      { label: 'model too slow (12 s)', value: 1, color: '#e0a100' }, { label: 'answer too long', value: 1, color: '#e0a100' },
+    ] },
+    checks: [
+      ['Transition table test covers every allowed and forbidden move', true],
+      ['No leaked sessions after 1,000 connect/disconnect cycles', true],
+      ['A late answer never speaks into a newer turn or a closed call', true],
+      ['Hang-up during a tool: the committed action is still recorded', true],
+      ['SIGTERM: refuse new calls, drain to a deadline, reconcile the rest', true],
+    ],
+    diagramTitle: 'A live call, one turn at a time',
+    mermaid: `flowchart LR
+  C[connecting] --> G[greeting] --> L[listening]
+  L -->|caller speaks| T[thinking] -->|answer starts| S[speaking]
+  S -->|answer done| L
+  S -->|interrupt| I[interrupted] --> L
+  T -->|too slow| L
+  L & T & S --> E[ending] --> X[closed]`,
+    evidenceLine: 'commits f85021c6c, 0124d16b1, bf9f48ba3; verifier 9/12 then 12/12; session suites 138 passed; voice baseline 21 suites passed.',
+    sections: [
+      { h: 'What the verifier caught', p: ['Attempt 1: I had not refreshed the committed voice inventory after adding the worker, so one existing voice test broke; refreshed. One planted bug survived (an interrupt while the model is still thinking); a test now pins it. On my side, the shutdown test caught a real bug: calls that were force-closed were being counted as finished cleanly.'] },
+    ],
+    evidence: [
+      ['Tests', 'stateMachine and sessionWorker: 138 tests, including all 99 state x event pairs'],
+      ['Leaks', '1,000 synthetic calls: 0 sessions, no timer, bounded orphan-tool list'],
+      ['Mutation', "verifier's 8 planted bugs all caught; my 4 caught"],
+    ],
+    notEstablished: [
+      'No real call has run through this yet; the engines (VS2.3, VS2.4) connect it to Twilio.',
+      'A tool result that fails to save after a hang-up is logged, not retried; durable retry comes with the database writer in VS2.3.',
+    ],
+  },
   'VS2.1': {
     code: 'VS2.1', short: 'Our own Twilio line, and only Twilio can talk to it',
     title: 'R02 Twilio carrier adapter: outbound REST + status callbacks, inbound TwiML, signature validation, replay rejection',
