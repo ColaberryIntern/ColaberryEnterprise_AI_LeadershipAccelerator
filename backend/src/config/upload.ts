@@ -85,6 +85,30 @@ const BUILD_ARTIFACT_MIMES: Record<string, string> = {
   'audio/mp4': '.m4a',
   'audio/wav': '.wav',
   'application/zip': '.zip',
+  // Windows Chrome and Edge label a .zip `application/x-zip-compressed`, not
+  // `application/zip`. The extension fallback below already catches it, but a
+  // file should not depend on the fallback to be recognised for what it is.
+  'application/x-zip-compressed': '.zip',
+
+  // ── THE FILES THE LABS THEMSELVES ASK FOR ───────────────────────────────────
+  // Reported by the QA tester 2026-11-24: the Week 4 Prompt Library lab tells a
+  // student to produce `eval.jsonl` test cases and a Python scorer
+  // (`eval_prompt.py`, `scripts/gate_library.py` — see data/classTeachWeeks.ts),
+  // and then the upload step refused both. The lab asked for work it would not
+  // take. YAML and JSON are here for the same reason: the prompt front-matter
+  // and config the same labs generate.
+  //
+  // DELIBERATELY ABSENT: .html, .svg and .js. Those are the extensions that turn
+  // into script if a file is ever served inline, and an allowlist that waves
+  // through the dangerous ones to be generous has stopped being an allowlist.
+  // The Deep Dive field guide takes .html through its own config, which stores
+  // it in the database and renders it deliberately.
+  'application/x-ndjson': '.jsonl',
+  'application/jsonl': '.jsonl',
+  'text/x-python': '.py',
+  'application/json': '.json',
+  'application/x-yaml': '.yaml',
+  'text/yaml': '.yml',
 };
 
 // Browsers are unreliable about media mime types — a .mov often arrives as
@@ -104,14 +128,30 @@ const buildArtifactStorage = multer.diskStorage({
   },
 });
 
+/** The human list, in one place, so the thrown error and the UI cannot drift apart. */
+export const BUILD_ARTIFACT_ACCEPTED_LABEL =
+  'PDF, Word, PowerPoint, Excel, RTF, Text, Markdown, CSV, JSON, JSONL, YAML, Python, images, MP4, MOV, WEBM, MP3, M4A, WAV, ZIP';
+
+/**
+ * PURE — would the build-artifact endpoint take this file?
+ *
+ * Exported and pure because it was neither, and that is why nobody noticed the
+ * Week 4 lab could not submit its own output: the rule lived inside a multer
+ * callback where no test could reach it, so the accepted list could change, or
+ * fail to change, in silence.
+ */
+export function isAcceptedBuildArtifact(mimetype: string | undefined, originalname: string): boolean {
+  const ext = path.extname(originalname || '').toLowerCase();
+  return Boolean((mimetype && BUILD_ARTIFACT_MIMES[mimetype]) || BUILD_ARTIFACT_EXT_FALLBACK.has(ext));
+}
+
 function buildArtifactFilter(
   _req: Express.Request,
   file: Express.Multer.File,
   cb: multer.FileFilterCallback,
 ): void {
-  const ext = path.extname(file.originalname).toLowerCase();
-  if (BUILD_ARTIFACT_MIMES[file.mimetype] || BUILD_ARTIFACT_EXT_FALLBACK.has(ext)) cb(null, true);
-  else cb(new Error('Accepted: PDF, Word, PowerPoint, Excel, RTF, Text, Markdown, CSV, images, MP4, MOV, WEBM, MP3, M4A, WAV, ZIP'));
+  if (isAcceptedBuildArtifact(file.mimetype, file.originalname)) cb(null, true);
+  else cb(new Error(`Accepted: ${BUILD_ARTIFACT_ACCEPTED_LABEL}`));
 }
 
 export const buildArtifactUpload = multer({
