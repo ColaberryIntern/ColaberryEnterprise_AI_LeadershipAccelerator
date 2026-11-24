@@ -112,3 +112,19 @@ export async function recomputeCall(callId: string): Promise<CallRecord | null> 
     return rec;
   });
 }
+
+const E164 = /^\+[1-9]\d{6,14}$/;
+
+/**
+ * True only when the number is an ACTIVE Twilio row in our voice_numbers inventory (the restricted
+ * e164 column is read here and by the carrier, nowhere else). Anything not E.164 is false without
+ * a query. The number is never logged.
+ */
+export async function isOwnedActiveNumber(e164: string): Promise<boolean> {
+  if (!E164.test(e164)) return false;
+  const rows = await sequelize.query<{ ok: number }>(
+    "SELECT 1 AS ok FROM voice_numbers WHERE provider = 'twilio' AND status = 'active' AND e164_restricted = :e164 LIMIT 1",
+    { replacements: { e164 }, type: QueryTypes.SELECT },
+  );
+  return rows.length > 0;
+}

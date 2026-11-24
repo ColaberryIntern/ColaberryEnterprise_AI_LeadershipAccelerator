@@ -40,7 +40,21 @@ describeIfDb('voice call store against Postgres', () => {
   });
   afterAll(async () => {
     await sequelize.query(`DELETE FROM voice_calls WHERE tenant_id = '${T}'`); // cascades to events and token uses
+    await sequelize.query(`DELETE FROM voice_numbers WHERE tenant_id = '${T}'`);
     await sequelize.close();
+  });
+
+  it('ownership: only an ACTIVE Twilio row in voice_numbers counts as our number', async () => {
+    await sequelize.query(`DELETE FROM voice_numbers WHERE tenant_id = '${T}'`);
+    await sequelize.query(
+      `INSERT INTO voice_numbers (tenant_id, provider, provider_number_id, number_ref, e164_restricted, status) VALUES
+       ('${T}', 'twilio', 'PN-it-active', 'it-active', '+15555550142', 'active'),
+       ('${T}', 'twilio', 'PN-it-inactive', 'it-inactive', '+15555550143', 'inactive')`,
+    );
+    expect(await S.isOwnedActiveNumber('+15555550142')).toBe(true);
+    expect(await S.isOwnedActiveNumber('+15555550143')).toBe(false); // inactive
+    expect(await S.isOwnedActiveNumber('+15555550144')).toBe(false); // not ours
+    expect(await S.isOwnedActiveNumber("'+15555550142' OR 1=1")).toBe(false); // not E.164: no query at all
   });
 
   it('appends each event once; a redelivery is a counted duplicate', async () => {

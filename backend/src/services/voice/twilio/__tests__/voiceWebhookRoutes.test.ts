@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import express from 'express';
 import request from 'supertest';
 import { buildVoiceWebhookRouter, VOICE_ROUTE_TABLE } from '../../../../routes/voiceWebhookRoutes';
@@ -13,7 +15,8 @@ const TOKEN = 'auth-token-for-tests-0123456789';
 const ACCOUNT = 'AC' + 'c3'.repeat(16);
 const CALL = '0b1c2d3e-4f50-4617-8899-aabbccddeeff';
 const SID = 'CA' + 'd4'.repeat(16);
-const PHONES = /5555550100|5555550199/;
+const PHONES = /5555550100|5555550199|5555550177/;
+const OURS = '+15555550199'; // the Twilio number we own in these tests (From outbound, To inbound)
 
 function harness(over: Partial<VoiceWebhookDeps> = {}, env: Record<string, string> = { VOICE_TEST_ENABLED: 'true', VOICE_TEST_ALLOWED_NUMBER: '+15555550100', VOICE_PUBLIC_BASE_URL: BASE }) {
   const stored: CanonicalCallEvent[] = [];
@@ -31,6 +34,7 @@ function harness(over: Partial<VoiceWebhookDeps> = {}, env: Record<string, strin
     },
     consumeToken: async (c: TokenClaims) => { if (nonces.has(c.nonce)) return 'replay'; nonces.add(c.nonce); return 'consumed'; },
     recomputeCall: async () => null,
+    ownsNumber: async (n: string) => n === OURS,
     connectTwiml: async () => '<Response><Connect/></Response>',
     now: () => Date.now(),
     log: (l) => logs.push(l),
@@ -60,9 +64,30 @@ describe('voice webhook route table (VS2.1)', () => {
     expect(mounted).toEqual(VOICE_ROUTE_TABLE.map((r) => `${r.method} ${r.path}`).sort());
     for (const r of VOICE_ROUTE_TABLE) {
       expect(r.auth).toBe('twilio_signature');
-      expect(r.acceptsDestinationNumber).toBe(false);
       expect(r.path).toMatch(/^\/api\/webhook\/voice\//);
     }
+  });
+
+  it('static: no handler reads a number field except ownedNumberOf (the ownership check)', () => {
+    const file = path.resolve(__dirname, '../../../../controllers/voiceTwilioWebhookController.ts');
+    const src = fs.readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    const start = src.indexOf('export function ownedNumberOf');
+    const end = src.indexOf('\n}\n', start);
+    expect(start).toBeGreaterThan(-1);
+    const outside = src.slice(0, start) + src.slice(end);
+    // Schema declarations name the fields; any READ (body.To, params['From'], query.phone, ...) is a violation.
+    const reads = outside.match(/\.(To|From|Caller|Called|phone|destination\w*)\b|\[\s*['"`](To|From|Caller|Called|phone|destination\w*)['"`]\s*\]/g) || [];
+    expect(reads).toEqual([]);
+    expect(fs.readFileSync(path.resolve(__dirname, '../../../../routes/voiceWebhookRoutes.ts'), 'utf8')).not.toMatch(/req\.(body|query|params)/);
+  });
+
+  it('behavioral: a different destination (To) on an outbound callback changes nothing that is stored', async () => {
+    const a = harness();
+    const b = harness();
+    await signed(a.app, statusPath(), status('completed', '3', { Timestamp: 'Mon, 24 Nov 2026 20:00:05 +0000' }));
+    await signed(b.app, statusPath(), status('completed', '3', { Timestamp: 'Mon, 24 Nov 2026 20:00:05 +0000', To: '+15555550177', destination: '+15555550177' }));
+    expect(b.stored).toEqual(a.stored);
+    expect(JSON.stringify(b.stored)).not.toMatch(PHONES);
   });
 
   it.each(VOICE_ROUTE_TABLE.map((r) => [r.path]))('%s does not exist while every voice flag is off', async (path) => {
@@ -91,6 +116,38 @@ describe('voice webhooks: signature, account, token (VS2.1)', () => {
     const { app, logs } = harness();
     expect((await signed(app, statusPath(), status('ringing', '1', { AccountSid: 'AC' + 'e5'.repeat(16) }))).status).toBe(403);
     expect(logs[0]).toMatchObject({ error_class: 'TwilioAccountMismatch' });
+  });
+
+  it('a correctly signed request whose number is not one we own is refused, and the number is not logged', async () => {
+    const { app, logs, stored } = harness();
+    const res = await signed(app, statusPath(), status('ringing', '1', { From: '+15555550177' }));
+    expect(res.status).toBe(403);
+    expect(logs).toContainEqual(expect.objectContaining({ error_class: 'TwilioNumberMismatch' }));
+    expect(stored).toHaveLength(0);
+    expect(JSON.stringify(logs)).not.toMatch(PHONES);
+  });
+
+  it('inbound checks To (our number), not From; an inbound-direction status checks To as well', async () => {
+    const { app } = harness();
+    const base = { AccountSid: ACCOUNT, CallSid: SID };
+    expect((await signed(app, '/api/webhook/voice/twilio/inbound', { ...base, To: '+15555550177', From: OURS })).status).toBe(403);
+    expect((await signed(app, '/api/webhook/voice/twilio/inbound', { ...base, To: OURS, From: '+15555550177' })).status).toBe(200);
+    expect((await signed(app, statusPath(), status('ringing', '1', { Direction: 'inbound', To: OURS, From: '+15555550177' }))).status).toBe(204);
+  });
+
+  it('a body that fails the schema is a 400 ValidationError (malformed account id, missing owned number)', async () => {
+    const { app, logs } = harness();
+    expect((await signed(app, statusPath(), status('ringing', '1', { AccountSid: 'not-an-account' }))).status).toBe(400);
+    const { From: _f, ...noFrom } = status('ringing', '1');
+    expect((await signed(app, statusPath(), noFrom)).status).toBe(400);
+    expect(logs.every((l) => l.error_class === 'ValidationError')).toBe(true);
+  });
+
+  it('a failed ownership lookup answers 503 (Twilio retries), never lets the request through', async () => {
+    const { app, stored, logs } = harness({ ownsNumber: async () => { throw Object.assign(new Error('db'), { name: 'SequelizeConnectionError' }); } });
+    expect((await signed(app, statusPath(), status('ringing', '1'))).status).toBe(503);
+    expect(stored).toHaveLength(0);
+    expect(logs).toContainEqual(expect.objectContaining({ error_class: 'SequelizeConnectionError' }));
   });
 
   it('fails closed with no auth token or no public URL configured', async () => {
@@ -149,7 +206,7 @@ describe('voice webhooks: answer TwiML and inbound (VS2.1)', () => {
   it('serves the engine TwiML once; a replay of the same signed request hangs up', async () => {
     const { app, logs } = harness();
     const path = `/api/webhook/voice/twilio/twiml?ref=${encodeURIComponent(mintToken(CALL, 'twiml', 300))}`;
-    const params = { AccountSid: ACCOUNT, CallSid: SID, CallStatus: 'in-progress', To: '+15555550100', From: '+15555550199' };
+    const params = { AccountSid: ACCOUNT, CallSid: SID, CallStatus: 'in-progress', To: '+15555550100', From: OURS };
     const first = await signed(app, path, params);
     expect(first.status).toBe(200);
     expect(first.text).toBe('<Response><Connect/></Response>');
@@ -161,18 +218,18 @@ describe('voice webhooks: answer TwiML and inbound (VS2.1)', () => {
   it('an expired answer ref is refused', async () => {
     const { app } = harness();
     const path = `/api/webhook/voice/twilio/twiml?ref=${encodeURIComponent(mintToken(CALL, 'twiml', 60, Date.now() - 120_000))}`;
-    expect((await signed(app, path, { AccountSid: ACCOUNT, CallSid: SID })).status).toBe(403);
+    expect((await signed(app, path, { AccountSid: ACCOUNT, CallSid: SID, From: OURS })).status).toBe(403);
   });
 
   it('a broken engine still ends the call cleanly (never leaves the caller waiting)', async () => {
     const { app } = harness({ connectTwiml: async () => { throw new Error('engine down'); } });
     const path = `/api/webhook/voice/twilio/twiml?ref=${encodeURIComponent(mintToken(CALL, 'twiml', 300))}`;
-    expect((await signed(app, path, { AccountSid: ACCOUNT, CallSid: SID })).text).toBe(HANGUP_TWIML);
+    expect((await signed(app, path, { AccountSid: ACCOUNT, CallSid: SID, From: OURS })).text).toBe(HANGUP_TWIML);
   });
 
   it('inbound gets the safe fallback until VS3.6 routing exists', async () => {
     const { app } = harness();
-    const res = await signed(app, '/api/webhook/voice/twilio/inbound', { AccountSid: ACCOUNT, CallSid: SID, To: '+15555550199', From: '+15555550100' });
+    const res = await signed(app, '/api/webhook/voice/twilio/inbound', { AccountSid: ACCOUNT, CallSid: SID, To: OURS, From: '+15555550100' });
     expect(res.status).toBe(200);
     expect(res.text).toBe(INBOUND_FALLBACK_TWIML);
   });
