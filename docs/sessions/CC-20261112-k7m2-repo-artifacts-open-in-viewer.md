@@ -133,3 +133,52 @@ They live under `artifacts/week-NN/` and were stored by the pre-existing weekly-
 sync — which is why Quincy Ninying's `data-flow-diagram.docx` already opened in the Word
 viewer. The 137 healed rows are the `docs/`-committed population from the 14 Nov ingest, and
 Swati's master specification is the only Word file among them.
+
+## The bytes were not enough: image and HTML had no renderer — 2026-11-15
+
+- [x] Render images and web pages in the artifact viewer instead of offering a download
+      and a "wrong format" scolding
+  - Date: 2026-11-15
+  - Session: CC-20261112-k7m2
+  - What changed: `fileKind` gained an `html` kind, classified BEFORE the text check;
+    `shapeFile` reads an HTML page as text so the viewer can sandbox it; the shared
+    `ArtifactFileViewer` gained `ImageViewer` and `HtmlViewer`.
+  - Verification: 7 new frontend tests and 2 new backend tests, all green; 3,003 backend
+    tests across factory/internship/artifacts and 163 frontend tests in the related suites
+    still pass. `tsc --noEmit` clean on both sides, each run first against a planted control
+    error that tsc caught (backend line 201, frontend line 44).
+  - Notes: found by Ali testing the links from the heal pass. The bytes landing was
+    necessary and not sufficient.
+
+### What was actually wrong
+
+Two separate gaps, both in the renderer rather than in the data.
+
+**An image had no viewer.** `ArtifactFileViewer` dispatched `image` to `DownloadViewer`, so
+Omolola's 4.3MB infographic rendered as a button saying "Download to open in your image
+viewer". A picture is the one artifact that should never be a button.
+
+**An HTML page was classified as text and scolded for it.** `text/html` matches `TEXT_MIME`
+(`^text/`), so `.html` fell through to `text`, which prints the file's SOURCE under:
+
+> Wrong format for an artifact: this is Markdown/text. Artifacts should be visual PDFs built
+> from HTML.
+
+The banner was telling an intern to convert the exact format it asks them to produce. The
+report's own taxonomy already disagreed: `renderArtifacts.ts` calls `html` a **Web page** and
+its `WRONG_FORMAT` set holds only `markdown` and `text`. The viewer was the odd one out, so
+the fix was to make it agree rather than to invent a third opinion.
+
+### Containment, unchanged
+
+The file route still sends every non-PDF as an attachment with `nosniff`, deliberately, so
+nothing renders from our own origin:
+
+- **HTML** goes into `<iframe srcDoc sandbox="">` — an EMPTY sandbox, no scripts, no
+  same-origin, no forms, no popups. Same containment the Word preview has used since 10 Nov,
+  and the same the gov studio's `BuildArtifactCards` chose independently.
+- **Images** are fetched with the viewer's own bearer token and the Blob is re-labelled
+  client-side by extension, because the route serves `application/octet-stream`.
+
+A test pins the empty `sandbox` attribute specifically: it must exist and be empty, since
+dropping the attribute entirely would silently grant everything.
