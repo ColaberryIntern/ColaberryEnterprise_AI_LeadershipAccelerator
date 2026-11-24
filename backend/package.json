@@ -12,6 +12,7 @@
     "seed:sequence": "ts-node src/seeds/seedDefaultSequence.ts",
     "seed:sources": "ts-node src/seeds/seedLeadSources.ts",
     "voice:inventory": "ts-node src/scripts/voice/voiceInventory.ts",
+    "voice:docs-check": "ts-node src/scripts/voice/docsCheck.ts",
     "lint": "eslint src --ext .ts",
     "test": "jest"
   },
