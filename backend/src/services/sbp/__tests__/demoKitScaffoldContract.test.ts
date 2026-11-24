@@ -82,7 +82,9 @@ const DATA_MODEL = {
 };
 
 /** Lay out a repo the scaffold can read, write the shipped scaffold into it, and run it. */
-function runScaffold(plan: unknown, dataModel: unknown = DATA_MODEL): { spec: unknown; stdout: string } {
+const FIXED_SHA = '4f3c21aa9b0e7d5612348899aabbccddeeff00112233445566778899aabbccdd';
+
+function runScaffold(plan: unknown, dataModel: unknown = DATA_MODEL, sha = FIXED_SHA): { spec: unknown; stdout: string } {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'demo-kit-scaffold-'));
   try {
     fs.mkdirSync(path.join(root, '.colaberry'), { recursive: true });
@@ -96,7 +98,7 @@ function runScaffold(plan: unknown, dataModel: unknown = DATA_MODEL): { spec: un
         plan_version: '3',
         // A fixed hash and a fixed sync time: the scaffold seeds its sample from these, so the
         // same plan gives the same demo. A clock read here would make this test flaky by design.
-        plan_sha256: '4f3c21aa9b0e7d5612348899aabbccddeeff00112233445566778899aabbccdd',
+        plan_sha256: sha,
         generated_at: '2026-01-05T12:00:00Z',
       }),
       'utf8',
@@ -365,8 +367,18 @@ describe('sample rows never claim what their own state denies (v13)', () => {
     for (const r of rows.shift_offer.filter((x) => x.response === 'waiting' || x.response === 'no_reply')) { expect(r.responded_at).toBeNull(); expect(r.sent_at).not.toBeNull(); }
   });
 
-  it('never has a reply before the offer it answers', () => {
-    for (const r of rows.shift_offer.filter((x) => x.sent_at && x.responded_at)) expect(minutes(r.responded_at)).toBeGreaterThanOrEqual(minutes(r.sent_at));
+  it('never has a reply before the offer it answers, across many seeds', () => {
+    // One seed may simply never draw a reversed pair; twelve fixed seeds do (v13's own did).
+    let pairs = 0;
+    for (let s = 0; s < 12; s++) {
+      const sha = `${s.toString(16).padStart(2, '0')}${FIXED_SHA.slice(2)}`;
+      const spec = runScaffold(PLAN, V13_MODEL, sha).spec as { entities: Record<string, { rows: Row[] }> };
+      for (const r of spec.entities.shift_offer.rows.filter((x) => x.sent_at && x.responded_at)) {
+        pairs += 1;
+        expect(minutes(r.responded_at)).toBeGreaterThanOrEqual(minutes(r.sent_at));
+      }
+    }
+    expect(pairs).toBeGreaterThan(5);
   });
 
   it('prints no "undefined" anywhere', () => {
