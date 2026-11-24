@@ -1,15 +1,15 @@
 {
  "generatedFrom": "git ls-files",
- "total": 200,
+ "total": 212,
  "byRole": {
-  "DISPATCH": 1,
+  "DISPATCH": 2,
   "INGEST": 3,
   "GUARD": 6,
   "CALLER": 11,
-  "CONFIG": 19,
+  "CONFIG": 20,
   "UI": 22,
-  "CONSUMER": 39,
-  "MENTION": 99
+  "CONSUMER": 44,
+  "MENTION": 104
  },
  "rows": [
   {
@@ -131,6 +131,32 @@
    "envVars": []
   },
   {
+   "path": "backend/src/db/ensureVoiceStudioSchema.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_STUDIO_ENABLED",
+    "VOICE_STUDIO_TABLES",
+    "VOICE_TABLE_SPECS"
+   ]
+  },
+  {
+   "path": "backend/src/db/rollback/dropVoiceStudioSchema.sql",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_STUDIO_ENABLED"
+   ]
+  },
+  {
+   "path": "backend/src/db/voiceStudioTableSpecs.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_TABLE_SPECS"
+   ]
+  },
+  {
    "path": "backend/src/middlewares/auditRedaction.ts",
    "role": "MENTION",
    "callTypes": [],
@@ -237,6 +263,15 @@
    "role": "CONFIG",
    "callTypes": [],
    "envVars": []
+  },
+  {
+   "path": "backend/src/models/voiceStudioModels.ts",
+   "role": "CONFIG",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_STUDIO_MODELS",
+    "VOICE_TABLE_SPECS"
+   ]
   },
   {
    "path": "backend/src/modules/communications/brandPreferenceGate.ts",
@@ -412,7 +447,9 @@
    "path": "backend/src/server.ts",
    "role": "MENTION",
    "callTypes": [],
-   "envVars": []
+   "envVars": [
+    "VOICE_STUDIO_ENABLED"
+   ]
   },
   {
    "path": "backend/src/services/agentAutonomy.ts",
@@ -1071,7 +1108,8 @@
     "SYNTHFLOW_ENTERPRISE_INTAKE_AGENT_ID",
     "SYNTHFLOW_OPEN_HOUSE_AGENT_ID",
     "VOICE_CALL_PATHS",
-    "VOICE_DIAL_GUARD_IN_TESTS"
+    "VOICE_DIAL_GUARD_IN_TESTS",
+    "VOICE_GATEWAY_LEGACY_ENABLED"
    ]
   },
   {
@@ -1099,6 +1137,62 @@
    "role": "MENTION",
    "callTypes": [],
    "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/contracts/providers.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/contracts/schemas.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/gateway/destinationHash.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_DESTINATION_HASH_KEY"
+   ]
+  },
+  {
+   "path": "backend/src/services/voice/gateway/legacyFacade.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_GATEWAY_LEGACY_ENABLED"
+   ]
+  },
+  {
+   "path": "backend/src/services/voice/gateway/voiceGateway.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/gateway/voicePolicy.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/gateway/voiceReservation.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/providers/synthflowLegacyProvider.ts",
+   "role": "DISPATCH",
+   "callTypes": [],
+   "envVars": [
+    "SYNTHFLOW_CALLS_URL",
+    "SYNTHFLOW_TIMEOUT_MS",
+    "VOICE_GATEWAY_LEGACY_ENABLED"
+   ]
   },
   {
    "path": "backend/src/services/voice/synthflowWebhookAuth.ts",
