@@ -109,13 +109,18 @@ function toIso(value: unknown): string | null {
   return null;
 }
 
-/** One capped event row, plus the visitor's true event total. Typed at the call site. */
+/** One capped event row. The visitor's true total comes from `eventTotals`, separately. */
 interface CappedEventRow {
   readonly visitor_id: unknown;
   readonly event_type: unknown;
   readonly page_path: unknown;
   readonly page_title: unknown;
   readonly timestamp: unknown;
+}
+
+/** One visitor's TRUE event count, independent of the cap. */
+interface EventTotalRow {
+  readonly visitor_id: unknown;
   readonly total: unknown;
 }
 
@@ -146,41 +151,97 @@ interface CappedEventRow {
  * single visitor holds 99,284 — and that visitor is in `admissions_memory`, so
  * it is reachable through this endpoint rather than hypothetical.
  *
- * ## Why a window function rather than a `limit` on the findAll
+ * ## Why not a plain `limit` on the findAll
  *
- * Because a plain `limit` is the bug the two-query split already exists to
- * avoid: it would bound total rows, so one heavy visitor would consume the
- * whole budget and the visitors after it would silently return zero events. The
- * cap has to be PER VISITOR, which is `ROW_NUMBER() OVER (PARTITION BY ...)`,
- * and that cannot be expressed through `findAll` because a window function
- * cannot appear in `WHERE` without a subquery. Raw SQL is the honest option
- * here; the result is typed at the call site as `CappedEventRow`.
+ * A plain `limit` would bound TOTAL rows, so one heavy visitor would consume the
+ * whole budget and every visitor after it would silently return zero events. The
+ * cap has to be PER VISITOR, and that cannot be expressed through `findAll`.
  *
- * `COUNT(*) OVER (PARTITION BY visitor_id)` rides along so `page_event_count`
- * stays the visitor's real total. Without it, capping the rows would quietly
- * turn that field into "the cap", which is a worse defect than the one being
- * fixed: a wrong number that looks right.
+ * ## Why LATERAL rather than ROW_NUMBER, which is what shipped first
  *
- * ## What this does NOT fix
+ * The first fix used `ROW_NUMBER() OVER (PARTITION BY visitor_id ORDER BY
+ * timestamp DESC)` with `WHERE rn <= cap`. It is correct, and it is slow for a
+ * reason worth writing down, because the obvious reading of it is wrong.
  *
- * `page_events.visitor_id` has no index, so this still plans as a sequential
- * scan over ~1.15M rows. This change bounds what crosses into Node, which is
- * the memory and transfer risk; the scan needs an index and that is a schema
- * change, proposed separately rather than smuggled in here.
+ * A window function has to see every row of its partition before it can number
+ * any of them. So `rn <= cap` is a filter applied AFTER the sort, not a brake on
+ * it. Adding `idx_page_events_visitor_timestamp` did not change that: Postgres
+ * picks a Bitmap Index Scan for `= ANY(...)`, bitmap scans return rows in heap
+ * order rather than index order, and the ordering the index could have supplied
+ * is thrown away. Measured against production at limit=100, with the index
+ * present:
+ *
+ *   Bitmap Index Scan on idx_page_events_visitor_timestamp   87 ms, 680,222 rows
+ *   Sort  (external merge, 48 MB spilled to disk)         1,615 ms
+ *   WindowAgg, Rows Removed by Filter: 678,929
+ *   Execution Time                                        2,059 ms
+ *
+ * 680,222 rows examined to return 1,293. The index removed the sequential scan
+ * and the sort ate the win.
+ *
+ * `LATERAL` expresses the same cap as a correlated per-visitor query, and a
+ * per-visitor `ORDER BY timestamp DESC LIMIT cap` is exactly the shape the index
+ * is sorted in. Postgres walks the index for one visitor, takes `cap` rows, and
+ * stops. Same data, same index, measured the same way:
+ *
+ *   Index Scan using idx_page_events_visitor_timestamp, Limit 20, 100 loops
+ *   no sort, no spill
+ *   Execution Time                                           18 ms
+ *
+ * 113x, and the disk spill is gone. The lesson is general enough to state: an
+ * index only removes a sort when the plan preserves its ordering, and `= ANY`
+ * over many values usually does not.
  */
 async function cappedEvents(visitorIds: string[], cap: number): Promise<CappedEventRow[]> {
   const rows = await sequelize.query<CappedEventRow>(
-    `SELECT visitor_id, event_type, page_path, page_title, timestamp, total
-       FROM (
-         SELECT visitor_id, event_type, page_path, page_title, timestamp,
-                ROW_NUMBER() OVER (PARTITION BY visitor_id ORDER BY timestamp DESC) AS rn,
-                COUNT(*)     OVER (PARTITION BY visitor_id)                        AS total
-           FROM page_events
-          WHERE visitor_id = ANY($1::uuid[])
-       ) ranked
-      WHERE rn <= $2
-      ORDER BY visitor_id, timestamp DESC`,
+    `SELECT v.visitor_id, e.event_type, e.page_path, e.page_title, e.timestamp
+       FROM unnest($1::uuid[]) AS v(visitor_id)
+       CROSS JOIN LATERAL (
+         SELECT p.event_type, p.page_path, p.page_title, p."timestamp"
+           FROM page_events p
+          WHERE p.visitor_id = v.visitor_id
+          ORDER BY p."timestamp" DESC
+          LIMIT $2
+       ) e
+      ORDER BY v.visitor_id, e."timestamp" DESC`,
     { bind: [visitorIds, cap], type: QueryTypes.SELECT },
+  );
+  return rows ?? [];
+}
+
+/**
+ * Each visitor's TRUE event count, which is a different question from "the rows
+ * we returned" and has to be asked separately.
+ *
+ * ## Why this is its own query now
+ *
+ * It used to ride along as `COUNT(*) OVER (PARTITION BY visitor_id)` on the
+ * capped query. It cannot ride along on a LATERAL that stops at `cap` rows, by
+ * construction: the whole point of the rewrite is that those rows are never
+ * read, so nothing in that query has seen enough to count them.
+ *
+ * Keeping the number honest matters more than keeping it in one query. If
+ * `page_event_count` silently became "the cap", that is a wrong number that
+ * looks right — a worse defect than the slow query this change exists to fix,
+ * because nothing downstream could tell it was wrong.
+ *
+ * A true total must examine every matching row; there is no shape that avoids
+ * that. What it can avoid is touching the heap, and selecting only the indexed
+ * columns gets an Index Only Scan. Measured on the same visitor set: 349 ms,
+ * against 2,059 ms for the old combined query that also fetched every column of
+ * all 680,222 rows and sorted them.
+ *
+ * CROSS JOIN LATERAL would drop a visitor with no events; this is a plain
+ * GROUP BY, so such a visitor is simply absent from the result and the caller
+ * defaults them to 0. That is the same outcome by a shorter route.
+ */
+async function eventTotals(visitorIds: string[]): Promise<EventTotalRow[]> {
+  const rows = await sequelize.query<EventTotalRow>(
+    `SELECT p.visitor_id, COUNT(*) AS total
+       FROM page_events p
+      WHERE p.visitor_id = ANY($1::uuid[])
+      GROUP BY p.visitor_id`,
+    { bind: [visitorIds], type: QueryTypes.SELECT },
   );
   return rows ?? [];
 }
@@ -221,18 +282,29 @@ export async function readAdmissionsSignals(
     .map((m) => String((m as unknown as { visitor_id: string }).visitor_id))
     .filter((id) => id && id !== 'null');
 
-  const events = visitorIds.length
-    ? await cappedEvents(visitorIds, opts.eventsPerVisitor)
-    : [];
+  // Issued together: they are independent reads of the same visitor set, so
+  // awaiting them in sequence would add the slower one's time to the faster
+  // one's for no reason.
+  const [events, totalRows] = visitorIds.length
+    ? await Promise.all([
+      cappedEvents(visitorIds, opts.eventsPerVisitor),
+      eventTotals(visitorIds),
+    ])
+    : [[] as CappedEventRow[], [] as EventTotalRow[]];
 
   const byVisitor = new Map<string, AdmissionsSignalEvent[]>();
+
+  // The TRUE total, from its own query. It is read rather than accumulated from
+  // the capped rows precisely BECAUSE they are capped: counting them here would
+  // report the cap back as the visitor's event count, which is a wrong number
+  // that looks right.
   const totals = new Map<string, number>();
+  for (const row of totalRows) {
+    totals.set(String(row.visitor_id), Number(row.total ?? 0));
+  }
+
   for (const row of events) {
     const vid = String(row.visitor_id);
-    // The TRUE total, carried on every row by COUNT(*) OVER. It is read rather
-    // than accumulated precisely because the rows are now capped: counting them
-    // here would report the cap back as the visitor's event count.
-    totals.set(vid, Number(row.total ?? 0));
     const bucket = byVisitor.get(vid) ?? [];
     bucket.push({
       event_type: String(row.event_type ?? ''),
