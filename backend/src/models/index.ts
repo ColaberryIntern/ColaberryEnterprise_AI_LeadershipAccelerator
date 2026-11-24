@@ -2262,3 +2262,6 @@ DeliveryAgentTrustRequirement.belongsTo(DeliveryAgentDefinition, {
 
 // Growth Journey OS models (T503): the sibling module this index was split into.
 export * from './growthJourneyModels';
+
+// Voice AI Studio models (VS1.4), generated from db/voiceStudioTableSpecs.ts.
+export * from './voiceStudioModels';
