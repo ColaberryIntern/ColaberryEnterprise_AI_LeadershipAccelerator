@@ -130,9 +130,26 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+      # HEAP, NOT A BUILD ERROR — the same failure the backend typecheck job hit on
+      # 2026-11-03, in a different job.
+      #
+      # 2026-11-24: PR #4381 is docs-only and could not change a single byte of the
+      # bundle, yet this job died with "FATAL ERROR: Reached heap limit Allocation
+      # failed - JavaScript heap out of memory" at 2036 MB, which is Node's default
+      # old-space on the runner. Main was green on either side of it, so the build had
+      # simply grown close enough to the ceiling that any run could tip over. An
+      # intermittent OOM is the worst kind of red: it reads as "your branch broke the
+      # build" on the PR page, so the next person goes hunting for a bundle error that
+      # is not there, and a re-run "fixes" it without fixing anything.
+      #
+      # 6144 matches the backend typecheck job rather than inventing a second number.
+      # NODE_OPTIONS is inherited by child processes, which matters here because the
+      # process that actually died was the fork-ts-checker-webpack-plugin fork, not
+      # webpack itself.
       - name: npm run build:frontend
         env:
           CI: 'true'
+          NODE_OPTIONS: --max-old-space-size=6144
         run: |
           npm install --no-audit --no-fund
           npm run build:frontend
