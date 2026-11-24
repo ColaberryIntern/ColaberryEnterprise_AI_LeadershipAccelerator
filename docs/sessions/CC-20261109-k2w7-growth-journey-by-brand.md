@@ -703,3 +703,67 @@ Running the suites in the orphaned `wt-growth-brand` worktree, whose git registr
 session had pruned, failed `ownerIsConfiguration.test.ts` on a repo-wide scan **including its
 own positive control**. The same suite passes in a clean worktree. A positive control failing
 alongside the assertion is the signal that the scan, not the code, is what broke.
+
+---
+
+## T18 — the tenant-resolution fix, live, 2026-11-23
+
+**Session:** CC-20261109-k2w7
+**What changed:** PR #4377 merged (`79eff742`) and reached production. The 403 that refused
+every brand to 13 of 15 admin identities is fixed in the running container.
+**Verification:** 12 checks, 12 passed, each with a control.
+
+| Check | Result |
+|---|---|
+| Brand lookup in the running `dist` | `findByPk` **x1** (was 0) |
+| `requestedBrandId` referenced | x6 |
+| `authorizedTenantIds` still gating | x10, so the membership check survived compilation |
+| Control marker | **0** |
+| All five sub-flags / master flag | unset / exactly `true` |
+| AD-1: Explorer routes still mounted | yes |
+
+The third row is the one worth keeping. The fix is only safe because the brand's tenant is
+adopted *and* checked against the caller's own memberships; a build that shipped the lookup
+without the gate would pass "the fix is live" and be a privilege escalation. So the gate is
+counted in the deployed artifact, not assumed from the diff.
+
+### The deploy I ran did not deliver it
+
+Worth recording because the obvious claim was wrong. After the deploy, the backend image was
+**unchanged** at `sha256:5e47576e`, `RestartCount` 0, started `20:06:59`, which is *before*
+my run, and yet the fix was present.
+
+Another session had deployed at 20:06 with an image already containing the merge from 19:56.
+By the time this deploy ran, the backend had nothing to change, and only nginx was recreated.
+
+"I deployed it, therefore it is live" would have been false while the conclusion stayed true.
+**The image digest and start time are what distinguish the two**, and they cost one command.
+
+### Three image builds cancelled in one afternoon
+
+`79eff742`, the commit this PR merged as, never got an image: a merge landing seconds later
+cancelled its build, the same way `abfcf1b9` and two others were cancelled earlier today.
+
+Chasing one SHA does not work on a busy afternoon. What worked was watching for **any**
+successful build whose commit contains the fix:
+
+```
+for sha in <completed+success builds>; do
+  git merge-base --is-ancestor <fix commit> "$sha" && deploy
+done
+```
+
+That is robust against churn in a way that polling a single SHA is not. The registry guard
+behaved correctly throughout: it refused rather than shipping something stale, which is why
+the churn cost minutes rather than a wrong release.
+
+### What this closes, and what it does not
+
+The workstream is complete: the merged page is live with fourteen tabs, brand-scoped, Maya's
+rules per brand, memberships seeded, every Explorer profile stored under Colaberry Training,
+and the 403 fixed.
+
+**Still unproven, and unprovable from outside:** no brand-scoped read has ever executed in
+production. The independent verifier measured zero in the logs. Every claim about what an
+operator sees rests on code tracing and database state. One signed-in page load converts it;
+nothing else will.
