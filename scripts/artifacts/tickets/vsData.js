@@ -6,6 +6,105 @@
 const SESSION = 'CC-20261124-2ptc';
 
 module.exports = {
+  'VS1.8': {
+    code: 'VS1.8', short: 'Phase 1 is live, verified, and changed nothing for callers',
+    title: 'Ship Phase 1: full quality gate, ONE PR, deploy, independent production verification',
+    docName: 'PHASE1_SHIP', date: '2026-11-24', session: SESSION, status: 'PASS: deployed 1b01fce0c, production verifier PASS',
+    asked: 'Ship Phase 1 as one PR and one deploy, with every flag off, and prove on the live system that production behaves exactly as before.',
+    delivered: 'PR #4397 (all 10 CI jobs green) merged by Ali; the post-merge image build confirmed before deploying; deploy-prod.sh exit 0 with a new-code marker; an independent production verifier confirmed the running image digest matches the merge, all 13 voice tables exist and are empty, every voice switch is off, the legacy call path is unchanged and no new route is reachable.',
+    takeaway: 'The foundation for replacing Synthflow is live and dormant: tables, gateway, contracts and safety tests are in production, nothing writes to them and no caller behaves differently. The next visible step is a real call to your phone, which needs your M0 answers.',
+    cards: [
+      { n: '10/10', k: 'CI jobs green on the PR', color: '#2e7d32' },
+      { n: '13', k: 'voice tables live, all empty' },
+      { n: '0', k: 'schema failures in 723 log lines', color: '#2e7d32' },
+      { n: 'OFF', k: 'every voice switch in production' },
+      { n: 'PASS', k: 'independent production verifier', color: '#2e7d32' },
+    ],
+    decision: 'Answer M0 (direction, API keys, reuse an idle Twilio number, test number in the server env, the public-number scrub) to start Phase 2 and the first live calls.',
+    ladder: ['done', 'waiting', 'todo', 'todo', 'todo', 'todo'],
+    bars: { title: 'Phase 1 tickets by verifier score (out of 12)', max: 12, rows: [
+      { label: 'VS1.1 inventory', value: 11, color: '#2e7d32' }, { label: 'VS1.2 readiness + cost', value: 11, color: '#2e7d32' },
+      { label: 'VS1.3 contracts', value: 11, color: '#2e7d32' }, { label: 'VS1.4 schema', value: 11, color: '#2e7d32' },
+      { label: 'VS1.5 gateway', value: 11, color: '#2e7d32' }, { label: 'VS1.6 facade', value: 12, color: '#2e7d32' }, { label: 'VS1.7 config', value: 12, color: '#2e7d32' },
+    ] },
+    checks: [
+      ['All CI checks green on the PR', true],
+      ['Ali merged it', true],
+      ['deploy-prod.sh exit 0 and prod HEAD contains the merge', true],
+      ['loop-production-verifier PASS against the live release', true],
+    ],
+    diagramTitle: 'How Phase 1 shipped',
+    mermaid: `flowchart LR
+  P[PR 4397: 10 CI jobs green] --> M[Ali merged]
+  M --> B[Build images success after merge]
+  B --> D[deploy-prod.sh backend, marker found]
+  D --> V[Independent production verifier]
+  V --> OK[PASS: digest match, 13 empty tables, switches OFF]`,
+    evidenceLine: 'merge 1b01fce0c; Build images success 19:16Z; deploy exit 0; production verifier PASS 19:20Z; container restarts 0.',
+    sections: [
+      { h: 'Rollback (corrected after verification)', p: ['Immediate: every switch is already off. Code rollback: revert the merge through a PR and deploy the new main tip, or, in an emergency, check out the previous main on the host and deploy with DEPLOY_MODE=build. Registry mode cannot redeploy an image that is not the current main tip; the first version of this note said otherwise and was corrected after the verifier flagged it.'] },
+      { h: 'Health endpoint note', p: ['/api/health is not a real route; it returns the app\'s normal 401 catch-all. The real health checks /health and /health/full both return 200.'] },
+    ],
+    evidence: [
+      ['Release', 'host HEAD 1b01fce0c; running image digest equals the registry sha-1b01fce0c tag'],
+      ['Schema', '13 voice_* tables, COUNT(*) = 0 each (read-only session)'],
+      ['Behavior', 'voice_config_loaded: valid, all switches off; ENABLE_VOICE_CALLS false; legacy dist path unchanged'],
+      ['Errors', 'no voice-related error lines since start; unrelated pre-existing warnings only'],
+    ],
+    notEstablished: [
+      'Anything about real calls: Phase 1 places none. Live calls start in Phase 2 after M0.',
+      'Behavior with VOICE_GATEWAY_LEGACY_ENABLED on in production: not turned on; a separate decision.',
+    ],
+  },
+  'VS0.2': {
+    code: 'VS0.2', short: 'A 40-task plan an independent auditor approved',
+    title: 'Execution contract and plan.md (one plan task per ticket), audited by loop-plan-auditor',
+    docName: 'PLAN_AUDIT', date: '2026-11-24', session: SESSION, status: 'PASS 18/20 (cycle 5, authorized by Ali)',
+    asked: 'Write the execution contract and a plan with one task per AI ticket, and get it graded by an independent auditor before any code is written.',
+    delivered: 'An execution contract (scope, repo facts, hard stops, rollback) and a 40-task plan in dependency order with machine-checkable acceptance per task. The auditor scored it 16, 17, 17 and 17 out of 20 (pass is 18); after the fourth failure the loop stopped and asked Ali, who authorized a fifth cycle, which passed at 18.',
+    takeaway: 'The audit paid for itself before a line of product code: it caught a test runner the repo does not have, a staging environment that does not exist, CLI flags no task built, and live-call prerequisites missing from the dependency graph. Each would have stalled a later phase.',
+    cards: [
+      { n: '18/20', k: 'final plan score', color: '#2e7d32' },
+      { n: '5', k: 'audit cycles (5th authorized by Ali)' },
+      { n: '40', k: 'plan tasks, one per AI ticket' },
+      { n: '22', k: 'tickets revised (37 updates)' },
+      { n: '0', k: 'dimensions scored zero', color: '#2e7d32' },
+    ],
+    decision: 'Nothing to decide. The plan and contract govern every later phase; carries recorded in it (typed models before VS3.1, Phase 5 writes on deployed code) are tracked there.',
+    ladder: ['done', 'waiting', 'todo', 'todo', 'todo', 'todo'],
+    bars: { title: 'Plan audit score by cycle (pass = 18)', max: 20, rows: [
+      { label: 'Cycle 1', value: 16, color: '#c62828' }, { label: 'Cycle 2', value: 17, color: '#e0a100' }, { label: 'Cycle 3', value: 17, color: '#e0a100' },
+      { label: 'Cycle 4 (retry)', value: 17, color: '#e0a100' }, { label: 'Cycle 5 (authorized)', value: 18, color: '#2e7d32' },
+    ] },
+    checks: [
+      ['loop-plan-auditor PASS at 18 of 20 or better with no zero', true],
+      ['One plan task per AI ticket, dependency ordered', true],
+      ['Every ship task has deploy, rollback and live-verification steps', true],
+      ['Human milestones M0-M6 declared as external gates', true],
+    ],
+    diagramTitle: 'How the plan gate worked',
+    mermaid: `flowchart LR
+  C[Contract + plan] --> A{Independent auditor}
+  A -->|16, 17, 17| F[Fix findings]
+  F --> A
+  A -->|4th fail| S[Loop stopped: asked Ali]
+  S -->|one more cycle| A
+  A -->|18/20| GO[Build Phase 1]`,
+    evidenceLine: 'run directory verification-log.md cycles 1-5; Ali authorized cycle 5 on 2026-11-24.',
+    sections: [
+      { h: 'What the audit found', rows: [
+        ['Cycle 1', 'Handoff task had no checkable criteria; migration step that does not exist in this repo; a script no task built'],
+        ['Cycle 2', 'Live-call and human-gate prerequisites missing from the dependency graph; staging assumed'],
+        ['Cycle 3', 'E2E named a test runner the repo does not have'],
+        ['Cycle 4', 'A frontend test command that would hang in watch mode; two CLI flags no task built'],
+      ], head: ['Cycle', 'Findings'] },
+    ],
+    evidence: [
+      ['Scores', '16, 17, 17, 17, 18 of 20'],
+      ['Decision', 'Ali chose "One more audit first" after cycle 4'],
+    ],
+    notEstablished: ['That the plan is complete for Phases 2 to 6 in every detail: each later phase is verified task by task as it runs.'],
+  },
   'VS1.5': {
     code: 'VS1.5', short: 'One fail-closed gate for every call, admitted atomically',
     title: 'R01 Voice Gateway + atomic dial reservation shared by every provider',
