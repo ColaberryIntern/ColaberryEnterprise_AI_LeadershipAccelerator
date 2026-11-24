@@ -71,7 +71,8 @@ export function redactedVoiceConfig(c: VoiceConfig): Record<string, unknown> {
 
 /** Boot-time report. Never throws; an invalid config is logged as a warning and treated as all-off. */
 export function logVoiceConfigAtBoot(env: Record<string, string | undefined> = process.env): VoiceConfig {
-  const c = loadVoiceConfig(env);
+  let c: VoiceConfig;
+  try { c = loadVoiceConfig(env); } catch { c = { ...safeDefaults(), valid: false, issues: ['voice config could not be read'] }; }
   const line = { level: c.valid ? 'info' : 'warn', service: 'voice-studio', event: 'voice_config_loaded', outcome: c.valid ? 'success' : 'failure',
     error_class: c.valid ? undefined : 'VoiceConfigInvalid', context: redactedVoiceConfig(c) };
   (c.valid ? console.log : console.warn)(JSON.stringify(line));

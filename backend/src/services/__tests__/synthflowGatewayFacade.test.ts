@@ -20,6 +20,8 @@ jest.mock('../../config/env', () => ({
 jest.mock('../launchSafety', () => ({ isKillSwitchActive: jest.fn().mockResolvedValue(false) }));
 jest.mock('../settingsService', () => ({ getTestOverrides: jest.fn().mockResolvedValue({ enabled: false }) }));
 jest.mock('../voice/gateway/legacyFacade', () => ({ dispatchLegacyViaGateway: jest.fn() }));
+// triggerVoiceCall's failure event is fire-and-forget (unchanged legacy behavior); keep it off the real DB writer.
+jest.mock('../aiEventService', () => ({ emitAiEvent: jest.fn().mockResolvedValue(undefined) }));
 
 import { triggerVoiceCall } from '../synthflowService';
 import { dispatchLegacyViaGateway } from '../voice/gateway/legacyFacade';

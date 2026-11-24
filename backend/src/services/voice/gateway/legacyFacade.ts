@@ -23,12 +23,14 @@ import { env } from '../../../config/env';
 import { isKillSwitchActiveStrict } from '../../launchSafety';
 import { isStaffAlertNumber } from '../voiceDialGuard';
 import { isVoicePathAllowed } from '../voiceCallPaths';
+import { loadVoiceConfig } from '../voiceConfig';
 import { authorizeVoiceCall, dispatchAuthorized, GatewayDeps } from './voiceGateway';
 import { reserveDial, transitionReservation } from './voiceReservation';
 import { createSynthflowLegacyProvider, extractSynthflowCallId } from '../providers/synthflowLegacyProvider';
 
+/** Same validated source as synthflowService and the boot log (VS1.7): invalid voice config = off. */
 export function isLegacyGatewayEnabled(): boolean {
-  return process.env.VOICE_GATEWAY_LEGACY_ENABLED === 'true';
+  return loadVoiceConfig().VOICE_GATEWAY_LEGACY_ENABLED;
 }
 
 /** The single tenant today's legacy calls belong to, until tenant provisioning (VS6.1) maps real ones. */

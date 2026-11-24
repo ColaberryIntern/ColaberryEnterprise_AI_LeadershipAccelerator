@@ -27,6 +27,11 @@ export async function runAllMockScenarios() {
 }
 
 async function main() {
+  if (process.argv.includes('--help')) {
+    console.log(`voice:test:mock - one call through the real Voice Gateway against the mock provider, four scenarios
+(accepted, refused, unknown, hang). No database, no network, no phone. Exit 0 all as expected, 1 otherwise.`);
+    return;
+  }
   const results = await runAllMockScenarios();
   for (const r of results) console.log(JSON.stringify({ event: 'voice_test_mock', outcome: r.ok ? 'success' : 'failure', ...r }));
   const failed = results.filter((r) => !r.ok).length;

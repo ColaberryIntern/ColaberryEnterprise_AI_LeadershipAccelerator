@@ -36,7 +36,15 @@ export function buildPreflight(env: Record<string, string | undefined>, mode: 't
   };
 }
 
+const HELP = `voice:preflight - is this environment ready for a bounded live test? Never dials.
+
+Usage: npm run voice:preflight -- [--mode test] [--redacted] [--help]
+  --mode test   also require VOICE_TEST_ENABLED, VOICE_TEST_ALLOWED_NUMBER and Twilio credentials
+  --redacted    accepted for clarity; output is ALWAYS redacted (no numbers, no secret values)
+Exit: 0 report printed (READY / NOT READY in the output), 2 the voice config itself is invalid`;
+
 function main() {
+  if (process.argv.includes('--help')) { console.log(HELP); return; }
   const i = process.argv.indexOf('--mode');
   const mode = i > -1 && process.argv[i + 1] === 'test' ? 'test' : 'check';
   const report = buildPreflight(process.env, mode);

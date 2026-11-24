@@ -5,6 +5,7 @@ import { isKillSwitchActive } from './launchSafety';
 import { redactForLogs } from '../utils/piiRedaction';
 import { classifyError } from '../utils/errorClassifier';
 import { isVoicePathAllowed, voiceCallPathKey } from './voice/voiceCallPaths';
+import { loadVoiceConfig } from './voice/voiceConfig';
 
 // Lazy import (matches alertDeliveryService.ts's convention): avoids pulling
 // the full Sequelize/model graph into every synthflowService import.
@@ -21,9 +22,12 @@ async function emitFailureEvent(params: Parameters<typeof import('./aiEventServi
   }
 }
 
-/** VS1.6 rollout switch: route legacy dials through the Voice Gateway. Read per call; off by default. */
+/**
+ * VS1.6 rollout switch: route legacy dials through the Voice Gateway. Read per call from the VALIDATED
+ * voice config (VS1.7), so an invalid voice config means off here exactly as the boot log and preflight say.
+ */
 function legacyGatewayOn(): boolean {
-  return process.env.VOICE_GATEWAY_LEGACY_ENABLED === 'true';
+  return loadVoiceConfig().VOICE_GATEWAY_LEGACY_ENABLED;
 }
 
 /**

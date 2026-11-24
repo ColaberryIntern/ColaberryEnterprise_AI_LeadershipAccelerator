@@ -8,9 +8,11 @@
  */
 import { createHmac } from 'crypto';
 import { env } from '../../../config/env';
+import { loadVoiceConfig } from '../voiceConfig';
 
+/** From the VALIDATED voice config (VS1.7): a too-short or otherwise invalid key falls back to the derived one. */
 export function destinationHashKey(): string {
-  return process.env.VOICE_DESTINATION_HASH_KEY || `voice-destination:${env.jwtSecret}`;
+  return loadVoiceConfig().VOICE_DESTINATION_HASH_KEY || `voice-destination:${env.jwtSecret}`;
 }
 
 /** HMAC-SHA256 hex of an already-normalized E.164 number. */
