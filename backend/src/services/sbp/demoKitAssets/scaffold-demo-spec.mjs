@@ -160,11 +160,62 @@ function value(key, e, f, i) {
   if (/location|address/.test(f.key)) return AREAS[i % AREAS.length];
   if (/_ref$/.test(f.key)) return `ref-${(seed + i * 7919).toString(16).slice(-5)}`;
   if (/actor/.test(f.key) && agents.length) return agents[i % agents.length].name;
-  if (/action|text|what|message|statement/.test(f.key) && agents.length) return `Produced: ${(agents[i % agents.length].outputs || ['a result'])[0]}`;
+  if (/action|text|what|message|statement/.test(f.key) && agents.length) return `Produced: ${(agents[i % agents.length].outputs || [])[0] || 'a result'}`; // v13: an agent with outputs: [] printed "Produced: undefined"
   if (/(_to|_by)$/.test(f.key)) return personaName;
   if (/channel/.test(f.key)) return one((derived.systems || ['Email']));
   return `Sample ${f.label.toLowerCase()}`;
 }
+/*
+ * A row must never claim something happened that its own state says has not.
+ *
+ * ShiftFill v13 (2026-11-24): three agency messages read `review: pending` with a `sent_at`,
+ * which is a sample row breaking the plan's own guardrail ("Dana approves any message to a temp
+ * agency before it is sent"), and the demo story's Trust line forbids exactly that. The check
+ * above only read ONE status field per entity, and never blanked a sent time.
+ *
+ * Every enum on the row is read, and its state decides what cannot have happened yet:
+ *   - a GATE state (held, pending review, awaiting approval, draft, queued) on any field that is
+ *     not about a reply: nothing past the gate happened, so no sent / delivered / approved /
+ *     decided / accepted / filled / replied value;
+ *   - a waiting state on a REPLY field (reply, response, answer): the message went out, but no
+ *     reply came, so only the reply's own values are blanked. A sent offer keeps its sent time.
+ */
+const GATE_STATE = /^(held|on[ _]hold|pending|awaiting(?:[ _]\w+)?|draft|queued|in[ _]review|not[ _]sent|unsent)$/i;
+// "held" on a reply field is still a gate (v13: an offer held for overtime approval read
+// `response: held` with a sent time); "pending" there only means no reply yet.
+const HELD = /^(held|on[ _]hold|draft|queued|not[ _]sent|unsent)$/i;
+const WAITING_REPLY = /^(pending|waiting|awaiting(?:[ _]\w+)?|none|no[ _]reply)$/i;
+// A person refused it, so it never went out (v13: a `rejected` agency message with a sent time).
+// Not on reply fields: a hygienist answering "no" does not unsend the offer.
+const REFUSED = /^(rejected|declined|denied|cancell?ed|not[ _]approved)$/i;
+const REPLY_FIELD = /reply|response|answer/;
+const PAST_GATE = /(^|_)(sent|delivered|released|approved|decided|accepted|filled|replied|responded|answered|closed|resolved|completed)(_|$)/;
+const REPLIED = /(^|_)(replied|responded|answered|accepted)(_|$)/;
+const SENT = /(^|_)(sent|delivered|released)(_|$)/;
+function blankFor(key, state) {
+  if (REPLY_FIELD.test(key)) return HELD.test(state) ? PAST_GATE : WAITING_REPLY.test(state) ? REPLIED : null;
+  return GATE_STATE.test(state) ? PAST_GATE : REFUSED.test(state) ? SENT : null;
+}
+// "Nov 22, 1:20 PM" as minutes, for ordering only. Null for anything else.
+const MON = 'JanFebMarAprMayJunJulAugSepOctNovDec';
+function stamp(v) {
+  const m = /^([A-Z][a-z]{2}) (\d{1,2}), (\d{1,2}):(\d{2}) (AM|PM)$/.exec(String(v ?? ''));
+  if (!m || MON.indexOf(m[1]) < 0) return null;
+  return (((MON.indexOf(m[1]) / 3) * 31 + Number(m[2])) * 24 + (Number(m[3]) % 12) + (m[5] === 'PM' ? 12 : 0)) * 60 + Number(m[4]);
+}
+function keepRowCoherent(e, row) {
+  // A reply never comes before what it answers (v13: an offer answered a day before it was sent).
+  const sentKey = e.fields.find((g) => SENT.test(g.key) && stamp(row[g.key]) !== null)?.key;
+  const replyKey = e.fields.find((g) => REPLIED.test(g.key) && stamp(row[g.key]) !== null)?.key;
+  if (sentKey && replyKey && stamp(row[replyKey]) < stamp(row[sentKey])) [row[sentKey], row[replyKey]] = [row[replyKey], row[sentKey]];
+  for (const f of e.fields) {
+    if (f.type !== 'enum' || row[f.key] == null) continue;
+    const blank = blankFor(f.key, String(row[f.key]));
+    if (!blank) continue;
+    for (const g of e.fields) if (g !== f && g.type !== 'enum' && blank.test(g.key)) row[g.key] = null;
+  }
+}
+
 for (const [key, e] of Object.entries(entities)) {
   e.rows.forEach((row, i) => {
     for (const f of e.fields) { const v = value(key, e, f, i); if (v !== undefined) row[f.key] = v; }
@@ -173,6 +224,7 @@ for (const [key, e] of Object.entries(entities)) {
     if (e.status && ATT.test(String(row[e.status]))) {
       for (const f of e.fields) if (/filled|decided|responded|closed|resolved|completed/.test(f.key)) row[f.key] = null;
     }
+    keepRowCoherent(e, row);
   });
 }
 
