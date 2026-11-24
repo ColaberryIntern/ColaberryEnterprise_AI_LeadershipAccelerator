@@ -71,6 +71,8 @@ export class RealtimeBridge {
   private readonly playedMs = new Map<string, number>();
   /** Function-call ids already handled: a redelivered call is ignored (the tool ran and was recorded once). */
   private readonly handledCalls = new Set<string>();
+  /** Tool calls still running, per response id: that response's response.done does not end the answer. */
+  private readonly toolsInFlight = new Map<string, number>();
 
   constructor(private readonly twilio: SocketLike, private readonly d: RealtimeDeps) {}
 
@@ -239,15 +241,24 @@ export class RealtimeBridge {
     if (this.handledCalls.size >= 200) this.handledCalls.delete(this.handledCalls.values().next().value as string);
     this.handledCalls.add(callId);
     const owner = this.current && (!responseId || this.current.id === responseId) ? { turnId: this.current.turnId, genId: this.current.genId } : null;
+    // Registered SYNCHRONOUSLY, before the tool's I/O: on the real wire the response that made this
+    // call reports response.done (completed) long before a calendar lookup returns. Without this the
+    // answer was marked done, the session went back to listening, and the follow-up answer was never
+    // requested: the caller heard silence (verifier attempt 1).
+    const key = responseId ?? this.current?.id ?? '';
+    this.toolsInFlight.set(key, (this.toolsInFlight.get(key) ?? 0) + 1);
     let input: unknown = {};
     try { input = args ? JSON.parse(args) : {}; } catch { input = { __unparseable: true }; } // the broker's schema rejects it with a speakable error
     h.toolStarted(callId, name);
     const out = await this.broker!.run(callId, name, input);
+    const left = (this.toolsInFlight.get(key) ?? 1) - 1;
+    if (left > 0) this.toolsInFlight.set(key, left); else this.toolsInFlight.delete(key);
     h.toolFinished(callId, out.committed);
     if (out.errorClass) this.log('warn', 'voice_tool_failed', { tool: name, error_class: out.errorClass });
     if (this.closed || !this.model) return;
     this.model.send(functionOutput(callId, out.content)); // always: an unanswered call would corrupt the model's conversation
-    if (owner && h.accepts(owner.turnId, owner.genId)) { this.followUpOf = owner; this.model.send(responseCreate()); }
+    // One follow-up per response, after its LAST tool call returns, and only while the answer is current.
+    if (left <= 0 && owner && h.accepts(owner.turnId, owner.genId)) { this.followUpOf = owner; this.model.send(responseCreate()); }
   }
 
   private responseDone(id: string, status?: string): void {
@@ -258,7 +269,8 @@ export class RealtimeBridge {
       if (h.snapshot().state === 'greeting') h.dispatch({ type: 'greeting_done' });
       return;
     }
-    if (this.followUpOf || status !== 'completed' || this.current?.id !== id) return; // a tool follow-up continues the same answer
+    // A response that made a tool call is not the end of the answer: its follow-up continues it.
+    if (this.followUpOf || this.toolsInFlight.has(id) || status !== 'completed' || this.current?.id !== id) return;
     h.dispatch({ type: 'generation_done', generationId: this.current.genId });
   }
 

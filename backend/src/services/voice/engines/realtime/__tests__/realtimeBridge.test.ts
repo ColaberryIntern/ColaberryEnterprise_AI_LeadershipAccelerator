@@ -65,13 +65,13 @@ describe('Engine B: setup and session (VS2.4)', () => {
   it('configures the model for mu-law in and out, server VAD with interruption, and the broker tools', async () => {
     const h = harness();
     await h.start();
-    const upd = h.model[0] as { type: string; session: Record<string, any> };
+    const upd = h.model[0] as { type: string; session: { type: string; audio: { input: { format: unknown; turn_detection: unknown }; output: { format: unknown } }; tools: Array<{ name: string }> } };
     expect(upd.type).toBe('session.update');
     expect(upd.session.type).toBe('realtime');
     expect(upd.session.audio.input.format).toEqual({ type: 'audio/pcmu' });
     expect(upd.session.audio.output.format).toEqual({ type: 'audio/pcmu' });
     expect(upd.session.audio.input.turn_detection).toMatchObject({ type: 'server_vad', interrupt_response: true });
-    expect(upd.session.tools.map((t: { name: string }) => t.name)).toEqual(['next_open_strategy_slots']);
+    expect(upd.session.tools.map((t) => t.name)).toEqual(['next_open_strategy_slots']);
   });
 
   it('caller audio before the model is ready is prebuffered in order, then flushed; the greeting discloses the AI', async () => {
@@ -197,6 +197,51 @@ describe('Engine B: tools (VS2.4)', () => {
     expect(h.tools).toEqual([expect.objectContaining({ toolCallId: 'call_1', committed: false })]);
     const creates = h.of(h.model, 'type', 'response.create');
     expect(creates.length).toBeGreaterThanOrEqual(2); // greeting + the follow-up
+  });
+
+  function gatedHarness(n = 1) {
+    const opens: Array<() => void> = [];
+    const gates = Array.from({ length: n }, () => new Promise<void>((r) => opens.push(r)));
+    let i = 0;
+    const h = harness({ broker: () => new ToolBroker([nextOpenSlotsTool(async () => { await gates[Math.min(i++, n - 1)]; return { timezone: 'UTC', dates: [] }; })]) });
+    return { h, open: (k: number) => opens[k]() };
+  }
+  const settle = () => new Promise((r) => setImmediate(r));
+
+  it('REAL wire order: response.done (completed) arrives before the tool returns; the answer still continues (verifier attempt 1)', async () => {
+    const { h, open } = gatedHarness();
+    await h.ready();
+    await h.answer('resp_1', 'item_1', 0);
+    const creates = () => h.of(h.model, 'type', 'response.create').length;
+    const before = creates();
+    const pending = h.ev({ type: 'response.function_call_arguments.done', response_id: 'resp_1', call_id: 'call_r', name: 'next_open_strategy_slots', arguments: '{}' });
+    await h.ev({ type: 'response.done', response: { id: 'resp_1', status: 'completed' } }); // the model's turn ends while the lookup runs
+    expect(h.worker.size).toBe(1);
+    open(0);
+    await pending; await settle();
+    expect(h.of(h.model, 'type', 'conversation.item.create')).toContainEqual(expect.objectContaining({ item: expect.objectContaining({ call_id: 'call_r' }) }));
+    expect(creates()).toBe(before + 1); // exactly one follow-up answer requested
+    // The follow-up's audio is played as part of the same answer.
+    await h.ev({ type: 'response.created', response: { id: 'resp_2' } });
+    const n = h.twilio.length;
+    await h.ev({ type: 'response.output_audio.delta', response_id: 'resp_2', item_id: 'item_2', delta: chunk20ms });
+    expect(h.twilio.length).toBe(n + 2); // media + mark
+  });
+
+  it('two tool calls in one response: both outputs returned, ONE follow-up, after the last one finishes', async () => {
+    const { h, open } = gatedHarness(2);
+    await h.ready();
+    await h.answer('resp_1', 'item_1', 0);
+    const creates = () => h.of(h.model, 'type', 'response.create').length;
+    const before = creates();
+    const a = h.ev({ type: 'response.function_call_arguments.done', response_id: 'resp_1', call_id: 'c_a', name: 'next_open_strategy_slots', arguments: '{}' });
+    const b = h.ev({ type: 'response.function_call_arguments.done', response_id: 'resp_1', call_id: 'c_b', name: 'next_open_strategy_slots', arguments: '{}' });
+    await h.ev({ type: 'response.done', response: { id: 'resp_1', status: 'completed' } });
+    open(0); await a; await settle();
+    expect(creates()).toBe(before); // one still running: no follow-up yet
+    open(1); await b; await settle();
+    expect(h.of(h.model, 'type', 'conversation.item.create').map((m) => (m.item as { call_id?: string }).call_id).filter(Boolean)).toEqual(['c_a', 'c_b']);
+    expect(creates()).toBe(before + 1);
   });
 
   it('a tool that finishes after the caller moved on still returns its output but requests no stale answer', async () => {
