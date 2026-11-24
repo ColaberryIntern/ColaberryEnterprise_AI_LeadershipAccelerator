@@ -1,0 +1,122 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<title>S2. Data model and migrations: built, waiting on merge</title><style>
+  :root {
+    --cherry: #FB2832; --cherry-deep: #C20E1E; --cherry-bg: #FFF0F1;
+    --leaf: #77BB4A; --ink: #2d3748; --muted: #718096; --border: #e2e8f0; --bg-alt: #f7fafc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fff;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-size: 10.5pt; line-height: 1.5;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  h1 { font-size: 19pt; line-height: 1.15; margin: 0 0 4px; color: var(--cherry); font-weight: 700; }
+  h2 {
+    font-size: 12.5pt; margin: 20px 0 8px; color: var(--cherry-deep); font-weight: 700;
+    border-bottom: 2px solid var(--cherry-bg); padding-bottom: 4px;
+  }
+  h3 { font-size: 10.5pt; margin: 14px 0 5px; font-weight: 700; color: var(--ink); }
+  p { margin: 0 0 8px; }
+  code { font-family: Consolas, monospace; font-size: 9pt; background: var(--bg-alt);
+         padding: 1px 4px; border-radius: 3px; }
+  .meta { font-size: 8.5pt; color: var(--muted); }
+  .rule { height: 3px; background: var(--cherry); margin: 10px 0 14px; border-radius: 2px; }
+
+  /* The takeaway box. Ali reads this and nothing else if the day is bad. */
+  .takeaway {
+    background: var(--cherry-bg); border-left: 5px solid var(--cherry);
+    padding: 12px 14px; margin: 0 0 16px; border-radius: 0 5px 5px 0;
+  }
+  .takeaway .label {
+    font-size: 8pt; font-weight: 700; letter-spacing: .09em; text-transform: uppercase;
+    color: var(--cherry-deep); margin-bottom: 4px;
+  }
+  .takeaway .headline { font-size: 12pt; font-weight: 700; line-height: 1.35; }
+
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 9pt; }
+  th {
+    text-align: left; background: var(--bg-alt); color: var(--ink); font-weight: 700;
+    padding: 6px 8px; border-bottom: 2px solid var(--border); font-size: 8.5pt;
+    text-transform: uppercase; letter-spacing: .04em;
+  }
+  td { padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:nth-child(even) td { background: #fcfcfd; }
+
+  .chip {
+    display: inline-block; padding: 1px 7px; border-radius: 9px; font-size: 7.8pt;
+    font-weight: 700; color: #fff; white-space: nowrap;
+  }
+  .cards { display: flex; gap: 10px; margin: 10px 0 14px; }
+  .card {
+    flex: 1; border: 1px solid var(--border); border-radius: 6px; padding: 9px 11px;
+    background: #fff;
+  }
+  .card .n { font-size: 20pt; font-weight: 700; line-height: 1; color: var(--cherry); }
+  .card .k { font-size: 7.8pt; color: var(--muted); text-transform: uppercase;
+             letter-spacing: .05em; margin-top: 3px; }
+  .note {
+    border: 1px solid var(--border); border-left: 4px solid var(--muted);
+    background: var(--bg-alt); padding: 9px 11px; margin: 10px 0; font-size: 9pt;
+    border-radius: 0 5px 5px 0;
+  }
+  .note.warn { border-left-color: #b3261e; background: #fdf3f2; }
+  .note.good { border-left-color: #2f7d32; background: #f3f9f3; }
+  figure { margin: 10px 0 14px; page-break-inside: avoid; }
+  figcaption { font-size: 8pt; color: var(--muted); margin-top: 5px; }
+  .mermaid { text-align: center; }
+  .pagebreak { page-break-before: always; }
+  
+    .legend { font-size: 8pt; color: #475569; margin: 2px 0 6px; }
+    .legend span { display:inline-block; width:12px; height:10px; border:1.5px solid; border-radius:2px; margin:0 4px 0 10px; vertical-align:-1px; }
+    table td, table th { font-size: 8.8pt; padding: 5px 7px; vertical-align: top; }
+    .chk td.mk { font-size: 15pt; font-weight: 700; text-align: center; line-height: 1; }
+    .opts tr.rec td { background: #fef3c7; }
+    .takeaway .headline { font-size: 11pt; font-weight: 600; }</style></head><body>
+  <h1>S2. Data model and migrations: built, waiting on merge</h1>
+  <div class="meta">Middlesex Glass · AIA billing Phase 1 · board catch-up, Tue 24 Nov 2026 · PR: https://github.com/colaberry/GlazeOff-AIA-Billing/pull/1</div>
+  <div class="rule"></div>
+  <div class="takeaway"><div class="label">Takeaway</div><div class="headline">The schema is built and tested in PR 1: 11 tables, forced row-level security on every one, <code>require()</code> on every route. 86 tests pass locally on Postgres 16 with 0 skipped. It is approved but not merged, and Sai has not reviewed yet. It cannot close at merge either: the ticket also requires both October requisitions to reproduce their printed totals, which needs the requisition loader (next PR, with S3).</div></div>
+  <h2>Where this sits on the way to the 8 Dec pilot</h2>
+  <svg viewBox="0 0 796 96" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, sans-serif">
+  <rect x="4" y="12" width="82" height="70" rx="8" fill="#dbeafe" stroke="#1e40af" stroke-width="1.2"/>
+      <text x="45" y="34" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2937">S0</text>
+      <text x="45" y="52" text-anchor="middle" font-size="9.5" font-weight="600" fill="#334155">Hosting</text>
+      <text x="45" y="68" text-anchor="middle" font-size="8.5" fill="#1e40af">2 checks open</text><rect x="92" y="12" width="82" height="70" rx="8" fill="#fde2e1" stroke="#b3261e" stroke-width="1.2"/>
+      <text x="133" y="34" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2937">S1</text>
+      <text x="133" y="52" text-anchor="middle" font-size="9.5" font-weight="600" fill="#334155">GCP + deploy</text>
+      <text x="133" y="68" text-anchor="middle" font-size="8.5" fill="#b3261e">blocked: access</text><rect x="180" y="4" width="82" height="84" rx="8" fill="#dbeafe" stroke="#1e40af" stroke-width="3.5"/>
+      <text x="221" y="30" text-anchor="middle" font-size="15" font-weight="700" fill="#1f2937">S2</text>
+      <text x="221" y="50" text-anchor="middle" font-size="9.5" font-weight="600" fill="#334155">Schema</text>
+      <text x="221" y="68" text-anchor="middle" font-size="8.5" fill="#1e40af">built in PR 1</text><rect x="268" y="12" width="82" height="70" rx="8" fill="#fef3c7" stroke="#b26a00" stroke-width="1.2"/>
+      <text x="309" y="34" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2937">S3</text>
+      <text x="309" y="52" text-anchor="middle" font-size="9.5" font-weight="600" fill="#334155">Load jobs</text>
+      <text x="309" y="68" text-anchor="middle" font-size="8.5" fill="#b26a00">Sat 28 Nov</text><rect x="356" y="12" width="82" height="70" rx="8" fill="#fef3c7" stroke="#b26a00" stroke-width="1.2"/>
+      <text x="397" y="34" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2937">S4</text>
+      <text x="397" y="52" text-anchor="middle" font-size="9.5" font-weight="600" fill="#334155">PM entry</text>
+      <text x="397" y="68" text-anchor="middle" font-size="8.5" fill="#b26a00">Sat 28 Nov</text><rect x="444" y="12" width="82" height="70" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.2"/>
+      <text x="485" y="34" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2937">S5</text>
+      <text x="485" y="52" text-anchor="middle" font-size="9.5" font-weight="600" fill="#334155">Finalize + export</text>
+      <text x="485" y="68" text-anchor="middle" font-size="8.5" fill="#94a3b8">Thu 3 Dec</text><rect x="532" y="12" width="82" height="70" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.2"/>
+      <text x="573" y="34" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2937">S6</text>
+      <text x="573" y="52" text-anchor="middle" font-size="9.5" font-weight="600" fill="#334155">Identity</text>
+      <text x="573" y="68" text-anchor="middle" font-size="8.5" fill="#94a3b8">Thu 3 Dec</text><rect x="620" y="12" width="82" height="70" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.2"/>
+      <text x="661" y="34" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2937">S7</text>
+      <text x="661" y="52" text-anchor="middle" font-size="9.5" font-weight="600" fill="#334155">Dry run</text>
+      <text x="661" y="68" text-anchor="middle" font-size="8.5" fill="#94a3b8">Sat 5 Dec</text><rect x="708" y="12" width="82" height="70" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.2"/>
+      <text x="749" y="34" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2937">PILOT</text>
+      <text x="749" y="52" text-anchor="middle" font-size="9.5" font-weight="600" fill="#334155">Two PMs</text>
+      <text x="749" y="68" text-anchor="middle" font-size="8.5" fill="#94a3b8">Tue 8 Dec</text>
+</svg>
+<div class="legend"><span style="background:#dbeafe;border-color:#1e40af"></span>built or decided, not closed
+<span style="background:#fde2e1;border-color:#b3261e"></span>blocked
+<span style="background:#fef3c7;border-color:#b26a00"></span>next
+<span style="background:#f1f5f9;border-color:#94a3b8"></span>later &nbsp;·&nbsp; thick border = this ticket</div>
+  <h2>Done-when, checked</h2>
+  <table class="chk"><thead><tr><th style="width:34px"></th><th style="width:44%">Done when (from the ticket)</th><th>Evidence, 24 Nov</th></tr></thead><tbody>
+  <tr><td class="mk" style="color:#2f7d32">✓</td><td><b>Migrations run clean on an empty database</b></td><td>Local CI mirror: <code>alembic upgrade head</code> run twice on a fresh Postgres 16; the second run is a no-op.</td></tr><tr><td class="mk" style="color:#b26a00">◐</td><td><b>Multi-tenant from the first migration, Middlesex as tenant one</b></td><td>Every table has <code>client_id</code> + forced RLS; cross-client reads, writes and foreign keys are refused in tests. No client name in code. Not yet: Middlesex is not loaded as a client row; that happens with S3.</td></tr><tr><td class="mk" style="color:#b26a00">◐</td><td><b>Retainage varies by contract (5, 7, 10, Fairfield 0)</b></td><td><code>contracts.retainage_pct</code> per contract. <b>Gap found:</b> the ticket says stored materials carry a <i>separate</i> retainage percentage; the schema has one. Fix lands in the next migration.</td></tr><tr><td class="mk" style="color:#b3261e">✗</td><td><b>Fairfield REQ 17 and Porsche REQ 12 reproduce to the dollar</b></td><td>Needs the requisition loader and G703 math (next PR, after PR 1 merges).</td></tr>
+  </tbody></table>
+  <h2>What moves it</h2><table class="opts"><tbody>
+  <tr class="rec"><td style="width:22%"><b>Ali</b></td><td>Merge PR 1 (you are on the bypass list; Sai can still review after).</td></tr><tr><td style="width:22%"><b>Ali (Claude)</b></td><td>Next PR: requisition load + G703 math + the stored-materials retainage column, proven against both October reqs.</td></tr><tr><td style="width:22%"><b>New due</b></td><td><b>Sat 28 Nov</b>, with S3. Moved from 21 Nov.</td></tr>
+  </tbody></table>
+  <p class="meta">Not closed: at least one done-condition above is unmet. Closing takes the one-page visual and the completion document, both on this ticket.</p></body></html>

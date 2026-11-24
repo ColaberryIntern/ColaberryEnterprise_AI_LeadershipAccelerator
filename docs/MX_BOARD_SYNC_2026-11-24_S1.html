@@ -1,0 +1,122 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<title>S1. Hosted platform + deploy path: blocked on access</title><style>
+  :root {
+    --cherry: #FB2832; --cherry-deep: #C20E1E; --cherry-bg: #FFF0F1;
+    --leaf: #77BB4A; --ink: #2d3748; --muted: #718096; --border: #e2e8f0; --bg-alt: #f7fafc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fff;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-size: 10.5pt; line-height: 1.5;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  h1 { font-size: 19pt; line-height: 1.15; margin: 0 0 4px; color: var(--cherry); font-weight: 700; }
+  h2 {
+    font-size: 12.5pt; margin: 20px 0 8px; color: var(--cherry-deep); font-weight: 700;
+    border-bottom: 2px solid var(--cherry-bg); padding-bottom: 4px;
+  }
+  h3 { font-size: 10.5pt; margin: 14px 0 5px; font-weight: 700; color: var(--ink); }
+  p { margin: 0 0 8px; }
+  code { font-family: Consolas, monospace; font-size: 9pt; background: var(--bg-alt);
+         padding: 1px 4px; border-radius: 3px; }
+  .meta { font-size: 8.5pt; color: var(--muted); }
+  .rule { height: 3px; background: var(--cherry); margin: 10px 0 14px; border-radius: 2px; }
+
+  /* The takeaway box. Ali reads this and nothing else if the day is bad. */
+  .takeaway {
+    background: var(--cherry-bg); border-left: 5px solid var(--cherry);
+    padding: 12px 14px; margin: 0 0 16px; border-radius: 0 5px 5px 0;
+  }
+  .takeaway .label {
+    font-size: 8pt; font-weight: 700; letter-spacing: .09em; text-transform: uppercase;
+    color: var(--cherry-deep); margin-bottom: 4px;
+  }
+  .takeaway .headline { font-size: 12pt; font-weight: 700; line-height: 1.35; }
+
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 9pt; }
+  th {
+    text-align: left; background: var(--bg-alt); color: var(--ink); font-weight: 700;
+    padding: 6px 8px; border-bottom: 2px solid var(--border); font-size: 8.5pt;
+    text-transform: uppercase; letter-spacing: .04em;
+  }
+  td { padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:nth-child(even) td { background: #fcfcfd; }
+
+  .chip {
+    display: inline-block; padding: 1px 7px; border-radius: 9px; font-size: 7.8pt;
+    font-weight: 700; color: #fff; white-space: nowrap;
+  }
+  .cards { display: flex; gap: 10px; margin: 10px 0 14px; }
+  .card {
+    flex: 1; border: 1px solid var(--border); border-radius: 6px; padding: 9px 11px;
+    background: #fff;
+  }
+  .card .n { font-size: 20pt; font-weight: 700; line-height: 1; color: var(--cherry); }
+  .card .k { font-size: 7.8pt; color: var(--muted); text-transform: uppercase;
+             letter-spacing: .05em; margin-top: 3px; }
+  .note {
+    border: 1px solid var(--border); border-left: 4px solid var(--muted);
+    background: var(--bg-alt); padding: 9px 11px; margin: 10px 0; font-size: 9pt;
+    border-radius: 0 5px 5px 0;
+  }
+  .note.warn { border-left-color: #b3261e; background: #fdf3f2; }
+  .note.good { border-left-color: #2f7d32; background: #f3f9f3; }
+  figure { margin: 10px 0 14px; page-break-inside: avoid; }
+  figcaption { font-size: 8pt; color: var(--muted); margin-top: 5px; }
+  .mermaid { text-align: center; }
+  .pagebreak { page-break-before: always; }
+  
+    .legend { font-size: 8pt; color: #475569; margin: 2px 0 6px; }
+    .legend span { display:inline-block; width:12px; height:10px; border:1.5px solid; border-radius:2px; margin:0 4px 0 10px; vertical-align:-1px; }
+    table td, table th { font-size: 8.8pt; padding: 5px 7px; vertical-align: top; }
+    .chk td.mk { font-size: 15pt; font-weight: 700; text-align: center; line-height: 1; }
+    .opts tr.rec td { background: #fef3c7; }
+    .takeaway .headline { font-size: 11pt; font-weight: 600; }</style></head><body>
+  <h1>S1. Hosted platform + deploy path: blocked on access</h1>
+  <div class="meta">Middlesex Glass · AIA billing Phase 1 · board catch-up, Tue 24 Nov 2026 · PR: https://github.com/colaberry/GlazeOff-AIA-Billing/pull/1</div>
+  <div class="rule"></div>
+  <div class="takeaway"><div class="label">Takeaway</div><div class="headline">The GCP project exists and is linked to billing, and Sai has Editor. Ali does not yet, so nothing can be deployed. A second gap: GitHub Actions has not started a single run in the private colaberry org since at least 2 Nov, so "deploy from a push" has no pipeline to ride on yet. Ram was emailed about it on 23 Nov.</div></div>
+  <h2>Where this sits on the way to the 8 Dec pilot</h2>
+  <svg viewBox="0 0 796 96" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, sans-serif">
+  <rect x="4" y="12" width="82" height="70" rx="8" fill="#dbeafe" stroke="#1e40af" stroke-width="1.2"/>
+      <text x="45" y="34" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2937">S0</text>
+      <text x="45" y="52" text-anchor="middle" font-size="9.5" font-weight="600" fill="#334155">Hosting</text>
+      <text x="45" y="68" text-anchor="middle" font-size="8.5" fill="#1e40af">2 checks open</text><rect x="92" y="4" width="82" height="84" rx="8" fill="#fde2e1" stroke="#b3261e" stroke-width="3.5"/>
+      <text x="133" y="30" text-anchor="middle" font-size="15" font-weight="700" fill="#1f2937">S1</text>
+      <text x="133" y="50" text-anchor="middle" font-size="9.5" font-weight="600" fill="#334155">GCP + deploy</text>
+      <text x="133" y="68" text-anchor="middle" font-size="8.5" fill="#b3261e">blocked: access</text><rect x="180" y="12" width="82" height="70" rx="8" fill="#dbeafe" stroke="#1e40af" stroke-width="1.2"/>
+      <text x="221" y="34" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2937">S2</text>
+      <text x="221" y="52" text-anchor="middle" font-size="9.5" font-weight="600" fill="#334155">Schema</text>
+      <text x="221" y="68" text-anchor="middle" font-size="8.5" fill="#1e40af">built in PR 1</text><rect x="268" y="12" width="82" height="70" rx="8" fill="#fef3c7" stroke="#b26a00" stroke-width="1.2"/>
+      <text x="309" y="34" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2937">S3</text>
+      <text x="309" y="52" text-anchor="middle" font-size="9.5" font-weight="600" fill="#334155">Load jobs</text>
+      <text x="309" y="68" text-anchor="middle" font-size="8.5" fill="#b26a00">Sat 28 Nov</text><rect x="356" y="12" width="82" height="70" rx="8" fill="#fef3c7" stroke="#b26a00" stroke-width="1.2"/>
+      <text x="397" y="34" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2937">S4</text>
+      <text x="397" y="52" text-anchor="middle" font-size="9.5" font-weight="600" fill="#334155">PM entry</text>
+      <text x="397" y="68" text-anchor="middle" font-size="8.5" fill="#b26a00">Sat 28 Nov</text><rect x="444" y="12" width="82" height="70" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.2"/>
+      <text x="485" y="34" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2937">S5</text>
+      <text x="485" y="52" text-anchor="middle" font-size="9.5" font-weight="600" fill="#334155">Finalize + export</text>
+      <text x="485" y="68" text-anchor="middle" font-size="8.5" fill="#94a3b8">Thu 3 Dec</text><rect x="532" y="12" width="82" height="70" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.2"/>
+      <text x="573" y="34" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2937">S6</text>
+      <text x="573" y="52" text-anchor="middle" font-size="9.5" font-weight="600" fill="#334155">Identity</text>
+      <text x="573" y="68" text-anchor="middle" font-size="8.5" fill="#94a3b8">Thu 3 Dec</text><rect x="620" y="12" width="82" height="70" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.2"/>
+      <text x="661" y="34" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2937">S7</text>
+      <text x="661" y="52" text-anchor="middle" font-size="9.5" font-weight="600" fill="#334155">Dry run</text>
+      <text x="661" y="68" text-anchor="middle" font-size="8.5" fill="#94a3b8">Sat 5 Dec</text><rect x="708" y="12" width="82" height="70" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.2"/>
+      <text x="749" y="34" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2937">PILOT</text>
+      <text x="749" y="52" text-anchor="middle" font-size="9.5" font-weight="600" fill="#334155">Two PMs</text>
+      <text x="749" y="68" text-anchor="middle" font-size="8.5" fill="#94a3b8">Tue 8 Dec</text>
+</svg>
+<div class="legend"><span style="background:#dbeafe;border-color:#1e40af"></span>built or decided, not closed
+<span style="background:#fde2e1;border-color:#b3261e"></span>blocked
+<span style="background:#fef3c7;border-color:#b26a00"></span>next
+<span style="background:#f1f5f9;border-color:#94a3b8"></span>later &nbsp;·&nbsp; thick border = this ticket</div>
+  <h2>Done-when, checked</h2>
+  <table class="chk"><thead><tr><th style="width:34px"></th><th style="width:44%">Done when (from the ticket)</th><th>Evidence, 24 Nov</th></tr></thead><tbody>
+  <tr><td class="mk" style="color:#b3261e">✗</td><td><b>A commit pushed to main is serving at a URL</b></td><td>No access to <code>glazeoff-billing</code>. Every Actions run ends in <code>startup_failure</code> (org billing or spending limit, most likely).</td></tr><tr><td class="mk" style="color:#b3261e">✗</td><td><b>The database survives a redeploy</b></td><td>No database yet.</td></tr><tr><td class="mk" style="color:#b3261e">✗</td><td><b>A restore from backup performed once</b></td><td>Same restore as S0. One run satisfies both tickets.</td></tr>
+  </tbody></table>
+  <h2>Two unblocks, both outside this tab</h2><table class="opts"><tbody>
+  <tr><td style="width:22%"><b>Karun</b></td><td>Ali as Editor on <code>glazeoff-billing</code>, and access to karunswaroop/GlazeOff-Shopdraw.</td></tr><tr><td style="width:22%"><b>Ram</b></td><td>Whoever owns colaberry org billing checks the Actions spending limit or payment method. Until then tests run by hand and are recorded on each PR.</td></tr><tr class="rec"><td style="width:22%"><b>New due</b></td><td><b>Tue 1 Dec</b>, the same day as the AIX Auth decision. Moved from 21 Nov. S3 and S4 do not wait on it: they are built and tested locally.</td></tr>
+  </tbody></table>
+  <p class="meta">Not closed: at least one done-condition above is unmet. Closing takes the one-page visual and the completion document, both on this ticket.</p></body></html>
