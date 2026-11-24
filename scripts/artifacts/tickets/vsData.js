@@ -124,7 +124,7 @@ module.exports = {
     notEstablished: [
       'Our actual Synthflow contract cost and included minutes (needed for the comparison; VS5.1 / M4).',
       'Whether ElevenLabs is billed inside ConversationRelay, and Engine B per-minute cost: both measured in live tests.',
-      'Carrier spam labelling or answer rates of any number.',
+      'Carrier spam labeling or answer rates of any number.',
     ],
   },
   M0: {

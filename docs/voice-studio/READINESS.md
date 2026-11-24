@@ -71,5 +71,5 @@ A REST API dial (the only kind this work could create) appears as direction `out
 ## What this does not establish
 
 - That any of the 9 placeholder numbers is free of SMS use (their SMS webhooks were not inspected); M0 picks one only after its SMS route is checked.
-- Carrier reputation or spam labelling of any number (outbound answer rates are measured in live tests, not here).
+- Carrier reputation or spam labeling of any number (outbound answer rates are measured in live tests, not here).
 - Anything about Synthflow's own configuration (VS5.1).
