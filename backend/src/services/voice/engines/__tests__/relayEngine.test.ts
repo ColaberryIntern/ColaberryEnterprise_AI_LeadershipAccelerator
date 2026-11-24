@@ -10,7 +10,7 @@ const SID = 'CA' + 'b8'.repeat(16);
 const CALL = '0b1c2d3e-4f50-4617-8899-aabbccddeeff';
 
 /** A scripted model turn: deltas, optional gate before each delta, then a stop. */
-interface Script { deltas?: string[]; gateAt?: number; tool?: { id: string; name: string; input?: unknown }; stop?: string; fail?: string }
+interface Script { deltas?: string[]; gateAt?: number; ignoreAbort?: boolean; tool?: { id: string; name: string; input?: unknown }; stop?: string; fail?: string }
 function scriptedLlm(scripts: Script[]) {
   const calls: Array<{ messages: VoiceMessage[]; tools: number }> = [];
   let release: () => void = () => undefined;
@@ -23,8 +23,8 @@ function scriptedLlm(scripts: Script[]) {
       const deltas = s.deltas ?? [];
       for (let i = 0; i < deltas.length; i++) {
         if (s.gateAt === i) await gate;
-        if (signal.aborted) return { ok: false, errorClass: 'Aborted', aborted: true };
-        onText(deltas[i]);
+        if (signal.aborted && !s.ignoreAbort) return { ok: false, errorClass: 'Aborted', aborted: true };
+        onText(deltas[i]); // a provider flushing buffered tokens may still deliver after the abort (ignoreAbort)
       }
       if (s.tool) {
         return { ok: true, stopReason: 'tool_use', text: deltas.join(''), toolCalls: [{ id: s.tool.id, name: s.tool.name, input: s.tool.input ?? {} }],
@@ -124,6 +124,33 @@ describe('Engine A protocol: interruption (VS2.3)', () => {
     const history = h.calls[1].messages;
     expect(history).toContainEqual({ role: 'assistant', content: 'Our next' });
     expect(JSON.stringify(history)).not.toContain('Monday');
+  });
+
+  it('interrupt AFTER the answer finished streaming (Twilio still speaking it): history is cut to what was heard', async () => {
+    const h = harness([{ deltas: ['Our next session ', 'starts on Monday.'] }, { deltas: ['Okay.'] }]);
+    await h.setup();
+    await h.prompt('When is the next session?');
+    expect(h.spoken()).toBe('Our next session starts on Monday.'); // all streamed; the model was faster than speech
+    await h.conn.onMessage(JSON.stringify({ type: 'interrupt', utteranceUntilInterrupt: 'Our next session', durationUntilInterruptMs: 900 }));
+    await h.prompt('Sorry, go on');
+    const history = h.calls[1].messages;
+    expect(history).toContainEqual({ role: 'assistant', content: 'Our next session' });
+    expect(JSON.stringify(history)).not.toContain('Monday');
+    expect(h.logs.filter((l) => l.error_class === 'InvalidTransition')).toHaveLength(0);
+  });
+
+  it('a provider that keeps delivering tokens after the abort is still never heard (engine-side guards)', async () => {
+    const h = harness([{ deltas: ['Our next ', 'session starts ', 'on Monday.'], gateAt: 1, ignoreAbort: true }, { deltas: ['Sure.'] }]);
+    await h.setup();
+    const answering = h.prompt('Tell me');
+    await new Promise((r) => setImmediate(r));
+    await h.conn.onMessage(JSON.stringify({ type: 'interrupt', utteranceUntilInterrupt: 'Our next' }));
+    h.release();
+    await answering;
+    expect(h.spoken()).toBe('Our next ');
+    await h.prompt('Question');
+    const assistant = h.calls[1].messages.filter((m) => m.role === 'assistant').map((m) => m.content);
+    expect(assistant).toEqual([TEST_PROFILE.greeting, 'Our next']); // heard part once; the canceled answer never lands in history
   });
 
   it('double interrupt is harmless and the call keeps working', async () => {

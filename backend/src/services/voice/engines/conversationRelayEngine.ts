@@ -132,14 +132,23 @@ export class RelayConnection {
     await this.answer(h);
   }
 
+  /**
+   * The caller talked over the agent. Usually the model finished streaming long before Twilio
+   * finished SPEAKING it, so the session is already back in listening: there is nothing to cancel,
+   * but history must still be cut back to what the caller actually heard (regression caught by a
+   * mutation test). When an answer is still in flight, cancel it too.
+   */
   private interrupt(heard: string): void {
     const h = this.handle!;
-    if (!h.dispatch({ type: 'interrupt' }).ok) return;
-    // History keeps only what the caller actually heard of the canceled answer.
+    const state = h.snapshot().state;
+    if (state === 'speaking' || state === 'thinking' || state === 'greeting' || state === 'interrupted') {
+      h.dispatch({ type: 'interrupt' });
+      h.dispatch({ type: 'interrupt_handled' });
+    }
+    const said = heard.trim();
     const last = this.history[this.history.length - 1];
-    if (last?.role === 'assistant' && typeof last.content === 'string') last.content = heard.trim() || '(interrupted)';
-    else if (heard.trim()) this.push({ role: 'assistant', content: heard.trim() });
-    h.dispatch({ type: 'interrupt_handled' });
+    if (last?.role === 'assistant' && typeof last.content === 'string') last.content = said || '(interrupted)';
+    else if (said) this.push({ role: 'assistant', content: said });
   }
 
   /** One answer: up to MAX_TOOL_ROUNDS tool rounds, streamed, abandoned the moment it goes stale. */
