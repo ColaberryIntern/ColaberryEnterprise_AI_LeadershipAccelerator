@@ -63,7 +63,7 @@ import { sequelize } from '../../config/database';
 import { TileStatus } from '../commercialization/commercializationTiles';
 import { annualizedRevenueCents } from '../commercialization/commercializationBoardService';
 import {
-  FlowEvent, FunnelStage, Money, RevenueStream, money, noMoney, formatCents,
+  FlowEvent, FunnelStage, Money, BuiltStream, money, noMoney, formatCents,
 } from './revenueFlowTypes';
 
 interface SubRow {
@@ -105,7 +105,7 @@ async function tableExists(name: string): Promise<boolean> {
 }
 
 export interface MembershipFlow {
-  stream: RevenueStream;
+  stream: BuiltStream;
   events: FlowEvent[];
   /** Pulled up for the page headline. */
   annualizedCents: number | null;
