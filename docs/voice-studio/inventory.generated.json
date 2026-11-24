@@ -1,6 +1,6 @@
 {
  "generatedFrom": "git ls-files",
- "total": 222,
+ "total": 227,
  "byRole": {
   "DISPATCH": 3,
   "INGEST": 3,
@@ -8,8 +8,8 @@
   "CALLER": 11,
   "CONFIG": 20,
   "UI": 22,
-  "CONSUMER": 47,
-  "MENTION": 110
+  "CONSUMER": 49,
+  "MENTION": 113
  },
  "rows": [
   {
@@ -1169,6 +1169,46 @@
    "envVars": []
   },
   {
+   "path": "backend/src/services/voice/engines/claudeVoiceLlm.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_ENGINE_A_MODEL"
+   ]
+  },
+  {
+   "path": "backend/src/services/voice/engines/conversationRelayEngine.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/engines/voiceProfiles.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/engines/voiceRuntime.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_ENGINE_A_MODEL",
+    "VOICE_RELAY_VOICE",
+    "VOICE_WS_BASE_URL"
+   ]
+  },
+  {
+   "path": "backend/src/services/voice/engines/voiceWsServer.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_STUDIO_ENABLED",
+    "VOICE_TEST_ENABLED",
+    "VOICE_WS_BASE_URL"
+   ]
+  },
+  {
    "path": "backend/src/services/voice/gateway/destinationHash.ts",
    "role": "MENTION",
    "callTypes": [],
@@ -1279,9 +1319,11 @@
    "callTypes": [],
    "envVars": [
     "VOICE_DESTINATION_HASH_KEY",
+    "VOICE_ENGINE_A_MODEL",
     "VOICE_ENGINE_DEFAULT",
     "VOICE_GATEWAY_LEGACY_ENABLED",
     "VOICE_PUBLIC_BASE_URL",
+    "VOICE_RELAY_VOICE",
     "VOICE_STUDIO_ENABLED",
     "VOICE_TEST_ALLOWED_NUMBER",
     "VOICE_TEST_BUDGET_USD",

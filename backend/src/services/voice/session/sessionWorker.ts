@@ -55,9 +55,14 @@ export interface SessionHandle {
   toolStarted(toolCallId: string, name: string): void;
   toolFinished(toolCallId: string, committed: boolean): void;
   close(reason: string): void;
+  /**
+   * Called once when the call starts ending (ending or closed), whoever caused it: the max-call
+   * timer, a timeout, drain, or close(). Engines use it to tell the carrier to hang up.
+   */
+  onEnd(cb: (reason: string) => void): void;
 }
 
-interface Live { agentId: string; snap: SessionSnapshot; gen: AbortController; queue: unknown[] }
+interface Live { agentId: string; snap: SessionSnapshot; gen: AbortController; queue: unknown[]; endListeners: Array<(reason: string) => void>; endNotified: boolean }
 
 export class SessionWorker {
   private readonly sessions = new Map<string, Live>();
@@ -85,7 +90,7 @@ export class SessionWorker {
     let perAgent = 0;
     for (const s of this.sessions.values()) if (s.agentId === agentId) perAgent++;
     if (perAgent >= this.cfg.maxPerAgent) return refuse('agent_concurrency');
-    this.sessions.set(callId, { agentId, snap: newSession(callId, this.deps.now(), limits), gen: new AbortController(), queue: [] });
+    this.sessions.set(callId, { agentId, snap: newSession(callId, this.deps.now(), limits), gen: new AbortController(), queue: [], endListeners: [], endNotified: false });
     this.ensureTimer();
     return { ok: true, handle: this.handle(callId) };
   }
@@ -161,6 +166,17 @@ export class SessionWorker {
       s.gen = new AbortController();
       s.queue.length = 0; // queued speech for a canceled generation must never be sent
     }
+    if ((r.session.state === 'ending' || r.session.state === 'closed') && !s.endNotified) {
+      s.endNotified = true;
+      const reason = r.session.endReason ?? r.session.state;
+      for (const cb of s.endListeners.splice(0)) {
+        try {
+          cb(reason);
+        } catch (e) {
+          this.deps.log({ level: 'error', event: 'voice_end_listener_failed', outcome: 'failure', error_class: (e as { name?: string })?.name || 'EndListenerError', call_id: callId });
+        }
+      }
+    }
     if (r.session.state === 'closed') this.finish(callId);
     return r;
   }
@@ -226,6 +242,7 @@ export class SessionWorker {
       takeQueued: () => { const s = live(); if (!s) return []; const out = s.queue; s.queue = []; return out; },
       toolStarted: (id, name) => { const s = live(); if (s) s.snap = toolStarted(s.snap, id, name); },
       toolFinished: (id, committed) => this.finishTool(callId, id, committed),
+      onEnd: (cb) => { const s = live(); if (!s || s.endNotified) cb(s?.snap.endReason ?? 'closed'); else s.endListeners.push(cb); },
       close: (reason) => {
         const s = live();
         if (s && s.snap.state !== 'ending') this.apply(callId, { type: 'end', reason });

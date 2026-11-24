@@ -25,6 +25,7 @@ import { canonicalWebhookUrl, isValidTwilioSignature, type TwilioParams } from '
 import { twilioAuthToken } from '../services/voice/twilio/twilioCredentials';
 import { verifyToken, type TokenClaims } from '../services/voice/twilio/correlationToken';
 import { twilioStatusToEvents } from '../services/voice/twilio/twilioStatusMap';
+import { connectTwimlFor } from '../services/voice/engines/voiceRuntime';
 import { appendCallEvents, consumeToken, isOwnedActiveNumber, recomputeCall, type AppendResult, type ConsumeResult } from '../services/voice/twilio/voiceCallStore';
 
 /** Shape every Twilio voice webhook body must have; other Twilio fields pass through unvalidated. */
@@ -55,7 +56,7 @@ export interface VoiceWebhookDeps {
   recomputeCall: (callId: string) => Promise<unknown>;
   /** True only for an E.164 number that is an ACTIVE Twilio row in voice_numbers. */
   ownsNumber: (e164: string) => Promise<boolean>;
-  /** Engine TwiML for a connected call. Until an engine is registered (VS2.3/VS2.4) the call ends safely. */
+  /** Engine TwiML for a connected call (VS2.3: ConversationRelay); an unsupported engine ends the call safely. */
   connectTwiml: (callId: string) => Promise<string>;
   now: () => number;
   log: (line: Record<string, unknown>) => void;
@@ -70,7 +71,7 @@ export function defaultVoiceWebhookDeps(): VoiceWebhookDeps {
     authToken: () => twilioAuthToken(),
     accountSid: () => process.env.TWILIO_ACCOUNT_SID || undefined,
     appendCallEvents, consumeToken, recomputeCall, ownsNumber: isOwnedActiveNumber,
-    connectTwiml: async () => HANGUP_TWIML,
+    connectTwiml: connectTwimlFor,
     now: () => Date.now(),
     log: (line) => (line.level === 'error' || line.level === 'warn' ? console.warn : console.log)(JSON.stringify({ service: 'voice-studio', ...line })),
   };

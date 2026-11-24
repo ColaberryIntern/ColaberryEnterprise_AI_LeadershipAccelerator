@@ -14,6 +14,7 @@ import leadRoutes from './routes/leadRoutes';
 import enrollmentRoutes from './routes/enrollmentRoutes';
 import webhookRoutes from './routes/webhookRoutes';
 import voiceWebhookRoutes from './routes/voiceWebhookRoutes';
+import { installVoiceRuntime } from './services/voice/engines/voiceRuntime';
 import unsubscribeRoutes from './routes/unsubscribeRoutes';
 import broadcastRoutes from './routes/broadcastRoutes';
 import broadcastMediaRoutes from './routes/broadcastMediaRoutes';
@@ -4042,9 +4043,11 @@ async function start(): Promise<void> {
     });
   });
 
-  app.listen(env.port, () => {
+  const httpServer = app.listen(env.port, () => {
     console.log(`Server running on port ${env.port} [${env.nodeEnv}]`);
   });
+  // Voice AI Studio WebSockets (VS2.3): Twilio-signed upgrades on /api/voice-ws/relay only; absent while voice is off.
+  installVoiceRuntime(httpServer);
 }
 
 start();
