@@ -5,6 +5,7 @@ import { isKillSwitchActive } from './launchSafety';
 import { redactForLogs } from '../utils/piiRedaction';
 import { classifyError } from '../utils/errorClassifier';
 import { isVoicePathAllowed, voiceCallPathKey } from './voice/voiceCallPaths';
+import { loadVoiceConfig } from './voice/voiceConfig';
 
 // Lazy import (matches alertDeliveryService.ts's convention): avoids pulling
 // the full Sequelize/model graph into every synthflowService import.
@@ -19,6 +20,14 @@ async function emitFailureEvent(params: Parameters<typeof import('./aiEventServi
       context: { event_type: params.event_type, message: err?.message },
     }));
   }
+}
+
+/**
+ * VS1.6 rollout switch: route legacy dials through the Voice Gateway. Read per call from the VALIDATED
+ * voice config (VS1.7), so an invalid voice config means off here exactly as the boot log and preflight say.
+ */
+function legacyGatewayOn(): boolean {
+  return loadVoiceConfig().VOICE_GATEWAY_LEGACY_ENABLED;
 }
 
 /**
@@ -286,7 +295,9 @@ export async function triggerVoiceCall(params: VoiceCallParams): Promise<Synthfl
   // (10 AM - 8 PM Central), at most 2 dials per number per 24h, fail closed. Staff alert
   // numbers are exempt. See voice/voiceDialGuard.ts for why this lives here.
   // Unit tests exercise triggerVoiceCall without a database; the guard has its own tests.
-  if (process.env.NODE_ENV !== 'test' || process.env.VOICE_DIAL_GUARD_IN_TESTS === '1') {
+  // With VOICE_GATEWAY_LEGACY_ENABLED on (VS1.6), the gateway's atomic reservation replaces this
+  // count-then-record guard below; with it off (the default) nothing here changes.
+  if (!legacyGatewayOn() && (process.env.NODE_ENV !== 'test' || process.env.VOICE_DIAL_GUARD_IN_TESTS === '1')) {
     const { checkDialGuard } = await import('./voice/voiceDialGuard');
     const guard = await checkDialGuard(actualPhone);
     if (!guard.ok) {
@@ -339,6 +350,28 @@ export async function triggerVoiceCall(params: VoiceCallParams): Promise<Synthfl
 
   if (customVariables.length > 0) {
     requestBody.custom_variables = customVariables;
+  }
+
+  // VS1.6: behind VOICE_GATEWAY_LEGACY_ENABLED, the dial goes through the Voice Gateway (policy +
+  // atomic reservation + the legacy Synthflow provider) and comes back in this function's exact
+  // result shape. Every check above has already run unchanged. Off by default.
+  if (legacyGatewayOn()) {
+    const { dispatchLegacyViaGateway } = await import('./voice/gateway/legacyFacade');
+    const r = await dispatchLegacyViaGateway({
+      pathKey, callType: params.callType, brandSlug: params.brandSlug, phoneE164: actualPhone, apiKey: env.synthflowApiKey, requestBody,
+    });
+    if (r.failure) {
+      console.error('[Synthflow] gateway dispatch failed:', r.failure.status ?? '', redactForLogs(r.failure.message).slice(0, 500));
+      emitFailureEvent({
+        event_type: 'synthflow_call_failed', outcome: 'failure', external_system: 'synthflow',
+        error_class: classifyError({ status: r.failure.status, message: r.failure.message }),
+        metadata: { message: redactForLogs(r.failure.message).slice(0, 200), via: 'voice_gateway' },
+      });
+    } else if (r.success && !(r.data && r.data.skipped)) {
+      console.log(`[Synthflow] ${params.callType} call initiated via gateway for ${redactForLogs(params.name)}. call_id: ${r.data?.call_id}`);
+    }
+    const { failure: _failure, ...legacyShape } = r;
+    return legacyShape;
   }
 
   try {

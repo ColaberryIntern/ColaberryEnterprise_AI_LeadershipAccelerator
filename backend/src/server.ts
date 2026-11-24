@@ -191,6 +191,8 @@ import { ensureApprovalRequestsSchema } from './db/ensureApprovalRequestsSchema'
 import { ensureApprovalRequestsEventIdFix } from './db/ensureApprovalRequestsEventIdFix';
 import { ensureOrgAccountSchema } from './db/ensureOrgAccountSchema';
 import { ensureMultiTenantSchema } from './db/ensureMultiTenantSchema';
+import { ensureVoiceStudioSchema } from './db/ensureVoiceStudioSchema';
+import { logVoiceConfigAtBoot } from './services/voice/voiceConfig';
 import { ensureGrowthJourneySchema } from './db/ensureGrowthJourneySchema';
 import { ensureRoutingAuditSchema } from './db/ensureRoutingAuditSchema';
 import { ensureRefactoredDeliverySchema } from './db/ensureRefactoredDeliverySchema';
@@ -2751,6 +2753,10 @@ async function start(): Promise<void> {
   // were reversed. Additive only; no NOT NULL, no backfill (backfills are separate
   // explicitly-invoked scripts, never boot work).
   await ensureMultiTenantSchema();
+  // Voice AI Studio (VS1.4): 13 additive voice_* tables, inert while VOICE_STUDIO_ENABLED is off.
+  // Each statement fails soft with a structured log; nothing here alters an existing table.
+  await ensureVoiceStudioSchema();
+  logVoiceConfigAtBoot(); // VS1.7: validated, redacted, never throws; invalid config = all voice switches off
   // Growth Journey OS — Phase 1: journey_programs and journey_paths, the shared
   // framework Explorer Growth becomes the first program on.
   //

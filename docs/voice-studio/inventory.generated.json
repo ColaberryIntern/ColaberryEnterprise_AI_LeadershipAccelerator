@@ -1,0 +1,1436 @@
+{
+ "generatedFrom": "git ls-files",
+ "total": 214,
+ "byRole": {
+  "DISPATCH": 2,
+  "INGEST": 3,
+  "GUARD": 6,
+  "CALLER": 11,
+  "CONFIG": 20,
+  "UI": 22,
+  "CONSUMER": 44,
+  "MENTION": 106
+ },
+ "rows": [
+  {
+   "path": "backend/src/config/env.ts",
+   "role": "CONFIG",
+   "callTypes": [],
+   "envVars": [
+    "ENABLE_VOICE_CALLS",
+    "SYNTHFLOW_AGENT_TOOL_AGENT_ID",
+    "SYNTHFLOW_AI_FLOTATION_AGENT_ID",
+    "SYNTHFLOW_API_KEY",
+    "SYNTHFLOW_CALLBACK_AGENT_ID",
+    "SYNTHFLOW_CPN_AGENT_ID",
+    "SYNTHFLOW_ENTERPRISE_INTAKE_AGENT_ID",
+    "SYNTHFLOW_INTEREST_AGENT_ID",
+    "SYNTHFLOW_INTERNSHIP_AGENT_ID",
+    "SYNTHFLOW_OPEN_HOUSE_AGENT_ID",
+    "SYNTHFLOW_PROJECT_DISCOVERY_AGENT_ID",
+    "SYNTHFLOW_WEBHOOK_TOKEN",
+    "SYNTHFLOW_WEBHOOK_URL",
+    "SYNTHFLOW_WELCOME_AGENT_ID",
+    "VOICE_CALL_PATHS"
+   ]
+  },
+  {
+   "path": "backend/src/config/explorerGrowthFlags.ts",
+   "role": "CONFIG",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/controllers/campaignDiagnosticsController.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/controllers/campaignSimulationController.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/controllers/enterpriseIntakeController.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/controllers/ghlWebhookController.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/controllers/internshipInterviewController.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/controllers/mandrillWebhookController.ts",
+   "role": "INGEST",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/controllers/openHouseController.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/controllers/synthflowWebhookController.ts",
+   "role": "INGEST",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/controllers/v1CallbackController.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/controllers/v1OutreachController.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/db/ensureAgentCommsSchema.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/db/ensureInternshipSchema.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/db/ensureMultiTenantSchema.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/db/ensureProjectDiscoveryCallSchema.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/db/ensureProjectUnderstandingSchema.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/db/ensureVoiceStudioSchema.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_STUDIO_ENABLED",
+    "VOICE_STUDIO_TABLES",
+    "VOICE_TABLE_SPECS"
+   ]
+  },
+  {
+   "path": "backend/src/db/rollback/dropVoiceStudioSchema.sql",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_STUDIO_ENABLED"
+   ]
+  },
+  {
+   "path": "backend/src/db/voiceStudioTableSpecs.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_TABLE_SPECS"
+   ]
+  },
+  {
+   "path": "backend/src/middlewares/auditRedaction.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/middlewares/serviceAuthMiddleware.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/models/AiAgent-Ali-AI.ts",
+   "role": "CONFIG",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/models/AiAgent.ts",
+   "role": "CONFIG",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/models/AutomationLog.ts",
+   "role": "CONFIG",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/models/CallContactLog.ts",
+   "role": "CONFIG",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/models/CommunicationLog.ts",
+   "role": "CONFIG",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/models/CommunicationPreference.ts",
+   "role": "CONFIG",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/models/DeliveryDiscovery.ts",
+   "role": "CONFIG",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/models/EnterpriseIntake.ts",
+   "role": "CONFIG",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/models/FollowUpSequence.ts",
+   "role": "CONFIG",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/models/InteractionOutcome.ts",
+   "role": "CONFIG",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/models/InternshipInterviewSession.ts",
+   "role": "CONFIG",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/models/InternshipStatusEvent.ts",
+   "role": "CONFIG",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/models/ProjectDiscoveryCallRequest.ts",
+   "role": "CONFIG",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/models/ProjectUnderstandingRecord.ts",
+   "role": "CONFIG",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/models/ScheduledEmail.ts",
+   "role": "CONFIG",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/models/index.ts",
+   "role": "CONFIG",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/models/voiceStudioModels.ts",
+   "role": "CONFIG",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_STUDIO_MODELS",
+    "VOICE_TABLE_SPECS"
+   ]
+  },
+  {
+   "path": "backend/src/modules/communications/brandPreferenceGate.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/routes/admin/flotationIntakeRoutes.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/routes/admin/kbRoutes.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/routes/admin/leadRoutes.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/routes/admin/productionCleanupRoute.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/routes/v1Routes.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/routes/webhookRoutes.ts",
+   "role": "INGEST",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/schemas/v1CallbackSchema.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/scripts/backfillBatchMonths.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/scripts/buildExpenseAuditFinal.js",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/scripts/buildExpenseAuditXlsx.js",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/scripts/closeNotificationPlanTodo.js",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/scripts/ensureOpenHouseCountdownCampaign.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/scripts/fileMayaToolGrantRequests.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/scripts/finalActivation.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": [
+    "SYNTHFLOW_API_KEY"
+   ]
+  },
+  {
+   "path": "backend/src/scripts/goLiveOrchestration.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": [
+    "SYNTHFLOW_API_KEY"
+   ]
+  },
+  {
+   "path": "backend/src/scripts/lib/vipSmsRouter.js",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_CAP"
+   ]
+  },
+  {
+   "path": "backend/src/scripts/postPortalLoginKitToBasecamp.js",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/scripts/send3TrackPlanEmail.js",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/scripts/sendSmsVoicePlanEmail.js",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/seeds/explorerGrowth/explorerSequenceDefinitions.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/seeds/seedColdOutboundCampaign.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/seeds/seedDefaultSequence.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/seeds/seedExecutiveBriefingCampaign.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/seeds/seedMayaCampaigns.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/seeds/seedNoShowCampaign.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/seeds/seedRoutingRules.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": [
+    "SYNTHFLOW_CPN_AGENT_ID"
+   ]
+  },
+  {
+   "path": "backend/src/server.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_STUDIO_ENABLED"
+   ]
+  },
+  {
+   "path": "backend/src/services/agentAutonomy.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/agentDomain/capabilities/admissions.json",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": [
+    "SYNTHFLOW_INTERNSHIP_AGENT_ID"
+   ]
+  },
+  {
+   "path": "backend/src/services/agentDomain/capabilities/internship.json",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": [
+    "SYNTHFLOW_INTERNSHIP_AGENT_ID"
+   ]
+  },
+  {
+   "path": "backend/src/services/agentDomain/registeredTools.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/agentPermissionService.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/agentRegistryAuditClassification.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/agentRegistrySeed-Ali-AI.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/agentRegistrySeed.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/agents/admissions/admissionsCallbackAgent.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/agents/admissions/admissionsEmailAgent.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/agents/admissions/admissionsSMSAgent.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/agents/admissions/admissionsSynthflowCallAgent.ts",
+   "role": "CALLER",
+   "callTypes": [
+    "interest"
+   ],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/agents/agentCommsSweep.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/agents/email/agentReplyDelivery.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/agents/tools/agentCallCompletion.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/agents/tools/agentCallTool.ts",
+   "role": "CALLER",
+   "callTypes": [
+    "callback"
+   ],
+   "envVars": [
+    "SYNTHFLOW_AGENT_TOOL_AGENT_ID",
+    "VOICE_CALL_PATHS"
+   ]
+  },
+  {
+   "path": "backend/src/services/agents/tools/agentEmailTool.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/aiMessageService.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/aiOrchestrator-Ali-AI.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/aiOrchestrator.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/alertDeliveryService.ts",
+   "role": "CALLER",
+   "callTypes": [
+    "welcome"
+   ],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/automationService.ts",
+   "role": "CALLER",
+   "callTypes": [
+    "interest",
+    "welcome"
+   ],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/callTranscriptProcessor.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/callbackRequestService.ts",
+   "role": "CALLER",
+   "callTypes": [
+    "callback"
+   ],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/campaignActivationAuditService.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/campaignBuilderService.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/campaignHealthScanner.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/campaignLifecycleService.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/campaignRebuildService.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/campaignWatchdogService.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/communicationLogService.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/communicationSafetyService.ts",
+   "role": "GUARD",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/consentService.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/content/testTypecheckBaseline.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/contextGraphService.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/cpn/scholarshipCallPrompt.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/dashboardService.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/dashboardThresholdWatcherService.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/delivery/flotationCallCompletion.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/delivery/projectIntake.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/delivery/projectUnderstanding.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_INTAKE_MAP"
+   ]
+  },
+  {
+   "path": "backend/src/services/delivery/projectUnderstandingExtractor.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_INTAKE_MAP"
+   ]
+  },
+  {
+   "path": "backend/src/services/delivery/recordProjectUnderstanding.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/email/mayaEmailTransport.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/emailService.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/enrollmentService.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/enterpriseIntake/enterpriseIntakeService.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_CALL_PATHS"
+   ]
+  },
+  {
+   "path": "backend/src/services/enterpriseIntake/enterpriseIntakeSource.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/enterpriseIntake/enterpriseIntakeSync.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/errorSpikeAlertService.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/explorerGrowth/explorerControlsService.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": [
+    "ENABLE_VOICE_CALLS"
+   ]
+  },
+  {
+   "path": "backend/src/services/explorerGrowth/explorerVoiceEligibility.ts",
+   "role": "GUARD",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/explorerGrowth/send/explorerSendGuards.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/freeSignupService.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/governanceService.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/growthJourney/conversationOwnershipService.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/growthJourney/execution/aliOutreachContext.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/growthJourney/execution/planExecution.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/growthJourney/governor/contactEvidence.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/growthJourney/handoffs/handoffSignals.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/inbound/agentRecipientRouter.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/inbound/inboundAutoReply.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/interactionService.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/internship/internshipCallCompletion.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/internship/internshipCallPrompt.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/internship/internshipCallReconcile.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/internship/internshipCallService.ts",
+   "role": "CALLER",
+   "callTypes": [
+    "internship_interview"
+   ],
+   "envVars": [
+    "SYNTHFLOW_INTERNSHIP_AGENT_ID"
+   ]
+  },
+  {
+   "path": "backend/src/services/internship/internshipInterviewService.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/internship/internshipTranscriptExtraction.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/kbService.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/maya/mayaJourneyHandoff.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/maya/mayaMemory.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/maya/mayaOutboundDelivery.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/maya/mayaPortalTools.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/maya/mayaPromotion.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_CALL_PATHS"
+   ]
+  },
+  {
+   "path": "backend/src/services/maya/mayaToolGate.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/maya/mayaToolGovernance.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/mayaActionService.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/mayaCampaignRouter.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/mayaIdentitySeed.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/mayaTools/toolContext.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/mayaTools/voiceSummaries.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_NOT_LIVE_SUMMARY",
+    "VOICE_SKIP_REASONS",
+    "VOICE_SKIP_SUMMARY_FALLBACK"
+   ]
+  },
+  {
+   "path": "backend/src/services/mayaTools/voiceTool.ts",
+   "role": "CALLER",
+   "callTypes": [
+    "callback"
+   ],
+   "envVars": [
+    "ENABLE_VOICE_CALLS",
+    "VOICE_NOT_LIVE_SUMMARY",
+    "VOICE_SKIP_SUMMARY_FALLBACK"
+   ]
+  },
+  {
+   "path": "backend/src/services/mayaToolsService.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/openHouseCountdown.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/opsAlertSubscriptionSeed.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/personHistoryService.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/reese/agentToolCapabilities.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/reliabilityAlertingService.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/reporting/campaignGraphService.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/routingActionsService.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/sbp/projectDiscoveryCall.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/sbp/projectDiscoveryCallPrompt.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/sbp/projectDiscoveryCallRequest.ts",
+   "role": "CALLER",
+   "callTypes": [
+    "project_discovery"
+   ],
+   "envVars": [
+    "ENABLE_VOICE_CALLS",
+    "SYNTHFLOW_PROJECT_DISCOVERY_AGENT_ID"
+   ]
+  },
+  {
+   "path": "backend/src/services/sbp/projectDiscoveryTranscript.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/schedulerService.ts",
+   "role": "CALLER",
+   "callTypes": [
+    "interest"
+   ],
+   "envVars": [
+    "ENABLE_VOICE_CALLS"
+   ]
+  },
+  {
+   "path": "backend/src/services/scheduling/cancelScheduledMessage.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": [
+    "ENABLE_VOICE_CALLS"
+   ]
+  },
+  {
+   "path": "backend/src/services/sequenceService.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/settingsService.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/synthflowService.ts",
+   "role": "DISPATCH",
+   "callTypes": [],
+   "envVars": [
+    "ENABLE_VOICE_CALLS",
+    "SYNTHFLOW_CPN_AGENT_ID",
+    "SYNTHFLOW_ENTERPRISE_INTAKE_AGENT_ID",
+    "SYNTHFLOW_OPEN_HOUSE_AGENT_ID",
+    "VOICE_CALL_PATHS",
+    "VOICE_DIAL_GUARD_IN_TESTS",
+    "VOICE_GATEWAY_LEGACY_ENABLED"
+   ]
+  },
+  {
+   "path": "backend/src/services/systemHealthService.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/testing/campaignSimulator.ts",
+   "role": "CALLER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/testing/campaignTestHarness.ts",
+   "role": "CALLER",
+   "callTypes": [
+    "interest"
+   ],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/trustRubric.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/contracts/providers.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/contracts/schemas.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/gateway/destinationHash.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_DESTINATION_HASH_KEY"
+   ]
+  },
+  {
+   "path": "backend/src/services/voice/gateway/legacyFacade.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_GATEWAY_LEGACY_ENABLED"
+   ]
+  },
+  {
+   "path": "backend/src/services/voice/gateway/mockRun.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/gateway/voiceGateway.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/gateway/voicePolicy.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/gateway/voiceReservation.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/providers/synthflowLegacyProvider.ts",
+   "role": "DISPATCH",
+   "callTypes": [],
+   "envVars": [
+    "SYNTHFLOW_CALLS_URL",
+    "SYNTHFLOW_TIMEOUT_MS",
+    "VOICE_GATEWAY_LEGACY_ENABLED"
+   ]
+  },
+  {
+   "path": "backend/src/services/voice/synthflowWebhookAuth.ts",
+   "role": "GUARD",
+   "callTypes": [],
+   "envVars": [
+    "SYNTHFLOW_WEBHOOK_TOKEN"
+   ]
+  },
+  {
+   "path": "backend/src/services/voice/voiceCallPaths.ts",
+   "role": "GUARD",
+   "callTypes": [],
+   "envVars": [
+    "ENABLE_VOICE_CALLS",
+    "VOICE_CALL_PATHS"
+   ]
+  },
+  {
+   "path": "backend/src/services/voice/voiceConfig.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_DESTINATION_HASH_KEY",
+    "VOICE_ENGINE_DEFAULT",
+    "VOICE_GATEWAY_LEGACY_ENABLED",
+    "VOICE_PUBLIC_BASE_URL",
+    "VOICE_STUDIO_ENABLED",
+    "VOICE_TEST_ALLOWED_NUMBER",
+    "VOICE_TEST_BUDGET_USD",
+    "VOICE_TEST_ENABLED",
+    "VOICE_TEST_MAX_ATTEMPTS",
+    "VOICE_TEST_MAX_DURATION_SECONDS",
+    "VOICE_WS_BASE_URL"
+   ]
+  },
+  {
+   "path": "backend/src/services/voice/voiceDialGuard.ts",
+   "role": "GUARD",
+   "callTypes": [],
+   "envVars": [
+    "ENABLE_VOICE_CALLS"
+   ]
+  },
+  {
+   "path": "backend/src/services/voice/voiceDialPolicy.ts",
+   "role": "GUARD",
+   "callTypes": [],
+   "envVars": [
+    "ENABLE_VOICE_CALLS",
+    "SYNTHFLOW_OPEN_HOUSE_AGENT_ID"
+   ]
+  },
+  {
+   "path": "backend/src/services/voiceCallPrompt.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/welcome/paidMemberWelcomeService.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/welcome/sendPortalWelcome.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/utils/errorClassifier.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/utils/phone.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "docker-compose.production.yml",
+   "role": "CONFIG",
+   "callTypes": [],
+   "envVars": [
+    "ENABLE_VOICE_CALLS",
+    "SYNTHFLOW_API_KEY",
+    "SYNTHFLOW_CALLBACK_AGENT_ID",
+    "SYNTHFLOW_INTEREST_AGENT_ID",
+    "SYNTHFLOW_WELCOME_AGENT_ID"
+   ]
+  },
+  {
+   "path": "frontend/src/components/CommunicationLogPanel.tsx",
+   "role": "UI",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "frontend/src/components/admin/ActivityTimeline.tsx",
+   "role": "UI",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "frontend/src/components/admin/intelligence/CampaignNodeDetailsPanel.tsx",
+   "role": "UI",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "frontend/src/components/admin/internship/FlotationIntakePanel.tsx",
+   "role": "UI",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "frontend/src/components/admin/internship/SpokenIntake.tsx",
+   "role": "UI",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "frontend/src/components/admin/internship/flotationIntakeSession.ts",
+   "role": "UI",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "frontend/src/components/admin/knowledgeOps/EntryEditModal.tsx",
+   "role": "UI",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "frontend/src/components/admin/maya/MayaCapabilityTable.tsx",
+   "role": "UI",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "frontend/src/components/campaign/SequenceStepEditor.tsx",
+   "role": "UI",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "frontend/src/components/explorerGrowth/ControlsCard.tsx",
+   "role": "UI",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "frontend/src/pages/admin/AdminAISettingsPage.tsx",
+   "role": "UI",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "frontend/src/pages/admin/AdminDashboardPage.tsx",
+   "role": "UI",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "frontend/src/pages/admin/AdminGovernancePage.tsx",
+   "role": "UI",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "frontend/src/pages/admin/AdminKnowledgeOpsPage.tsx",
+   "role": "UI",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "frontend/src/pages/admin/AdminSequencesPage.tsx",
+   "role": "UI",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "frontend/src/pages/admin/AdminSettingsPage.tsx",
+   "role": "UI",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "frontend/src/pages/admin/ai-settings/CampaignSimulatorPanel.tsx",
+   "role": "UI",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "frontend/src/services/adminFlotationIntakeApi.ts",
+   "role": "UI",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "frontend/src/services/agentEmailApi.ts",
+   "role": "UI",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "frontend/src/services/explorerGrowthApi.ts",
+   "role": "UI",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "frontend/src/services/intelligenceApi.ts",
+   "role": "UI",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "frontend/src/utils/agentDisplayNames.ts",
+   "role": "UI",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "scripts/artifacts/tickets/c78c79Data.js",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  }
+ ]
+}
