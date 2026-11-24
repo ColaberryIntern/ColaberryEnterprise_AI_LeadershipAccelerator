@@ -68,6 +68,31 @@ export async function bridgeExplorerProfileAtRegistration(
 ): Promise<boolean> {
   try {
     const result = await resolveExplorerLead(enrollmentId);
+
+    // T206: the BRAND RELATIONSHIP, at registration, for the same reason the
+    // profile above is written here rather than overnight.
+    //
+    // Only with a lead link. `lead_tenant_contexts` is keyed on the lead, so
+    // there is nothing to key a row on without one, and `resolveExplorerLead`
+    // returns `lead_id: null` for exactly two cases that must NOT get a row:
+    // an unresolvable email, and the synthetic daily smoke-test Explorer.
+    //
+    // Never throws and cannot fail this function: the relationship module
+    // returns an outcome instead of raising, and its outcome is deliberately
+    // not consulted here, because a registration must not change behaviour
+    // based on whether a bookkeeping row landed. `repairAllExplorerBridges`
+    // remains the recovery path for whatever this misses.
+    //
+    // SENDS NOTHING, and that is provable rather than asserted: it writes with
+    // `consentContact: false`, and `brandPreferenceGate` blocks a false-consent
+    // row (`no_consent`) exactly as it blocks a missing one (`no_relationship`).
+    // So this cannot move anybody from blocked to allowed. The no-send suite in
+    // this module still governs: nothing below reaches a mailer.
+    if (result.lead_id !== null) {
+      const { ensureExplorerBrandRelationship } = await import('./explorerBrandRelationship');
+      await ensureExplorerBrandRelationship(result.lead_id, entryPoint);
+    }
+
     return result.resolved;
   } catch (error) {
     // Logged by error CLASS so the failure is triageable, and with the enrollment id
