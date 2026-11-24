@@ -11,6 +11,7 @@
     "seed:github": "ts-node src/seeds/seedGithubDev.ts",
     "seed:sequence": "ts-node src/seeds/seedDefaultSequence.ts",
     "seed:sources": "ts-node src/seeds/seedLeadSources.ts",
+    "voice:inventory": "ts-node src/scripts/voice/voiceInventory.ts",
     "lint": "eslint src --ext .ts",
     "test": "jest"
   },
