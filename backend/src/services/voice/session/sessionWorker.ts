@@ -191,14 +191,23 @@ export class SessionWorker {
     const pending = s?.snap.pendingTools.get(toolCallId);
     if (s && pending) {
       s.snap = toolFinished(s.snap, toolCallId, committed, this.deps.now());
-      this.deps.recordTool(callId, { toolCallId, name: pending.name, turnId: pending.turnId, committed, afterClose: false });
+      this.safeRecordTool(callId, { toolCallId, name: pending.name, turnId: pending.turnId, committed, afterClose: false });
       return;
     }
     const key = `${callId}:${toolCallId}`;
     const orphan = this.orphanTools.get(key);
     if (!orphan) return; // unknown or already recorded: idempotent
     this.orphanTools.delete(key);
-    this.deps.recordTool(callId, { toolCallId, name: orphan.name, turnId: orphan.turnId, committed, afterClose: true });
+    this.safeRecordTool(callId, { toolCallId, name: orphan.name, turnId: orphan.turnId, committed, afterClose: true });
+  }
+
+  /** A failing record sink is logged, never thrown into the call (the call must not die because a log write did). */
+  private safeRecordTool(callId: string, rec: Parameters<WorkerDeps['recordTool']>[1]): void {
+    try {
+      this.deps.recordTool(callId, rec);
+    } catch (e) {
+      this.deps.log({ level: 'error', event: 'voice_tool_record_failed', outcome: 'failure', error_class: (e as { name?: string })?.name || 'ToolRecordError', call_id: callId, tool_call_id: rec.toolCallId, committed: rec.committed });
+    }
   }
 
   get orphanCount(): number { return this.orphanTools.size; }

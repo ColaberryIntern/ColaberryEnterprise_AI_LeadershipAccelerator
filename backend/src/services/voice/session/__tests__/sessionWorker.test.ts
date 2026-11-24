@@ -127,6 +127,16 @@ describe('session worker: interruption, late results, tools (VS2.2)', () => {
     expect(tools).toEqual([{ callId: 'c1', toolCallId: 'tool-9', name: 'book_strategy_slot', turnId: 1, committed: true, afterClose: true }]);
   });
 
+  it('a failing tool-record sink is logged with an error class, never thrown into the call', () => {
+    const { w, logs } = setup(undefined, { recordTool: () => { throw Object.assign(new Error('db'), { name: 'SequelizeConnectionError' }); } });
+    const h = openOk(w, 'c1');
+    toSpeaking(h);
+    h.toolStarted('t1', 'next_open_slots');
+    expect(() => h.toolFinished('t1', true)).not.toThrow();
+    expect(h.snapshot().toolRecords).toHaveLength(1);
+    expect(logs).toContainEqual(expect.objectContaining({ event: 'voice_tool_record_failed', error_class: 'SequelizeConnectionError', committed: true }));
+  });
+
   it('a tool finishing on a live call is recorded with afterClose false', () => {
     const { w, tools } = setup();
     const h = openOk(w, 'c1');

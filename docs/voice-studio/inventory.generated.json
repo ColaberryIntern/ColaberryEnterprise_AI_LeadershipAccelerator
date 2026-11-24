@@ -1,6 +1,6 @@
 {
  "generatedFrom": "git ls-files",
- "total": 221,
+ "total": 222,
  "byRole": {
   "DISPATCH": 3,
   "INGEST": 3,
@@ -8,7 +8,7 @@
   "CALLER": 11,
   "CONFIG": 20,
   "UI": 22,
-  "CONSUMER": 46,
+  "CONSUMER": 47,
   "MENTION": 110
  },
  "rows": [
@@ -1221,6 +1221,12 @@
   {
    "path": "backend/src/services/voice/providers/twilioCarrier.ts",
    "role": "DISPATCH",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/session/sessionWorker.ts",
+   "role": "CONSUMER",
    "callTypes": [],
    "envVars": []
   },

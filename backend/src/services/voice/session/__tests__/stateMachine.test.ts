@@ -75,6 +75,16 @@ describe('session state machine: late results and interrupts (VS2.2)', () => {
     expect(acceptsGeneration(next, 1, 1)).toBe(false);
   });
 
+  it('interrupt while THINKING, then a new caller turn: the old request\'s late generation_started is stale', () => {
+    const thinking = drive({ type: 'connected' }, { type: 'greeting_done' }, { type: 'caller_turn' }); // model request g+1 in flight
+    const g = thinking.generationId;
+    const interrupted = transition(thinking, { type: 'interrupt' }, T0 + 5).session;
+    const turn2 = transition(interrupted, { type: 'caller_turn' }, T0 + 6).session;
+    // The old request was minted as g+1 and carries no turn id: only the generation bump can stop it.
+    expect(transition(turn2, { type: 'generation_started', generationId: g + 1 }, T0 + 7)).toMatchObject({ ok: false, reason: 'stale_generation' });
+    expect(transition(turn2, { type: 'generation_started', generationId: turn2.generationId + 1 }, T0 + 8).ok).toBe(true);
+  });
+
   it('a stale generation_started (an id that is not next) is rejected as stale', () => {
     const thinking = drive({ type: 'connected' }, { type: 'greeting_done' }, { type: 'caller_turn' });
     expect(transition(thinking, { type: 'generation_started', generationId: 7 }, T0)).toMatchObject({ ok: false, reason: 'stale_generation' });
