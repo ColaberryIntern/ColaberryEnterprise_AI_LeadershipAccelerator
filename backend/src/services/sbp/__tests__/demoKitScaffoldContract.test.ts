@@ -82,7 +82,9 @@ const DATA_MODEL = {
 };
 
 /** Lay out a repo the scaffold can read, write the shipped scaffold into it, and run it. */
-function runScaffold(plan: unknown): { spec: unknown; stdout: string } {
+const FIXED_SHA = '4f3c21aa9b0e7d5612348899aabbccddeeff00112233445566778899aabbccdd';
+
+function runScaffold(plan: unknown, dataModel: unknown = DATA_MODEL, sha = FIXED_SHA): { spec: unknown; stdout: string } {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'demo-kit-scaffold-'));
   try {
     fs.mkdirSync(path.join(root, '.colaberry'), { recursive: true });
@@ -96,14 +98,14 @@ function runScaffold(plan: unknown): { spec: unknown; stdout: string } {
         plan_version: '3',
         // A fixed hash and a fixed sync time: the scaffold seeds its sample from these, so the
         // same plan gives the same demo. A clock read here would make this test flaky by design.
-        plan_sha256: '4f3c21aa9b0e7d5612348899aabbccddeeff00112233445566778899aabbccdd',
+        plan_sha256: sha,
         generated_at: '2026-01-05T12:00:00Z',
       }),
       'utf8',
     );
     fs.writeFileSync(
       path.join(root, 'command-center/data-model.json'),
-      JSON.stringify(DATA_MODEL),
+      JSON.stringify(dataModel),
       'utf8',
     );
 
@@ -309,5 +311,77 @@ describe('the scaffold follows its own contract and picks the right person (v12)
   it('keeps a real job title when the most-narrated role is one', () => {
     const titled = { ...V12, derived: { ...V12.derived, roles: ['hygienist', 'operations manager'] }, stories: PLAN.stories.map((s: object) => ({ ...s, narrative: 'As an operations manager, I want x, so that y.' })) };
     expect((runScaffold(titled).spec as typeof spec).app.persona.role).toBe('Operations manager');
+  });
+});
+
+/**
+ * ShiftFill v13 (2026-11-24): the scaffold's sample rows broke the plan's own guardrail. Agency
+ * messages read `review: pending` with a `sent_at`; an offer read `response: held` with a send
+ * and a reply; a `rejected` message had been sent; a reply came a day before its send. The
+ * STORY-900 Trust line is "no sample row breaks a guardrail", so the scaffold must not start a
+ * student off breaking one. The tables below are v13's own data model, cut to these fields.
+ */
+describe('sample rows never claim what their own state denies (v13)', () => {
+  const V13_MODEL = {
+    tables: [
+      { name: 'gap', purpose: 'one unfilled shift', fields: [{ name: 'id', type: 'id' }, { name: 'status', type: 'enum', note: 'open | offering | filled' }] },
+      { name: 'temp_agency', purpose: 'an agency we may message', fields: [{ name: 'id', type: 'id' }, { name: 'name', type: 'text' }] },
+      {
+        name: 'agency_message', purpose: 'a message to a temp agency, held for Dana', fields: [
+          { name: 'id', type: 'id' }, { name: 'gap_id', type: 'ref', note: 'gap' }, { name: 'temp_agency_id', type: 'ref', note: 'temp_agency' },
+          { name: 'review', type: 'enum', note: 'pending | approved | rejected' }, { name: 'decided_by', type: 'text' }, { name: 'sent_at', type: 'timestamp' },
+        ],
+      },
+      {
+        name: 'shift_offer', purpose: 'one text offering a shift', fields: [
+          { name: 'id', type: 'id' }, { name: 'gap_id', type: 'ref', note: 'gap' }, { name: 'sent_at', type: 'timestamp' },
+          { name: 'response', type: 'enum', note: 'held | waiting | yes | no | no_reply' }, { name: 'responded_at', type: 'timestamp' },
+        ],
+      },
+    ],
+  };
+  type Row = Record<string, unknown>;
+  let rows: Record<string, Row[]>;
+  beforeAll(() => {
+    const spec = runScaffold(PLAN, V13_MODEL).spec as { entities: Record<string, { rows: Row[] }> };
+    rows = Object.fromEntries(Object.entries(spec.entities).map(([k, e]) => [k, e.rows]));
+  });
+  const minutes = (v: unknown): number => {
+    const m = /^([A-Z][a-z]{2}) (\d{1,2}), (\d{1,2}):(\d{2}) (AM|PM)$/.exec(String(v));
+    if (!m) throw new Error(`not a sample time: ${String(v)}`);
+    return ((('JanFebMarAprMayJunJulAugSepOctNovDec'.indexOf(m[1]) / 3) * 31 + Number(m[2])) * 24 + (Number(m[3]) % 12) + (m[5] === 'PM' ? 12 : 0)) * 60 + Number(m[4]);
+  };
+
+  it('has every state on both tables, so the rules below are actually exercised', () => {
+    expect(new Set(rows.agency_message.map((r) => r.review))).toEqual(new Set(['pending', 'approved', 'rejected']));
+    expect(new Set(rows.shift_offer.map((r) => r.response))).toEqual(new Set(['held', 'waiting', 'yes', 'no', 'no_reply']));
+  });
+
+  it('never sends an agency message still pending, or one Dana rejected', () => {
+    for (const r of rows.agency_message.filter((x) => x.review !== 'approved')) expect(r.sent_at).toBeNull();
+    expect(rows.agency_message.filter((x) => x.review === 'pending').every((r) => r.decided_by === null)).toBe(true);
+  });
+
+  it('a held offer was neither sent nor answered; a sent offer awaiting a reply keeps its send', () => {
+    for (const r of rows.shift_offer.filter((x) => x.response === 'held')) { expect(r.sent_at).toBeNull(); expect(r.responded_at).toBeNull(); }
+    for (const r of rows.shift_offer.filter((x) => x.response === 'waiting' || x.response === 'no_reply')) { expect(r.responded_at).toBeNull(); expect(r.sent_at).not.toBeNull(); }
+  });
+
+  it('never has a reply before the offer it answers, across many seeds', () => {
+    // One seed may simply never draw a reversed pair; twelve fixed seeds do (v13's own did).
+    let pairs = 0;
+    for (let s = 0; s < 12; s++) {
+      const sha = `${s.toString(16).padStart(2, '0')}${FIXED_SHA.slice(2)}`;
+      const spec = runScaffold(PLAN, V13_MODEL, sha).spec as { entities: Record<string, { rows: Row[] }> };
+      for (const r of spec.entities.shift_offer.rows.filter((x) => x.sent_at && x.responded_at)) {
+        pairs += 1;
+        expect(minutes(r.responded_at)).toBeGreaterThanOrEqual(minutes(r.sent_at));
+      }
+    }
+    expect(pairs).toBeGreaterThan(5);
+  });
+
+  it('prints no "undefined" anywhere', () => {
+    expect(JSON.stringify(rows)).not.toContain('undefined');
   });
 });

@@ -186,7 +186,9 @@ dl.facts dd { margin: 0; min-width: 0; }
 .tl .actor { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; font-size: 12px; color: var(--muted); }
 .tl .actor b { color: var(--ink); font-weight: 600; }
 .tl .refs { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px 8px; font-size: 12px; color: var(--muted); align-items: center; }
-.tl .refs code { background: var(--wash); border-radius: 4px; padding: 1px 6px; font-size: 11px; }
+.tl .refs code { background: var(--wash); border-radius: 4px; padding: 1px 6px; font-size: 11px; overflow-wrap: anywhere; }
+/* Evidence references are one unbroken token ("agency_message/northwindagency…"); at 320px v13's
+   pushed the Trust screen into a sideways scroll. They may break anywhere. */
 .tl .unverified { color: var(--att-ink); font-weight: 600; }
 .pill.danger { background: var(--bad-bg); color: var(--bad-ink); }
 .pill.live { background: var(--live-bg); color: var(--live-ink); }
