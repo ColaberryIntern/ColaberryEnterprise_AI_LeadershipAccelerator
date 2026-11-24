@@ -70,13 +70,22 @@ describe('voice webhook route table (VS2.1)', () => {
 
   it('static: no handler reads a number field except ownedNumberOf (the ownership check)', () => {
     const file = path.resolve(__dirname, '../../../../controllers/voiceTwilioWebhookController.ts');
-    const src = fs.readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    // Normalize line endings first: a Windows checkout (core.autocrlf) is CRLF, CI is LF, and the
+    // window below must be found on both (regression: verifier attempt 2 found end = -1 on CRLF).
+    const src = fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
     const start = src.indexOf('export function ownedNumberOf');
     const end = src.indexOf('\n}\n', start);
     expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start); // a missing end marker fails loudly instead of shrinking the scanned window
     const outside = src.slice(0, start) + src.slice(end);
-    // Schema declarations name the fields; any READ (body.To, params['From'], query.phone, ...) is a violation.
-    const reads = outside.match(/\.(To|From|Caller|Called|phone|destination\w*)\b|\[\s*['"`](To|From|Caller|Called|phone|destination\w*)['"`]\s*\]/g) || [];
+    expect(outside).toContain('async function status('); // the handlers are inside the scanned text
+    // Schema declarations name the fields; any READ (body.To, params['From'], query.phone, a destructure) is a violation.
+    const F = '(To|From|Caller|Called|phone|destination\\w*)';
+    const reads = [
+      ...(outside.match(new RegExp(`\\.${F}\\b`, 'g')) || []),
+      ...(outside.match(new RegExp(`\\[\\s*['"\`]${F}['"\`]\\s*\\]`, 'g')) || []),
+      ...(outside.match(new RegExp(`\\{[^}]*\\b${F}\\b[^}]*\\}\\s*=\\s*[^;\\n]*\\b(body|query|params)\\b`, 'g')) || []),
+    ];
     expect(reads).toEqual([]);
     expect(fs.readFileSync(path.resolve(__dirname, '../../../../routes/voiceWebhookRoutes.ts'), 'utf8')).not.toMatch(/req\.(body|query|params)/);
   });
