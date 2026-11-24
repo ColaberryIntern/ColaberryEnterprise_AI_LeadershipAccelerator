@@ -26,7 +26,10 @@ const SAMPLE_PROJECTS: ProjectOpt[] = [
 // real call, three subagents handling one task — and before this they could not be
 // submitted at all. Kept in step with `buildArtifactUpload` on the server, which
 // is the actual gate; this list only decides what the file picker offers.
-const ACCEPT = '.pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.rtf,.txt,.md,.csv,.png,.jpg,.jpeg,.gif,.webp,.mp4,.mov,.webm,.mp3,.m4a,.wav,.zip';
+// `.jsonl` and `.py` are here because the labs ask for them by name — Week 4
+// builds `eval.jsonl` cases and a Python scorer — and the picker used to hide
+// the very files the student had just been told to produce.
+const ACCEPT = '.pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.rtf,.txt,.md,.csv,.json,.jsonl,.yaml,.yml,.py,.png,.jpg,.jpeg,.gif,.webp,.mp4,.mov,.webm,.mp3,.m4a,.wav,.zip';
 const ACCEPT_EXT = ACCEPT.split(',');
 // 100MB, matching GitHub's file limit — the labs also tell students to commit the
 // recording to their repo, so accepting something GitHub would reject is a trap.
@@ -177,7 +180,7 @@ const BuildArtifactsRender: React.FC<Props> = ({ bodyHtml, title, summary, varia
     const f = e.target.files && e.target.files[0];
     if (!f) return;
     const ext = '.' + (f.name.split('.').pop() || '').toLowerCase();
-    if (!ACCEPT_EXT.includes(ext)) { setUploadErr(`That's a ${ext || 'file with no extension'}. Upload what you built — accepted: PDF, Word, PowerPoint, Excel, Markdown, RTF, Text, CSV, images, MP4, MOV, WEBM, MP3, M4A, WAV, ZIP.`); e.target.value = ''; return; }
+    if (!ACCEPT_EXT.includes(ext)) { setUploadErr(`That's a ${ext || 'file with no extension'}. Upload what you built — accepted: PDF, Word, PowerPoint, Excel, Markdown, RTF, Text, CSV, JSON, JSONL, YAML, Python, images, MP4, MOV, WEBM, MP3, M4A, WAV, ZIP.`); e.target.value = ''; return; }
     // Checked here as well as on the server so a 90-second recording fails in a
     // second with advice, rather than after uploading 100MB to be rejected.
     if (f.size > MAX_UPLOAD_BYTES) {
@@ -365,7 +368,7 @@ const BuildArtifactsRender: React.FC<Props> = ({ bodyHtml, title, summary, varia
         ) : copyGateMet ? (
           <div className="ba-submit">
             <div className="ba-submit-h">Submit your build</div>
-            <p className="ba-submit-p">Upload what you built — a file Claude Code made, or the screen recording if this week asked for one. If you have a GitHub repository connected, text files (<code>.md</code>, <code>.txt</code>, <code>.csv</code>) also land there under <code>artifacts/</code>; recordings are kept here, and the lab shows you how to commit those to your own repo. Accepted: PDF, Word, PowerPoint, Excel, Markdown, RTF, Text, CSV, images, MP4, MOV, WEBM, MP3, M4A, WAV, ZIP — up to 100MB.</p>
+            <p className="ba-submit-p">Upload what you built — a file Claude Code made, or the screen recording if this week asked for one. If you have a GitHub repository connected, text files (<code>.md</code>, <code>.txt</code>, <code>.csv</code>) also land there under <code>artifacts/</code>; recordings are kept here, and the lab shows you how to commit those to your own repo. Accepted: PDF, Word, PowerPoint, Excel, Markdown, RTF, Text, CSV, JSON, JSONL, YAML, Python, images, MP4, MOV, WEBM, MP3, M4A, WAV, ZIP — up to 100MB.</p>
             <input ref={fileRef} type="file" accept={ACCEPT} style={{ display: 'none' }} onChange={onFile} />
             <button type="button" className="ba-submit-btn" disabled={uploading} onClick={() => fileRef.current && fileRef.current.click()}>{uploading ? 'Uploading…' : '⬆  Upload your file & submit'}</button>
             {uploadErr && <div className="ba-err">{uploadErr}</div>}
