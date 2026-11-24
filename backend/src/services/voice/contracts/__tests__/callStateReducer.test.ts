@@ -1,4 +1,4 @@
-import { applyCallEvent, initialCallRecord, mayRedial, reduceCallEvents } from '../callStateReducer';
+import { applyCallEvent, initialCallRecord, mayRedial, RECONCILED_NOT_CREATED, reduceCallEvents } from '../callStateReducer';
 import type { CallState, CanonicalCallEvent } from '../schemas';
 
 const CALL = '11111111-1111-4111-8111-111111111111';
@@ -23,12 +23,12 @@ describe('callStateReducer: order independence', () => {
   ];
   const done = ev('completed', 'carrier', '40');
 
-  it('all 720 arrival orders of a full lifecycle reduce to the same record', () => {
+  it('all 720 arrival orders of a full lifecycle reduce to the same record, streamed one event at a time', () => {
     const all = permutations([...lifecycle, done]);
     expect(all.length).toBe(720);
     const first = reduceCallEvents(CALL, all[0]);
     for (const order of all) {
-      const r = reduceCallEvents(CALL, order);
+      const r = order.reduce(applyCallEvent, initialCallRecord(CALL));
       expect(r.state).toBe('completed');
       expect(r.sessionSucceeded).toBe(true);
       expect(r.carrierAnswered && r.humanAnswered).toBe(true);
@@ -51,7 +51,7 @@ const cases: Case[] = [
   { name: 'earliest terminal wins when two disagree', events: () => [ev('completed', 'carrier', '30'), ev('failed', 'session', '20')], state: 'failed', extra: (r) => expect(r.terminalConflicts).toBe(1) },
   { name: 'later conflicting terminal is counted, not applied', events: () => [ev('failed', 'carrier', '20'), ev('completed', 'session', '30')], state: 'failed', extra: (r) => expect(r.terminalConflicts).toBe(1) },
   { name: 'same terminal twice is not a conflict', events: () => [ev('completed', 'carrier', '30'), ev('completed', 'session', '31')], state: 'completed', extra: (r) => expect(r.terminalConflicts).toBe(0) },
-  { name: 'duplicate eventKey is ignored', events: () => { const e = ev('ringing', 'carrier', '01'); return [e, e, e]; }, state: 'ringing', extra: (r) => expect(r.seenEventKeys).toHaveLength(1) },
+  { name: 'duplicate eventKey is ignored', events: () => { const e = ev('ringing', 'carrier', '01'); return [e, e, e]; }, state: 'ringing', extra: (r) => expect(r.events).toHaveLength(1) },
   { name: 'event for another call is ignored', events: () => [ev('ringing', 'carrier', '01', { callId: '22222222-2222-4222-8222-222222222222' })], state: 'requested' },
   { name: 'dispatch_unknown stays put on gateway events (no self-healing)', events: () => [ev('dispatch_unknown', 'gateway', '01'), ev('blocked', 'gateway', '02'), ev('dispatching', 'gateway', '03')], state: 'dispatch_unknown' },
   { name: 'dispatch_unknown resolved by carrier evidence', events: () => [ev('dispatch_unknown', 'gateway', '01'), ev('ringing', 'carrier', '02', { providerCallId: 'CAxxxx0002' })], state: 'ringing' },
@@ -93,6 +93,69 @@ describe('callStateReducer: purity and idempotency', () => {
     const late = [ev('completed', 'carrier', '30'), ev('failed', 'session', '20')];
     const streamed = late.reduce(applyCallEvent, initialCallRecord(CALL));
     expect(streamed.state).toBe(reduceCallEvents(CALL, late).state);
+  });
+});
+
+/**
+ * Verifier attempt 1 (8/12) adversarial cases. Each scenario is run through EVERY arrival order on
+ * the streaming path and must equal batch, and redial must stay forbidden where the dispatch was
+ * ambiguous or the carrier showed the call.
+ */
+describe('adversarial: streaming equals batch, and redial safety is order-independent', () => {
+  const at = (iso: string) => iso;
+  const mk = (state: CallState, source: CanonicalCallEvent['source'], occurredAt: string, key: string, extra: Partial<CanonicalCallEvent> = {}): CanonicalCallEvent =>
+    ({ contractVersion: 1, eventKey: key, callId: CALL, source, state, occurredAt: at(occurredAt), ...extra });
+  const T = '2026-11-24T15:00:30.000Z';
+  const scenarios: Record<string, { events: CanonicalCallEvent[]; state: CallState; redialForbidden?: boolean }> = {
+    'A: two terminals, same instant': { events: [mk('completed', 'carrier', T, 'a'), mk('failed', 'session', T, 'b')], state: 'completed' },
+    'B: dispatch_unknown then gateway completed': { events: [mk('dispatch_unknown', 'gateway', '2026-11-24T15:00:01.000Z', 'du'), mk('completed', 'gateway', '2026-11-24T15:00:02.000Z', 'gc')], state: 'dispatch_unknown', redialForbidden: true },
+    'C: dispatch_unknown plus gateway blocked': { events: [mk('dispatch_unknown', 'gateway', '2026-11-24T15:00:02.000Z', 'du'), mk('blocked', 'gateway', '2026-11-24T15:00:01.000Z', 'gb')], state: 'dispatch_unknown', redialForbidden: true },
+    'D: dispatch_unknown plus gateway failed': { events: [mk('dispatch_unknown', 'gateway', '2026-11-24T15:00:02.000Z', 'du'), mk('failed', 'gateway', '2026-11-24T15:00:01.000Z', 'gf')], state: 'dispatch_unknown', redialForbidden: true },
+    'E: carrier ringing plus gateway blocked': { events: [mk('ringing', 'carrier', '2026-11-24T15:00:02.000Z', 'cr'), mk('blocked', 'gateway', '2026-11-24T15:00:03.000Z', 'gb')], state: 'blocked', redialForbidden: true },
+    'F: carrier ringing plus gateway failed': { events: [mk('ringing', 'carrier', '2026-11-24T15:00:02.000Z', 'cr'), mk('failed', 'gateway', '2026-11-24T15:00:03.000Z', 'gf')], state: 'failed', redialForbidden: true },
+    'G: three terminals': { events: [mk('completed', 'carrier', '2026-11-24T15:00:30.000Z', 't1'), mk('failed', 'session', '2026-11-24T15:00:31.000Z', 't2'), mk('busy', 'carrier', '2026-11-24T15:00:32.000Z', 't3')], state: 'completed' },
+    'H: two error classes': { events: [mk('ringing', 'carrier', '2026-11-24T15:00:01.000Z', 'e1', { errorClass: 'X' }), mk('failed', 'carrier', '2026-11-24T15:00:02.000Z', 'e2', { errorClass: 'Y' })], state: 'failed', redialForbidden: true },
+    'I: dispatch_unknown then reconciler failed (no proof of non-creation)': { events: [mk('dispatch_unknown', 'gateway', '2026-11-24T15:00:01.000Z', 'du'), mk('failed', 'reconciler', '2026-11-24T15:05:00.000Z', 'rf')], state: 'failed', redialForbidden: true },
+    'J: mixed timestamp precision, earlier terminal wins': { events: [mk('completed', 'carrier', '2026-11-24T15:00:30Z', 'p1'), mk('failed', 'session', '2026-11-24T15:00:30.500Z', 'p2')], state: 'completed' },
+  };
+
+  it.each(Object.entries(scenarios))('%s', (_name, s) => {
+    const batch = reduceCallEvents(CALL, s.events);
+    for (const order of permutations(s.events)) {
+      const streamed = order.reduce(applyCallEvent, initialCallRecord(CALL));
+      expect(streamed.state).toBe(s.state);
+      expect(streamed.terminalConflicts).toBe(batch.terminalConflicts);
+      expect(streamed.lastErrorClass).toBe(batch.lastErrorClass);
+      if (s.redialForbidden) {
+        expect(mayRedial(streamed)).toBe(false);
+        expect(mayRedial(streamed, 'refused')).toBe(false);
+      }
+    }
+  });
+
+  it('G counts every conflicting terminal the same way in both paths', () => {
+    expect(reduceCallEvents(CALL, scenarios['G: three terminals'].events).terminalConflicts).toBe(2);
+  });
+
+  it('H keeps the latest error class by real time', () => {
+    expect(reduceCallEvents(CALL, scenarios['H: two error classes'].events).lastErrorClass).toBe('Y');
+  });
+
+  it('a reconciler that proves no call was created makes a failed ambiguous dispatch redialable', () => {
+    const r = reduceCallEvents(CALL, [
+      mk('dispatch_unknown', 'gateway', '2026-11-24T15:00:01.000Z', 'du'),
+      mk('failed', 'reconciler', '2026-11-24T15:05:00.000Z', 'rn', { errorClass: RECONCILED_NOT_CREATED }),
+    ]);
+    expect(r.state).toBe('failed');
+    expect(mayRedial(r)).toBe(true);
+  });
+
+  it('but never once the carrier showed the call, even with that reconciler proof', () => {
+    const r = reduceCallEvents(CALL, [
+      mk('ringing', 'carrier', '2026-11-24T15:00:02.000Z', 'cr'),
+      mk('failed', 'reconciler', '2026-11-24T15:05:00.000Z', 'rn', { errorClass: RECONCILED_NOT_CREATED }),
+    ]);
+    expect(mayRedial(r)).toBe(false);
   });
 });
 

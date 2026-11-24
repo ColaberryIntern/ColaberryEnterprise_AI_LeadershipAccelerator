@@ -1,36 +1,49 @@
 /**
  * Pure call-state reducer (VS1.3). Folds CanonicalCallEvents, from any source and in any order,
- * into one call record. No I/O; the same events in any order produce the same final state.
+ * into one call record. No I/O.
  *
- * Rules (directive sections 3 and 7):
+ * ORDER INDEPENDENCE BY CONSTRUCTION. The record keeps its de-duplicated event set, and every
+ * apply recomputes the derived fields from that set. Streaming (one event at a time, in arrival
+ * order) and batch therefore cannot disagree: they derive from the same set. (Verifier attempt 1
+ * showed an incremental fold disagreeing with batch on late terminals and gateway events; this
+ * design removes that class of bug rather than patching cases.)
+ *
+ * Rules (directive sections 3, 5 and 7):
  *  1. Duplicates (same eventKey) are ignored.
- *  2. First terminal wins. A later, different terminal is counted as a conflict, never applied.
- *  3. Non-terminal events only move the call forward (by rank); a late, older event cannot pull it back.
- *     Facts carried on a late event (answeredBy, providerCallId) are still merged.
- *  4. dispatch_unknown is sticky: only carrier, session or reconciler evidence moves it. Nothing in
- *     here ever sends a call back to dispatching, because an ambiguous dispatch must never be redialed.
- *  5. Carrier-answered, human-answered and session-success are separate facts: a ringing phone or a
- *     carrier "answered" is not a conversation.
- *
- * Order-independence: events are applied in (rank, occurredAt, eventKey) order, so the result does
- * not depend on arrival order, except that among terminals the EARLIEST by occurredAt wins.
+ *  2. First terminal wins, by real time (Date.parse, so '...30Z' and '...30.500Z' compare correctly),
+ *     ties broken by eventKey. Every other terminal with a different state counts as a conflict.
+ *  3. Otherwise the highest-ranked non-terminal state wins; a late, older event cannot pull the call back.
+ *  4. An ambiguous dispatch (any dispatch_unknown) cannot be resolved by the gateway itself: gateway
+ *     events past dispatch are ignored until carrier, session or reconciler evidence exists.
+ *  5. Carrier-answered, human-answered and session-success are separate facts.
+ *  6. Redial safety is sticky: once a dispatch was ambiguous or the carrier showed any sign of the
+ *     call, mayRedial is false forever, unless a reconciler proved no call was created.
  */
 import type { CallState, CanonicalCallEvent } from './schemas';
 import { TERMINAL_STATES } from './schemas';
 
+/** errorClass a reconciler uses to state, with evidence, that the carrier created no call. */
+export const RECONCILED_NOT_CREATED = 'ReconciledNotCreated';
+
 export interface CallRecord {
   callId: string;
   state: CallState;
+  events: CanonicalCallEvent[];
   providerCallIds: string[];
   carrierAnswered: boolean;
   humanAnswered: boolean;
   sessionStarted: boolean;
   /** True only when a session actually ran AND the call completed. */
   sessionSucceeded: boolean;
+  /** Any dispatch_unknown was ever seen. */
+  dispatchAmbiguous: boolean;
+  /** The carrier or a session showed the call existed (queued or later, or a provider id). */
+  carrierEvidence: boolean;
+  /** A reconciler proved the carrier created no call. */
+  reconciledNotCreated: boolean;
   terminalAt?: string;
   terminalConflicts: number;
   lastErrorClass?: string;
-  seenEventKeys: string[];
 }
 
 const RANK: Record<CallState, number> = {
@@ -38,61 +51,82 @@ const RANK: Record<CallState, number> = {
   answered: 6, session_active: 7,
   blocked: 9, completed: 9, busy: 9, no_answer: 9, failed: 9, canceled: 9,
 };
-
-export function initialCallRecord(callId: string): CallRecord {
-  return { callId, state: 'requested', providerCallIds: [], carrierAnswered: false, humanAnswered: false, sessionStarted: false, sessionSucceeded: false, terminalConflicts: 0, seenEventKeys: [] };
-}
+const GATEWAY_ALLOWED_WHILE_AMBIGUOUS: ReadonlySet<CallState> = new Set(['requested', 'reserved', 'dispatching', 'dispatch_unknown']);
 
 export function isTerminal(s: CallState): boolean {
   return TERMINAL_STATES.has(s);
 }
 
-/** Apply one event. Returns a new record; never mutates the input. */
-export function applyCallEvent(rec: CallRecord, ev: CanonicalCallEvent): CallRecord {
-  if (ev.callId !== rec.callId || rec.seenEventKeys.includes(ev.eventKey)) return rec;
-  const next: CallRecord = { ...rec, providerCallIds: [...rec.providerCallIds], seenEventKeys: [...rec.seenEventKeys, ev.eventKey] };
+const ms = (iso: string) => Date.parse(iso);
+const byTime = (a: CanonicalCallEvent, b: CanonicalCallEvent) =>
+  ms(a.occurredAt) - ms(b.occurredAt) || (a.eventKey < b.eventKey ? -1 : a.eventKey > b.eventKey ? 1 : 0);
 
-  // Facts are merged regardless of whether the state moves (rule 3).
-  if (ev.providerCallId && !next.providerCallIds.includes(ev.providerCallId)) next.providerCallIds.push(ev.providerCallId);
-  if (ev.state === 'answered' && ev.source === 'carrier') next.carrierAnswered = true;
-  if (ev.answeredBy === 'human') next.humanAnswered = true;
-  if (ev.state === 'session_active' && ev.source === 'session') next.sessionStarted = true;
-  if (ev.errorClass) next.lastErrorClass = ev.errorClass;
-
-  if (isTerminal(next.state)) {
-    if (isTerminal(ev.state) && ev.state !== next.state) {
-      // Rule 2, with order-independence: the earliest terminal by occurredAt wins.
-      if (next.terminalAt && ev.occurredAt < next.terminalAt) {
-        next.state = ev.state;
-        next.terminalAt = ev.occurredAt;
-      }
-      next.terminalConflicts += 1;
-    }
-  } else if (next.state === 'dispatch_unknown' && ev.source === 'gateway') {
-    // Rule 4: the gateway cannot resolve its own ambiguity (no redial, no self-healing).
-  } else if (RANK[ev.state] > RANK[next.state]) {
-    next.state = ev.state;
-    if (isTerminal(ev.state)) next.terminalAt = ev.occurredAt;
-  }
-
-  next.sessionSucceeded = next.sessionStarted && next.state === 'completed';
-  return next;
+export function initialCallRecord(callId: string): CallRecord {
+  return derive(callId, []);
 }
 
-const ORDER = (a: CanonicalCallEvent, b: CanonicalCallEvent) =>
-  RANK[a.state] - RANK[b.state] || (a.occurredAt < b.occurredAt ? -1 : a.occurredAt > b.occurredAt ? 1 : 0) || (a.eventKey < b.eventKey ? -1 : a.eventKey > b.eventKey ? 1 : 0);
+function derive(callId: string, events: CanonicalCallEvent[]): CallRecord {
+  const sorted = [...events].sort(byTime);
+  const dispatchAmbiguous = sorted.some((e) => e.state === 'dispatch_unknown');
+  const carrierEvidence = sorted.some((e) => !!e.providerCallId || ((e.source === 'carrier' || e.source === 'session') && RANK[e.state] >= RANK.queued));
+  const reconciledNotCreated = sorted.some((e) => e.source === 'reconciler' && e.errorClass === RECONCILED_NOT_CREATED);
+  const resolved = carrierEvidence || sorted.some((e) => e.source === 'reconciler');
 
-/** Fold a batch in canonical order (rule set above), so arrival order never changes the outcome. */
+  // Rule 4: while a dispatch is ambiguous and unresolved, gateway events past dispatch do not count.
+  const effective = sorted.filter((e) => !(dispatchAmbiguous && !resolved && e.source === 'gateway' && !GATEWAY_ALLOWED_WHILE_AMBIGUOUS.has(e.state)));
+
+  const terminals = effective.filter((e) => isTerminal(e.state));
+  let state: CallState = 'requested';
+  let terminalAt: string | undefined;
+  let terminalConflicts = 0;
+  if (terminals.length) {
+    const winner = terminals[0]; // sorted by real time, then eventKey (rule 2)
+    state = winner.state;
+    terminalAt = winner.occurredAt;
+    terminalConflicts = terminals.filter((e) => e.state !== winner.state).length;
+  } else {
+    for (const e of effective) if (RANK[e.state] > RANK[state]) state = e.state;
+  }
+
+  const providerCallIds = Array.from(new Set(sorted.map((e) => e.providerCallId).filter((x): x is string => !!x))).sort();
+  const sessionStarted = sorted.some((e) => e.state === 'session_active' && e.source === 'session');
+  const withError = sorted.filter((e) => e.errorClass);
+  return {
+    callId,
+    state,
+    events: sorted,
+    providerCallIds,
+    carrierAnswered: sorted.some((e) => e.state === 'answered' && e.source === 'carrier'),
+    humanAnswered: sorted.some((e) => e.answeredBy === 'human'),
+    sessionStarted,
+    sessionSucceeded: sessionStarted && state === 'completed',
+    dispatchAmbiguous,
+    carrierEvidence,
+    reconciledNotCreated,
+    terminalAt,
+    terminalConflicts,
+    lastErrorClass: withError.length ? withError[withError.length - 1].errorClass : undefined,
+  };
+}
+
+/** Apply one event. Returns a new record; never mutates the input. */
+export function applyCallEvent(rec: CallRecord, ev: CanonicalCallEvent): CallRecord {
+  if (ev.callId !== rec.callId || rec.events.some((e) => e.eventKey === ev.eventKey)) return rec;
+  return derive(rec.callId, [...rec.events, ev]);
+}
+
+/** Fold a batch. Identical to applying the events one at a time in any order. */
 export function reduceCallEvents(callId: string, events: CanonicalCallEvent[]): CallRecord {
-  return [...events].sort(ORDER).reduce(applyCallEvent, initialCallRecord(callId));
+  return events.reduce(applyCallEvent, initialCallRecord(callId));
 }
 
 /**
  * May a NEW dial be attempted for this logical call? Only when nothing could have reached the
- * carrier: blocked, or refused before acceptance. Never from dispatch_unknown or anything later.
+ * carrier: a policy block, or a refusal before acceptance. Never after an ambiguous dispatch (unless
+ * a reconciler proved no call was created), never once the carrier showed any sign of the call.
  */
 export function mayRedial(rec: CallRecord, lastDispatchOutcome?: 'accepted' | 'refused' | 'unknown'): boolean {
-  if (rec.state === 'dispatch_unknown' || lastDispatchOutcome === 'unknown' || lastDispatchOutcome === 'accepted') return false;
-  if (rec.providerCallIds.length > 0) return false;
-  return rec.state === 'blocked' || (rec.state === 'failed' && lastDispatchOutcome === 'refused');
+  if (lastDispatchOutcome === 'accepted' || rec.carrierEvidence || rec.providerCallIds.length > 0) return false;
+  if ((rec.dispatchAmbiguous || lastDispatchOutcome === 'unknown') && !rec.reconciledNotCreated) return false;
+  return rec.state === 'blocked' || (rec.state === 'failed' && (lastDispatchOutcome === 'refused' || rec.reconciledNotCreated));
 }

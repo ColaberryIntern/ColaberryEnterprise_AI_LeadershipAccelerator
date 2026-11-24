@@ -11,8 +11,9 @@ import type { AuthorizedDispatch, CanonicalCallEvent, DispatchResult, ProviderHe
 export interface VoiceProvider {
   readonly engine: VoiceEngine;
   dispatch(input: AuthorizedDispatch): Promise<DispatchResult>;
-  cancel(providerCallId: string): Promise<void>;
-  getStatus(providerCallId: string): Promise<ProviderStatus>;
+  /** Takes OUR canonical callId (directive section 3); the provider resolves its own alias internally. */
+  cancel(callId: string): Promise<void>;
+  getStatus(callId: string): Promise<ProviderStatus>;
   normalizeEvent(input: VerifiedProviderEvent): Promise<CanonicalCallEvent[]>;
   health(): Promise<ProviderHealth>;
 }
