@@ -70,6 +70,27 @@ describe('Voice Studio schema: privacy by structure', () => {
   });
 });
 
+/**
+ * Postgres keywords that are RESERVED, or reserved-except-as-function/type, and therefore break an
+ * unquoted column definition. `authorization` shipped in the first VS1.4 commit: CREATE TABLE
+ * voice_tool_runs would have failed at boot, and the fail-soft ensure would have hidden it.
+ * Source: https://www.postgresql.org/docs/current/sql-keywords-appendix.html
+ */
+const PG_RESERVED = new Set(['all', 'analyse', 'analyze', 'and', 'any', 'array', 'as', 'asc', 'asymmetric', 'authorization', 'binary', 'both', 'case', 'cast', 'check',
+  'collate', 'collation', 'column', 'concurrently', 'constraint', 'create', 'cross', 'current_catalog', 'current_date', 'current_role', 'current_schema',
+  'current_time', 'current_timestamp', 'current_user', 'default', 'deferrable', 'desc', 'distinct', 'do', 'else', 'end', 'except', 'false', 'fetch', 'for',
+  'foreign', 'freeze', 'from', 'full', 'grant', 'group', 'having', 'ilike', 'in', 'initially', 'inner', 'intersect', 'into', 'is', 'isnull', 'join', 'lateral',
+  'leading', 'left', 'like', 'limit', 'localtime', 'localtimestamp', 'natural', 'not', 'notnull', 'null', 'offset', 'on', 'only', 'or', 'order', 'outer',
+  'overlaps', 'placing', 'primary', 'references', 'returning', 'right', 'select', 'session_user', 'similar', 'some', 'symmetric', 'system_user', 'table',
+  'tablesample', 'then', 'to', 'trailing', 'true', 'union', 'unique', 'user', 'using', 'variadic', 'verbose', 'when', 'where', 'window', 'with']);
+
+describe('Voice Studio DDL is valid without quoting', () => {
+  it('no column name is a Postgres reserved keyword (regression: voice_tool_runs.authorization)', () => {
+    const bad = VOICE_TABLE_SPECS.flatMap((t) => t.columns.filter((c) => PG_RESERVED.has(c.name)).map((c) => `${t.table}.${c.name}`));
+    expect(bad).toEqual([]);
+  });
+});
+
 describe('Voice Studio models equal the DDL', () => {
   it.each(VOICE_TABLE_SPECS.map((s) => [s.model, s] as const))('%s attributes equal its table columns', (_m, spec) => {
     const model = VOICE_STUDIO_MODELS[spec.model];

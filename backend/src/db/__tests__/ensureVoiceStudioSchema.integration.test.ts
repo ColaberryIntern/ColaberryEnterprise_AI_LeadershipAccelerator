@@ -84,7 +84,7 @@ describeIfDb('voice studio schema against Postgres', () => {
     const id = call.id;
     await sequelize.query(`INSERT INTO voice_call_events (tenant_id, call_id, event_key, source, state, occurred_at) VALUES ('${T1}', '${id}', 'k1', 'carrier', 'ringing', NOW())`);
     await sequelize.query(`INSERT INTO voice_turns (tenant_id, call_id, turn_index, speaker, started_at) VALUES ('${T1}', '${id}', 0, 'agent', NOW())`);
-    await sequelize.query(`INSERT INTO voice_tool_runs (tenant_id, call_id, tool_name, idempotency_key, authorization) VALUES ('${T1}', '${id}', 'slots', 'tk1', 'allowed')`);
+    await sequelize.query(`INSERT INTO voice_tool_runs (tenant_id, call_id, tool_name, idempotency_key, auth_decision) VALUES ('${T1}', '${id}', 'slots', 'tk1', 'allowed')`);
     await sequelize.query(`INSERT INTO voice_artifacts (tenant_id, call_id, kind, storage_ref) VALUES ('${T1}', '${id}', 'summary', 'ref:1')`);
     await sequelize.query(`INSERT INTO voice_usage (tenant_id, call_id, provider, unit, quantity) VALUES ('${T1}', '${id}', 'twilio', 'minute', 1)`);
     await sequelize.query(`DELETE FROM voice_calls WHERE id = '${id}'`);

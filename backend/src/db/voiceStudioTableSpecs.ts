@@ -151,10 +151,10 @@ export const VOICE_TABLE_SPECS: TableSpec[] = [
     table: 'voice_tool_runs', model: 'VoiceToolRun',
     columns: [id(), tenant(), c('call_id', 'UUID NOT NULL', DataTypes.UUID), c('turn_index', 'INTEGER', DataTypes.INTEGER),
       c('tool_name', 'VARCHAR(100) NOT NULL', DataTypes.STRING(100)), c('idempotency_key', 'VARCHAR(200) NOT NULL', DataTypes.STRING(200)),
-      c('authorization', 'VARCHAR(20) NOT NULL', DataTypes.STRING(20)), c('args_redacted', "JSONB NOT NULL DEFAULT '{}'::jsonb", DataTypes.JSONB),
+      c('auth_decision', 'VARCHAR(20) NOT NULL', DataTypes.STRING(20)), c('args_redacted', "JSONB NOT NULL DEFAULT '{}'::jsonb", DataTypes.JSONB),
       c('result_summary', 'TEXT', DataTypes.TEXT), c('status', "VARCHAR(20) NOT NULL DEFAULT 'pending'", DataTypes.STRING(20)),
       c('started_at', 'TIMESTAMPTZ NOT NULL DEFAULT NOW()', DataTypes.DATE), c('ended_at', 'TIMESTAMPTZ', DataTypes.DATE)],
-    constraints: [callFk('voice_tool_runs'), "CONSTRAINT voice_tool_runs_auth_chk CHECK (authorization IN ('allowed','denied','approval_required'))"],
+    constraints: [callFk('voice_tool_runs'), "CONSTRAINT voice_tool_runs_auth_chk CHECK (auth_decision IN ('allowed','denied','approval_required'))"],
     indexes: ['CREATE UNIQUE INDEX IF NOT EXISTS voice_tool_runs_idem_uq ON voice_tool_runs (call_id, idempotency_key)'],
   },
   {
