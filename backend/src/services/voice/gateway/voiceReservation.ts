@@ -101,7 +101,7 @@ export async function reserveDial(input: ReserveInput): Promise<ReserveResult> {
     });
   } catch (err) {
     console.error(JSON.stringify({ level: 'error', service: 'voice-gateway', event: 'voice_reservation_failed', outcome: 'failure',
-      error_class: err instanceof Error ? err.constructor.name : 'UnknownError', context: { message: err instanceof Error ? err.message : String(err) } }));
+      error_class: err instanceof Error ? err.constructor.name : 'UnknownError' })); // message omitted: it can echo SQL values
     // The error class (never the message, which can echo SQL values) travels with the denial so a
     // fail-closed block is diagnosable from the caller's log.
     return { outcome: 'denied', reason: 'reservation_unavailable', detail: err instanceof Error ? err.constructor.name : 'UnknownError' };

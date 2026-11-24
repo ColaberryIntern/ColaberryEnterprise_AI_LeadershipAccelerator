@@ -19,7 +19,7 @@ import { randomUUID } from 'crypto';
 import type { AuthorizedDispatch, DispatchResult, VoiceEngine, VoiceRequest } from '../contracts/schemas';
 import { parseContract, VoiceRequestSchema, CONTRACT_VERSION } from '../contracts/schemas';
 import type { VoiceProvider } from '../contracts/providers';
-import { evaluateVoicePolicy, BlockReason, ConsentStatus, Exemption, PolicyMode } from './voicePolicy';
+import { evaluateVoicePolicy, BlockReason, ConsentStatus, Exemption, PolicyMode, STAFF_BUDGET_24H, TEST_BUDGET_24H } from './voicePolicy';
 import { hashDestination } from './destinationHash';
 import { DEFAULT_CAPS, ReservationCaps, ReserveInput, ReserveResult, transitionReservation } from './voiceReservation';
 
@@ -77,9 +77,17 @@ export async function authorizeVoiceCall(raw: unknown, deps: GatewayDeps): Promi
   const route = await fact('route', () => deps.resolveRoute(req));
   if (!route.ok || !route.v) return { outcome: 'blocked', reason: 'route_not_configured' };
 
+  // Exempt destinations still RESERVE (so every dial is counted and idempotent) but against their own
+  // finite budget: staff alerts keep today's freedom from the 2/24h cap up to STAFF_BUDGET_24H; the admin
+  // test destination gets TEST_BUDGET_24H. Everyone else uses the route's caps.
+  const exempt = exemption.ok ? exemption.v : null;
+  const baseCaps = route.v.caps ?? DEFAULT_CAPS;
+  const caps = exempt === 'staff' ? { ...baseCaps, perDestination24h: STAFF_BUDGET_24H }
+    : exempt === 'test' ? { ...baseCaps, perDestination24h: TEST_BUDGET_24H }
+      : baseCaps;
   const reservation = await deps.reserve({
     tenantId: req.tenantId, idempotencyKey: req.idempotencyKey, destinationHash: hashDestination(e164 as string),
-    destinationE164: e164 as string, routeId: route.v.routeId, purpose: req.purpose, caps: route.v.caps ?? DEFAULT_CAPS,
+    destinationE164: e164 as string, routeId: route.v.routeId, purpose: req.purpose, caps,
   });
   if (reservation.outcome === 'denied') {
     deps.log({ event: 'voice_call_blocked', outcome: 'skipped', reason: reservation.reason, path: req.path, tenant: req.tenantId });

@@ -33,8 +33,15 @@ describe('voicePolicy: ordered, fail-closed verdicts', () => {
     expect(v({ suppressed: true, exemption: 'staff' })).toEqual({ ok: false, reason: 'suppressed' });
   });
 
-  it('staff are exempt from consent and hours only (as voiceDialGuard is today)', () => {
+  it('staff with internal-alert consent are exempt from call hours (as voiceDialGuard is today)', () => {
     expect(v({ exemption: 'staff', consent: 'staff_internal', now: at('05:00') })).toEqual({ ok: true });
+    expect(v({ exemption: 'staff', consent: 'granted', now: at('05:00') })).toEqual({ ok: true });
+  });
+
+  it.each([
+    ['revoked', 'consent_revoked'], ['expired', 'consent_expired'], ['missing', 'consent_missing'], ['unknown', 'consent_unknown'],
+  ] as const)('staff are NOT exempt from consent: %s blocks with %s (directive section 5; verifier VS1.5 attempt 1)', (consent, reason) => {
+    expect(v({ exemption: 'staff', consent })).toEqual({ ok: false, reason });
   });
 
   it('a test destination still needs consent and hours (no blanket exemption)', () => {

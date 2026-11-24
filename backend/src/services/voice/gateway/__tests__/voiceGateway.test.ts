@@ -90,6 +90,19 @@ describe('authorizeVoiceCall', () => {
     expect(input.destinationHash).not.toContain('5555550123');
   });
 
+  it('a staff destination whose consent read throws is BLOCKED (no blanket staff exemption)', async () => {
+    const { d } = deps({ exemptionFor: async () => 'staff', consentFor: async () => { throw new Error('x'); } });
+    expect(await authorizeVoiceCall(request, d)).toEqual({ outcome: 'blocked', reason: 'consent_unknown' });
+  });
+
+  it.each([
+    ['staff', 48], ['test', 3], [null, 2],
+  ] as const)('exemption %s reserves against a finite per-destination budget of %s', async (exemption, budget) => {
+    const reserve = jest.fn(async (_input: ReserveInput) => ({ outcome: 'reserved' as const, reservationId: '11111111-1111-4111-8111-111111111111', replay: false }));
+    await authorizeVoiceCall(request, deps({ exemptionFor: async () => exemption, consentFor: async () => (exemption === 'staff' ? 'staff_internal' : 'granted'), reserve }).d);
+    expect(reserve.mock.calls[0]?.[0].caps.perDestination24h).toBe(budget);
+  });
+
   it('logs blocks without the destination number', async () => {
     const { d, logs } = deps({ consentFor: async () => 'missing' });
     await authorizeVoiceCall(request, d);

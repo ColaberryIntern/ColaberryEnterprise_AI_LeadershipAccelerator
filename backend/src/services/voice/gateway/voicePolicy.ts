@@ -11,8 +11,12 @@
  *    Central window must both hold; an unknown recipient timezone FAILS CLOSED.
  *
  * Unknown is never "allow": an unreadable kill switch is ON, unknown suppression or consent blocks.
- * Staff exemptions cover hours and caps only; they never bypass the kill switch, the enable flag,
- * the path allowlist or suppression (directive section 5).
+ * Exemptions are explicit and FINITE (directive section 5, INVENTORY F-02):
+ *  - staff: exempt from CALL HOURS only (alerts are deliberately after hours). Consent must still be
+ *    'staff_internal' or 'granted'; revoked, expired, missing or unknown consent blocks staff too. Staff
+ *    get their own finite dial budget instead of the 2/24h cap (STAFF_BUDGET_24H, applied in the gateway).
+ *  - test: no exemption from consent or hours; its own finite budget (TEST_BUDGET_24H).
+ * Neither ever bypasses the kill switch, the enable flag, the path allowlist or suppression.
  */
 
 export type PolicyMode = 'legacy' | 'direct';
@@ -43,6 +47,10 @@ export type BlockReason =
 
 export type PolicyVerdict = { ok: true } | { ok: false; reason: BlockReason };
 
+/** Finite per-destination budgets for exempt destinations (24 h). Staff alerts can recur; tests are bounded tightly. */
+export const STAFF_BUDGET_24H = 48;
+export const TEST_BUDGET_24H = 3;
+
 export const LEGACY_WINDOW = { tz: 'America/Chicago', startMinute: 10 * 60, endMinute: 20 * 60 };
 export const RECIPIENT_WINDOW = { startMinute: 9 * 60, endMinute: 20 * 60 };
 
@@ -67,12 +75,12 @@ export function evaluateVoicePolicy(f: PolicyFacts): PolicyVerdict {
   if (f.suppressed === null) return { ok: false, reason: 'suppression_unknown' };
   if (f.suppressed) return { ok: false, reason: 'suppressed' };
 
-  if (f.exemption !== 'staff') {
-    if (f.consent === 'missing' || f.consent === 'staff_internal') return { ok: false, reason: 'consent_missing' };
-    if (f.consent === 'revoked') return { ok: false, reason: 'consent_revoked' };
-    if (f.consent === 'expired') return { ok: false, reason: 'consent_expired' };
-    if (f.consent === 'unknown') return { ok: false, reason: 'consent_unknown' };
-  }
+  // Consent applies to EVERYONE. The only difference for staff is that an internal-alert consent counts.
+  if (f.consent === 'revoked') return { ok: false, reason: 'consent_revoked' };
+  if (f.consent === 'expired') return { ok: false, reason: 'consent_expired' };
+  if (f.consent === 'unknown') return { ok: false, reason: 'consent_unknown' };
+  if (f.consent === 'missing') return { ok: false, reason: 'consent_missing' };
+  if (f.consent === 'staff_internal' && f.exemption !== 'staff') return { ok: false, reason: 'consent_missing' };
 
   if (f.exemption === 'staff') return { ok: true }; // hours exemption, as voiceDialGuard does today
   if (!inWindow(minuteOfDayIn(f.now, LEGACY_WINDOW.tz), LEGACY_WINDOW)) return { ok: false, reason: 'outside_call_hours' };
