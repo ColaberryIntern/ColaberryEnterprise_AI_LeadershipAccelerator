@@ -3,9 +3,16 @@ jest.mock('../../config/env', () => ({
     databaseUrl: 'postgres://user:pass@localhost:5432/test',
     nodeEnv: 'test',
     enableVoiceCalls: true,
-    voiceCallPaths: 'interest,callback,agent-tool',
+    voiceCallPaths: 'interest,callback,agent-tool,welcome,open_house,project_discovery,colaberry-internship,ai-flotation,enterprise-intake,cpn',
     synthflowApiKey: 'test-key',
     synthflowInterestAgentId: 'agent-interest',
+    synthflowWelcomeAgentId: 'agent-welcome',
+    synthflowCallbackAgentId: 'agent-callback',
+    synthflowOpenHouseAgentId: 'agent-openhouse',
+    synthflowProjectDiscoveryAgentId: 'agent-discovery',
+    synthflowInternshipAgentId: 'agent-internship',
+    synthflowEnterpriseIntakeAgentId: 'agent-enterprise',
+    synthflowCpnAgentId: 'agent-cpn',
     synthflowAgentToolAgentId: 'agent-tool-id',
     synthflowAiFlotationAgentId: 'agent-flotation',
   },
@@ -24,6 +31,7 @@ import { dispatchLegacyViaGateway } from '../voice/gateway/legacyFacade';
  */
 const facade = dispatchLegacyViaGateway as jest.Mock;
 const base = { name: 'Test', phone: '5555550123', callType: 'interest' as const };
+const p = 'Speak as the caller for this brand.';
 
 describe('triggerVoiceCall facade (VS1.6)', () => {
   afterEach(() => {
@@ -55,7 +63,7 @@ describe('triggerVoiceCall facade (VS1.6)', () => {
 
   it('flag ON: earlier checks still run first (a disallowed path never reaches the gateway)', async () => {
     process.env.VOICE_GATEWAY_LEGACY_ENABLED = 'true';
-    const r = await triggerVoiceCall({ ...base, callType: 'welcome' });
+    const r = await triggerVoiceCall({ ...base, callType: 'callback', brandSlug: 'not-on-the-allowlist', prompt: p });
     expect(r).toEqual({ success: true, data: { skipped: true, reason: 'path_not_allowed' } });
     expect(facade).not.toHaveBeenCalled();
   });
@@ -86,5 +94,40 @@ describe('triggerVoiceCall facade (VS1.6)', () => {
     jest.spyOn(global as never, 'fetch').mockResolvedValue({ ok: true, status: 200, text: async () => '{}' } as never);
     await triggerVoiceCall(base);
     expect(facade).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Per-caller contract (one case per route key in INVENTORY.md): the request the gateway path sends to
+ * Synthflow is IDENTICAL to what the legacy path sends today, so every caller gets the same agent, prompt
+ * and variables whichever way the flag is set.
+ */
+describe('per-caller contract: flag ON sends the same Synthflow request as flag OFF', () => {
+  afterEach(() => { delete process.env.VOICE_GATEWAY_LEGACY_ENABLED; jest.restoreAllMocks(); facade.mockReset(); });
+  const cases = [
+    ['scheduler / automation interest', { callType: 'interest' as const }, 'agent-interest'],
+    ['enrollment welcome + exec alerts', { callType: 'welcome' as const }, 'agent-welcome'],
+    ['open house countdown', { callType: 'open_house' as const, prompt: p }, 'agent-openhouse'],
+    ['SBP project discovery', { callType: 'project_discovery' as const, prompt: p }, 'agent-discovery'],
+    ['internship interview', { callType: 'internship_interview' as const, brandSlug: 'colaberry-internship', prompt: p }, 'agent-internship'],
+    ['AI Flotation callback hub', { callType: 'callback' as const, brandSlug: 'ai-flotation', prompt: p }, 'agent-flotation'],
+    ['Enterprise intake', { callType: 'callback' as const, brandSlug: 'enterprise-intake', prompt: p }, 'agent-enterprise'],
+    ['CPN scholarship', { callType: 'callback' as const, brandSlug: 'cpn', prompt: p }, 'agent-cpn'],
+    ['Maya / agent tool', { callType: 'callback' as const, brandSlug: 'agent-tool', prompt: p }, 'agent-tool-id'],
+  ] as const;
+
+  it.each(cases)('%s', async (_name, extra, agent) => {
+    const fetchSpy = jest.spyOn(global as never, 'fetch').mockResolvedValue({ ok: true, status: 200, text: async () => '{"call_id":"c"}' } as never);
+    await triggerVoiceCall({ ...base, ...extra });
+    const offBody = JSON.parse(String((fetchSpy.mock.calls[0] as unknown[])[1] && ((fetchSpy.mock.calls[0] as unknown[])[1] as { body: string }).body));
+
+    process.env.VOICE_GATEWAY_LEGACY_ENABLED = 'true';
+    facade.mockResolvedValue({ success: true, data: { call_id: 'c' } });
+    await triggerVoiceCall({ ...base, ...extra });
+    const on = facade.mock.calls[0][0];
+
+    expect(offBody.model_id).toBe(agent);
+    expect(on.requestBody).toEqual(offBody);
+    expect(on.phoneE164).toBe(offBody.phone);
   });
 });
