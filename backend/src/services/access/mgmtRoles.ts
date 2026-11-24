@@ -64,6 +64,26 @@ export const SECTION_KEYS = [
   // `/api/admin/communications` (the lead-messaging log) stays 'campaigns'. owner and admin derive it from ALL_SECTIONS;
   // community_organizer is granted it below; anyone else (Taiwo) gets it per member through extra sections.
   'comms_hub',
+  // Orchestration health, read-only (Ali 2026-11-24, option A). Three GET endpoints: the health
+  // report, the latest health snapshot, and the monitoring agent list.
+  //
+  // Its own key rather than 'program' for the reason the `brands` split above records. Quincy
+  // Nkwain Ninying owns the platform domain and step 2 of his capability asks him to read the
+  // curriculum health output in the product. The only key that reached it was 'program', which
+  // also carries accelerator, community roles, the whole curriculum composer, AI org, brain and
+  // projects — curriculum's entire department, handed over to read three numbers.
+  //
+  // DELIBERATELY NOT the whole `/api/admin/orchestration` prefix. The matcher is `/`-delimited
+  // and `pathToSection` returns the FIRST match, so the three reads are declared as their own
+  // rows ahead of the broad one. In particular the prefix `/api/admin/orchestration/monitoring`
+  // is NOT used, because it would also capture `POST /monitoring/scan`, an on-demand run that
+  // the request this key exists to serve explicitly excluded.
+  //
+  // No role loses anything: `owner` and `admin` derive from ALL_SECTIONS, and `curriculum` — the
+  // one role definition holding 'program' as a literal — is granted it below in the same diff.
+  // Checked in production on 2026-11-24: nobody holds 'program' as an extra section, so the
+  // role literals are the whole regression surface.
+  'orchestration_health',
 ] as const;
 export type SectionKey = typeof SECTION_KEYS[number];
 
@@ -91,7 +111,15 @@ export const MGMT_ROLE_DEFS: Record<MgmtRole, MgmtRoleDef> = {
   admin: { role: 'admin', label: 'Admin', sections: ADMIN_EXCEPT_INBOX },
   // Curriculum → the Program group (accelerator, community-roles, orchestration,
   // AI org, enterprise intelligence, projects) + a Dashboard landing.
-  curriculum: { role: 'curriculum', label: 'Curriculum', sections: ['dashboard', 'program'] },
+  // 'orchestration_health' is listed because the three health reads were split OUT of 'program'
+  // on 2026-11-24. Without it Swati Raman and Ruth Kumera would silently lose the Curriculum
+  // Health tab they have today — a permissions change disguised as a routing change, which is
+  // the exact objection `brandPaths.test.ts` raises and the exact condition it says to meet.
+  curriculum: {
+    role: 'curriculum',
+    label: 'Curriculum',
+    sections: ['dashboard', 'program', 'orchestration_health'],
+  },
   // Revenue → the Revenue group, including its lead-queue links ('leads' is a
   // narrower slice of that same group, carved out for the sales rep role).
   revenue: { role: 'revenue', label: 'Revenue', sections: ['dashboard', 'revenue', 'leads'] },

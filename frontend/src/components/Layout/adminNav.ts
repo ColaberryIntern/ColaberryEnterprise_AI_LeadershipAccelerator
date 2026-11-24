@@ -360,6 +360,20 @@ export const NAV_GROUPS: NavGroup[] = [
     // for sectionForPath(); without an entry here it would fall through to null and
     // ProtectedRoute would admit every identity except a plain sales login.
     { path: '/admin/system/operations', label: 'Platform Operations', icon: 'pulse-line' },
+    // Orchestration Health, read-only. Carries its OWN section rather than inheriting the
+    // group's 'system', which is the whole point: it is reachable by the three reads split out
+    // of 'program' on 2026-11-24, not by System access.
+    //
+    // It is a SEPARATE ROUTE rather than a deep link to the Curriculum page's Health tab
+    // because the nav's model is one section per path and sectionForPath never sees a query
+    // string. Pointing it at /admin/orchestration?tab=health would resolve to 'program' and
+    // ProtectedRoute would bounce the very people this link exists for, before a tab rendered.
+    {
+      path: '/admin/orchestration-health',
+      label: 'Orchestration Health',
+      icon: 'heart-pulse-line',
+      section: 'orchestration_health',
+    },
     { path: '/admin/tickets', label: 'Tickets', icon: 'ticket-2-line' },
     { path: '/admin/reports', label: 'Automated Reports', icon: 'mail-send-line' },
     { path: '/admin/settings', label: 'Settings', icon: 'settings-3-line' },

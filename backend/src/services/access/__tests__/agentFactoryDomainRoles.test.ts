@@ -23,6 +23,7 @@ import {
   ALL_SECTIONS, MGMT_ROLE_DEFS, MGMT_ROLES, roleCanAccessSection, sectionsForRole,
   type MgmtRole, type SectionKey,
 } from '../mgmtRoles';
+import { pathToSection } from '../../../middlewares/mgmtSectionGate';
 
 /** The five new roles and the exact sections each is supposed to reach. Hand-written on purpose. */
 const DOMAIN_ROLES: ReadonlyArray<readonly [MgmtRole, SectionKey[], string]> = [
@@ -86,7 +87,14 @@ describe('AF2.3 no existing role was widened', () => {
   const BEFORE: Record<string, SectionKey[]> = {
     owner: [...ALL_SECTIONS],
     admin: ALL_SECTIONS.filter((s) => s !== 'inbox_content'),
-    curriculum: ['dashboard', 'program'],
+    // Gained 'orchestration_health' on 2026-11-24, and this is NOT a widening. Three read
+    // endpoints (the health report, the latest snapshot, the monitoring agent list) were split
+    // OUT of 'program' into their own key so the platform domain could reach them without
+    // being handed curriculum's whole department. Adding the key here keeps curriculum's
+    // EFFECTIVE reach byte-for-byte identical to what it was the day before; omitting it would
+    // have silently taken the Health tab away from Swati Raman and Ruth Kumera. The test below
+    // this table asserts that equivalence directly, rather than trusting this comment.
+    curriculum: ['dashboard', 'program', 'orchestration_health'],
     revenue: ['dashboard', 'revenue', 'leads'],
     admissions: ['dashboard', 'lead_ingestion', 'internship'],
     support: ['students'],
@@ -99,6 +107,26 @@ describe('AF2.3 no existing role was widened', () => {
   it.each(Object.keys(BEFORE))('%s grants exactly what it granted before', (role) => {
     // AF2.3's fourth acceptance criterion, asserted rather than left to `git diff` to prove.
     expect([...sectionsForRole(role)].sort()).toEqual([...BEFORE[role]].sort());
+  });
+
+  it('the 2026-11-24 orchestration-health split cost curriculum nothing', () => {
+    // The claim in the table above, asserted at the gate rather than at the role definition.
+    // A role's section list is only half the story: what matters is whether the identity still
+    // reaches the PATHS it reached before. These three moved out of 'program' that day, so if
+    // the compensating grant were ever dropped from the curriculum definition, this goes red
+    // and names the surface Swati and Ruth just lost.
+    const MOVED_PATHS = [
+      '/api/admin/orchestration/health-report',
+      '/api/admin/orchestration/health-snapshots/latest',
+      '/api/admin/orchestration/monitoring/agents',
+    ];
+    for (const p of MOVED_PATHS) {
+      const section = pathToSection(p);
+      expect(section).toBe('orchestration_health');
+      expect(roleCanAccessSection('curriculum', section as SectionKey)).toBe(true);
+    }
+    // And the department it was carved out of is untouched for them.
+    expect(roleCanAccessSection('curriculum', 'program')).toBe(true);
   });
 
   it('owner still sees everything and admin still lacks exactly inbox_content', () => {

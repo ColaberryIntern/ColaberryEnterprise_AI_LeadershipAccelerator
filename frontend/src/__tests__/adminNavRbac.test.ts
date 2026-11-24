@@ -44,6 +44,17 @@ describe('sectionForPath', () => {
     expect(sectionForPath('/admin/leadsomething')).toBeNull();
   });
 
+  it('keeps the orchestration-health route separate from the Curriculum page', () => {
+    // The read-only health view (2026-11-24) is its own route precisely so it can carry its
+    // own section. The two paths differ by a hyphen, and the whole split depends on the
+    // matcher treating that as a different route rather than a child of the shorter one:
+    // '/admin/orchestration-health' must NOT be read as being under '/admin/orchestration'.
+    // If it ever were, the people this route exists for would be bounced by ProtectedRoute
+    // and the only symptom would be a silent redirect.
+    expect(sectionForPath('/admin/orchestration-health')).toBe('orchestration_health');
+    expect(sectionForPath('/admin/orchestration')).toBe('program');
+  });
+
   it('returns null for a path with no nav entry', () => {
     expect(sectionForPath('/admin/change-password')).toBeNull();
     expect(sectionForPath('/admin/nonexistent')).toBeNull();

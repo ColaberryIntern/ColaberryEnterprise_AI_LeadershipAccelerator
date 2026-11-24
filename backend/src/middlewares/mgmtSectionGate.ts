@@ -129,6 +129,20 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   // classification safely.
   ['/api/admin/admissions', 'lead_ingestion'],
   ['/api/admin/inbox', 'inbox_content'], ['/api/admin/content-queue', 'inbox_content'],
+  // ORDER IS LOAD-BEARING. These three sit ahead of the broad `/api/admin/orchestration` row on
+  // the next line because `pathToSection` returns the FIRST match, not the longest. Move them
+  // below it and they stop doing anything, silently: the broad row answers 'program' first and
+  // the holder of `orchestration_health` gets a 403 with no clue why.
+  //
+  // They are the complete read set behind the Curriculum Health tab, and nothing else:
+  // HealthDashboardTab.tsx calls exactly these three and no more.
+  //
+  // `/monitoring/agents` is spelled out rather than `/monitoring`, because the `/`-delimited
+  // matcher would read the shorter prefix as also covering `POST /monitoring/scan` — an
+  // on-demand health scan, i.e. a run. The whole point of this key is read-only.
+  ['/api/admin/orchestration/health-report', 'orchestration_health'],
+  ['/api/admin/orchestration/health-snapshots/latest', 'orchestration_health'],
+  ['/api/admin/orchestration/monitoring/agents', 'orchestration_health'],
   ['/api/admin/accelerator', 'program'], ['/api/admin/community', 'program'], ['/api/admin/orchestration', 'program'],
   ['/api/admin/workforce', 'program'], ['/api/admin/brain', 'program'], ['/api/admin/projects', 'program'],
   // AI Project Factory Command Center (Phase 3): a delivery contract is program-domain work, the
