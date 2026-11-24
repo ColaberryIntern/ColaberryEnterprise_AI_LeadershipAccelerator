@@ -18788,9 +18788,3 @@ Branch `workstream/career-prep-r2r3`, one PR (https://github.com/ColaberryIntern
   - Session: CC-20261118-e16w
   - What changed: `CheckinLiveController.tsx` hides GetClaudeHelp on narrow screens when Run it here is available (computers keep it). Session 3 deck (slides.js, build.js, saved to production): follow cards, lobby card and the hands-on strip say "tap Run it here, read the answer on the page", no install steps.
   - Verification: CheckinRunHere 7/7 (2 new: phone hides, computer keeps), CheckinFollowAlong 3/3; deck browser check 0 errors, save verify=OK.
-- [x] Health check: stop flagging Open House attendees as stalled (sequence_progression false CRITICAL)
-  - Date: 2026-11-24
-  - Session: CC-20261124-h7q2
-  - What changed: `health/sequenceProgressionCheck.ts` excludes audience-tagged follow-ups (any step with audience attended/missed), the same rule as `sequenceService.isAudienceTaggedSequence`. Their steps alternate audiences, so an attendee correctly gets 0, 2, 4 and never 1; the check read that as a stall and raised CRITICAL for 7 days after every Open House.
-  - Verification: new SQL run read-only on prod returns 0 rows (was 23; all 23 verified 0:sent 2:pending 4:pending in Open House Follow-up (Maya)); health suites 27/27 incl. 1 new cell; md5 pin re-pinned on purpose.
-  - Notes: Triggered by the 2026-11-24 7:03 AM system_health email. No data changed.
