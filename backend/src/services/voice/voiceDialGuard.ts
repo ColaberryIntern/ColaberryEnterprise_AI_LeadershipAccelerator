@@ -84,6 +84,11 @@ async function exemptNumbers(): Promise<Set<string>> {
   return out;
 }
 
+/** Is this (normalized) number one of our own staff alert phones? Shared with the gateway facade (VS1.6). */
+export async function isStaffAlertNumber(phone: string): Promise<boolean> {
+  return (await exemptNumbers()).has(phone);
+}
+
 /** May we dial this (already normalized, E.164) number right now? */
 export async function checkDialGuard(phone: string, now: Date = new Date()): Promise<{ ok: true } | { ok: false; reason: string }> {
   const exempt = (await exemptNumbers()).has(phone);
