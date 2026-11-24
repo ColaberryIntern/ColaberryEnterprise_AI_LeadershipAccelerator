@@ -209,6 +209,62 @@ module.exports = {
       'URLs assembled at runtime are a documented limit of the static check; the import rule covers the likely path.',
     ],
   },
+  'VS2.1': {
+    code: 'VS2.1', short: 'Our own Twilio line, and only Twilio can talk to it',
+    title: 'R02 Twilio carrier adapter: outbound REST + status callbacks, inbound TwiML, signature validation, replay rejection',
+    docName: 'TWILIO_CARRIER', date: '2026-11-24', session: SESSION, status: 'PASS 12/12 (verifier attempt 3); closes at the Phase 2 deploy',
+    asked: 'Connect Voice AI Studio to our own Twilio account: place and end calls, take Twilio\'s status updates and answer requests, prove every request really came from Twilio, and refuse replays, with no prompt or personal data in any URL.',
+    delivered: 'A Twilio carrier adapter that places calls through the REST API with status callbacks and a hard time limit, never retries a create, and treats any uncertain outcome as "may exist, reconcile, never redial". Three webhooks (status, answer, inbound) that do not exist while voice is off, check Twilio\'s signature against our own public address, check the account, check our signed single-use reference, and store events idempotently. A WebSocket location in nginx for the voice engines.',
+    takeaway: 'Nothing can drive a call through these webhooks except Twilio itself, a replayed request ends the call instead of restarting it, and no phone number is stored or logged. One thing is missing before the first real call: the Twilio auth token, which Twilio uses to sign its requests. Until it is set, every webhook refuses (fail closed).',
+    cards: [
+      { n: '1 of 1', k: "Twilio's own signature example reproduced", color: '#2e7d32' },
+      { n: '0', k: 'phone numbers stored or logged', color: '#2e7d32' },
+      { n: '0', k: 'automatic redials on an uncertain create', color: '#2e7d32' },
+      { n: '8 of 8', k: 'planted bugs caught by the tests' },
+      { n: '1', k: 'setting still needed: TWILIO_AUTH_TOKEN', color: '#e0a100' },
+    ],
+    decision: 'One key for you to add before LIVE-01 (not now): TWILIO_AUTH_TOKEN from the Twilio console, into the prod .env, never in chat. Same for ANTHROPIC_API_KEY.',
+    ladder: ['done', 'active', 'todo', 'todo', 'todo', 'todo'],
+    bars: { title: 'Outcomes the carrier returns', max: 7, rows: [
+      { label: 'refused (Twilio created nothing)', value: 7, color: '#2e7d32' }, { label: 'unknown (reconcile, never redial)', value: 5, color: '#e0a100' },
+    ] },
+    checks: [
+      ['Invalid signature returns 403 and logs error_class', true],
+      ['Duplicate and out-of-order status callbacks give the same final state', true],
+      ['Route table: every route Twilio-signed; none takes a destination number', true],
+      ['Replay of a single-use answer request hangs up', true],
+      ['Only a number we own (active in voice_numbers) is accepted', true],
+    ],
+    diagramTitle: 'Every Twilio request, five locks',
+    mermaid: `flowchart LR
+  T[Twilio request] --> G{Voice flag on?}
+  G -->|no| N[Route does not exist]
+  G -->|yes| S{Signature valid?}
+  S -->|no| F[403 + error_class]
+  S -->|yes| A{Our account?}
+  A -->|no| F
+  A -->|yes| O{Our own number?}
+  O -->|no| F
+  O -->|yes| R{Signed ref valid, unused?}
+  R -->|no| H[Refuse or hang up]
+  R -->|yes| E[Idempotent event store]`,
+    evidenceLine: 'commits 517fd976c, e11a4ae00, 340c1ff87; verifier 9/12, 10/12, 12/12; 6 new suites; voice + db suites 167 passed (8 DB-only skipped locally, run in CI); 8 mutations caught.',
+    sections: [
+      { h: 'What the verifier caught', p: ['Attempt 1: the spec asked us to check the called number, and we had not; requests now count only if the number on our side is an active Twilio number we own. A route check could never fail; it was replaced with real ones. Attempt 2: on this Windows machine one safety test was silently scanning almost nothing (line endings); it now works on both and fails loudly if it cannot find what it checks.'] },
+      { h: 'Why "no phone number" is read the way it is', p: ['Twilio\'s own requests always carry To and From. Those fields arrive signed and are used only to validate; they are never stored or logged, and the tests check that. No route accepts a number to dial from whoever calls it: a destination only ever comes from the server-side allowlist.'] },
+    ],
+    evidence: [
+      ['Signature', "Twilio security page worked example: L/OH5YylLD5NRKLltdqwSvS0BnU= reproduced; tamper, wrong token, missing token all refused"],
+      ['Carrier', '4xx -> refused with stable classes (caller-ID error 32204 -> TwilioInvalidFrom); timeout, network, 5xx, shapeless success -> unknown; never retried'],
+      ['Webhooks', 'off = route absent; unsigned 403; foreign account 403; replay -> hang-up; database failure 500 so Twilio redelivers into idempotent writes'],
+      ['Schema', 'voice_token_uses added (14th voice table, additive); rollback script updated'],
+    ],
+    notEstablished: [
+      'No live Twilio request has hit these routes yet; that happens after the Phase 2 deploy, once TWILIO_AUTH_TOKEN is set.',
+      'The Postgres store test runs in CI, not locally.',
+      'The WebSocket server itself arrives in VS2.2; nginx only forwards to it.',
+    ],
+  },
   'VS1.7': {
     code: 'VS1.7', short: 'A bad setting turns voice off, never on',
     title: 'R01 Feature flags, startup config validation, mock provider, and the voice:* CLI (dry run by default)',
