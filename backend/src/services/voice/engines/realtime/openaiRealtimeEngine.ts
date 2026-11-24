@@ -10,7 +10,8 @@
  * "<item_id>|<ms sent so far>"; Twilio echoes it when that audio has PLAYED. On barge-in
  * (input_audio_buffer.speech_started) the bridge clears Twilio's buffer, truncates the assistant item
  * at the last PLAYED millisecond (never at what was merely sent), and cancels the response. Marks
- * Twilio returns because of the clear are ignored (they mean "discarded", not "played").
+ * Twilio returns because of the clear arrive after the truncation was already computed, and that
+ * item is never truncated again (the next answer is a new item), so they cannot inflate it.
  *
  * Staleness mirrors Engine A: audio is forwarded only from the current response while the session
  * accepts its (turn, generation). Tool calls go through the broker; every call gets its
@@ -68,7 +69,6 @@ export class RealtimeBridge {
   private currentItem: string | null = null;
   private readonly sentMs = new Map<string, number>();
   private readonly playedMs = new Map<string, number>();
-  private readonly cleared = new Set<string>();
   /** Function-call ids already handled: a redelivered call is ignored (the tool ran and was recorded once). */
   private readonly handledCalls = new Set<string>();
 
@@ -140,7 +140,7 @@ export class RealtimeBridge {
     if (sep < 0) return;
     const item = name.slice(0, sep);
     const ms = Number(name.slice(sep + 1));
-    if (!Number.isFinite(ms) || this.cleared.has(item)) return; // marks returned by a clear mean "discarded"
+    if (!Number.isFinite(ms)) return;
     this.playedMs.set(item, Math.max(this.playedMs.get(item) ?? 0, ms));
   }
 
@@ -217,7 +217,6 @@ export class RealtimeBridge {
     if (audible && item) {
       this.twilio.send(clearOut(this.streamSid));
       this.model!.send(truncateItem(item, this.playedMs.get(item) ?? 0));
-      this.cleared.add(item);
     }
     if (this.current?.active) this.model!.send(responseCancel(this.current.id));
     this.newCallerTurn();
