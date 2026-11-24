@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Tuesday, November 24, 2026 at 7:25 AM</div>
-    <div><span class="sid">CC-20261120-e2fc</span><span class="count">32 changes</span></div>
+    <div class="meta">Generated Tuesday, November 24, 2026 at 7:37 AM</div>
+    <div><span class="sid">CC-20261120-e2fc</span><span class="count">33 changes</span></div>
   </header>
   <main>
     
@@ -512,6 +512,20 @@
         <div class="card-body">
           <div class="row"><span class="k">What changed</span><span class="v">deployed 489db0293 (registry mode). `keepRowCoherent` is present in the live `demoKitAssets.generated.js`, and `SBP_CONNECTED_DEMO` is still the test enrollment only. No code change in this entry. BC L12.20 closed.</span></div>
           <div class="row"><span class="k">Verification</span><span class="v ver">v13&#39;s repo files, downloaded from production after the deploy, carry the new scaffold and the wrapping evidence codes. Run on v13&#39;s own data model, that scaffold gives 0 agency messages sent while not approved (3 before). Home 200.</span></div>
+          
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">33</span>
+          <h2>Connected Demo switched on for all new builds</h2>
+          <span class="badge">2026-11-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">production config only, approved by Ali (Q1: A). In `/opt/colaberry-accelerator/.env`, `SBP_CONNECTED_DEMO` changed from Ali&#39;s test enrollment to `all`; backup at `.env.bak-20261124-connecteddemo-all`. Backend redeployed at 89e6bf3bb. Only NEW builds get STORY-900: `connectedDemoEnabledFor` governs new builds, and existing boards answer from their own rows. Roll back by setting the line back and redeploying the backend.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`printenv SBP_CONNECTED_DEMO` in the running backend shows `all`. Home 200.</span></div>
           
           
         </div>
