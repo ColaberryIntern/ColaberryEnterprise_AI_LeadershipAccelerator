@@ -40,12 +40,14 @@ Source of truth: [MASTER_BUILD_PROMPT.md](MASTER_BUILD_PROMPT.md). The directive
 
 ## Monthly scenarios, Engine A (connected minutes)
 
-| Minutes per month | Low (voice included in Relay) | High (ElevenLabs billed separately) |
-|---|---|---|
-| 1,000 | 85 | 115 |
-| 5,000 | 425 | 575 |
-| 10,000 | 850 | 1,150 |
-| 25,000 | 2,125 | 2,875 |
+Low = voice included in Relay (0.085/min). High = ElevenLabs billed separately (0.115/min). Base = the midpoint (0.100/min), used for planning until LIVE-01 shows which one applies.
+
+| Minutes per month | Low | Base | High |
+|---|---|---|---|
+| 1,000 | 85 | 100 | 115 |
+| 5,000 | 425 | 500 | 575 |
+| 10,000 | 850 | 1,000 | 1,150 |
+| 25,000 | 2,125 | 2,500 | 2,875 |
 
 Plus numbers: 0 USD if an idle number we already own is reused (READINESS.md), else 1.15 per local number per month. Recording is off by default (directive), so it adds nothing until approved.
 

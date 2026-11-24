@@ -6,6 +6,89 @@
 const SESSION = 'CC-20261124-2ptc';
 
 module.exports = {
+  M0: {
+    code: 'M0', short: 'Five calls only you can make before Phase 2 dials anything',
+    title: 'Escalations before Phase 2: direction, paid services, a Twilio voice number, the test number, and the public phone-number exposure',
+    docName: 'DECISIONS_BRIEF', date: '2026-11-24', session: SESSION, status: 'APPROVAL_REQUIRED (due Wed 26 Nov)',
+    asked: 'Decide the governance items the build cannot decide alone: change of direction, new paid vendors, which phone number the engine dials from, where the test number lives, and whether to clean up the existing exposure.',
+    delivered: 'Five questions, each with a recommended default, backed by the VS1.1 inventory, the VS1.2 Twilio readiness probe (GET-only) and official prices read today. Phase 1 keeps building while these are open; only Phase 2 live work waits.',
+    takeaway: 'We do not need Synthflow, a new carrier or a new number to test. Our own Twilio account is active with 69 voice-capable numbers, 9 of them idle for voice, and dialing from them avoids the caller-ID error that broke the Synthflow numbers. What we do need from you is the go-ahead on direction and two API keys.',
+    cards: [
+      { n: '69', k: 'voice numbers we own' },
+      { n: '9', k: 'idle for inbound voice', color: '#2e7d32' },
+      { n: '$0.085-0.115', k: 'per connected minute, engine A' },
+      { n: '$0', k: 'number cost if we reuse one', color: '#2e7d32' },
+      { n: '32', k: 'public lines with your number', color: '#c62828' },
+    ],
+    decision: 'Reply on the ticket in one line, e.g. "Q1 A, Q2 A, Q3 A, Q4 A, Q5 A". Defaults apply on Wed 26 Nov for Q1, Q4 and Q5; Q2 and Q3 need your explicit yes because they involve money or a production number.',
+    ladder: ['active', 'waiting', 'todo', 'todo', 'todo', 'todo'],
+    bars: { title: 'Engine A cost per 10,000 connected minutes (USD)', max: 1200, rows: [
+      { label: 'Twilio voice', value: 140, color: '#5a6b85' },
+      { label: 'ConversationRelay', value: 700, color: '#5a6b85' },
+      { label: 'Claude Haiku (estimate)', value: 13, color: '#e0a100' },
+      { label: 'ElevenLabs if billed apart', value: 300, color: '#e0a100' },
+    ] },
+    checks: [
+      ['Q1 Direction: this build supersedes the 23 Nov GHL plan (recommended A)', false],
+      ['Q2 Keys: you put ElevenLabs + OpenAI keys into the prod env (recommended A)', false],
+      ['Q3 Number: reuse one idle Twilio number we own, $0 (recommended A)', false],
+      ['Q4 Test number: Claude sets it in the server env only (recommended A)', false],
+      ['Q5 Exposure: small PR moves the 32 lines to env / reserved test numbers (recommended A)', false],
+    ],
+    diagramTitle: 'What each answer unblocks',
+    mermaid: `flowchart LR
+  Q1[Q1 direction] --> P2[Phase 2 build]
+  Q2[Q2 API keys] --> EA[Engine A + B sessions]
+  Q3[Q3 number] --> TW[Twilio dispatch from our number]
+  Q4[Q4 test number in env] --> L[LIVE-01 / LIVE-02 on your phone]
+  EA --> L
+  TW --> L
+  Q5[Q5 scrub 32 lines] --> PRIV[Privacy goal met]`,
+    evidenceLine: 'READINESS.md and COST_MODEL.md (commit e3b5103a5), INVENTORY.md (24c7a40f3); Twilio probes were GET-only; prices from official pages read 2026-11-24.',
+    sections: [
+      { h: 'Q1. Direction', p: ['On 23 Nov agent calls were set to move to Kes\'s shared GHL voice agent. This list builds our own platform instead.'], ul: [
+        'A. This list supersedes it: build Voice AI Studio; Kes\'s GHL agent stays only as a fallback (recommended)',
+        'B. Do both: GHL for agent calls now, Voice Studio for everything later',
+        'C. Pause this list',
+        'Default on Wed 26 Nov: A'] },
+      { h: 'Q2. Paid services and keys (needs your explicit yes)', p: ['Engine A uses Twilio ConversationRelay, which defaults to ElevenLabs voices; neither vendor states whether ElevenLabs is billed separately inside Relay, so the cost is shown both ways. Engine B needs OpenAI Realtime usage (token-priced; measured in LIVE-02).'], ul: [
+        'A. You put an OpenAI API key (and an ElevenLabs key if Relay asks for one) into the prod env; Claude never sees them in chat (recommended)',
+        'B. Kes provides them',
+        'C. Build Engine A only for now'] },
+      { h: 'Q3. Which number the engine dials from (needs your explicit yes)', p: ['Nine numbers we already own point their voice webhook at Twilio\'s placeholder (demo.twilio.com), so nothing answers them today. Claude would check one has no SMS use, then point its voice webhook at the Voice Studio test endpoint.'], ul: [
+        'A. Reuse one idle number we own: $0 (recommended)',
+        'B. Buy one new local number: 1.15 USD per month',
+        'C. Not yet'] },
+      { h: 'Q4. Where the authorized test number lives', ul: [
+        'A. Claude sets VOICE_TEST_ALLOWED_NUMBER on the prod server only; never in git, Basecamp, logs or PDFs (recommended)',
+        'B. You set it yourself',
+        'Default on Wed 26 Nov: A'] },
+      { h: 'Q5. The 32 public lines with your number (finding F-01)', p: ['Two are live values (a test bypass in leadService.ts and a default alert phone in mandrillWebhookController.ts); the rest are test fixtures, comments, logs and .env.example. Git history keeps the old lines either way.'], ul: [
+        'A. One small separate PR: live values move to env vars, fixtures switch to reserved 555 numbers (recommended)',
+        'B. Leave them',
+        'Default on Wed 26 Nov: A'] },
+      { h: 'Cost basis (official pages, read 2026-11-24)', rows: [
+        ['Twilio outbound voice, US local', '0.014 USD per min'], ['ConversationRelay', '0.07 USD per min, starting at'],
+        ['Media Streams', '0.0044 USD per min'], ['Local number', '1.15 USD per month'],
+        ['ElevenLabs Flash TTS', '0.04 USD per 1K characters'], ['OpenAI gpt-realtime-2.1-mini audio', '10 in / 20 out USD per 1M tokens'],
+        ['Claude Haiku 5.5', '0.10 in / 0.50 out USD per 1M tokens'],
+      ], head: ['Item', 'Price'] },
+    ],
+    evidence: [
+      ['Twilio account', 'active, Full; 69 owned voice-capable numbers; 13 SIP trunks'],
+      ['Idle voice numbers', '9 point at the demo.twilio.com placeholder (counts only; numbers not listed)'],
+      ['Error 32204 meaning', 'From number is neither a Twilio number on the account nor a verified caller ID (twilio.com/docs/api/errors/32204)'],
+      ['Every dial in the code', 'one function, triggerVoiceCall (synthflowService.ts:188), 11 callers'],
+      ['Calls placed by this work', '0'],
+    ],
+    notEstablished: [
+      'Whether ElevenLabs is billed separately inside ConversationRelay (neither vendor says); LIVE-01 usage settles it.',
+      'Engine B per-minute cost (token-priced; measured in LIVE-02).',
+      'That a reused number has no SMS use: checked before it is repointed, after your yes.',
+      'Anything about Synthflow contract terms or cancellation (M5).',
+    ],
+  },
+
   'VS0.1': {
     code: 'VS0.1', short: 'Kit staged, baseline green, one exposure found',
     title: 'Stage the kit: redacted directive, docs/voice-studio/ skeleton, worktree, session, baseline',
