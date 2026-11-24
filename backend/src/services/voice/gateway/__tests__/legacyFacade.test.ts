@@ -37,8 +37,8 @@ describe('legacy facade: triggerVoiceCall shapes through the gateway', () => {
     const f = okFetch({ call_id: 'sf-1' });
     await dispatchLegacyViaGateway(input, deps, f);
     const body = JSON.parse(String((f as unknown as jest.Mock).mock.calls[0][1].body));
-    expect(body.phone).toBe(PHONE);
-    expect(body.model_id).toBe('agent-x');
+    // The FULL body the provider sends: exactly what synthflowService built, with only the phone replaced.
+    expect(body).toEqual({ ...input.requestBody, phone: PHONE });
   });
 
   it('HTTP 500: legacy failure shape, reservation released (Synthflow created no call)', async () => {

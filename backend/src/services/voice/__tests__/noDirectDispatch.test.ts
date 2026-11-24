@@ -9,7 +9,8 @@
  *
  * Both scans are pure functions over source text, and each fails its own planted control first.
  * Known limits of a text heuristic (accepted, documented): a URL assembled at runtime from variables
- * or env, or an HTTP method held in a variable, is not detected; rule 2 still forbids the provider
+ * or env, an HTTP method held in a variable, Node's https.request with host and path given separately,
+ * and shelling out to curl are not detected; rule 2 still forbids the provider
  * import those would most plausibly need.
  */
 import fs from 'fs';
@@ -52,7 +53,8 @@ export function importsProviderIllegally(rel: string, source: string): boolean {
   for (const m of stripComments(source).matchAll(IMPORT_SPEC)) {
     const spec = m[1];
     const target = spec.startsWith('.') ? path.posix.normalize(path.posix.join(path.posix.dirname(p), spec)) : spec;
-    if (target.startsWith(VOICE_PROVIDERS) || /(^|\/)services\/voice\/providers\//.test(target)) return true;
+    // Also the folder itself ('../voice/providers', for a future index.ts), not only files inside it.
+    if (target.startsWith(VOICE_PROVIDERS) || target === VOICE_PROVIDERS.slice(0, -1) || /(^|\/)services\/voice\/providers(\/|$)/.test(target)) return true;
   }
   return false;
 }
@@ -110,6 +112,7 @@ describe('rule 2: only the gateway may import a provider', () => {
     ['services/foo.ts', "const { createSynthflowLegacyProvider } = require('./voice/providers/synthflowLegacyProvider');"],
     ['services/voice/voiceCallPaths.ts', "const m = await import('./providers/synthflowLegacyProvider');"],
     ['routes/admin/voiceStudioRoutes.ts', "import type { X } from '../../services/voice/providers/twilioCarrier';"],
+    ['controllers/x.ts', "import * as P from '../services/voice/providers';"],
   ])('control: a planted provider import in %s is flagged', (rel, src) => expect(importsProviderIllegally(rel, src)).toBe(true));
 
   it('control: the same import inside the gateway (or the providers folder itself) is allowed', () => {
