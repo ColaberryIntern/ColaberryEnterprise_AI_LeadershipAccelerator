@@ -209,6 +209,55 @@ module.exports = {
       'URLs assembled at runtime are a documented limit of the static check; the import rule covers the likely path.',
     ],
   },
+  'VS2.3': {
+    code: 'VS2.3', short: 'Engine A: a real conversation, with a voice, that stops the moment you talk',
+    title: 'R02 Engine A: Conversation Relay + ElevenLabs voice + streaming Claude, with interruption and one read-only tool',
+    docName: 'ENGINE_A_RELAY', date: '2026-11-24', session: SESSION, status: 'PASS 12/12 (verifier attempt 2); closes at the Phase 2 deploy',
+    asked: 'Build the first voice engine: Twilio ConversationRelay handles listening and the ElevenLabs voice, Claude streams the answers, the caller can interrupt at any time, and the agent can use one read-only tool.',
+    delivered: 'A WebSocket endpoint that only Twilio can open, a session that starts only after a single-use reference, our account and the right call all check out, answers streamed token by token from Claude and cut off the instant the caller speaks, history that keeps only what the caller actually heard, a calendar lookup that offers up to three strategy-call times and never books, keypad presses, language switching, and safe spoken lines for failures and refusals. Every call opens with "I\'m an AI, not a person".',
+    takeaway: 'Talk over the agent and it stops and listens; nothing from the cut-off answer is ever spoken later or remembered as said. Check the calendar and get interrupted mid-lookup, and the conversation still carries on cleanly. The verifier caught exactly that last case breaking on attempt 1; it is fixed and now tested the way the real API checks it.',
+    cards: [
+      { n: '46', k: 'protocol tests (mock Twilio + mock model)', color: '#2e7d32' },
+      { n: '0', k: 'words from a canceled answer ever spoken', color: '#2e7d32' },
+      { n: '1', k: 'tool run per request, even on replay', color: '#2e7d32' },
+      { n: '3', k: 'real bugs caught before any live call' },
+      { n: '2', k: 'keys you add before LIVE-01', color: '#e0a100' },
+    ],
+    decision: 'Before LIVE-01: put ANTHROPIC_API_KEY and TWILIO_AUTH_TOKEN in the prod .env (never in chat). Optional: Engine A uses Claude Opus 5.5 by default; if the first calls feel slow, a faster model is one setting, your call.',
+    ladder: ['done', 'active', 'todo', 'todo', 'todo', 'todo'],
+    bars: { title: 'What the tests caught before any live call', max: 3, rows: [
+      { label: 'unheard words kept in memory', value: 1, color: '#2e7d32' }, { label: 'tool result split from request', value: 1, color: '#2e7d32' },
+      { label: 'frames processed after close', value: 1, color: '#2e7d32' },
+    ] },
+    checks: [
+      ['Greeting discloses the AI before anything else', true],
+      ['Interrupt mid-sentence: the canceled answer never resumes', true],
+      ['The read-only tool runs once per request', true],
+      ['Call ends cleanly (hang-up, time limit, server restart)', true],
+      ['Malformed and oversized messages are rejected', true],
+    ],
+    diagramTitle: 'One live call on Engine A',
+    mermaid: `flowchart LR
+  P[Caller speaks] --> R[Twilio Relay: speech to text]
+  R --> E[Engine A session]
+  E --> C[Claude streams the answer]
+  C --> E --> V[Relay: ElevenLabs voice]
+  P -. talks over .-> X[Cancel: never resumes]
+  E --> T[Calendar lookup, read-only]`,
+    evidenceLine: 'commits f4809eac1, 86f827ab8, 0e07cf441, dec8e3bbc; verifier 10/12 then 12/12; relay suites 46 passed; voice baseline 23 suites passed.',
+    sections: [
+      { h: 'What testing caught', p: ['Mutation testing: the model finishes writing faster than Twilio finishes speaking, so most interrupts arrive after the answer is complete; the full unheard answer was staying in memory. The verifier: a caller speaking while the calendar lookup ran left the conversation malformed, so every later turn would have failed. Both are fixed and pinned by tests; the mock model now rejects bad conversations exactly like the real API.'] },
+    ],
+    evidence: [
+      ['Tests', '46 protocol tests; reintroducing the verifier\'s bug fails 2 of them'],
+      ['Safety', 'single-use session reference, account and call checked before a session opens; Twilio-signed WebSocket only; no transcript or number in any log'],
+      ['Model', 'Claude Opus 5.5 by default (Claude API guidance), low effort, 15 s timeout, server-side fallback on a refusal'],
+    ],
+    notEstablished: [
+      'Real speech, real latency and Twilio\'s real handshake are only proven in LIVE-01 (needs your two keys and a call window).',
+      'Language switching sends the right message, but whether Relay ever reports a new language mid-call is only provable live.',
+    ],
+  },
   'VS2.2': {
     code: 'VS2.2', short: 'One brain for every live call: it can be interrupted, and never talks over itself',
     title: 'R02 Shared realtime session state machine and session worker module',
