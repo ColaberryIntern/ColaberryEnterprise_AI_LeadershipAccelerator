@@ -67,6 +67,14 @@ describe('session state machine: late results and interrupts (VS2.2)', () => {
     expect(transition(r.session, { type: 'generation_done', generationId: 1 }, T0 + 60)).toMatchObject({ ok: false });
   });
 
+  it('trailing output of a FINISHED generation is refused once the next turn starts (only the turn id differs)', () => {
+    const done = transition(toSpeaking(), { type: 'generation_done', generationId: 1 }, T0 + 10).session; // turn 1 answered
+    const next = transition(done, { type: 'caller_turn' }, T0 + 20).session; // turn 2, generation id unchanged
+    expect(next.generationId).toBe(1);
+    expect(next.state).toBe('thinking');
+    expect(acceptsGeneration(next, 1, 1)).toBe(false);
+  });
+
   it('a stale generation_started (an id that is not next) is rejected as stale', () => {
     const thinking = drive({ type: 'connected' }, { type: 'greeting_done' }, { type: 'caller_turn' });
     expect(transition(thinking, { type: 'generation_started', generationId: 7 }, T0)).toMatchObject({ ok: false, reason: 'stale_generation' });
