@@ -159,6 +159,59 @@ describe('adversarial: streaming equals batch, and redial safety is order-indepe
   });
 });
 
+/** Verifier attempt 2 (10/12) cases: evidence from ANY source blocks redial; key collisions cannot hide ambiguity. */
+describe('adversarial round 2: any evidence of a call blocks redial, in every arrival order', () => {
+  const mk = (state: CallState, source: CanonicalCallEvent['source'], s: string, key: string, extra: Partial<CanonicalCallEvent> = {}): CanonicalCallEvent =>
+    ({ contractVersion: 1, eventKey: key, callId: CALL, source, state, occurredAt: `2026-11-24T15:00:${s}.000Z`, ...extra });
+  const forbidden: Record<string, CanonicalCallEvent[]> = {
+    'P: gateway blocked + legacy human answered (no provider id)': [mk('blocked', 'gateway', '01', 'gb'), mk('answered', 'legacy', '05', 'la', { answeredBy: 'human' })],
+    'P2: dispatching, legacy human answered, gateway failed': [mk('dispatching', 'gateway', '01', 'gd'), mk('answered', 'legacy', '05', 'la', { answeredBy: 'human' }), mk('failed', 'gateway', '06', 'gf')],
+    'Q: gateway blocked + reconciler answered (no provider id)': [mk('blocked', 'gateway', '01', 'gb'), mk('answered', 'reconciler', '05', 'ra')],
+    'Q2: ReconciledNotCreated contradicted by a reconciler completed': [mk('dispatch_unknown', 'gateway', '01', 'du'),
+      mk('failed', 'reconciler', '10', 'rn', { errorClass: RECONCILED_NOT_CREATED }), mk('completed', 'reconciler', '20', 'rc')],
+    'Y2: same key on dispatch_unknown and dispatching': [mk('dispatch_unknown', 'gateway', '02', 'same'), mk('dispatching', 'gateway', '01', 'same'), mk('failed', 'gateway', '03', 'gf')],
+    'legacy ringing with no provider id': [mk('ringing', 'legacy', '02', 'lr'), mk('failed', 'gateway', '03', 'gf')],
+  };
+
+  it.each(Object.entries(forbidden))('%s: never redialable', (_n, events) => {
+    const batch = reduceCallEvents(CALL, events);
+    for (const order of permutations(events)) {
+      const r = order.reduce(applyCallEvent, initialCallRecord(CALL));
+      expect(r.state).toBe(batch.state);
+      expect(r.eventKeyConflicts).toBe(batch.eventKeyConflicts);
+      for (const outcome of [undefined, 'refused', 'unknown'] as const) expect(mayRedial(r, outcome)).toBe(false);
+    }
+  });
+
+  it('Y: same key, different content, produces one record in every order and counts the conflict', () => {
+    const events = [mk('ringing', 'carrier', '02', 'k'), mk('answered', 'carrier', '03', 'k'), mk('completed', 'carrier', '30', 'end')];
+    const sigs = new Set(permutations(events).map((o) => JSON.stringify(o.reduce(applyCallEvent, initialCallRecord(CALL)))));
+    expect(sigs.size).toBe(1);
+    expect(reduceCallEvents(CALL, events).eventKeyConflicts).toBe(1);
+  });
+
+  it('an exact duplicate (same key, same content) is still dropped', () => {
+    const e = mk('ringing', 'carrier', '02', 'k');
+    const r = reduceCallEvents(CALL, [e, { ...e }]);
+    expect(r.events).toHaveLength(1);
+    expect(r.eventKeyConflicts).toBe(0);
+  });
+
+  it('Z: an unparseable occurredAt is dropped and counted, in every order', () => {
+    const bad = { ...mk('completed', 'carrier', '30', 'bad'), occurredAt: 'not-a-date' };
+    const events = [mk('ringing', 'carrier', '02', 'r'), bad, mk('answered', 'carrier', '05', 'a')];
+    const sigs = new Set(permutations(events).map((o) => JSON.stringify(o.reduce(applyCallEvent, initialCallRecord(CALL)))));
+    expect(sigs.size).toBe(1);
+    const r = reduceCallEvents(CALL, events);
+    expect(r.invalidEvents).toBe(1);
+    expect(r.state).toBe('answered');
+  });
+
+  it('a gateway-only block, with no evidence anywhere, stays redialable (no false lockout)', () => {
+    expect(mayRedial(reduceCallEvents(CALL, [mk('reserved', 'gateway', '00', 'r'), mk('blocked', 'gateway', '01', 'b')]))).toBe(true);
+  });
+});
+
 describe('mayRedial: an ambiguous or accepted dispatch is never redialed', () => {
   it('refuses after dispatch_unknown', () => expect(mayRedial(reduceCallEvents(CALL, [ev('dispatch_unknown', 'gateway', '01')]), 'unknown')).toBe(false));
   it('refuses after an accepted dispatch even if it later failed', () => expect(mayRedial(reduceCallEvents(CALL, [ev('failed', 'carrier', '01')]), 'accepted')).toBe(false));

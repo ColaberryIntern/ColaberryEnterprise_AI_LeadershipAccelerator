@@ -2,11 +2,14 @@
  * Pure call-state reducer (VS1.3). Folds CanonicalCallEvents, from any source and in any order,
  * into one call record. No I/O.
  *
- * ORDER INDEPENDENCE BY CONSTRUCTION. The record keeps its de-duplicated event set, and every
- * apply recomputes the derived fields from that set. Streaming (one event at a time, in arrival
- * order) and batch therefore cannot disagree: they derive from the same set. (Verifier attempt 1
- * showed an incremental fold disagreeing with batch on late terminals and gateway events; this
- * design removes that class of bug rather than patching cases.)
+ * ORDER INDEPENDENCE BY CONSTRUCTION. The record keeps its event SET, and every apply recomputes the
+ * derived fields from that set. Streaming (one event at a time, in arrival order) and batch therefore
+ * derive from the same set and cannot disagree.
+ *  - An exact duplicate (same eventKey AND same content) is dropped.
+ *  - Same eventKey with DIFFERENT content is a provider anomaly: BOTH events are kept (so neither
+ *    arrival order can hide, say, a dispatch_unknown) and eventKeyConflicts counts it.
+ *  - An event whose occurredAt does not parse is dropped and counted in invalidEvents. Callers should
+ *    validate with CanonicalCallEventSchema first; this is a guard, not the contract.
  *
  * Rules (directive sections 3, 5 and 7):
  *  1. Duplicates (same eventKey) are ignored.
@@ -16,8 +19,11 @@
  *  4. An ambiguous dispatch (any dispatch_unknown) cannot be resolved by the gateway itself: gateway
  *     events past dispatch are ignored until carrier, session or reconciler evidence exists.
  *  5. Carrier-answered, human-answered and session-success are separate facts.
- *  6. Redial safety is sticky: once a dispatch was ambiguous or the carrier showed any sign of the
- *     call, mayRedial is false forever, unless a reconciler proved no call was created.
+ *  6. Redial safety is sticky. callExisted is set by ANY evidence that a call reached the phone
+ *     network: a provider id, an answeredBy, or any non-gateway event (carrier, session, legacy, or a
+ *     reconciler not claiming ReconciledNotCreated) past dispatch. Once set, mayRedial is false
+ *     forever. An ambiguous dispatch is redialable only with a ReconciledNotCreated proof AND no
+ *     contrary evidence from any source.
  */
 import type { CallState, CanonicalCallEvent } from './schemas';
 import { TERMINAL_STATES } from './schemas';
@@ -37,12 +43,16 @@ export interface CallRecord {
   sessionSucceeded: boolean;
   /** Any dispatch_unknown was ever seen. */
   dispatchAmbiguous: boolean;
-  /** The carrier or a session showed the call existed (queued or later, or a provider id). */
-  carrierEvidence: boolean;
-  /** A reconciler proved the carrier created no call. */
+  /** Any source showed the call reached the phone network (see rule 6). Blocks redial forever. */
+  callExisted: boolean;
+  /** A reconciler claimed the carrier created no call (only honored when callExisted is false). */
   reconciledNotCreated: boolean;
   terminalAt?: string;
   terminalConflicts: number;
+  /** Events sharing an eventKey but differing in content (both kept). */
+  eventKeyConflicts: number;
+  /** Events dropped because occurredAt did not parse. */
+  invalidEvents: number;
   lastErrorClass?: string;
 }
 
@@ -58,19 +68,33 @@ export function isTerminal(s: CallState): boolean {
 }
 
 const ms = (iso: string) => Date.parse(iso);
+/** Canonical content of an event: key order independent, so equal events compare equal. */
+const content = (e: CanonicalCallEvent) => JSON.stringify(Object.keys(e).sort().map((k) => [k, (e as Record<string, unknown>)[k]]));
+const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 const byTime = (a: CanonicalCallEvent, b: CanonicalCallEvent) =>
-  ms(a.occurredAt) - ms(b.occurredAt) || (a.eventKey < b.eventKey ? -1 : a.eventKey > b.eventKey ? 1 : 0);
+  ms(a.occurredAt) - ms(b.occurredAt) || cmp(a.eventKey, b.eventKey) || cmp(content(a), content(b));
+const PRE_DISPATCH: ReadonlySet<CallState> = new Set(['requested', 'reserved', 'dispatching', 'dispatch_unknown', 'blocked']);
 
-export function initialCallRecord(callId: string): CallRecord {
-  return derive(callId, []);
+/** Rule 6: does this one event show the call reached the phone network? */
+function showsCallExisted(e: CanonicalCallEvent): boolean {
+  if (e.providerCallId || e.answeredBy) return true;
+  if (e.source === 'gateway' || PRE_DISPATCH.has(e.state)) return false;
+  if (e.source === 'reconciler' && e.errorClass === RECONCILED_NOT_CREATED) return false;
+  return true;
 }
 
-function derive(callId: string, events: CanonicalCallEvent[]): CallRecord {
+export function initialCallRecord(callId: string): CallRecord {
+  return derive(callId, [], 0);
+}
+
+function derive(callId: string, events: CanonicalCallEvent[], invalidEvents: number): CallRecord {
   const sorted = [...events].sort(byTime);
+  const keys = sorted.map((e) => e.eventKey);
+  const eventKeyConflicts = keys.length - new Set(keys).size;
   const dispatchAmbiguous = sorted.some((e) => e.state === 'dispatch_unknown');
-  const carrierEvidence = sorted.some((e) => !!e.providerCallId || ((e.source === 'carrier' || e.source === 'session') && RANK[e.state] >= RANK.queued));
+  const callExisted = sorted.some(showsCallExisted);
   const reconciledNotCreated = sorted.some((e) => e.source === 'reconciler' && e.errorClass === RECONCILED_NOT_CREATED);
-  const resolved = carrierEvidence || sorted.some((e) => e.source === 'reconciler');
+  const resolved = callExisted || sorted.some((e) => e.source === 'reconciler');
 
   // Rule 4: while a dispatch is ambiguous and unresolved, gateway events past dispatch do not count.
   const effective = sorted.filter((e) => !(dispatchAmbiguous && !resolved && e.source === 'gateway' && !GATEWAY_ALLOWED_WHILE_AMBIGUOUS.has(e.state)));
@@ -101,21 +125,26 @@ function derive(callId: string, events: CanonicalCallEvent[]): CallRecord {
     sessionStarted,
     sessionSucceeded: sessionStarted && state === 'completed',
     dispatchAmbiguous,
-    carrierEvidence,
+    callExisted,
     reconciledNotCreated,
     terminalAt,
     terminalConflicts,
+    eventKeyConflicts,
+    invalidEvents,
     lastErrorClass: withError.length ? withError[withError.length - 1].errorClass : undefined,
   };
 }
 
 /** Apply one event. Returns a new record; never mutates the input. */
 export function applyCallEvent(rec: CallRecord, ev: CanonicalCallEvent): CallRecord {
-  if (ev.callId !== rec.callId || rec.events.some((e) => e.eventKey === ev.eventKey)) return rec;
-  return derive(rec.callId, [...rec.events, ev]);
+  if (ev.callId !== rec.callId) return rec;
+  if (Number.isNaN(ms(ev.occurredAt))) return derive(rec.callId, rec.events, rec.invalidEvents + 1);
+  const c = content(ev);
+  if (rec.events.some((e) => e.eventKey === ev.eventKey && content(e) === c)) return rec;
+  return derive(rec.callId, [...rec.events, ev], rec.invalidEvents);
 }
 
-/** Fold a batch. Identical to applying the events one at a time in any order. */
+/** Fold a batch. Same result as applying the events one at a time, in any arrival order. */
 export function reduceCallEvents(callId: string, events: CanonicalCallEvent[]): CallRecord {
   return events.reduce(applyCallEvent, initialCallRecord(callId));
 }
@@ -126,7 +155,8 @@ export function reduceCallEvents(callId: string, events: CanonicalCallEvent[]): 
  * a reconciler proved no call was created), never once the carrier showed any sign of the call.
  */
 export function mayRedial(rec: CallRecord, lastDispatchOutcome?: 'accepted' | 'refused' | 'unknown'): boolean {
-  if (lastDispatchOutcome === 'accepted' || rec.carrierEvidence || rec.providerCallIds.length > 0) return false;
+  if (lastDispatchOutcome === 'accepted' || rec.callExisted || rec.providerCallIds.length > 0) return false;
+  if (rec.carrierAnswered || rec.humanAnswered || rec.sessionStarted) return false;
   if ((rec.dispatchAmbiguous || lastDispatchOutcome === 'unknown') && !rec.reconciledNotCreated) return false;
   return rec.state === 'blocked' || (rec.state === 'failed' && (lastDispatchOutcome === 'refused' || rec.reconciledNotCreated));
 }
