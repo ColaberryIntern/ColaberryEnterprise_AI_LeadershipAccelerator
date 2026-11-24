@@ -66,12 +66,19 @@ export async function reserveDial(input: ReserveInput): Promise<ReserveResult> {
         `SELECT COUNT(*)::int AS n FROM voice_dial_reservations
           WHERE destination_hash = :h AND created_at > NOW() - INTERVAL '24 hours' AND ${COUNTED}`,
         { h: input.destinationHash }, t);
-      const [legacy] = await q<{ n: number }>(
-        `SELECT CASE WHEN to_regclass('public.voice_dial_log') IS NULL THEN 0
-                ELSE (SELECT COUNT(*)::int FROM voice_dial_log WHERE phone = :p AND created_at > NOW() - INTERVAL '24 hours') END AS n`,
-        { p: input.destinationE164 }, t);
-      if (dest.n + legacy.n >= input.caps.perDestination24h) {
-        return { outcome: 'denied', reason: 'destination_cap', detail: `${dest.n + legacy.n} in 24h` } as const;
+      // Legacy Synthflow-era dials count too. voice_dial_log is created lazily by voiceDialGuard, so it can be
+      // absent on a fresh database. Postgres resolves table names at PARSE time, so a CASE around the count
+      // still fails when the table is missing (CI caught this): check existence first, as its own query.
+      const [exists] = await q<{ present: boolean }>(`SELECT to_regclass('public.voice_dial_log') IS NOT NULL AS present`, {}, t);
+      let legacyCount = 0;
+      if (exists.present) {
+        const [legacy] = await q<{ n: number }>(
+          `SELECT COUNT(*)::int AS n FROM voice_dial_log WHERE phone = :p AND created_at > NOW() - INTERVAL '24 hours'`,
+          { p: input.destinationE164 }, t);
+        legacyCount = legacy.n;
+      }
+      if (dest.n + legacyCount >= input.caps.perDestination24h) {
+        return { outcome: 'denied', reason: 'destination_cap', detail: `${dest.n + legacyCount} in 24h` } as const;
       }
       if (input.caps.perRoutePerDay != null && input.routeId) {
         const [r] = await q<{ n: number }>(
@@ -95,7 +102,9 @@ export async function reserveDial(input: ReserveInput): Promise<ReserveResult> {
   } catch (err) {
     console.error(JSON.stringify({ level: 'error', service: 'voice-gateway', event: 'voice_reservation_failed', outcome: 'failure',
       error_class: err instanceof Error ? err.constructor.name : 'UnknownError', context: { message: err instanceof Error ? err.message : String(err) } }));
-    return { outcome: 'denied', reason: 'reservation_unavailable' };
+    // The error class (never the message, which can echo SQL values) travels with the denial so a
+    // fail-closed block is diagnosable from the caller's log.
+    return { outcome: 'denied', reason: 'reservation_unavailable', detail: err instanceof Error ? err.constructor.name : 'UnknownError' };
   }
 }
 

@@ -37,10 +37,19 @@ describeIfDb('voice dial reservation against Postgres', () => {
     await sequelize.close();
   });
 
+  it('reserves on a database where the legacy voice_dial_log table does not exist (regression: parse-time relation error)', async () => {
+    // Runs first, before the legacy test below creates the table. On a fresh CI database the table is absent;
+    // if another suite already created it, this still proves a normal reservation works.
+    const r = await R.reserveDial(base('fresh-1', 'f'.repeat(64)));
+    expect(r).toMatchObject({ outcome: 'reserved' });
+  });
+
   it('20 concurrent requests for one destination admit exactly the cap (2)', async () => {
     const hash = 'a'.repeat(64);
     const results = await Promise.all(Array.from({ length: 20 }, (_, i) => R.reserveDial(base(`race-${i}`, hash))));
-    expect(results.filter((r) => r.outcome === 'reserved')).toHaveLength(2);
+    // On failure, show WHY each request was denied rather than only a count.
+    const reasons = results.map((r) => (r.outcome === 'denied' ? `${r.reason}:${r.detail ?? ''}` : 'reserved'));
+    expect({ reserved: results.filter((r) => r.outcome === 'reserved').length, reasons }).toMatchObject({ reserved: 2 });
     expect(results.filter((r) => r.outcome === 'denied' && r.reason === 'destination_cap')).toHaveLength(18);
   });
 

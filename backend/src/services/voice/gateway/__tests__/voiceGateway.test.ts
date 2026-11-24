@@ -1,5 +1,6 @@
 import { authorizeVoiceCall, dispatchAuthorized, GatewayDeps } from '../voiceGateway';
 import { hashDestination } from '../destinationHash';
+import type { ReserveInput } from '../voiceReservation';
 import type { VoiceProvider } from '../../contracts/providers';
 import type { DispatchResult } from '../../contracts/schemas';
 import { ContractViolation } from '../../contracts/schemas';
@@ -81,9 +82,10 @@ describe('authorizeVoiceCall', () => {
   });
 
   it('reserves by a keyed hash, never by the raw number in the hash field', async () => {
-    const reserve = jest.fn(async () => ({ outcome: 'reserved' as const, reservationId: '11111111-1111-4111-8111-111111111111', replay: false }));
+    const reserve = jest.fn(async (_input: ReserveInput) => ({ outcome: 'reserved' as const, reservationId: '11111111-1111-4111-8111-111111111111', replay: false }));
     await authorizeVoiceCall(request, deps({ reserve }).d);
-    const input = reserve.mock.calls[0][0];
+    const input = reserve.mock.calls[0]?.[0];
+    if (!input) throw new Error('reserve was not called');
     expect(input.destinationHash).toBe(hashDestination('+15555550123', 'voice-destination:test-secret'));
     expect(input.destinationHash).not.toContain('5555550123');
   });
