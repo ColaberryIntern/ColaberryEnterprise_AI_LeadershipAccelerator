@@ -6,6 +6,119 @@
 const SESSION = 'CC-20261124-2ptc';
 
 module.exports = {
+  'VS1.3': {
+    code: 'VS1.3', short: 'One call record from any source, and no unsafe redial',
+    title: 'R01 Canonical contracts: VoiceEngine, CallState, VoiceRequest, VoiceProvider, CarrierAdapter, ConversationEngine + call-state reducer',
+    docName: 'CONTRACTS_AND_REDUCER', date: '2026-11-24', session: SESSION, status: 'PASS 11/12 (verifier attempt 3); closes at the Phase 1 deploy',
+    asked: 'Define the versioned contracts every voice provider speaks, and a pure reducer that turns events from any source, in any order, into one call record that never allows a redial after an uncertain dispatch.',
+    delivered: 'Zod v1 contracts for every type the directive names (with a stable ContractViolation error), the provider interfaces, and a reducer that derives the record from the de-duplicated event set so arrival order cannot change the outcome. 73 tests plus two independent adversarial harnesses (40 scenarios) all pass.',
+    takeaway: 'The rule that matters most in production is enforced in code and proven by attack: once there is ANY sign a call reached the phone network, from the carrier, a live session, the legacy Synthflow webhook or a reconciler, that call can never be redialed automatically. The independent verifier found two real holes on the way; both are closed.',
+    cards: [
+      { n: '720', k: 'arrival orders, one result', color: '#2e7d32' },
+      { n: '40', k: 'adversarial scenarios pass' },
+      { n: '0', k: 'redial holes left', color: '#2e7d32' },
+      { n: '3', k: 'verifier attempts to pass' },
+      { n: '14', k: 'call states, 6 terminal' },
+    ],
+    decision: 'Nothing to decide. This is the safety core the gateway (VS1.5) and both engines build on.',
+    ladder: ['active', 'waiting', 'todo', 'todo', 'todo', 'todo'],
+    bars: { title: 'Verifier score by attempt (out of 12; 11 passes)', max: 12, rows: [
+      { label: 'Attempt 1 (redial hole)', value: 8, color: '#c62828' }, { label: 'Attempt 2 (legacy evidence)', value: 10, color: '#e0a100' }, { label: 'Attempt 3 (pass)', value: 11, color: '#2e7d32' },
+    ] },
+    checks: [
+      ['Every directive type defined and runtime-validated (ContractViolation on bad input)', true],
+      ['Streaming and batch agree in every permutation (720-order lifecycle + adversarial sets)', true],
+      ['dispatch_unknown and any evidence of a call are never auto-redialed', true],
+      ['No any without justification; baseline 21 suites pass; tsc clean', true],
+    ],
+    diagramTitle: 'Events from any source become one record',
+    mermaid: `flowchart LR
+  G[Gateway events] --> S[De-duplicated event set]
+  C[Carrier status callbacks] --> S
+  X[Live session events] --> S
+  L[Legacy Synthflow webhook] --> S
+  R[Reconciler] --> S
+  S --> D[derive: state, facts, conflicts]
+  D --> M{mayRedial}
+  M -->|any sign the call existed| N[NO, forever]
+  M -->|policy block, nothing sent| Y[yes]`,
+    evidenceLine: 'commits f2ed312b9, e706f2d84, 0156c1d84, 4ffcb1252; jest contracts 73/73, now 77/77 with the follow-ups; verifier attempts 8, 10, 11 of 12.',
+    sections: [
+      { h: 'What the verifier broke, and how it was fixed', rows: [
+        ['Attempt 1', 'Streaming and batch disagreed; an earlier-arriving gateway block made an ambiguous dispatch redialable', 'Record derived from the event set; sticky ambiguity flag'],
+        ['Attempt 2', 'A human-answered call reported only by the legacy webhook or a reconciler was redialable', 'Sticky callExisted from any source'],
+        ['Attempt 3 note', 'An uppercase copy of a call id was silently dropped', 'Ids lowercased at the boundary; foreign events counted'],
+      ], head: ['Round', 'Hole found', 'Fix'] },
+    ],
+    evidence: [
+      ['Tests', '77 contract tests; 720-permutation lifecycle; adversarial rounds 1 and 2 permuted on the streaming path'],
+      ['Independent harnesses', 'verifier attack.js (18 cases) and attack3.js (22 cases): 0 failures on current code'],
+      ['Verifier', '8/12, 10/12, then 11/12 PASS'],
+    ],
+    notEstablished: [
+      'Behavior with real provider payloads: normalizers that turn Twilio and Synthflow callbacks into these events arrive in VS2.1 and VS1.6.',
+      'Persistence of the record (voice_calls / voice_call_events) is VS1.4 schema plus later wiring.',
+    ],
+  },
+  'VS1.4': {
+    code: 'VS1.4', short: '13 voice tables, additive and proven on real Postgres',
+    title: 'R01 Schema: additive ensureVoiceStudioSchema + Sequelize models for profiles, versions, numbers, routes, calls, events, reservations, turns, tool runs, evaluations, usage',
+    docName: 'SCHEMA', date: '2026-11-24', session: SESSION, status: 'PASS 11/12 (verifier attempt 2); closes at the Phase 1 deploy',
+    asked: 'Add the tables the platform needs, mapped onto what already exists, additive and reversible, with the directive\'s indexes and constraints.',
+    delivered: '13 voice_* tables generated from one spec (so the models and the database cannot drift), boot-wired after the multi-tenant schema, fail-soft per statement, plus a reviewed drop script that is never run without approval. CI on real Postgres: 13 tables, re-runnable with zero failed statements, every constraint holds, and deleting a call removes everything about it.',
+    takeaway: 'The schema is inert until the feature flag is on, changes no existing table, and never stores a phone number except in one restricted column. CI caught a real bug on the first try (a reserved word that would have silently skipped one table in production); it is fixed and now guarded by a test.',
+    cards: [
+      { n: '13', k: 'new tables, all voice_*' },
+      { n: '0', k: 'existing tables altered', color: '#2e7d32' },
+      { n: '7/7', k: 'real Postgres checks in CI', color: '#2e7d32' },
+      { n: '1', k: 'column may hold a number (restricted)' },
+      { n: '5', k: 'tables wiped with their call (retention)' },
+    ],
+    decision: 'Nothing to decide. The tables stay unused until a route is cut over after your approvals.',
+    ladder: ['active', 'waiting', 'todo', 'todo', 'todo', 'todo'],
+    bars: { title: 'Columns per table', max: 30, rows: [
+      { label: 'voice_calls', value: 28, color: '#5a6b85' }, { label: 'voice_agent_versions', value: 21, color: '#5a6b85' },
+      { label: 'voice_routes', value: 15, color: '#5a6b85' }, { label: 'voice_numbers', value: 14, color: '#5a6b85' },
+      { label: 'voice_tool_runs', value: 12, color: '#5a6b85' }, { label: 'voice_dial_reservations', value: 12, color: '#5a6b85' },
+    ] },
+    checks: [
+      ['Ensure runs twice as a no-op with 0 failed statements (CI Postgres)', true],
+      ['bootSchemaCreatable passes with the new file wired', true],
+      ['Duplicate idempotency key, bad state, bad canary rejected (CI)', true],
+      ['Every table tenant-scoped; directive indexes present; model columns equal DDL', true],
+    ],
+    diagramTitle: 'How the new tables relate',
+    mermaid: `flowchart LR
+  P[voice_agent_profiles] --> V[voice_agent_versions]
+  RT[voice_routes] --> C[voice_calls]
+  V --> C
+  N[voice_numbers] --> RT
+  R[voice_dial_reservations] --> C
+  C -->|cascade| E[voice_call_events]
+  C -->|cascade| T[voice_turns]
+  C -->|cascade| TR[voice_tool_runs]
+  C -->|cascade| A[voice_artifacts]
+  C -->|cascade| U[voice_usage]
+  C -.links.-> CL[communication_logs existing]`,
+    evidenceLine: 'commits e0dbb3c02 + c1332af0f; CI on 5116ae1b7: integration tier PASS 7/7; local schema tests 35 passed; verifier 11/12.',
+    sections: [
+      { h: 'Reuse before adding', ul: [
+        'communication_logs stays the cross-channel record; voice_calls links to it.',
+        'voice_dial_log stores raw numbers and has no status or lease, so it cannot be an atomic reservation table; it stays for legacy reads and still counts toward caps.',
+        'Legacy Synthflow call ids stay searchable through voice_calls.legacy_call_id.',
+      ] },
+      { h: 'The bug CI caught', p: ['A column named authorization is a reserved word in Postgres. CREATE TABLE voice_tool_runs failed in CI, and because boot schema work is fail-soft, production would have started without that table. Renamed to auth_decision; a unit test now fails on any reserved keyword, and was mutation-checked by planting the old name back.'] },
+    ],
+    evidence: [
+      ['CI Postgres', 'ensureVoiceStudioSchema.integration: 7 passed (twice-safe, 13 tables, constraints, cascade, event dedup)'],
+      ['Local', 'schema unit tests 35 passed; baseline 21 voice suites 327 tests; tsc exit 0'],
+      ['Verifier', 'attempt 1: 6/12 FAIL; attempt 2: 11/12 PASS'],
+    ],
+    notEstablished: [
+      'Production data: no rows are written until the gateway is wired (VS1.6) and a route is enabled (after M3).',
+      'Typed attributes on the generated models: carried to VS3.1, before business logic reads them.',
+    ],
+  },
   'VS1.1': {
     code: 'VS1.1', short: 'Every voice call goes through one function',
     title: 'R00 Inventory: every caller, consumer, route, cron and config of voice in the repo',
