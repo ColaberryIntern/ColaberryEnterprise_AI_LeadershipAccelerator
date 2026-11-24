@@ -6,6 +6,158 @@
 const SESSION = 'CC-20261124-2ptc';
 
 module.exports = {
+  'VS1.5': {
+    code: 'VS1.5', short: 'One fail-closed gate for every call, admitted atomically',
+    title: 'R01 Voice Gateway + atomic dial reservation shared by every provider',
+    docName: 'VOICE_GATEWAY', date: '2026-11-24', session: SESSION, status: 'PASS 11/12 (verifier attempt 2); closes at the Phase 1 deploy',
+    asked: 'Replace each caller\'s own guards with one gateway: kill switch, consent, suppression, hours and caps in one ordered policy, and an atomic reservation so concurrent dials cannot race past the cap.',
+    delivered: 'A pure policy (legacy mode keeps today\'s 10 AM to 8 PM Central window; direct mode adds the recipient\'s local hours and fails closed on an unknown time zone), a keyed destination hash, a transactional reservation under advisory locks, and a gateway that mints the only authorized dispatch. On real Postgres, 20 simultaneous requests for one number admit exactly 2.',
+    takeaway: 'Every future call passes one gate that never treats "unknown" as "allow": an unreadable kill switch, consent or suppression blocks the call. A dial that times out is recorded as ambiguous and never retried. The verifier found staff numbers skipping consent; now only their call-hours exemption remains, with a finite budget.',
+    cards: [
+      { n: '2 of 20', k: 'simultaneous dials admitted (cap 2)', color: '#2e7d32' },
+      { n: '1,512', k: 'policy combinations, 0 wrong' },
+      { n: '0', k: 'unknowns that allow a call', color: '#2e7d32' },
+      { n: '48 / 3', k: 'staff / test daily budgets' },
+      { n: '67', k: 'tests (61 unit + 6 Postgres)' },
+    ],
+    decision: 'Nothing to decide now. The gateway stays dormant until VOICE_GATEWAY_LEGACY_ENABLED is turned on, which is a separate choice after the Phase 1 deploy.',
+    ladder: ['active', 'waiting', 'todo', 'todo', 'todo', 'todo'],
+    bars: { title: 'Per-destination budget in 24 hours', max: 50, rows: [
+      { label: 'Staff alert phones', value: 48, color: '#5a6b85' }, { label: 'Admin test number', value: 3, color: '#e0a100' }, { label: 'Everyone else (today\'s cap)', value: 2, color: '#2e7d32' },
+    ] },
+    checks: [
+      ['20 concurrent requests for one destination admit exactly the cap (CI Postgres)', true],
+      ['Kill switch flipped during reservation blocks dispatch', true],
+      ['Ambiguous timeout keeps the reservation held, never retried', true],
+      ['Legacy 10 AM to 8 PM Central and 2 per 24 h preserved', true],
+    ],
+    diagramTitle: 'From request to dial',
+    mermaid: `flowchart LR
+  Q[Voice request] --> P{Policy: kill switch, flag, path, consent, suppression, hours}
+  P -->|any unknown| B[Blocked]
+  P -->|ok| R{Atomic reservation, advisory locks}
+  R -->|over cap| B
+  R -->|held| K{Kill switch re-check}
+  K --> D[Provider dial]
+  D -->|accepted| A[accepted]
+  D -->|refused| L[released]
+  D -->|timeout or throw| U[ambiguous, never retried]`,
+    evidenceLine: 'commits 62ca48e4c, 5116ae1b7, 4ca09c06a, 397d405bd; CI Postgres reservation suite 6/6; verifier 9/12 then 11/12; 1,512-combination matrix 0 wrong.',
+    sections: [
+      { h: 'What the verifier and CI caught', rows: [
+        ['CI', 'On a fresh database every reservation failed closed (a query referenced a not-yet-created legacy table at parse time)', 'Existence checked first; regression test'],
+        ['Attempt 1', 'Staff numbers skipped consent entirely, even when revoked', 'Consent applies to everyone; staff keep only the call-hours exemption'],
+        ['Attempt 2 note', 'Unexpected values (GRANTED, empty, undefined) allowed a call', 'Allowlists: only exactly-known-good values allow'],
+      ], head: ['Found by', 'Problem', 'Fix'] },
+    ],
+    evidence: [
+      ['Concurrency', 'CI Postgres: 20 concurrent requests, exactly 2 reserved, 18 destination_cap'],
+      ['Policy sweep', 'verifier matrix: 1,512 combinations, 0 wrongly allowed, 0 wrongly blocked'],
+      ['Tests', 'voicePolicy 41, voiceGateway 20, voiceReservation integration 6'],
+    ],
+    notEstablished: [
+      'Consent records are not yet read by the gateway for legacy calls: in legacy mode each caller still owns consent, as today (moved per route in Phases 3 and 5).',
+      'Recipient time zones for direct-engine calls come from lead data wired in Phase 2.',
+    ],
+  },
+  'VS1.6': {
+    code: 'VS1.6', short: 'Every existing call can route through the gateway, unchanged',
+    title: 'R01 Legacy Synthflow adapter + triggerVoiceCall compatibility facade + static no-direct-dispatch test',
+    docName: 'LEGACY_FACADE', date: '2026-11-24', session: SESSION, status: 'PASS 12/12 (verifier attempt 2); closes at the Phase 1 deploy',
+    asked: 'Put today\'s Synthflow dial behind the gateway without changing what any caller sees, and make the build fail if anything dials around it.',
+    delivered: 'A legacy Synthflow provider and a facade behind one switch (off by default). With it off, today\'s code path runs unchanged; with it on, the same checks run first and the dial goes through the atomic reservation, returning the exact result shapes callers read. A static test fails the build on any direct dial or any provider import outside the gateway.',
+    takeaway: 'Turning the gateway on later will not change what any of the 9 call routes sends to Synthflow: the verifier mutation-tested that, breaking the body three ways and watching the contract tests fail each time. And nobody can quietly add a dial that skips the safety checks: the build fails first.',
+    cards: [
+      { n: '9 of 9', k: 'routes send an identical request', color: '#2e7d32' },
+      { n: '2', k: 'files allowed to dial' },
+      { n: '343', k: 'existing voice tests pass, flag off', color: '#2e7d32' },
+      { n: '12/12', k: 'verifier score' },
+      { n: 'OFF', k: 'gateway switch by default' },
+    ],
+    decision: 'Later, not now: whether to turn VOICE_GATEWAY_LEGACY_ENABLED on in production for today\'s Synthflow calls (it fixes the dial-count race). Recommended only after Phase 1 is deployed and verified.',
+    ladder: ['active', 'waiting', 'todo', 'todo', 'todo', 'todo'],
+    bars: { title: 'Tests guarding this change', max: 30, rows: [
+      { label: 'Architecture (no direct dial)', value: 27, color: '#5a6b85' }, { label: 'Flag on/off + 9 route contracts', value: 16, color: '#2e7d32' }, { label: 'Facade outcomes', value: 11, color: '#5a6b85' },
+    ] },
+    checks: [
+      ['All pre-existing voice tests still pass with the flag off', true],
+      ['Architecture test fails on a planted direct dial and a planted provider import', true],
+      ['10-digit US number still normalized to +1, never +682', true],
+      ['Flag on: every earlier check runs first; results keep the legacy shape', true],
+    ],
+    diagramTitle: 'One switch, two paths, same result',
+    mermaid: `flowchart LR
+  C[Any of 11 callers] --> T[triggerVoiceCall: same checks, same order]
+  T -->|switch OFF default| S[Synthflow, exactly as today]
+  T -->|switch ON| G[Gateway: atomic reservation]
+  G --> L[Legacy Synthflow provider]
+  S --> R[Same result shape to the caller]
+  L --> R`,
+    evidenceLine: 'commits 7488a072c, 4b36acda7, 568cc04d5, 422844f18; verifier 10/12 then 12/12 with planted imports and body mutations.',
+    sections: [
+      { h: 'What stays the same on purpose', ul: [
+        'Each caller still owns consent and suppression in legacy mode, as today; the facade logs that provenance. Moving consent into the gateway is per-route work in Phases 3 and 5.',
+        'The dead runLeadAutomation path stays, but can now only dial through this facade.',
+      ] },
+    ],
+    evidence: [
+      ['Flag off', 'baseline voice suites 22/22, 343 tests'],
+      ['Contracts', '9 routes: flag-on Synthflow body equals flag-off body; mutation-checked by the verifier'],
+      ['Architecture', '27 tests: direct dials (incl. other vendors) and provider imports caught; unrelated providers folders not flagged'],
+    ],
+    notEstablished: [
+      'Production behavior with the switch on: it ships off; turning it on is a later, separate step.',
+      'URLs assembled at runtime are a documented limit of the static check; the import rule covers the likely path.',
+    ],
+  },
+  'VS1.7': {
+    code: 'VS1.7', short: 'A bad setting turns voice off, never on',
+    title: 'R01 Feature flags, startup config validation, mock provider, and the voice:* CLI (dry run by default)',
+    docName: 'CONFIG_AND_CLI', date: '2026-11-24', session: SESSION, status: 'PASS 12/12 (verifier attempt 2); closes at the Phase 1 deploy',
+    asked: 'Add the switches disabled by default, validate them at startup without ever crashing the server, a mock provider that proves zero real calls, and the preflight and mock-test commands.',
+    delivered: 'A validated config that is the single source of truth for every voice switch: any invalid value turns everything off and is logged; the live-test ceilings (3 attempts, 180 seconds, 5 USD) cannot be raised. voice:preflight reports readiness, redacted, and never dials; voice:test:mock runs four scenarios through the real gateway with zero network attempts.',
+    takeaway: 'With nothing set, the system behaves exactly as today. A typo in a voice setting can only switch voice off. The readiness check now reports exactly what the running code will do, which the verifier proved with a live control run.',
+    cards: [
+      { n: '0', k: 'network calls in the mock run', color: '#2e7d32' },
+      { n: '4 of 4', k: 'mock scenarios as expected', color: '#2e7d32' },
+      { n: '3 / 180 s / $5', k: 'test ceilings, not raisable' },
+      { n: '$1.04', k: 'worst case of one test run' },
+      { n: '34', k: 'tests (config, agreement, CLI)' },
+    ],
+    decision: 'Nothing new. M0 Q4 (Claude sets the test number in the server env) is what turns the readiness check from NOT READY to READY for Phase 2.',
+    ladder: ['active', 'waiting', 'todo', 'todo', 'todo', 'todo'],
+    bars: { title: 'Readiness today (preflight --mode test)', max: 3, rows: [
+      { label: 'Blockers named', value: 3, color: '#e0a100' }, { label: 'Dials placed', value: 0, color: '#2e7d32' },
+    ] },
+    checks: [
+      ['voice:preflight prints a redacted report and places no call', true],
+      ['Startup with all voice env unset behaves exactly as today', true],
+      ['Mock run asserts 0 real provider calls', true],
+      ['Every runtime reader agrees with the validated config', true],
+    ],
+    diagramTitle: 'One validated source',
+    mermaid: `flowchart LR
+  E[VOICE_* environment] --> V{Validated config}
+  V -->|invalid| O[Everything OFF + logged]
+  V -->|valid| C[Switches as set]
+  C --> S[triggerVoiceCall routing]
+  C --> H[Destination hash key]
+  C --> P[voice:preflight report]
+  C --> B[Boot log]`,
+    evidenceLine: 'commits f06e63239, ee02aee4b, 3a6ef8338; voice:test:mock 4/4 with networkAttempts 0; verifier 10/12 then 12/12.',
+    sections: [
+      { h: 'What the verifier caught', p: ['Three places read the gateway switch and hash key straight from the environment, so with an invalid config the readiness check said "off" while the code still routed through the gateway. All readers now use the validated config, and a test fails the build if anything reads those settings any other way.'] },
+    ],
+    evidence: [
+      ['Tests', 'voiceConfig 15, voiceConfigAgreement 12, preflight and mock 7'],
+      ['Mock run', '4 scenarios through the real gateway; realCalls 0; networkAttempts 0; fetch restored'],
+      ['Preflight', 'test mode: NOT READY with 3 named blockers, 0 dials; no number or secret in output'],
+    ],
+    notEstablished: [
+      'Credential checks against the provider APIs (read-only) arrive with the Twilio adapter in VS2.1.',
+      'The mock traps fetch, not raw sockets; the mock provider uses neither.',
+    ],
+  },
   'VS1.3': {
     code: 'VS1.3', short: 'One call record from any source, and no unsafe redial',
     title: 'R01 Canonical contracts: VoiceEngine, CallState, VoiceRequest, VoiceProvider, CarrierAdapter, ConversationEngine + call-state reducer',
