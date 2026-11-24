@@ -1,0 +1,403 @@
+{{#if selectedType}}
+{{!-- ── FORM VIEW ─────────────────────────────────────────────────────────── --}}
+<div class="row g-4">
+  <div class="col-lg-8">
+
+    <div class="d-flex align-items-center gap-3 mb-4">
+      <a href="/reports/new" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i>
+      </a>
+      <div>
+        <h2 class="mb-0">
+          <i class="bi {{formTypeIcon selectedType}} me-2"></i>{{formTypeLabel selectedType}}
+        </h2>
+        <p class="text-muted mb-0 small">Fill out all required fields and submit.</p>
+      </div>
+    </div>
+
+    {{#if (eq selectedType "noise_complaint")}}
+    <div class="alert alert-warning d-flex align-items-center gap-2 mb-3">
+      <i class="bi bi-exclamation-triangle-fill flex-shrink-0"></i>
+      <span class="small">Reports filed between <strong>10 PM and 8 AM</strong> are automatically escalated to the Residence Director.</span>
+    </div>
+    {{/if}}
+
+    <form method="POST" action="/reports" enctype="multipart/form-data">
+      <input type="hidden" name="form_type" value="{{selectedType}}">
+
+      {{!-- Location & Time --}}
+      <div class="card border-0 shadow-sm mb-3">
+        <div class="card-header bg-light fw-semibold py-2">
+          <i class="bi bi-geo-alt me-2 text-muted"></i>Location &amp; Time
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-5">
+              <label class="form-label">Building</label>
+              <select class="form-select" name="building">
+                <option value="">Select building…</option>
+                {{#each buildings}}
+                <option value="{{this}}">{{this}}</option>
+                {{/each}}
+              </select>
+            </div>
+            {{#unless (eq selectedType "evaluation")}}
+            {{#unless (eq selectedType "on_call_log")}}
+            <div class="col-md-3">
+              <label class="form-label">Room Number</label>
+              <input type="text" class="form-control" name="room_number" placeholder="e.g. 214">
+            </div>
+            {{/unless}}
+            {{/unless}}
+            <div class="col-md-4">
+              <label class="form-label">Date &amp; Time
+                <span class="text-muted small">(defaults to now)</span>
+              </label>
+              <input type="datetime-local" class="form-control" name="occurred_at" id="occurred_at_input">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {{!-- NOISE COMPLAINT fields --}}
+      {{#if (eq selectedType "noise_complaint")}}
+      <div class="card border-0 shadow-sm mb-3">
+        <div class="card-header bg-light fw-semibold py-2">
+          <i class="bi bi-volume-up me-2 text-warning"></i>Noise Details
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Type of Noise</label>
+              <select class="form-select" name="noise_type">
+                <option value="">Select…</option>
+                <option value="loud music">Loud Music</option>
+                <option value="party">Party / Large Gathering</option>
+                <option value="shouting">Shouting / Arguing</option>
+                <option value="television">Television / Gaming</option>
+                <option value="instrument">Musical Instrument</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Resident Notified?</label>
+              <select class="form-select" name="resident_notified">
+                <option value="yes">Yes — spoken to resident</option>
+                <option value="attempted">Attempted — no answer</option>
+                <option value="no">No</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+      {{/if}}
+
+      {{!-- LOCKOUT fields --}}
+      {{#if (eq selectedType "lockout")}}
+      <div class="card border-0 shadow-sm mb-3">
+        <div class="card-header bg-light fw-semibold py-2">
+          <i class="bi bi-person me-2 text-primary"></i>Student Information
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Student Name <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" name="student_name" required placeholder="Full name">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Student ID</label>
+              <input type="text" class="form-control" name="student_id" placeholder="e.g. ATD-2024-0001">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">ID Verified?</label>
+              <select class="form-select" name="id_verified">
+                <option value="yes">Yes — ID checked</option>
+                <option value="no">No — could not verify</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+      {{/if}}
+
+      {{!-- ON-CALL LOG fields --}}
+      {{#if (eq selectedType "on_call_log")}}
+      <div class="card border-0 shadow-sm mb-3">
+        <div class="card-header bg-light fw-semibold py-2">
+          <i class="bi bi-journal-text me-2 text-success"></i>Duty Details
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label">Duty Type</label>
+              <select class="form-select" name="duty_type">
+                <option value="RA on duty">RA On Duty</option>
+                <option value="CC on duty">CC On Duty</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Rounds Completed?</label>
+              <select class="form-select" name="rounds_completed">
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+                <option value="partial">Partial</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Follow-Up Needed?</label>
+              <select class="form-select" name="follow_up_needed">
+                <option value="no">No</option>
+                <option value="yes">Yes</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+      {{/if}}
+
+      {{!-- ROOMMATE AGREEMENT fields --}}
+      {{#if (eq selectedType "roommate_agreement")}}
+      <div class="card border-0 shadow-sm mb-3">
+        <div class="card-header bg-light fw-semibold py-2">
+          <i class="bi bi-people me-2 text-info"></i>Agreement Details
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label">Roommate Names <span class="text-muted small">(comma-separated)</span></label>
+              <input type="text" class="form-control" name="roommate_names"
+                     placeholder="e.g. Alex Kim, Jordan Park">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Quiet Hours</label>
+              <input type="text" class="form-control" name="quiet_hours"
+                     placeholder="e.g. 11 PM – 9 AM">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Guest Policy</label>
+              <input type="text" class="form-control" name="guest_policy"
+                     placeholder="e.g. 3 nights/week max">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Cleaning Schedule</label>
+              <input type="text" class="form-control" name="cleaning_schedule"
+                     placeholder="e.g. Alternating weeks for bathroom">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Additional Agreements</label>
+              <textarea class="form-control" name="additional_agreements" rows="2"
+                        placeholder="Temperature preferences, quiet study times, etc."></textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+      {{/if}}
+
+      {{!-- EVALUATION fields --}}
+      {{#if (eq selectedType "evaluation")}}
+      <div class="card border-0 shadow-sm mb-3">
+        <div class="card-header bg-light fw-semibold py-2">
+          <i class="bi bi-star me-2 text-danger"></i>Evaluation Details
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Staff Member Name <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" name="evaluatee_name" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Evaluation Period</label>
+              <input type="text" class="form-control" name="evaluation_period"
+                     placeholder="e.g. Spring 2026">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Overall (1–5)</label>
+              <select class="form-select" name="overall_rating">
+                <option value="5">5 — Excellent</option>
+                <option value="4">4 — Good</option>
+                <option value="3" selected>3 — Meets expectations</option>
+                <option value="2">2 — Needs improvement</option>
+                <option value="1">1 — Unsatisfactory</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Communication (1–5)</label>
+              <select class="form-select" name="communication_rating">
+                <option value="5">5</option>
+                <option value="4">4</option>
+                <option value="3" selected>3</option>
+                <option value="2">2</option>
+                <option value="1">1</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Event Planning (1–5)</label>
+              <select class="form-select" name="event_planning_rating">
+                <option value="5">5</option>
+                <option value="4">4</option>
+                <option value="3" selected>3</option>
+                <option value="2">2</option>
+                <option value="1">1</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Crisis Response (1–5)</label>
+              <select class="form-select" name="crisis_response_rating">
+                <option value="5">5</option>
+                <option value="4">4</option>
+                <option value="3" selected>3</option>
+                <option value="2">2</option>
+                <option value="1">1</option>
+              </select>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Recommendations</label>
+              <textarea class="form-control" name="recommendations" rows="2"
+                        placeholder="Strengths, areas for growth, goals for next period…"></textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+      {{/if}}
+
+      {{!-- Description + Photo (common) --}}
+      <div class="card border-0 shadow-sm mb-3">
+        <div class="card-header bg-light fw-semibold py-2">
+          <i class="bi bi-card-text me-2 text-muted"></i>Description &amp; Documentation
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label">Description <span class="text-danger">*</span></label>
+              <textarea class="form-control" name="description" rows="4" required
+                        placeholder="Describe the situation in detail…"></textarea>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Photo / Evidence <span class="text-muted small">(optional)</span></label>
+              <input type="file" class="form-control" name="photo" accept="image/jpeg,image/png,image/gif,image/webp">
+              <div class="form-text">Accepted: JPG, PNG, GIF, WebP — max 10 MB</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex gap-2 mt-3">
+        <button type="submit" class="btn btn-primary px-4">
+          <i class="bi bi-send me-1"></i>Submit Report
+        </button>
+        <a href="/reports" class="btn btn-outline-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+
+  {{!-- Sidebar: escalation rules --}}
+  <div class="col-lg-4">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-light fw-semibold py-2">
+        <i class="bi bi-shield-exclamation me-2 text-muted"></i>Escalation Rules
+      </div>
+      <div class="card-body small text-muted">
+        {{#if (eq selectedType "noise_complaint")}}
+        <p><i class="bi bi-exclamation-triangle text-warning me-1"></i>
+           <strong>Auto-escalates</strong> to the Residence Director when filed between
+           <strong>10 PM and 8 AM</strong>.</p>
+        <p>The RD receives an in-app notification immediately. The report status is set to
+           <span class="badge bg-danger">Escalated</span> automatically.</p>
+        <p class="mb-0 text-info"><i class="bi bi-lightbulb me-1"></i>
+           Set the time to after 10 PM to see escalation in action.</p>
+        {{/if}}
+        {{#if (eq selectedType "lockout")}}
+        <p><i class="bi bi-bell text-primary me-1"></i>
+           The on-call <strong>Community Coordinator is notified</strong> for every lockout report.</p>
+        <p class="mb-0">Lockouts are tracked and can be referenced if a student has repeated incidents.</p>
+        {{/if}}
+        {{#if (eq selectedType "on_call_log")}}
+        <p><i class="bi bi-info-circle text-info me-1"></i>
+           On-call logs are retained for <strong>90 days</strong> and reviewed weekly by the Residence Director.</p>
+        <p class="mb-0">Logs that flag follow-up items are automatically surfaced in the RD's daily digest.</p>
+        {{/if}}
+        {{#if (eq selectedType "roommate_agreement")}}
+        <p><i class="bi bi-info-circle text-info me-1"></i>
+           Agreements are stored on file and can be referenced during <strong>conflict mediation</strong>.</p>
+        <p class="mb-0">Both parties can request a copy through the Community Coordinator.</p>
+        {{/if}}
+        {{#if (eq selectedType "evaluation")}}
+        <p><i class="bi bi-info-circle text-info me-1"></i>
+           Evaluations are visible to the <strong>Residence Director</strong> and the staff member's direct supervisor.</p>
+        <p class="mb-0">Staff members are notified when an evaluation is submitted.</p>
+        {{/if}}
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Default datetime-local to now (local time)
+  const dtInput = document.getElementById('occurred_at_input');
+  if (dtInput && !dtInput.value) {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    dtInput.value = now.toISOString().slice(0, 16);
+  }
+</script>
+
+{{else}}
+{{!-- ── TYPE SELECTOR ─────────────────────────────────────────────────────── --}}
+<div class="mb-4">
+  <h2>New Report</h2>
+  <p class="text-muted">Select the type of report you want to file.</p>
+</div>
+
+<div class="row g-3">
+  <div class="col-sm-6 col-lg-4">
+    <a href="/reports/new?type=noise_complaint"
+       class="card border-0 shadow-sm type-card text-decoration-none h-100">
+      <div class="card-body text-center py-5">
+        <i class="bi bi-volume-up display-4 text-warning"></i>
+        <h5 class="mt-3 mb-1">Noise Complaint</h5>
+        <p class="text-muted small mb-0">Report quiet hours violations</p>
+      </div>
+    </a>
+  </div>
+  <div class="col-sm-6 col-lg-4">
+    <a href="/reports/new?type=lockout"
+       class="card border-0 shadow-sm type-card text-decoration-none h-100">
+      <div class="card-body text-center py-5">
+        <i class="bi bi-lock display-4 text-primary"></i>
+        <h5 class="mt-3 mb-1">Lockout</h5>
+        <p class="text-muted small mb-0">Assist locked-out students</p>
+      </div>
+    </a>
+  </div>
+  <div class="col-sm-6 col-lg-4">
+    <a href="/reports/new?type=on_call_log"
+       class="card border-0 shadow-sm type-card text-decoration-none h-100">
+      <div class="card-body text-center py-5">
+        <i class="bi bi-journal-text display-4 text-success"></i>
+        <h5 class="mt-3 mb-1">On-Call Log</h5>
+        <p class="text-muted small mb-0">Document your duty shift</p>
+      </div>
+    </a>
+  </div>
+  <div class="col-sm-6 col-lg-4">
+    <a href="/reports/new?type=roommate_agreement"
+       class="card border-0 shadow-sm type-card text-decoration-none h-100">
+      <div class="card-body text-center py-5">
+        <i class="bi bi-people display-4 text-info"></i>
+        <h5 class="mt-3 mb-1">Roommate Agreement</h5>
+        <p class="text-muted small mb-0">Document room agreements</p>
+      </div>
+    </a>
+  </div>
+  <div class="col-sm-6 col-lg-4">
+    <a href="/reports/new?type=evaluation"
+       class="card border-0 shadow-sm type-card text-decoration-none h-100">
+      <div class="card-body text-center py-5">
+        <i class="bi bi-star display-4 text-danger"></i>
+        <h5 class="mt-3 mb-1">Performance Evaluation</h5>
+        <p class="text-muted small mb-0">Evaluate student staff</p>
+      </div>
+    </a>
+  </div>
+</div>
+{{/if}}

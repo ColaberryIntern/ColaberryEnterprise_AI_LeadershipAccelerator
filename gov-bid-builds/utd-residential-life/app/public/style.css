@@ -1,0 +1,143 @@
+/* UTD Residential Life — Demo App Styles */
+
+:root {
+  --navy: #00539B;          /* UT Dallas Comet Blue */
+  --accent: #E87722;        /* UT Dallas Comet Orange */
+  --accent-blue: #0066CC;   /* hover / link tint */
+  --sidebar-w: 220px;
+}
+
+/* ── Layout ──────────────────────────────────────────────────────────────── */
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.app-nav {
+  background: var(--navy) !important;
+  height: 56px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  border-bottom: 3px solid var(--accent);
+}
+
+.app-nav .navbar-brand .brand-sub {
+  font-size: .65rem;
+  font-weight: 400;
+  opacity: .75;
+  display: block;
+  letter-spacing: .04em;
+  line-height: 1;
+  margin-top: 1px;
+}
+
+.app-body {
+  min-height: calc(100vh - 56px);
+}
+
+.sidebar {
+  width: var(--sidebar-w);
+  min-width: var(--sidebar-w);
+  background: #f8f9fa;
+  border-right: 1px solid #e9ecef;
+  position: sticky;
+  top: 56px;
+  height: calc(100vh - 56px);
+  overflow-y: auto;
+}
+
+.sidebar .nav-link {
+  color: #495057;
+  font-size: .875rem;
+  padding: .35rem .75rem;
+  border-radius: 6px;
+  margin-bottom: 2px;
+  transition: background .12s, color .12s;
+}
+
+.sidebar .nav-link:hover {
+  background: #e9ecef;
+  color: var(--navy);
+}
+
+.sidebar .nav-link.nav-link-sm {
+  font-size: .82rem;
+  padding: .25rem .75rem;
+}
+
+.sidebar .nav-divider {
+  border-top: 1px solid #dee2e6;
+}
+
+.sidebar .nav-section-label {
+  font-size: .7rem;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: #adb5bd;
+  font-weight: 600;
+}
+
+.main-content {
+  min-width: 0;
+}
+
+/* ── Stat cards ──────────────────────────────────────────────────────────── */
+.stat-card {
+  border-left: 4px solid #dee2e6 !important;
+  transition: box-shadow .15s;
+}
+.stat-card:hover { box-shadow: 0 .25rem .75rem rgba(0,0,0,.08) !important; }
+.stat-card.open      { border-left-color: #6c757d !important; }
+.stat-card.escalated { border-left-color: #dc3545 !important; }
+.stat-card.resolved  { border-left-color: #198754 !important; }
+.stat-card.total     { border-left-color: #0d6efd !important; }
+
+.stat-number {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+/* ── Form type selector cards ────────────────────────────────────────────── */
+.type-card {
+  transition: transform .15s, box-shadow .15s;
+}
+.type-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 .5rem 1.25rem rgba(0,0,0,.12) !important;
+  border-color: var(--accent) !important;
+}
+
+/* ── Demo footer ─────────────────────────────────────────────────────────── */
+.demo-footer {
+  background: #f1f3f5;
+  border-top: 1px solid #dee2e6;
+  font-size: .75rem;
+  color: #6c757d;
+  padding: .55rem 1.5rem;
+  text-align: center;
+}
+.demo-footer strong { color: #495057; }
+.demo-footer .footer-divider { margin: 0 .5rem; opacity: .4; }
+
+/* ── Login page ──────────────────────────────────────────────────────────── */
+.login-card {
+  width: 100%;
+  max-width: 480px;
+}
+
+.user-card {
+  cursor: pointer;
+  transition: background .12s, border-color .12s;
+}
+.user-card:hover {
+  background: #f0f4ff;
+  border-color: var(--accent) !important;
+}
+
+/* ── Table ────────────────────────────────────────────────────────────────── */
+.table > tbody > tr { cursor: default; }
+.table > tbody > tr:hover { background: #f8f9ff; }
+
+/* ── Misc ─────────────────────────────────────────────────────────────────── */
+.cursor-pointer { cursor: pointer; }

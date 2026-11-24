@@ -1,0 +1,166 @@
+<div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
+  <a href="/evaluations" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i></a>
+  <div class="flex-grow-1">
+    <h2 class="mb-0"><i class="bi bi-arrow-left-right me-2 text-primary"></i>Evaluation Comparison</h2>
+    <p class="text-muted mb-0 small">{{staff.name}} · {{staff.building}}</p>
+  </div>
+  {{#if periods.length}}
+  <form method="GET" class="d-flex gap-2 align-items-center">
+    <label class="form-label mb-0 small text-muted">Period:</label>
+    <select class="form-select form-select-sm" name="period" onchange="this.form.submit()">
+      {{#each periods}}
+      <option value="{{this}}" {{#if (eq this ../period)}}selected{{/if}}>{{this}}</option>
+      {{/each}}
+    </select>
+  </form>
+  {{/if}}
+</div>
+
+{{#if compareRows.length}}
+
+<!-- Summary row -->
+<div class="row g-3 mb-4">
+  <div class="col-md-5">
+    <div class="card border-0 shadow-sm h-100 border-start border-3 border-secondary">
+      <div class="card-body">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="badge bg-secondary">Self</span>
+          {{#if selfEval}}<span class="badge bg-{{selfEval.avgBadge}}">Avg {{selfEval.avg}} / 5</span>{{/if}}
+        </div>
+        {{#if selfEval}}
+        <div class="small text-muted">Submitted by {{selfEval.evaluatee_name}}</div>
+        {{else}}
+        <div class="small text-muted fst-italic">Not yet submitted</div>
+        {{/if}}
+      </div>
+    </div>
+  </div>
+  <div class="col-md-2 d-flex align-items-center justify-content-center">
+    <i class="bi bi-arrow-left-right fs-3 text-muted"></i>
+  </div>
+  <div class="col-md-5">
+    <div class="card border-0 shadow-sm h-100 border-start border-3 border-primary">
+      <div class="card-body">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="badge bg-primary">Supervisor</span>
+          {{#if supervisorEval}}<span class="badge bg-{{supervisorEval.avgBadge}}">Avg {{supervisorEval.avg}} / 5</span>{{/if}}
+        </div>
+        {{#if supervisorEval}}
+        <div class="small text-muted">Submitted by {{supervisorEval.evaluator_name}}</div>
+        {{else}}
+        <div class="small text-muted fst-italic">Not yet submitted</div>
+        {{/if}}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Dimension comparison table -->
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-header bg-light fw-semibold py-2 small">
+    <i class="bi bi-bar-chart-line me-2 text-muted"></i>Dimension-by-Dimension Comparison
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-sm mb-0">
+      <thead class="table-light">
+        <tr>
+          <th class="ps-3">Dimension</th>
+          <th class="text-center">Self</th>
+          <th class="text-center">Supervisor</th>
+          <th class="text-center">Delta</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#each compareRows}}
+        <tr>
+          <td class="ps-3 fw-semibold small align-middle">{{label}}</td>
+          <td class="text-center align-middle">
+            {{#if selfVal}}
+            <span class="badge bg-{{selfBadge}} small">{{selfVal}} — {{selfLabel}}</span>
+            {{else}}
+            <span class="text-muted small">—</span>
+            {{/if}}
+          </td>
+          <td class="text-center align-middle">
+            {{#if supVal}}
+            <span class="badge bg-{{supBadge}} small">{{supVal}} — {{supLabel}}</span>
+            {{else}}
+            <span class="text-muted small">—</span>
+            {{/if}}
+          </td>
+          <td class="text-center align-middle fw-semibold {{deltaClass}}">{{deltaLabel}}</td>
+        </tr>
+        {{/each}}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Open-ended side-by-side -->
+{{#if (or selfEval supervisorEval)}}
+<div class="card border-0 shadow-sm">
+  <div class="card-header bg-light fw-semibold py-2 small">
+    <i class="bi bi-chat-left-text me-2 text-muted"></i>Written Responses
+  </div>
+  <div class="card-body">
+    <div class="row g-4">
+      <div class="col-md-6">
+        <div class="d-flex align-items-center gap-2 mb-3">
+          <span class="badge bg-secondary">Self</span>
+          {{#if selfEval}}<span class="text-muted small">{{selfEval.evaluatee_name}}</span>{{/if}}
+        </div>
+        {{#if selfEval}}
+        {{#if selfEval.strengths}}
+        <p class="small text-muted fw-semibold mb-1">Strengths</p>
+        <p class="small mb-3">{{selfEval.strengths}}</p>
+        {{/if}}
+        {{#if selfEval.growth_areas}}
+        <p class="small text-muted fw-semibold mb-1">Areas for Growth</p>
+        <p class="small mb-3">{{selfEval.growth_areas}}</p>
+        {{/if}}
+        {{#if selfEval.goals_next_semester}}
+        <p class="small text-muted fw-semibold mb-1">Goals for Next Semester</p>
+        <p class="small mb-0">{{selfEval.goals_next_semester}}</p>
+        {{/if}}
+        {{else}}
+        <p class="small text-muted fst-italic">No self-evaluation submitted for {{period}}.</p>
+        {{/if}}
+      </div>
+      <div class="col-md-6 border-start">
+        <div class="d-flex align-items-center gap-2 mb-3">
+          <span class="badge bg-primary">Supervisor</span>
+          {{#if supervisorEval}}<span class="text-muted small">{{supervisorEval.evaluator_name}}</span>{{/if}}
+        </div>
+        {{#if supervisorEval}}
+        {{#if supervisorEval.strengths}}
+        <p class="small text-muted fw-semibold mb-1">Observed Strengths</p>
+        <p class="small mb-3">{{supervisorEval.strengths}}</p>
+        {{/if}}
+        {{#if supervisorEval.growth_areas}}
+        <p class="small text-muted fw-semibold mb-1">Areas for Development</p>
+        <p class="small mb-3">{{supervisorEval.growth_areas}}</p>
+        {{/if}}
+        {{#if supervisorEval.goals_next_semester}}
+        <p class="small text-muted fw-semibold mb-1">Recommended Goals</p>
+        <p class="small mb-0">{{supervisorEval.goals_next_semester}}</p>
+        {{/if}}
+        {{else}}
+        <p class="small text-muted fst-italic">No supervisor evaluation submitted for {{period}}.</p>
+        {{/if}}
+      </div>
+    </div>
+  </div>
+</div>
+{{/if}}
+
+{{else}}
+<div class="text-center text-muted py-5">
+  <i class="bi bi-clipboard2-x fs-1 d-block mb-2 opacity-25"></i>
+  <p class="mb-2">No evaluations found for {{staff.name}}{{#if period}} in {{period}}{{/if}}.</p>
+  {{#if canManage}}
+  <a href="/evaluations/new?type=supervisor&evaluatee_id={{staff.id}}" class="btn btn-outline-primary btn-sm">
+    Submit supervisor evaluation
+  </a>
+  {{/if}}
+</div>
+{{/if}}

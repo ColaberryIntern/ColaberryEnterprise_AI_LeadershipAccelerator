@@ -1,0 +1,96 @@
+<div class="d-flex align-items-center gap-3 mb-4">
+  <a href="/proposals" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i></a>
+  <div>
+    <h2 class="mb-0">Submit Program Proposal</h2>
+    <p class="text-muted mb-0 small">Propose a program and link it to a residential curriculum outcome.</p>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-7">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <form method="POST" action="/proposals">
+
+          <div class="mb-3">
+            <label class="form-label">Program Title <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" name="title" required
+              placeholder="e.g. Stress-Free Finals Week Study Night"
+              value="{{prefill.title}}">
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Description <span class="text-danger">*</span></label>
+            <textarea class="form-control" name="description" rows="3" required
+              placeholder="What is this program? What will happen?">{{prefill.description}}</textarea>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Target Audience <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" name="target_audience" required
+              placeholder="e.g. All first-year residents in Andrews Hall"
+              value="{{prefill.target_audience}}">
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-sm-6">
+              <label class="form-label">Proposed Date</label>
+              <input type="date" class="form-control" name="proposed_date"
+                value="{{prefill.proposed_date}}">
+            </div>
+            <div class="col-sm-6">
+              <label class="form-label">Budget Estimate ($)</label>
+              <input type="number" class="form-control" name="budget_estimate" min="0" step="0.01"
+                placeholder="0.00" value="{{prefill.budget_estimate}}">
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Expected Outcomes <span class="text-danger">*</span></label>
+            <textarea class="form-control" name="expected_outcomes" rows="2" required
+              placeholder="What will participants gain? How will success be measured?">{{prefill.expected_outcomes}}</textarea>
+          </div>
+
+          <div class="mb-4">
+            <label class="form-label">Curriculum Learning Outcome</label>
+            <select class="form-select" name="outcome_id">
+              <option value="">— Not linked —</option>
+              {{#each outcomes}}
+              <option value="{{id}}">{{code}} — {{title}} ({{catLabel}})</option>
+              {{/each}}
+            </select>
+            <div class="form-text">Link this program to a residential curriculum goal to track coverage.</div>
+          </div>
+
+          <div class="d-flex gap-2">
+            <button type="submit" name="action" value="submit" class="btn btn-primary px-4">
+              <i class="bi bi-send me-1"></i>Submit for Review
+            </button>
+            <button type="submit" name="action" value="draft" class="btn btn-outline-secondary">
+              Save as Draft
+            </button>
+            <a href="/proposals" class="btn btn-link text-muted">Cancel</a>
+          </div>
+
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-light fw-semibold py-2 small">
+        <i class="bi bi-diagram-3 me-2 text-muted"></i>Curriculum Learning Outcomes
+      </div>
+      <div class="card-body small">
+        {{#each outcomes}}
+        <div class="mb-2">
+          <span class="fw-semibold">{{code}}</span>
+          <span class="text-muted ms-1">{{title}}</span>
+        </div>
+        {{/each}}
+        <p class="text-muted mb-0 mt-3">Linking your proposal to a learning outcome helps the RD see how programs map to the residential curriculum.</p>
+      </div>
+    </div>
+  </div>
+</div>
