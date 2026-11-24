@@ -31,8 +31,17 @@
 .cm-btn.is-secondary:hover{background:var(--sunken)}
 .cm-btn.is-disabled{background:var(--sunken);color:var(--muted);cursor:default}
 .cm-link{background:none;border:none;padding:4px 2px;color:var(--cm-link);font-weight:600;font-size:13px;cursor:pointer;text-decoration:underline}
-.te-nav .cm-switch-back{margin:10px 12px 0;text-align:left}
-.te-shell.collapsed .te-nav .cm-switch-back{display:none}
+/* The way back out of the classic view, and the only one in that layout (PortalShell's footer prop).
+   It used to sit at the end of a rail taller than the screen, so it was below the fold on a laptop,
+   and `display:none` while the rail was collapsed removed it outright. Both read to a learner as
+   "there is no way back" (Swati Raman, 2026-11-03). So: STICKY to the bottom of the rail rather
+   than scrolling off it, and icon-only when collapsed rather than gone. .te-nav is the scroll
+   container (overflow:auto, fixed height) and this is a direct child of it, so bottom:0 pins. */
+.te-nav .cm-switch-back{position:sticky;bottom:0;z-index:1;margin-top:auto;display:flex;align-items:center;gap:8px;
+  padding:10px 12px;text-align:left;background:var(--surface);border-top:1px solid var(--border-sub)}
+.te-nav .cm-switch-back .lb{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.te-shell.collapsed .te-nav .cm-switch-back{justify-content:center;gap:0;padding:11px 0}
+.te-shell.collapsed .te-nav .cm-switch-back .lb{display:none}
 .cm-btn:focus-visible,.cm-link:focus-visible,.cm-nav-item:focus-visible,.cm-tab:focus-visible{outline:3px solid var(--berry);outline-offset:2px}
 
 /* ---- the map ---- */
