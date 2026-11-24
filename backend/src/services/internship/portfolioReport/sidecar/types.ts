@@ -113,6 +113,13 @@ export interface SidecarIntern {
     weeks_behind: number | null;
   };
   last_ask: { sent_at: string; from: string; subject: string | null; body_text: string | null; body_truncated: boolean; satisfied: boolean | null; satisfied_by: string | null } | null;
+  /**
+   * The newest email FROM them in the window, or null. Unfiltered by content: a one-line "on it"
+   * counts, because the question this answers is "have they written back", not "have they asked
+   * something". Sidecars written before this field existed carry `undefined`, and consumers must
+   * tolerate that rather than treat it as "no mail".
+   */
+  last_inbound_at: string | null;
   /** This intern's most insightful messages (both directions), best first, at most 10 (communications.ts). */
   communications: Communication[];
   delta: {
@@ -144,7 +151,7 @@ export const REQUIRED_INTERN_KEYS: ReadonlyArray<keyof SidecarIntern> = [
   'name', 'first_name', 'enrollment_id', 'track', 'track_label', 'link', 'day', 'status', 'chips', 'narrative', 'narrative_from_model',
   'story', 'project', 'stories_verified', 'stories_total', 'percent_built', 'overdue_tasks', 'training', 'days_since_build_work',
   'build_work_in_window', 'counts', 'most_urgent', 'most_urgent_overflow', 'timeline', 'asking_you', 'asking_you_from_model',
-  'open_questions', 'nudge', 'artifacts', 'artifacts_raw_count', 'artifacts_real_count', 'asks', 'triage', 'pacing', 'last_ask', 'communications', 'delta',
+  'open_questions', 'nudge', 'artifacts', 'artifacts_raw_count', 'artifacts_real_count', 'asks', 'triage', 'pacing', 'last_ask', 'last_inbound_at', 'communications', 'delta',
 ];
 
 /** What the previous run persisted, per intern: the minimum needed to compute `delta`. */
