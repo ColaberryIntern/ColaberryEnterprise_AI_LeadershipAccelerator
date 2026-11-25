@@ -12,6 +12,7 @@ import { repointCurriculumLegacyBehaviors } from './curriculum/repointLegacyBeha
 import { recordPersonaVersionChangeIfNeeded } from './agentPersonaVersionHistoryService';
 import { classifyNewAgentAutonomyLevel, maybeReclassifyAutonomyLevel } from './agentAutonomyReclassificationService';
 import { GROWTH_JOURNEY_AGENT_ENTRIES } from './agentRegistry/growthJourneyAgents';
+import { AGENT_DOMAIN_PLAN_SYNC_ENTRIES } from './agentRegistry/agentDomainPlanSyncAgents';
 import { DOMAIN_AGENT_ENTRIES } from './agentRegistry/domainAgents';
 import { mergePreservedTools, readToolsGranted } from './agentDomain/seedToolPreservation';
 
@@ -3039,6 +3040,7 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     ],
   },
   ...GROWTH_JOURNEY_AGENT_ENTRIES,
+  ...AGENT_DOMAIN_PLAN_SYNC_ENTRIES,
   {
     agent_name: 'GrowthJourneyHandoffs',
     agent_type: 'ticket_creator_identity',

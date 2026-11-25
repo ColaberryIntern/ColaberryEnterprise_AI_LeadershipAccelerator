@@ -64,6 +64,7 @@ import { registerGrowthJourneyCrons } from './scheduling/growthJourneyCrons';
 import { registerAdSpendCrons } from './scheduling/adSpendCrons';
 import { registerChatConversationCrons } from './scheduling/chatConversationCrons';
 import { registerVisitorGeoCrons } from './scheduling/visitorGeoCrons';
+import { registerPlanRepoSyncCrons } from './scheduling/planRepoSyncCrons';
 import { runContentSync } from './explorerGrowth/content/runContentSync';
 import {
   isWithinSendWindow,
@@ -2186,6 +2187,12 @@ export function startScheduler(): void {
   // the bar goes dark again within about three days. Spawns the script as a child process on
   // purpose - see visitorGeoCrons.ts for why the 50MB reader must not live in this process.
   registerVisitorGeoCrons();
+  // Deliver each agent domain's published build plan into its builder's GitHub repo every six
+  // hours. Before this, the only caller of refreshRepoDocuments was the builder's own Sync
+  // button, so a republished plan could sit undelivered for days: on 2026-11-24 five of seven
+  // repos were eleven days behind and one builder was short credit she had already earned.
+  // See planRepoSyncCrons.ts and docs/sessions/CC-20261124-w8nz-plan-repo-sync.md.
+  registerPlanRepoSyncCrons();
 
   // Reliability alerting (Trust Center P1-5): rolling 15-min ai_events error-rate
   // check, alerts ali@colaberry.com on breach (2h in-memory cooldown, see
