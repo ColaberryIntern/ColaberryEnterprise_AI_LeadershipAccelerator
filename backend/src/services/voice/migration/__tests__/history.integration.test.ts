@@ -100,6 +100,16 @@ describeIfDb('history import against Postgres', () => {
     await apply(make(1, { startedAt: '2025-12-31T23:59:59.000Z' }, 'before'));
     expect(await M.verifyHistory(sequelize, x, T)).toMatchObject({ manifest: 3, imported: 3, unexpected: [], missing: [], ok: true });
   });
+  it('a re-import reads only its own tenant: the same ids elsewhere, with other content, are no conflict', async () => {
+    await apply(make(3));
+    await apply(make(3, { outcome: 'busy' }), OTHER);
+    expect(await apply(make(3))).toMatchObject({ inserted: 0, alreadyThere: 3, conflicts: [], ok: true });
+  });
+  it('verify includes a call at the first instant of its range', async () => {
+    const x = make(1, { startedAt: '2026-01-01T00:00:00.000Z' }, 'edge');
+    await apply(x);
+    expect(await M.verifyHistory(sequelize, x, T)).toMatchObject({ manifest: 1, imported: 1, ok: true });
+  });
   it('another tenant holding the same calls does not count as already there', async () => {
     await apply(make(3), OTHER);
     expect(await apply(make(3))).toMatchObject({ inserted: 3, alreadyThere: 0, ok: true });
