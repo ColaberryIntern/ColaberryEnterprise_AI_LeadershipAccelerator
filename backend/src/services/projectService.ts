@@ -54,8 +54,8 @@ async function loadEnrollmentForProject(enrollmentId: string): Promise<Enrollmen
   return enrollment;
 }
 
-/** Create a fresh project row + mark it the enrollment's active project. */
-async function buildAndActivateProject(
+/** Create a fresh project row for an enrollment, WITHOUT touching its active pointer. */
+async function buildProjectRow(
   enrollment: Enrollment,
   opts: { transaction?: Transaction; claimedForBuild?: boolean } = {},
 ): Promise<Project> {
@@ -82,6 +82,15 @@ async function buildAndActivateProject(
       ...(opts.claimedForBuild ? { build_claimed_at: new Date().toISOString() } : {}),
     },
   } as any, { transaction: opts.transaction });
+  return project;
+}
+
+/** Create a fresh project row + mark it the enrollment's active project. */
+async function buildAndActivateProject(
+  enrollment: Enrollment,
+  opts: { transaction?: Transaction; claimedForBuild?: boolean } = {},
+): Promise<Project> {
+  const project = await buildProjectRow(enrollment, opts);
   (enrollment as any).active_project_id = project.id;
   await enrollment.save({ transaction: opts.transaction });
   return project;
@@ -121,6 +130,21 @@ export async function createProjectForEnrollment(enrollmentId: string): Promise<
 export async function createNewProjectForEnrollment(enrollmentId: string): Promise<Project> {
   const enrollment = await loadEnrollmentForProject(enrollmentId);
   return buildAndActivateProject(enrollment);
+}
+
+/**
+ * Create a NEW project row WITHOUT repointing the enrollment's single
+ * `active_project_id`. For monitored side-projects (gov builds) that an intern
+ * owns ALONGSIDE their primary student build: activating one would clobber the
+ * pointer, and a second one would clobber the first - so an intern could never
+ * own two gov projects at once. This path leaves the active pointer where it is,
+ * so any number of gov projects coexist and none hijacks the student build.
+ * The student "+ New project" flow is unchanged and still uses the activating
+ * variant above.
+ */
+export async function createDetachedProjectForEnrollment(enrollmentId: string): Promise<Project> {
+  const enrollment = await loadEnrollmentForProject(enrollmentId);
+  return buildProjectRow(enrollment);
 }
 
 /**

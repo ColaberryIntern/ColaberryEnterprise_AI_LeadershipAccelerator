@@ -20,7 +20,7 @@ import { getIdentityLinks } from '../../modules/identity/platformIdentityService
 import PlatformIdentity from '../../models/PlatformIdentity';
 import Enrollment from '../../models/Enrollment';
 import ContractTrack from '../../models/ContractTrack';
-import { createNewProjectForEnrollment } from '../projectService';
+import { createDetachedProjectForEnrollment } from '../projectService';
 import Project from '../../models/Project';
 import { materializePlanAsTasks } from '../sbp/materializeTasks';
 import { buildSchedule, type CohortWindow, type Schedule } from '../sbp/buildSchedule';
@@ -33,6 +33,7 @@ import { factoryId } from './factoryIds';
 import { decomposeGovBuildPlanRaw } from './govBuildPlanAI';
 import { rescaleScheduleToDeadline } from './govScheduleWindow';
 import { reanalyzeProposalBlueprint } from './proposal/reanalyzeProposalBlueprint';
+import { normalizeGovReleaseLadder, withDefaultGovParking } from './govReleaseLadder';
 
 export type GovMaterializeReason =
   | 'no_enrollment' | 'no_program' | 'decompose_error' | 'plan_blocked' | 'bad_input'
@@ -120,11 +121,16 @@ export async function materializeGovBuildProject(input: MaterializeGovProjectInp
   //    write rows that corrupt the board (e.g. a dangling blocked_by locks a task forever).
   const raw = await decomposeGovBuildPlanRaw({ requirements: input.requirements, title: input.title, buyer: input.buyer, buildSpec: input.buildSpec });
   if (raw.error || !raw.plan) throw new GovMaterializeError('decompose_error', raw.error ?? 'The AI build plan could not be generated right now.');
-  const plan = raw.plan;
-  const gate = gatePlan(plan);
+  const basePlan = raw.plan;
+  const gate = gatePlan(basePlan);
   if (blockingViolations(gate.violations).length > 0) {
     throw new GovMaterializeError('plan_blocked', 'The generated build plan has blocking issues — re-generate the build plan before creating the project.');
   }
+  // M2-T1: impose the gov three-release ladder (R0 Foundation / R1 Proposal / R2 Full build-out)
+  // on the gated plan. Gov-only: the non-gov student path never reaches this function, so its
+  // decomposer-emitted releases are unchanged. Reassigns release keys only (no story added/dropped),
+  // so the gate computed above still holds.
+  const plan = normalizeGovReleaseLadder(basePlan);
 
   // 3. Idempotent project: reuse the one already linked to this pursuit's solution_build track, else create+link.
   const track = await ContractTrack.findByPk(factoryId('track', [input.deliveryProjectId, 'solution_build']));
@@ -133,7 +139,11 @@ export async function materializeGovBuildProject(input: MaterializeGovProjectInp
   if (!projectId) {
     let project: Project;
     try {
-      project = await createNewProjectForEnrollment(enrollmentId);
+      // M2-T3: DETACHED create - a gov build is a monitored side-project and must not repoint the
+      // enrollment's single active_project_id. That lets an intern own multiple gov projects at once
+      // (a second would otherwise clobber the first) and stops a gov build from hijacking their primary
+      // student project. The student "+ New project" flow is unchanged.
+      project = await createDetachedProjectForEnrollment(enrollmentId);
     } catch (err: any) {
       if (/no associated program|program/i.test(String(err?.message ?? ''))) {
         throw new GovMaterializeError('no_program', "The assigned intern's enrollment has no program (its cohort is missing a program). Assign an intern enrolled in a cohort with a program.");
@@ -141,7 +151,9 @@ export async function materializeGovBuildProject(input: MaterializeGovProjectInp
       throw err;
     }
     project.name = input.projectName || input.title || `Gov build — ${input.canonicalOpportunityId}`;
-    project.project_variables = { ...(project.project_variables || {}), kind: 'gov', gov_canonical_id: input.canonicalOpportunityId, gov_delivery_project_id: input.deliveryProjectId };
+    // M2-T2: park R2 (Full build-out) by default. withDefaultGovParking never overwrites an existing
+    // parked list, so a re-materialize of an already-activated project does not re-park it.
+    project.project_variables = withDefaultGovParking({ ...(project.project_variables || {}), kind: 'gov', gov_canonical_id: input.canonicalOpportunityId, gov_delivery_project_id: input.deliveryProjectId });
     await project.save();
     projectId = project.id as string;
     created = true;
