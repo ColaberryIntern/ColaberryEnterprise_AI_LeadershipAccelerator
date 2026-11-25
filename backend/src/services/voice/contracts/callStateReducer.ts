@@ -80,6 +80,7 @@ const PRE_DISPATCH: ReadonlySet<CallState> = new Set(['requested', 'reserved', '
 
 /** Rule 6: does this one event show the call reached the phone network? */
 function showsCallExisted(e: CanonicalCallEvent): boolean {
+  if (e.source === 'studio') return false; // our own bookkeeping (opt-out, transfer): says nothing about the call's state
   if (e.providerCallId || e.answeredBy) return true;
   if (e.source === 'gateway') return false;
   // Any carrier event, whatever its state, means the carrier knew about the call.
@@ -103,7 +104,7 @@ function derive(callId: string, events: CanonicalCallEvent[], invalidEvents: num
   const resolved = callExisted || sorted.some((e) => e.source === 'reconciler');
 
   // Rule 4: while a dispatch is ambiguous and unresolved, gateway events past dispatch do not count.
-  const effective = sorted.filter((e) => !(dispatchAmbiguous && !resolved && e.source === 'gateway' && !GATEWAY_ALLOWED_WHILE_AMBIGUOUS.has(e.state)));
+  const effective = sorted.filter((e) => e.source !== 'studio' && !(dispatchAmbiguous && !resolved && e.source === 'gateway' && !GATEWAY_ALLOWED_WHILE_AMBIGUOUS.has(e.state)));
 
   const terminals = effective.filter((e) => isTerminal(e.state));
   let state: CallState = 'requested';

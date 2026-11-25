@@ -6,10 +6,14 @@ Source of truth: [MASTER_BUILD_PROMPT.md](MASTER_BUILD_PROMPT.md) (authorized te
 
 ## How to look
 
-- Every voice log line is JSON with `service: voice-studio`, `event`, `error_class` and `correlation_id` (the call id). Follow one call by its correlation_id.
-- `voice_ops_metrics` is logged every five minutes while a direct engine is on: volume, success and failure rate, retries, and latency percentiles per provider operation.
+- Voice log lines are JSON with `service` (voice-studio, voice-gateway or voice-postcall), `event`, `outcome`, `error_class` on failure, and `correlation_id` (the call id, or null when no call is known yet). Follow one call by its correlation_id.
+- `voice_ops_metrics` is logged every five minutes while a direct engine is on, and for a day after its last call: volume, success and failure rate, retries, and latency percentiles per provider operation.
 - Never paste a phone number, transcript or key into a ticket. Use the call id.
 - Emergency stop: the existing launch safety switch. It blocks new dials, inbound agent answers and transfers. It does not hang up a live call.
+
+## What is live today
+
+The only outbound calls so far are Test Lab calls (`test_mode`). `call_failures`, `busy_no_answer`, `no_ringing` and `wrong_agent` leave test calls out, so they start working with the first live route (VS4.5), which must write `profile_version_id` on every call. Provider circuits, signature failures, silent audio, stuck and stalled calls, spend, opt-outs and handler failures cover test calls too. Engine B answer latency is not measured yet.
 
 ## Calls are accepted but never ring (`no_ringing`)
 
@@ -45,7 +49,7 @@ Source of truth: [MASTER_BUILD_PROMPT.md](MASTER_BUILD_PROMPT.md) (authorized te
 
 ## Provider 429 or 5xx (`provider_circuit_open`)
 
-- **Detection:** A circuit (twilio, anthropic, openai_realtime) is not closed: half or more of at least five recent calls to it failed.
+- **Detection:** A circuit (twilio, anthropic, openai_realtime) is not closed: half or more of at least five recent calls to it failed. Waiting too long for an answer counts as a failure; a caller hanging up or interrupting does not.
 - **Containment:** Automatic: Engine A apologizes at once, Engine B and dials are refused. It re-tests itself after 60 seconds.
 - **Diagnostics:** voice_circuit_changed lines; provider status page; quota and key validity (AuthError).
 - **Remediation:** Nothing if it closes by itself. Quota or key: owner action. A restart re-tests at once.
@@ -53,7 +57,7 @@ Source of truth: [MASTER_BUILD_PROMPT.md](MASTER_BUILD_PROMPT.md) (authorized te
 
 ## Silent audio (`silent_audio`)
 
-- **Detection:** A person answered and the AI session never succeeded.
+- **Detection:** A call answered for ten seconds or more ended with no AI session (a transfer is not counted).
 - **Containment:** Set the route to legacy.
 - **Diagnostics:** Did the WebSocket upgrade arrive (voice_ws_upgrade_refused, voice_ws_setup_timeout)? Did the session start line appear? Engine B: did session.updated arrive?
 - **Remediation:** Fix the address, flag or key it points to; test call on the same engine.

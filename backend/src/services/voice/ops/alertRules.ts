@@ -24,7 +24,7 @@ export interface OpsFacts {
   queueStuck: number;
   policyDenied: number;
   webhookSignatureFailures: number;
-  /** A person answered and the AI session never succeeded, last hour. */
+  /** Answered for 10 s or more, ended, and no AI session ever started (a transfer is not counted), last hour. */
   silentAnswered: number;
   transitionsRejected: number;
   /** Live (non-test) calls whose version is missing or not published. */
@@ -66,7 +66,7 @@ export function evaluateAlerts(f: OpsFacts): VoiceAlert[] {
   if (f.webhookSignatureFailures >= THRESHOLDS.signatureFailures) add('webhook_signature', 8, `${f.webhookSignatureFailures} webhook requests failed the signature check in the last hour.`);
   const open = Object.entries(f.breakers).filter(([, s]) => s !== 'CLOSED').map(([p]) => p);
   if (open.length) add('provider_circuit_open', 8, `Circuit not closed for: ${open.join(', ')}.`);
-  if (f.silentAnswered > 0) add('silent_audio', 8, `${f.silentAnswered} answered call(s) in the last hour had no working AI session.`);
+  if (f.silentAnswered > 0) add('silent_audio', 8, `${f.silentAnswered} call(s) answered for ten seconds or more in the last hour had no AI session at all.`);
   if (f.transitionsRejected >= THRESHOLDS.transitions) add('interruption_failures', 6, `${f.transitionsRejected} rejected turn changes in the last hour.`);
   if (f.wrongVersion > 0) add('wrong_agent', 9, `${f.wrongVersion} live call(s) in the last day ran without a published agent version.`);
   if (f.duplicateDials > 0) add('duplicate_calls', 9, `${f.duplicateDials} recipient(s) were dialed more than twice in ten minutes.`);

@@ -12,6 +12,7 @@
  * The destination is resolved from VOICE_TEST_ALLOWED_NUMBER inside the server; responses and logs
  * never contain it.
  */
+import { tapVoiceLog } from '../ops/opsMetrics';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../../../config/database';
 import { isKillSwitchActiveStrict } from '../../launchSafety';
@@ -108,7 +109,7 @@ export function testGatewayDeps(req: LiveTestRequest, c: VoiceConfig): GatewayDe
       caps: { perDestination24h: c.VOICE_TEST_MAX_ATTEMPTS, perRoutePerDay: null, perTenantPerDay: null } }),
     reserve: reserveDial,
     transition: transitionReservation,
-    log: (e) => console.log(JSON.stringify({ level: 'info', service: 'voice-gateway', ...e })),
+    log: (e) => console.log(JSON.stringify(tapVoiceLog({ level: 'info', service: 'voice-gateway', ...e }))),
   };
 }
 
@@ -151,6 +152,6 @@ export function productionTestLabDeps(): TestLabDeps {
     provider: productionDirectProvider,
     authorize: authorizeVoiceCall,
     dispatch: dispatchAuthorized,
-    log: (line) => (line.level === 'warn' || line.level === 'error' ? console.warn : console.log)(JSON.stringify({ timestamp: new Date().toISOString(), service: 'voice-studio', ...line })),
+    log: (line) => (line.level === 'warn' || line.level === 'error' ? console.warn : console.log)(JSON.stringify(tapVoiceLog({ service: 'voice-studio', ...line }))),
   };
 }

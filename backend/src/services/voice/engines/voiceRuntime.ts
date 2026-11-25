@@ -21,13 +21,14 @@ import { admissionsCalendar } from '../../calendarTarget';
 import { loadVoiceConfig } from '../voiceConfig';
 import { installSigtermDrain, SessionWorker, type WorkerDeps } from '../session/sessionWorker';
 import { mintToken } from '../twilio/correlationToken';
-import { consumeToken } from '../twilio/voiceCallStore';
+import { appendCallEvents, consumeToken, recomputeCall } from '../twilio/voiceCallStore';
+import { CONTRACT_VERSION } from '../contracts/schemas';
 import { createClaudeVoiceLlm } from './claudeVoiceLlm';
 import type { RelayDeps } from './conversationRelayEngine';
 import { buildRelayTwiml } from './relayProtocol';
 import { nextOpenSlotsTool, ToolBroker } from './toolBroker';
 import { liveProfile, TEST_PROFILE } from './voiceProfiles';
-import { tapVoiceLog } from '../ops/opsMetrics';
+import { tapVoiceLog, voiceOps } from '../ops/opsMetrics';
 import { guardLlm, guardRealtime, realtimeAvailable } from '../ops/providerGuards';
 import { runOpsSweep } from '../ops/opsSweep';
 import { toolsNotSwitchedOff } from '../profiles/voiceToolPolicy';
@@ -55,10 +56,29 @@ export function toolVerdict(rec: { committed: boolean; errorClass?: string }): {
   return { decision: 'allowed', status: rec.committed ? 'committed' : 'completed' };
 }
 
+/** Write that the AI session is up (the evidence silent-audio alerts and success rates rest on). Never throws. */
+export async function recordSessionStarted(callId: string): Promise<void> {
+  try {
+    await appendCallEvents([{ contractVersion: CONTRACT_VERSION, eventKey: 'session:started', callId, source: 'session', state: 'session_active', occurredAt: new Date().toISOString() }]);
+    await recomputeCall(callId);
+  } catch (e) {
+    log({ level: 'error', event: 'voice_session_event_failed', outcome: 'failure', error_class: (e as Error).name || 'DatabaseError', call_id: callId });
+  }
+}
+
+/** Sweep while a direct engine is on, and for a day after its last call: turning the engine off must not stop the watching. */
+async function watching(): Promise<boolean> {
+  const c = loadVoiceConfig();
+  if (c.valid && (c.VOICE_STUDIO_ENABLED || c.VOICE_TEST_ENABLED)) return true;
+  const [r] = await sequelize.query<{ any: boolean }>("SELECT EXISTS (SELECT 1 FROM voice_calls WHERE engine IN ('conversation_relay','openai_realtime') AND created_at > NOW() - INTERVAL '24 hours') AS any", { type: QueryTypes.SELECT });
+  return Boolean(r?.any);
+}
+
 /** Idempotent tool-run insert with bounded retry. Exported for tests. */
 export async function persistToolRun(callId: string, rec: { toolCallId: string; name: string; turnId: number; committed: boolean; afterClose: boolean; errorClass?: string },
   exec: (sql: string, replacements: Record<string, unknown>) => Promise<unknown> = (sql, replacements) => sequelize.query(sql, { replacements, type: QueryTypes.INSERT }),
   attempts = 3, backoffMs = 200): Promise<boolean> {
+  const t0 = Date.now();
   for (let i = 1; i <= attempts; i++) {
     try {
       await exec(
@@ -67,9 +87,11 @@ export async function persistToolRun(callId: string, rec: { toolCallId: string; 
          ON CONFLICT (call_id, idempotency_key) DO NOTHING`,
         { callId, turn: rec.turnId, name: rec.name, key: rec.toolCallId, ...toolVerdict(rec) },
       );
+      voiceOps.operation('database.tool_run', 'success', Date.now() - t0, i - 1);
       return true;
     } catch (e) {
       if (i === attempts) {
+        voiceOps.operation('database.tool_run', 'failure', Date.now() - t0, i - 1);
         log({ level: 'error', event: 'voice_tool_record_lost', outcome: 'failure', error_class: (e as { name?: string })?.name || 'DatabaseError', call_id: callId, tool_call_id: rec.toolCallId, committed: rec.committed, after_close: rec.afterClose });
         return false;
       }
@@ -106,6 +128,7 @@ export function relayDeps(): RelayDeps {
     llm: guardLlm(createClaudeVoiceLlm(c.VOICE_ENGINE_A_MODEL)),
     broker: relayBroker,
     profile: liveProfile(),
+    onSessionStarted: (callId) => { void recordSessionStarted(callId); },
     onOptOut: (callId) => { void recordOptOut(callId, productionOptOutDeps()); }, // never throws
     accountSid: () => process.env.TWILIO_ACCOUNT_SID || undefined,
     consumeSessionRef: consumeToken,
@@ -159,6 +182,7 @@ export function realtimeDeps(): RealtimeDeps {
     callMatches,
     connectModel: guardRealtime((h) => connectOpenAiRealtime(c.VOICE_ENGINE_B_MODEL, h)),
     modelAvailable: () => realtimeAvailable(),
+    onSessionStarted: (callId) => { void recordSessionStarted(callId); },
     now: () => Date.now(),
     log,
   };
@@ -197,11 +221,21 @@ export function installVoiceRuntime(server: Server): void {
   // Reconcile, do not trust delivery: Twilio does not redeliver status callbacks. The sweep is a
   // no-op unless a direct engine is switched on, checked on every tick so a flag flip needs no restart.
   const sweep = setInterval(() => {
-    const c = loadVoiceConfig();
-    if (!c.valid || !(c.VOICE_STUDIO_ENABLED || c.VOICE_TEST_ENABLED)) return;
-    void runOpsSweep(); // never throws
-    reconcileOptOuts().catch((e: Error) => log({ level: 'error', event: 'voice_opt_out_sweep_failed', outcome: 'failure', error_class: e.name || 'Error' }));
-    reconcileDirectCompletions().catch((e: Error) => log({ level: 'error', event: 'voice_postcall_sweep_failed', outcome: 'failure', error_class: e.name || 'Error' }));
+    void sweepOnce();
   }, POSTCALL_SWEEP_MS);
   sweep.unref();
+}
+
+/** One pass of everything the sweep does. Never throws. Exported for tests. */
+export async function sweepOnce(): Promise<boolean> {
+  try {
+    if (!(await watching())) return false;
+    await runOpsSweep(); // before the reconcilers, so it sees what they have not fixed yet; never throws
+    await reconcileOptOuts().catch((e: Error) => log({ level: 'error', event: 'voice_opt_out_sweep_failed', outcome: 'failure', error_class: e.name || 'Error' }));
+    await reconcileDirectCompletions().catch((e: Error) => log({ level: 'error', event: 'voice_postcall_sweep_failed', outcome: 'failure', error_class: e.name || 'Error' }));
+    return true;
+  } catch (e) {
+    log({ level: 'error', event: 'voice_sweep_failed', outcome: 'failure', error_class: (e as Error).name || 'DatabaseError' });
+    return false;
+  }
 }

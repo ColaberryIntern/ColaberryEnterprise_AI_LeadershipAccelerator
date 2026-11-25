@@ -9,6 +9,7 @@
  *   GET /api/admin/voice-studio/quality                    rubric + evaluation runs
  *   GET /api/admin/voice-studio/costs?days                 actual vs estimated, caps, operations
  */
+import { tapVoiceLog } from '../../services/voice/ops/opsMetrics';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import { z } from 'zod';
 import * as Auth from '../../middlewares/authMiddleware';
@@ -50,7 +51,7 @@ export function buildVoiceStudioEvidenceRouter(deps: () => EvidenceDeps = produc
   const bad = (res: Response): void => { res.status(400).json({ error: 'ValidationError' }); };
   const fail = (res: Response, event: string, e: unknown): void => {
     const errorClass = (e as { name?: string })?.name || 'DatabaseError';
-    console.warn(JSON.stringify({ level: 'error', service: 'voice-studio', event, outcome: 'failure', error_class: errorClass }));
+    console.warn(JSON.stringify(tapVoiceLog({ level: 'error', service: 'voice-studio', event, outcome: 'failure', error_class: errorClass })));
     res.status(500).json({ error: errorClass });
   };
 
@@ -79,7 +80,7 @@ export function buildVoiceStudioEvidenceRouter(deps: () => EvidenceDeps = produc
     try {
       const d = await deps().store.getCallDetail(id.data);
       if (!d) { res.status(404).json({ error: 'NotFound' }); return; }
-      console.log(JSON.stringify({ level: 'info', service: 'voice-studio', event: 'voice_audit_export', outcome: 'success', call_id: id.data, actor: req.admin?.sub ?? null }));
+      console.log(JSON.stringify(tapVoiceLog({ level: 'info', service: 'voice-studio', event: 'voice_audit_export', outcome: 'success', call_id: id.data, actor: req.admin?.sub ?? null })));
       res.status(200).type('text/csv').set('Cache-Control', 'no-store')
         .set('Content-Disposition', `attachment; filename="voice-call-${id.data}.csv"`).send(timelineCsv(buildTimeline(d)));
     } catch (e) { fail(res, 'voice_audit_export_failed', e); }

@@ -103,7 +103,7 @@ export const VerifiedProviderEventSchema = z.object({
 }).strict();
 export type VerifiedProviderEvent = z.infer<typeof VerifiedProviderEventSchema>;
 
-export const EventSourceSchema = z.enum(['gateway', 'carrier', 'session', 'reconciler', 'legacy']);
+export const EventSourceSchema = z.enum(['gateway', 'carrier', 'session', 'reconciler', 'legacy', 'studio']);
 
 /** The normalized, append-only event every source is reduced to. */
 export const CanonicalCallEventSchema = z.object({

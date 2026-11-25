@@ -41,6 +41,8 @@ export interface RealtimeDeps {
   consumeSessionRef: (claims: TokenClaims) => Promise<'consumed' | 'replay' | 'unknown_call'>;
   callMatches: (callId: string, callSid: string) => Promise<boolean>;
   connectModel: (h: ModelHandlers) => SocketLike;
+  /** VS4.3: the model accepted our session, so the caller can be heard and answered (never awaited, never throws). */
+  onSessionStarted?: (callId: string) => void;
   /** VS4.3: false while the provider's circuit is open. The call is refused before a session exists. */
   modelAvailable?: () => boolean;
   now: () => number;
@@ -193,6 +195,7 @@ export class RealtimeBridge {
       case 'session.updated': {
         if (this.ready) return;
         this.ready = true;
+        this.d.onSessionStarted?.(this.callId!);
         for (const f of this.prebuffer.splice(0)) this.model!.send(appendAudio(f));
         h.dispatch({ type: 'connected' });
         this.greetingRequested = true;

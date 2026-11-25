@@ -16,12 +16,13 @@
  * lead, so only step 1 applies. The caller's words are never logged or stored here.
  */
 import { QueryTypes } from 'sequelize';
+import { tapVoiceLog } from '../ops/opsMetrics';
 
 const CALL = '(?:call(?:ing|s|ed)?|phon(?:e|ing)|ring(?:ing)?|contact(?:ing|ed)?|bother(?:ing|ed)?|dial(?:ing)?)';
 const NOT = "(?:do\\s*n[o'\u2019]?t|don\\s*t|do\\s+not|never|not)";
 const PATTERNS: readonly RegExp[] = [
-  /\b(?:do\s*n[o'\u2019]?t|don\s*t|do\s+not|no\s+longer)\s+(?:want|wanna|wish|like|consent|agree)\b[^.?!]{0,30}\b(?:calls?|calling|called|contact(?:ed|ing)?|hear\s+from\s+you)\b(?![^.?!]{0,12}\btomorrow\b)/i,
-  /\b(?:can\s*n[o'\u2019]?t|can(?:'|\u2019)t|cannot|should\s*n(?:'|\u2019)?t|shouldn(?:'|\u2019)t|must\s*not|mustn(?:'|\u2019)t)\s+(?:be\s+)?call(?:ing)?\s+(?:me|us|here)\b/i,
+  /\b(?:do\s*n[o'\u2019]?t|don\s*t|do\s+not|no\s+longer)\s+(?:want|wanna|wish|like|consent|agree)\b(?!\s+to\s+(?:miss|end|lose|drop|interrupt|hang|cut|finish|delay|cancel|rush|forget|call)\b)[^.?!]{0,30}\b(?:calls?|calling|called|contact(?:ed|ing)?|hear\s+from\s+you)\b(?![^.?!]{0,12}\btomorrow\b)/i,
+  /\b(?:can\s*n[o'\u2019]?t|can(?:'|\u2019)t|cannot|should\s*n(?:'|\u2019)?t|shouldn(?:'|\u2019)t|must\s*not|mustn(?:'|\u2019)t)\s+(?:be\s+)?call(?:ing)?\s+(?:me|us|here)\b(?!\s+(?:after|before|until|till|between|at|on|during|this|today|tonight|right\s+now)\b)/i,
   /\brather\s+you\s+(?:did\s*n(?:'|\u2019)?t|didn(?:'|\u2019)t|not)\s+(?:call|contact|phone)\b/i,
   /\bstop\s+with\s+(?:the|these|all)\b[^.?!]{0,12}\bcalls?\b/i,
   /\bDNC\b/i,
@@ -82,6 +83,13 @@ export function productionOptOutDeps(): OptOutDeps {
       const rows = await s.query<{ leadId: number | null; testMode: boolean }>(
         `UPDATE voice_calls SET state_reason = 'caller_opt_out', updated_at = NOW() WHERE id = :callId RETURNING lead_id AS "leadId", test_mode AS "testMode"`,
         { replacements: { callId }, type: QueryTypes.SELECT });
+      if (rows[0]) {
+        // When it was first heard. Kept on retries, so the alert can age it.
+        await s.query(
+          `INSERT INTO voice_call_events (tenant_id, call_id, event_key, source, state, occurred_at)
+           SELECT tenant_id, id, 'opt_out_heard', 'studio', 'session_active', NOW() FROM voice_calls WHERE id = :callId
+           ON CONFLICT (call_id, event_key) DO NOTHING`, { replacements: { callId } });
+      }
       return rows[0] ?? null;
     },
     suppress: async (leadId) => {
@@ -95,7 +103,7 @@ export function productionOptOutDeps(): OptOutDeps {
          SELECT tenant_id, id, 'opt_out_recorded', 'studio', 'session_active', NOW() FROM voice_calls WHERE id = :callId
          ON CONFLICT (call_id, event_key) DO NOTHING`, { replacements: { callId } });
     },
-    log: (l) => (l.level === 'info' ? console.log : console.warn)(JSON.stringify({ timestamp: new Date().toISOString(), ...l })),
+    log: (l) => (l.level === 'info' ? console.log : console.warn)(JSON.stringify(tapVoiceLog(l))),
   };
 }
 

@@ -4,6 +4,7 @@
  * Fail closed: anything unreadable refuses, and the caller gets the safe fallback. The target number is
  * compared in the database and never logged or stored.
  */
+import { tapVoiceLog } from '../ops/opsMetrics';
 import { QueryTypes } from 'sequelize';
 import { isKillSwitchActiveStrict } from '../../launchSafety';
 import { MAX_TRANSFERS_PER_HOUR } from './humanTransfer';
@@ -12,7 +13,7 @@ export async function emergencyStopped(read: () => Promise<boolean> = isKillSwit
   try {
     return (await read()) !== false;
   } catch (e) {
-    console.warn(JSON.stringify({ level: 'error', service: 'voice-studio', event: 'voice_kill_switch_unreadable', outcome: 'failure', error_class: (e as Error).name || 'SettingsError' }));
+    console.warn(JSON.stringify(tapVoiceLog({ level: 'error', service: 'voice-studio', event: 'voice_kill_switch_unreadable', outcome: 'failure', error_class: (e as Error).name || 'SettingsError' })));
     return true;
   }
 }
@@ -40,7 +41,7 @@ export async function refuseTransferDial(callId: string, target: string, stopped
       return null;
     });
   } catch (e) {
-    console.warn(JSON.stringify({ level: 'error', service: 'voice-studio', event: 'voice_transfer_guard_failed', outcome: 'failure', error_class: (e as Error).name || 'DatabaseError', call_id: callId }));
+    console.warn(JSON.stringify(tapVoiceLog({ level: 'error', service: 'voice-studio', event: 'voice_transfer_guard_failed', outcome: 'failure', error_class: (e as Error).name || 'DatabaseError', call_id: callId })));
     return 'guard_unavailable';
   }
 }

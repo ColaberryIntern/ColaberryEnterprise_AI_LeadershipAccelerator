@@ -19,6 +19,7 @@
  *
  * Failure: any database error denies with `reservation_unavailable` (fail closed).
  */
+import { tapVoiceLog } from '../ops/opsMetrics';
 import { QueryTypes, Transaction } from 'sequelize';
 import { sequelize } from '../../../config/database';
 
@@ -100,8 +101,8 @@ export async function reserveDial(input: ReserveInput): Promise<ReserveResult> {
       return { outcome: 'reserved', reservationId: row.id, replay: false } as const;
     });
   } catch (err) {
-    console.error(JSON.stringify({ level: 'error', service: 'voice-gateway', event: 'voice_reservation_failed', outcome: 'failure',
-      error_class: err instanceof Error ? err.constructor.name : 'UnknownError' })); // message omitted: it can echo SQL values
+    console.error(JSON.stringify(tapVoiceLog({ level: 'error', service: 'voice-gateway', event: 'voice_reservation_failed', outcome: 'failure',
+      error_class: err instanceof Error ? err.constructor.name : 'UnknownError' }))); // message omitted: it can echo SQL values
     // The error class (never the message, which can echo SQL values) travels with the denial so a
     // fail-closed block is diagnosable from the caller's log.
     return { outcome: 'denied', reason: 'reservation_unavailable', detail: err instanceof Error ? err.constructor.name : 'UnknownError' };

@@ -47,6 +47,8 @@ export interface RelayDeps {
    * communication log. Never logged.
    */
   onTranscript?: (callId: string, transcript: string) => void;
+  /** VS4.3: the AI session is up (never awaited, never throws). */
+  onSessionStarted?: (callId: string) => void;
   /** VS4.2: the caller asked not to be called. Called at most once per call; never awaited. */
   onOptOut?: (callId: string) => void;
 }
@@ -183,6 +185,7 @@ export class RelayConnection {
       this.log('info', 'voice_relay_end_sent', { reason });
     });
     this.log('info', 'voice_relay_session_started', { profile: this.d.profile.versionId });
+    this.d.onSessionStarted?.(this.callId!);
     // Started in arrival order, not awaited one by one: a later interrupt must be able to cut an earlier answer.
     await Promise.all(this.early.splice(0).map((e) => this.live(e)));
   }

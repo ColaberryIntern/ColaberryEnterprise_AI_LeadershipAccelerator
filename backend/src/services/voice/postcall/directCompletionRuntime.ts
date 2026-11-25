@@ -12,6 +12,7 @@
  * completion was never recorded, and processes them. Bounded per run; safe to run concurrently with
  * the live triggers because every write is claimed.
  */
+import { tapVoiceLog } from '../ops/opsMetrics';
 import { QueryTypes } from 'sequelize';
 import { claimCompletion } from './completion';
 import { MAX_EFFECT_ATTEMPTS, claimEffect, clearTranscriptReview, markEffectDone, markTranscriptReview, releaseEffect } from './effectClaims';
@@ -33,7 +34,7 @@ export function transcriptFor(callId: string, now = Date.now()): string {
 }
 
 const log = (line: Record<string, unknown>): void => {
-  const out = JSON.stringify({ timestamp: new Date().toISOString(), ...line });
+  const out = JSON.stringify(tapVoiceLog(line));
   if (line.level === 'error' || line.level === 'warn') console.warn(out); else console.log(out);
 };
 

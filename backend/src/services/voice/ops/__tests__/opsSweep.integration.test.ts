@@ -48,7 +48,6 @@ describeIfDb('operations facts against Postgres', () => {
       ['dispatchUnknown24h', () => call({ state: "'dispatch_unknown'" })],
       ['orphaned', () => call({ state: "'session_active'", created_at: ago('71 minutes') })],
       ['stalled', () => call({ state: "'session_active'", created_at: ago('6 minutes') })],
-      ['silentAnswered', () => call({ state: "'completed'", human_answered: 'TRUE', direction: "'inbound'" })],
       ['optOutsPending', () => call({ state: "'completed'", state_reason: "'caller_opt_out'", lead_id: '9', created_at: ago('2 hours'), updated_at: ago('16 minutes'), direction: "'inbound'" })],
       ['queueStuck', () => sequelize.query(`INSERT INTO voice_dial_reservations (tenant_id, idempotency_key, destination_hash, purpose, status, lease_expires_at) VALUES ('${T}', 'q', 'h', 't', 'dispatching', ${ago('3 minutes')})`)],
       ['duplicateDials', () => sequelize.query(`INSERT INTO voice_dial_reservations (tenant_id, idempotency_key, destination_hash, purpose, status, lease_expires_at) SELECT '${T}', 'd' || g, 'same', 't', 'accepted', NOW() FROM generate_series(1, 3) g`)],
@@ -85,6 +84,53 @@ describeIfDb('operations facts against Postgres', () => {
     const m = new M.OpsMetrics(() => 1);
     for (let i = 0; i < 12; i++) m.operation('anthropic.first_text', 'success', 3000);
     expect(await S.readFacts(sequelize, m)).toMatchObject({ turnLatencyP95Ms: 3000, turnLatencySamples: 12 });
+  });
+
+  it('DRILL through the real writers: a call answered for 30 s with no session is silent; one with a session, a transfer, or a 3 s answer is not', async () => {
+    const { appendCallEvents, recomputeCall } = await import('../../twilio/voiceCallStore');
+    const { twilioStatusToEvents } = await import('../../twilio/twilioStatusMap');
+    const { recordSessionStarted } = await import('../../engines/voiceRuntime');
+    const { refuseTransferDial } = await import('../../transfer/transferGuard');
+    const t0 = Date.now() - 120_000;
+    const run = async (answeredMs: number, between?: (id: string) => Promise<unknown>) => {
+      const id = await call({ state: "'dispatching'" });
+      const sid = 'CA' + id.replace(/-/g, '');
+      const at = async (status: string, ms: number) => appendCallEvents(twilioStatusToEvents(id, { CallSid: sid, CallStatus: status }, new Date(t0 + ms).toISOString()));
+      await at('ringing', 0);
+      await at('in-progress', 1_000);
+      if (between) await between(id);
+      await at('completed', 1_000 + answeredMs);
+      await recomputeCall(id);
+      return id;
+    };
+    await run(3_000);
+    await run(30_000, recordSessionStarted);
+    await run(30_000, (id) => refuseTransferDial(id, '+15555550199', async () => false));
+    expect((await facts()).silentAnswered).toBe(0);
+    await run(30_000);
+    expect((await facts()).silentAnswered).toBe(1);
+    const [[ok]] = (await sequelize.query(`SELECT COUNT(*)::int AS n FROM voice_calls WHERE tenant_id = '${T}' AND session_succeeded`)) as [Array<{ n: number }>, unknown];
+    expect(ok.n).toBe(1); // the session event is also what success rates rest on
+  });
+
+  it('DRILL through the real reconciler: an opt-out that keeps failing to record raises the alert once 15 minutes old', async () => {
+    const O = await import('../../optout/optOut');
+    const id = await call({ state: "'completed'", lead_id: '9' });
+    const d = { ...O.productionOptOutDeps(), suppress: async () => { throw new Error('down'); }, log: () => undefined };
+    expect(await O.recordOptOut(id, d)).toBe('pending');
+    expect((await facts()).optOutsPending).toBe(0);
+    await sequelize.query(`UPDATE voice_call_events SET ingested_at = ${ago('16 minutes')} WHERE call_id = '${id}' AND event_key = 'opt_out_heard'`); // time passes
+    for (let i = 0; i < 4; i++) { await O.reconcileOptOuts(20, d); expect((await facts()).optOutsPending).toBe(1); } // eslint-disable-line no-await-in-loop
+    await O.reconcileOptOuts(20, { ...d, suppress: async () => undefined });
+    expect((await facts()).optOutsPending).toBe(0);
+  });
+
+  it('our own bookkeeping events never move a call state', async () => {
+    const { recomputeCall } = await import('../../twilio/voiceCallStore');
+    const { refuseTransferDial } = await import('../../transfer/transferGuard');
+    const id = await call({ state: "'requested'" });
+    await refuseTransferDial(id, '+15555550199', async () => false);
+    expect(await recomputeCall(id)).toMatchObject({ state: 'requested', callExisted: false, sessionStarted: false });
   });
 
   it('a recent event means not stalled; a recorded opt-out is not pending; turn latency is the 95th percentile', async () => {

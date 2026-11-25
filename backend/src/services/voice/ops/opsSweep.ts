@@ -36,10 +36,14 @@ export async function readFacts(s: Sequelize, ops: OpsMetrics = voiceOps, spendA
            (SELECT COUNT(*)::int FROM voice_calls WHERE state = 'dispatch_unknown' AND created_at > NOW() - INTERVAL '24 hours') AS unknown24,
            (SELECT COUNT(*)::int FROM voice_calls WHERE state IN ${ACTIVE} AND created_at < NOW() - INTERVAL '70 minutes' AND created_at > NOW() - INTERVAL '7 days') AS orphaned,
            (SELECT COUNT(*)::int FROM voice_calls c WHERE c.state IN ('answered','session_active') AND c.created_at < NOW() - INTERVAL '5 minutes' AND c.created_at > NOW() - INTERVAL '70 minutes'
-              AND NOT EXISTS (SELECT 1 FROM voice_call_events e WHERE e.call_id = c.id AND e.ingested_at > NOW() - INTERVAL '5 minutes')) AS stalled,
+              AND NOT EXISTS (SELECT 1 FROM voice_call_events e WHERE e.call_id = c.id AND (e.ingested_at > NOW() - INTERVAL '5 minutes' OR e.event_key = 'transfer_dialed'))) AS stalled,
            (SELECT COUNT(*)::int FROM voice_dial_reservations WHERE status IN ('held','dispatching') AND lease_expires_at < NOW() - INTERVAL '2 minutes' AND created_at > NOW() - INTERVAL '24 hours') AS stuck,
            (SELECT COUNT(*)::int FROM voice_tool_runs WHERE auth_decision = 'denied' AND started_at > NOW() - INTERVAL '1 hour') AS denied,
-           (SELECT COUNT(*)::int FROM voice_calls WHERE human_answered = TRUE AND session_succeeded = FALSE AND state = 'completed' AND state_reason IS DISTINCT FROM 'transfer_fallback' AND created_at > NOW() - INTERVAL '1 hour') AS silent,
+           (SELECT COUNT(*)::int FROM voice_calls c WHERE c.engine IN ('conversation_relay','openai_realtime') AND c.state = 'completed' AND c.created_at > NOW() - INTERVAL '1 hour'
+              AND NOT EXISTS (SELECT 1 FROM voice_call_events e WHERE e.call_id = c.id AND (e.source = 'session' OR e.event_key = 'transfer_dialed'))
+              -- answered for at least ten seconds, by the carrier's own times
+              AND (SELECT MIN(e.occurred_at) FROM voice_call_events e WHERE e.call_id = c.id AND e.source = 'carrier' AND e.state = 'answered')
+                  <= (SELECT MIN(e.occurred_at) FROM voice_call_events e WHERE e.call_id = c.id AND e.source = 'carrier' AND e.state = 'completed') - INTERVAL '10 seconds') AS silent,
            (SELECT COUNT(*)::int FROM voice_calls c LEFT JOIN voice_agent_versions v ON v.id = c.profile_version_id
              WHERE c.test_mode = FALSE AND c.engine IN ('conversation_relay','openai_realtime') AND c.direction = 'outbound' AND c.created_at > NOW() - INTERVAL '24 hours' AND (v.id IS NULL OR v.status NOT IN ('published','retired'))) AS wrong_version,
            (SELECT COUNT(*)::int FROM (SELECT destination_hash FROM voice_dial_reservations WHERE status IN ('accepted','ambiguous') AND created_at > NOW() - INTERVAL '10 minutes' GROUP BY destination_hash HAVING COUNT(*) > 2) d) AS duplicates,
@@ -48,7 +52,8 @@ export async function readFacts(s: Sequelize, ops: OpsMetrics = voiceOps, spendA
                 WHERE c.engine IN ('conversation_relay','openai_realtime') AND c.provider_call_id IS NOT NULL AND c.created_at > NOW() - INTERVAL '24 hours'
                   AND NOT EXISTS (SELECT 1 FROM voice_usage u WHERE u.call_id = c.id)), 0))::text AS spend,
            (SELECT percentile_disc(0.95) WITHIN GROUP (ORDER BY ms)::int FROM turns) AS p95, (SELECT COUNT(*)::int FROM turns) AS turns,
-           (SELECT COUNT(*)::int FROM voice_calls c WHERE c.state_reason = 'caller_opt_out' AND c.test_mode = FALSE AND c.lead_id IS NOT NULL AND c.updated_at < NOW() - INTERVAL '15 minutes'
+           (SELECT COUNT(*)::int FROM voice_calls c WHERE c.state_reason = 'caller_opt_out' AND c.test_mode = FALSE AND c.lead_id IS NOT NULL
+              AND COALESCE((SELECT e.ingested_at FROM voice_call_events e WHERE e.call_id = c.id AND e.event_key = 'opt_out_heard'), c.created_at) < NOW() - INTERVAL '15 minutes'
               AND NOT EXISTS (SELECT 1 FROM voice_call_events e WHERE e.call_id = c.id AND e.event_key = 'opt_out_recorded')) AS opt_pending`,
   { replacements: { rate: WORST_CASE_USD_PER_MIN }, type: QueryTypes.SELECT });
   const firstText = ops.snapshot().find((o) => o.operation === 'anthropic.first_text');

@@ -63,7 +63,7 @@ export async function closeInboundCall(callId: string, body: Record<string, unkn
       (await import('../services/voice/postcall/directCompletionRuntime')).completeDirectCall(callId);
     }
   } catch (e) {
-    console.warn(JSON.stringify({ level: 'error', service: 'voice-studio', event: 'voice_inbound_close_failed', outcome: 'failure', error_class: (e as Error).name || 'DatabaseError', call_id: callId }));
+    console.warn(JSON.stringify(tapVoiceLog({ level: 'error', service: 'voice-studio', event: 'voice_inbound_close_failed', outcome: 'failure', error_class: (e as Error).name || 'DatabaseError', call_id: callId })));
   }
 }
 
