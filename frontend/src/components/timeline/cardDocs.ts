@@ -80,7 +80,7 @@ export function blogReaderDoc(
  *  `allow-popups` the click is silently swallowed (same failure the intel band hit), and
  *  without `allow-popups-to-escape-sandbox` the opened tab INHERITS this sandbox — an
  *  opaque origin with no cookies — which breaks the login-gated course links (Anthropic
- *  Skilljar) the readings point at. Deliberately no `allow-same-origin`: the reader still
+ *  Claude Academy) the readings point at. Deliberately no `allow-same-origin`: the reader still
  *  cannot touch the parent page, cookies, or storage. */
 export const READER_SANDBOX = 'allow-scripts allow-popups allow-popups-to-escape-sandbox';
 
