@@ -46,7 +46,7 @@
  */
 import { ChannelRow, sortChannels } from '../revenueRoom/channelTruth';
 import { FlowTone } from './revenueClassifications';
-import { DemandBand, DemandSource } from './revenueFlowTypes';
+import { DemandBand, DemandRate, DemandSource } from './revenueFlowTypes';
 
 /**
  * Which campaigns count as feeding the membership motion.
@@ -83,6 +83,8 @@ export interface CampaignReachRow {
   sent: number;
   opened: number;
   replied: number;
+  /** `interaction_outcomes.outcome = 'clicked'`. Read from R27; recorded all along. */
+  clicked: number;
 }
 
 export const ASKED_LABEL = 'Who we asked';
@@ -140,6 +142,51 @@ export function campaignTone(row: CampaignReachRow): FlowTone {
   return 'muted';
 }
 
+/**
+ * One rate, carried with the two numbers that made it. R27.
+ *
+ * A zero denominator yields `defined: false` and an explanation rather than 0%, for the same
+ * reason the government card reports a null win rate: 0% claims nobody read it, when the truth
+ * is that nothing was sent to be read. The basis travels with the number because a rate quoted
+ * without one is the easiest figure on this page to misuse.
+ */
+export function rateOf(
+  key: string,
+  label: string,
+  rawNumerator: number,
+  rawDenominator: number,
+  basis: string,
+): DemandRate {
+  // Coerced before anything else. A count that arrives undefined or NaN would otherwise
+  // divide into "NaN%", which renders as a confident-looking figure rather than as a gap.
+  const numerator = Number.isFinite(rawNumerator) ? Math.max(0, Math.trunc(rawNumerator)) : 0;
+  const denominator = Number.isFinite(rawDenominator) ? Math.max(0, Math.trunc(rawDenominator)) : 0;
+
+  if (denominator <= 0) {
+    return {
+      key,
+      label,
+      numerator,
+      denominator,
+      display: 'No emails sent yet',
+      basis,
+      defined: false,
+    };
+  }
+  const pct = (numerator / denominator) * 100;
+  return {
+    key,
+    label,
+    numerator,
+    denominator,
+    // One decimal: a tenth of a percent is meaningful over 8,518 emails and noise over 12,
+    // and the basis beside it is what lets a reader tell which case they are in.
+    display: `${pct.toFixed(1)}%`,
+    basis,
+    defined: true,
+  };
+}
+
 /** One campaign as a source in the `asked` band. */
 export function campaignSource(row: CampaignReachRow): DemandSource {
   const state = row.status === row.approvalStatus
@@ -178,6 +225,13 @@ export function campaignSource(row: CampaignReachRow): DemandSource {
           + 'conversions.',
       },
     ],
+    // Both over EMAILS SENT rather than people asked, deliberately: an open and a click are
+    // events on a message, so dividing them by a count of people would produce a rate above
+    // 100% the moment a sequence sends twice to the same person.
+    rates: [
+      rateOf('read_rate', 'read rate', row.opened, row.sent, 'opened over emails sent'),
+      rateOf('click_rate', 'click rate', row.clicked, row.sent, 'clicked over emails sent'),
+    ],
     status: campaignStatus(row),
     // False for every campaign, always. It is a fact about the schema, not about the campaign.
     attributable: false,
@@ -215,6 +269,10 @@ export function channelSource(row: ChannelRow): DemandSource {
     label: row.label,
     count: row.payingMembers,
     countLabel: 'paying members',
+    // Empty, and the required field is what forced the decision rather than letting it default.
+    // A channel is not a campaign: nothing sends an email on its behalf, so there is no
+    // denominator and a read rate here would be a number about a thing that did not happen.
+    rates: [],
     measures: [
       {
         label: 'leads ever recorded',

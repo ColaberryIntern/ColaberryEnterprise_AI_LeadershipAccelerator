@@ -9,6 +9,7 @@ import {
   channelSource,
   channelTone,
   includeChannel,
+  rateOf,
 } from '../demandPath';
 import type { ChannelRow } from '../../revenueRoom/channelTruth';
 
@@ -320,5 +321,89 @@ describe('the honesty assertion bites', () => {
     expect(bands[1].sources).toHaveLength(3);
     // The arrived band's counts are the people paying today, and they sum to that number.
     expect(bands[1].sources.reduce((a, s) => a + s.count, 0)).toBe(33);
+  });
+});
+
+/**
+ * R27 — read rate and click rate on a campaign card.
+ *
+ * Ali, 25 Nov 2026: "show bottom left and right sub kpi's showing the read and click rates".
+ *
+ * The click was recorded all along and never read: `interaction_outcomes` held 5,838 `clicked`
+ * rows against 14,036 `opened` on the day this was built. So both rates come from the same
+ * table and the same column, and a click rate rests on exactly the instrument a read rate does.
+ *
+ * These cover the ways a rate becomes a lie: a zero denominator printed as 0%, a rate quoted
+ * without its basis, and a missing count rendering as a confident NaN.
+ */
+describe('a campaign rate carries the numbers that made it', () => {
+  it('computes a percentage with its numerator and denominator', () => {
+    const r = rateOf('read_rate', 'read rate', 1191, 8518, 'opened over emails sent');
+    expect(r.defined).toBe(true);
+    expect(r.display).toBe('14.0%');
+    expect(r.numerator).toBe(1191);
+    expect(r.denominator).toBe(8518);
+    expect(r.basis).toBe('opened over emails sent');
+  });
+
+  /**
+   * The one that matters. 0% claims nobody read it; the truth is that nothing was sent to be
+   * read. Same reasoning as the government card's null win rate.
+   */
+  it('refuses to call a zero denominator 0 percent', () => {
+    const r = rateOf('click_rate', 'click rate', 0, 0, 'clicked over emails sent');
+    expect(r.defined).toBe(false);
+    expect(r.display).toBe('No emails sent yet');
+    expect(r.display).not.toContain('0%');
+  });
+
+  it('never renders a missing count as NaN', () => {
+    // A count that arrives undefined would divide into "NaN%", which looks like a figure.
+    const r = rateOf('click_rate', 'click rate', undefined as unknown as number, 100, 'x');
+    expect(r.display).toBe('0.0%');
+    expect(r.display).not.toContain('NaN');
+    expect(r.numerator).toBe(0);
+  });
+
+  it('is zero percent when nothing was opened but something was sent', () => {
+    // The control for the undefined case above: a real measured zero IS 0%, and must not be
+    // confused with the undefined one.
+    const r = rateOf('read_rate', 'read rate', 0, 500, 'opened over emails sent');
+    expect(r.defined).toBe(true);
+    expect(r.display).toBe('0.0%');
+  });
+});
+
+describe('a campaign source carries both rates, a channel carries none', () => {
+  const campaign = {
+    key: 'alumni_champion',
+    name: 'Colaberry Alumni AI Champion Campaign',
+    status: 'paused',
+    approvalStatus: 'live',
+    enrolledLeads: 10343,
+    sent: 8518,
+    opened: 1191,
+    replied: 3,
+    clicked: 420,
+  };
+
+  it('puts read rate first and click rate second, for bottom left and bottom right', () => {
+    const s = campaignSource(campaign);
+    expect(s.rates.map((r) => r.key)).toEqual(['read_rate', 'click_rate']);
+    expect(s.rates[0].display).toBe('14.0%');
+    expect(s.rates[1].display).toBe('4.9%');
+  });
+
+  it('divides both by emails sent, so a rate can never exceed 100 percent', () => {
+    // Dividing an event count by PEOPLE would break the moment a sequence sends twice.
+    const s = campaignSource({ ...campaign, opened: 9000 });
+    expect(s.rates[0].denominator).toBe(8518);
+    expect(s.rates.every((r) => r.basis.includes('emails sent'))).toBe(true);
+  });
+
+  it('reports both as undefined on a campaign that has sent nothing', () => {
+    const s = campaignSource({ ...campaign, sent: 0, opened: 0, clicked: 0 });
+    expect(s.rates.every((r) => r.defined === false)).toBe(true);
+    expect(s.rates.every((r) => r.display === 'No emails sent yet')).toBe(true);
   });
 });

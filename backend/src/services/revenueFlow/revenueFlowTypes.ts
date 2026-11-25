@@ -100,6 +100,25 @@ export type DemandBandKey = 'asked' | 'arrived';
  * about revenue even if someone later wants it to. The absence is load bearing and is asserted
  * in the tests.
  */
+/**
+ * One rate on a demand source, carried with the two numbers that produced it. R27.
+ *
+ * `defined: false` means the denominator was zero. That is reported as "no emails sent yet"
+ * rather than as 0%, for the same reason the government card reports a null win rate: 0%
+ * claims we were read by nobody, when the truth is that nothing was sent to be read.
+ */
+export interface DemandRate {
+  key: string;
+  label: string;
+  numerator: number;
+  denominator: number;
+  /** The words to print. A percentage when defined, an explanation when not. */
+  display: string;
+  /** What the rate is OF, so it cannot be quoted without its basis. */
+  basis: string;
+  defined: boolean;
+}
+
 export interface DemandSource {
   key: string;
   label: string;
@@ -113,6 +132,16 @@ export interface DemandSource {
   countLabel: string;
   /** Further measures in reading order. `count: null` means not recorded, never zero. */
   measures: DemandMeasure[];
+  /**
+   * The two rates a campaign is judged on, where they can be computed. R27.
+   *
+   * Ali, 25 Nov 2026: "show bottom left and right sub kpi's showing the read and click rates".
+   *
+   * Each carries its own numerator and denominator, because a rate quoted without its basis is
+   * the easiest number on this page to misuse: "14% read" means something different over 8,518
+   * emails than over 12. Empty on a source that is not a campaign.
+   */
+  rates: DemandRate[];
   status: TileStatus;
   /**
    * Whether this source can be tied to a downstream revenue record at all.
