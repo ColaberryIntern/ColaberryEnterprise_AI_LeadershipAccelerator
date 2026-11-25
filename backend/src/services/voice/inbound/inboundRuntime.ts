@@ -50,6 +50,8 @@ export async function answerInbound(input: { calledNumber: string | undefined; c
     }
     return INBOUND_MESSAGE_TWIML;
   } catch (e) {
+    // The caller hears the message and is hung up on, so an opened row is ended here too.
+    if (callId) await d.markFallback(callId, 'inbound_error', true).catch((x: Error) => d.log({ level: 'error', event: 'voice_inbound_close_failed', outcome: 'failure', error_class: x.name || 'DatabaseError', call_id: callId }));
     d.log({ level: 'error', event: 'voice_inbound_failed', outcome: 'failure', error_class: (e as { name?: string })?.name || 'InboundError', call_id: callId });
     return INBOUND_MESSAGE_TWIML;
   }

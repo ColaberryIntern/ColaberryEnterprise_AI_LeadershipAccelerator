@@ -44,7 +44,7 @@ export function productionDirectDeps(): DirectDeps {
     loadCall: async (callId) => {
       const s = await db();
       const rows = await s.query<DirectCallRow>(
-        'SELECT id, engine, state, lead_id, provider_call_id, test_mode, human_answered, duration_seconds, purpose FROM voice_calls WHERE id = :callId',
+        'SELECT id, engine, state, lead_id, provider_call_id, test_mode, human_answered, duration_seconds, purpose, direction FROM voice_calls WHERE id = :callId',
         { replacements: { callId }, type: QueryTypes.SELECT });
       return rows[0] ?? null;
     },
@@ -53,9 +53,9 @@ export function productionDirectDeps(): DirectDeps {
       await s.transaction(async (transaction) => {
         await s.query(
           `INSERT INTO communication_logs (id, lead_id, channel, direction, delivery_mode, status, provider, provider_message_id, metadata, created_at)
-           VALUES (:logId, :leadId, 'voice', 'outbound', 'live', 'pending', :engine, :sid, CAST(:meta AS jsonb), NOW())
+           VALUES (:logId, :leadId, 'voice', :direction, 'live', 'pending', :engine, :sid, CAST(:meta AS jsonb), NOW())
            ON CONFLICT (id) DO NOTHING`,
-          { replacements: { logId, leadId: call.lead_id, engine: call.engine, sid: call.provider_call_id, meta: JSON.stringify({ source: 'voice-studio', voice_call_id: call.id, purpose: call.purpose }) }, transaction });
+          { replacements: { logId, direction: call.direction ?? 'outbound', leadId: call.lead_id, engine: call.engine, sid: call.provider_call_id, meta: JSON.stringify({ source: 'voice-studio', voice_call_id: call.id, purpose: call.purpose }) }, transaction });
         await s.query('UPDATE voice_calls SET communication_log_id = :logId, updated_at = NOW() WHERE id = :id AND communication_log_id IS NULL',
           { replacements: { logId, id: call.id }, transaction });
       });

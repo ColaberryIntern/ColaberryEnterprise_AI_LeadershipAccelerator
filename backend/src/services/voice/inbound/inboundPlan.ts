@@ -34,7 +34,16 @@ export interface InboundFacts {
   now: Date;
 }
 
-export type FallbackReason = 'unknown_number' | 'no_policy' | 'invalid_policy' | 'disabled' | 'not_live' | 'engine_not_ready' | 'after_hours';
+/**
+ * The brand the live engine's profile speaks for. Until per-brand profiles are wired to live calls, the
+ * engine always speaks the frozen Colaberry TEST profile, so only a Test Lab number of that brand (or
+ * with no brand recorded, which is how the test line is registered) may be answered by it.
+ */
+export const LIVE_PROFILE_BRAND = 'colaberry';
+export const agentSpeaksFor = (n: CalledNumber, testTenantId: string): boolean =>
+  n.tenantId === testTenantId && (n.brandSlug === null || n.brandSlug === LIVE_PROFILE_BRAND);
+
+export type FallbackReason = 'unknown_number' | 'no_policy' | 'invalid_policy' | 'disabled' | 'no_agent_for_brand' | 'not_live' | 'engine_not_ready' | 'after_hours';
 export type InboundPlan =
   | { kind: 'agent'; engine: 'conversation_relay'; number: CalledNumber; testMode: boolean }
   | { kind: 'human'; reason: FallbackReason; number: CalledNumber; testMode: boolean }
@@ -54,6 +63,7 @@ export function planInbound(f: InboundFacts): InboundPlan {
     ? { kind: 'human', reason, number: n, testMode } : message(reason));
 
   if (!p.data.enabled) return fallback('disabled');
+  if (!agentSpeaksFor(n, f.testTenantId)) return fallback('no_agent_for_brand');
   // A customer number needs the studio switch; the dedicated test number needs the test switch.
   if (testMode ? !f.testEnabled : !f.studioEnabled) return fallback('not_live');
   if (p.data.hours === 'business' && !withinTransferHours(f.now)) return fallback('after_hours');

@@ -33,6 +33,7 @@ export interface DirectCallRow {
   human_answered: boolean;
   duration_seconds: number | null;
   purpose: string;
+  direction?: string;
 }
 
 export interface DirectDeps {

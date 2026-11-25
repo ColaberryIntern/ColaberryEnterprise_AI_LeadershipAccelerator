@@ -99,6 +99,21 @@ describe('transfer webhooks (handlers, after the shared Twilio checks)', () => {
     expect(d.recordFallback).not.toHaveBeenCalled();
   });
 
+  it('VS3.6: every way a call ends here closes an inbound record; a dial in progress and a bad ref do not', async () => {
+    const post = async (path: string, body: object, over: Partial<TransferDeps> = {}) => {
+      const { a, d } = app(over);
+      await request(a).post(path).type('form').send({ Direction: 'inbound', ...body });
+      return d.closeInbound as jest.Mock;
+    };
+    const r = `ref=${encodeURIComponent(ref())}`;
+    for (const c of [await post(`/c?${r}`, {}), await post(`/c?${r}`, { HandoffData: HANDOFF }, { target: () => undefined }), await post(`/d?${r}`, { DialCallStatus: 'completed' }), await post(`/d?${r}`, { DialCallStatus: 'busy' })]) {
+      expect(c).toHaveBeenCalledTimes(1);
+      expect(c).toHaveBeenCalledWith(CALL, expect.objectContaining({ Direction: 'inbound' }));
+    }
+    expect(await post(`/c?${r}`, { HandoffData: HANDOFF })).not.toHaveBeenCalled(); // dialing a teammate: still live
+    expect(await post('/d?ref=bad', { DialCallStatus: 'busy' })).not.toHaveBeenCalled();
+  });
+
   it('a failure to record the fallback still gives the caller the fallback (never an error)', async () => {
     const { a } = app({ recordFallback: jest.fn().mockRejectedValue(Object.assign(new Error('db'), { name: 'ConnectionError' })) });
     const r = await request(a).post(`/d?ref=${encodeURIComponent(ref())}`).type('form').send({ DialCallStatus: 'busy' });

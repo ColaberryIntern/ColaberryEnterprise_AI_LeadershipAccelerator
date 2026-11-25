@@ -76,5 +76,5 @@ export function effectiveVoiceTools(p: ToolPolicyInput): ToolPolicyResult {
 /** The one way a voice call gets its broker: policy-filtered tools, recorded under the agent's key. */
 export function buildVoiceBroker(p: ToolPolicyInput, timeoutMs?: number): { broker: ToolBroker; denied: ToolPolicyResult['denied'] } {
   const r = effectiveVoiceTools(p);
-  return { broker: new ToolBroker(r.allowed, timeoutMs, { agentName: p.agentKey, surface: 'voice_call', held: r.held }), denied: r.denied };
+  return { broker: new ToolBroker(r.allowed, timeoutMs, { agentName: p.agentKey, surface: 'voice_call', held: r.held }, p.callerVerified === true), denied: r.denied };
 }

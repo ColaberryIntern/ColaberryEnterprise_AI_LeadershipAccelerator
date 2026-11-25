@@ -81,7 +81,7 @@ export class ToolBroker {
   private readonly done = new Map<string, Promise<ToolOutcome>>();
   private static readonly MAX_REMEMBERED = 100;
 
-  constructor(tools: RegisteredTool[], private readonly timeoutMs: number = TOOL_TIMEOUT_MS, private readonly recording?: ToolRecording) {
+  constructor(tools: RegisteredTool[], private readonly timeoutMs: number = TOOL_TIMEOUT_MS, private readonly recording?: ToolRecording, private readonly callerVerified = false) {
     for (const t of tools) this.tools.set(t.def.name, t);
   }
 
@@ -112,6 +112,7 @@ export class ToolBroker {
   private async execute(name: string, input: unknown): Promise<ToolOutcome> {
     const tool = this.tools.get(name);
     if (!tool) return { content: `Unknown tool ${name}.`, isError: true, committed: false, errorClass: 'UnknownTool' };
+    if (tool.sensitive && !this.callerVerified) return { content: 'That needs the caller to be verified first. Offer to have a teammate follow up.', isError: true, committed: false, errorClass: 'CallerNotVerified' };
     const parsed = tool.schema.safeParse(input ?? {});
     if (!parsed.success) return { content: 'The tool input was invalid.', isError: true, committed: false, errorClass: 'ValidationError' };
     try {

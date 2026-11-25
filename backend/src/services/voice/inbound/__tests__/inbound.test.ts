@@ -2,7 +2,8 @@ import { z } from 'zod';
 import { INBOUND_MESSAGE_TWIML, planInbound, type CalledNumber, type InboundFacts } from '../inboundPlan';
 import { answerInbound, type InboundDeps } from '../inboundRuntime';
 import { effectiveVoiceTools } from '../../profiles/voiceToolPolicy';
-import type { RegisteredTool } from '../../engines/toolBroker';
+import { ToolBroker, type RegisteredTool } from '../../engines/toolBroker';
+import { toolVerdict } from '../../engines/voiceRuntime';
 import { closeInboundCall } from '../../../../controllers/voiceTransferController';
 
 const TEST = '00000000-0000-4000-8000-0000000007e5';
@@ -28,12 +29,19 @@ describe('planInbound: only the called number decides', () => {
     ['Engine B', { number: num({ routingPolicy: policy({ engine: 'openai_realtime' }) }) }, 'invalid_policy'],
     ['disabled', { number: num({ routingPolicy: policy({ enabled: false }) }) }, 'disabled'],
     ['test number with test mode off', { testEnabled: false }, 'not_live'],
-    ['customer number with the studio off', { number: num({ tenantId: LIVE }) }, 'not_live'],
     ['engine not ready', { engineReady: false }, 'engine_not_ready'],
     ['after hours', { number: num({ routingPolicy: policy({ hours: 'business' }) }), now: SUN_10_CT }, 'after_hours'],
   ])('%s is the safe message', (_n, p, reason) => expect(planInbound(facts(p))).toMatchObject({ kind: 'message', reason }));
-  it('a customer number is answered only with the studio on, and is not a test call', () => {
-    expect(planInbound(facts({ number: num({ tenantId: LIVE }), studioEnabled: true }))).toMatchObject({ kind: 'agent', testMode: false });
+  it.each<[string, Partial<CalledNumber>]>([
+    ['another brand on the test tenant', { brandSlug: 'otherbrand' }],
+    ['another brand on a customer tenant', { tenantId: LIVE, brandSlug: 'otherbrand' }],
+    ['a Colaberry customer number', { tenantId: LIVE }],
+    ['a customer number with no brand', { tenantId: LIVE, brandSlug: null }],
+  ])('%s is never answered by the test agent, even with everything switched on', (_n, p) => {
+    expect(planInbound(facts({ number: num(p), studioEnabled: true }))).toMatchObject({ kind: 'message', reason: 'no_agent_for_brand' });
+  });
+  it('the test line is answered whether its brand is recorded or not', () => {
+    for (const brandSlug of ['colaberry', null]) expect(planInbound(facts({ number: num({ brandSlug }) })).kind).toBe('agent');
   });
   it('the human fallback dials only inside transfer hours and with a number configured', () => {
     const n = num({ routingPolicy: policy({ enabled: false, fallback: 'human_line' }) });
@@ -85,12 +93,21 @@ describe('answerInbound', () => {
     const d = deps({ [k]: boom }, {}, k === 'markFallback' ? num({ routingPolicy: {} }) : num());
     expect(await answerInbound(IN, d)).toBe(INBOUND_MESSAGE_TWIML);
     expect(d.log).toHaveBeenCalledWith(expect.objectContaining({ event: 'voice_inbound_failed', error_class: 'ConnectionError' }));
+    if (k === 'agentTwiml') expect(d.markFallback).toHaveBeenCalledWith(expect.any(String), 'inbound_error', true); // the row does not stay ringing
   });
 });
 
 describe('caller verification before sensitive data', () => {
   const tool: RegisteredTool = { def: { name: 'admissions_knowledge', description: 'x', input_schema: { type: 'object' } }, schema: z.object({}) as z.ZodType<unknown>, readOnly: true, sensitive: true, run: async () => 'x' };
   const base = { agentKey: 'edu-cory-outbound', brandSlug: 'colaberry', versionPermissions: ['admissions_knowledge'], registered: [tool] };
+  it('the broker itself refuses a sensitive tool, however it was built', async () => {
+    const run = jest.fn().mockResolvedValue('personal data');
+    const out = await new ToolBroker([{ ...tool, run }]).run('a', 'admissions_knowledge', {});
+    expect(out).toMatchObject({ isError: true, errorClass: 'CallerNotVerified' });
+    expect(run).not.toHaveBeenCalled();
+    expect(toolVerdict({ committed: false, errorClass: 'CallerNotVerified' }).decision).toBe('denied');
+    expect((await new ToolBroker([{ ...tool, run }], undefined, undefined, true).run('b', 'admissions_knowledge', {})).content).toBe('personal data');
+  });
   it('a sensitive tool is refused by default and allowed only on a verified call', () => {
     expect(effectiveVoiceTools(base).denied).toContainEqual({ name: 'admissions_knowledge', reason: 'caller_not_verified' });
     expect(effectiveVoiceTools({ ...base, callerVerified: true }).allowed.map((t) => t.def.name)).toEqual(['admissions_knowledge']);

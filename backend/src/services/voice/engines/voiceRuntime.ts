@@ -45,7 +45,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * invalid input) = denied; it was allowed but failed or timed out = failed; otherwise it ran.
  */
 export function toolVerdict(rec: { committed: boolean; errorClass?: string }): { decision: 'allowed' | 'denied'; status: string } {
-  if (rec.errorClass === 'UnknownTool' || rec.errorClass === 'ValidationError') return { decision: 'denied', status: 'refused' };
+  if (rec.errorClass === 'UnknownTool' || rec.errorClass === 'ValidationError' || rec.errorClass === 'CallerNotVerified') return { decision: 'denied', status: 'refused' };
   if (rec.errorClass) return { decision: 'allowed', status: 'failed' };
   return { decision: 'allowed', status: rec.committed ? 'committed' : 'completed' };
 }
