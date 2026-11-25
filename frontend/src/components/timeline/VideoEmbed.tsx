@@ -4,6 +4,7 @@ import { ytHandshake } from '../../utils/youtubeChannel';
 import { getPodcastMuted, setPodcastMuted } from '../../utils/podcastMutePreference';
 import { creditForTick } from './watchCredit';
 import { retryDelayMs } from './watchRetry';
+import { resumeTargetS, withStartAt } from './watchResume';
 
 /**
  * VideoEmbed — plays a lesson video in-app from any supported link (YouTube,
@@ -64,6 +65,14 @@ interface Props {
   /** Duration fallback in seconds (e.g. card.estimated_time * 60) for providers
    *  that never report one — powers the dwell fallback's percentage. */
   fallbackDurationS?: number | null;
+  /** Where this student left off, in seconds: the playhead the server has been
+   *  storing on every beat since the watch gate shipped. Absent or null starts
+   *  at the beginning, which is what every caller did before 2026-11-25. */
+  resumeAtS?: number | null;
+  /** The clip's length as the SERVER knows it. Only used to decide whether a
+   *  resume is wanted at all (see watchResume.ts) when the player reports no
+   *  duration of its own, which is every cross-origin iframe. */
+  resumeDurationS?: number | null;
 }
 
 const PlayIcon = () => (
@@ -77,7 +86,7 @@ const MAX_REBUFFERED_S = 600;
 
 const addParam = (u: string, p: string) => u + (u.includes('?') ? '&' : '?') + p;
 
-const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded, badge, autoplay, onWatchBeat, fallbackDurationS }) => {
+const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded, badge, autoplay, onWatchBeat, fallbackDurationS, resumeAtS, resumeDurationS }) => {
   const [playing, setPlaying] = useState(!!autoplay);
 
   // --- watch accumulation (refs so handlers/effects never go stale) ---
@@ -91,6 +100,54 @@ const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded, badge, au
   const hasBeat = !!onWatchBeat;
   const fallbackRef = useRef<number>(0);
   fallbackRef.current = Math.max(0, Number(fallbackDurationS) || 0);
+
+  // --- resume: start where this student left off ---
+  // The server has stored a furthest playhead on every beat since the watch gate
+  // shipped, and until now nothing read it back, so every reopen started at zero.
+  // A 20-minute class abandoned at minute 18 meant scrubbing back by hand, and
+  // the usual outcome is replaying the opening, which the coverage gate does not
+  // credit twice. See watchResume.ts for when a resume is NOT wanted.
+  const mediaRef = useRef<HTMLMediaElement | null>(null);
+  // One seek per mounted player. A student who scrubs somewhere else must not be
+  // dragged back to the stored position by a later render.
+  const seekedRef = useRef(false);
+  // An iframe takes its start point in the URL, so it is frozen on the first
+  // usable value: a verdict that lands a moment after the player mounted still
+  // applies, and nothing after that can reload the player underneath them.
+  const [iframeStartAtS, setIframeStartAtS] = useState<number | null>(null);
+  const iframeStartFrozenRef = useRef(false);
+
+  /** Seek a <video>/<audio> element to the stored position, at most once. */
+  const applyResume = (el: HTMLMediaElement | null) => {
+    if (!el || seekedRef.current) return;
+    // Nothing is seekable before metadata arrives - assigning currentTime then
+    // is either dropped or an InvalidStateError, depending on the browser. The
+    // element's `loadedmetadata` handler calls straight back here, which is the
+    // moment this becomes possible, so there is nothing to wait for elsewhere.
+    if (el.readyState < 1) return;
+    // The element's own duration is the honest one now that metadata has loaded;
+    // fall back to the server's only if it still reports none.
+    const playerDuration = Number(el.duration);
+    const target = resumeTargetS(resumeAtS, Number.isFinite(playerDuration) && playerDuration > 0 ? playerDuration : resumeDurationS);
+    if (target == null) return;
+    seekedRef.current = true;
+    // A player that refuses the seek (no range support yet) keeps its own start
+    // rather than throwing out of a render.
+    try { el.currentTime = target; } catch { /* keep the player's own start */ }
+  };
+
+  useEffect(() => {
+    applyResume(mediaRef.current);
+    if (iframeStartFrozenRef.current) return;
+    const target = resumeTargetS(resumeAtS, resumeDurationS);
+    if (target == null) return;
+    iframeStartFrozenRef.current = true;
+    setIframeStartAtS(target);
+  // Deliberately not exhaustive, and carrying no lint-suppression comment, for
+  // the same reason as the tracking effect below: this project ships no ESLint
+  // config, so a directive naming react-hooks is a hard error in the Frontend
+  // build gate. `applyResume` is re-created every render and reads live props.
+  }, [resumeAtS, resumeDurationS, playing]);
 
   // The provider label of the last tick, so an exit beat is labeled like the beats before it.
   const lastProviderRef = useRef<string>('file');
@@ -331,10 +388,12 @@ const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded, badge, au
           <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '10px 12px', display: 'grid', gap: 6, zIndex: 2 }}>
             {title && <span className="tlv-postertitle" style={{ position: 'static' }}>{title}</span>}
             <audio
+              ref={(el) => { mediaRef.current = el; }}
               style={{ width: '100%' }}
               src={source.embedUrl}
               controls
               autoPlay
+              onLoadedMetadata={(e) => applyResume(e.currentTarget)}
               // Read fresh on every (re)mount — a new VideoEmbed instance mounts per
               // drawer-open / per scroll-triggered preview, so a stale useState here
               // would silently re-mute an episode the student already unmuted.
@@ -351,12 +410,14 @@ const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded, badge, au
     return (
       <div className="tlv-frame">
         <video
+          ref={(el) => { mediaRef.current = el; }}
           className="tlv-media"
           src={source.embedUrl}
           controls
           autoPlay
           muted={autoplay}
           playsInline
+          onLoadedMetadata={(e) => applyResume(e.currentTarget)}
           onTimeUpdate={mediaTimeUpdate('file')}
           onPause={() => flushRef.current('file')}
           onEnded={mediaEnded('file')}
@@ -369,9 +430,16 @@ const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded, badge, au
 
   // iframe providers (youtube / vimeo / loom / wistia). YouTube gets the JS-API
   // origin param so its postMessage channel reports playback to this window.
-  const iframeSrc = source.provider === 'youtube'
-    ? addParam(withAutoplay(source, autoplay), `origin=${encodeURIComponent(window.location.origin)}`)
-    : withAutoplay(source, autoplay);
+  // YouTube and Vimeo take the start point in the URL (both are cross-origin
+  // iframes, and the channel this app speaks to YouTube is receive-only); Loom
+  // and Wistia publish no start parameter and are left alone.
+  const iframeSrc = withStartAt(
+    source.provider === 'youtube'
+      ? addParam(withAutoplay(source, autoplay), `origin=${encodeURIComponent(window.location.origin)}`)
+      : withAutoplay(source, autoplay),
+    source.provider,
+    iframeStartAtS,
+  );
   return (
     <div className="tlv-frame">
       <iframe

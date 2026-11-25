@@ -8,7 +8,9 @@
 jest.mock('../../../models/TimelineCard', () => ({ __esModule: true, default: { findByPk: jest.fn() } }));
 jest.mock('../../../models/TimelineCardProgress', () => ({ __esModule: true, default: { findOne: jest.fn() } }));
 jest.mock('../../../models/CurriculumTypeDefinition', () => ({ __esModule: true, default: { findOne: jest.fn() } }));
-jest.mock('../../timeline/timelineService', () => ({ videoFromMetadata: jest.fn(() => null) }));
+// cardVideoMetadata, not timelineService: videoFromMetadata moved there when the
+// feed started reading watch state, to keep the two out of an import cycle.
+jest.mock('../../timeline/cardVideoMetadata', () => ({ videoFromMetadata: jest.fn(() => null) }));
 jest.mock('../../timeline/networkVideoService', () => ({ getAssignedTestimonialDurationS: jest.fn(() => null) }));
 jest.mock('../../timeline/podcastMediaService', () => ({ getAssignedPodcastDurationS: jest.fn(() => null) }));
 jest.mock('../../timeline/curriculumScope', () => ({ isCardServable: jest.fn(() => true) }));
@@ -72,6 +74,42 @@ describe('getWatchVerdict', () => {
   it('reads the card and returns its verdict', async () => {
     findCard.mockResolvedValue(video);
     findProgress.mockResolvedValue(null);
-    await expect(getWatchVerdict('e1', 'c1')).resolves.toEqual({ watched_pct: 0, required_pct: 75, met: false });
+    await expect(getWatchVerdict('e1', 'c1')).resolves.toEqual({
+      watched_pct: 0, required_pct: 75, met: false, position_s: null, duration_s: null,
+    });
+  });
+});
+
+/**
+ * The player's half of this read (2026-11-25). `max_position_s` had been stored
+ * on every beat since the gate shipped and nothing read it back, so reopening a
+ * part-watched video started it over. The drawer and the lesson workspace both
+ * hydrate from here, so this is where the resume point has to appear.
+ */
+describe('getWatchVerdict — where to start playing', () => {
+  beforeEach(() => { findCard.mockResolvedValue(video); });
+
+  it('carries the furthest second this student reached', async () => {
+    findProgress.mockResolvedValue(progressWith({ watched_s: 600, max_position_s: 612, duration_s: 1200, watched_pct: 50 }));
+    await expect(getWatchVerdict('e1', 'c1')).resolves.toMatchObject({ position_s: 612, duration_s: 1200 });
+  });
+
+  it('has no resume point for a video nobody has played', async () => {
+    findProgress.mockResolvedValue(null);
+    await expect(getWatchVerdict('e1', 'c1')).resolves.toMatchObject({ position_s: null, duration_s: null });
+  });
+
+  it('still carries the position for a card that is already completed', async () => {
+    // The gate never re-gates a completed card, but a rewatch still wants to
+    // know where they got to — and the client decides it is too close to the end.
+    findProgress.mockResolvedValue({ status: 'completed', analytics: { watch: { watched_s: 1200, max_position_s: 1190, duration_s: 1200, watched_pct: 100 } } });
+    await expect(getWatchVerdict('e1', 'c1')).resolves.toMatchObject({ met: true, position_s: 1190 });
+  });
+
+  it('carries a position even for a type with no watch requirement', async () => {
+    // Ungated, so there is no bar — but they still left off somewhere.
+    findCard.mockResolvedValue(reading);
+    findProgress.mockResolvedValue(progressWith({ watched_s: 400, max_position_s: 400, duration_s: 1200, watched_pct: 33 }));
+    await expect(getWatchVerdict('e1', 'c2')).resolves.toMatchObject({ required_pct: null, position_s: 400 });
   });
 });

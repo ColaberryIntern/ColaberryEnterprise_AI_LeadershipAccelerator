@@ -316,6 +316,8 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
                 onEnded={done || preview ? undefined : completeSafely}
                 onWatchBeat={handleWatchBeat}
                 fallbackDurationS={card.video?.duration_seconds || (card.estimated_time ? card.estimated_time * 60 : null)}
+                resumeAtS={watch?.position_s ?? null}
+                resumeDurationS={watch?.duration_s ?? card.video?.duration_seconds ?? null}
               />
             ) : (card.image || card.type_thumbnail) ? (
               // No clip attached yet — show the card's image (own image, else the

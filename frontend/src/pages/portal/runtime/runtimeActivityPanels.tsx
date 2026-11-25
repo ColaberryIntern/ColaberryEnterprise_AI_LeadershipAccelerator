@@ -20,7 +20,7 @@ export function RuntimeHero({ src, title }: { src: string; title: string }): Rea
   );
 }
 
-type Watch = { watched_pct: number; required_pct: number | null; met: boolean } | null;
+type Watch = { watched_pct: number; required_pct: number | null; met: boolean; position_s?: number | null; duration_s?: number | null } | null;
 
 /** The player for video bands, with the watch-gate line while not yet completed. */
 export function RuntimeVideo({ card, completed, watch, onWatchBeat }: {
@@ -39,6 +39,8 @@ export function RuntimeVideo({ card, completed, watch, onWatchBeat }: {
         badge={card.type === 'testimonial' ? 'Testimonial' : card.type === 'podcast' ? 'Podcast' : null}
         onWatchBeat={onWatchBeat}
         fallbackDurationS={card.video?.duration_seconds || (card.estimated_time ? card.estimated_time * 60 : null)}
+        resumeAtS={watch?.position_s ?? null}
+        resumeDurationS={watch?.duration_s ?? card.video?.duration_seconds ?? null}
       />
       {!completed && card.video?.url && (
         <div className="tlv-watch">
