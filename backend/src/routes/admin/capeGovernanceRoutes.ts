@@ -3,7 +3,7 @@
  * §12, §16 Phase 6): skill coverage heatmap, learner-stage (lifecycle-mode)
  * policies, pacing controls, and the explanation simulator's persona/lookup
  * support. NOT the Phase 0-1 minimal settings panel (`capeAdminRoutes.ts`) —
- * a sibling surface, same `requireAdmin` pattern.
+ * a sibling surface, same `program` section guard.
  *
  * GET  /api/admin/cape/governance/policy                       — current Stage-4/pacing knobs
  * GET  /api/admin/cape/governance/policy/history                — version history
@@ -16,25 +16,29 @@
  * GET  /api/admin/cape/governance/lookup?query=                  — email/ID lookup for the simulator
  */
 import { Router } from 'express';
-import { requireAdmin } from '../../middlewares/authMiddleware';
+import { requireSection } from '../../middlewares/authMiddleware';
 import {
   handleGetGovernancePolicy, handleGetGovernancePolicyHistory, handleUpdateGovernancePolicy,
   handleListLifecycleModePolicies, handleGetLifecycleModePolicyHistory, handleUpdateLifecycleModePolicy,
   handleGetSkillCoverageHeatmap, handleListPersonas, handleLookupEnrollment,
 } from '../../controllers/capeGovernanceController';
 
+// This router is mounted above adminRoutes, so mgmtSectionGate never runs for it and its '/api/admin/cape'
+// -> 'program' row has no effect here. The section is enforced on each route instead.
+const requireProgram = requireSection('program');
+
 const router = Router();
 
-router.get('/api/admin/cape/governance/policy', requireAdmin, handleGetGovernancePolicy);
-router.get('/api/admin/cape/governance/policy/history', requireAdmin, handleGetGovernancePolicyHistory);
-router.put('/api/admin/cape/governance/policy', requireAdmin, handleUpdateGovernancePolicy);
+router.get('/api/admin/cape/governance/policy', requireProgram, handleGetGovernancePolicy);
+router.get('/api/admin/cape/governance/policy/history', requireProgram, handleGetGovernancePolicyHistory);
+router.put('/api/admin/cape/governance/policy', requireProgram, handleUpdateGovernancePolicy);
 
-router.get('/api/admin/cape/governance/lifecycle-modes', requireAdmin, handleListLifecycleModePolicies);
-router.get('/api/admin/cape/governance/lifecycle-modes/:mode/history', requireAdmin, handleGetLifecycleModePolicyHistory);
-router.put('/api/admin/cape/governance/lifecycle-modes/:mode', requireAdmin, handleUpdateLifecycleModePolicy);
+router.get('/api/admin/cape/governance/lifecycle-modes', requireProgram, handleListLifecycleModePolicies);
+router.get('/api/admin/cape/governance/lifecycle-modes/:mode/history', requireProgram, handleGetLifecycleModePolicyHistory);
+router.put('/api/admin/cape/governance/lifecycle-modes/:mode', requireProgram, handleUpdateLifecycleModePolicy);
 
-router.get('/api/admin/cape/governance/heatmap', requireAdmin, handleGetSkillCoverageHeatmap);
-router.get('/api/admin/cape/governance/personas', requireAdmin, handleListPersonas);
-router.get('/api/admin/cape/governance/lookup', requireAdmin, handleLookupEnrollment);
+router.get('/api/admin/cape/governance/heatmap', requireProgram, handleGetSkillCoverageHeatmap);
+router.get('/api/admin/cape/governance/personas', requireProgram, handleListPersonas);
+router.get('/api/admin/cape/governance/lookup', requireProgram, handleLookupEnrollment);
 
 export default router;

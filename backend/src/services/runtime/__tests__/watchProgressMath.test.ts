@@ -229,3 +229,119 @@ describe('meetsWatchRequirement', () => {
     expect(meetsWatchRequirement(st({ duration_s: 0, watched_pct: 0, watched_s: 0 }), 0.75).met).toBe(false);
   });
 });
+
+/**
+ * COVERAGE, not time spent.
+ *
+ * Asked by the QA tester 2026-11-21: "Does re-watching the same part count again
+ * toward 75%?" It did. `watched_s` counted seconds played and the gate divided
+ * that by duration, so replaying the opening cleared the gate without ever
+ * reaching the end. These pin the new rule - what was covered, not how long was
+ * spent.
+ */
+describe('accumulateWatch coverage', () => {
+  /** Play `seconds` forward from `from`, in 15s beats like a real client. */
+  const play = (state: WatchState | null, from: number, seconds: number, duration: number): WatchState => {
+    let s = state;
+    let pos = from;
+    let left = seconds;
+    while (left > 0) {
+      const step = Math.min(15, left);
+      pos += step;
+      left -= step;
+      s = accumulateWatch(s, { delta_s: step, position_s: pos, duration_s: duration }, NOW);
+    }
+    return s as WatchState;
+  };
+
+  it('THE REPORTED BUG: replaying the first half does not clear a 75% gate', () => {
+    let s = play(null, 0, 150, 300);     // first half
+    expect(s.watched_pct).toBe(50);
+    s = play(s, 0, 150, 300);            // the same half again
+
+    expect(s.watched_s).toBe(300);       // 300 seconds really were played
+    expect(s.covered_s).toBe(150);       // of a 300s video, half of it was seen
+    expect(s.watched_pct).toBe(50);      // was 100 before this change
+    expect(meetsWatchRequirement(s, 0.75).met).toBe(false);
+  });
+
+  it('watching it through does clear the gate, and merges into one span', () => {
+    const s = play(null, 0, 300, 300);
+    expect(s.watched_pct).toBe(100);
+    expect(s.segments).toEqual([[0, 300]]);
+    expect(meetsWatchRequirement(s, 0.75).met).toBe(true);
+  });
+
+  it('a seek forward credits only what was played after it, never the skipped part', () => {
+    let s = play(null, 0, 60, 300);      // [0, 60]
+    s = play(s, 200, 60, 300);           // seek to 200, play through to 260
+    expect(s.covered_s).toBe(120);
+    expect(s.segments).toEqual([[0, 60], [200, 260]]);
+    expect(s.watched_pct).toBe(40);      // not 87, which the playhead alone would say
+  });
+
+  it('scrubbing to the end still earns nothing', () => {
+    const s = accumulateWatch(null, { delta_s: 0, position_s: 299, duration_s: 300 }, NOW);
+    expect(s.covered_s).toBe(0);
+    expect(s.watched_pct).toBe(0);
+  });
+
+  it('adjacent beats join into one span rather than accumulating for ever', () => {
+    const s = play(null, 0, 120, 300);   // eight 15s beats
+    expect(s.segments).toEqual([[0, 120]]);
+  });
+
+  it('keeps the time reading for a player that reports no playhead', () => {
+    // An audio element with no position would otherwise sit at 0% for ever.
+    let s = accumulateWatch(null, { delta_s: 30, duration_s: 100, provider: 'audio' }, NOW);
+    s = accumulateWatch(s, { delta_s: 30, duration_s: 100, provider: 'audio' }, NOW);
+    expect(s.segments).toEqual([]);
+    expect(s.watched_pct).toBe(60);
+  });
+});
+
+/**
+ * Rows written before coverage existed carry no spans. Seeding them from what
+ * was already recorded is what lets this ship without a backfill, and these two
+ * cases are the whole argument for the seed.
+ */
+describe('accumulateWatch coverage, migrating a legacy row', () => {
+  const legacy = (watched_s: number, max_position_s: number, watched_pct: number): WatchState =>
+    ({ watched_s, max_position_s, duration_s: 300, watched_pct } as WatchState);
+
+  it('an honest straight-through watcher keeps their progress', () => {
+    const s = accumulateWatch(legacy(300, 300, 100), { delta_s: 5, position_s: 300, duration_s: 300 }, NOW);
+    expect(s.watched_pct).toBe(100);
+  });
+
+  it('someone who reached 100% by replaying the first half drops to what they actually saw', () => {
+    const s = accumulateWatch(legacy(300, 150, 100), { delta_s: 5, position_s: 150, duration_s: 300 }, NOW);
+    expect(s.covered_s).toBe(150);
+    expect(s.watched_pct).toBe(50);
+  });
+
+  it('never seeds further than the seconds actually played', () => {
+    // A playhead at 300 with only 30s played cannot mean 300s were covered, so
+    // the seeded span is [0, 30] and NOT [0, 300]. The [295, 300] span is this
+    // call's own beat, which is why covered_s is 35 rather than 30.
+    const s = accumulateWatch(legacy(30, 300, 10), { delta_s: 5, position_s: 300, duration_s: 300 }, NOW);
+    expect(s.segments).toEqual([[0, 30], [295, 300]]);
+    expect(s.covered_s).toBe(35);
+  });
+});
+
+describe('withAuthoritativeDuration coverage', () => {
+  it('re-expresses coverage against the real duration', () => {
+    const watch = { watched_s: 200, max_position_s: 200, duration_s: 600, watched_pct: 33, segments: [[0, 200]], covered_s: 200 } as unknown as WatchState;
+    const out = withAuthoritativeDuration(watch, 400)!;
+    expect(out.covered_s).toBe(200);
+    expect(out.watched_pct).toBe(50);
+  });
+
+  it('drops span left behind past the end of a replaced video', () => {
+    const watch = { watched_s: 213, max_position_s: 213, duration_s: 213, watched_pct: 100, segments: [[0, 213]], covered_s: 213 } as unknown as WatchState;
+    const out = withAuthoritativeDuration(watch, 109)!;
+    expect(out.segments).toEqual([[0, 109]]);
+    expect(out.watched_pct).toBe(100);
+  });
+});

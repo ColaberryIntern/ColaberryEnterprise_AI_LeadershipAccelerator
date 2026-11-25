@@ -91,4 +91,16 @@ describe('enqueueStoryArtifactCaptures', () => {
     expect(launchMock).not.toHaveBeenCalled();
     expect(artCreate).not.toHaveBeenCalled();
   });
+
+  // M1-T3 (Gov Proposal Studio) confirming test: once the gov demo URL IS set (which M1-T2 does the moment the
+  // Command Center goes live), the already-wired enqueue captures each verified story into Build Evidence — no new
+  // product code, this just proves the demo-set branch flows all the way to an inserted artifact row.
+  it('captures each verified story once a demo IS configured', async () => {
+    demoFindByPk.mockResolvedValue({ demo_url: 'https://saratoga-demo.colaberry.dev', capture_root: '/', story_capture_paths: {} });
+    artFindOne.mockResolvedValue(null);           // not yet captured
+    artCreate.mockResolvedValue({ id: 'a3' });
+    await enqueueStoryArtifactCaptures('dp-1', [{ storyId: 'STORY-REQ-7', commitSha: 'def456' }]);
+    expect(launchMock).toHaveBeenCalled();
+    expect(artCreate).toHaveBeenCalledWith(expect.objectContaining({ story_id: 'STORY-REQ-7', status: 'captured' }));
+  });
 });

@@ -13,7 +13,7 @@ import { useMediaBeats, type WatchBeatPayload } from './useMediaBeats';
 
 // Server-derived watch state for a card (the video watch gate). watched_pct is
 // the ratcheted server total; the collect button unlocks when met.
-interface WatchState { watched_pct: number; required_pct: number | null; met: boolean; }
+interface WatchState { watched_pct: number; required_pct: number | null; met: boolean; position_s?: number | null; duration_s?: number | null; }
 
 /** Mirrors POINTS_PER_COMMENT in backend/src/services/communityService.ts and
  *  REPLY_POINTS in CommunityThreadPanel — what a reply earns, advertised on the
@@ -63,6 +63,11 @@ export interface TimelineFeedCard {
   quiz_score: number | null;
   completed_at: string | null;
   video?: { url: string; presenter: string | null; poster: string | null; title?: string | null; duration_seconds?: number | null } | null;
+  // How far this student already got in this card's video, and where to resume
+  // it. Null when they have never played it. It rides along with the feed
+  // because the progress row it is read from is already loaded there - a tile
+  // that fetched its own would be one request per video card on screen.
+  watch?: { watched_pct: number; required_pct: number | null; met: boolean; position_s?: number | null; duration_s?: number | null } | null;
   image?: string | null;   // the item's OWN image (blog cover, testimonial still) — overrides the generic type visual
   content?: { title?: string; summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;   // title = the generated lesson title ("Overview — {week topic}"), display beats the raw card title
   course?: { name: string | null; url: string | null; completion?: 'certificate' | 'progress'; sections?: string } | null;   // Skills Course (skills_jar): class name + link + completion mode
@@ -191,6 +196,10 @@ const Icon: React.FC<{ kind: Kind }> = ({ kind }) => {
 const StatePip: React.FC<{ status: TimelineFeedCard['status'] }> = ({ status }) => {
   if (status === 'completed') return <span className="pip done"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg>Completed</span>;
   if (status === 'locked') return <span className="pip lock"><svg viewBox="0 0 24 24" fill="none"><rect x="5" y="11" width="14" height="9" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" stroke="currentColor" strokeWidth="2" /></svg>Locked</span>;
+  // `status` has four values and this pip used to render three of them, so a
+  // card the server itself called `in_progress` was labelled "Not started" -
+  // next to its own "Watched 50%" strip. Reported by the QA tester 2026-11-24.
+  if (status === 'in_progress') return <span className="pip up"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" /><path d="M12 12V7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /><path d="M12 12l3.5 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>In progress</span>;
   return <span className="pip up"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" /></svg>Not started</span>;
 };
 
@@ -247,7 +256,24 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
   // Points are NEVER collected on the tile — every points card opens the drawer,
   // where the type's completion gate lives. The tile only PREVIEWS progress (the
   // video watch %); the drawer owns the Collect button.
-  const [watch, setWatch] = useState<WatchState | null>(null); // video watch progress (on-card % preview)
+  // Seeded from the FEED, not from nothing. The tile used to start every render
+  // at "nothing recorded" and learn a percentage only from its own playback
+  // heartbeat, so a video watched yesterday - or watched in the drawer a moment
+  // ago - showed no progress at all until it was reopened and played again.
+  // Reported by the QA tester 2026-11-24. The ambient-media path below already
+  // hydrated itself on mount; the card-video path never did.
+  const [watch, setWatch] = useState<WatchState | null>(card.watch ?? null); // video watch progress (on-card % preview)
+  // Adopt a fresher snapshot when the FEED refetches, so progress made in the
+  // drawer lands on the tile without reopening it. Keyed on the values rather
+  // than the object: a parent that rebuilds its card objects every render would
+  // otherwise set state in a loop.
+  const fedWatch = card.watch;
+  useEffect(() => {
+    if (fedWatch) setWatch({ ...fedWatch });
+  // Deliberately not exhaustive and carrying NO lint-suppression directive: this
+  // project ships no ESLint config, so a directive naming react-hooks is a hard
+  // error in the separate Frontend build gate. Same reasoning as VideoEmbed.
+  }, [fedWatch?.watched_pct, fedWatch?.required_pct, fedWatch?.met, fedWatch?.position_s, fedWatch?.duration_s]);
 
   // STABLE IDENTITY MATTERS HERE. This used to be an inline arrow in the JSX below, so every
   // render of this card handed VideoEmbed a brand new function -- and VideoEmbed listed that
@@ -456,6 +482,8 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
         title={card.video?.title || shortTitle}
         poster={ownPoster || posterUrl}
         autoplay
+        resumeAtS={watch?.position_s ?? null}
+        resumeDurationS={watch?.duration_s ?? null}
         badge={card.type === 'testimonial' ? 'Testimonial' : card.type === 'podcast' ? 'Podcast' : null}
         onEnded={() => setPlayingInline(false)}
         // Sibling of CardDetailBody's reportBeats: the heartbeat deliberately

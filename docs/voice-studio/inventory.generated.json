@@ -1,6 +1,6 @@
 {
  "generatedFrom": "git ls-files",
- "total": 234,
+ "total": 236,
  "byRole": {
   "DISPATCH": 3,
   "INGEST": 3,
@@ -8,7 +8,7 @@
   "CALLER": 11,
   "CONFIG": 20,
   "UI": 22,
-  "CONSUMER": 54,
+  "CONSUMER": 56,
   "MENTION": 115
  },
  "rows": [
@@ -1133,6 +1133,12 @@
    "envVars": []
   },
   {
+   "path": "backend/src/services/synthflowPostCallSms.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
    "path": "backend/src/services/synthflowService.ts",
    "role": "DISPATCH",
    "callTypes": [],
@@ -1283,6 +1289,12 @@
   },
   {
    "path": "backend/src/services/voice/gateway/voiceReservation.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/postcall/completion.ts",
    "role": "CONSUMER",
    "callTypes": [],
    "envVars": []

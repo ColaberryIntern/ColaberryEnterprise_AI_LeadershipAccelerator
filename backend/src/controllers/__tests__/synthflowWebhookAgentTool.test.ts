@@ -10,6 +10,12 @@ const m = {
   sms: jest.fn(),
   update: jest.fn(),
   findOne: jest.fn(),
+  claim: jest.fn(),
+  extract: jest.fn(),
+  claimEffect: jest.fn(),
+  review: jest.fn(),
+  release: jest.fn(),
+  done: jest.fn(),
 };
 
 jest.mock('../../config/env', () => ({ env: { synthflowWebhookToken: 't' } }));
@@ -23,7 +29,12 @@ jest.mock('../../models', () => ({
   Activity: { findOne: jest.fn().mockResolvedValue(null) },
 }));
 jest.mock('../../services/scheduling/cancelScheduledMessage', () => ({ cancelScheduledMessagesWhere: jest.fn() }));
-jest.mock('../../services/callTranscriptProcessor', () => ({ processCallTranscript: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('../../services/callTranscriptProcessor', () => ({ processCallTranscript: (...a: unknown[]) => m.extract(...a) }));
+jest.mock('../../services/voice/postcall/effectClaims', () => ({
+  claimEffect: (...a: unknown[]) => m.claimEffect(...a), markEffectDone: (...a: unknown[]) => m.done(...a),
+  markTranscriptReview: (...a: unknown[]) => m.review(...a), releaseEffect: (...a: unknown[]) => m.release(...a),
+  clearTranscriptReview: jest.fn().mockResolvedValue(undefined),
+}));
 jest.mock('../../services/ghlService', () => ({ sendSmsViaGhl: (...a: unknown[]) => m.sms(...a), syncLeadToGhl: jest.fn(), findContactByEmail: jest.fn() }));
 jest.mock('../../services/activityService', () => ({ logActivity: (...a: unknown[]) => m.activity(...a) }));
 jest.mock('../../services/delivery/flotationCallCompletion', () => ({ completeFlotationCall: jest.fn(), isIntakeCallSource: () => false }));
@@ -32,6 +43,11 @@ jest.mock('../../services/settingsService', () => ({ getTestOverrides: (...a: un
 jest.mock('../../utils/piiRedaction', () => ({ redactForLogs: (s: string) => s }));
 jest.mock('../../services/ghlMirrorService', () => ({ mirrorToGhlInBackground: jest.fn(), resolveGhlContactId: jest.fn().mockResolvedValue(null) }));
 jest.mock('../../services/agents/tools/agentCallCompletion', () => ({ completeAgentToolCallFromWebhook: (...a: unknown[]) => m.complete(...a) }));
+// VS3.2: the real payload normalizer, a faked DB claim (its SQL is proven in completion.integration).
+jest.mock('../../services/voice/postcall/completion', () => ({
+  ...jest.requireActual('../../services/voice/postcall/completion'),
+  claimCompletion: (...a: unknown[]) => m.claim(...a),
+}));
 
 import { handleSynthflowCallComplete } from '../synthflowWebhookController';
 
@@ -55,6 +71,10 @@ beforeEach(() => {
   m.update.mockResolvedValue(undefined);
   m.complete.mockResolvedValue({ outcome: 'summarized' });
   m.testOverrides.mockResolvedValue({ enabled: false });
+  m.claim.mockResolvedValue({ firstDelivery: true });
+  m.extract.mockResolvedValue(undefined);
+  m.claimEffect.mockResolvedValue(true);
+  for (const fn of [m.review, m.release, m.done]) fn.mockResolvedValue(undefined);
   jest.spyOn(console, 'log').mockImplementation(() => undefined);
   jest.spyOn(console, 'warn').mockImplementation(() => undefined);
 });
@@ -79,4 +99,69 @@ it('CONTROL: a non-agent call keeps the old path (no agent completion; post-call
   expect(m.complete).not.toHaveBeenCalled();
   expect(m.activity.mock.calls[0][0].subject).toBe('Maya called Pat (1m 5s)');
   expect(m.testOverrides).toHaveBeenCalled();
+});
+
+it('VS3.2 replay: a redelivered completion sends no second text and writes no second timeline entry', async () => {
+  m.findOne.mockResolvedValue(row({ source: 'interest' }));
+  m.claim.mockResolvedValue({ firstDelivery: false });
+  const r = res();
+  await handleSynthflowCallComplete(req(), r as never);
+  await flush();
+  expect(m.claim).toHaveBeenCalledWith('log-9', expect.objectContaining({ providerCallId: 'call-9', status: 'completed', completed: true }));
+  expect(m.activity).not.toHaveBeenCalled();
+  expect(m.testOverrides).not.toHaveBeenCalled(); // post-call SMS path never starts
+  expect(m.sms).not.toHaveBeenCalled();
+  expect(r.json).toHaveBeenCalledWith({ ok: true, matched: true });
+});
+
+it('VS3.2 replay: idempotent branches still run, so a retry after a mid-way failure can finish them', async () => {
+  m.findOne.mockResolvedValue(row({ source: 'agent-tool', agent_name: 'Reese' }));
+  m.claim.mockResolvedValue({ firstDelivery: false });
+  await handleSynthflowCallComplete(req(), res() as never);
+  await flush();
+  expect(m.complete).toHaveBeenCalledTimes(1);
+  expect(m.activity).not.toHaveBeenCalled();
+});
+
+it('VS3.2: the old unconditional row update is gone (the claim is the only write of the completion)', async () => {
+  m.findOne.mockResolvedValue(row({ source: 'interest' }));
+  await handleSynthflowCallComplete(req(), res() as never);
+  await flush();
+  expect(m.update).not.toHaveBeenCalled();
+  expect(m.claim).toHaveBeenCalledTimes(1);
+});
+
+it('VS3.2 failed extraction: the transcript is marked pending review and the claim released for a retry', async () => {
+  m.findOne.mockResolvedValue(row({ source: 'interest' }));
+  m.extract.mockRejectedValue(new Error('openai 503'));
+  await handleSynthflowCallComplete(req(), res() as never);
+  await flush(); await flush();
+  expect(m.claimEffect).toHaveBeenCalledWith('log-9', 'extraction');
+  expect(m.review).toHaveBeenCalledWith('log-9', 'extraction_failed');
+  expect(m.release).toHaveBeenCalledWith('log-9', 'extraction');
+  expect(m.done).not.toHaveBeenCalled();
+});
+
+it('VS3.2 a replay retries a released extraction once, and never re-runs a done one', async () => {
+  m.findOne.mockResolvedValue(row({ source: 'interest' }));
+  m.claim.mockResolvedValue({ firstDelivery: false });
+  m.claimEffect.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+  await handleSynthflowCallComplete(req(), res() as never);
+  await flush();
+  expect(m.extract).toHaveBeenCalledTimes(1);
+  expect(m.done).toHaveBeenCalledWith('log-9', 'extraction');
+  await handleSynthflowCallComplete(req(), res() as never);
+  await flush();
+  expect(m.extract).toHaveBeenCalledTimes(1);
+  expect(m.activity).not.toHaveBeenCalled();
+});
+
+it('VS3.2 a claim failure (DB down) skips extraction without failing the webhook', async () => {
+  m.findOne.mockResolvedValue(row({ source: 'interest' }));
+  m.claimEffect.mockRejectedValue(Object.assign(new Error('db'), { name: 'ConnectionError' }));
+  const r = res();
+  await handleSynthflowCallComplete(req(), r as never);
+  await flush();
+  expect(m.extract).not.toHaveBeenCalled();
+  expect(r.json).toHaveBeenCalledWith({ ok: true, matched: true });
 });

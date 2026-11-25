@@ -19,20 +19,16 @@ import { buildGateContext, evaluateCardLock, GateCard } from './timelineGatingSe
 import { globalCurriculumWhere } from './curriculumScope';
 import { isFreePreviewTier } from '../access/contentEntitlement';
 import { env } from '../../config/env';
+import { FeedVideo, videoFromMetadata } from './cardVideoMetadata';
+import { buildFeedWatchMap, FeedCardWatch } from './feedWatchState';
+
+// Re-exported from cardVideoMetadata, which is where they live now — every
+// existing caller keeps importing them from here. See that module's header for
+// why they moved (it is what broke the feed <-> watch-progress import cycle).
+export { videoFromMetadata } from './cardVideoMetadata';
+export type { FeedVideo } from './cardVideoMetadata';
 
 export const BUCKET_ORDER = ['pre_class', 'learn', 'practice', 'build', 'reflect', 'share', 'advance'] as const;
-
-export interface FeedVideo {
-  url: string;
-  presenter: string | null;
-  poster: string | null;
-  title?: string | null;   // the specific video's own title — overlaid on the poster (personalized picks)
-  // Real provider duration in seconds, when known (YouTube Data API for fixed video
-  // cards; network_videos/podcasts catalogs for personalized picks). The watch-gate's
-  // ground truth — see watchProgressService.resolveAuthoritativeDurationS. Absent/null
-  // means "not known", never a guess.
-  duration_seconds?: number | null;
-}
 
 /** AI-generated student content saved onto the card (by the Timeline editor's
  *  "Generate content"), rendered in the student drawer — what was previewed IS
@@ -83,6 +79,11 @@ export interface FeedCard {
   quiz_score: number | null;
   completed_at: Date | null;
   video: FeedVideo | null;
+  // How far this student already got in this card's video, and where to resume
+  // it — null when they have never played it. Carried in the feed because the
+  // progress row it comes from is already loaded here; a tile that fetched its
+  // own would mean one request per video card on screen. See feedWatchState.
+  watch?: FeedCardWatch | null;
   content: FeedContent | null;
   course: FeedCourse | null;          // Skills Course link (skills_jar)
   image: string | null;               // the item's OWN image (blog cover, testimonial still) — tiles use it over the generic type visual
@@ -109,21 +110,6 @@ export function contentFromMetadata(metadata: any): FeedContent | null {
   if (Array.isArray(c.questions) && c.questions.length) out.questions = c.questions.map(String);
   if (typeof c.reflection === 'string' && c.reflection.trim()) out.reflection = c.reflection;
   return Object.keys(out).length ? out : null;
-}
-
-/** PURE — a typed video from a card's metadata blob, or null. Only the URL is
- *  required; presenter/poster are optional display extras. */
-export function videoFromMetadata(metadata: any): FeedVideo | null {
-  const v = metadata && typeof metadata === 'object' ? metadata.video : null;
-  if (!v || typeof v !== 'object' || typeof v.url !== 'string' || !v.url.trim()) return null;
-  const duration = Number(v.duration_seconds);
-  return {
-    url: v.url.trim(),
-    presenter: typeof v.presenter === 'string' && v.presenter.trim() ? v.presenter.trim() : null,
-    poster: typeof v.poster === 'string' && v.poster.trim() ? v.poster.trim() : null,
-    title: typeof v.title === 'string' && v.title.trim() ? v.title.trim() : null,
-    duration_seconds: Number.isFinite(duration) && duration > 0 ? duration : null,
-  };
 }
 
 /** PURE — the card's own display image from its metadata blob, or null. Set by
@@ -248,10 +234,17 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
 
   // The type's Parts (capabilities) live on CurriculumTypeDefinition (what the
   // Studio "Parts" panel edits), keyed by slug (= card.type). One query, mapped.
-  const typeDefs = await CurriculumTypeDefinition.findAll({ attributes: ['slug', 'capabilities', 'thumbnail_url'] });
+  const typeDefs = await CurriculumTypeDefinition.findAll({ attributes: ['slug', 'capabilities', 'thumbnail_url', 'completion_rules'] });
   const capsBySlug = new Map(typeDefs.map((t) => [t.slug, normalizeCapabilities(t.capabilities)]));
   // The type's Studio thumbnail (AI banner) — every card's default image.
   const thumbBySlug = new Map(typeDefs.map((t) => [t.slug, (t.thumbnail_url || '').trim() || null]));
+  // The type's completion rules — the watch requirement a tile's progress bar is
+  // measured against, read off the same query rather than one of its own.
+  const rulesBySlug = new Map<string, unknown>(typeDefs.map((t) => [t.slug, (t as any).completion_rules ?? null]));
+
+  // Watch progress per tile, from the progress rows already loaded above. Only
+  // cards this student has actually played are resolved.
+  const watchByCard = await buildFeedWatchMap(enrollmentId, cards, progressByCard, rulesBySlug);
 
   // NOTE: the 'overview' card type (which surfaced the week's SECTION title as
   // its week_title) was retired 2026-07-21, so week_title is always null now.
@@ -299,6 +292,7 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
       quiz_score: progress?.quiz_score ?? null,
       completed_at: progress?.completed_at ?? null,
       video: videoFromMetadata(card.metadata),
+      watch: watchByCard.get(card.id) ?? null,
       content: contentFromMetadata(card.metadata),
       course: courseFromMetadata(card.metadata),
       image: imageFromMetadata(card.metadata),

@@ -54,6 +54,7 @@
 import { setTimeout as delay } from 'timers/promises';
 import Project from '../../../models/Project';
 import { commandCenterProbeUrls } from '../commandCenterLocation';
+import { CONNECTED_DEMO_DIR } from '../connectedDemoStory';
 
 const GITHUB_API = 'https://api.github.com';
 
@@ -246,6 +247,34 @@ export async function recordPagesUrlIfLive(
     await project.save();
 
     log('sbp_pages_recorded', 'success', { ...base, url: live, probed, from_api: fromApi });
+
+    // GOV ONLY: a gov build ships a connected demo at `<command_center_url>demo/`. The moment the
+    // Command Center URL is first recorded, publish that demo URL to Build Evidence automatically so the
+    // Demo URL field and its screenshot captures do not wait on a manual paste. This runs in the SAME
+    // once-only `recorded` branch (the early never-overwrite return guarantees it fires at most once per
+    // project), honours the human: it skips if a demo URL was already set by hand, and respects the gov
+    // demo host allowlist (env GOV_DEMO_HOST_ALLOWLIST) so a host that is not allowed simply leaves
+    // today's manual path untouched. NEVER THROWS, in keeping with this module's contract.
+    const vars = (project.project_variables || {}) as Record<string, any>;
+    if (vars.kind === 'gov' && typeof vars.gov_delivery_project_id === 'string' && vars.gov_delivery_project_id) {
+      const base2 = live.endsWith('/') ? live : `${live}/`;
+      const demoUrl = `${base2}${CONNECTED_DEMO_DIR}`;
+      try {
+        const { setGovBuildDemo, getGovBuildDemo, isAllowedDemoUrl } = await import('../../factory/proposal/captureStoryArtifact');
+        const alreadySet = await getGovBuildDemo(vars.gov_delivery_project_id).catch(() => null);
+        if (alreadySet) {
+          log('gov_demo_url_skipped_already_set', 'partial', { ...base, url: demoUrl });
+        } else if (!isAllowedDemoUrl(demoUrl)) {
+          log('gov_demo_url_host_not_allowed', 'partial', { ...base, url: demoUrl });
+        } else {
+          await setGovBuildDemo(vars.gov_delivery_project_id, { demoUrl });
+          log('gov_demo_url_published', 'success', { ...base, url: demoUrl });
+        }
+      } catch (e: unknown) {
+        log('gov_demo_url_publish_failed', 'failure', { ...base, url: demoUrl, error_class: (e as { name?: string })?.name ?? 'Error' });
+      }
+    }
+
     return { outcome: 'recorded', url: live, from_api: fromApi, probed };
   } catch (err: unknown) {
     log('sbp_pages_check_failed', 'failure', {
