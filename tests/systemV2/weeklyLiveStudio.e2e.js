@@ -82,6 +82,7 @@ async function main() {
       for (const tab of ['classes', 'plan', 'map', 'rubric']) {
         await page.click(`[data-testid="tab-${tab}"]`);
         await page.waitForTimeout(300);
+        if (tab === 'classes') check(`${at}: each row's buttons share a line`, await page.$$eval('.cls-row', (rows) => rows.length > 1 && rows.every((r) => new Set(Array.from(r.querySelectorAll('.cls-btn')).map((x) => Math.round(x.getBoundingClientRect().top))).size === 1)));
         if (tab === 'classes') check(`${at}: class list`, (await page.textContent('[data-testid="classes-panel"]')).includes('Weekly Live Ep 2'));
         if (tab === 'plan') {
           await page.waitForSelector('[data-testid="topic-5"]', { timeout: 10000 }).catch(() => null);
