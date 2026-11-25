@@ -15,6 +15,7 @@ import { isCoryAuthorizedIdentity, requireAdmin } from '../../middlewares/authMi
 import EnterpriseIntake from '../../models/EnterpriseIntake';
 import ProjectUnderstandingRecord from '../../models/ProjectUnderstandingRecord';
 import { env } from '../../config/env';
+import { clientDemoView } from '../../services/enterpriseIntake/enterpriseIntakeDemo';
 import { stageOf } from '../../services/enterpriseIntake/enterpriseIntakeSync';
 import {
   ActionRefused,
@@ -82,6 +83,9 @@ router.get(`${BASE}/:id`, requireAdmin, async (req: Request, res: Response, next
     const i = await EnterpriseIntake.findByPk(String(req.params.id));
     if (!i) return res.status(404).json({ error: 'No such client' });
     const record = i.understanding_id ? await ProjectUnderstandingRecord.findByPk(i.understanding_id) : null;
+    // Signed 12-hour demo links: minted on this read, never stored, never cached.
+    const demo = await clientDemoView(i);
+    res.set('Cache-Control', 'no-store');
     res.json({
       client: {
         ...summary(i),
@@ -113,6 +117,7 @@ router.get(`${BASE}/:id`, requireAdmin, async (req: Request, res: Response, next
           files: (i.client_files || []).map((f) => ({ name: f.name, size: f.size, chars: f.chars, uploadedAt: f.uploaded_at })),
           aliBriefSentAt: i.ali_brief_sent_at,
         },
+        demo,
       },
     });
   } catch (err) {
