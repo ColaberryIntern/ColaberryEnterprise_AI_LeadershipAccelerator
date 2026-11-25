@@ -50,8 +50,10 @@ describe('seed from the live Synthflow assistant', () => {
     expect(renderCall(c, {})).toEqual({ ok: false, reason: 'no_prompt' });
     expect(renderCall(c, { prompt: 'Follow up with Dana about the class.' }).ok).toBe(true);
   });
-  it('language mapping never yields an invalid tag', () => {
-    for (const l of [undefined, 'en', 'en-US', 'english', 'es-US', 'xx']) expect(toLanguage(l)).toMatch(/^[a-z]{2}-[A-Z]{2}$/);
+  it('language: known values map; an unknown one is NOT silently turned into English', () => {
+    expect([undefined, 'en', 'English', 'en-US', 'es', 'es-US'].map(toLanguage)).toEqual(['en-US', 'en-US', 'en-US', 'en-US', 'es-US', 'es-US']);
+    expect(toLanguage('xx')).toBe('xx');
+    expect(VersionContentSchema.safeParse(assistantToContent({ agent: { prompt: '{prompt}', language: 'xx' } })).success).toBe(false);
   });
 
   const fakeFetch = (status: number, body: unknown): typeof fetch => (async (url: string, init: { headers: Record<string, string> }) => {

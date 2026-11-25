@@ -62,13 +62,32 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   });
 }
 
+/**
+ * VS3.1: when set, every tool call (including a refused unknown tool) is recorded through the repo's
+ * agent tool recorder (agents/tools/toolInvocationRecorder.ts) under the agent's registry key, with
+ * the tools the agent holds so the recorder can flag a call outside its grants. Argument KEYS only.
+ */
+export interface ToolRecording { agentName: string; surface: string; held: readonly string[] }
+
+type Recorder = typeof import('../../agents/tools/toolInvocationRecorder');
+
 export class ToolBroker {
   private readonly tools = new Map<string, RegisteredTool>();
   private readonly done = new Map<string, Promise<ToolOutcome>>();
   private static readonly MAX_REMEMBERED = 100;
 
-  constructor(tools: RegisteredTool[], private readonly timeoutMs: number = TOOL_TIMEOUT_MS) {
+  constructor(tools: RegisteredTool[], private readonly timeoutMs: number = TOOL_TIMEOUT_MS, private readonly recording?: ToolRecording) {
     for (const t of tools) this.tools.set(t.def.name, t);
+  }
+
+  /** Record through the shared recorder; resolved per call so a partial mock elsewhere cannot break import. */
+  private record(name: string, input: unknown, run: () => Promise<ToolOutcome>): Promise<ToolOutcome> {
+    if (!this.recording) return run();
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const rec = require('../../agents/tools/toolInvocationRecorder') as Partial<Recorder>;
+    if (typeof rec.withToolRecording !== 'function') return run();
+    const args = input && typeof input === 'object' ? (input as Record<string, unknown>) : undefined;
+    return rec.withToolRecording({ agentName: this.recording.agentName, toolName: name, surface: this.recording.surface, args }, run, this.recording.held);
   }
 
   defs(): VoiceToolDef[] { return [...this.tools.values()].map((t) => t.def); }
@@ -80,7 +99,7 @@ export class ToolBroker {
     const prior = this.done.get(callId);
     if (prior) return prior;
     if (this.done.size >= ToolBroker.MAX_REMEMBERED) this.done.delete(this.done.keys().next().value as string);
-    const p = this.execute(name, input);
+    const p = this.record(name, input, () => this.execute(name, input));
     this.done.set(callId, p);
     return p;
   }

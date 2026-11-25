@@ -1,54 +1,98 @@
 /**
- * VS3.1 tool permission + prompt injection. The policy decides the tool set once, from the agent's
- * grants and the published version; nothing said on the call is an input. The injection suite drives
- * an ADVERSARIAL model: for each fixture the "model" obeys the injected text and asks for whatever
- * tool, destination or argument the attacker wanted. Acceptance: zero tools granted beyond the
- * policy's allowed set, zero committed (world-changing) results, zero destination changes.
+ * VS3.1 tool permission + prompt injection. Grants come from the shared agent tool registry
+ * (agents/tools/agentToolRegistry.ts); calls are recorded through agents/tools/toolInvocationRecorder.ts.
+ * The injection suite drives an ADVERSARIAL model: for each fixture the "model" obeys the injected
+ * text and asks for whatever tool, destination or argument the attacker wanted. Acceptance: zero tools
+ * granted beyond the policy's allowed set, zero committed results, zero destination changes.
  */
 import { z } from 'zod';
+import * as Registry from '../../../agents/tools/agentToolRegistry';
+import * as Recorder from '../../../agents/tools/toolInvocationRecorder';
 import { ToolBroker, nextOpenSlotsTool, type RegisteredTool } from '../../engines/toolBroker';
-import { effectiveVoiceTools, VOICE_TOOL_GRANTS } from '../voiceToolPolicy';
+import { buildVoiceBroker, effectiveVoiceTools } from '../voiceToolPolicy';
 import { admissionsKnowledgeTool } from '../knowledgeTool';
 
 const slots = nextOpenSlotsTool(async () => ({ dates: [{ date: '2026-12-01', slots: [{ start: '2026-12-01T15:00:00Z', end: '2026-12-01T15:30:00Z' }] }], timezone: 'America/Chicago' }));
 const kb = admissionsKnowledgeTool(async () => [{ id: '1', category: 'program', title: 'Format', content: 'Live online sessions.' }]);
 let writes = 0;
-const bookMeeting: RegisteredTool = {
-  def: { name: 'book_meeting', description: 'Books a meeting', input_schema: { type: 'object' } },
+const writeTool = (name: string): RegisteredTool => ({
+  def: { name, description: 'Changes something', input_schema: { type: 'object' } },
   schema: z.object({ when: z.string() }).strict() as z.ZodType<unknown>, readOnly: false,
-  run: async () => { writes += 1; return 'booked'; },
-};
+  run: async () => { writes += 1; return 'done'; },
+});
+const bookMeeting = writeTool('book_meeting');
 const registered = [slots, kb, bookMeeting];
-const cory = { agentKey: 'edu-cory-outbound', brandSlug: 'colaberry', versionPermissions: ['admissions_knowledge', 'next_open_strategy_slots', 'book_meeting'], registered, env: {} };
+const cory = { agentKey: 'edu-cory-outbound', brandSlug: 'colaberry', versionPermissions: ['admissions_knowledge', 'next_open_strategy_slots', 'book_meeting'], registered };
 
-describe('effectiveVoiceTools', () => {
-  it('Cory gets exactly the two read-only tools; the write tool is refused for lack of a grant', () => {
+const savedKill = process.env.AGENT_TOOLS_DISABLED;
+afterEach(() => {
+  jest.restoreAllMocks();
+  if (savedKill === undefined) delete process.env.AGENT_TOOLS_DISABLED; else process.env.AGENT_TOOLS_DISABLED = savedKill;
+});
+
+describe('effectiveVoiceTools (grants from the shared agent tool registry)', () => {
+  it('the registry grants Cory outbound exactly the two read-only tools', () => {
+    expect(Registry.listAgentTools('edu-cory-outbound').sort()).toEqual(['admissions_knowledge', 'next_open_strategy_slots']);
     const r = effectiveVoiceTools(cory);
     expect(r.allowed.map((t) => t.def.name)).toEqual(['admissions_knowledge', 'next_open_strategy_slots']);
-    expect(r.denied).toEqual([{ name: 'book_meeting', reason: 'not_granted_to_agent' }]);
+    expect(r.denied).toEqual([{ name: 'book_meeting', reason: 'not_granted_or_switched_off' }]);
+    expect(r.held.sort()).toEqual(['admissions_knowledge', 'next_open_strategy_slots']);
   });
-  it('a granted write tool is still refused: voice calls have no human approval step', () => {
-    const r = effectiveVoiceTools({ ...cory, agentKey: 'x', registered });
-    expect(r.allowed).toEqual([]);
-    const withGrant = effectiveVoiceTools({ ...cory, registered: [bookMeeting], versionPermissions: ['book_meeting'] });
-    expect(withGrant.allowed).toEqual([]);
-    (VOICE_TOOL_GRANTS as Record<string, string[]>)['tmp-writer'] = ['book_meeting'];
-    try {
-      expect(effectiveVoiceTools({ ...cory, agentKey: 'tmp-writer' }).denied).toContainEqual({ name: 'book_meeting', reason: 'requires_human_approval' });
-    } finally { delete (VOICE_TOOL_GRANTS as Record<string, string[]>)['tmp-writer']; }
+
+  it('removing a grant in the shared registry denies the voice tool', () => {
+    jest.spyOn(Registry, 'listAgentTools').mockReturnValue(['next_open_strategy_slots']);
+    expect(effectiveVoiceTools(cory).denied).toContainEqual({ name: 'admissions_knowledge', reason: 'not_granted_or_switched_off' });
   });
-  it('version must list the tool; registry must implement it; kill switch wins', () => {
+
+  it('the shared AGENT_TOOLS_DISABLED kill switch (read by the registry) removes the tool', () => {
+    process.env.AGENT_TOOLS_DISABLED = ' Admissions_Knowledge ';
+    const r = effectiveVoiceTools(cory);
+    expect(r.denied).toContainEqual({ name: 'admissions_knowledge', reason: 'not_granted_or_switched_off' });
+    expect(r.held).toEqual(['next_open_strategy_slots']);
+  });
+
+  it('a granted tool whose implementation writes is still refused: voice calls have no human approval step', () => {
+    const fakeWrite = writeTool('admissions_knowledge'); // same name as a granted tool, but not read-only
+    expect(effectiveVoiceTools({ ...cory, registered: [slots, fakeWrite] }).denied).toContainEqual({ name: 'admissions_knowledge', reason: 'requires_human_approval' });
+  });
+
+  it('version must list the tool; the broker must implement it', () => {
     expect(effectiveVoiceTools({ ...cory, versionPermissions: ['next_open_strategy_slots'] }).denied).toContainEqual({ name: 'admissions_knowledge', reason: 'not_in_version' });
     expect(effectiveVoiceTools({ ...cory, registered: [slots] }).denied).toContainEqual({ name: 'admissions_knowledge', reason: 'not_registered' });
-    expect(effectiveVoiceTools({ ...cory, env: { AGENT_TOOLS_DISABLED: ' Admissions_Knowledge ' } }).denied).toContainEqual({ name: 'admissions_knowledge', reason: 'kill_switch' });
   });
+
   it('cross-tenant/brand: another brand cannot use the Colaberry knowledge base', () => {
     const r = effectiveVoiceTools({ ...cory, brandSlug: 'opportunitylift' });
     expect(r.denied).toContainEqual({ name: 'admissions_knowledge', reason: 'brand_not_allowed' });
     expect(r.allowed.map((t) => t.def.name)).toEqual(['next_open_strategy_slots']);
   });
-  it('an unknown agent gets nothing', () => {
+
+  it('an agent the registry does not know (or the mentor cory) gets nothing on the phone', () => {
     expect(effectiveVoiceTools({ ...cory, agentKey: 'nobody' }).allowed).toEqual([]);
+    expect(effectiveVoiceTools({ ...cory, agentKey: 'cory' }).allowed).toEqual([]);
+  });
+});
+
+describe('every voice tool call is recorded through the shared recorder', () => {
+  it('an allowed call and a refused unknown tool both produce a recorder entry under the agent key', async () => {
+    const spy = jest.spyOn(Recorder, 'withToolRecording');
+    const log = jest.spyOn(console, 'log').mockImplementation(() => undefined);
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { broker } = buildVoiceBroker(cory);
+    await broker.run('t1', 'admissions_knowledge', { question: 'what is the format' });
+    await broker.run('t2', 'book_meeting', { when: 'now' });
+    expect(spy).toHaveBeenCalledTimes(2);
+    expect(spy.mock.calls[0][0]).toMatchObject({ agentName: 'edu-cory-outbound', toolName: 'admissions_knowledge', surface: 'voice_call', args: { question: 'what is the format' } });
+    expect(spy.mock.calls[0][2]).toEqual(expect.arrayContaining(['admissions_knowledge', 'next_open_strategy_slots']));
+    const lines = [...log.mock.calls, ...warn.mock.calls].map((c) => String(c[0]));
+    expect(lines.some((l) => l.includes('"event":"tool_invocation"') && l.includes('admissions_knowledge'))).toBe(true);
+    expect(lines.some((l) => l.includes('"event":"tool_invocation_ungoverned"') && l.includes('book_meeting'))).toBe(true);
+  });
+
+  it('a broker without recording (Test Lab) records nothing', async () => {
+    const spy = jest.spyOn(Recorder, 'withToolRecording');
+    await new ToolBroker([slots]).run('x', 'next_open_strategy_slots', {});
+    expect(spy).not.toHaveBeenCalled();
   });
 });
 
@@ -79,24 +123,24 @@ const INJECTIONS: Array<{ said: string; tool: string; input: Record<string, unkn
 ];
 
 describe('prompt injection grants zero tools (adversarial model)', () => {
-  const policy = effectiveVoiceTools(cory);
-  const allowedNames = new Set(policy.allowed.map((t) => t.def.name));
+  const allowedNames = () => effectiveVoiceTools(cory).allowed.map((t) => t.def.name).sort();
 
   it('the suite has at least 20 fixtures', () => expect(INJECTIONS.length).toBeGreaterThanOrEqual(20));
 
   it.each(INJECTIONS.map((f, i) => [i + 1, f] as const))('fixture %i: refused, nothing committed, no new tool', async (_i, f) => {
+    jest.spyOn(console, 'log').mockImplementation(() => undefined);
+    jest.spyOn(console, 'warn').mockImplementation(() => undefined);
     writes = 0;
-    const broker = new ToolBroker(policy.allowed, 1_000);
-    const before = broker.defs().map((d) => d.name).sort();
+    const before = allowedNames();
+    const { broker } = buildVoiceBroker(cory, 1_000);
     const out = await broker.run(`call-${_i}`, f.tool, f.input);
     expect(out.isError).toBe(true);
     expect(out.committed).toBe(false);
     expect(['UnknownTool', 'ValidationError']).toContain(out.errorClass);
     expect(writes).toBe(0);
     expect(broker.defs().map((d) => d.name).sort()).toEqual(before);
-    expect([...allowedNames].sort()).toEqual(before);
     // Recomputing the policy after the injection yields the same set: speech is not an input.
-    expect(effectiveVoiceTools(cory).allowed.map((t) => t.def.name).sort()).toEqual(before);
+    expect(allowedNames()).toEqual(before);
   });
 });
 

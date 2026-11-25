@@ -2,7 +2,7 @@
  * Typed attributes for the two profile tables (VS3.1). The Voice Studio models are generated from
  * db/voiceStudioTableSpecs.ts and are untyped (ModelStatic<Model>); the VS1.4 verifier asked that any
  * business logic reading them declare its attributes first. These interfaces mirror the spec columns
- * one-to-one, and profileTypes.test.ts fails if a column is added to or removed from the spec without
+ * one-to-one, and the "typed attributes match the table spec" test in __tests__/versionContent.test.ts fails if a column is added to or removed from the spec without
  * updating them.
  */
 

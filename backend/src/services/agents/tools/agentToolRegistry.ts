@@ -23,6 +23,9 @@ const GRANTS: Record<AgentKey, readonly AgentToolName[]> = {
   // Dara v2 Phase 3 — a student can attach a screenshot (e.g. a broken quiz
   // page, a confusing lesson diagram) to a curriculum-support DM.
   dara: ['read_attachments'],
+  // Voice AI Studio (VS3.1): the outbound phone agent may look up open strategy-call times and an
+  // approved admissions answer. Both are read-only; the voice tool policy refuses any write tool.
+  'edu-cory-outbound': ['next_open_strategy_slots', 'admissions_knowledge'],
 };
 
 /** Tools disabled globally by the env kill switch (comma-separated names). */

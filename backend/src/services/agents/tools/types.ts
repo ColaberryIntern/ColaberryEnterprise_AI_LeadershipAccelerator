@@ -9,10 +9,17 @@
  */
 
 /** Every tool that exists. Adding one means adding it here first. */
-export type AgentToolName = 'read_attachments';
+export type AgentToolName =
+  | 'read_attachments'
+  /** Voice AI Studio (VS3.1): read-only phone tools, run through the voice ToolBroker. */
+  | 'next_open_strategy_slots'
+  | 'admissions_knowledge';
 
 /** Every agent that can hold a tool grant. */
-export type AgentKey = 'cory' | 'reese' | 'dara';
+export type AgentKey =
+  | 'cory' | 'reese' | 'dara'
+  /** Voice AI Studio (VS3.1): the outbound phone agent "Edu: Cory - Outbound" (Synthflow today). Not the mentor 'cory'. */
+  | 'edu-cory-outbound';
 
 /**
  * A client-side reference to an uploaded attachment. The client never sends

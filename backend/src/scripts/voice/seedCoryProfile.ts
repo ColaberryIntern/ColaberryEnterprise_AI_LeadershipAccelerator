@@ -28,10 +28,15 @@ export function pickAssistant(body: unknown): SynthflowAssistant | null {
   return one && typeof one === 'object' ? (one as SynthflowAssistant) : null;
 }
 
+/**
+ * Synthflow language to a BCP 47 tag. Only mappings we are sure of; anything else is passed through
+ * unchanged so the content schema rejects it and the seed refuses, instead of silently becoming English.
+ */
 export function toLanguage(l: string | undefined): string {
   if (!l) return 'en-US';
   if (/^[a-z]{2}-[A-Z]{2}$/.test(l)) return l;
-  return /^en\b/i.test(l) ? 'en-US' : 'en-US';
+  const short: Record<string, string> = { en: 'en-US', english: 'en-US', es: 'es-US', spanish: 'es-US' };
+  return short[l.trim().toLowerCase()] ?? l;
 }
 
 export function assistantToContent(a: SynthflowAssistant): VersionContent {
@@ -90,7 +95,10 @@ export async function runSeed(argv: string[], env: Record<string, string | undef
 if (require.main === module) {
   runSeed(process.argv, process.env).then(async ({ code, out }) => {
     console.log(JSON.stringify(out));
-    try { (await import('../../config/database')).sequelize.close(); } catch { /* not opened on refusal */ }
+    // Close the pool if the seed opened it; on a refusal it was never opened and there is nothing to close.
+    try { await (await import('../../config/database')).sequelize.close(); } catch (e) {
+      console.error(JSON.stringify({ level: 'warn', event: 'voice_seed_db_close_failed', error_class: (e as Error).name || 'Error' }));
+    }
     process.exit(code);
   }, (e: Error) => {
     console.error(JSON.stringify({ level: 'error', event: 'voice_seed_cory_failed', error_class: e.name || 'Error' }));

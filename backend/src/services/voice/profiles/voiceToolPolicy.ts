@@ -4,55 +4,50 @@
  * injection: caller speech and retrieved text reach the model, but the model can only call tools the
  * broker was built with, and the broker is built from this function's `allowed` list alone.
  *
+ * Grants are NOT a voice-only table. They come from the repo's agent tool registry
+ * (agents/tools/agentToolRegistry.ts, `listAgentTools`), which also applies the shared
+ * AGENT_TOOLS_DISABLED kill switch. A voice profile's agent_key IS the registry's AgentKey.
+ *
  * A tool is allowed only if ALL of these hold (each failure is reported with a stable reason):
- *   1. granted to the agent this profile is a channel for (VOICE_TOOL_GRANTS, a typed constant in the
- *      same style as agents/tools/agentToolRegistry.ts: a grant changes with a deploy and is covered
- *      by tsc and a test, not by whatever is in a table),
- *   2. listed in the published version's tool_permissions,
- *   3. registered with the broker (a real implementation exists),
- *   4. not switched off by AGENT_TOOLS_DISABLED (the same kill switch the agent tool registry reads),
- *   5. read-only. A tool that changes the world needs a human approval step, which voice calls do
- *      not have, so it is refused here rather than trusted to the prompt,
- *   6. allowed for the profile's brand (the admissions knowledge base is Colaberry's; it is not
+ *   1. the registry grants it to the agent, and the kill switch has not switched it off,
+ *   2. it is listed in the published version's tool_permissions,
+ *   3. it is registered with the broker (a real implementation exists),
+ *   4. it is read-only. A tool that changes the world needs a human approval step, which voice calls
+ *      do not have, so it is refused here rather than trusted to the prompt,
+ *   5. it is allowed for the profile's brand (the admissions knowledge base is Colaberry's; it is not
  *      tenant-scoped in the database, so the scope is enforced here).
+ * Every call is then recorded through agents/tools/toolInvocationRecorder.ts by the broker.
  */
-import type { RegisteredTool } from '../engines/toolBroker';
-
-export const VOICE_TOOL_GRANTS: Readonly<Record<string, readonly string[]>> = {
-  /** "Edu: Cory - Outbound", the first migration target (MIGRATION_MATRIX.md). */
-  'edu-cory-outbound': ['next_open_strategy_slots', 'admissions_knowledge'],
-  /** The Phase 2 Test Lab profile. */
-  'test-relay': ['next_open_strategy_slots'],
-};
+import { ToolBroker, type RegisteredTool } from '../engines/toolBroker';
+import { listAgentTools } from '../../agents/tools/agentToolRegistry';
+import type { AgentKey } from '../../agents/tools/types';
 
 /** Brands each brand-sensitive tool may serve. Tools not listed here are brand-neutral. */
 export const TOOL_BRANDS: Readonly<Record<string, readonly string[]>> = {
   admissions_knowledge: ['colaberry'],
 };
 
-export type ToolDenial = 'not_granted_to_agent' | 'not_in_version' | 'not_registered' | 'kill_switch' | 'requires_human_approval' | 'brand_not_allowed';
+export type ToolDenial = 'not_granted_or_switched_off' | 'not_in_version' | 'not_registered' | 'requires_human_approval' | 'brand_not_allowed';
 
 export interface ToolPolicyInput {
   agentKey: string;
   brandSlug: string;
   versionPermissions: readonly string[];
   registered: readonly RegisteredTool[];
-  env?: Record<string, string | undefined>;
 }
 
 export interface ToolPolicyResult {
   allowed: RegisteredTool[];
   denied: Array<{ name: string; reason: ToolDenial }>;
-}
-
-function killSwitched(env: Record<string, string | undefined>): Set<string> {
-  return new Set((env.AGENT_TOOLS_DISABLED ?? '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean));
+  /** What the registry says the agent holds right now (kill switch applied), for the recorder. */
+  held: string[];
 }
 
 export function effectiveVoiceTools(p: ToolPolicyInput): ToolPolicyResult {
-  const grants = new Set(VOICE_TOOL_GRANTS[p.agentKey] ?? []);
+  // An agent key the registry does not know holds nothing (listAgentTools returns []).
+  const held = listAgentTools(p.agentKey as AgentKey) as string[];
+  const grants = new Set(held);
   const inVersion = new Set(p.versionPermissions);
-  const off = killSwitched(p.env ?? process.env);
   const byName = new Map(p.registered.map((t) => [t.def.name, t]));
   const names = [...new Set([...grants, ...inVersion, ...byName.keys()])].sort();
   const allowed: RegisteredTool[] = [];
@@ -61,14 +56,19 @@ export function effectiveVoiceTools(p: ToolPolicyInput): ToolPolicyResult {
     const tool = byName.get(name);
     const brands = TOOL_BRANDS[name];
     let reason: ToolDenial | null = null;
-    if (!grants.has(name)) reason = 'not_granted_to_agent';
+    if (!grants.has(name)) reason = 'not_granted_or_switched_off';
     else if (!inVersion.has(name)) reason = 'not_in_version';
     else if (!tool) reason = 'not_registered';
-    else if (off.has(name)) reason = 'kill_switch';
     else if (!tool.readOnly) reason = 'requires_human_approval';
     else if (brands && !brands.includes(p.brandSlug)) reason = 'brand_not_allowed';
     if (reason) denied.push({ name, reason });
     else allowed.push(tool as RegisteredTool);
   }
-  return { allowed, denied };
+  return { allowed, denied, held };
+}
+
+/** The one way a voice call gets its broker: policy-filtered tools, recorded under the agent's key. */
+export function buildVoiceBroker(p: ToolPolicyInput, timeoutMs?: number): { broker: ToolBroker; denied: ToolPolicyResult['denied'] } {
+  const r = effectiveVoiceTools(p);
+  return { broker: new ToolBroker(r.allowed, timeoutMs, { agentName: p.agentKey, surface: 'voice_call', held: r.held }), denied: r.denied };
 }
