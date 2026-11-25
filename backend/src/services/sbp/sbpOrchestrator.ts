@@ -57,6 +57,12 @@ import {
 } from './planStore';
 import { getProvisionQueue } from './boundedQueue';
 import { setProjectNameIfEmpty } from './projectNaming';
+import { buildBriefText } from './buildBriefText';
+import { queuePlatformBuild } from './platformBuild/queue';
+
+// Moved to its own module (this file is past the CLAUDE.md size ceiling); re-exported so every
+// existing importer keeps working unchanged.
+export { buildBriefText };
 
 /** Where a build is. Stored on `build_intake.status`. */
 export type BuildStatus =
@@ -531,41 +537,6 @@ function autoPublishEnabled(): boolean {
 }
 
 /**
- * The brief the decomposer treats as ground truth. Assembled from the wizard's
- * answers rather than the idea alone, because the sharpening questions are
- * exactly the detail the pilot dropped.
- */
-export function buildBriefText(input: StartBuildInput): string {
-  const parts = [input.idea.trim()];
-  // The adaptive interview, when the client ran one. Each answer is carried
-  // with the question that produced it, so the decomposer reads the exchange
-  // rather than a bare value whose meaning lived in a label it never sees.
-  const answered = (input.answers ?? []).filter((a) => a.answer && a.answer.trim());
-  if (answered.length) {
-    parts.push(
-      ['THE STUDENT ANSWERED THESE QUESTIONS ABOUT THEIR OWN PROJECT:', ...answered.map(
-        (a) => `Q: ${a.question.trim()}\nA: ${a.answer.trim()}`,
-      )].join('\n\n'),
-    );
-  }
-  // Legacy fixed fields — still honoured when present so an older client works.
-  if (input.users) parts.push(`WHO USES IT: ${input.users}`);
-  if (input.dataSources) parts.push(`DATA SOURCES IT MUST CONNECT TO: ${input.dataSources}`);
-  if (input.doneDefinition) parts.push(`WHAT DONE LOOKS LIKE (the guardrail): ${input.doneDefinition}`);
-  // Scheduling context only. Phrased so it shapes release week ranges without
-  // becoming a requirement — the first live run turned "TIMELINE: 6 weeks" into
-  // REQ-016 "The system must be deployed within 6 weeks", which no story can
-  // fulfil and which the coverage rule then flagged as an uncovered must-have.
-  if (input.targetWeeks) {
-    parts.push(
-      `SCHEDULE (context for release planning, NOT a requirement — do not emit a requirement about the timeline): ` +
-      `fit the releases into ${input.targetWeeks} weeks.`,
-    );
-  }
-  return parts.join('\n\n');
-}
-
-/**
  * Give the project a real name, from `source`, if it does not have one yet.
  *
  * Never throws. Naming is presentation: it must not be able to fail a build
@@ -834,6 +805,13 @@ export async function publishBuild(
     // Never throws — a failed mark must not fail the publish.
     await markProjectPendingApproval(projectId, opts.enrollmentId);
     await setStatus(projectId, 'awaiting_repo');
+    // L13.1: the platform builds the Command Center and Demo itself, no repo needed. Never
+    // throws, no-op unless SBP_PLATFORM_BUILD covers this enrollment. Not awaited: the dispatch
+    // retries for up to ~50s and the publish must not wait on GitHub. See platformBuild/queue.ts.
+    void queuePlatformBuild({
+      projectId, enrollmentId: opts.enrollmentId, planVersion: published.version,
+      planSha256: published.plan_sha256, correlationId: correlationId ?? null,
+    });
     log('sbp_build_published_no_repo', correlationId, 'partial', {
       projectId, version: published.version, lists: m.lists, tasks: m.tasks,
     });
@@ -918,6 +896,13 @@ export async function publishBuild(
   await markProjectPendingApproval(projectId, opts.enrollmentId);
 
   await setStatus(projectId, 'published');
+  // L13.1: the platform builds the Command Center and Demo itself, no repo needed. Never
+  // throws, no-op unless SBP_PLATFORM_BUILD covers this enrollment. Not awaited: the dispatch
+  // retries for up to ~50s and the publish must not wait on GitHub. See platformBuild/queue.ts.
+  void queuePlatformBuild({
+    projectId, enrollmentId: opts.enrollmentId, planVersion: published.version,
+    planSha256: published.plan_sha256, correlationId: correlationId ?? null,
+  });
   log('sbp_build_published', correlationId, 'success', {
     projectId, version: published.version, commit: write.commitSha, files: write.changedPaths.length,
     lists: materialized.lists, tasks: materialized.tasks, preserved_complete: materialized.preservedComplete,

@@ -1,0 +1,109 @@
+# Platform build runner (L13.1): builds ONE project's Command Center and Demo, on our side.
+#
+# WHAT STARTS IT. Only the platform backend, through the workflow_dispatch API, right after a
+# student's plan is published and only for enrollments SBP_PLATFORM_BUILD covers. There is no
+# push, schedule or pull_request trigger, so nothing merged can start a paid agent run.
+#
+# WHERE IT RUNS. A GitHub-hosted, ephemeral runner (ESC-4: agent execution never shares the
+# internet-facing backend's machine). It holds exactly one secret, ANTHROPIC_API_KEY, and the
+# step below fails if any production credential appears in its environment.
+#
+# HOW THE PLATFORM KNOWS IT IS US. GitHub OIDC (`id-token: write`). The backend accepts only a
+# token whose claims say: this repository, this workflow file, refs/heads/main,
+# workflow_dispatch, github-hosted. No token or secret is passed as an input, which matters
+# because this repository is PUBLIC and so are its workflow inputs and logs.
+#
+# WHAT IT LOGS. Counts, states and costs. Never file contents, prompts or agent messages: the
+# script prints nothing else, and the workspace is deleted at the end whether the job passed.
+#
+# WHERE THE RESULT GOES. Uploaded to the platform, validated, stored as a new version and served
+# by the platform. Nothing is pushed anywhere, which is why `contents: read` is enough.
+
+name: Platform build runner
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'platform_build_runs.id to claim (UUID). Not a secret: the job proves itself with OIDC.'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: platform-build-${{ inputs.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build the Command Center and Demo
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      PLATFORM_API_BASE: ${{ vars.PLATFORM_API_BASE || 'https://enterprise.colaberry.ai' }}
+      PLATFORM_BUILD_MODEL: ${{ vars.PLATFORM_BUILD_MODEL || 'claude-opus-5-5' }}
+      RUN_ID: ${{ inputs.run_id }}
+      WORKSPACE: ${{ github.workspace }}/workspace
+      AGENT_SDK_DIR: ${{ runner.temp }}/agent-sdk
+
+    steps:
+      - name: Refuse to run anywhere but a GitHub-hosted runner
+        run: |
+          if [ "${RUNNER_ENVIRONMENT:-}" != "github-hosted" ]; then
+            echo "::error::This workflow must run on a GitHub-hosted runner."
+            exit 1
+          fi
+
+      - name: Refuse a run id that is not a UUID
+        # Read from env, never interpolated into the script, so an input cannot become shell.
+        run: |
+          if ! printf '%s' "$RUN_ID" | grep -Eq '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'; then
+            echo "::error::run_id is not a UUID"
+            exit 1
+          fi
+
+      - name: Check out the runner script only
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          sparse-checkout: scripts/platformBuild
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install the shell sandbox
+        # The agent's shell commands run sandboxed (no network, no API key in their environment);
+        # on Linux that needs bubblewrap and socat. The script fails if the sandbox cannot start.
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap socat > /dev/null
+
+      - name: Install the agent engine (pinned)
+        # Installed on the runner, never into the backend image: the engine belongs here.
+        run: |
+          mkdir -p "$AGENT_SDK_DIR"
+          cd "$AGENT_SDK_DIR"
+          npm init -y > /dev/null
+          npm install --no-audit --no-fund --silent @anthropic-ai/claude-agent-sdk@0.3.245
+
+      - name: Fail if a production credential is present
+        run: |
+          for forbidden in DATABASE_URL MANDRILL_API_KEY BASECAMP_TOKEN OPENAI_API_KEY AWS_ACCESS_KEY_ID JWT_SECRET GITHUB_TOKEN; do
+            if [ -n "$(printenv "$forbidden" || true)" ]; then
+              echo "::error::$forbidden is present in the runner environment. Remove it."
+              exit 1
+            fi
+          done
+
+      - name: Build and upload
+        run: node scripts/platformBuild/runPlatformBuild.mjs
+
+      - name: Destroy the workspace
+        if: always()
+        run: rm -rf "$WORKSPACE" "$AGENT_SDK_DIR"
