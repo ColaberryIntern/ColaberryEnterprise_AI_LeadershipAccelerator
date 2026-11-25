@@ -210,6 +210,60 @@ describe('running', () => {
     expect(q('topics')).toBeNull();
     expect(api.getPlan).not.toHaveBeenCalledWith('p2');
   });
+  describe('a first run, when neither date has a plan', () => {
+    const JAN = '2099-01-05';
+    const later = <T,>() => { let ok: (v: T) => void = () => undefined; let no: (e: unknown) => void = () => undefined; const p = new Promise<T>((a, b) => { ok = a; no = b; }); return { p, ok, no }; };
+    const begin = async () => {
+      api.getPlanSetup.mockImplementation(async (d) => setup({ latestPlanId: null, ...(d === JAN ? { batch: { ok: true, cohortId: 'j', cohortName: 'JAN' } } : {}) }));
+      api.getPlan.mockResolvedValue(view({ id: 'p2' }));
+      await open();
+    };
+    const toJanuary = async () => { act(() => { Simulate.change(q('input-airDate')!, { target: { value: JAN } } as never); }); await flush(); };
+    const januaryIsClean = async () => {
+      expect(q('plan-batch')!.textContent).toBe('Goes into JAN');
+      for (const id of ['topics', 'plan-progress', 'signals', 'choose-1', 'plan-error']) expect([id, q(id)]).toEqual([id, null]);
+      expect(api.chooseTopic).not.toHaveBeenCalled();
+    };
+    it('the first plan load answers after the date changed', async () => {
+      await begin();
+      const load = later<plans.PlanView>(); api.getPlan.mockReturnValueOnce(load.p);
+      await click('find-topics'); await toJanuary();
+      await act(async () => { load.ok(view({ id: 'p2' })); }); await flush();
+      await januaryIsClean();
+    });
+    it('the setup refresh answers after the date changed', async () => {
+      await begin();
+      const refresh = later<plans.PlanSetup>(); api.getPlanSetup.mockReturnValueOnce(refresh.p);
+      await click('find-topics');
+      expect(q('topics')).not.toBeNull(); // it was on screen for its own date
+      await toJanuary();
+      await act(async () => { refresh.ok(setup({ latestPlanId: 'p2' })); }); await flush();
+      await januaryIsClean();
+    });
+    it('the setup refresh failed, and the date changed later, while the run still polls', async () => {
+      jest.useFakeTimers();
+      await begin();
+      api.getPlan.mockResolvedValue(view({ id: 'p2', status: 'researching', stage: 'signals' }, { topics: [] }));
+      api.getPlanSetup.mockRejectedValueOnce(refused(500));
+      await click('find-topics');
+      expect(q('plan-progress')).not.toBeNull();
+      await toJanuary();
+      await januaryIsClean();
+      const calls = api.getPlan.mock.calls.length;
+      act(() => { jest.advanceTimersByTime(POLL_MS * 3); }); await flush();
+      expect(api.getPlan.mock.calls.length).toBe(calls);
+      await januaryIsClean();
+    });
+    it('going back to the first date while its start is in flight shows that run', async () => {
+      await begin();
+      const begun = later<{ planId: string; started: boolean }>(); api.startPlan.mockReturnValueOnce(begun.p);
+      await click('find-topics'); await toJanuary();
+      act(() => { Simulate.change(q('input-airDate')!, { target: { value: nextMonday() } } as never); }); await flush();
+      api.getPlanSetup.mockResolvedValue(setup({ latestPlanId: 'p2' }));
+      await act(async () => { begun.ok({ planId: 'p2', started: true }); }); await flush();
+      expect(q('topics')).not.toBeNull();
+    });
+  });
   it('a start refused after the date changed says nothing on the new date', async () => {
     let refuse: (e: unknown) => void = () => undefined;
     api.startPlan.mockReturnValueOnce(new Promise((_ok, no) => { refuse = no; }));

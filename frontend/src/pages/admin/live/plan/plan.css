@@ -79,5 +79,5 @@
   .clp-table td { border: 0; padding: 1px 0; }
   .clp-table tr { padding: 8px 0; border-bottom: 1px solid var(--border-subtle); }
   .cls-row { flex-wrap: wrap; }
-  .cls-row-main { flex: 1 1 100%; }
+  .cls-row-main, .clp-pipe { flex: 1 1 100%; }
 }

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { chooseTopic, getPlan, getPlanSetup, planFailure, regeneratePlan, startPlan, type PlanInputs, type PlanSetup, type PlanView } from '../../../../services/weeklyLivePlanApi';
 import { DemandBars, SignalList } from './PlanParts';
 import { centralToday, STAGE_LABEL, STAGE_ORDER } from './planModel';
@@ -39,13 +39,14 @@ export default function PlanTab({ airDate, onAirDate, setup, setupError, onSetup
     }
   }, []);
 
-  // A new air date (or a first load) shows the plan that date already has.
+  // A new air date clears everything before it is painted, even when neither date has a plan (then
+  // `latest` is null both times). A load that finishes later is dropped: its plan is no longer current.
   const latest = setup?.latestPlanId ?? null;
-  useEffect(() => {
+  useLayoutEffect(() => {
     current.current = latest; setView(null); setConfirm(null); setError(null); setOffline(false);
     if (latest) load(latest);
     return () => { current.current = null; };
-  }, [latest, load]);
+  }, [airDate, latest, load]);
 
   const running = view?.plan.status === 'researching';
   useEffect(() => {
