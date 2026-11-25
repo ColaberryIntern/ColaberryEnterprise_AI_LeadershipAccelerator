@@ -7,6 +7,7 @@
  * application error. No retry: Twilio owns redelivery. The called number is used for the lookup and
  * is never stored on the call or logged; the caller's number is not an input at all.
  */
+import { tapVoiceLog } from '../ops/opsMetrics';
 import { QueryTypes } from 'sequelize';
 import type { CallSession } from './inboundTypes';
 import { INBOUND_MESSAGE_TWIML, planInbound, type CalledNumber, type InboundFacts } from './inboundPlan';
@@ -117,6 +118,6 @@ export function productionInboundDeps(): InboundDeps {
     openCall: openInboundCall,
     markFallback: markInboundFallback,
     agentTwiml: (callId) => (require('../engines/voiceRuntime') as typeof import('../engines/voiceRuntime')).connectTwimlFor(callId),
-    log: (line) => (line.level === 'info' ? console.log : console.warn)(JSON.stringify({ service: 'voice-studio', ...line })),
+    log: (line) => (line.level === 'info' ? console.log : console.warn)(JSON.stringify(tapVoiceLog(line))),
   };
 }

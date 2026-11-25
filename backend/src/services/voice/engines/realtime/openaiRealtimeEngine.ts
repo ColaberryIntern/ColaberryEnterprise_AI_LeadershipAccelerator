@@ -41,6 +41,8 @@ export interface RealtimeDeps {
   consumeSessionRef: (claims: TokenClaims) => Promise<'consumed' | 'replay' | 'unknown_call'>;
   callMatches: (callId: string, callSid: string) => Promise<boolean>;
   connectModel: (h: ModelHandlers) => SocketLike;
+  /** VS4.3: false while the provider's circuit is open. The call is refused before a session exists. */
+  modelAvailable?: () => boolean;
   now: () => number;
   log: (line: Record<string, unknown>) => void;
 }
@@ -132,6 +134,7 @@ export class RealtimeBridge {
       return this.shutdown('setup_lookup_failed', 1011);
     }
     if (this.closed) return; // the caller hung up while we were checking (VS4.1): open nothing, least of all a paid model connection
+    if (this.d.modelAvailable && !this.d.modelAvailable()) return this.shutdown('model_unavailable', 1013);
     const opened = this.d.worker.open(v.claims.callId, this.d.profile.versionId);
     if (!opened.ok) return this.shutdown(`session_refused_${opened.reason}`, 1013);
     this.callId = v.claims.callId;
@@ -139,7 +142,12 @@ export class RealtimeBridge {
     this.handle = opened.handle;
     this.broker = this.d.broker();
     this.handle.onEnd((reason) => this.teardown(`session_${reason}`));
-    this.model = this.d.connectModel({ onMessage: (raw) => { this.onModel(raw).catch((e: Error) => { this.log('error', 'voice_realtime_handler_failed', { error_class: e?.name || 'HandlerError' }); this.teardown('handler_failed'); }); }, onClose: (reason) => this.onModelClose(reason) });
+    try {
+      this.model = this.d.connectModel({ onMessage: (raw) => { this.onModel(raw).catch((e: Error) => { this.log('error', 'voice_realtime_handler_failed', { error_class: e?.name || 'HandlerError' }); this.teardown('handler_failed'); }); }, onClose: (reason) => this.onModelClose(reason) });
+    } catch (e) {
+      this.log('error', 'voice_realtime_connect_failed', { error_class: (e as { name?: string })?.name || 'ConnectError' });
+      return this.teardown('model_unavailable');
+    }
     this.model.send(sessionUpdate({ instructions: this.d.profile.system, voice: this.d.voice, tools: this.broker.defs() }));
     this.log('info', 'voice_stream_session_started', { profile: this.d.profile.versionId });
   }

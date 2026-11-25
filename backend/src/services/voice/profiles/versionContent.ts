@@ -28,13 +28,17 @@ export const VOICE_ENGINES = ['conversation_relay', 'openai_realtime'] as const;
  * class advisor" and "a person who teaches AI" do not count. A denial, or a claim to be a person,
  * anywhere fails it. Deliberately narrow: a wording it does not know is refused and reworded.
  */
-const AI_IS = "(?:an?\\s+)?(?:automated\\s+|virtual\\s+)*(?:AI|artificial intelligence)(?:\\s+(?:voice\\s+|phone\\s+|calling\\s+)?(?:assistant|agent|caller|voice))?|(?:an?\\s+)?virtual\\s+assistant";
-const OWNER = "(?:(?:the\\s+)?[A-Z][\\w&.]*(?:\\s+[A-Z][\\w&.]*){0,2}(?:'s|\u2019s)?\\s+)?";
-const SPEAKER = "(?:I\\s*(?:'|\u2019)\\s*m|I\\s+am|this\\s+is|you\\s+are\\s+(?:speaking|talking)\\s+(?:with|to)|you(?:'|\u2019)re\\s+(?:speaking|talking)\\s+(?:with|to))";
-const PHRASE_END = "(?=\\s*(?:[.!?,;]|$)|\\s+(?:from|for|with|at|on\\s+behalf|calling\\s+(?:from|for|on|with|you|about)|and)\\b)";
-const AI_SELF = new RegExp(`(?:^|[.!?,;]\\s*|\\b(?:hi|hello|hey|and)\\s+)${SPEAKER}\\s+(?:${OWNER})(?:${AI_IS})${PHRASE_END}`, 'i');
+const NOUN = "(?:[Aa]ssistant|[Aa]gent|[Cc]aller|[Vv]oice)";
+const AI_NOUN = `(?:[Aa]utomated\\s+|[Vv]irtual\\s+)*(?:AI|artificial intelligence)\\s+(?:voice\\s+|phone\\s+|calling\\s+)?${NOUN}|[Vv]irtual\\s+assistant`;
+const AI_IS = `(?:(?:[Aa]n?|[Tt]he)\\s+)?(?:${AI_NOUN}|AI|artificial intelligence)`;
+const NAME = "[A-Z][\\w&.]*(?:\\s+[A-Z][\\w&.]*){0,2}";
+const OWNER = `(?:(?:[Tt]he\\s+)?${NAME}(?:'s|\u2019s)?\\s+)?`;
+const SPEAKER = "(?:I\\s*(?:'|\u2019)\\s*m|I\\s+am|[Tt]his\\s+is|[Yy]ou(?:\\s+are|(?:'|\u2019)re)\\s+(?:speaking|talking)\\s+(?:with|to))";
+const PHRASE_END = "(?=\\s*(?:[.!?,;]|$)|\\s+(?:from|calling\\s+(?:from|on\\s+behalf)|on\\s+behalf|with|at)\\s)";
+const START = "(?:^|[.!?,;]\\s*|\\b(?:[Hh]i|[Hh]ello|[Hh]ey)\\s+)";
+const AI_SELF = new RegExp(`${START}${SPEAKER}\\s+(?:${OWNER}(?:${AI_IS})${PHRASE_END}|${NAME},\\s+(?:[Aa]n?|[Tt]he)\\s+(?:${AI_NOUN})${PHRASE_END})`);
 const AI_DENIAL = /\b(?:not|never|no|isn(?:'|\u2019)t|aren(?:'|\u2019)t)\b[^.!?,;]{0,30}\b(?:AI|artificial intelligence|virtual assistant|robot|bot)\b/i;
-const CLAIMS_PERSON = /\b(?:I\s*(?:'|\u2019)\s*m|I\s+am|this\s+is)\s+an?\s+(?:real\s+|actual\s+|live\s+)*(?:human|person)\b/i;
+const CLAIMS_PERSON = /\b(?:I\s*(?:'|\u2019)\s*m|I\s+am|this\s+is)\s+(?:an?\s+)?(?:real\s+|actual\s+|live\s+)*(?:human|person)\b/i;
 export const disclosesAi = (t: string): boolean => AI_SELF.test(t) && !AI_DENIAL.test(t) && !CLAIMS_PERSON.test(t);
 
 export const VersionContentSchema = z.object({

@@ -101,16 +101,17 @@ describe('renderCall (prompt-only shell semantics)', () => {
     const r = renderCall(c, { prompt: 'Call about {company}', variables: { company: 'Acme {prompt}' } });
     expect(r.ok && r.system.startsWith('Call about company Company: Acme prompt. Unknown stays {other}.')).toBe(true);
   });
-  it.each(["Hi, this is Colaberry's AI assistant.", "I'm an AI calling from Colaberry.", 'I am an AI, not a person.', 'You are speaking with an AI assistant.', "You're talking to an AI.", 'This is an automated AI agent from Colaberry.', 'I am a virtual assistant for Colaberry.'])('accepts a real disclosure: %s', (d) => {
+  it.each(["Hi, this is Colaberry's AI assistant.", "I'm an AI calling from Colaberry.", 'I am an AI, not a person.', 'You are speaking with an AI assistant.', "You're talking to an AI.", 'This is an automated AI agent from Colaberry.', 'I am a virtual assistant from Colaberry.'])('accepts a real disclosure: %s', (d) => {
     expect(disclosesAi(d)).toBe(true);
   });
 
   it.each(['Hi, this is Colaberry calling about an AI class.', "I'm Sam from Colaberry calling about an AI program you asked about.", 'I am a real person who teaches an AI class.', 'This is Sam, your AI agent builder class advisor.',
-    'This is a human, no AI assistant here.', 'I am an AI engineer at Colaberry.', 'This is an AI class reminder.', "I'm an AI assistant manager.", 'This is the AI Accelerator team.', "This is Colaberry's AI assistant. I'm a real person.", 'This is not an AI.', 'I work with an AI assistant.', 'You asked about an AI.'])('refuses: %s', (d) => {
+    'This is a human, no AI assistant here.', 'I am an AI engineer at Colaberry.', 'This is an AI class reminder.', "I'm an AI assistant manager.", 'This is the AI Accelerator team.', "This is Colaberry's AI assistant. I'm a real person.", 'This is not an AI.', 'I work with an AI assistant.', 'You asked about an AI.',
+    'This is about AI.', "I'm calling about AI.", "I'm into AI.", 'You are speaking with people behind AI.', 'This is an AI for beginners class.', "I'm an AI and data engineer.", "I am human. I'm an AI assistant.", 'This is Sam, an AI engineer.', 'This is the AI team from Colaberry.'])('refuses: %s', (d) => {
     expect(disclosesAi(d)).toBe(false);
   });
 
-  it.each(["I'm not a person, I'm an AI assistant.", "I'm AI.", 'Hello, I am an AI voice agent calling on behalf of Colaberry.', 'You are speaking with the Colaberry AI assistant.'])('also accepts: %s', (d) => {
+  it.each(["I'm not a person, I'm an AI assistant.", "I'm AI.", 'Hello, I am an AI voice agent calling on behalf of Colaberry.', 'You are speaking with the Colaberry AI assistant.', 'Hi, I am Cory, an AI assistant from Colaberry.'])('also accepts: %s', (d) => {
     expect(disclosesAi(d)).toBe(true);
   });
 

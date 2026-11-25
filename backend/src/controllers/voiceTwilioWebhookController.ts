@@ -18,6 +18,7 @@
  * would make Twilio speak an "application error" to the person); unknown call -> 204/hang-up;
  * database failure -> 500 so Twilio redelivers (every write is idempotent).
  */
+import { tapVoiceLog } from '../services/voice/ops/opsMetrics';
 import type { NextFunction, Request, Response } from 'express';
 import { z } from 'zod';
 import { loadVoiceConfig, type VoiceConfig } from '../services/voice/voiceConfig';
@@ -82,7 +83,7 @@ export function defaultVoiceWebhookDeps(): VoiceWebhookDeps {
     inboundTwiml: (input) => answerInbound(input, productionInboundDeps()),
     onCallEnded: completeDirectCall,
     now: () => Date.now(),
-    log: (line) => (line.level === 'error' || line.level === 'warn' ? console.warn : console.log)(JSON.stringify({ service: 'voice-studio', ...line })),
+    log: (line) => (line.level === 'error' || line.level === 'warn' ? console.warn : console.log)(JSON.stringify(tapVoiceLog(line))),
   };
 }
 

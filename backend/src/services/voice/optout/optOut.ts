@@ -20,6 +20,13 @@ import { QueryTypes } from 'sequelize';
 const CALL = '(?:call(?:ing|s|ed)?|phon(?:e|ing)|ring(?:ing)?|contact(?:ing|ed)?|bother(?:ing|ed)?|dial(?:ing)?)';
 const NOT = "(?:do\\s*n[o'\u2019]?t|don\\s*t|do\\s+not|never|not)";
 const PATTERNS: readonly RegExp[] = [
+  /\b(?:do\s*n[o'\u2019]?t|don\s*t|do\s+not|no\s+longer)\s+(?:want|wanna|wish|like|consent|agree)\b[^.?!]{0,30}\b(?:calls?|calling|called|contact(?:ed|ing)?|hear\s+from\s+you)\b(?![^.?!]{0,12}\btomorrow\b)/i,
+  /\b(?:can\s*n[o'\u2019]?t|can(?:'|\u2019)t|cannot|should\s*n(?:'|\u2019)?t|shouldn(?:'|\u2019)t|must\s*not|mustn(?:'|\u2019)t)\s+(?:be\s+)?call(?:ing)?\s+(?:me|us|here)\b/i,
+  /\brather\s+you\s+(?:did\s*n(?:'|\u2019)?t|didn(?:'|\u2019)t|not)\s+(?:call|contact|phone)\b/i,
+  /\bstop\s+with\s+(?:the|these|all)\b[^.?!]{0,12}\bcalls?\b/i,
+  /\bDNC\b/i,
+  /\bno\s+quiero\s+(?:que\s+me\s+llamen|m[a\u00e1]s\s+llamadas)\b/i,
+  /\b(?:qu[i\u00ed]te(?:n)?me|b[o\u00f3]rre(?:n)?me|s[a\u00e1]que(?:n)?me)\s+de\b/i,
   new RegExp(`\\b(?:stop|quit|cease|no\\s+more)\\s+(?:all\\s+|the\\s+|these\\s+|those\\s+|your\\s+|with\\s+the\\s+)?${CALL}\\b`, 'i'),
   new RegExp(`\\b${NOT}\\s+(?:you\\s+|ever\\s+|please\\s+){0,2}(?:call|phone|ring|contact|bother|dial)(?:\\s+(?:me|us|this|here|again|back|my|anymore|any\\s+more|ever)\\b|\\s*$|\\s*[.!,])`, 'i'),
   new RegExp(`\\b${NOT}\\s+want\\s+(?:you\\s+to\\s+(?:call|phone|ring|contact)|(?:any\\s+|more\\s+|these\\s+|your\\s+)*(?:calls?|phone\\s+calls?)|to\\s+be\\s+(?:called|contacted|bothered))\\b`, 'i'),
@@ -30,7 +37,7 @@ const PATTERNS: readonly RegExp[] = [
   /\bleave\s+(?:me|us)\s+alone\b/i,
   /\bopt(?:ing)?\s*-?\s*(?:me\s+)?out\b/i,
   /\bunsubscribe\b/i,
-  /^\W*(?:please\s+)?stop\W*$/i,
+  /^\W*(?:(?:please|okay|ok|just)\W+)*stop(?:\s+(?:it|please|now))*\W*$/i,
   /\b(?:no|ya\s+no)\s+(?:me\s+|nos\s+)?(?:vuelva[ns]?\s+a\s+)?(?:llame[ns]?|llamar(?:me|nos)?|contacte[ns]?)\b/i,
   /\b(?:deje|deja|dejen)\s+de\s+(?:llamar|contactar|molestar)/i,
 ];

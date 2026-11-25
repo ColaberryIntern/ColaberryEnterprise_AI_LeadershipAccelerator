@@ -13,6 +13,7 @@
  * (voice_calls.state_reason = 'transfer_fallback') so a teammate calls back. The teammate number is
  * read from the server env only, here, and is never logged.
  */
+import { tapVoiceLog } from '../services/voice/ops/opsMetrics';
 import type { Request, Response } from 'express';
 import { verifyToken } from '../services/voice/twilio/correlationToken';
 import {
@@ -45,7 +46,7 @@ export function defaultTransferDeps(): TransferDeps {
     },
     refuseDial: (callId, target) => refuseTransferDial(callId, target),
     closeInbound: closeInboundCall,
-    log: (line) => (line.level === 'error' || line.level === 'warn' ? console.warn : console.log)(JSON.stringify({ service: 'voice-studio', ...line })),
+    log: (line) => (line.level === 'error' || line.level === 'warn' ? console.warn : console.log)(JSON.stringify(tapVoiceLog(line))),
   };
 }
 

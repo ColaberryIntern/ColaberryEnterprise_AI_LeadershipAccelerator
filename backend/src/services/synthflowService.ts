@@ -1,4 +1,5 @@
 import { env } from '../config/env';
+import { safeRecordingUrl } from './voice/synthflowWebhookAuth';
 import { normalizePhone } from '../utils/phone';
 import { getTestOverrides } from './settingsService';
 import { isKillSwitchActive } from './launchSafety';
@@ -479,7 +480,7 @@ export async function fetchSynthflowCall(callId: string): Promise<SynthflowCallR
       transcript: String(call.transcript ?? ''),
       disposition: call.disposition ?? call.end_call_reason ?? null,
       durationSeconds: typeof rawDuration === 'number' ? Math.round(rawDuration) : null,
-      recordingUrl: call.recording_url ?? null,
+      recordingUrl: safeRecordingUrl(call.recording_url) || null,
       endedReason: call.end_call_reason ?? null,
     };
   } catch {

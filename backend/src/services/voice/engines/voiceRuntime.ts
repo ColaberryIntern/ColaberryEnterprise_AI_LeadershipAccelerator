@@ -27,6 +27,9 @@ import type { RelayDeps } from './conversationRelayEngine';
 import { buildRelayTwiml } from './relayProtocol';
 import { nextOpenSlotsTool, ToolBroker } from './toolBroker';
 import { liveProfile, TEST_PROFILE } from './voiceProfiles';
+import { tapVoiceLog } from '../ops/opsMetrics';
+import { guardLlm, guardRealtime, realtimeAvailable } from '../ops/providerGuards';
+import { runOpsSweep } from '../ops/opsSweep';
 import { toolsNotSwitchedOff } from '../profiles/voiceToolPolicy';
 import { productionOptOutDeps, reconcileOptOuts, recordOptOut } from '../optout/optOut';
 import { ACTION_TOKEN_TTL_SECONDS, CONNECT_ACTION_PATH } from '../transfer/humanTransfer';
@@ -38,7 +41,7 @@ import { buildStreamTwiml } from './realtime/streamProtocol';
 
 const HANGUP = '<?xml version="1.0" encoding="UTF-8"?><Response><Hangup/></Response>';
 const log = (line: Record<string, unknown>): void => {
-  (line.level === 'error' || line.level === 'warn' ? console.warn : console.log)(JSON.stringify({ timestamp: new Date().toISOString(), service: 'voice-studio', ...line }));
+  (line.level === 'error' || line.level === 'warn' ? console.warn : console.log)(JSON.stringify(tapVoiceLog(line)));
 };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -100,7 +103,7 @@ export function relayDeps(): RelayDeps {
   const c = loadVoiceConfig();
   return {
     worker: getWorker(),
-    llm: createClaudeVoiceLlm(c.VOICE_ENGINE_A_MODEL),
+    llm: guardLlm(createClaudeVoiceLlm(c.VOICE_ENGINE_A_MODEL)),
     broker: relayBroker,
     profile: liveProfile(),
     onOptOut: (callId) => { void recordOptOut(callId, productionOptOutDeps()); }, // never throws
@@ -154,7 +157,8 @@ export function realtimeDeps(): RealtimeDeps {
     accountSid: () => process.env.TWILIO_ACCOUNT_SID || undefined,
     consumeSessionRef: consumeToken,
     callMatches,
-    connectModel: (h) => connectOpenAiRealtime(c.VOICE_ENGINE_B_MODEL, h),
+    connectModel: guardRealtime((h) => connectOpenAiRealtime(c.VOICE_ENGINE_B_MODEL, h)),
+    modelAvailable: () => realtimeAvailable(),
     now: () => Date.now(),
     log,
   };
@@ -195,6 +199,7 @@ export function installVoiceRuntime(server: Server): void {
   const sweep = setInterval(() => {
     const c = loadVoiceConfig();
     if (!c.valid || !(c.VOICE_STUDIO_ENABLED || c.VOICE_TEST_ENABLED)) return;
+    void runOpsSweep(); // never throws
     reconcileOptOuts().catch((e: Error) => log({ level: 'error', event: 'voice_opt_out_sweep_failed', outcome: 'failure', error_class: e.name || 'Error' }));
     reconcileDirectCompletions().catch((e: Error) => log({ level: 'error', event: 'voice_postcall_sweep_failed', outcome: 'failure', error_class: e.name || 'Error' }));
   }, POSTCALL_SWEEP_MS);
