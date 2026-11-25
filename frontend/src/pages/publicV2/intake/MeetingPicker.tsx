@@ -45,7 +45,10 @@ export function MeetingPicker({ token, anchorKey, onBooked }: MeetingPickerProps
   }, [token, anchorKey, reload]);
 
   const book = async (): Promise<void> => {
-    if (!chosen) return;
+    if (!chosen) {
+      setNote('Choose one of the times above first.');
+      return;
+    }
     setBusy(true);
     setNote('');
     try {
@@ -84,13 +87,13 @@ export function MeetingPicker({ token, anchorKey, onBooked }: MeetingPickerProps
           </div>
           <div className="cbv2-dpi__times" role="radiogroup" aria-label="Time">
             {today?.slots.map((s) => (
-              <button key={s.start} type="button" role="radio" aria-checked={chosen === s.start} onClick={() => setChosen(s.start)}>
+              <button key={s.start} type="button" role="radio" aria-checked={chosen === s.start} onClick={() => { setChosen(s.start); setNote(''); }}>
                 {timeLabel(s.start)}
               </button>
             ))}
           </div>
-          <button type="button" className="cbv2-btn cbv2-btn--primary" onClick={() => void book()} disabled={!chosen || busy}>
-            {busy ? 'Booking…' : chosen ? `Book ${whenLabel(chosen)}` : 'Pick a time'}
+          <button type="button" className="cbv2-btn cbv2-btn--primary" onClick={() => void book()} disabled={busy}>
+            {busy ? 'Booking…' : chosen ? `Book ${whenLabel(chosen)}` : 'Book this meeting'}
           </button>
         </>
       ) : null}
