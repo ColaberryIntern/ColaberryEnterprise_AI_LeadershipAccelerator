@@ -111,6 +111,14 @@ describe('Overview tab', () => {
     expect(q('[data-testid="migration-empty"]')).not.toBeNull();
   });
 
+  it('test traffic is labelled Simulated, never Observed', async () => {
+    const sim: Overview = { ...OVERVIEW, window: { days: 7, mode: 'test' }, kpis: [{ key: 'attempted', label: 'Calls attempted', value: 2, unit: 'count', provenance: 'simulated' }] };
+    mockApi.getOverview.mockResolvedValue(sim);
+    await renderAt('/admin/voice-studio');
+    expect(text('[data-testid="kpi-attempted-provenance"]')).toBe('Simulated');
+    expect(q('[data-testid="kpi-attempted-provenance"]')?.getAttribute('title')).toContain('Not live traffic');
+  });
+
   it('a 404 (console switched off) shows the switched-off state, not an error', async () => {
     mockApi.getOverview.mockRejectedValue({ response: { status: 404 } });
     await renderAt('/admin/voice-studio');

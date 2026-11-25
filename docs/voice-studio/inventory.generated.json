@@ -1,13 +1,13 @@
 {
  "generatedFrom": "git ls-files",
- "total": 247,
+ "total": 254,
  "byRole": {
   "DISPATCH": 3,
   "INGEST": 3,
   "GUARD": 6,
   "CALLER": 11,
   "CONFIG": 20,
-  "UI": 22,
+  "UI": 29,
   "CONSUMER": 60,
   "MENTION": 122
  },
@@ -1603,6 +1603,42 @@
    "envVars": []
   },
   {
+   "path": "frontend/src/components/admin/voiceStudio/AgentsTab.tsx",
+   "role": "UI",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_STUDIO_UI_ENABLED"
+   ]
+  },
+  {
+   "path": "frontend/src/components/admin/voiceStudio/OverviewTab.tsx",
+   "role": "UI",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_STUDIO_UI_ENABLED"
+   ]
+  },
+  {
+   "path": "frontend/src/components/admin/voiceStudio/VersionEditor.tsx",
+   "role": "UI",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "frontend/src/components/admin/voiceStudio/VoiceStudioLayout.tsx",
+   "role": "UI",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_STUDIO_TABS"
+   ]
+  },
+  {
+   "path": "frontend/src/components/admin/voiceStudio/voiceStudioFormat.ts",
+   "role": "UI",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
    "path": "frontend/src/components/campaign/SequenceStepEditor.tsx",
    "role": "UI",
    "callTypes": [],
@@ -1657,6 +1693,14 @@
    "envVars": []
   },
   {
+   "path": "frontend/src/routes/adminRoutes.tsx",
+   "role": "UI",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_STUDIO_UI_ENABLED"
+   ]
+  },
+  {
    "path": "frontend/src/services/adminFlotationIntakeApi.ts",
    "role": "UI",
    "callTypes": [],
@@ -1679,6 +1723,14 @@
    "role": "UI",
    "callTypes": [],
    "envVars": []
+  },
+  {
+   "path": "frontend/src/services/voiceStudioApi.ts",
+   "role": "UI",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_STUDIO_UI_ENABLED"
+   ]
   },
   {
    "path": "frontend/src/utils/agentDisplayNames.ts",
