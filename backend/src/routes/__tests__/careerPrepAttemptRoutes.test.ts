@@ -139,10 +139,18 @@ describe('an upload over the limit', () => {
 });
 
 describe('the upload path has its own nginx body-size rule', () => {
-  it('nginx.conf raises the cap for the attempts path to 100m', () => {
+  it('nginx.conf raises the cap for the attempts path to the multer cap PLUS the envelope margin', () => {
+    // 101m, not 100m. client_max_body_size is measured against the WHOLE request
+    // body - the file, the multipart boundaries and the text fields - so a limit
+    // set equal to PREP_ATTEMPT_MAX_BYTES refuses a recording at the TOP of the
+    // range multer would have accepted, at the edge, as an HTML 413 the uploader
+    // cannot read. A practice recording is routinely near the cap, so this is the
+    // common case rather than an edge one. Raised 2026-11-25 along with the three
+    // sibling routes that had the same equality; nginxUploadLimits.contract.test.ts
+    // governs all four against the cap+1m rule every other upload route follows.
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const conf = require('fs').readFileSync(require('path').join(__dirname, '..', '..', '..', '..', 'nginx', 'nginx.conf'), 'utf8') as string;
     const block = /location ~ "\^\/api\/portal\/career-prep\/sessions\/\[0-9a-fA-F-\]\+\/attempts\$" \{([\s\S]*?)\n    \}/.exec(conf);
-    expect(block?.[1]).toContain('client_max_body_size 100m;');
+    expect(block?.[1]).toContain('client_max_body_size 101m;');
   });
 });
