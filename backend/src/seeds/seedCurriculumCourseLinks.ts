@@ -23,18 +23,28 @@ export interface CourseLinkSeedRow {
   link_status: CourseLinkStatus;
 }
 
-const SKILLJAR = 'https://anthropic.skilljar.com';
+// Claude Academy, not Skilljar. Skilljar retires in early December 2026 and this
+// seed RUNS ON EVERY BACKEND RESTART (server.ts), rewriting curriculum_course_links
+// wholesale - which is the table the classroom week page reads. So until this
+// constant changed, every restart sent students back to Skilljar no matter what
+// the timeline cards said, and that is what made a correctly-updated week 6 card
+// still show a Skilljar link in the student view on 2026-11-25.
+//
+// The slugs below come from the eight published Skills Course cards, which were
+// set by hand against the live Academy site. They are NOT the Skilljar slugs with
+// the host swapped: week 3's course was renamed, and its old name 404s on Academy.
+const ACADEMY = 'https://academy.claude.com/courses';
 const CCA_F = 'https://claudecertifications.com/claude-certified-architect/exam-guide';
 
 export const COURSE_LINK_ROWS: CourseLinkSeedRow[] = [
-  { module_number: 1,  provider: 'skilljar',           course_title: 'Claude Code 101',                               course_url: `${SKILLJAR}/claude-code-101`,                          link_status: 'confirmed' },
-  { module_number: 2,  provider: 'skilljar',           course_title: 'Introduction to Agent Skills',                   course_url: `${SKILLJAR}/introduction-to-agent-skills`,             link_status: 'confirmed' },
-  { module_number: 3,  provider: 'skilljar',           course_title: 'Claude with the Anthropic API',                  course_url: `${SKILLJAR}/claude-with-the-anthropic-api`,            link_status: 'confirmed' },
+  { module_number: 1,  provider: 'skilljar',           course_title: 'Claude Code 101',                               course_url: `${ACADEMY}/claude-code-101`,                          link_status: 'confirmed' },
+  { module_number: 2,  provider: 'skilljar',           course_title: 'Introduction to Agent Skills',                   course_url: `${ACADEMY}/introduction-to-agent-skills`,             link_status: 'confirmed' },
+  { module_number: 3,  provider: 'skilljar',           course_title: 'Building with the Claude API',                   course_url: `${ACADEMY}/building-with-the-claude-api`,            link_status: 'confirmed' },
   { module_number: 4,  provider: 'colaberry_original', course_title: 'Prompt Engineering (Colaberry-original)',        course_url: null,                                                   link_status: 'not_applicable' },
-  { module_number: 5,  provider: 'skilljar',           course_title: 'Introduction to Model Context Protocol',         course_url: `${SKILLJAR}/introduction-to-model-context-protocol`,   link_status: 'confirmed' },
-  { module_number: 6,  provider: 'skilljar',           course_title: 'Model Context Protocol: Advanced Topics',        course_url: `${SKILLJAR}/model-context-protocol-advanced-topics`,   link_status: 'confirmed' },
-  { module_number: 7,  provider: 'skilljar',           course_title: 'Introduction to Subagents',                      course_url: `${SKILLJAR}/introduction-to-subagents`,                link_status: 'confirmed' },
-  { module_number: 8,  provider: 'skilljar',           course_title: 'Claude Code in Action',                          course_url: `${SKILLJAR}/claude-code-in-action`,                    link_status: 'confirmed' },
+  { module_number: 5,  provider: 'skilljar',           course_title: 'Introduction to Model Context Protocol',         course_url: `${ACADEMY}/introduction-to-model-context-protocol`,   link_status: 'confirmed' },
+  { module_number: 6,  provider: 'skilljar',           course_title: 'Model Context Protocol: Advanced Topics',        course_url: `${ACADEMY}/model-context-protocol-advanced-topics`,   link_status: 'confirmed' },
+  { module_number: 7,  provider: 'skilljar',           course_title: 'Introduction to Subagents',                      course_url: `${ACADEMY}/introduction-to-subagents`,                link_status: 'confirmed' },
+  { module_number: 8,  provider: 'skilljar',           course_title: 'Claude Code in Action',                          course_url: `${ACADEMY}/claude-code-in-action`,                    link_status: 'confirmed' },
   { module_number: 9,  provider: 'colaberry_original', course_title: 'Reliability Engineering (Colaberry-original)',   course_url: null,                                                   link_status: 'not_applicable' },
   { module_number: 10, provider: 'colaberry_original', course_title: 'Governance (Colaberry-original)',                course_url: null,                                                   link_status: 'not_applicable' },
   { module_number: 11, provider: 'colaberry_original', course_title: 'Systems Architecture (Colaberry-original)',      course_url: null,                                                   link_status: 'not_applicable' },
