@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { PageHeader, SectionCard } from '../../components/admin/shell';
 import AddCapabilityFrontDoor from '../../components/admin/agentDetailV2/AddCapabilityFrontDoor';
 import ToolRequestForm from '../../components/admin/toolRequest/ToolRequestForm';
+import ApprovalQueue from '../../components/approvals/ApprovalQueue';
+import { ageDays } from '../../components/approvals/approvalQueueModel';
 import {
   CHANGE_REQUEST_DESCRIPTION_MAX,
   CHANGE_REQUEST_TITLE_MAX,
@@ -60,30 +62,13 @@ function when(iso: string | null): string {
 }
 
 /**
- * How long this has been waiting, in whole days.
- *
- * The row used to print only the absolute filing time and leave the arithmetic to the reader.
- * Age is the only thing that distinguishes a queue from a list, and on 2026-11-13 this queue
- * had taken exactly one request and decided none of them, so it is now stated.
- *
- * Null for anything undecidable rather than a guessed 0: a missing or unparseable date must not
- * render as "today".
+ * Age and order now live in `components/approvals/approvalQueueModel`, with the queue that reads
+ * them, and are re-exported here because this page wrote them first and
+ * `AdminChangeRequestsPage.age.test.ts` imports them from here. One implementation, two names for
+ * the same door: the queue header, the age bar and the row pill cannot disagree about what
+ * "2 days" means if there is only one rule to disagree with.
  */
-export function ageDays(iso: string | null, now: Date = new Date()): number | null {
-  if (!iso) return null;
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return null;
-  const ms = now.getTime() - then;
-  if (ms < 0) return 0;
-  return Math.floor(ms / 86_400_000);
-}
-
-/** Oldest first. The server returns newest-first, which buries the one most needing a decision. */
-export function oldestFirst(a: ChangeRequest, b: ChangeRequest): number {
-  const at = a.requested_at ? new Date(a.requested_at).getTime() : 0;
-  const bt = b.requested_at ? new Date(b.requested_at).getTime() : 0;
-  return at - bt;
-}
+export { ageDays, oldestFirst } from '../../components/approvals/approvalQueueModel';
 
 function AgeChip({ days }: { days: number | null }) {
   if (days === null) return null;
@@ -154,8 +139,6 @@ export default function AdminChangeRequestsPage() {
   // Per-row decision state, so one refusal does not blank the whole queue.
   const [busyId, setBusyId] = useState('');
   const [decideProblem, setDecideProblem] = useState('');
-  const [declineFor, setDeclineFor] = useState('');
-  const [declineReason, setDeclineReason] = useState('');
 
   async function load(live: () => boolean) {
     try {
@@ -214,8 +197,6 @@ export default function AdminChangeRequestsPage() {
       const swap = (rows: ChangeRequest[]) => rows.map((r) => (r.id === id ? updated : r));
       setQueue((q) => (q ? swap(q) : q));
       setMine(swap);
-      setDeclineFor('');
-      setDeclineReason('');
     } catch (err) {
       setDecideProblem(errorMessage(err, 'Could not record that decision.'));
     } finally {
@@ -232,8 +213,28 @@ export default function AdminChangeRequestsPage() {
    * is offered the other's control.
    */
   const waiting = (queue ?? []).filter((r) => r.status === 'submitted');
-  const toolWaiting = waiting.filter((r) => r.kind === 'tool');
-  const changeWaiting = waiting.filter((r) => r.kind !== 'tool');
+  /**
+   * Which of these are the viewer's OWN, by id rather than by email.
+   *
+   * `mine` comes from the self-scoped endpoint, which resolves identity from the verified token.
+   * Re-deriving the viewer from an email string would introduce a second answer that can disagree
+   * with the first, and a queue that mislabels whose request is whose is worse than no filter.
+   */
+  const mineIds = new Set(mine.map((r) => r.id));
+
+  /**
+   * The queue speaks verbs; this page speaks the change-request API.
+   *
+   * A tool row emits nothing here: its verbs need a missing field, an assigned tool name or a
+   * chosen option that a collapsed row does not carry, so it links to its own desk instead of
+   * offering a control the server would refuse. The guard is belt and braces against a future
+   * caller wiring one up and discovering the refusal at the moment of deciding.
+   */
+  function onQueueDecide(id: string, kind: ChangeRequest['kind'], verb: string, reason: string) {
+    if (kind === 'tool') return;
+    if (verb !== 'approved' && verb !== 'declined') return;
+    void onDecide(id, verb, reason || undefined);
+  }
 
   return (
     <>
@@ -401,96 +402,30 @@ export default function AdminChangeRequestsPage() {
           {/* Rendered only when the API returned the queue, which means this viewer may decide. */}
           {queue !== null && (
             <SectionCard title="Decide">
-              <p className="text-muted small">
-                Approving records that you approved it, and when. It does not start any work.
-              </p>
+              {/* AF12.3 split tool grants onto their own screen, and AF-approvals merged the QUEUE
+                  back without merging the DECISION.
 
-              {/* AF12.3 — TOOL REQUESTS LEAVE THIS QUEUE.
-                  Ali, 17 Nov 2026, with a screenshot of this very list: *"allow me to add my own
-                  input like it says in the desc instead of just approving like the old design."*
+                  Ali, 17 Nov 2026: *"allow me to add my own input like it says in the desc instead
+                  of just approving like the old design."* Right, and still true: a grant needs five
+                  verbs, a duplicate check and an instruction box, so it is settled on
+                  /admin/tool-requests.
 
-                  The old design is these two buttons, and the five verbs, the ten-block package,
-                  the duplicate check and the instruction box have existed on `/admin/tool-requests`
-                  since AF11.3 — he had never seen them, because nothing in the product led here
-                  from there. A tool request offered Approve and Decline on this screen got settled
-                  from a title, and the server refuses the five verbs on a change request anyway,
-                  so one of these two queues was always going to be the wrong place to answer from.
+                  Ali, 25 Nov 2026, looking at this page: *"Why do I have to go to two different
+                  places. Can these 2 be merged."* Also right, about a different thing. Two inboxes
+                  meant the oldest thing waiting was the one nobody opened: the admissions builder's
+                  capability request sat submitted for ELEVEN WHOLE DAYS while a two-day-old platform
+                  request was chased by email.
 
-                  They are LINKED rather than hidden: a count with no way through would be the same
-                  dead end in a politer form. */}
-              {toolWaiting.length > 0 && (
-                <div className="alert alert-info small" role="status" data-testid="tool-requests-elsewhere">
-                  <div className="fw-semibold">
-                    <i className="ri-tools-line me-1" aria-hidden="true" />
-                    {toolWaiting.length === 1
-                      ? 'One tool request is waiting, and it is decided on its own screen.'
-                      : `${toolWaiting.length} tool requests are waiting, and they are decided on their own screen.`}
-                  </div>
-                  <div>
-                    A tool grant is the moment an agent stops observing and starts acting, so it
-                    gets the ten-block case, the duplicate check, five answers rather than two, and
-                    a box for your own instructions. None of that fits a row with two buttons.
-                  </div>
-                  <a className="btn btn-sm btn-primary mt-2" href="/admin/tool-requests">
-                    Open the tool request console
-                  </a>
-                </div>
-              )}
-
-              {decideProblem && (
-                <div className="alert alert-danger small" role="alert">{decideProblem}</div>
-              )}
-              {changeWaiting.length === 0 ? (
-                <p className="text-muted small mb-0">
-                  {toolWaiting.length > 0
-                    ? 'No change requests are waiting. The tool requests above are decided on their own screen.'
-                    : 'Nothing is waiting on a decision.'}
-                </p>
-              ) : (
-                // Oldest first: the server orders requested_at DESC, which put the request most
-                // needing a decision at the bottom of the page.
-                changeWaiting.slice().sort(oldestFirst).map((r) => (
-                  <RequestRow key={r.id} r={r}>
-                    <div className="d-flex flex-column gap-2" style={{ minWidth: 220 }}>
-                      <div className="d-flex gap-2">
-                        <button
-                          className="btn btn-success btn-sm"
-                          disabled={busyId === r.id}
-                          onClick={() => onDecide(r.id, 'approved')}
-                        >
-                          Approve
-                        </button>
-                        <button
-                          className="btn btn-outline-secondary btn-sm"
-                          disabled={busyId === r.id}
-                          onClick={() => setDeclineFor(declineFor === r.id ? '' : r.id)}
-                        >
-                          Decline
-                        </button>
-                      </div>
-                      {declineFor === r.id && (
-                        <div>
-                          <textarea
-                            className="form-control form-control-sm"
-                            rows={2}
-                            maxLength={DECLINED_REASON_MAX}
-                            placeholder="Why, in words they can read"
-                            value={declineReason}
-                            onChange={(e) => setDeclineReason(e.target.value)}
-                          />
-                          <button
-                            className="btn btn-outline-danger btn-sm mt-2"
-                            disabled={busyId === r.id || !declineReason.trim()}
-                            onClick={() => onDecide(r.id, 'declined', declineReason.trim())}
-                          >
-                            Record decline
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </RequestRow>
-                ))
-              )}
+                  So one age-sorted list holds every kind, each row carries what the decision
+                  releases, and a tool row links through to its own desk. Nothing left the tool
+                  console; what left was having to remember it exists. */}
+              <ApprovalQueue
+                requests={waiting}
+                mineIds={mineIds}
+                busyId={busyId}
+                problem={decideProblem}
+                onDecide={onQueueDecide}
+              />
             </SectionCard>
           )}
         </>
