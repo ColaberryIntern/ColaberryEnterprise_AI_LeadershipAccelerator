@@ -7,9 +7,9 @@ import { parseArgs, validateUpdate } from '../updateCourseLink';
 
 describe('parseArgs', () => {
   it('parses --week, --url, --status, --title', () => {
-    const u = parseArgs(['--week', '7', '--url', 'https://anthropic.skilljar.com/introduction-to-subagents', '--status', 'confirmed', '--title', 'Introduction to Subagents']);
+    const u = parseArgs(['--week', '7', '--url', 'https://academy.claude.com/courses/introduction-to-subagents', '--status', 'confirmed', '--title', 'Introduction to Subagents']);
     expect(u.module_number).toBe(7);
-    expect(u.course_url).toBe('https://anthropic.skilljar.com/introduction-to-subagents');
+    expect(u.course_url).toBe('https://academy.claude.com/courses/introduction-to-subagents');
     expect(u.link_status).toBe('confirmed');
     expect(u.course_title).toBe('Introduction to Subagents');
   });
@@ -33,7 +33,7 @@ describe('validateUpdate', () => {
   });
 
   it('accepts a valid url + status update', () => {
-    expect(() => validateUpdate({ module_number: 1, course_url: 'https://anthropic.skilljar.com/claude-code-101', link_status: 'confirmed' })).not.toThrow();
+    expect(() => validateUpdate({ module_number: 1, course_url: 'https://academy.claude.com/courses/claude-code-101', link_status: 'confirmed' })).not.toThrow();
   });
 
   it('rejects a week outside 1-12 (boundary)', () => {

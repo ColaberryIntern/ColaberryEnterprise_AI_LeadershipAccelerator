@@ -4,8 +4,8 @@ import CurriculumCourseLink from '../../models/CurriculumCourseLink';
 jest.mock('../../models/CurriculumCourseLink');
 
 const ROWS = [
-  { module_number: 2, provider: 'skilljar', course_title: 'Introduction to Agent Skills', course_url: 'https://anthropic.skilljar.com/introduction-to-agent-skills', link_status: 'confirmed' },
-  { module_number: 7, provider: 'skilljar', course_title: 'Introduction to Subagents', course_url: 'https://anthropic.skilljar.com/introduction-to-subagents', link_status: 'pending_confirmation' },
+  { module_number: 2, provider: 'skilljar', course_title: 'Introduction to Agent Skills', course_url: 'https://academy.claude.com/courses/introduction-to-agent-skills', link_status: 'confirmed' },
+  { module_number: 7, provider: 'skilljar', course_title: 'Introduction to Subagents', course_url: 'https://academy.claude.com/courses/introduction-to-subagents', link_status: 'pending_confirmation' },
   { module_number: 4, provider: 'colaberry_original', course_title: 'Prompt Engineering (Colaberry-original)', course_url: null, link_status: 'not_applicable' },
 ];
 
@@ -19,7 +19,7 @@ describe('getCourseLinkMap', () => {
 
     expect(map.size).toBe(3);
     expect(map.get(2)!.link_status).toBe('confirmed');
-    expect(map.get(2)!.course_url).toContain('anthropic.skilljar.com');
+    expect(map.get(2)!.course_url).toContain('academy.claude.com');
     expect(map.get(7)!.link_status).toBe('pending_confirmation');
     expect(map.get(4)!.course_url).toBeNull();
   });

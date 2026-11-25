@@ -203,7 +203,7 @@ const intensives: IntensiveDef[] = [
         skill_area: 'build_discipline',
         mon_date: '2026-07-27',
         thu_date: '2026-07-30',
-        anthropic: { title: 'Building with the Claude API', slug: 'claude-with-the-anthropic-api', url: anthropicUrl('claude-with-the-anthropic-api'), status: 'confirmed' },
+        anthropic: { title: 'Building with the Claude API', slug: 'building-with-the-claude-api', url: anthropicUrl('building-with-the-claude-api'), status: 'confirmed' },
       },
     ],
   },

@@ -30,7 +30,7 @@ const ANTHROPIC_COURSES: CourseMaterial[] = [
   {
     title: 'Building with the Claude API (Anthropic Skilljar)',
     type: 'reading',
-    url: 'https://anthropic.skilljar.com/claude-with-the-anthropic-api',
+    url: 'https://academy.claude.com/courses/building-with-the-claude-api',
   },
 ];
 
