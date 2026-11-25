@@ -31,11 +31,18 @@ echo "minted token prefix: AAAAAAAA"
 echo "probe HTTP 200 (expect 200)"
 exit \${REFRESH_RC:-0}
 EOF
-  chmod +x "$T/bin/docker" "$T/refresh.sh"
+  # Fake flock: records its args, then runs the command, or reports the lock as busy.
+  cat > "$T/bin/flock" <<EOF
+#!/usr/bin/env bash
+echo "\$*" > "$T/flock_args"
+[ -n "\${LOCK_BUSY:-}" ] && exit 75
+shift 5; exec "\$@"
+EOF
+  chmod +x "$T/bin/docker" "$T/bin/flock" "$T/refresh.sh"
 }
 
 run_sut() {
-  PATH="$T/bin:$PATH" BC_REFRESH_SCRIPT="$T/refresh.sh" BC_HEALTH_LOG="$T/health.log" \
+  PATH="$T/bin:$PATH" BC_REFRESH_SCRIPT="$T/refresh.sh" BC_HEALTH_LOG="$T/health.log" BC_MINT_LOCK="$T/lock/bc-mint.lock" \
     bash "$SUT" > "$T/out" 2>&1
   echo $?
 }
@@ -76,6 +83,39 @@ rc=$(run_sut)
 setup 0 0
 r1=$(run_sut); rm -f "$T/calls"; r2=$(run_sut)
 [ "$r1" = 0 ] && [ "$r2" = 0 ] && [ ! -f "$T/refresh_args" ] && pass "rerun is idempotent" || fail "idempotency"
+
+# 6. The refresh runs under the shared mint lock, with a bounded wait.
+setup 2 0
+rc=$(run_sut)
+[ "$rc" = 0 ] && grep -q -- "-w 120 -E 75 $T/lock/bc-mint.lock $T/refresh.sh --commit" "$T/flock_args" \
+  && pass "refresh runs under the mint lock" || fail "mint lock (rc=$rc)"
+grep -q 'ops-engine/bc-mint.lock' "$SUT" && grep -q 'ops-engine/bc-mint.lock' "$HERE/../cron-env-wrapper.sh" \
+  && pass "same lock file as cron-env-wrapper" || fail "lock path differs from cron-env-wrapper"
+
+# 7. Lock busy: refresh skipped, still re-probes, and the alert says why.
+setup 2 2
+rc=$(LOCK_BUSY=1 run_sut)
+[ "$rc" = 2 ] && [ ! -f "$T/refresh_args" ] && [ "$(cat "$T/calls")" = 2 ] \
+  && pass "lock busy: refresh skipped, re-probed" || fail "lock busy (rc=$rc)"
+grep -q 'BC_REFRESH_NOTE=exit 75' "$T/env.2" && grep -q 'mint lock busy' "$T/env.2" \
+  && pass "alert explains the busy lock" || fail "busy lock note"
+
+# 8. Run the real probe JS with a stub DB and stub fetch. Only the token named "new" is accepted.
+run_probe_js() {  # $1 = JSON list of tokens the DB returns, in order
+  mkdir -p "$T/node_modules/mssql"
+  cat > "$T/node_modules/mssql/index.js" <<'EOF'
+const toks = JSON.parse(process.env.TOKENS); let n = 0;
+module.exports = { connect: async () => {}, close: async () => {},
+  Request: class { async query() { return { recordset: [{ AccessToken: toks[Math.min(n++, toks.length - 1)] }] }; } } };
+EOF
+  echo 'global.fetch = async (u, o) => ({ status: o.headers.Authorization === "Bearer new" ? 200 : 401, json: async () => ({ name: "Test", id: 1 }) });' > "$T/preload.js"
+  (cd "$T" && TOKENS="$1" BC_ALERT=0 BC_CONFIRM_DELAY_MS=10 node -r ./preload.js probe.js > js.out 2>&1; echo $?)
+}
+rc=$(run_probe_js '["old","new"]')
+[ "$rc" = 0 ] && grep -q 'CONFIRM HTTP 200' "$T/js.out" \
+  && pass "token replaced mid-check: confirm uses the new token" || fail "confirm reused the stale token (rc=$rc)"
+rc=$(run_probe_js '["old"]')
+[ "$rc" = 2 ] && pass "token still dead at confirm -> unhealthy" || fail "dead token (rc=$rc)"
 
 echo "---"
 [ "$FAILS" -eq 0 ] && { echo "ALL PASS"; exit 0; } || { echo "$FAILS FAILED"; exit 1; }

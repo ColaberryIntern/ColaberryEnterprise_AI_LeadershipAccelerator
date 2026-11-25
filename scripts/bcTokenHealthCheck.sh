@@ -12,7 +12,15 @@
 # gap and turns the email into a signal that a human is actually needed (the
 # advisor grant needs a browser re-auth, or the mint itself fails).
 #
+# Correction (2026-11-25): on 2026-11-23 the token was replaced during this check's
+# 30s confirm wait (8 refreshes, 13:00:05-13:00:30 UTC), but the confirm retested the
+# copy read at 13:00:01. The confirm now rereads CCPP. The refresh takes the same
+# bc-mint.lock as cron-env-wrapper.sh, so the two never mint at the same time.
+#
 # Failure modes handled:
+#   - token replaced mid-check                 -> confirm rereads CCPP, no refresh
+#   - another job is minting                   -> wait up to 120s (one attempt); on lock
+#                                                 timeout skip the refresh and re-probe
 #   - transient Basecamp 401 on a valid token -> 30s confirm re-probe, no refresh
 #   - expired token                            -> refresh, re-probe, no alert if 200
 #   - refresh fails / grant dead               -> alert, with the refresh tail in it
@@ -36,8 +44,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REFRESH_SCRIPT="${BC_REFRESH_SCRIPT:-$SCRIPT_DIR/refreshBasecampTokenFromVault.sh}"
 LOG="${BC_HEALTH_LOG:-/opt/colaberry-accelerator/tmp/basecamp-health.log}"
 CONFIRM_DELAY_MS="${BC_HEALTH_CONFIRM_DELAY_MS:-30000}"
+MINT_LOCK="${BC_MINT_LOCK:-/opt/colaberry-accelerator/tmp/ops-engine/bc-mint.lock}"   # same file as cron-env-wrapper.sh
 
-mkdir -p "$(dirname "$LOG")"
+mkdir -p "$(dirname "$LOG")" "$(dirname "$MINT_LOCK")"
 exec > >(tee -a "$LOG") 2>&1
 echo "===== bc-token-health $(date -u +%Y-%m-%dT%H:%M:%SZ) ====="
 
@@ -45,7 +54,7 @@ echo "===== bc-token-health $(date -u +%Y-%m-%dT%H:%M:%SZ) ====="
 # With BC_ALERT=1 an unhealthy result also emails Ali (BC_REFRESH_NOTE is included).
 PROBE_JS='
 const sql = require("mssql");
-(async () => {
+async function readToken() {
   await sql.connect({
     server: process.env.MSSQL_HOST, port: parseInt(process.env.MSSQL_PORT || "1433", 10),
     user: process.env.MSSQL_USER, password: process.env.MSSQL_PASS,
@@ -56,10 +65,12 @@ const sql = require("mssql");
     "SELECT TOP 1 AccessToken FROM Basecamp_AuthInfo WHERE IsActive=1 ORDER BY BasecampAuthInfoID DESC"
   )).recordset[0];
   await sql.close();
-  const tok = String((row && row.AccessToken) || "").replace(/^Bearer\s+/i, "").trim();
-
+  return String((row && row.AccessToken) || "").replace(/^Bearer\s+/i, "").trim();
+}
+(async () => {
   let who = "";
   async function probe() {
+    const tok = await readToken();   // every probe rereads: another job may have replaced the token
     try {
       const r = await fetch("https://3.basecampapi.com/'"$ACCOUNT"'/my/profile.json",
         { headers: { Authorization: "Bearer " + tok, "User-Agent": "bc-token-health" },
@@ -79,7 +90,7 @@ const sql = require("mssql");
     const confirm = await probe();
     console.log("CONFIRM HTTP " + confirm);
     if (confirm === 200) {
-      console.log("transient " + status + "; token is healthy");
+      console.log("recovered after " + status + " (transient or token replaced); token is healthy");
       return;
     }
     status = confirm;
@@ -121,9 +132,11 @@ rc=$?
 [ "$rc" -eq 0 ] && exit 0
 
 echo "UNHEALTHY (probe exit $rc) - running $REFRESH_SCRIPT --commit before alerting"
-REFRESH_OUT=$("$REFRESH_SCRIPT" --commit 2>&1)   # refresh never prints the token (8-char prefix only)
+# The refresh never prints the token (8-char prefix only). Exit 75 = lock not acquired.
+REFRESH_OUT=$(flock -w 120 -E 75 "$MINT_LOCK" "$REFRESH_SCRIPT" --commit 2>&1)
 refresh_rc=$?
 printf '%s\n' "$REFRESH_OUT" | tail -n 8 | sed 's/^/  refresh| /'
+[ "$refresh_rc" -eq 75 ] && REFRESH_OUT="mint lock busy for 120s; refresh skipped"
 echo "refresh exit $refresh_rc - re-probing"
 
 run_probe 1 "exit $refresh_rc
