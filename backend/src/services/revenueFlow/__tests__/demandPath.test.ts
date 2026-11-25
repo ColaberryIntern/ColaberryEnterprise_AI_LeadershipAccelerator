@@ -30,6 +30,9 @@ const campaign = (over: Partial<CampaignReachRow> = {}): CampaignReachRow => ({
   sent: 8_518,
   opened: 1_191,
   replied: 3,
+  // R27. Required on the row since the click rate landed, and the click was recorded all
+  // along: interaction_outcomes held 5,838 of them on 2026-11-25.
+  clicked: 420,
   ...over,
 });
 

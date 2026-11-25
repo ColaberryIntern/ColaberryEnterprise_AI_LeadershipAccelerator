@@ -220,9 +220,10 @@ describe('what this service structurally does not do', () => {
     const p = r?.people[0];
     expect(p?.name).toBeNull();
     expect(p?.email).toBeNull();
-    // Not "Unknown", not the row id dressed up as a person.
+    // Not "Unknown", not the row id dressed up as a person. Since R27 the rows hang off the
+    // person, so the id to compare against is the one on the row rather than on the person.
     expect(JSON.stringify(p)).not.toContain('Unknown');
-    expect(p?.name).not.toBe(p?.rowId);
+    expect(p?.name).not.toBe(p?.rows[0].rowId);
   });
 });
 
