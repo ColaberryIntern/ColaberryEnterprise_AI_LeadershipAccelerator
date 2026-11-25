@@ -36,6 +36,27 @@ export interface CourseScrapResult {
   error_class?: string;
 }
 
+/**
+ * Why an outline came back empty. An empty outline is NOT the same as "this
+ * course has no outline" - it is always a failure of ours or of the fetch, and
+ * before this type existed all four cases were indistinguishable from
+ * "unchanged".
+ */
+export type OutlineFailure =
+  | 'TimeoutError'
+  | 'NetworkError'
+  | 'UpstreamUnavailable'
+  | 'SelectorMiss'
+  /**
+   * Unreachable by construction: `scrapeOutline` returns a reason on every path
+   * that yields an empty outline. If this ever appears in a log, the plumbing
+   * between the extractor and the reporter has been broken by a refactor - and
+   * that matters, because the alternative was defaulting to 'SelectorMiss' and
+   * sending whoever reads the alert to inspect markup for what may have been a
+   * timeout or a 404.
+   */
+  | 'ContractViolation';
+
 export interface CatalogScraperRunResult {
   source: 'curriculum_course_links' | 'fallback';
   courses_found: number;
@@ -43,6 +64,19 @@ export interface CatalogScraperRunResult {
   updated: number;
   unchanged: number;
   errors: number;
+  /**
+   * Courses whose page produced no outline at all. Counted separately from
+   * `errors` because `errors` means "the database write failed", while this
+   * means "we learned nothing about this course" - which the old shape reported
+   * as `unchanged`, i.e. as good news.
+   */
+  outlines_missing: number;
+  /**
+   * False when this run proved nothing. A monitor that cannot read its source
+   * must say so; reporting a clean run is worse than reporting a failure,
+   * because nobody looks at a green check.
+   */
+  healthy: boolean;
   results: CourseScrapResult[];
 }
 
@@ -73,22 +107,28 @@ async function fetchWithTimeout(url: string): Promise<Response> {
 
 /**
  * Fetch a course page and extract module/section titles as a newline-joined string.
- * Fails soft — outline extraction failure is logged but never aborts the run.
+ *
+ * Fails soft - one bad course never aborts the run - but it now RETURNS the
+ * reason. The caller needs to tell "Anthropic did not change this page" apart
+ * from "we could not read this page", because those are opposite facts and the
+ * old signature collapsed them into the same empty string.
  */
-async function scrapeOutline(courseUrl: string): Promise<string> {
+async function scrapeOutline(
+  courseUrl: string,
+): Promise<{ outline: string; failure: OutlineFailure | null }> {
   let resp: Response;
   try {
     resp = await fetchWithTimeout(courseUrl);
   } catch (err: any) {
     // err: any — fetch/abort throw sites are untyped at the JS boundary; read via err.name/err.message only.
-    const error_class = err.name === 'AbortError' ? 'TimeoutError' : 'NetworkError';
+    const error_class: OutlineFailure = err.name === 'AbortError' ? 'TimeoutError' : 'NetworkError';
     log('warn', 'outline_fetch_failed', { url: courseUrl, error_class, message: err.message });
-    return '';
+    return { outline: '', failure: error_class };
   }
 
   if (!resp.ok) {
     log('warn', 'outline_fetch_non_ok', { url: courseUrl, status: resp.status, error_class: 'UpstreamUnavailable' });
-    return '';
+    return { outline: '', failure: 'UpstreamUnavailable' };
   }
 
   const html = await resp.text();
@@ -115,7 +155,19 @@ async function scrapeOutline(courseUrl: string): Promise<string> {
     if (sections.length >= 3) break;
   }
 
-  return sections.join('\n');
+  if (sections.length === 0) {
+    // Every selector missed. The page was fetched and parsed, so this is OUR
+    // extractor against THEIR markup - the failure a platform migration or a
+    // redesign causes, and the one most worth shouting about.
+    log('warn', 'outline_selectors_missed', {
+      url: courseUrl,
+      error_class: 'SelectorMiss',
+      html_bytes: html.length,
+    });
+    return { outline: '', failure: 'SelectorMiss' };
+  }
+
+  return { outline: sections.join('\n'), failure: null };
 }
 
 // ─── SHA-256 ──────────────────────────────────────────────────────────────────
@@ -126,7 +178,10 @@ function sha256(text: string): string {
 
 // ─── Registry sync ────────────────────────────────────────────────────────────
 
-async function syncCourse(course: ScrapedCourse): Promise<CourseScrapResult> {
+async function syncCourse(
+  course: ScrapedCourse,
+  failure: OutlineFailure | null = null,
+): Promise<CourseScrapResult> {
   const outlineHash = sha256(course.outline);
 
   try {
@@ -156,7 +211,9 @@ async function syncCourse(course: ScrapedCourse): Promise<CourseScrapResult> {
           : null,
       });
       log('info', 'course_created', { url: course.url, outcome: 'success', change_flagged: hasOutline });
-      return { url: course.url, outcome: 'created' };
+      return hasOutline
+        ? { url: course.url, outcome: 'created' }
+        : { url: course.url, outcome: 'created', error_class: failure ?? 'ContractViolation' };
     }
 
     // Guard: a fresh scrape that yields an empty outline almost always means a
@@ -166,9 +223,18 @@ async function syncCourse(course: ScrapedCourse): Promise<CourseScrapResult> {
     // failure mode this monitor exists to prevent. Bump last_checked and move on.
     const existingHasContent = Boolean(existing.outline) || Boolean(existing.content_hash);
     if (!course.outline && existingHasContent) {
+      // The row is left alone on purpose: overwriting a good outline with empty,
+      // or flagging a change off it, would fire the false alert this monitor
+      // exists to prevent. What changed is that the run no longer calls this
+      // success. `last_checked` still moves, so staleness alone cannot be the
+      // signal either - `outlines_missing` is.
       await existing.update({ last_checked: new Date() });
-      log('warn', 'outline_empty_skipped', { url: course.url, outcome: 'partial' });
-      return { url: course.url, outcome: 'unchanged' };
+      log('warn', 'outline_empty_skipped', {
+        url: course.url,
+        outcome: 'partial',
+        error_class: failure ?? 'ContractViolation',
+      });
+      return { url: course.url, outcome: 'unchanged', error_class: failure ?? 'ContractViolation' };
     }
 
     const titleChanged = existing.title !== course.title;
@@ -215,6 +281,13 @@ export async function runCatalogScraper(): Promise<CatalogScraperRunResult> {
   let source: CatalogScraperRunResult['source'] = 'curriculum_course_links';
 
   try {
+    // provider='skilljar' is a LEGACY ENUM VALUE that now means Claude Academy.
+    // The courses moved to academy.claude.com in November 2026; the column is
+    // CHECK-constrained and this query selects on it, so the value stayed put.
+    // DO NOT "tidy" it to 'academy' without migrating the column in the same
+    // commit: this query would match zero rows, the code below would quietly
+    // fall back to the hardcoded KNOWN_CATALOG, and the run would report success
+    // while monitoring a list instead of the program.
     const rows = await CurriculumCourseLink.findAll({
       where: { provider: 'skilljar' },
       // Deterministic order so the de-dup below is first-wins-stable: if two
@@ -257,8 +330,8 @@ export async function runCatalogScraper(): Promise<CatalogScraperRunResult> {
   const results: CourseScrapResult[] = [];
 
   for (const course of coursesToWatch) {
-    const outline = await scrapeOutline(course.url);
-    const result = await syncCourse({ ...course, outline });
+    const { outline, failure } = await scrapeOutline(course.url);
+    const result = await syncCourse({ ...course, outline }, failure);
     results.push(result);
   }
 
@@ -267,15 +340,54 @@ export async function runCatalogScraper(): Promise<CatalogScraperRunResult> {
   const unchanged = results.filter((r) => r.outcome === 'unchanged').length;
   const errors    = results.filter((r) => r.outcome === 'error').length;
 
-  log('info', 'run_complete', {
+  // A missing outline is a non-DB failure, so it is deliberately NOT folded into
+  // `errors` (whose meaning other callers already depend on) and is counted here.
+  const outlines_missing = results.filter((r) => r.outcome !== 'error' && Boolean(r.error_class)).length;
+
+  // WHY A FRACTION AND NOT A SINGLE MISS. One course can legitimately go dark -
+  // Anthropic retires it, or renames it and our link 404s - and that is a
+  // per-course alert, not a broken monitor. Half the catalog going dark in one
+  // run is not eight coincidences; it is our extractor against their markup, or
+  // a host that no longer exists. That is the case worth waking someone for.
+  const found = coursesToWatch.length;
+  const extractionBroken = found > 0 && outlines_missing >= Math.ceil(found / 2);
+  const allErrored = found > 0 && errors === found;
+  const healthy = !extractionBroken && !allErrored;
+
+  if (extractionBroken) {
+    log('error', 'outline_extraction_broken', {
+      source,
+      courses_found: found,
+      outlines_missing,
+      error_class: outlines_missing === found ? 'OutlineExtractionBroken' : 'OutlineExtractionDegraded',
+      outcome: 'failure',
+      message:
+        'No usable outline for at least half the tracked courses. The monitor cannot ' +
+        'see curriculum changes until this is fixed; treat a quiet week as unproven, not clean.',
+    });
+  }
+
+  log(healthy ? 'info' : 'error', 'run_complete', {
     source,
-    courses_found: coursesToWatch.length,
+    courses_found: found,
     created,
     updated,
     unchanged,
     errors,
-    outcome: errors === coursesToWatch.length ? 'failure' : errors > 0 ? 'partial' : 'success',
+    outlines_missing,
+    healthy,
+    outcome: healthy ? (errors > 0 || outlines_missing > 0 ? 'partial' : 'success') : 'failure',
   });
 
-  return { source, courses_found: coursesToWatch.length, created, updated, unchanged, errors, results };
+  return {
+    source,
+    courses_found: found,
+    created,
+    updated,
+    unchanged,
+    errors,
+    outlines_missing,
+    healthy,
+    results,
+  };
 }
