@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { RecapSummarySchema, NextEventUrlSchema } from '../services/weeklyLive/recap/recapContent';
 import { draftSummary } from '../services/weeklyLive/recap/recapDraft';
 import { lintObject } from '../services/weeklyLive/recap/recapLint';
-import { RecapError, recapState, sendAll, sendTest, dryRun, classDate } from '../services/weeklyLive/recap/recapSendService';
+import { RecapError, recapState, sendAll, sendTest, dryRun, classDate, previewEmail } from '../services/weeklyLive/recap/recapSendService';
 import { verifyOptOutToken, verifyRecapToken } from '../services/weeklyLive/recap/recapToken';
 import * as store from '../services/weeklyLive/recap/recapStore';
 import { listMessages } from '../services/liveChat/liveChatStore';
@@ -15,7 +15,13 @@ import { listMessages } from '../services/liveChat/liveChatStore';
  */
 const SessionId = z.string().uuid();
 const PutBody = z.object({ summary: RecapSummarySchema.optional(), nextEventUrl: z.union([NextEventUrlSchema, z.literal('')]).optional() }).strict();
-const SendBody = z.object({ mode: z.enum(['dry', 'test', 'send']) }).strict();
+const SendBody = z.object({ mode: z.enum(['dry', 'test', 'send', 'preview']) }).strict();
+const TokenQuery = z.union([z.string().max(2048), z.undefined()]);
+
+/** A link token was present but did not verify: say so in the log (no token, no email), never silently. */
+function logBadToken(event: string, sessionId: string | null) {
+  console.warn(JSON.stringify({ level: 'warn', service: 'backend', event, outcome: 'failure', error_class: 'AuthError', context: sessionId ? { session_id: sessionId } : {} }));
+}
 
 function fail(res: Response, e: unknown) {
   if (e instanceof RecapError) return res.status(e.status).json({ error: e.message, code: e.code, violations: e.violations });
@@ -60,6 +66,7 @@ export async function handleSendRecap(req: Request, res: Response) {
   if (!body.success) return res.status(400).json({ error: 'mode must be dry, test or send' });
   try {
     if (body.data.mode === 'dry') return res.json(await dryRun(sid.data));
+    if (body.data.mode === 'preview') return res.json(await previewEmail(sid.data));
     if (body.data.mode === 'test') return res.json(await sendTest(sid.data));
     return res.json(await sendAll(sid.data));
   } catch (e) { return fail(res, e); }
@@ -68,12 +75,15 @@ export async function handleSendRecap(req: Request, res: Response) {
 /** Public: the recap page data. The class chat only with a valid personal token. */
 export async function handlePublicRecap(req: Request, res: Response) {
   const sid = SessionId.safeParse(req.params.id);
-  if (!sid.success) return res.status(404).json({ error: 'Not found' });
+  const tq = TokenQuery.safeParse(req.query.t);
+  if (!sid.success || !tq.success) return res.status(400).json({ error: 'Invalid link' });
   try {
     const [session, recap] = await Promise.all([store.getSession(sid.data), store.getRecap(sid.data)]);
     const summary = RecapSummarySchema.safeParse(recap?.summary ?? null);
-    if (!session || !summary.success) return res.status(404).json({ error: 'Not found' });
-    const guestId = verifyRecapToken(req.query.t, sid.data);
+    // An overview that breaks a content rule is never shown publicly (the send is blocked for it too).
+    if (!session || !summary.success || lintObject(summary.data).length) return res.status(404).json({ error: 'Not found' });
+    const guestId = verifyRecapToken(tq.data, sid.data);
+    if (tq.data && !guestId) logBadToken('weekly_live.recap_page_token', sid.data);
     const chat = guestId
       ? (await listMessages(sid.data, 300)).map((m) => ({ id: m.id, kind: m.kind, name: m.display_name, content: m.content, at: m.created_at }))
       : null;
@@ -91,6 +101,7 @@ const page = (title: string, body: string) => `<!doctype html><html lang="en"><h
 /** Public: one-click opt-out from class recap emails. Idempotent. */
 export async function handleRecapOptOut(req: Request, res: Response) {
   const em = verifyOptOutToken(req.query.t);
+  if (!em) logBadToken('weekly_live.recap_optout_token', null);
   if (!em) return res.status(400).type('html').send(page('This link is not valid', 'We could not read this link. Reply to any recap email and we will remove you by hand.'));
   try {
     await store.addOptOut(em);

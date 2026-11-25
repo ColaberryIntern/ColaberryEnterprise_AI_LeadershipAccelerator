@@ -85,6 +85,29 @@ it('editing the overview disables Send until it is saved again', async () => {
   expect(q('recap-test')?.disabled).toBe(true);
 });
 
+it('Preview shows the exact email in a sandboxed frame without sending', async () => {
+  mockGet.mockResolvedValue(state());
+  mockSend.mockResolvedValue({ subject: 'Your class recap: It Works While You Sleep', html: '<p>Hi Ali</p>' });
+  act(() => { root.render(<StudioRecapPanel sessionId="s1" onClose={() => undefined} />); });
+  await flush();
+  await act(async () => { q('recap-preview')!.click(); });
+  await flush();
+  expect(mockSend).toHaveBeenCalledWith('s1', 'preview');
+  const frame = container.querySelector('iframe') as HTMLIFrameElement;
+  expect(frame.getAttribute('srcdoc')).toBe('<p>Hi Ali</p>');
+  expect(frame.getAttribute('sandbox')).toBe('');
+});
+
+it('failed rows get a Retry button that goes through the same confirmation', async () => {
+  mockGet.mockResolvedValue(state({ counts: { queued: 0, sending: 0, sent: 29, failed: 2, skipped: 1 }, dry: { toSend: 2, alreadySent: 29, skipped: { test_guest: 1 }, checkedIn: 32 } }));
+  act(() => { root.render(<StudioRecapPanel sessionId="s1" onClose={() => undefined} />); });
+  await flush();
+  expect(q('recap-retry')?.textContent).toContain('Retry the 2 that failed');
+  act(() => { q('recap-retry')!.click(); });
+  expect(q('recap-confirm')).not.toBeNull();
+  expect(mockSend).not.toHaveBeenCalled();
+});
+
 it('a load failure shows the error and a way out', async () => {
   mockGet.mockRejectedValue({ response: { data: { error: 'Class not found' } } });
   act(() => { root.render(<StudioRecapPanel sessionId="s1" onClose={() => undefined} />); });

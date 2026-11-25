@@ -31,6 +31,12 @@ export async function upsertRecap(sessionId: string, patch: { summary?: RecapSum
      ON CONFLICT (session_id) DO UPDATE SET
        summary = COALESCE(CAST(:summary AS JSONB), weekly_live_recaps.summary),
        next_event_url = CASE WHEN :urlSet THEN :url ELSE weekly_live_recaps.next_event_url END,
+       -- Any change to what goes out voids the earlier test copy (Ali's pre-approval is a test of
+       -- the FINAL content), so the real send is locked again until a new test is sent.
+       test_sent_at = CASE
+         WHEN CAST(:summary AS JSONB) IS DISTINCT FROM NULL AND CAST(:summary AS JSONB) IS DISTINCT FROM weekly_live_recaps.summary THEN NULL
+         WHEN :urlSet AND :url IS DISTINCT FROM weekly_live_recaps.next_event_url THEN NULL
+         ELSE weekly_live_recaps.test_sent_at END,
        updated_at = NOW()`,
     { replacements: {
       sid: sessionId,

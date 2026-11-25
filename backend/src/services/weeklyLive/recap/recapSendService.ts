@@ -88,6 +88,33 @@ export async function sendTest(sessionId: string): Promise<{ to: string }> {
 
 export interface SendResult { sent: number; failed: number; skippedNow: number; alreadySent: number }
 
+/**
+ * Stable error classes for a failed delivery (CLAUDE.md: generic Error is not a classification).
+ * nodemailer exposes the SMTP reply as responseCode and transport faults as code.
+ */
+export function classifySendError(e: unknown): string {
+  const err = (e ?? {}) as { responseCode?: number; code?: string; name?: string };
+  const rc = Number(err.responseCode);
+  if (rc === 429 || rc === 421 || rc === 450 || rc === 451) return 'RateLimitError';
+  if (rc >= 500 && rc < 600 && rc !== 550 && rc !== 553) return 'UpstreamUnavailable';
+  if (rc === 550 || rc === 553 || (rc >= 400 && rc < 500)) return 'RecipientRejected';
+  if (['ECONNECTION', 'ETIMEDOUT', 'ESOCKET', 'ECONNRESET', 'EDNS', 'ECONNREFUSED'].includes(String(err.code))) return 'UpstreamUnavailable';
+  if (String(err.code) === 'EAUTH') return 'AuthError';
+  if (err.name === 'TimeoutError') return 'TimeoutError';
+  return 'SendError';
+}
+
+const logSend = (outcome: string, errorClass: string, sessionId: string) =>
+  console.warn(JSON.stringify({ level: 'warn', service: 'backend', event: 'weekly_live.recap_send', outcome, error_class: errorClass, context: { session_id: sessionId } }));
+
+/** Preview: the exact email the first attendee would get, rendered for Ali; nothing is sent or stored. */
+export async function previewEmail(sessionId: string): Promise<{ subject: string; html: string }> {
+  const ready = await loadReady(sessionId);
+  const l = links(sessionId, 'preview', RECAP_TEST_TO.toLowerCase());
+  const mail = buildRecapEmail({ summary: ready.summary, firstName: 'Ali', classTitle: ready.session.title, classDate: classDate(ready.session.session_date), recapUrl: l.recapUrl, nextEventUrl: ready.nextEventUrl, unsubscribeUrl: l.unsubscribeUrl });
+  return { subject: mail.subject, html: mail.html };
+}
+
 export async function sendAll(sessionId: string, sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms))): Promise<SendResult> {
   const ready = await loadReady(sessionId);
   const recap = await store.getRecap(sessionId);
@@ -102,16 +129,25 @@ export async function sendAll(sessionId: string, sleep: (ms: number) => Promise<
     if (!(await store.claimSend(sessionId, r.emailLower))) { result.alreadySent++; continue; }
     const l = links(sessionId, r.guestId, r.emailLower);
     const mail = buildRecapEmail({ summary: ready.summary, firstName: firstNameOf(r.name), classTitle: ready.session.title, classDate: classDate(ready.session.session_date), recapUrl: l.recapUrl, nextEventUrl: ready.nextEventUrl, unsubscribeUrl: l.unsubscribeUrl });
+    let messageId: string;
     try {
-      const messageId = await deliver(r.email, mail.subject, mail.html, mail.text, l.unsubscribeUrl);
-      await store.finishSend(sessionId, r.emailLower, true, { messageId });
-      result.sent++;
+      messageId = await deliver(r.email, mail.subject, mail.html, mail.text, l.unsubscribeUrl);
     } catch (e) {
-      const errorClass = e instanceof Error ? e.constructor.name : 'UnknownSendError';
+      const errorClass = classifySendError(e);
       await store.finishSend(sessionId, r.emailLower, false, { errorClass });
-      console.warn(JSON.stringify({ level: 'warn', service: 'backend', event: 'weekly_live.recap_send', outcome: 'failure', error_class: errorClass, context: { session_id: sessionId } }));
+      logSend('failure', errorClass, sessionId);
       result.failed++;
+      await sleep(GAP_MS);
+      continue;
     }
+    // Delivered. Recording it is a separate step on purpose: if this write fails, the row stays
+    // claimed ('sending'), which no later run re-claims, so the person is never mailed twice.
+    try {
+      await store.finishSend(sessionId, r.emailLower, true, { messageId });
+    } catch {
+      logSend('partial', 'StateWriteError', sessionId);
+    }
+    result.sent++;
     await sleep(GAP_MS);
   }
   console.log(JSON.stringify({ level: 'info', service: 'backend', event: 'weekly_live.recap_send', outcome: result.failed ? 'partial' : 'success', context: { session_id: sessionId, ...result } }));

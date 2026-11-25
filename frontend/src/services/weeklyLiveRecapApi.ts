@@ -46,10 +46,11 @@ export async function draftRecap(sessionId: string): Promise<DraftResult> {
   const { data } = await api.post(`/api/admin/live/sessions/${sessionId}/recap/draft`, {});
   return data;
 }
+export async function sendRecap(sessionId: string, mode: 'preview'): Promise<{ subject: string; html: string }>;
 export async function sendRecap(sessionId: string, mode: 'dry'): Promise<RecapDry>;
 export async function sendRecap(sessionId: string, mode: 'test'): Promise<{ to: string }>;
 export async function sendRecap(sessionId: string, mode: 'send'): Promise<RecapSendResult>;
-export async function sendRecap(sessionId: string, mode: 'dry' | 'test' | 'send'): Promise<unknown> {
+export async function sendRecap(sessionId: string, mode: 'preview' | 'dry' | 'test' | 'send'): Promise<unknown> {
   const { data } = await api.post(`/api/admin/live/sessions/${sessionId}/recap/send`, { mode }, { timeout: 300000 });
   return data;
 }

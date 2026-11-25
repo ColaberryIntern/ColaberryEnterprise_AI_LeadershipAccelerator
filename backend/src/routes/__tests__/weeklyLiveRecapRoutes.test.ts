@@ -60,10 +60,28 @@ describe('public recap route', () => {
     expect(other.body.chat).toBeNull();
     expect(chat).not.toHaveBeenCalled();
   });
-  it('malformed id is 404, a class without a recap is 404', async () => {
-    expect((await request(app).get('/api/live/recap/not-a-uuid')).status).toBe(404);
+  it('malformed id or token shape is 400; a class without a recap is 404', async () => {
+    expect((await request(app).get('/api/live/recap/not-a-uuid')).status).toBe(400);
+    expect((await request(app).get(`/api/live/recap/${SID}?t=a&t=b`)).status).toBe(400);
     m.getRecap.mockResolvedValue(null);
     expect((await request(app).get(`/api/live/recap/${SID}`)).status).toBe(404);
+  });
+  it('an overview that breaks a content rule is never served publicly', async () => {
+    m.getRecap.mockResolvedValue({ session_id: SID, summary: { ...summary, headline: 'Join free tonight' }, next_event_url: null, test_sent_at: null } as never);
+    expect((await request(app).get(`/api/live/recap/${SID}`)).status).toBe(404);
+  });
+  it('a tampered or expired token: overview only, one AuthError log line with no token and no email', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const tampered = mintRecapToken(SID, 'g1').slice(0, -3) + 'abc';
+    const res = await request(app).get(`/api/live/recap/${SID}`).query({ t: tampered });
+    expect(res.status).toBe(200);
+    expect(res.body.chat).toBeNull();
+    const lines = warn.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('AuthError'));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain(SID);
+    expect(lines[0]).not.toContain(tampered);
+    expect(lines[0]).not.toMatch(/@/);
+    warn.mockRestore();
   });
 });
 
@@ -76,10 +94,13 @@ describe('recap opt-out', () => {
     expect(m.addOptOut).toHaveBeenCalledWith('ana@x.com');
     expect(a.text).toContain('You will not get class recaps anymore');
   });
-  it('a bad token is a 400 page and records nothing', async () => {
+  it('a bad token is a 400 page, records nothing, and logs AuthError', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
     const res = await request(app).get('/api/live/recap/unsubscribe').query({ t: 'garbage' });
     expect(res.status).toBe(400);
     expect(m.addOptOut).not.toHaveBeenCalled();
+    expect(warn.mock.calls.some((c) => String(c[0]).includes('"error_class":"AuthError"'))).toBe(true);
+    warn.mockRestore();
   });
 });
 

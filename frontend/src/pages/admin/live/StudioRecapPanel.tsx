@@ -32,6 +32,7 @@ export default function StudioRecapPanel({ sessionId, onClose }: { sessionId: st
   const [violations, setViolations] = useState<RecapViolation[]>([]);
   const [confirming, setConfirming] = useState(false);
   const [result, setResult] = useState<RecapSendResult | null>(null);
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -63,6 +64,7 @@ export default function StudioRecapPanel({ sessionId, onClose }: { sessionId: st
     if (d.source === 'ai') await load();
     setMsg({ kind: d.source === 'ai' ? 'ok' : 'error', text: d.source === 'ai' ? 'Drafted from the class deck. Read it, edit, then save.' : 'The draft did not come back; write the overview by hand.' });
   });
+  const preview = () => run('preview', async () => { setPreviewHtml((await sendRecap(sessionId, 'preview')).html); });
   const test = () => run('test', async () => { const r = await sendRecap(sessionId, 'test'); await load(); setMsg({ kind: 'ok', text: `Test copy sent to ${r.to}.` }); });
   const sendAll = () => run('send', async () => { const r = await sendRecap(sessionId, 'send'); setResult(r); setConfirming(false); await load(); });
 
@@ -118,12 +120,24 @@ export default function StudioRecapPanel({ sessionId, onClose }: { sessionId: st
 
         <div className="cls-recap-actions">
           <button type="button" className="cls-btn cls-btn-ghost" onClick={save} disabled={busy !== null} data-testid="recap-save">{busy === 'save' ? 'Saving...' : 'Save'}</button>
+          <button type="button" className="cls-btn cls-btn-ghost" onClick={preview} disabled={busy !== null || dirty || !state.hasSavedSummary} data-testid="recap-preview">{busy === 'preview' ? 'Loading...' : 'Preview the email'}</button>
           <button type="button" className="cls-btn cls-btn-ghost" onClick={test} disabled={busy !== null || dirty || !state.hasSavedSummary} data-testid="recap-test">{busy === 'test' ? 'Sending...' : 'Send a test to Ali'}</button>
           <button type="button" className="cls-btn cls-btn-primary" onClick={() => setConfirming(true)} disabled={busy !== null || !ready || state.dry.toSend === 0} data-testid="recap-send">
             Send to {state.dry.toSend} {state.dry.toSend === 1 ? 'person' : 'people'}
           </button>
         </div>
-        {!ready && <p className="cls-label" data-testid="recap-send-why">To send: save the overview, paste the https Eventbrite link, then send the test to Ali.</p>}
+        {!ready && <p className="cls-label" data-testid="recap-send-why">To send: save the overview, paste the https Eventbrite link, then send the test to Ali. Any change after the test needs a new test.</p>}
+        {ready && state.counts.failed > 0 && (
+          <button type="button" className="cls-btn cls-btn-ghost" onClick={() => setConfirming(true)} disabled={busy !== null} data-testid="recap-retry">
+            Retry the {state.counts.failed} that failed
+          </button>
+        )}
+        {previewHtml && (
+          <div data-testid="recap-preview-frame">
+            <iframe title="Recap email preview" sandbox="" srcDoc={previewHtml} style={{ width: '100%', height: 520, border: '1px solid var(--border-default, #e2e8f0)', borderRadius: 8 }} />
+            <button type="button" className="cls-btn cls-btn-ghost" onClick={() => setPreviewHtml(null)}>Close preview</button>
+          </div>
+        )}
 
         {confirming && (
           <div className="cls-note cls-note-warn" role="alertdialog" aria-label="Confirm send" data-testid="recap-confirm">

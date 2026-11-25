@@ -58,7 +58,7 @@ describe('recap send', () => {
     send.mockRejectedValueOnce(Object.assign(new Error('550'), { name: 'SmtpError' })).mockResolvedValueOnce({ messageId: 'ok' });
     const r = await sendAll(SID, noSleep);
     expect(r).toMatchObject({ sent: 1, failed: 1 });
-    expect(m.finishSend).toHaveBeenCalledWith(SID, 'ana@x.com', false, expect.objectContaining({ errorClass: 'Error' }));
+    expect(m.finishSend).toHaveBeenCalledWith(SID, 'ana@x.com', false, expect.objectContaining({ errorClass: 'SendError' }));
   });
   it('refuses the real send until the test copy went to Ali', async () => {
     m.getRecap.mockResolvedValue({ session_id: SID, summary, next_event_url: 'https://www.eventbrite.com/e/123', test_sent_at: null } as never);
