@@ -21,6 +21,8 @@ jest.mock('../../../models/EnterpriseIntake', () => ({
   default: { findAll: (...a: any[]) => mockFindAll(...a), findByPk: (...a: any[]) => mockFindByPk(...a) },
 }));
 jest.mock('../../../models/ProjectUnderstandingRecord', () => ({ __esModule: true, default: { findByPk: jest.fn().mockResolvedValue({ items: [{ dimension: 'systems', value: 'McLeod' }] }) } }));
+const mockDemoView = jest.fn();
+jest.mock('../../../services/enterpriseIntake/enterpriseIntakeDemo', () => ({ clientDemoView: (...a: any[]) => mockDemoView(...a) }));
 jest.mock('../../../services/enterpriseIntake/enterpriseIntakeSync', () => ({ stageOf: () => 'Interviewed' }));
 jest.mock('../../../services/enterpriseIntake/enterpriseIntakeActions', () => {
   class ActionRefused extends Error {
@@ -100,6 +102,15 @@ describe('reads', () => {
     const res = await request(app()).get(BASE).set('Authorization', admin());
     expect(res.status).toBe(200);
     expect(res.body.clients[0]).toMatchObject({ company: 'Acme Logistics', stage: 'Interviewed', hoursPerWeek: 20, hoursPerYear: 1040 });
+  });
+
+  it('L13.7: the demo is read fresh on every load and never cached', async () => {
+    mockDemoView.mockResolvedValueOnce({ state: 'ready', commandCenterUrl: 'one' }).mockResolvedValueOnce({ state: 'ready', commandCenterUrl: 'two' });
+    const get = () => request(app()).get(`${BASE}/${ID}`).set('Authorization', admin());
+    const a = await get();
+    expect(a.headers['cache-control']).toBe('no-store');
+    expect(a.body.client.demo.commandCenterUrl).toBe('one');
+    expect((await get()).body.client.demo.commandCenterUrl).toBe('two');
   });
 
   it('one client carries the write-up and the actions\' inputs', async () => {

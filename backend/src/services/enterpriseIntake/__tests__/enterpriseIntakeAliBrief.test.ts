@@ -10,6 +10,8 @@ jest.mock('../../../models/EnterpriseIntake', () => ({
   default: { findByPk: (...a: any[]) => mockFindByPk(...a), findAll: (...a: any[]) => mockFindAll(...a), update: (...a: any[]) => mockUpdate(...a) },
 }));
 jest.mock('../../../models/ProjectUnderstandingRecord', () => ({ __esModule: true, default: { findByPk: (...a: any[]) => mockRecord(...a) } }));
+const mockDemoView = jest.fn();
+jest.mock('../enterpriseIntakeDemo', () => ({ clientDemoView: (...a: any[]) => mockDemoView(...a) }));
 jest.mock('../enterpriseIntakeEmails', () => ({ sendAliBrief: (s: string, h: string) => mockSend(s, h) }));
 
 import { FREE_WORD_RULE } from '../../content/bannedCopyRule';
@@ -44,6 +46,7 @@ beforeEach(() => {
   mockUpdate.mockResolvedValue([1]);
   mockRecord.mockResolvedValue({ items: [{ dimension: 'systems', value: 'McLeod TMS' }] });
   mockSend.mockResolvedValue(undefined);
+  mockDemoView.mockResolvedValue({ state: 'ready', message: 'The Command Center and demo are ready to show.', commandCenterUrl: 'https://enterprise.colaberry.ai/api/platform-view/SECRET/', demoUrl: 'https://enterprise.colaberry.ai/api/platform-view/SECRET/demo/', linkExpiresAt: 'T' });
   jest.spyOn(console, 'log').mockImplementation(() => undefined);
   jest.spyOn(console, 'error').mockImplementation(() => undefined);
 });
@@ -96,6 +99,26 @@ describe('the brief', () => {
     expect(daysAway(MEETING, new Date('2026-11-23T06:00:00Z'))).toBe('today');
     expect(daysAway(MEETING, new Date('2026-11-22T16:00:00Z'))).toBe('tomorrow');
     expect(daysAway(MEETING, NOW)).toBe('in 2 days');
+  });
+});
+
+describe('L13.7: the demo in the brief', () => {
+  it('says it is ready, links to Admin, and never carries a demo link', async () => {
+    mockFindByPk.mockResolvedValue(intake());
+    await sendAliBriefOnce('i-1', NOW);
+    const h = mockSend.mock.calls[0][1];
+    expect(h).toContain('Demo ready');
+    expect(h).toContain('The Command Center and demo are ready to show.');
+    expect(h).toContain('/admin/enterprise-clients/i-1');
+    expect(h).not.toContain('platform-view');
+    expect(h).not.toContain('SECRET');
+  });
+
+  it.each([['building', 'Demo not ready yet'], ['unknown', 'Demo not ready yet'], ['failed', 'Demo NOT ready'], ['refused', 'Demo NOT ready']])('%s reads as %s', (state, label) => {
+    const h = buildAliBriefHtml({ intake: intake(), facts: [], now: NOW, adminUrl: 'x', demo: { state: state as any, message: 'Why <b>' } });
+    expect(h).toContain(label);
+    expect(h).toContain('Why &lt;b&gt;');
+    expect(h).not.toContain('Demo ready');
   });
 });
 

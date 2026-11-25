@@ -10,6 +10,8 @@ const mockRunTurn = jest.fn();
 const mockCallback = jest.fn();
 const mockIntakeCreate = jest.fn();
 const mockIntakeFindOne = jest.fn();
+const mockIntakeFindByPk = jest.fn();
+const mockIntakeUpdate = jest.fn();
 
 jest.mock('../../../config/env', () => ({ env: mockEnv }));
 // The real resolveAgentId lives in synthflowService, whose import graph opens the database. The rule
@@ -21,7 +23,8 @@ jest.mock('../../../models/EnterpriseIntake', () => ({
   __esModule: true,
   default: {
     create: (...a: any[]) => mockIntakeCreate(...a),
-    findByPk: jest.fn(),
+    findByPk: (...a: any[]) => mockIntakeFindByPk(...a),
+    update: (...a: any[]) => mockIntakeUpdate(...a),
     findOne: (...a: any[]) => mockIntakeFindOne(...a),
   },
 }));
@@ -38,6 +41,9 @@ jest.mock('../../callbackRequestService', () => ({ requestInstantCallback: (...a
 const mockOpenList = jest.fn();
 const mockPostInterview = jest.fn();
 jest.mock('../enterpriseIntakeResearch', () => ({ researchSoon: jest.fn() }));
+// The real demo module, over the one door: what is pinned here is the whole path to that door.
+const mockStartDemo = jest.fn();
+jest.mock('../../sbp/clientDemo', () => ({ startClientDemo: (...a: any[]) => mockStartDemo(...a), clientDemoStatus: jest.fn() }));
 jest.mock('../enterpriseIntakeBasecamp', () => ({
   openClientListSoon: (...a: any[]) => mockOpenList(...a),
   postInterviewSoon: (...a: any[]) => mockPostInterview(...a),
@@ -316,5 +322,87 @@ describe('"Call me now"', () => {
     await recordEnterpriseCallOutcome('call_9', { understanding: 'created', understanding_id: 'u-2' }, 'AI: Hello\nThem: Hi');
     expect(intake.update).toHaveBeenCalledWith(expect.objectContaining({ status: 'interviewed', interviewed_via: 'call', transcript: 'AI: Hello\nThem: Hi' }));
     expect(mockPostInterview).toHaveBeenCalledWith(intake.id);
+  });
+});
+
+describe('L13.7: a finished interview starts the client demo', () => {
+  const flush = async () => { for (let n = 0; n < 30; n++) await new Promise((r) => setImmediate(r)); };
+  /** One stored row behind every read and conditional write, as the database is. */
+  function stored(over: Record<string, unknown> = {}) {
+    const row: any = intakeRow({ understanding_id: null, interviewed_at: null, demo_attempts: 0, demo_failures: 0, demo_claimed_at: null, demo_started_at: null, demo_reason: null, ...over });
+    row.update = jest.fn(async (v: any) => { Object.assign(row, v); });
+    mockIntakeFindByPk.mockImplementation(async () => ({ ...row }));
+    mockIntakeFindOne.mockResolvedValue(row);
+    mockIntakeUpdate.mockImplementation(async (v: any, o: any) => {
+      if ('demo_attempts' in o.where && (row.demo_attempts !== o.where.demo_attempts || row.demo_started_at)) return [0];
+      Object.assign(row, v);
+      return [1];
+    });
+    return row;
+  }
+  const DONE = { done: true, message: 'Thanks.', understanding: 'created', understanding_id: 'u-1' };
+  beforeEach(() => {
+    mockStartDemo.mockResolvedValue({ ok: true, projectId: 'p-1', reused: false });
+    jest.spyOn(console, 'log').mockImplementation(() => undefined);
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+  });
+
+  it('typed: once, with that understanding, and still buildFor none', async () => {
+    mockRunTurn.mockResolvedValue(DONE);
+    await runEnterpriseInterviewTurn(stored() as any, []);
+    await flush();
+    expect(mockStartDemo.mock.calls).toEqual([[{ understandingId: 'u-1' }]]);
+    expect(mockRunTurn.mock.calls[0][0].buildFor).toEqual({ kind: 'none' });
+  });
+
+  it('call: once, with that understanding', async () => {
+    stored({ call_id: 'call_9' });
+    await recordEnterpriseCallOutcome('call_9', { understanding: 'created', understanding_id: 'u-2' }, 'AI: Hi');
+    await flush();
+    expect(mockStartDemo.mock.calls).toEqual([[{ understandingId: 'u-2' }]]);
+  });
+
+  it('a repeated final turn, and a webhook delivered twice, start nothing more', async () => {
+    mockRunTurn.mockResolvedValue(DONE);
+    const row = stored({ call_id: 'call_9' });
+    await runEnterpriseInterviewTurn(row, []);
+    await flush();
+    await runEnterpriseInterviewTurn(row, []);
+    await recordEnterpriseCallOutcome('call_9', { understanding: 'deduplicated', understanding_id: 'u-1' }, 'x');
+    await recordEnterpriseCallOutcome('call_9', { understanding: 'deduplicated', understanding_id: 'u-1' }, 'x');
+    await flush();
+    expect(mockStartDemo).toHaveBeenCalledTimes(1);
+  });
+
+  it('two final turns at the same moment, each with its own copy of the row, start one', async () => {
+    mockRunTurn.mockResolvedValue(DONE);
+    const row = stored();
+    const copy = () => ({ ...row, update: row.update });
+    await Promise.all([runEnterpriseInterviewTurn(copy() as any, []), runEnterpriseInterviewTurn(copy() as any, [])]);
+    await flush();
+    expect(mockStartDemo).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['throws', () => mockStartDemo.mockRejectedValue(new Error('boom'))],
+    ['refuses', () => mockStartDemo.mockResolvedValue({ ok: false, reason: 'daily_cap', error: 'x' })],
+    ['never answers', () => mockStartDemo.mockReturnValue(new Promise(() => undefined))],
+    ['cannot reach the database', () => mockIntakeFindByPk.mockRejectedValue(new Error('db down'))],
+  ])('when the start %s, the client gets the same answer', async (_n, arrange) => {
+    mockRunTurn.mockResolvedValue(DONE);
+    const row = stored();
+    arrange();
+    expect(await runEnterpriseInterviewTurn(row, [])).toEqual({ done: true, message: 'Thanks.', understood: true });
+    await flush();
+  });
+
+  it('starts nothing from the form alone, an unfinished turn or a failed write-up', async () => {
+    await createEnterpriseIntake(FORM, { ipAddress: null, userAgent: null });
+    mockRunTurn.mockResolvedValue({ done: false, message: 'Next?', exchanges: 1 });
+    await runEnterpriseInterviewTurn(stored(), []);
+    mockRunTurn.mockResolvedValue({ done: true, message: 'Thanks.', understanding: 'failed' });
+    await runEnterpriseInterviewTurn(stored(), []);
+    await flush();
+    expect(mockStartDemo).not.toHaveBeenCalled();
   });
 });

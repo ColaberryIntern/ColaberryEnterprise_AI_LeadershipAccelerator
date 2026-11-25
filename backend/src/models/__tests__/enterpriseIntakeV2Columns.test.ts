@@ -23,6 +23,13 @@ const V2: Array<[string, boolean, unknown]> = [
   ['ali_brief_claimed_at', true, undefined],
   ['ali_brief_sent_at', true, undefined],
   ['ali_brief_attempts', false, 0],
+  ['demo_claimed_at', true, undefined],
+  ['demo_attempted_at', true, undefined],
+  ['demo_started_at', true, undefined],
+  ['demo_attempts', false, 0],
+  ['demo_failures', false, 0],
+  ['demo_reason', true, undefined],
+  ['demo_error', true, undefined],
 ];
 
 describe('EnterpriseIntake v2 columns', () => {

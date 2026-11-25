@@ -114,6 +114,17 @@ export interface EnterpriseIntakeAttributes {
   ali_brief_claimed_at?: Date | null;
   ali_brief_sent_at?: Date | null;
   ali_brief_attempts?: number;
+  /**
+   * L13.7: the client's Command Center and demo. Only WHETHER it was started and why not; the links
+   * expire after 12 hours and are never stored. `demo_claimed_at` is held while a start is in flight.
+   */
+  demo_claimed_at?: Date | null;
+  demo_attempted_at?: Date | null;
+  demo_started_at?: Date | null;
+  demo_attempts?: number;
+  demo_failures?: number;
+  demo_reason?: string | null;
+  demo_error?: string | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -198,6 +209,13 @@ class EnterpriseIntake extends Model<EnterpriseIntakeAttributes> implements Ente
   declare ali_brief_claimed_at: Date | null;
   declare ali_brief_sent_at: Date | null;
   declare ali_brief_attempts: number;
+  declare demo_claimed_at: Date | null;
+  declare demo_attempted_at: Date | null;
+  declare demo_started_at: Date | null;
+  declare demo_attempts: number;
+  declare demo_failures: number;
+  declare demo_reason: string | null;
+  declare demo_error: string | null;
   declare createdAt: Date;
   declare updatedAt: Date;
 }
@@ -271,6 +289,13 @@ EnterpriseIntake.init(
     ali_brief_claimed_at: { type: DataTypes.DATE, allowNull: true },
     ali_brief_sent_at: { type: DataTypes.DATE, allowNull: true },
     ali_brief_attempts: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    demo_claimed_at: { type: DataTypes.DATE, allowNull: true },
+    demo_attempted_at: { type: DataTypes.DATE, allowNull: true },
+    demo_started_at: { type: DataTypes.DATE, allowNull: true },
+    demo_attempts: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    demo_failures: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    demo_reason: { type: DataTypes.STRING(30), allowNull: true },
+    demo_error: { type: DataTypes.STRING(500), allowNull: true },
   },
   {
     sequelize,

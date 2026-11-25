@@ -11,6 +11,7 @@ import StudentTaskList from '../../models/StudentTaskList';
 import StudentTask from '../../models/StudentTask';
 import EvidenceRecord from '../../models/EvidenceRecord';
 import { getProjectByEnrollment, listProjectsForEnrollment } from '../projectService';
+import { caseStudyHolderIds, withoutHolders } from './caseStudyHolders';
 import { awardedEvidenceRef } from '../sbp/verification/verificationLatch';
 import { taskPointsForProject } from '../sbp/verification/storyPoints';
 import {
@@ -181,11 +182,14 @@ export async function getOwnedProjectTree(enrollmentId: string, projectId: strin
 
 /** Lightweight list of the student's projects (no task tree), active flagged. */
 export async function listEnrollmentProjectsSummary(enrollmentId: string): Promise<ProjectSummaryDto[]> {
-  const [projects, active] = await Promise.all([
+  const [all, active, holders] = await Promise.all([
     listProjectsForEnrollment(enrollmentId),
     getProjectByEnrollment(enrollmentId),
+    caseStudyHolderIds(enrollmentId),
   ]);
   const activeId = active ? active.id : null;
+  // Only what they built here. See caseStudyHolders.ts.
+  const projects = withoutHolders(all, holders, activeId);
 
   // ONE query for the whole list, not one per project. This runs on the page a
   // student lands on, and the badge is not worth an N+1 there.

@@ -94,7 +94,13 @@ describe('CareerPrepCard (CP5.1)', () => {
     expect(h.querySelector('.cm-prep-floor b')?.textContent).toMatch(/^\d+$/);
     expect(h.querySelector('.cm-prep-bar')?.getAttribute('aria-label')).toBe('Readiness 64, ready at 75');
   });
-  it.each(['explorer', 'business', 'staff'] as const)('hidden for %s, and the summary is never asked for', (audience) => {
+  it('an explorer it is open for (a pilot volunteer) sees the card; one it is not open for does not', () => {
+    expect(mount(<MemoryRouter><CareerPrepCard audience="explorer" now={MON} /></MemoryRouter>).querySelector('[data-testid="cm-prep-card"]')).not.toBeNull();
+    act(() => root!.unmount()); root = null; host?.remove();
+    flag.mockReturnValue(false);
+    expect(mount(<MemoryRouter><CareerPrepCard audience="explorer" now={MON} /></MemoryRouter>).querySelector('[data-testid="cm-prep-card"]')).toBeNull();
+  });
+  it.each(['business', 'staff'] as const)('hidden for %s, and the summary is never asked for', (audience) => {
     const h = mount(<MemoryRouter><CareerPrepCard audience={audience} now={MON} /></MemoryRouter>);
     expect(h.querySelector('[data-testid="cm-prep-card"]')).toBeNull();
     expect(summary).toHaveBeenCalledWith(false);
