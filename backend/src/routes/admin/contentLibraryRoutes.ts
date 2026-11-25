@@ -11,6 +11,7 @@ import {
   createLinkAsset,
   searchLibrary,
   toLibraryView,
+  toLibraryViewResolved,
   updateLibraryAsset,
   uploadLibraryFile,
 } from '../../services/media/mediaLibraryService';
@@ -209,7 +210,7 @@ router.post('/api/admin/marketing/library/link', requireAdmin, async (req: Reque
       rightsExpiresAt: body.data.rights_expires_at ? new Date(body.data.rights_expires_at) : null,
       uploadedBy: req.admin?.sub ?? null,
     });
-    res.status(201).json({ asset: toLibraryView(asset) });
+    res.status(201).json({ asset: await toLibraryViewResolved(asset) });
   } catch (err) { fail(res, err, 'library_link_failed'); }
 });
 
@@ -247,7 +248,7 @@ router.post('/api/admin/marketing/library/file', requireAdmin, uploadSingle('fil
     });
     // 200 on reuse, 201 on create: the client can tell "already had it" from "added it", and
     // re-uploading the same bytes is a success rather than a conflict.
-    res.status(reused ? 200 : 201).json({ asset: toLibraryView(asset), reused });
+    res.status(reused ? 200 : 201).json({ asset: await toLibraryViewResolved(asset), reused });
   } catch (err) { fail(res, err, 'library_upload_failed'); }
 });
 
@@ -267,7 +268,7 @@ router.patch('/api/admin/marketing/library/:id', requireAdmin, async (req: Reque
         ? undefined
         : (body.data.rights_expires_at === null ? null : new Date(body.data.rights_expires_at)),
     });
-    res.json({ asset: toLibraryView(updated) });
+    res.json({ asset: await toLibraryViewResolved(updated) });
   } catch (err) { fail(res, err, 'library_update_failed'); }
 });
 
@@ -277,7 +278,7 @@ router.post('/api/admin/marketing/library/:id/archive', requireAdmin, async (req
   try {
     const asset = await loadScopedAsset(req, id.data);
     if (!asset) return void res.status(404).json({ error: 'That asset is not in the library.', error_class: 'NotFound' });
-    res.json({ asset: toLibraryView(await archiveLibraryAsset(asset)) });
+    res.json({ asset: await toLibraryViewResolved(await archiveLibraryAsset(asset)) });
   } catch (err) { fail(res, err, 'library_archive_failed'); }
 });
 

@@ -4,6 +4,7 @@ import { WorkflowError } from '../content/contentWorkflowService';
 import { findOrCreateLibraryAsset, ingestFileBytes } from './mediaAssetService';
 import { signedUrl } from './mediaStore';
 import { mediaPublicBaseUrl } from '../publishing/adapterRegistry';
+import { NOT_RECORDED, resolveUploaders, type UploaderLabel, type UploaderSource } from './uploaderLabels';
 
 /**
  * The media library: the logic behind the library screen and the composer's picker.
@@ -121,6 +122,17 @@ export interface LibraryAssetView {
   rightsStatus: RightsStatus;
   archivedAt: string | null;
   createdAt: string | null;
+  /** The raw uploader uuid, or null when the column was never populated. */
+  uploadedBy: string | null;
+  /** Always non-empty. 'Not recorded' when absent, 'Unknown (abcd1234)' when unresolvable. */
+  uploadedByLabel: string;
+  /** Which lookup answered, so the screen can tell a person from a batch job. */
+  uploadedBySource: UploaderSource;
+  /** YouTube views for a link asset. Null means no answer, which is NOT zero views. */
+  viewCount: number | null;
+  likeCount: number | null;
+  /** When the counts above were last fetched, so a stale number is visibly stale. */
+  viewsCheckedAt: string | null;
   /**
    * A signed, time-limited URL for a FILE, so the screen can show and play it. Null for a link
    * (whose playable address is `sourceUrl`) and null when signing is unavailable.
@@ -189,7 +201,17 @@ export function buildLibraryWhere(query: LibraryQuery): WhereOptions {
   return where as WhereOptions;
 }
 
-export function toLibraryView(asset: MediaAsset, now: Date = new Date(), base?: string | null): LibraryAssetView {
+export function toLibraryView(
+  asset: MediaAsset,
+  now: Date = new Date(),
+  base?: string | null,
+  /**
+   * Resolved separately and passed in, for the same reason `base` is: a page of 100 rows
+   * resolves its uploaders in two queries rather than two hundred. Omitting it is allowed
+   * and yields 'Not recorded', so this stays a pure synchronous function.
+   */
+  uploader?: UploaderLabel | null,
+): LibraryAssetView {
   const a = asset as unknown as Record<string, any>;
   // Only a file has bytes to sign. The base is passed in so a caller listing 100 rows resolves it
   // once rather than per row, and so a test can hand in a fixed one.
@@ -217,7 +239,50 @@ export function toLibraryView(asset: MediaAsset, now: Date = new Date(), base?: 
     rightsStatus: rightsStatus({ rights_expires_at: a.rights_expires_at ?? null }, now),
     archivedAt: a.archived_at ? new Date(a.archived_at).toISOString() : null,
     createdAt: a.created_at ? new Date(a.created_at).toISOString() : null,
+    uploadedBy: a.uploaded_by ?? null,
+    uploadedByLabel: uploader ? uploader.label : NOT_RECORDED.label,
+    uploadedBySource: uploader ? uploader.source : NOT_RECORDED.source,
+    ...youtubeView(a.metadata),
   };
+}
+
+/**
+ * Read the stored YouTube counts off the row.
+ *
+ * Written by the scheduled refresh, never fetched during a render: an external call on
+ * the critical path of a grid would make the page as slow and as fragile as YouTube is.
+ * Absent counts stay null rather than becoming 0, because a video that is private or
+ * deleted must not read as a video nobody watched.
+ */
+export function youtubeView(metadata: unknown): {
+  viewCount: number | null;
+  likeCount: number | null;
+  viewsCheckedAt: string | null;
+} {
+  const yt = (metadata as { youtube?: Record<string, unknown> } | null | undefined)?.youtube;
+  if (!yt) return { viewCount: null, likeCount: null, viewsCheckedAt: null };
+  const num = (v: unknown): number | null =>
+    typeof v === 'number' && Number.isFinite(v) ? v : null;
+  return {
+    viewCount: num(yt.viewCount),
+    likeCount: num(yt.likeCount),
+    viewsCheckedAt: typeof yt.checkedAt === 'string' ? yt.checkedAt : null,
+  };
+}
+
+/**
+ * The one-asset version, for routes that return a single row after a write.
+ *
+ * Without this, a tile would lose its uploader line the moment it was edited, which
+ * reads as the save having destroyed something.
+ */
+export async function toLibraryViewResolved(
+  asset: MediaAsset,
+  now: Date = new Date(),
+): Promise<LibraryAssetView> {
+  const id = (asset as unknown as { uploaded_by?: string | null }).uploaded_by ?? null;
+  const labels = await resolveUploaders([id]);
+  return toLibraryView(asset, now, undefined, id ? labels.get(id) ?? null : null);
 }
 
 
@@ -401,8 +466,14 @@ export async function searchLibrary(query: LibraryQuery, now: Date = new Date())
   });
   // Resolved once for the whole page rather than per row.
   const base = mediaPublicBaseUrl();
+  const labels = await resolveUploaders(
+    rows.map((row) => (row as unknown as { uploaded_by?: string | null }).uploaded_by ?? null),
+  );
   return {
-    assets: rows.map((row) => toLibraryView(row, now, base)),
+    assets: rows.map((row) => {
+      const id = (row as unknown as { uploaded_by?: string | null }).uploaded_by ?? null;
+      return toLibraryView(row, now, base, id ? labels.get(id) ?? null : null);
+    }),
     total: count,
     limit,
     offset,

@@ -601,6 +601,16 @@ const DYNAMIC_SCHEDULE_REGISTRY: DynamicScheduleEntry[] = [
     label: 'Story verification sweep, the cadence floor (every 15 minutes)',
   },
   {
+    agentName: 'YoutubeViewRefresh',
+    // 06:20 Central, before anyone opens the library for the day. One quota unit.
+    hardcodedSchedule: '20 6 * * *',
+    dynamicImport: async () => {
+      const { runYoutubeViewRefresh } = await import('./media/refreshYoutubeViews');
+      await runYoutubeViewRefresh();
+    },
+    label: 'Library YouTube view counts (daily, 06:20 Central)',
+  },
+  {
     agentName: 'MarketingPublishingWorker',
     hardcodedSchedule: '* * * * *',
     dynamicImport: async () => {
