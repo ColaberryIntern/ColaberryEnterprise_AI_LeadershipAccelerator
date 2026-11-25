@@ -5,15 +5,16 @@
 jest.mock('../runStore', () => ({
   queueRun: jest.fn(),
   countFailedRuns: jest.fn(),
+  countRunsSince: jest.fn(async () => 0),
   transitionRun: jest.fn(async () => true),
   failStaleRuns: jest.fn(async () => 0),
 }));
 jest.mock('../../../../config/env', () => ({
-  env: { sbpPlatformBuild: 'all', platformBuildRepo: 'o/r', platformBuildWorkflow: 'platform-build-runner.yml' },
+  env: { sbpPlatformBuild: 'on', platformBuildDailyMax: 5, platformBuildRepo: 'o/r', platformBuildWorkflow: 'platform-build-runner.yml' },
 }));
 
 /* eslint-disable @typescript-eslint/no-var-requires */
-const runStore = require('../runStore') as { queueRun: jest.Mock; countFailedRuns: jest.Mock; transitionRun: jest.Mock; failStaleRuns: jest.Mock };
+const runStore = require('../runStore') as { queueRun: jest.Mock; countFailedRuns: jest.Mock; countRunsSince: jest.Mock; transitionRun: jest.Mock; failStaleRuns: jest.Mock };
 const { env } = require('../../../../config/env') as { env: { sbpPlatformBuild: string } };
 import { dispatchRun } from '../dispatch';
 
@@ -61,7 +62,7 @@ describe('dispatchRun', () => {
 });
 
 describe('queuePlatformBuild', () => {
-  const input = { projectId: 'p', enrollmentId: 'e', planVersion: 2, planSha256: 'sha', correlationId: 'c' };
+  const input = { projectId: 'p', enrollmentId: 'e', planVersion: 2, planSha256: 'sha', correlationId: 'c', setupMode: 'platform' as const };
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { queuePlatformBuild } = require('../queue') as typeof import('../queue');
   const realFetch = global.fetch;
@@ -70,19 +71,30 @@ describe('queuePlatformBuild', () => {
     runStore.queueRun.mockReset();
     runStore.countFailedRuns.mockReset().mockResolvedValue(0);
     runStore.transitionRun.mockReset().mockResolvedValue(true);
-    env.sbpPlatformBuild = 'all';
+    env.sbpPlatformBuild = 'on';
+    runStore.countRunsSince.mockReset().mockResolvedValue(0);
     process.env.GITHUB_TOKEN = 'gh';
     jest.spyOn(console, 'log').mockImplementation(() => undefined);
     jest.spyOn(console, 'error').mockImplementation(() => undefined);
   });
   afterEach(() => { global.fetch = realFetch; jest.restoreAllMocks(); });
 
-  it('does nothing when the flag does not cover the enrollment', async () => {
-    env.sbpPlatformBuild = 'off';
+  it('never spends on a student build, whatever the switch says', async () => {
+    expect(await queuePlatformBuild({ ...input, setupMode: 'student' })).toBe('flag_off');
+    expect(await queuePlatformBuild({ ...input, setupMode: undefined })).toBe('flag_off');
+    expect(runStore.queueRun).not.toHaveBeenCalled();
+  });
+
+  it.each(['off', '', 'all', 'ON', 'aced5b39-0b47-496a-b172-e1f5c042bf8a'])('reads the switch value %p as off', async (v) => {
+    env.sbpPlatformBuild = v;
     expect(await queuePlatformBuild(input)).toBe('flag_off');
     expect(runStore.queueRun).not.toHaveBeenCalled();
-    env.sbpPlatformBuild = 'someone-else';
-    expect(await queuePlatformBuild(input)).toBe('flag_off');
+  });
+
+  it('stops at the daily cap', async () => {
+    runStore.countRunsSince.mockResolvedValue(5);
+    expect(await queuePlatformBuild(input)).toBe('daily_cap');
+    expect(runStore.queueRun).not.toHaveBeenCalled();
   });
 
   it('does not start a second run when one is live (republish is idempotent)', async () => {

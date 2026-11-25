@@ -39,7 +39,7 @@ import { stagedGenerationEnabled } from './stagedGeneration';
 import { GateResult, formatViolations, blockingViolations, advisoryViolations, isPublishable } from './planGate';
 import { gateAndRepair } from './planRepair';
 import { scopeAgents, agentScopingEnabledFor } from './scopeAgents';
-import { setupForPublish } from './setupStories';
+import { setupForPublish, setupModeFor } from './setupStories';
 import { env } from '../../config/env';
 import { BuildPlan } from './planContract';
 import { renderDocs } from './renderDocs';
@@ -52,13 +52,13 @@ import { Schedule } from './buildSchedule';
 import { scheduleForEnrollment, truthForRender } from './scheduleForEnrollment';
 import { hashPlan } from './planHash';
 import {
-  saveIntake, getIntake, savePlanDraft, getPlan, publishPlan, firstPublishedAt, StoredPlan, BuildIntake,
+  saveIntake, getIntake, savePlanDraft, getPlan, publishPlan, firstPublishedAt, StoredPlan, BuildIntake, SetupMode,
   listIntakesByStatus, claimStaleGeneratingIntake,
 } from './planStore';
 import { getProvisionQueue } from './boundedQueue';
 import { setProjectNameIfEmpty } from './projectNaming';
 import { buildBriefText } from './buildBriefText';
-import { queuePlatformBuild } from './platformBuild/queue';
+import { queuePlatformBuild, platformBuildOn } from './platformBuild/queue';
 
 // Moved to its own module (this file is past the CLAUDE.md size ceiling); re-exported so every
 // existing importer keeps working unchanged.
@@ -140,6 +140,12 @@ export interface StartBuildInput {
    * `expected_sha256` so the plan they read is provably the plan that ships.
    */
   holdForReview?: boolean;
+  /**
+   * Who makes the Command Center and demo (L13.7). Default 'student': STORY-000 and STORY-900 are tasks
+   * on the board and cost us nothing. 'platform': we build and host them, about $2 a project. Only
+   * `clientDemo.ts` passes it; no student route accepts it from a request.
+   */
+  setupMode?: SetupMode;
 }
 
 /**
@@ -265,6 +271,7 @@ export async function startBuild(input: StartBuildInput): Promise<{ projectId: s
     // rebuilds the job from here, so a hold that existed only on this in-memory input was a
     // hold the next restart quietly dropped - and the build published itself to the student.
     hold_for_review: input.holdForReview === true,
+    setup_mode: input.setupMode ?? 'student',
   });
   log('sbp_build_started', correlationId, 'success', { projectId: input.projectId, idea_chars: input.idea.length });
 
@@ -606,6 +613,7 @@ function inputFromIntake(intake: BuildIntake, enrollmentId: string): StartBuildI
     // Restored from the row. Without this the resumed generation is identical to the
     // original EXCEPT that it publishes, which is the one difference that matters.
     holdForReview: intake.hold_for_review === true,
+    setupMode: intake.setup_mode === 'platform' ? 'platform' : 'student',
   };
 }
 
@@ -775,8 +783,9 @@ export async function publishBuild(
    * Includes `|| already materialized`, so a republish keeps a demo the student is already
    * building even if the flag has since been narrowed. See connectedDemoFlag.ts.
    */
+  const setupMode = await setupModeFor(projectId);
   const { connectedDemo, setupRetired } = await setupForPublish(projectId, opts.enrollmentId, {
-    platformBuild: env.sbpPlatformBuild, connectedDemo: env.sbpConnectedDemo,
+    platformBuild: setupMode === 'platform' && platformBuildOn(), connectedDemo: env.sbpConnectedDemo,
   });
 
   // Second and last chance to name the project. Five of the twenty live builds
@@ -806,11 +815,11 @@ export async function publishBuild(
     await markProjectPendingApproval(projectId, opts.enrollmentId);
     await setStatus(projectId, 'awaiting_repo');
     // L13.1: the platform builds the Command Center and Demo itself, no repo needed. Never
-    // throws, no-op unless SBP_PLATFORM_BUILD covers this enrollment. Not awaited: the dispatch
+    // throws, no-op unless this build is in platform mode. Not awaited: the dispatch
     // retries for up to ~50s and the publish must not wait on GitHub. See platformBuild/queue.ts.
     void queuePlatformBuild({
       projectId, enrollmentId: opts.enrollmentId, planVersion: published.version,
-      planSha256: published.plan_sha256, correlationId: correlationId ?? null,
+      planSha256: published.plan_sha256, correlationId: correlationId ?? null, setupMode,
     });
     log('sbp_build_published_no_repo', correlationId, 'partial', {
       projectId, version: published.version, lists: m.lists, tasks: m.tasks,
@@ -899,11 +908,11 @@ export async function publishBuild(
 
   await setStatus(projectId, 'published');
   // L13.1: the platform builds the Command Center and Demo itself, no repo needed. Never
-  // throws, no-op unless SBP_PLATFORM_BUILD covers this enrollment. Not awaited: the dispatch
+  // throws, no-op unless this build is in platform mode. Not awaited: the dispatch
   // retries for up to ~50s and the publish must not wait on GitHub. See platformBuild/queue.ts.
   void queuePlatformBuild({
     projectId, enrollmentId: opts.enrollmentId, planVersion: published.version,
-    planSha256: published.plan_sha256, correlationId: correlationId ?? null,
+    planSha256: published.plan_sha256, correlationId: correlationId ?? null, setupMode,
   });
   log('sbp_build_published', correlationId, 'success', {
     projectId, version: published.version, commit: write.commitSha, files: write.changedPaths.length,

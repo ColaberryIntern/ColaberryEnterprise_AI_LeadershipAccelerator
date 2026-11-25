@@ -6,7 +6,8 @@
  *
  * ## When it does nothing (and says why)
  *
- *   flag_off                 SBP_PLATFORM_BUILD does not cover this enrollment
+ *   flag_off                 the build is in student mode, or the master switch is off
+ *   daily_cap                PLATFORM_BUILD_DAILY_MAX runs already started in the last 24 hours
  *   already_built_or_running the project already has a live run (queued, dispatched, building
  *                            or uploaded). A republish does NOT rebuild: the Command Center reads
  *                            its plan, progress and schedule LIVE from the platform, so a new plan
@@ -15,13 +16,13 @@
  *                            then delete the failed rows (see directives/platform_build.md).
  */
 import { env } from '../../../config/env';
-import { connectedDemoEnabledFor } from '../connectedDemoFlag';
-import { queueRun, countFailedRuns, transitionRun, failStaleRuns } from './runStore';
+import type { SetupMode } from '../planStore';
+import { queueRun, countFailedRuns, countRunsSince, transitionRun, failStaleRuns } from './runStore';
 import { dispatchRun } from './dispatch';
 
 export const MAX_FAILED_RUNS = 3;
 
-export type QueueOutcome = 'dispatched' | 'flag_off' | 'already_built_or_running' | 'attempts_exhausted' | 'dispatch_failed' | 'error';
+export type QueueOutcome = 'dispatched' | 'flag_off' | 'daily_cap' | 'already_built_or_running' | 'attempts_exhausted' | 'dispatch_failed' | 'error';
 
 export interface QueueInput {
   projectId: string;
@@ -29,11 +30,17 @@ export interface QueueInput {
   planVersion: number;
   planSha256: string;
   correlationId: string | null;
+  /** Absent means 'student', which never spends. */
+  setupMode?: SetupMode;
 }
 
-/** Same three-way setting as SBP_CONNECTED_DEMO: off | all | comma-separated enrollment ids. */
-export function platformBuildEnabledFor(enrollmentId: string | null | undefined, setting: string | null | undefined): boolean {
-  return connectedDemoEnabledFor(enrollmentId, setting);
+/** The master switch. Only the exact word counts, so a leftover enrollment list reads as off. */
+export function platformBuildOn(): boolean {
+  return env.sbpPlatformBuild === 'on';
+}
+
+export function runsInLastDay(): Promise<number> {
+  return countRunsSince(24);
 }
 
 function log(event: string, outcome: 'success' | 'failure' | 'partial', correlationId: string | null, context: Record<string, unknown>, errorClass?: string | null): void {
@@ -53,7 +60,7 @@ function log(event: string, outcome: 'success' | 'failure' | 'partial', correlat
 export async function queuePlatformBuild(input: QueueInput): Promise<QueueOutcome> {
   const ctx = { projectId: input.projectId, planVersion: input.planVersion };
   try {
-    if (!platformBuildEnabledFor(input.enrollmentId, env.sbpPlatformBuild)) return 'flag_off';
+    if (input.setupMode !== 'platform' || !platformBuildOn()) return 'flag_off';
 
     // A run GitHub accepted but never ran would otherwise hold the project's only live slot forever.
     const stale = await failStaleRuns(input.projectId);
@@ -62,6 +69,11 @@ export async function queuePlatformBuild(input: QueueInput): Promise<QueueOutcom
     if ((await countFailedRuns(input.projectId)) >= MAX_FAILED_RUNS) {
       log('platform_build_attempts_exhausted', 'partial', input.correlationId, ctx);
       return 'attempts_exhausted';
+    }
+
+    if ((await runsInLastDay()) >= env.platformBuildDailyMax) {
+      log('platform_build_daily_cap', 'failure', input.correlationId, { ...ctx, max: env.platformBuildDailyMax }, 'QuotaError');
+      return 'daily_cap';
     }
 
     const { run, created } = await queueRun(input);
