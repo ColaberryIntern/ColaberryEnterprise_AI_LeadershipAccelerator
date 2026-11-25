@@ -13,9 +13,22 @@ jest.mock('../../../../models/Project', () => ({
   default: { findByPk: (...a: any[]) => mockProjectFindByPk(...a) },
 }));
 
+// M1-T2 (Gov Proposal Studio): the gov demo auto-publish reaches into the capture module (dynamic import).
+// Mocked so the recorded-branch gov logic is observable without a GovBuildDemo table. Defaults: host allowed,
+// nothing set yet, write resolves. Non-gov tests never enter the block, so this mock is inert for them.
+const mockSetGovBuildDemo = jest.fn().mockResolvedValue(undefined);
+const mockGetGovBuildDemo = jest.fn().mockResolvedValue(null);
+const mockIsAllowedDemoUrl = jest.fn().mockReturnValue(true);
+jest.mock('../../../factory/proposal/captureStoryArtifact', () => ({
+  setGovBuildDemo: (...a: any[]) => mockSetGovBuildDemo(...a),
+  getGovBuildDemo: (...a: any[]) => mockGetGovBuildDemo(...a),
+  isAllowedDemoUrl: (...a: any[]) => mockIsAllowedDemoUrl(...a),
+}));
+
 import {
   derivePagesUrl, fetchPagesUrl, pagesResponds, recordPagesUrlIfLive,
 } from '../pagesUrlService';
+import { CONNECTED_DEMO_DIR } from '../../connectedDemoStory';
 
 const PROJECT = '40a5cea6-ace8-4734-8220-7e62df2111e5';
 const OLD_TOKEN = process.env.GITHUB_TOKEN;
@@ -207,6 +220,64 @@ describe('recordPagesUrlIfLive', () => {
     mockProjectFindByPk.mockResolvedValue(null);
     expect((await recordPagesUrlIfLive(PROJECT, 'a', 'cc', { fetchImpl: githubFetch() })).outcome)
       .toBe('no_project');
+  });
+});
+
+// ── M1-T2: gov connected-demo auto-publish on the recorded branch ───────────
+
+/**
+ * When a GOV project's Command Center URL is first recorded, the connected demo URL
+ * (<command_center_url>demo/) must auto-publish to Build Evidence — once, honouring a
+ * human-set URL, respecting the host allowlist, and never throwing. A non-gov project
+ * must be entirely unaffected.
+ */
+describe('gov connected-demo auto-publish (M1-T2)', () => {
+  const GOV_SITE = 'https://colaberryintern.github.io/AcceleratorTesting/';
+  const govRow = () => projectRow({ kind: 'gov', gov_delivery_project_id: 'dp-9' });
+  const recordGov = (row: any) => {
+    mockProjectFindByPk.mockResolvedValue(row);
+    return recordPagesUrlIfLive(PROJECT, 'ColaberryIntern', 'AcceleratorTesting', {
+      fetchImpl: githubFetch({ pages: { html_url: GOV_SITE }, live: [GOV_SITE] }),
+    });
+  };
+
+  it('publishes <command_center_url>demo/ to the gov demo store when the host is allowed and none is set', async () => {
+    mockGetGovBuildDemo.mockResolvedValueOnce(null);
+    mockIsAllowedDemoUrl.mockReturnValueOnce(true);
+    const res = await recordGov(govRow());
+    expect(res.outcome).toBe('recorded');                               // the Command Center write still happens
+    expect(mockSetGovBuildDemo).toHaveBeenCalledTimes(1);
+    expect(mockSetGovBuildDemo).toHaveBeenCalledWith('dp-9', { demoUrl: `${GOV_SITE}${CONNECTED_DEMO_DIR}` });
+  });
+
+  it('SKIPS the write when a demo URL was already set by hand (never overwrites a human)', async () => {
+    mockGetGovBuildDemo.mockResolvedValueOnce({ demoUrl: 'https://set-by-hand.example.com/', captureRoot: null, storyCapturePaths: {} });
+    const res = await recordGov(govRow());
+    expect(res.outcome).toBe('recorded');
+    expect(mockSetGovBuildDemo).not.toHaveBeenCalled();
+  });
+
+  it('SKIPS the write when the demo host is not on the allowlist', async () => {
+    mockGetGovBuildDemo.mockResolvedValueOnce(null);
+    mockIsAllowedDemoUrl.mockReturnValueOnce(false);                    // e.g. github.io not yet in GOV_DEMO_HOST_ALLOWLIST
+    const res = await recordGov(govRow());
+    expect(res.outcome).toBe('recorded');
+    expect(mockSetGovBuildDemo).not.toHaveBeenCalled();
+  });
+
+  it('does NOTHING for a non-gov project — the student path is untouched', async () => {
+    const res = await recordGov(projectRow());                         // no kind:'gov'
+    expect(res.outcome).toBe('recorded');
+    expect(mockSetGovBuildDemo).not.toHaveBeenCalled();
+    expect(mockGetGovBuildDemo).not.toHaveBeenCalled();
+  });
+
+  it('NEVER throws out of the recorded branch even if the demo write fails', async () => {
+    mockGetGovBuildDemo.mockResolvedValueOnce(null);
+    mockIsAllowedDemoUrl.mockReturnValueOnce(true);
+    mockSetGovBuildDemo.mockRejectedValueOnce(new Error('demo store down'));
+    const res = await recordGov(govRow());
+    expect(res.outcome).toBe('recorded');                              // the failure is swallowed, URL still recorded
   });
 });
 

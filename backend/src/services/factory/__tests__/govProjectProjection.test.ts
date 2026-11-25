@@ -39,6 +39,11 @@ jest.mock('../proposal/govProposalReviewRunStore', () => ({ latestRunsForDocs: j
 const resolveGovContractOwner = jest.fn();
 const listGovDemoVideos = jest.fn();
 jest.mock('../govDemoVideos', () => ({ resolveGovContractOwner: (...a: any[]) => resolveGovContractOwner(...a), listGovDemoVideos: (...a: any[]) => listGovDemoVideos(...a) }));
+// M1-T4 (Gov Proposal Studio): the loader read-joins the connected demo URL from the capture module. Mocked so the
+// contract-link projection can be asserted DB-free. Default "no demo" (beforeEach) keeps every other loader test
+// unchanged. The command_center_url half is read straight off project_variables, no mock needed.
+const getGovBuildDemo = jest.fn();
+jest.mock('../proposal/captureStoryArtifact', () => ({ getGovBuildDemo: (...a: any[]) => getGovBuildDemo(...a) }));
 const plain = (v: any) => ({ get: () => ({ ...v }) });
 
 import { toStudentGovProjectView, getStudentGovProjectView, toStudentSubmissionChecklist, assembleProposalDocuments, toStudentMeetings, toStudentVetting, toStudentOpportunitySummary, type ProposalDocSummarySource } from '../govProjectProjection';
@@ -163,7 +168,34 @@ describe('toStudentSubmissionChecklist (pure) — PRICE-FREE', () => {
 });
 
 describe('getStudentGovProjectView (loader) — only a non-archived government project', () => {
-  beforeEach(() => { jest.clearAllMocks(); ctFindAll.mockResolvedValue(trackRows); crFindAll.mockResolvedValue(reqRows); evFindAll.mockResolvedValue([]); asFindAll.mockResolvedValue([]); gprFindAll.mockResolvedValue([]); gpsgFindOne.mockResolvedValue(null); gqFindOne.mockResolvedValue(null); gpbFindOne.mockResolvedValue(null); gpdFindOrCreate.mockResolvedValue([{ get: () => ({}), update: jest.fn() }, true]); gpdFindAll.mockResolvedValue([]); loadAiVettingView.mockResolvedValue(null); ghcFindOne.mockResolvedValue(null); resolveGovContractOwner.mockResolvedValue(null); listGovDemoVideos.mockResolvedValue([]); });
+  beforeEach(() => { jest.clearAllMocks(); ctFindAll.mockResolvedValue(trackRows); crFindAll.mockResolvedValue(reqRows); evFindAll.mockResolvedValue([]); asFindAll.mockResolvedValue([]); gprFindAll.mockResolvedValue([]); gpsgFindOne.mockResolvedValue(null); gqFindOne.mockResolvedValue(null); gpbFindOne.mockResolvedValue(null); gpdFindOrCreate.mockResolvedValue([{ get: () => ({}), update: jest.fn() }, true]); gpdFindAll.mockResolvedValue([]); loadAiVettingView.mockResolvedValue(null); ghcFindOne.mockResolvedValue(null); resolveGovContractOwner.mockResolvedValue(null); listGovDemoVideos.mockResolvedValue([]); getGovBuildDemo.mockResolvedValue(null); });
+
+  // ── M1-T4: link the connected demo + Command Center to the contract (a read join, no new columns) ──
+  it('M1-T4: surfaces demoUrl (gov-build-demo store) + commandCenterUrl (project_variables) on the contract', async () => {
+    dpFindByPk.mockResolvedValue({ ...projectRow, project_variables: { command_center_url: 'https://colaberryintern.github.io/crash/' } });
+    getGovBuildDemo.mockResolvedValue({ demoUrl: 'https://colaberryintern.github.io/crash/demo/', captureRoot: null, storyCapturePaths: {} });
+    const v = await getStudentGovProjectView('dp-1', true, 'id-1');
+    expect(v!.demoUrl).toBe('https://colaberryintern.github.io/crash/demo/');
+    expect(v!.commandCenterUrl).toBe('https://colaberryintern.github.io/crash/');
+    expect(getGovBuildDemo).toHaveBeenCalledWith('dp-1');
+  });
+
+  it('M1-T4: both are null before either is published (no demo row, no command_center_url)', async () => {
+    dpFindByPk.mockResolvedValue({ ...projectRow, project_variables: {} });
+    getGovBuildDemo.mockResolvedValue(null);
+    const v = await getStudentGovProjectView('dp-1', true, 'id-1');
+    expect(v!.demoUrl).toBeNull();
+    expect(v!.commandCenterUrl).toBeNull();
+  });
+
+  it('M1-T4: a demo-store failure never blocks the view (demoUrl falls back to null)', async () => {
+    dpFindByPk.mockResolvedValue({ ...projectRow, project_variables: { command_center_url: 'https://x.github.io/cc/' } });
+    getGovBuildDemo.mockRejectedValue(new Error('demo store down'));
+    const v = await getStudentGovProjectView('dp-1', true, 'id-1');
+    expect(v).not.toBeNull();
+    expect(v!.demoUrl).toBeNull();
+    expect(v!.commandCenterUrl).toBe('https://x.github.io/cc/'); // the command center half still surfaces
+  });
 
   it('returns the view for a government_public_sector project', async () => {
     dpFindByPk.mockResolvedValue(projectRow);
