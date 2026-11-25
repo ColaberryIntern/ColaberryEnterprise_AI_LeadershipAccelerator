@@ -23,7 +23,9 @@ const BACKEND_SRC = path.resolve(__dirname, '..');
 const FIXED_FILES: Record<string, number> = {
   'services/emailService.ts': 49,
   'services/synthflowService.ts': 5,
-  'controllers/synthflowWebhookController.ts': 4,
+  // VS3.2 split: 2 call sites stayed in the controller, 2 moved verbatim with the SMS helpers.
+  'controllers/synthflowWebhookController.ts': 2,
+  'services/synthflowPostCallSms.ts': 2,
   'services/callTranscriptProcessor.ts': 1,
   'controllers/leadController.ts': 1,
   'controllers/adminLeadController.ts': 1,
@@ -52,8 +54,8 @@ const FIXED_FILES: Record<string, number> = {
 describe('PII log redaction coverage (T005 regression guard)', () => {
   const entries = Object.entries(FIXED_FILES);
 
-  it('covers all 24 files identified by the T005 audit, plus the one T515 split out of the Mandrill controller', () => {
-    expect(entries.length).toBe(25);
+  it('covers all 24 files identified by the T005 audit, plus the one T515 split out of the Mandrill controller and the one VS3.2 split out of the Synthflow webhook controller', () => {
+    expect(entries.length).toBe(26);
   });
 
   it('every fixed file still exists on disk', () => {
