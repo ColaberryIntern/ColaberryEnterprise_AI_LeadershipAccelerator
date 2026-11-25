@@ -59,7 +59,7 @@ describe('answerInbound', () => {
     const d = deps();
     expect(await answerInbound(IN, d)).toBe('<Response><Connect/></Response>');
     expect(d.openCall).toHaveBeenCalledWith({ callSid: IN.callSid, number: num(), engine: 'conversation_relay', testMode: true });
-    expect(JSON.stringify([d.openCall.mock.calls, (d.log as jest.Mock).mock.calls])).not.toMatch(/\+1\d{10}/);
+    expect(JSON.stringify([(d.openCall as jest.Mock).mock.calls, (d.log as jest.Mock).mock.calls])).not.toMatch(/\+1\d{10}/);
   });
   it('unknown number or no CallSid: message, no call row, no agent', async () => {
     for (const [i, d] of [[IN, deps({}, {}, null)], [{ ...IN, callSid: undefined }, deps()], [{ ...IN, calledNumber: undefined }, deps()]] as const) {
