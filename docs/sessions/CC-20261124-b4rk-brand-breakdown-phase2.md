@@ -179,13 +179,54 @@ tell whether the guard or the null URL was keeping the link off it. The test now
 a URL, making the guard the only thing that can suppress the link, with a real brand carrying the
 same URL as the control. Killed on re-run.
 
-**The local typecheck proved itself rather than being trusted.** The full project `tsc` here is
-still a false clean (TypeScript 4.9.5 against an `@types/d3-dispatch` using a TS 5 `const` type
-parameter, so the parser aborts before repo source). The scoped invocation was run first on code
-that turned out to have two real errors — `onBrandsLoaded` typed as a prop but never
-destructured, and `InitiativeCardView` imported as a default when it is a named export — and it
-reported both with exact text. That is a stronger control than a planted one. **CI remains the
-type authority.**
+### CI round one failed three backend gates, and the root cause was my compiler
+
+Worth the full record, because the lesson is reusable and the first local run was a false clean.
+
+`backend/package.json` declares `typescript: ^5.7.3`. The hoisted local install is **4.9.5**, and
+`backend/node_modules` holds no typescript at all. 4.9.5 cannot parse the TS 5 `const` type
+parameter in `@types/d3-dispatch`, nor `zod/v4`, so `tsc -p tsconfig.json` aborts inside
+`node_modules` and **a planted control error is never reached**. CI installs fresh, gets 5.7, and
+found what I could not.
+
+**The fix, which should have been step one:** install the declared compiler into the session
+scratchpad — `npm install --no-save typescript@5.7.3` — and run it against the worktree's own
+tsconfig. Nothing inside the repo is touched, no `package.json` changes, no shared
+`node_modules` is mutated, and it adds no dependency to the project. With it, the planted
+control **is** reported, and the whole backend project comes back with 4 errors, every one a
+`TS2307` for `maxmind` or `@anthropic-ai/sdk` — packages this worktree is missing and CI has.
+The same compiler runs the test-file gate under an 8192 MB heap: zero errors in every file this
+branch touches.
+
+What round one caught:
+
+1. **`brandDirectoryService.ts` — a consumer I never opened.** Phase 2 narrowed
+   `BRAND_BY_STREAM`'s values to `BrandKey` on purpose, so a mistyped slug would be a compile
+   error. That file still narrowed with `.filter((s): s is string => ...)`, which is not
+   assignable to a union of literals. Narrowed to `BrandKey` rather than widening the map back
+   out, which would have thrown away the guarantee.
+
+   **The real mistake was the scope of the check, not the edit.** My scoped `tsc` listed the
+   files I had edited. Tightening a type breaks its READERS, and the readers are by definition
+   the files you did not need to touch — so a list built from `git status` is the worst possible
+   proxy for the set at risk.
+
+2. **`revenueFlowService.test.ts` — my own test.** The completeness check reads the figure keys
+   off the headline at run time, precisely so an undeclared figure is caught, which means they
+   cannot be typed as the key union derived from that same headline. Indexed through an explicit
+   `Record<string, string>` lookup.
+
+3. **`frontendTypographyLint` — the ratchet working.** Splitting the card view carried an em dash
+   into a new file, and a new file is allowed none. The dash was introducing what a deadline date
+   means, so it became a colon, which is house style. The ratchet turned DOWN:
+   `AdminRevenueRoomPage` 2 → 1, no entry for the new file, recorded total 2088 → 2087. The dash
+   had sat in the page's baseline unremarked for weeks; moving the code is what forced the
+   question.
+
+**Round two: all 10 gates pass** on `b7cf7bdcd` — Backend typecheck, Backend unit tests, Frontend
+build, Frontend typecheck, Frontend unit tests, Test-file typecheck, Integration tier (Postgres),
+Scan new commits, Secret scan + route-auth lint, Static security scan. `Sweep full history` skips
+by design.
 
 **The 8 failing frontend suites are this worktree's environment, not this change.** Two fail on
 `Cannot find module '@dnd-kit/core'` (a dependency missing from the local hoisted install), two
