@@ -316,6 +316,72 @@ describe('STORY-900 on the board', () => {
 });
 
 /**
+ * M3: the P1-P8 proposal ladder on R1.
+ *
+ * Gov-only (the `proposalStories` flag), injected into the SECOND release (R1 Proposal) of the gov
+ * ladder, chained P1 -> P2 -> ... -> P8 with the head gated on the last R0 Foundation row. Same
+ * replay guarantees as STORY-000/900, and OFF by default so the student path is untouched.
+ */
+describe('P1-P8 proposal ladder on R1', () => {
+  const govPlan: BuildPlan = {
+    project_name: 'Gov Pursuit', descriptor: 'a gov build',
+    requirements: [{ id: 'REQ-001', statement: 'x', kind: 'FUNC', priority: 'must', cluster: 'Core' }],
+    releases: [
+      { key: 'r0', name: 'Foundation', goal: 'g', demo: 'd', week_start: 1, week_end: 1 },
+      { key: 'r1', name: 'Proposal', goal: 'g', demo: 'd', week_start: 2, week_end: 2 },
+      { key: 'r2', name: 'Full build-out', goal: 'g', demo: 'd', week_start: 3, week_end: 3 },
+    ],
+    stories: [story('STORY-001', 'r0', 'Walking skeleton', ['REQ-001'])],
+  };
+  const govPublish = (over: { proposalStories?: boolean; connectedDemo?: boolean } = {}) =>
+    materializePlanAsTasks(PROJECT, ENROLLMENT, govPlan, {
+      schedule: null, now: NOW,
+      connectedDemo: over.connectedDemo ?? true,
+      proposalStories: over.proposalStories ?? true,
+    });
+  const P_IDS = ['STORY-P1', 'STORY-P2', 'STORY-P3', 'STORY-P4', 'STORY-P5', 'STORY-P6', 'STORY-P7', 'STORY-P8'];
+  const proposalRows = () => taskTable.all.filter((r) => /^STORY-P[1-8]$/.test(r.story_id));
+
+  it('creates NO proposal rows when the flag is omitted (student path unchanged)', async () => {
+    await govPublish({ proposalStories: false });
+    expect(proposalRows()).toHaveLength(0);
+  });
+
+  it('injects exactly the eight P-stories into R1, in order and contiguous from position 0', async () => {
+    await govPublish();
+    const rows = proposalRows().sort((a, b) => a.position - b.position);
+    expect(rows.map((r) => r.story_id)).toEqual(P_IDS);
+    expect(rows.every((r) => r.release_key === 'r1')).toBe(true);
+    expect(rows.map((r) => r.position)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+  });
+
+  it('chains P1 -> P2 -> ... -> P8, with P1 gated on the connected demo (the last R0 row)', async () => {
+    await govPublish({ connectedDemo: true });
+    const byId = Object.fromEntries(proposalRows().map((r) => [r.story_id, r]));
+    expect(byId['STORY-P1'].blocked_by).toEqual([CONNECTED_DEMO_STORY_ID]);
+    for (let n = 2; n <= 8; n++) {
+      expect(byId[`STORY-P${n}`].blocked_by).toEqual([`STORY-P${n - 1}`]);
+    }
+  });
+
+  it('gates P1 on the Command Center when there is no connected demo', async () => {
+    await govPublish({ connectedDemo: false });
+    expect(taskTable.find((r) => r.story_id === 'STORY-P1')!.blocked_by).toEqual([COMMAND_CENTER_STORY_ID]);
+  });
+
+  it('is replay-safe: a second publish creates no new proposal rows and does not un-finish one', async () => {
+    await govPublish();
+    const p3 = taskTable.find((r) => r.story_id === 'STORY-P3')!;
+    await p3.update({ status: 'complete' });
+    const afterFirst = taskTable.creates;
+    await govPublish();
+    expect(proposalRows()).toHaveLength(8);
+    expect(taskTable.creates).toBe(afterFirst);                                        // nothing new created
+    expect(taskTable.find((r) => r.story_id === 'STORY-P3')!.status).toBe('complete'); // stays done
+  });
+});
+
+/**
  * The keep-complete override, tested where it actually bites.
  *
  * A mutation setting `keepComplete = false` for the demo row SURVIVED, and the reason matters:
