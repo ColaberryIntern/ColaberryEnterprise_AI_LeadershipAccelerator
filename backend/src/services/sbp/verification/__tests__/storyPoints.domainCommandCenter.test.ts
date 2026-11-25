@@ -69,33 +69,33 @@ describe('the two acceptance constants really do differ — the premise of this 
 describe('commandCenterSpecForProject — resolved, never assumed', () => {
   it('namespaces the id on an agent-domain project', async () => {
     mockDomainKeyForProject.mockResolvedValue('platform');
-    expect((await commandCenterSpecForProject(DOMAIN_PROJECT)).id).toBe('platform.STORY-000');
+    expect((await commandCenterSpecForProject(DOMAIN_PROJECT))!.id).toBe('platform.STORY-000');
   });
 
   it('carries the EIGHT domain criteria, not the SBP five', async () => {
     mockDomainKeyForProject.mockResolvedValue('platform');
     const spec = await commandCenterSpecForProject(DOMAIN_PROJECT);
-    expect(spec.acceptance).toEqual([...DOMAIN_ACCEPTANCE]);
-    expect(spec.acceptance).toHaveLength(8);
+    expect(spec!.acceptance).toEqual([...DOMAIN_ACCEPTANCE]);
+    expect(spec!.acceptance).toHaveLength(8);
   });
 
   it('uses the SAME id builder the board and the repo use, so the three cannot drift', async () => {
     mockDomainKeyForProject.mockResolvedValue('marketing');
-    expect((await commandCenterSpecForProject(DOMAIN_PROJECT)).id)
+    expect((await commandCenterSpecForProject(DOMAIN_PROJECT))!.id)
       .toBe(domainCommandCenterStoryId('marketing'));
   });
 
   it('leaves a non-domain project on the bare id and the SBP five — unchanged behaviour', async () => {
     mockDomainKeyForProject.mockResolvedValue(null);
     const spec = await commandCenterSpecForProject(PLAIN_PROJECT);
-    expect(spec.id).toBe(COMMAND_CENTER_STORY_ID);
-    expect(spec.acceptance).toEqual([...COMMAND_CENTER_ACCEPTANCE]);
+    expect(spec!.id).toBe(COMMAND_CENTER_STORY_ID);
+    expect(spec!.acceptance).toEqual([...COMMAND_CENTER_ACCEPTANCE]);
   });
 
   it('falls back to the bare spec when the lookup THROWS, rather than failing the run', async () => {
     mockDomainKeyForProject.mockRejectedValue(new Error('connection terminated'));
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
-    expect((await commandCenterSpecForProject(DOMAIN_PROJECT)).id).toBe(COMMAND_CENTER_STORY_ID);
+    expect((await commandCenterSpecForProject(DOMAIN_PROJECT))!.id).toBe(COMMAND_CENTER_STORY_ID);
     // It fails soft, but it is never silent: a swallowed catch is a defect.
     expect(warn).toHaveBeenCalled();
     const line = JSON.parse(String(warn.mock.calls[0][0]));
@@ -106,16 +106,16 @@ describe('commandCenterSpecForProject — resolved, never assumed', () => {
   });
 
   it('does not query at all for an empty project id', async () => {
-    expect((await commandCenterSpecForProject('')).id).toBe(COMMAND_CENTER_STORY_ID);
+    expect((await commandCenterSpecForProject(''))!.id).toBe(COMMAND_CENTER_STORY_ID);
     expect(mockDomainKeyForProject).not.toHaveBeenCalled();
   });
 
   it('returns a fresh array each time, so no caller can mutate the shared constant', async () => {
     mockDomainKeyForProject.mockResolvedValue('platform');
     const a = await commandCenterSpecForProject(DOMAIN_PROJECT);
-    a.acceptance.push('tampered');
+    a!.acceptance.push('tampered');
     const b = await commandCenterSpecForProject(DOMAIN_PROJECT);
-    expect(b.acceptance).toHaveLength(8);
+    expect(b!.acceptance).toHaveLength(8);
   });
 });
 

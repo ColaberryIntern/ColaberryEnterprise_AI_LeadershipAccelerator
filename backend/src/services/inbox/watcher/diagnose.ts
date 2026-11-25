@@ -52,6 +52,8 @@ export interface StudentFacts {
   webhookRegistered: boolean;
   webhookLastDeliveryAt: string | null;
   story000Present: boolean;
+  /** L13.4: platform-built, so STORY-000 is absent on purpose. */
+  setupRetired?: boolean;
   acceptanceCriteriaCount: number | null;
   /**
    * Fact groups the read could NOT establish — a query that threw, a table that
@@ -335,6 +337,14 @@ function diagnoseProjectState(facts: StudentFacts, readAt: Date): DiagnosisResul
 
   // Restoring a missing STORY-000 means regenerating a plan, which is a write
   // over student work. That decision is Ali's, always.
+  if (!facts.story000Present && facts.setupRetired) {
+    return {
+      outcome: 'escalate',
+      detail: `${facts.email} is on a platform-built project, which has no STORY-000 on purpose: the platform hosts their `
+        + 'Command Center and demo. Nothing to restore. Diagnosed, not touched.',
+      evidence,
+    };
+  }
   if (!facts.story000Present) {
     return {
       outcome: 'escalate',

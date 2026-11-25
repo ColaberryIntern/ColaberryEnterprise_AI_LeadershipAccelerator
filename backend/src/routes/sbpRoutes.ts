@@ -426,7 +426,9 @@ router.get('/api/portal/sbp/builds/:projectId/stories/:storyId/prompt', requireP
     // a second assembly path for STORY-000 would be a second thing to drift.
     const { COMMAND_CENTER_STORY_ID, commandCenterPrompt } =
       await import('../services/sbp/commandCenterStory');
-    if (!story && storyId.toUpperCase() === COMMAND_CENTER_STORY_ID) {
+    const { setupStoriesRetiredFor } = await import('../services/sbp/setupStories');
+    const setupRetired = await setupStoriesRetiredFor(projectId);
+    if (!story && !setupRetired && storyId.toUpperCase() === COMMAND_CENTER_STORY_ID) {
       const { scheduleForEnrollment } = await import('../services/sbp/scheduleForEnrollment');
       // Null is a normal answer here (cohort with no start date) and the prompt
       // renders without dates rather than throwing, so a schedule lookup that
@@ -490,6 +492,7 @@ router.get('/api/portal/sbp/builds/:projectId/stories/:storyId/prompt', requireP
       manifestPaths: manifest,
       notes: typeof req.query.notes === 'string' ? req.query.notes : undefined,
       projectId,
+      setupRetired,
     });
     res.json({ story_id: story.id, prompt, has_repo: Boolean(repo), paths_verified: manifest.length > 0 });
   } catch (e) { fail(res, e, next); }

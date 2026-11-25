@@ -39,7 +39,7 @@ import { stagedGenerationEnabled } from './stagedGeneration';
 import { GateResult, formatViolations, blockingViolations, advisoryViolations, isPublishable } from './planGate';
 import { gateAndRepair } from './planRepair';
 import { scopeAgents, agentScopingEnabledFor } from './scopeAgents';
-import { connectedDemoForPublish } from './connectedDemoFlag';
+import { setupForPublish } from './setupStories';
 import { env } from '../../config/env';
 import { BuildPlan } from './planContract';
 import { renderDocs } from './renderDocs';
@@ -775,9 +775,9 @@ export async function publishBuild(
    * Includes `|| already materialized`, so a republish keeps a demo the student is already
    * building even if the flag has since been narrowed. See connectedDemoFlag.ts.
    */
-  const connectedDemo = await connectedDemoForPublish(
-    projectId, opts.enrollmentId, env.sbpConnectedDemo,
-  );
+  const { connectedDemo, setupRetired } = await setupForPublish(projectId, opts.enrollmentId, {
+    platformBuild: env.sbpPlatformBuild, connectedDemo: env.sbpConnectedDemo,
+  });
 
   // Second and last chance to name the project. Five of the twenty live builds
   // reached publish with no intake name — the wizard's name field is optional —
@@ -798,7 +798,7 @@ export async function publishBuild(
       opts.enrollmentId, published.plan as BuildPlan, correlationId, windowOrigin,
     );
     const m = await materializePlanAsTasks(
-      projectId, opts.enrollmentId, published.plan as BuildPlan, { schedule, connectedDemo },
+      projectId, opts.enrollmentId, published.plan as BuildPlan, { schedule, connectedDemo, setupRetired },
     );
     await makeActiveProject(opts.enrollmentId, projectId, correlationId);
     // Hold it for review, IF the gate is on for this enrollment (no-op otherwise).
@@ -860,6 +860,7 @@ export async function publishBuild(
     baselineByStory: snapshot.baselineByStory,
     repoWriteAccess,
     connectedDemo,
+    setupRetired,
   });
 
   // Read the manifest that is already in the repo, so the content-hash check in
@@ -889,6 +890,7 @@ export async function publishBuild(
     manifestPaths: files.map((f) => f.path),
     schedule,
     connectedDemo,
+    setupRetired,
   });
   await makeActiveProject(opts.enrollmentId, projectId, correlationId);
   // Hold it for review, IF the gate is on for this enrollment (no-op otherwise).

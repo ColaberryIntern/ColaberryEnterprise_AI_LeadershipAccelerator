@@ -37,9 +37,10 @@ turned on per enrollment.
    `{"event":"uploaded",...}`, and `platform_build_runs.status = 'uploaded'` for that run.
 6. **Open any story of that project in the portal.** Success: "Command Center" and "Demo" buttons
    in the story header open the hosted pages, and both render with no console errors.
-7. **Widen** to more enrollment ids, then to `all`, only after L13.4 (retiring STORY-000 and
-   STORY-900 for platform-built projects) has shipped. Until then a covered student would see
-   both the platform's Command Center and a STORY-000 task asking them to build one.
+7. **Check the board of a NEW project.** Success: its first release starts with the plan's own
+   first story; there is no STORY-000 or STORY-900 task. A project published before the flag
+   covered it keeps the rows it has.
+8. **Widen** to more enrollment ids, then to `all`.
 
 ## Outputs
 
@@ -73,6 +74,8 @@ turned on per enrollment.
 | Sandbox cannot be proven | Runner reports `SandboxUnavailable` before any paid call. | Run the "Platform build sandbox check" workflow on a PR; a runner image change is the usual cause. |
 | Demo spec invalid but Command Center fine | Command Center stored, demo not; run `uploaded` with `error_class = DemoSpecInvalid` and the reasons in `error_detail`. | Optional: re-run later. |
 | 3 failed runs for one project | Queue stops (`attempts_exhausted`). | Fix the cause, then `DELETE FROM platform_build_runs WHERE project_id = '<id>' AND status = 'failed';` and re-publish. |
+| A covered build could not be queued at all | The board has no STORY-000 and there is no hosted Command Center yet. | Re-publish; that queues a run. If attempts are exhausted, see the row above. |
+| The flag is turned off after a project was retired | It stays retired: a republish adds nothing back while the project has a platform build run. | Nothing. Deleting that project's runs and republishing with the flag off brings STORY-000 back. |
 | A link is opened after 12 hours | "Not ready yet" page. | Re-open the story in the portal; it mints a fresh link. |
 
 ## Safety constraints

@@ -32,6 +32,7 @@ import { scheduleForEnrollment, truthForRender } from './scheduleForEnrollment';
 import { ensureGovPlanPublishedForSync, isGovBuildProjectVariables } from './govPlanForSync';
 import { scheduleFromBoard } from './scheduleFromBoard';
 import { connectedDemoMaterializedFor } from './connectedDemoFlag';
+import { setupStoriesRetiredFor } from './setupStories';
 import type { Schedule } from './buildSchedule';
 
 export interface RenderProjectDocsOptions {
@@ -109,6 +110,7 @@ export async function renderProjectDocs(
     // From the BOARD, not from the env flag, so a narrowed rollout never deletes the demo
     // instructions out from under a student already building one. See connectedDemoFlag.ts.
     connectedDemo: await connectedDemoMaterializedFor(projectId),
+    setupRetired: await setupStoriesRetiredFor(projectId),
   });
 
   return { stored, enrollmentId, files, schedule: schedule ?? null };
