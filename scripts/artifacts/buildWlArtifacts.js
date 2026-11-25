@@ -38,6 +38,12 @@ async function main() {
   if (flag === '--ledger' && ledgerPath) {
     const ledger = JSON.parse(fs.readFileSync(ledgerPath, 'utf8'));
     ledger.pdf_usage = ledger.pdf_usage || {};
+    // A rebuild supersedes this ticket's earlier PDFs (they were never posted), so drop the ticket from
+    // every older hash first; otherwise stale hashes would count against the reuse cap forever.
+    for (const [sha, codes] of Object.entries(ledger.pdf_usage)) {
+      const kept = codes.filter((c) => c !== r.code);
+      if (kept.length) ledger.pdf_usage[sha] = kept; else delete ledger.pdf_usage[sha];
+    }
     for (const x of results) {
       const used = ledger.pdf_usage[x.sha] || [];
       if (!used.includes(r.code) && used.length >= MAX_TICKETS_PER_PDF) {

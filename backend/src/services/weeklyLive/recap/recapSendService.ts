@@ -2,7 +2,7 @@ import { env } from '../../../config/env';
 import { guardedSendMail, resolveEmailRecipient } from '../../emailService';
 import { RecapSummary, RecapSummarySchema, NextEventUrlSchema, defaultSummary } from './recapContent';
 import { buildRecapEmail, firstNameOf } from './recapEmail';
-import { lintObject, LintViolation } from './recapLint';
+import { lintRecapSummary, LintViolation } from './recapLint';
 import { loadRecipientPlan } from './recapRecipients';
 import { mintOptOutToken, mintRecapToken } from './recapToken';
 import * as store from './recapStore';
@@ -39,7 +39,7 @@ export async function loadReady(sessionId: string): Promise<RecapReady> {
   if (!parsed.success) throw new RecapError(400, 'no_summary', 'Draft or write the overview first');
   const url = NextEventUrlSchema.safeParse(recap?.next_event_url ?? '');
   if (!url.success) throw new RecapError(400, 'no_next_event', 'Paste the Eventbrite link for the next class (https)');
-  const violations = lintObject(parsed.data);
+  const violations = await lintRecapSummary(sessionId, parsed.data);
   if (violations.length) throw new RecapError(400, 'content_rules', 'The overview breaks a content rule', violations);
   return { session, summary: parsed.data, nextEventUrl: url.data };
 }

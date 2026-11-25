@@ -139,6 +139,7 @@ import { ensureBroadcastClipMarkSchema } from './db/ensureBroadcastClipMarkSchem
 import { ensureBroadcastClipDecisionSchema } from './db/ensureBroadcastClipDecisionSchema';
 import { ensureStudioSetupSchema } from './db/ensureStudioSetupSchema';
 import { ensureWeeklyLiveRecapSchema } from './db/ensureWeeklyLiveRecapSchema';
+import { ensureWeeklyLiveSchema } from './db/ensureWeeklyLiveSchema';
 import weeklyLiveRecapRoutes from './routes/weeklyLiveRecapRoutes';
 import { ensureBroadcastReplayIndexSchema } from './db/ensureBroadcastReplayIndexSchema';
 import { ensureFactoryTaskSchema } from './db/ensureFactoryTaskSchema';
@@ -3280,6 +3281,8 @@ async function start(): Promise<void> {
   await ensureStudioSetupSchema();
   // Weekly Live recap tables (WL1.1): after live_sessions and session_guests, which they reference.
   await ensureWeeklyLiveRecapSchema();
+  // Weekly Live Studio tables (WL2.1): plans, signals, demand, topics, content pieces, moments.
+  await ensureWeeklyLiveSchema();
   // L8.3 - the partial index the replay list reads through. The live ticker's index covers
   // backstage/live/reconnecting only, so replay_ready would otherwise scan the whole table.
   await ensureBroadcastReplayIndexSchema();
