@@ -35,6 +35,11 @@ export interface RelayDeps {
   llm: VoiceLlm;
   broker: () => ToolBroker;
   profile: VoiceProfile;
+  /**
+   * VS4.5: what THIS call may say and use, fixed at dial time. null = refuse the call. Absent = the
+   * deps' own profile and broker (tests, and the load harness).
+   */
+  sessionFor?: (callId: string) => Promise<{ profile: VoiceProfile; broker: ToolBroker } | null>;
   accountSid: () => string | undefined;
   consumeSessionRef: (claims: TokenClaims) => Promise<'consumed' | 'replay' | 'unknown_call'>;
   /** Does this callId's voice_calls row carry this CallSid (or none yet)? */
@@ -72,6 +77,7 @@ export class RelayConnection {
   private history: VoiceMessage[] = [];
   private malformed = 0;
   private settingUp = false;
+  private profile: VoiceProfile;
   private early: RelayInbound[] = [];
   private closed = false;
   private lang: string | null = null;
@@ -84,7 +90,7 @@ export class RelayConnection {
   /** What the agent said in the current answer, for the transcript (spoken resets per tool round). */
   private turnSaid = '';
 
-  constructor(private readonly t: RelayTransport, private readonly d: RelayDeps) {}
+  constructor(private readonly t: RelayTransport, private readonly d: RelayDeps) { this.profile = d.profile; }
 
   /** A verified call is attached (the single-use reference was accepted). */
   get established(): boolean { return this.handle !== null; }
@@ -126,7 +132,7 @@ export class RelayConnection {
 
   /** The caller is speaking a different supported language: switch Relay's recognition and voice once. */
   private switchLanguage(lang: string | undefined): void {
-    const current = this.lang ?? this.d.profile.language;
+    const current = this.lang ?? this.profile.language;
     if (!lang || lang === current || !SUPPORTED_LANGUAGES.has(lang)) return;
     this.lang = lang;
     this.t.send(languageSwitch(lang));
@@ -159,24 +165,30 @@ export class RelayConnection {
     const v = verifyToken(m.customParameters.ref, 'session', this.d.now());
     if (!v.ok) return this.shutdown(`session_ref_${v.reason}`, 1008);
     if (m.accountSid !== this.d.accountSid()) return this.shutdown('account_mismatch', 1008);
+    let session: Awaited<ReturnType<NonNullable<RelayDeps['sessionFor']>>> | undefined;
     try {
       const used = await this.d.consumeSessionRef(v.claims);
       if (used !== 'consumed') return this.shutdown(used === 'replay' ? 'session_ref_replayed' : 'unknown_call', 1008);
       if (!(await this.d.callMatches(v.claims.callId, m.callSid))) return this.shutdown('call_sid_mismatch', 1008);
+      if (this.d.sessionFor) {
+        session = await this.d.sessionFor(v.claims.callId);
+        if (!session) return this.shutdown('no_session_profile', 1008);
+        this.profile = session.profile;
+      }
     } catch (e) {
       this.log('error', 'voice_relay_setup_failed', { error_class: (e as { name?: string })?.name || 'DatabaseError' });
       return this.shutdown('setup_lookup_failed', 1011);
     }
     if (this.closed) return; // the caller hung up while we were checking (VS4.1): open nothing
-    const opened = this.d.worker.open(v.claims.callId, this.d.profile.versionId);
+    const opened = this.d.worker.open(v.claims.callId, this.profile.versionId);
     if (!opened.ok) return this.shutdown(`session_refused_${opened.reason}`, 1013);
     this.callId = v.claims.callId;
     this.handle = opened.handle;
-    this.broker = this.d.broker();
+    this.broker = session ? session.broker : this.d.broker();
     this.handle.dispatch({ type: 'connected' });
     this.handle.dispatch({ type: 'greeting_done' }); // Twilio speaks the TwiML welcomeGreeting itself
-    this.history.push({ role: 'assistant', content: this.d.profile.greeting });
-    this.line('Agent', this.d.profile.greeting);
+    this.history.push({ role: 'assistant', content: this.profile.greeting });
+    this.line('Agent', this.profile.greeting);
     this.handle.onEnd((reason) => {
       this.emitTranscript();
       if (!this.closed) setTimeout(() => { if (!this.closed) this.t.close(1000); }, END_GRACE_MS).unref();
@@ -184,7 +196,7 @@ export class RelayConnection {
       this.t.send(endSession());
       this.log('info', 'voice_relay_end_sent', { reason });
     });
-    this.log('info', 'voice_relay_session_started', { profile: this.d.profile.versionId });
+    this.log('info', 'voice_relay_session_started', { profile: this.profile.versionId });
     this.d.onSessionStarted?.(this.callId!);
     // Started in arrival order, not awaited one by one: a later interrupt must be able to cut an earlier answer.
     await Promise.all(this.early.splice(0).map((e) => this.live(e)));
@@ -265,7 +277,7 @@ export class RelayConnection {
 
     for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
       const r = await this.d.llm.streamTurn({
-        system: this.d.profile.system, messages: this.history, tools: round < MAX_TOOL_ROUNDS ? this.broker!.defs() : [],
+        system: this.profile.system, messages: this.history, tools: round < MAX_TOOL_ROUNDS ? this.broker!.defs() : [],
         signal, onText: (delta) => { if (!signal.aborted) say(delta, false); },
       });
       if (local.signal.aborted && started) return this.finishAnswer(h, genId, spoken); // length cut: close politely

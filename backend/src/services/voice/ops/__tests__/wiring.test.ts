@@ -34,13 +34,14 @@ import http from 'http';
 import { sequelize } from '../../../../config/database';
 import { defaultVoiceWebhookDeps } from '../../../../controllers/voiceTwilioWebhookController';
 import { defaultTransferDeps } from '../../../../controllers/voiceTransferController';
-import { installVoiceRuntime, POSTCALL_SWEEP_MS, realtimeDeps, recordSessionStarted, relayDeps, sweepOnce } from '../../engines/voiceRuntime';
+import { connectTwimlFor, installVoiceRuntime, POSTCALL_SWEEP_MS, realtimeDeps, recordSessionStarted, relayDeps, sweepOnce } from '../../engines/voiceRuntime';
 import { productionDirectProvider } from '../../gateway/directEngineProvider';
 import { RealtimeBridge } from '../../engines/realtime/openaiRealtimeEngine';
 import { RelayConnection } from '../../engines/conversationRelayEngine';
 import { ToolBroker } from '../../engines/toolBroker';
 import { SessionWorker } from '../../session/sessionWorker';
 import { correlationKey, mintToken } from '../../twilio/correlationToken';
+import { pinSession, unpinSession } from '../../rollout/callSessions';
 import { OpsMetrics, voiceOps } from '../opsMetrics';
 import { guardLlm, guardRealtime, REALTIME_SLOW_MS, realtimeAvailable } from '../providerGuards';
 
@@ -104,6 +105,29 @@ describe('production wiring', () => {
     expect(append.mock.calls.map((c) => c[0][0])).toEqual([expect.objectContaining({ callId: 'c1', source: 'session', state: 'session_active' }), expect.objectContaining({ callId: 'c2' })]);
     append.mockRejectedValueOnce(new Error('db'));
     await expect(recordSessionStarted('c3')).resolves.toBeUndefined();
+  });
+});
+
+describe('VS4.5: what a live call is given in production', () => {
+  const row = (test_mode: boolean) => query.mockResolvedValue([{ engine: 'conversation_relay', test_mode }]);
+  it('the answer speaks the test greeting on a test call, and hangs up on a real call with nothing pinned', async () => {
+    row(true);
+    expect(await connectTwimlFor('c-1')).toContain('AI assistant');
+    row(false);
+    expect(await connectTwimlFor('c-1')).toContain('<Hangup/>');
+  });
+  it('the answer and both engines use the pinned version on a real call', async () => {
+    pinSession('c-2', { profile: { versionId: 'v3', greeting: 'hello from v3', system: 'sys v3', language: 'es-US' }, tools: [], agentKey: 'a', held: [] });
+    row(false);
+    const xml = await connectTwimlFor('c-2');
+    expect(xml).toContain('hello from v3');
+    expect(xml).toContain('es-US');
+    expect((await relayDeps().sessionFor!('c-2'))!.profile.system).toBe('sys v3');
+    expect((await realtimeDeps().sessionFor!('c-2'))!.profile.system).toBe('sys v3');
+    expect(await relayDeps().sessionFor!('c-3')).toBeNull();
+    query.mockResolvedValue([]);
+    expect(await relayDeps().sessionFor!('c-2')).toBeNull(); // no such call
+    unpinSession('c-2');
   });
 });
 

@@ -36,6 +36,11 @@ export interface RealtimeDeps {
   worker: SessionWorker;
   broker: () => ToolBroker;
   profile: VoiceProfile;
+  /**
+   * VS4.5: what THIS call may say and use, fixed at dial time. null = refuse the call. Absent = the
+   * deps' own profile and broker (tests, and the load harness).
+   */
+  sessionFor?: (callId: string) => Promise<{ profile: VoiceProfile; broker: ToolBroker } | null>;
   voice?: string;
   accountSid: () => string | undefined;
   consumeSessionRef: (claims: TokenClaims) => Promise<'consumed' | 'replay' | 'unknown_call'>;
@@ -70,6 +75,7 @@ export class RealtimeBridge {
   private malformed = 0;
   private closed = false;
   private settingUp = false;
+  private profile: VoiceProfile;
   // Response and playback tracking
   private greetingResponse: string | null = null;
   private greetingRequested = false;
@@ -85,7 +91,7 @@ export class RealtimeBridge {
   /** Tool calls still running, per response id: that response's response.done does not end the answer. */
   private readonly toolsInFlight = new Map<string, number>();
 
-  constructor(private readonly twilio: SocketLike, private readonly d: RealtimeDeps) {}
+  constructor(private readonly twilio: SocketLike, private readonly d: RealtimeDeps) { this.profile = d.profile; }
 
   /** A verified call is attached (the single-use reference was accepted). */
   get established(): boolean { return this.handle !== null; }
@@ -127,22 +133,28 @@ export class RealtimeBridge {
     const v = verifyToken(s.customParameters.ref, 'session', this.d.now());
     if (!v.ok) return this.shutdown(`session_ref_${v.reason}`, 1008);
     if (s.accountSid !== this.d.accountSid()) return this.shutdown('account_mismatch', 1008);
+    let session: Awaited<ReturnType<NonNullable<RealtimeDeps['sessionFor']>>> | undefined;
     try {
       const used = await this.d.consumeSessionRef(v.claims);
       if (used !== 'consumed') return this.shutdown(used === 'replay' ? 'session_ref_replayed' : 'unknown_call', 1008);
       if (!(await this.d.callMatches(v.claims.callId, s.callSid))) return this.shutdown('call_sid_mismatch', 1008);
+      if (this.d.sessionFor) {
+        session = await this.d.sessionFor(v.claims.callId);
+        if (!session) return this.shutdown('no_session_profile', 1008);
+        this.profile = session.profile;
+      }
     } catch (e) {
       this.log('error', 'voice_stream_setup_failed', { error_class: (e as { name?: string })?.name || 'DatabaseError' });
       return this.shutdown('setup_lookup_failed', 1011);
     }
     if (this.closed) return; // the caller hung up while we were checking (VS4.1): open nothing, least of all a paid model connection
     if (this.d.modelAvailable && !this.d.modelAvailable()) return this.shutdown('model_unavailable', 1013);
-    const opened = this.d.worker.open(v.claims.callId, this.d.profile.versionId);
+    const opened = this.d.worker.open(v.claims.callId, this.profile.versionId);
     if (!opened.ok) return this.shutdown(`session_refused_${opened.reason}`, 1013);
     this.callId = v.claims.callId;
     this.streamSid = m.streamSid;
     this.handle = opened.handle;
-    this.broker = this.d.broker();
+    this.broker = session ? session.broker : this.d.broker();
     this.handle.onEnd((reason) => this.teardown(`session_${reason}`));
     try {
       this.model = this.d.connectModel({ onMessage: (raw) => { this.onModel(raw).catch((e: Error) => { this.log('error', 'voice_realtime_handler_failed', { error_class: e?.name || 'HandlerError' }); this.teardown('handler_failed'); }); }, onClose: (reason) => this.onModelClose(reason) });
@@ -150,8 +162,8 @@ export class RealtimeBridge {
       this.log('error', 'voice_realtime_connect_failed', { error_class: (e as { name?: string })?.name || 'ConnectError' });
       return this.teardown('model_unavailable');
     }
-    this.model.send(sessionUpdate({ instructions: this.d.profile.system, voice: this.d.voice, tools: this.broker.defs() }));
-    this.log('info', 'voice_stream_session_started', { profile: this.d.profile.versionId });
+    this.model.send(sessionUpdate({ instructions: this.profile.system, voice: this.d.voice, tools: this.broker.defs() }));
+    this.log('info', 'voice_stream_session_started', { profile: this.profile.versionId });
   }
 
   private callerAudio(payload: string): void {
@@ -199,7 +211,7 @@ export class RealtimeBridge {
         for (const f of this.prebuffer.splice(0)) this.model!.send(appendAudio(f));
         h.dispatch({ type: 'connected' });
         this.greetingRequested = true;
-        this.model!.send(responseCreate(`Greet the caller with exactly these words and nothing else: "${this.d.profile.greeting}"`));
+        this.model!.send(responseCreate(`Greet the caller with exactly these words and nothing else: "${this.profile.greeting}"`));
         return;
       }
       case 'input_audio_buffer.speech_started': this.bargeIn(); return;

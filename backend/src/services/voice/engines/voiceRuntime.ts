@@ -27,7 +27,8 @@ import { createClaudeVoiceLlm } from './claudeVoiceLlm';
 import type { RelayDeps } from './conversationRelayEngine';
 import { buildRelayTwiml } from './relayProtocol';
 import { nextOpenSlotsTool, ToolBroker } from './toolBroker';
-import { liveProfile, TEST_PROFILE } from './voiceProfiles';
+import { liveProfile, type VoiceProfile } from './voiceProfiles';
+import { resolveSession } from '../rollout/callSessions';
 import { tapVoiceLog, voiceOps } from '../ops/opsMetrics';
 import { guardLlm, guardRealtime, realtimeAvailable } from '../ops/providerGuards';
 import { runOpsSweep } from '../ops/opsSweep';
@@ -128,6 +129,7 @@ export function relayDeps(): RelayDeps {
     llm: guardLlm(createClaudeVoiceLlm(c.VOICE_ENGINE_A_MODEL)),
     broker: relayBroker,
     profile: liveProfile(),
+    sessionFor: (callId) => sessionFor(callId, relayTools),
     onSessionStarted: (callId) => { void recordSessionStarted(callId); },
     onOptOut: (callId) => { void recordOptOut(callId, productionOptOutDeps()); }, // never throws
     accountSid: () => process.env.TWILIO_ACCOUNT_SID || undefined,
@@ -140,17 +142,34 @@ export function relayDeps(): RelayDeps {
   };
 }
 
-export const slotTool = () => new ToolBroker(toolsNotSwitchedOff([nextOpenSlotsTool(() => getAvailableSlots(14, admissionsCalendar()))]));
+const slotTools = () => toolsNotSwitchedOff([nextOpenSlotsTool(() => getAvailableSlots(14, admissionsCalendar()))]);
+export const slotTool = () => new ToolBroker(slotTools());
 
 /**
  * Engine A also gets transfer_to_human (VS3.2): it acts on the transfer control by ending the relay
  * session with handoffData. Engine B does not handle that control yet, so it does NOT get the tool
  * (it would announce a transfer that never happens). Unset VOICE_TRANSFER_NUMBER = a callback offer.
  */
-export const relayBroker = () => new ToolBroker(toolsNotSwitchedOff([
+const relayTools = () => toolsNotSwitchedOff([
   nextOpenSlotsTool(() => getAvailableSlots(14, admissionsCalendar())),
   transferToHumanTool(() => loadVoiceConfig().VOICE_TRANSFER_NUMBER),
-]));
+]);
+export const relayBroker = () => new ToolBroker(relayTools());
+
+/** VS4.5: a test call speaks the frozen test profile; a real call speaks what was pinned when it was dialed, or nothing. */
+async function sessionFor(callId: string, testTools: () => ReturnType<typeof relayTools>): Promise<{ profile: VoiceProfile; broker: ToolBroker } | null> {
+  const s = resolveSession(await callMode(callId), testTools);
+  if (!s) {
+    log({ level: 'error', event: 'voice_session_profile_missing', outcome: 'failure', error_class: 'SessionProfileMissing', call_id: callId });
+    return null;
+  }
+  return { profile: s.profile, broker: s.held.length ? new ToolBroker([...s.tools], undefined, { agentName: s.agentKey, surface: 'voice_call', held: s.held }) : new ToolBroker([...s.tools]) };
+}
+
+async function callMode(callId: string): Promise<{ id: string; testMode: boolean } | null> {
+  const [r] = await sequelize.query<{ test_mode: boolean }>('SELECT test_mode FROM voice_calls WHERE id = :callId', { replacements: { callId }, type: QueryTypes.SELECT });
+  return r ? { id: callId, testMode: r.test_mode } : null;
+}
 
 /** Open the OpenAI Realtime WebSocket. The key never leaves the server and is never logged. */
 export function connectOpenAiRealtime(model: string, h: ModelHandlers): SocketLike {
@@ -176,6 +195,7 @@ export function realtimeDeps(): RealtimeDeps {
     worker: getWorker(),
     broker: slotTool,
     profile: liveProfile(),
+    sessionFor: (callId) => sessionFor(callId, slotTools),
     voice: c.VOICE_REALTIME_VOICE,
     accountSid: () => process.env.TWILIO_ACCOUNT_SID || undefined,
     consumeSessionRef: consumeToken,
@@ -191,13 +211,18 @@ export function realtimeDeps(): RealtimeDeps {
 /** The answer TwiML for a connected call, by its engine. Unknown or unsupported engine: hang up. */
 export async function connectTwimlFor(callId: string): Promise<string> {
   const c = loadVoiceConfig();
-  const rows = await sequelize.query<{ engine: string }>('SELECT engine FROM voice_calls WHERE id = :callId', { replacements: { callId }, type: QueryTypes.SELECT });
-  if (rows[0]?.engine === 'conversation_relay' && c.VOICE_WS_BASE_URL) {
+  const rows = await sequelize.query<{ engine: string; test_mode: boolean }>('SELECT engine, test_mode FROM voice_calls WHERE id = :callId', { replacements: { callId }, type: QueryTypes.SELECT });
+  const session = rows[0] ? resolveSession({ id: callId, testMode: rows[0].test_mode }, () => []) : null;
+  if (rows[0] && !session) {
+    log({ level: 'error', event: 'voice_session_profile_missing', outcome: 'failure', error_class: 'SessionProfileMissing', call_id: callId });
+    return HANGUP;
+  }
+  if (session && rows[0]?.engine === 'conversation_relay' && c.VOICE_WS_BASE_URL) {
     return buildRelayTwiml({
       wsUrl: new URL(RELAY_PATH, c.VOICE_WS_BASE_URL).toString(),
       sessionRef: mintToken(callId, 'session', 120),
-      welcomeGreeting: TEST_PROFILE.greeting,
-      language: TEST_PROFILE.language,
+      welcomeGreeting: session.profile.greeting,
+      language: session.profile.language,
       voice: c.VOICE_RELAY_VOICE,
       actionUrl: c.VOICE_PUBLIC_BASE_URL
         ? `${new URL(CONNECT_ACTION_PATH, c.VOICE_PUBLIC_BASE_URL).toString()}?ref=${encodeURIComponent(mintToken(callId, 'status', ACTION_TOKEN_TTL_SECONDS))}`
