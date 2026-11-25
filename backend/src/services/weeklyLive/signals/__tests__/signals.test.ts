@@ -39,6 +39,10 @@ describe('vet', () => {
     expect((await vet(cand({ url: 'https://a.com/' }), FROM, TODAY, page('<title>Front Page</title>'))).dropped_reason).toContain('index page');
     expect([namesAStory('https://a.com/en/news/'), namesAStory('https://a.com/n/ai-jobs-report'), namesAStory('https://a.com/article/4120784')]).toEqual([false, true, true]);
   });
+  it('a roundup page is dropped with that reason, by the page title and not the search headline', async () => {
+    const html = `<meta property="og:title" content="The week in AI, 16-22 November 2026">${ld('2026-11-18').replace('Page title', '')}`;
+    expect((await vet(cand({ headline: 'A plain headline' }), FROM, TODAY, page(html))).dropped_reason).toBe('a roundup or newsletter, not one story');
+  });
   it('403 then the alternate outlet', async () => {
     const f = jest.fn().mockResolvedValueOnce({ ok: false, url: '', reason: 'HTTP 403' }).mockResolvedValueOnce({ ok: true, url: 'https://b.com/y', html: ld('2026-11-18') });
     expect(await vet(cand({ alternate_url: 'https://b.com/y' }), FROM, TODAY, f)).toMatchObject({ url: 'https://b.com/y', publisher: 'b.com', fetched_ok: true });
@@ -194,5 +198,14 @@ it('a query string that names the page is a different page; tracking is ignored'
 
 it.each([['fifty', 50], ['', 50], [undefined, 50], ['-5', 50], ['Infinity', 50], ['0', 0], ['20', 20]])('cap setting %s is %s', (raw, n) => { expect(capFrom(raw as string | undefined)).toBe(n); });
 
-it.each([['AI News This Week: 23 to 29 November 2026', 'https://g.com/ai', true], ['The week in AI, 16-22 November', 'https://g.com/x', true], ['The week of 23 November', 'https://g.com/x', true], ['News Bytes for Nov. 13', 'https://w.org/x', true],
-  ['Plain title', 'https://g.com/ai-news/weekly/2026-w48/', true], ['Weekly pay rises as AI spreads', 'https://a.com/pay', false], ['Canva cuts 22% of staff this week', 'https://a.com/canva-cuts-staff', false], ['Digestive startup uses AI', 'https://a.com/x', false]])('%s at %s is a roundup: %s', (h, u, yes) => { expect(isRoundup(h as string, u as string)).toBe(yes); });
+it.each([
+  'AI News This Week: 23 to 29 November 2026', 'The week in AI, 16-22 November 2026', 'The week of 23–29 November 2026 · AI, Work and the Economy', 'This week in AI: a lot happened', 'The Week in Tech',
+  'WorldatWork Today News Bytes for Nov. 13, 2026 | WorldatWork', 'North America HR News Flash: Friday, November 20, 2026 | NACSHR', 'Top AI stories of the week', 'AI and Jobs News, November 2026: What Companies Actually Did', 'Weekly Roundup: agents', 'Our AI weekly newsletter',
+])('a roundup: %s', (h) => { expect(isRoundup(h, 'https://a.com/x')).toBe(true); });
+it.each([
+  'Amazon layoffs begin the week of Nov. 30', 'Congress passed two AI bills this week in a late vote', 'Nvidia CEO speaks this week in Davos', 'Gmail gets an AI digest of your day', 'How one worker built a newsletter with AI agents',
+  "Reader's Digest replaces editors with AI", 'Bayer uses AI to defend Roundup weedkiller', 'Weekly pay rises as AI spreads', 'Weekend work is back', 'Canva cuts 22% of staff this week', 'A four-day week of work, thanks to AI', 'News Corp signs an AI deal in November 2026',
+])('one story: %s', (h) => { expect(isRoundup(h, 'https://www.theatlantic.com/newsletters/archive/2026/11/one-story/1/')).toBe(false); });
+it('a weekly issue address is a roundup whatever its title', () => {
+  expect([isRoundup('Plain', 'https://g.com/ai-news/weekly/2026-w48/'), isRoundup('Plain', 'https://g.com/latest/2026-w47/'), isRoundup('Plain', 'https://g.com/weekly/one-story')]).toEqual([true, true, false]);
+});

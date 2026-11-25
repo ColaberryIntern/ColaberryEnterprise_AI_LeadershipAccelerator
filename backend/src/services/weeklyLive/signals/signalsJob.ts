@@ -70,10 +70,18 @@ export function namesAStory(url: string): boolean {
   return /[-_][^-_]+[-_]/.test(last) || /\d{5,}/.test(last);
 }
 
-/** Roundups and newsletters retell many stories, so they cannot date or source any one of them. */
-const ROUNDUP = /\b(round-?up|newsletter|digest|news (bytes|briefs?|flash)|week(ly)? in (ai|review)|(news|ai) (this|of the) week|this week in|the week of|weekly (brief|recap|wrap))\b/i;
+/**
+ * Roundups and newsletters retell many stories, so they cannot date or source any one of them. Only
+ * title-shaped forms count (how the headline starts or ends, once the site's name is cut off): the same
+ * words inside a sentence are ordinary news ("AI layoffs begin the week of Nov. 30", "Gmail gets an AI digest").
+ */
+const ROUNDUP_START = /^((the|your|this|last)\s+)?week\s+(in|of)\b|^this week in\b|^(top|biggest|best)\b.*\b(stories|news|headlines)\b.*\bweek\b|^(weekly|daily)\s+(round-?up|recap|digest|brief|wrap|newsletter)\b/i;
+const ROUNDUP_END = /\b(news|stories|headlines)\s+(this|of the|for the)\s+week\b|\bnews\s+(bytes|briefs?|flash|round-?up|digest)\b|\b(weekly|daily)\s+(round-?up|recap|digest|brief|wrap|newsletter)$/i;
+const PERIOD_NEWS = /\bnews,?\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2}(\s*(to|-|–)\s*\d{1,2})?,?\s+)?\d{4}/i;
+const WEEK_URL = /\/weekly\/\d{4}|\/\d{4}-w\d{2}\b/i;
 export function isRoundup(headline: string, url: string): boolean {
-  return ROUNDUP.test(headline) || /\/(weekly|newsletters?|roundup|digest)s?\//i.test(new URL(url).pathname);
+  const h = headline.split(/\s[|·]\s/)[0].trim();
+  return ROUNDUP_START.test(h) || ROUNDUP_END.test(h) || PERIOD_NEWS.test(h) || WEEK_URL.test(new URL(url).pathname);
 }
 
 export async function vet(c: Candidate, from: string, today: string, fetchPage: FetchPage): Promise<SignalRow> {

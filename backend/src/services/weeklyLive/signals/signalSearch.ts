@@ -18,8 +18,11 @@ import { withBudget } from './researchBudget';
  */
 export const SEARCH_MODEL = process.env.WEEKLY_LIVE_SEARCH_MODEL || 'gpt-6.2-sol';
 const WEB_SEARCH_CALL_USD = 0.01;
-/** Worst case reserved per call: about 100k input and 8k output tokens, plus 10 searches. */
+/** Worst case reserved per call: about 100k input and 8k output tokens, plus MAX_SEARCHES searches. */
 export const SEARCH_RESERVE_USD = 0.45;
+const MAX_SEARCHES = 10;
+/** Per call, so the fetch stage has a bound: five calls, two rounds, at most 80 pages. */
+export const MAX_CANDIDATES = 8;
 const TIMEOUT_MS = 180_000;
 /** Outlets that refuse our page reader (seen 2026-11-25). A story there needs an alternate the reader can open. */
 const UNREADABLE = ['axios.com', 'apnews.com', 'lemonde.fr', 'time.com', 'newegg.com', 'glassdoor.com'];
@@ -85,13 +88,13 @@ export async function searchGroup(group: readonly number[], s: SearchInput): Pro
     const event = { event_type: 'llm.call' as const, external_system: 'openai', workflow_id: WORKFLOW, trace_id: ensureTraceId(), model: SEARCH_MODEL, cache_hit: false };
     try {
       const res = await client.responses.create({
-        model: SEARCH_MODEL, tools: [{ type: 'web_search', search_context_size: 'medium' }], input: redactSensitive(prompt(group, s)), max_output_tokens: 8000,
+        model: SEARCH_MODEL, tools: [{ type: 'web_search', search_context_size: 'medium' }], input: redactSensitive(prompt(group, s)), max_output_tokens: 8000, max_tool_calls: MAX_SEARCHES,
       });
       const searches = res.output.filter((o) => o.type === 'web_search_call').length;
       const costUsd = searchCost(SEARCH_MODEL, res.usage, searches);
       emitAiEvent({ ...event, outcome: 'success', prompt_tokens: res.usage?.input_tokens ?? null, completion_tokens: res.usage?.output_tokens ?? null,
         total_tokens: res.usage?.total_tokens ?? null, cost_usd: costUsd, duration_ms: Date.now() - t0 }).catch(() => undefined); // telemetry never fails the search
-      return { value: parseCandidates(res.output_text || ''), costUsd };
+      return { value: parseCandidates(res.output_text || '').slice(0, MAX_CANDIDATES), costUsd };
     } catch (e) {
       emitAiEvent({ ...event, outcome: 'failure', error_class: classifyError(e), duration_ms: Date.now() - t0 }).catch(() => undefined);
       throw e;
