@@ -54,7 +54,7 @@ beforeEach(() => {
 });
 
 describe('a client demo gets its own project', () => {
-  it('never reuses the holder's active project', async () => {
+  it('never reuses an active project of the holder', async () => {
     mockFindByPk.mockResolvedValue(record());
     mockDetached.mockResolvedValue({ id: 'own-1' });
     await startBuildFromUnderstanding({ recordId: 'rec-1', enrollmentId: 'enr-1', setupMode: 'platform' });

@@ -183,7 +183,7 @@ describe('a gate-clean plan reaches the student without anyone publishing it', (
 
   it.each([
     ['student', null, 1], ['platform', null, 0], ['student', REPO, 1], ['platform', REPO, 0],
-  ])('a %s build (repo %j) moves the holder's active project %i time(s)', async (mode, repo, times) => {
+  ])('a %s build (repo %j) moves the active project %i time(s)', async (mode, repo, times) => {
     mockRepoFor.mockResolvedValue(repo);
     mockGetIntake.mockResolvedValue({ project_id: PROJECT, idea: INPUT.idea, status: 'captured', correlation_id: 'corr-1', setup_mode: mode });
     await startBuild(INPUT as any);
