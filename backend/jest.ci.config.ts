@@ -188,7 +188,6 @@ const ciConfig: Config = {
     'src/__tests__/services/communityCommentsLikesProfiles\\.test\\.ts',
     'src/__tests__/services/duplicateAccountSweepService\\.test\\.ts',
     'src/middlewares/__tests__/mgmtRbac\\.test\\.ts',
-    'src/seeds/__tests__/seedCurriculumCourseLinks\\.test\\.ts',
     'src/services/timeline/__tests__/timelineAdminService\\.test\\.ts',
     'src/services/timeline/__tests__/typeRegistry\\.test\\.ts',
     'src/intelligence/systemStateEngine/__tests__/phase10_5\\.test\\.ts',

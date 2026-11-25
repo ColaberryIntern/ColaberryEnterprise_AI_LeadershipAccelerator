@@ -13,7 +13,9 @@
  * type-checked and unit-tested in isolation.
  */
 
-export const ANTHROPIC_ACADEMY_BASE = 'https://anthropic.skilljar.com/';
+// The name was always ANTHROPIC_ACADEMY_BASE; the value finally matches it.
+// Skilljar retires in early December 2026.
+export const ANTHROPIC_ACADEMY_BASE = 'https://academy.claude.com/courses/';
 
 export function anthropicUrl(slug: string): string {
   return `${ANTHROPIC_ACADEMY_BASE}${slug}`;
