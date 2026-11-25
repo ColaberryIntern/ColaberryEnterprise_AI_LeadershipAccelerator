@@ -191,6 +191,15 @@ export const VOICE_TABLE_SPECS: TableSpec[] = [
     indexes: ['CREATE INDEX IF NOT EXISTS voice_usage_call_idx ON voice_usage (call_id)',
       'CREATE INDEX IF NOT EXISTS voice_usage_tenant_time_idx ON voice_usage (tenant_id, created_at)'],
   },
+  {
+    // VS2.1: single-use enforcement for signed correlation tokens (TwiML fetch, WebSocket session).
+    // A replayed token hits the unique nonce and is refused. Holds no phone number and no secret.
+    table: 'voice_token_uses', model: 'VoiceTokenUse',
+    columns: [id(), tenant(), c('call_id', 'UUID NOT NULL', DataTypes.UUID), c('purpose', 'VARCHAR(20) NOT NULL', DataTypes.STRING(20)),
+      c('nonce', 'VARCHAR(64) NOT NULL', DataTypes.STRING(64)), c('consumed_at', 'TIMESTAMPTZ NOT NULL DEFAULT NOW()', DataTypes.DATE)],
+    constraints: [callFk('voice_token_uses')],
+    indexes: ['CREATE UNIQUE INDEX IF NOT EXISTS voice_token_uses_nonce_uq ON voice_token_uses (purpose, nonce)'],
+  },
 ];
 
 /** CREATE TABLE ... IF NOT EXISTS for one spec (columns, then table constraints). */

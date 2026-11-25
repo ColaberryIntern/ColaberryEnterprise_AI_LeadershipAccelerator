@@ -4,6 +4,7 @@
 -- need (SELECT count(*) on each), and only while VOICE_STUDIO_ENABLED is off.
 -- Call-scoped tables go first; they reference voice_calls.
 BEGIN;
+DROP TABLE IF EXISTS voice_token_uses;
 DROP TABLE IF EXISTS voice_usage;
 DROP TABLE IF EXISTS voice_artifacts;
 DROP TABLE IF EXISTS voice_tool_runs;
