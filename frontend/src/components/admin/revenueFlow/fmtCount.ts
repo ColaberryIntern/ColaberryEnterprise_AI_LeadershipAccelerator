@@ -18,9 +18,11 @@
  * Room never renders as zero. The caller decides the words; this refuses to invent a digit.
  */
 export function fmtCount(n: number | null | undefined): string | null {
-  if (n === null || n === undefined) return null;
-  if (!Number.isFinite(n)) return null;
-  return Math.trunc(n).toLocaleString('en-US');
+  // ONE guard, not two. `Number.isFinite` is already false for null, undefined and NaN, so an
+  // explicit null check in front of it was a branch no input could reach — which the mutation
+  // check found by deleting it and watching every test still pass.
+  if (!Number.isFinite(n as number)) return null;
+  return Math.trunc(n as number).toLocaleString('en-US');
 }
 
 /**

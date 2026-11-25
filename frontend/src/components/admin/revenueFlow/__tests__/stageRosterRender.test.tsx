@@ -160,6 +160,16 @@ describe('the name opens the 360, or is plain text', () => {
     expect(html).toContain('data-testid="roster-name-row:x"');
     expect(html).toContain('No name recorded');
     expect(html).not.toContain('/admin/people/');
+
+    /*
+      Asserted as "not an anchor", because the two checks above do not distinguish it. A
+      <Link to={null}> carries the same test id and does not contain /admin/people/ either,
+      so both would pass while the page rendered a dead link. The mutation check found this
+      by removing the guard and watching the test stay green.
+    */
+    const cell = html.slice(html.indexOf('data-testid="roster-name-row:x"') - 60);
+    expect(cell.slice(0, 120)).not.toContain('<a ');
+    expect(cell.slice(0, 120)).toContain('<span');
   });
 
   it('invents nothing to fill a missing name', () => {
