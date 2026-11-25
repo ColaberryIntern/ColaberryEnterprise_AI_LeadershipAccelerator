@@ -72,15 +72,15 @@ const SPECS: readonly ProposalStorySpec[] = [
   },
   {
     id: 'STORY-P2',
-    title: 'P2 - Establish rapport with Sharath and the buyer',
-    narrative: 'As the builder, I want a named human on the other side, so that collection and submission have a real contact and the buyer context is captured.',
+    title: 'P2 - Establish rapport with the client contract manager',
+    narrative: 'As the builder, I want a relationship with the single authorized client contact - the person managing this contract - so that the pursuit has a real line to the client and I never reach out to anyone I am not allowed to.',
     acceptance: [
-      'Given the pursuit, When I record the collaborator, Then Sharath and the buyer contact are captured on the project.',
-      'Given an intro is needed, When I prepare it, Then it is a DRAFT held for Ali, never auto-sent.',
-      `Given I email Sharath about this pursuit, When I set the subject, Then it carries the ${GOV_PROPOSAL_EMAIL_TAG} tag so his gov-contract replies are recognized and tracked.`,
-      'Trust: no outreach leaves without Ali approving it first.',
+      'Given the solicitation, When I identify the client contact, Then I use ONLY the contract-managing contact whose information is included, and never anyone else at the client.',
+      'Given the pursuit is active, When I engage the client, Then I email the authorized contact at least once, as a DRAFT held for Ali, never auto-sent.',
+      'Given the client holds a meeting, When one is scheduled, Then I bring a prepared set of questions to ask.',
+      'Trust: the only external person contacted about this pursuit is the one authorized client contact, and every outreach is a draft Ali approves before it is sent.',
     ],
-    build: (p) => `For "${p}", capture Sharath (the pursuit collaborator) and the buyer contact. Draft - DRAFT only, never auto-send - a short intro that sets up the collection channel used in P4. Flag any commitment in the draft for Ali before sending. Put ${GOV_PROPOSAL_EMAIL_TAG} in the subject line of every email to Sharath about this pursuit, so his gov-contract replies are tracked and not lost among the other projects he is copied on.`,
+    build: (p) => `For "${p}", identify the single authorized client contact - the person managing this contract, whose information is included in the solicitation - and treat them as the ONLY external person you may contact about the pursuit. Email them at least once (DRAFT only, held for Ali, never auto-sent), and prepare a set of questions to ask at any client meeting. Do not reach out to anyone else at the client. (Sharath, the internal lead, is contacted later when the documents are built and submitted - P4 and P7 - not here.)`,
   },
   {
     id: 'STORY-P3',
