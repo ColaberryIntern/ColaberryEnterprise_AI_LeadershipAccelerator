@@ -37,6 +37,12 @@ export const EXPLORER_BRAND = {
   brandSlug: 'colaberry-training',
 } as const;
 
+/** Explorer's brand, as the two ids every tenant-scoped write needs. */
+export interface ExplorerBrandContext {
+  tenantId: string;
+  brandId: string;
+}
+
 /**
  * Cached because a brand id for a slug does not change, and this is consulted on
  * every draft render.
@@ -44,12 +50,50 @@ export const EXPLORER_BRAND = {
  * Only a SUCCESSFUL resolution is cached. A failure returns null and is retried
  * next time: caching a null would turn one transient database blip into a
  * process that reads global rules forever and never says why.
+ *
+ * BOTH IDS ARE CACHED TOGETHER, as one object, so they cannot drift apart. Two
+ * independent caches would admit a state where the brand id is populated and the
+ * tenant id is not, and a tenant-scoped write built from that pair would land a
+ * row under the wrong tenant while reporting success.
  */
-let cachedBrandId: string | null = null;
+let cachedContext: ExplorerBrandContext | null = null;
 
 /** Visible for tests, so one case cannot leak its stub into the next. */
 export function resetExplorerBrandCache(): void {
-  cachedBrandId = null;
+  cachedContext = null;
+}
+
+/**
+ * Explorer's tenant AND brand id, or null when they cannot be resolved.
+ *
+ * WHY THIS EXISTS ALONGSIDE `resolveExplorerBrandId`. `lead_tenant_contexts` is
+ * keyed on `(lead_id, tenant_id, brand_id)`, so a writer needs the tenant as
+ * well as the brand. The brand row already carries its `tenant_id`, so taking
+ * both from the SAME lookup is what guarantees they agree. Resolving the tenant
+ * separately by slug would be a second query that can succeed against a
+ * different row, which is the class of bug `resolveBrandBySlug` exists to avoid.
+ *
+ * Null is a real answer and means "Explorer's brand is not resolvable right
+ * now". Callers must degrade rather than invent a tenant.
+ */
+export async function resolveExplorerBrandContext(): Promise<ExplorerBrandContext | null> {
+  if (cachedContext) return cachedContext;
+  try {
+    const brand = await resolveBrandBySlug(EXPLORER_BRAND.tenantSlug, EXPLORER_BRAND.brandSlug);
+    if (!brand) return null;
+    // A brand row without a tenant id cannot key a tenant-scoped write. Treat it
+    // as unresolved rather than coercing it, so the caller skips the write
+    // instead of inserting a row nobody can authorize later.
+    const tenantId = (brand as unknown as { tenant_id?: string | null }).tenant_id ?? null;
+    if (!tenantId) return null;
+    cachedContext = { tenantId, brandId: brand.id };
+    return cachedContext;
+  } catch {
+    // Structured logging deliberately omitted, for the reason given on
+    // `resolveExplorerBrandId` below: this runs on high-frequency paths and a
+    // database outage would turn one fault into thousands of identical lines.
+    return null;
+  }
 }
 
 /**
@@ -62,16 +106,13 @@ export function resetExplorerBrandCache(): void {
  * has tolerated since the day it shipped.
  */
 export async function resolveExplorerBrandId(): Promise<string | null> {
-  if (cachedBrandId) return cachedBrandId;
-  try {
-    const brand = await resolveBrandBySlug(EXPLORER_BRAND.tenantSlug, EXPLORER_BRAND.brandSlug);
-    if (!brand) return null;
-    cachedBrandId = brand.id;
-    return cachedBrandId;
-  } catch {
-    // Structured logging deliberately omitted: this runs per draft render, and a
-    // database outage would turn one fault into thousands of identical lines.
-    // The caller reports which rule set it used, which is the fact that matters.
-    return null;
-  }
+  // Delegates rather than repeating the lookup, so there is ONE query, ONE cache
+  // and no way for the brand id this returns to disagree with the tenant id
+  // `resolveExplorerBrandContext` returns for the same brand.
+  //
+  // Its four existing call sites are unaffected: this still answers a brand id
+  // or null, and null still means "use the global rules", which is the
+  // behaviour each of them already handles.
+  const context = await resolveExplorerBrandContext();
+  return context ? context.brandId : null;
 }
