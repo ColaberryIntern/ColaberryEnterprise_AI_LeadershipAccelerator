@@ -3040,7 +3040,6 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     ],
   },
   ...GROWTH_JOURNEY_AGENT_ENTRIES,
-  ...AGENT_DOMAIN_PLAN_SYNC_ENTRIES,
   {
     agent_name: 'GrowthJourneyHandoffs',
     agent_type: 'ticket_creator_identity',
@@ -3071,6 +3070,10 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
   // acceptance 7 pins that group CONTIGUOUS - shadow, executor, digest, handoffs at
   // shadow+1..+3 - so ten entries inserted mid-run break it. The test is right.
   ...DOMAIN_AGENT_ENTRIES,
+  // Here for the same reason, and I learned it the same way: placed after
+  // GROWTH_JOURNEY_AGENT_ENTRIES this entry sat between the digest and
+  // GrowthJourneyHandoffs and broke acceptance 7 on the first CI run.
+  ...AGENT_DOMAIN_PLAN_SYNC_ENTRIES,
   {
     agent_name: 'workforce_intelligence_engine',
     agent_type: 'ticket_creator_identity',
