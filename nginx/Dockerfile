@@ -6,7 +6,13 @@ COPY frontend/package.json ./frontend/
 RUN npm ci
 COPY frontend/ ./frontend/
 ENV REACT_APP_API_URL=
-RUN npm run build:frontend
+# HEAP: the same fix as CI's "Frontend build" job (.github/workflows/ci.yml explains it). The
+# type-check child ignores NODE_OPTIONS and runs at the library's 2048 MB default, and this image
+# build died there twice on 2026-11-25. The grep fails the build loudly if the library changes.
+RUN F=node_modules/fork-ts-checker-webpack-plugin/lib/typescript-reporter/TypeScriptReporterConfiguration.js \
+ && { grep -q "memoryLimit: 2048" "$F" || { echo "fork-ts-checker memoryLimit default not found in $F"; exit 1; }; } \
+ && sed -i 's/memoryLimit: 2048/memoryLimit: 6144/' "$F" \
+ && NODE_OPTIONS=--max-old-space-size=6144 npm run build:frontend
 
 # Build the brand apps AFTER the frontend, deliberately. Copying apps/ or packages/
 # earlier would invalidate the cached `npm ci` and `build:frontend` layers on every change
