@@ -18892,3 +18892,10 @@ Branch `workstream/career-prep-r2r3`, one PR (https://github.com/ColaberryIntern
   - What changed: a video is evidence for one week; non-English videos are skipped; week 1 title pattern drops "first"
   - Verification: demand jest suite passes; not yet rerun live
   - Notes: Ali accepted the one-day gap and the tuned patterns on 2026-11-25
+
+- [ ] Weekly Live Studio WL3.3: topic generator (built, topic quality not accepted, not graded)
+  - Date: 2026-11-25
+  - Session: CC-20261124-iwlu
+  - What changed: services/weeklyLive/topics: strict answer schema, content lint, measured demand, news age ceiling, factors from cited signals, stable ranking
+  - Verification: jest weeklyLive 239 passed; three live generations without a database (wl3.3-live-runs.txt)
+  - Notes: first live run returned 0 usable topics (model left out score keys), fixed with a strict schema; topic copy quality still open
