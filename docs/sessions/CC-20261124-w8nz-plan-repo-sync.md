@@ -128,21 +128,94 @@ ABSENT in dist: domainStoryAcceptance
 /app/src present in the image? NO (dist-only image)
 ```
 
-So the republish logic **cannot execute in production at all**. That is the real reason it
-has only ever been a hand-run script, and it is why the 13 Nov note's "republish at the end
-of the reconciler" was never as small as it sounded. Porting credit-bearing logic to
-TypeScript belongs in its own diff, not bolted onto a new unattended writer.
+So nothing in the running application can call the republish logic.
+
+**Corrected 25 Nov.** An earlier draft of this note said the logic "cannot execute in
+production at all". That is too strong. A person with container access can still run it, by
+copying the script and its libraries into `/app`, which is exactly how the 13 Nov and 22 Nov
+runs happened. What is impossible is for the DEPLOYED APPLICATION to do it: no route, no
+cron, no service can reach code that is not in the image.
+
+That distinction decides whether the TypeScript port is worth doing, and on 25 Nov the
+measurement said no. The sweep's own drift query, run against production, returned **zero
+drift on all ten domains**: board and plan hold the same story ids everywhere, 598 stories in
+total, nothing on one side that the other has not heard of.
+
+```
+admissions 66/66   curriculum 53/53   executive 104/104   internship 50/50
+learner_success 52/52   marketing 79/79   platform 64/64   product_experience 40/40
+sales 47/47   website 43/43            DOMAINS WITH DRIFT: 0 of 10
+```
+
+The 22 Nov republish had already brought every plan into line with its board. **The plan was
+never the stale half; the repo was.** Porting 986 lines of credit-bearing logic would
+therefore automate an operation that currently has nothing to do, and it would put a
+destructive write on a timer: the 13 Nov run checked 17 proposed story removals against
+`evidence_records` by hand before applying, and a cron cannot make that judgment.
 
 Until then the sweep **reports** the debt: `plan_repo_sync_board_plan_drift` names the
 stories the board has that the published plan has never heard of, with the remedy command.
 That is the signal whose absence let this run for 23 days in October and 11 days in November.
 
+## Production-verified, 6:41 AM CST on 2026-11-25
+
+#4409 merged at 5:24 AM CST and was deployed by 5:30 AM. The registry row was created at 5:31 AM,
+`enabled`, schedule `41 */6 * * *`. Checked before the first run: the auto-classifier set
+`autonomy_level: observe`, which sounds like it would stop the job writing, and does not.
+`agentControlDecision` reads only `enabled` and `status = 'paused'`; autonomy level is consumed
+by `agentAuthorizationService`, which this job never calls.
+
+The first unattended run, correlation id `1abb5809`:
+
+```
+attempted 7   written 1   unchanged 6   skipped 3 (no repo)   failed 0   drifted 0
+```
+
+**I predicted it would write nothing, and that was wrong.** It wrote three files to
+`MihretColaberry1/ColaberryInternship`, commit `3956b164`, and the diff is the whole reason
+this change exists:
+
+| File | What moved |
+|---|---|
+| `.colaberry/agent-domain.json` | `verified` 6 to 7. `product_experience.CAP.design_token_drift_audit` went from `in_progress`, 0 of 1 criteria, to `complete`. |
+| `.colaberry/manifest.json` | New `generated_at` and correlation id. `plan_version` stayed 3 and `plan_sha256` was BYTE-IDENTICAL. |
+| `.colaberry/progress.json` | The matching criteria state. |
+
+Two things that diff proves, neither of which was certain beforehand:
+
+1. **The plan did not change; the delivery did.** Same plan hash, new verification state. Her
+   repo had been telling her 6 verified since her own Sync press at 12:23 AM CST on 24 Nov while the
+   platform had credited 7. Without the sweep she would have kept reading 6 until she pressed
+   Sync again. That is the same withheld-credit harm that started this, found on a second
+   builder, one run in.
+2. **There is no timestamp churn.** `manifest.json` carries a fresh `generated_at` and
+   correlation id on every render, so the obvious worry is a commit to all seven repos every
+   six hours forever. Six repos came back `changed: 0` in this same run, which settles it
+   empirically rather than by reading the writer: a changed manifest alone does not produce a
+   commit.
+
+One observation, not a defect in this change: the completed story now carries `verified: true`
+with `criteria_passed: null` and `criteria_total: null`, because the renderer treats
+`status = 'complete'` as verified without criteria. Pre-existing behaviour in
+`refreshRepoDocuments`, worth a look if those nulls ever reach a learner-facing surface.
+
 ## Still open after this
 
-1. **The republish half.** Port the three plan libraries to TypeScript so a republish can run
-   inside the container, then let the sweep republish before it pushes. Until that lands,
-   `republishDomainBuildPlans.js --domain=<key> --apply` is still a hand-run job, and the
-   sweep's drift line is what tells anyone it is owed.
+1. **The republish half: NOT being ported. Ali's decision, 2026-11-25.** Put to him with the
+   zero-drift measurement and the cron-gate objection; he chose to drop it. So this is settled,
+   not merely unscheduled, and a future session should not reopen it on the strength of the
+   `dist` gap alone.
+
+   `republishDomainBuildPlans.js --domain=<key> --apply` stays a hand-run job, executed by
+   copying it and its three libraries into the container. The sweep's `plan_repo_sync_board_plan_drift`
+   line is what says when it is owed again. Two conditions would have to be met before the port
+   is worth raising a second time: drift actually reappears, AND the credited-removal gate can
+   be satisfied without a person reading `evidence_records`. The 13 Nov run checked 17 proposed
+   story removals by hand; until something can make that judgement, a cron must not.
+
+   Note what the original wording would have caused: a future session reading "cannot execute in
+   production at all" would have started an 986-line port of credit-bearing logic that has
+   nothing to fix, and would have been building toward an unattended destructive write.
 2. **Where the drift report lands.** Today it is a structured log line. Container logs on this
    box held 475 lines over 96 hours when this was investigated, so a log is a weak place for a
    finding that matters. Surfacing it on the operations health page is the natural follow-up,

@@ -110,6 +110,27 @@ export interface DemandBand {
   attributionBreak: string | null;
 }
 
+/**
+ * The government pipeline's upstream stage, as counts and words. R12.
+ *
+ * Carries NO money field, and that is the design rather than an omission: a count of
+ * unassessed opportunities beside a dollar figure is how "pipeline behind pipeline" quietly
+ * becomes "pipeline". `gov_qualifications` holds no value column, so there is nothing
+ * measured to put here.
+ */
+export interface PreProjectTier {
+  count: number;
+  /** Expected 0. Non-zero means the lifecycle changed, and the copy says so. */
+  linkedCount: number;
+  /** How many could be named today. */
+  nameableCount: number;
+  label: string;
+  definition: string;
+  whyNoNames: string;
+  unlockedBy: string;
+  provenance: string;
+}
+
 export interface Stream {
   key: string;
   label: string;
@@ -136,6 +157,14 @@ export interface Stream {
   demand?: DemandBand[];
   /** Populated only for the government stream; see FlaggedBid on the backend. */
   bids?: FlaggedBid[];
+  /**
+   * The stage behind the pipeline: opportunities still being assessed. R12.
+   *
+   * Undefined rather than a zero count when the qualification table cannot be read, so
+   * "the instrument is missing" never renders as "every opportunity has been assessed".
+   * There is no money field on it, structurally: see the backend's `govPreProjectTier`.
+   */
+  preProject?: PreProjectTier;
   /** Populated only for the enterprise stream; see EnterpriseDeal on the backend. */
   deals?: EnterpriseDealRow[];
 }

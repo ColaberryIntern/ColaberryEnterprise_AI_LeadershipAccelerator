@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20261124-g9p2 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Wednesday, November 25, 2026 at 7:28 AM</div>
+    <div><span class="sid">CC-20261124-g9p2</span><span class="count">2 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>Gov Proposal Studio M1 - Spine + Foundation (merged, deployed, production-verified)</h2>
+          <span class="badge">2026-11-25</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">a NEW gov project now builds its Command Center (STORY-000) + connected demo (STORY-900, blocked_by STORY-000) as part of the spine (connectedDemo:true into materializePlanAsTasks), auto-publishes the demo URL when GitHub Pages goes live (gov-gated, fail-soft, no-overwrite, allowlist-gated in pagesUrlService), auto-captures demo screens to Build Evidence (already wired generically), and surfaces demoUrl + commandCenterUrl on the contract view (pure read join). Planned M1-T0 migration dropped: both URLs already persist.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend tsc --noEmit exit 0; jest ci 4 suites / 112 tests; loop-task-verifier 12/12 PASS; PR #4412 merged (main 39e5908f7); deployed backend via scripts/deploy-prod.sh registry mode, running image digest == published sha-39e5908f7, marker gov_demo_url_published present in /app/dist; loop-production-verifier PASS 96/100.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">M1 was logged to PROGRESS.md before the sealed-archive rule was reloaded; that merged append is left in place (do not edit the archive). This session file is the correct per-session log. Operational note still open (Ali&#39;s call, non-blocking): add github.io to prod GOV_DEMO_HOST_ALLOWLIST so the demo auto-publish fires.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>Gov Proposal Studio M2 - Three-release ladder + multi-project + auto-pickup</h2>
+          <span class="badge">2026-11-25</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">(T1) new govReleaseLadder.ts imposes the canonical R0 Foundation / R1 Proposal / R2 Full build-out ladder on the gated gov plan before scheduling - a pure, gov-only transform that reassigns release keys only (walking-skeleton release -&gt; R0, everything else -&gt; R2; R1 starts empty for M3&#39;s P1-P8), so requirement coverage is untouched and the student path is unchanged. (T2) R2 is parked by default via gov_parked_releases in the gov project&#39;s own project_variables (no shared-table column, no migration); withDefaultGovParking never overwrites an activated release, activateGovRelease is the deliberate switch. (T3) gov materialize now uses a new createDetachedProjectForEnrollment that creates the project row WITHOUT repointing the enrollment&#39;s single active_project_id, so an intern can own multiple gov projects at once and a gov build never hijacks the primary student build; the student &quot;+ New project&quot; path (createNewProjectForEnrollment) is byte-for-byte unchanged. (T4) the materialize-build-project action IS the assignment action, so after T1-T3 assigning a gov project picks up the whole lifecycle in one call, idempotently, and a second gov project for the same intern gets its own ladder - proven by test. (T5) regression gate.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend tsc --noEmit exit 0; test-file typecheck baseline matched exactly (no new errors); jest 191 suites / 3056 tests pass across sbp + factory + projectService (integration tier excluded locally, runs in CI with Postgres); the three M2 suites (govReleaseLadder, govProjectMaterialization, projectService.govDetached) green.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">parking lives in project_variables rather than a new column by design (gov-scoped, additive, zero blast radius on shared tables). T4 required no new wiring because the assignment action already triggers materialize; T3&#39;s detached create is what enables the multi-project case. Rollback: all changes additive/gov-scoped; revert the six files, redeploy backend; no schema change. PR pending (one PR + one deploy, Ali merges).</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>docs/sessions/CC-20261124-g9p2.md</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>
