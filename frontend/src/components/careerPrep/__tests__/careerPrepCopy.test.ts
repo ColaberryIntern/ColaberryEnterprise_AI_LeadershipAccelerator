@@ -1,6 +1,6 @@
 import { careerPrepSummary, interviewWhen } from '../logic/careerPrepCopy';
 import { careerPrepDoorsFor, doorsText, CAREER_PREP_ROOM_PATH } from '../../campus/hq/careerPrepDoors';
-import { buildHq, PLACEMENT_SECTION, type HqNav } from '../../campus/hq/hqModel';
+import { buildHq, PLACEMENT_SECTION, readerLine, type HqNav } from '../../campus/hq/hqModel';
 import { NAV_GROUPS } from '../../Layout/adminNav';
 import type { PrepInterview, PrepSummary } from '../careerPrepApi';
 
@@ -38,10 +38,16 @@ describe('careerPrepDoorsFor: one door for students (CP2.2)', () => {
     expect(doors).toHaveLength(1);
     expect(doors[0]).toMatchObject({ path: CAREER_PREP_ROOM_PATH, label: 'Career Prep', own: true, open: true });
   });
-  it('gives no doors to a member without it, an explorer, or a partner (Release 1)', () => {
-    expect(careerPrepDoorsFor('member', { on: false })).toEqual([]);
-    expect(careerPrepDoorsFor('explorer', { on: true })).toEqual([]);
+  it('gives an explorer it is on for (a pilot volunteer) the same one door', () => {
+    expect(careerPrepDoorsFor('explorer', { on: true })).toEqual(careerPrepDoorsFor('member', { on: true }));
+  });
+  it('gives no doors to a student without it, a partner or staff', () => {
+    for (const a of ['member', 'explorer'] as const) {
+      expect(careerPrepDoorsFor(a, { on: false })).toEqual([]);
+      expect(careerPrepDoorsFor(a, undefined)).toEqual([]); // flag still loading, or failed closed
+    }
     expect(careerPrepDoorsFor('business', { on: true })).toEqual([]);
+    expect(careerPrepDoorsFor('staff', { on: true })).toEqual([]);
   });
   it('pluralizes doors', () => {
     expect([doorsText(1), doorsText(4)]).toEqual(['1 door', '4 doors']);
@@ -64,8 +70,14 @@ describe('the tower with Career Prep (CP2.2)', () => {
     const has = (hq: ReturnType<typeof buildHq>) => hq.floors.some((f) => f.label === 'Career Prep' || f.label === 'Hiring');
     expect(has(buildHq(() => false, false, 'member', nav, undefined, undefined, {}, { on: false }))).toBe(false);
     expect(has(buildHq(() => false, false, 'member', nav))).toBe(false); // flag still loading: no flash
-    expect(has(buildHq(() => false, false, 'explorer', nav, undefined, undefined, {}, { on: true }))).toBe(false);
+    expect(has(buildHq(() => false, false, 'explorer', nav, undefined, undefined, {}, { on: false }))).toBe(false);
+    expect(has(buildHq(() => false, false, 'explorer', nav))).toBe(false);
     expect(has(buildHq(() => false, false, 'business', nav))).toBe(false);
+  });
+  it('an explorer it is on for sees the floor, only its one door, and a visitor badge', () => {
+    const hq = buildHq(() => false, false, 'explorer', nav, undefined, undefined, {}, { on: true });
+    expect(floorOf(hq).rooms.map((r) => r.path)).toEqual([CAREER_PREP_ROOM_PATH]);
+    expect(readerLine(hq, 'explorer')).toBe('Visitor badge · 1 floor');
   });
   it('leaves everyone else\'s tower exactly as it was: same floors, same numbers, no gap', () => {
     const real = { pinned: [], groups: NAV_GROUPS };

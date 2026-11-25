@@ -4,7 +4,7 @@ import { conciergeLine, floorStatus, openFloors, readerLine, type HqFloor } from
 import type { HqState } from './useHq';
 import type { CampusAudience } from '../campusMap';
 import { HqPeople, type HqPerson } from './HqPeople';
-import { isCareerPrepFloor, prepExpressLabel, prepFloorOf, prepLobbyLine, prepOutsideHint, prepStaffFloorsLine } from './careerPrepDoors';
+import { isCareerPrepFloor, isPrepAudience, prepExpressLabel, prepFloorOf, prepLobbyLine, prepOutsideHint, prepStaffFloorsLine } from './careerPrepDoors';
 import { useCareerPrepSummary } from '../../careerPrep/useCareerPrepSummary';
 
 /**
@@ -95,7 +95,7 @@ export function HqLobby({ s, face, audience, firstName, hour, desk, lobby, peopl
 }): React.ReactElement {
   const { hq } = s;
   const prep = hq.isStaff ? undefined : prepFloorOf(hq.floors);
-  const student = !!prep && audience === 'member';
+  const student = !!prep && isPrepAudience(audience);
   const summary = useCareerPrepSummary(student);
   const listed = student ? hq.floors.filter((f) => f.access !== 'none') : hq.floors;
   const portalDoors = hq.ground.filter((g) => g.portal);
@@ -116,7 +116,7 @@ export function HqLobby({ s, face, audience, firstName, hour, desk, lobby, peopl
         <button type="button" className="cm-hq-elev" onClick={s.toCab} aria-label="Elevator B"><span className="ind">PH</span><span className="dr"><i /><i /></span></button>
       </div>
       <div className="cm-hq-bubble" data-testid="cm-hq-concierge"><b>CONCIERGE{desk ? ` · ${desk.name.toUpperCase()}` : ''}</b>{prep && student ? prepLobbyLine(firstName, prep.num, summary?.sessionMinutes) : conciergeLine(hq, firstName, audience, hour)}</div>
-      {prep && audience === 'member' && <button type="button" className="cm-hq-btn is-navy cm-hq-express" onClick={() => s.ride(prep.num)} data-testid="cm-hq-express">{prepExpressLabel(prep.num)}</button>}
+      {prep && isPrepAudience(audience) && <button type="button" className="cm-hq-btn is-navy cm-hq-express" onClick={() => s.ride(prep.num)} data-testid="cm-hq-express">{prepExpressLabel(prep.num)}</button>}
       <div className="cm-hq-desk">
         {desk && <div className="host"><span className="av">{desk.initials}</span><span className="bd" /></div>}
         <div className="top2" /><div className="body">CONCIERGE</div>
@@ -140,7 +140,7 @@ export function HqLobby({ s, face, audience, firstName, hour, desk, lobby, peopl
         <button type="button" className="r yes" onClick={() => s.ride('G')}><span className="n">G</span><span className="l">LOBBY · {face.toUpperCase()}</span><span className="s">✓</span></button>
       </div>
       {/* CP5.3: a student with Career Prep has the express button instead of the badge gate */}
-      {!(prep && audience === 'member') && <div className="cm-hq-gate">
+      {!(prep && isPrepAudience(audience)) && <div className="cm-hq-gate">
         <span className="tsl" />
         <button type="button" className={`reader ${hq.isStaff ? 'ok' : 'no'}`} onClick={s.toCab} data-testid="cm-hq-reader">
           <span className="dot">{hq.isStaff ? '✓' : 'G'}</span>{readerLine(hq, audience)}

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCampus } from './CampusContext';
+import { CareerPrepTab } from './CareerPrepMenuLink';
 import { useCampusView } from './useCampusView';
 import { OPEN_BELL_EVENT } from './art/BuildingBadges';
 import { badgeText, unreadConversations } from './home/inboxModel';
@@ -65,6 +66,7 @@ export default function CampusTabBar({ active, onMessages }: { active: string; o
   return (
     <nav className="cm-tabbar" aria-label="Campus">
       {todayFirst ? [today, map] : [map, today]}
+      <CareerPrepTab />
       {audience !== 'business' && button('messages', 'Messages', unread)}
       {button('alerts', 'Alerts')}
       {button('me', 'Me')}
