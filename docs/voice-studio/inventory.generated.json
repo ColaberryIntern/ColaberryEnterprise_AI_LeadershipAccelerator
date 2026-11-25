@@ -1,6 +1,6 @@
 {
  "generatedFrom": "git ls-files",
- "total": 276,
+ "total": 278,
  "byRole": {
   "DISPATCH": 3,
   "INGEST": 3,
@@ -9,7 +9,7 @@
   "CONFIG": 20,
   "UI": 33,
   "CONSUMER": 72,
-  "MENTION": 128
+  "MENTION": 130
  },
  "rows": [
   {
@@ -1367,6 +1367,18 @@
     "VOICE_TEST_ENABLED",
     "VOICE_WS_BASE_URL"
    ]
+  },
+  {
+   "path": "backend/src/services/voice/migration/assistantInventory.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/migration/matrix.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
   },
   {
    "path": "backend/src/services/voice/ops/opsMetrics.ts",

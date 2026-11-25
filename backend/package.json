@@ -15,6 +15,7 @@
     "voice:docs-check": "ts-node src/scripts/voice/docsCheck.ts",
     "voice:preflight": "ts-node src/scripts/voice/preflight.ts",
     "voice:load": "node --expose-gc -r ts-node/register/transpile-only src/scripts/voice/load.ts",
+    "voice:migration:report": "ts-node --transpile-only src/scripts/voice/migrationReport.ts",
     "voice:reconcile": "ts-node src/scripts/voice/reconcile.ts",
     "voice:rollback:drill": "ts-node --transpile-only src/scripts/voice/rollbackDrill.ts",
     "voice:route:rollback": "ts-node src/scripts/voice/rollbackRoute.ts",
