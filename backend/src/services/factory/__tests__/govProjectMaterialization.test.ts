@@ -101,6 +101,7 @@ describe('govProjectMaterialization (core-table write — idempotent, typed erro
     await materializeGovBuildProject(baseInput);
     const matArgs = mock(materializePlanAsTasks).mock.calls[0];
     expect(matArgs[3].connectedDemo).toBe(true);
+    expect(matArgs[3].proposalStories).toBe(true);   // M3: R1 gets the P1-P8 proposal ladder
   });
 
   it('passes connectedDemo:true on the REUSE path too, so a re-run still carries the demo spine', async () => {

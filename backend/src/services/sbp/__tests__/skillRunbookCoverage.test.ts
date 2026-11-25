@@ -62,13 +62,15 @@ const SKILL_DIR = path.join(REPO_ROOT, '.claude', 'skills', 'build-student-proje
  * an allowlist entry is how that cost gets avoided.
  */
 const NOT_IN_RUNBOOK: Readonly<Record<string, string>> = {
-  // Empty, and that is the healthy state. On 2026-09-09 the runbook named 34 of
-  // 64 modules; documenting the other 30 turned out to be a morning's work, and
-  // every one of them had something a reader would want on the day it breaks.
-  //
   // Add an entry only for a module with genuinely no student-visible failure
   // mode, and say why in the value. An allowlist that grows is this test being
   // switched off one line at a time.
+  proposalReadinessStories:
+    'Gov Proposal Studio only. The P1-P8 proposal ladder is injected into the R1 release for '
+    + 'government-contract projects via the gov-only `proposalStories` flag (set only by '
+    + 'materializeGovBuildProject). It never fires on a student (non-gov) build, so it has no '
+    + 'student-visible failure mode for THIS runbook; its failure history lives with the gov '
+    + 'proposal pipeline, not the student capstone build.',
 };
 
 /** Every module the pipeline ships, by bare name. */
