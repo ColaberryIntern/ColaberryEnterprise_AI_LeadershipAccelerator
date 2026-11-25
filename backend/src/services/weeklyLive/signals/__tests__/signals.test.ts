@@ -168,6 +168,8 @@ describe('cost cap', () => {
   });
   it('unknown usage is charged at the worst case; searches are billed', () => {
     expect(searchCost('gpt-4o', undefined, 2)).toBe(SEARCH_RESERVE_USD);
+    expect(searchCost('unknown-model', { input_tokens: 1 }, 2)).toBe(SEARCH_RESERVE_USD);
+    expect(searchCost('gpt-6.2-sol', { input_tokens: 10_000, output_tokens: 1000 }, 2)).toBeCloseTo(0.05, 6);
     expect(searchCost('gpt-4o', { input_tokens: 10_000, output_tokens: 1000 }, 2)).toBeCloseTo(0.055, 6);
   });
 });

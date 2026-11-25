@@ -13,7 +13,7 @@ it('records the call, redacts the prompt and does not retry', async () => {
   expect(await searchGroup([1, 6], input)).toEqual([]);
   expect(create.mock.calls[0][0].input).not.toContain('4111 1111 1111 1111');
   expect(options[0]).toMatchObject({ maxRetries: 0 });
-  expect(emit).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'success', workflow_id: 'weekly_live_signals', total_tokens: 11_000, cost_usd: expect.closeTo(0.045, 5) }));
+  expect(emit).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'success', workflow_id: 'weekly_live_signals', total_tokens: 11_000, cost_usd: expect.closeTo(0.04, 5) }));
 });
 it('records a failed call and rethrows', async () => {
   create.mockRejectedValue(Object.assign(new Error('slow down'), { status: 429 }));

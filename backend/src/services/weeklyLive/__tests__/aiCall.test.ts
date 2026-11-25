@@ -2,7 +2,8 @@ const create = jest.fn(); const emit = jest.fn().mockResolvedValue(undefined); c
 jest.mock('../../openaiInstrumented', () => ({ getInstrumentedOpenAI: (_c: unknown, o: unknown) => { options.push(o); return { responses: { create } }; } }));
 jest.mock('../../aiEventService', () => ({ emitAiEvent: (e: unknown) => emit(e) }));
 jest.mock('../signals/researchBudget', () => ({ withBudget: async (_p: unknown, _n: unknown, _e: unknown, call: () => Promise<{ value: unknown; costUsd: number }>) => { const r = await call(); settled.push(r.costUsd); return r.value; } }));
-import { askAi, callCost, reserveFor } from '../aiCall';
+import { askAi } from '../aiCall';
+import { callCost, reserveFor } from '../modelPrices';
 
 /** WL3.3: paid calls are strict, redacted, logged, never retried, and never priced at zero. */
 const call = { planId: 'p', purpose: 'topic_write', model: 'gpt-6.2-sol', system: 's', user: 'card 4111 1111 1111 1111', schema: {}, maxTokens: 10, reserveUsd: 0.3 };

@@ -5,7 +5,7 @@ import { emitAiEvent } from '../../aiEventService';
 import { redactSensitive } from '../../../utils/piiRedaction';
 import { ensureTraceId } from '../../../utils/requestContext';
 import { classifyError } from '../../../utils/errorClassifier';
-import { MODEL_PRICING } from '../../components/costEstimationService';
+import { callCost, isPriced } from '../modelPrices';
 import { allWeeks } from '../../../data/canonicalCourse';
 import { VIRAL_FACTORS } from '../scoring';
 import { withBudget } from './researchBudget';
@@ -77,9 +77,8 @@ Only use URLs you found in this search.`;
 
 export interface SearchUsage { input_tokens?: number; output_tokens?: number; }
 export function searchCost(model: string, usage: SearchUsage | undefined, searches: number): number {
-  if (!usage) return SEARCH_RESERVE_USD; // unknown usage is charged at the worst case, never zero
-  const p = MODEL_PRICING[model] || MODEL_PRICING['gpt-4o'];
-  return ((usage.input_tokens || 0) * p.input_per_1m + (usage.output_tokens || 0) * p.output_per_1m) / 1_000_000 + searches * WEB_SEARCH_CALL_USD;
+  if (!usage || !isPriced(model)) return SEARCH_RESERVE_USD; // unknown usage or price is charged at the worst case, never zero
+  return callCost(model, usage, SEARCH_RESERVE_USD) + searches * WEB_SEARCH_CALL_USD;
 }
 
 export async function searchGroup(group: readonly number[], s: SearchInput): Promise<Candidate[]> {
