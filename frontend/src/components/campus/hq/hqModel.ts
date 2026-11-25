@@ -188,7 +188,7 @@ export function conciergeLine(hq: Hq, firstName: string, audience: CampusAudienc
 export function readerLine(hq: Hq, audience: CampusAudience): string {
   if (!hq.isStaff) {
     const mine = openFloors(hq).length;
-    if (mine) return `Member badge · ${mine} ${mine === 1 ? 'floor' : 'floors'}`;
+    if (mine) return `${audience === 'explorer' ? 'Visitor' : 'Member'} badge · ${mine} ${mine === 1 ? 'floor' : 'floors'}`;
     return `${audience === 'explorer' ? 'Visitor' : audience === 'business' ? 'Partner' : 'Member'} badge · ground floor`;
   }
   const n = openFloors(hq).length;

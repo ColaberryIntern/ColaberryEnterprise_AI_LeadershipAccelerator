@@ -7,7 +7,7 @@ import { useHqSubnav } from './useHqSubnav';
 import { useHqStartIntent } from './useHqStartIntent';
 import { listMyGovProjects } from '../../../services/govProjectPortalApi';
 import { fetchCareerPrepFlag } from '../../careerPrep/careerPrepFlag';
-import type { CareerPrepFloorState } from './careerPrepDoors';
+import { isPrepAudience, type CareerPrepFloorState } from './careerPrepDoors';
 
 /**
  * Campus HQ state (H5): which scene you are in (outside, lobby, elevator, a floor), where the cab is, the hovered button, and
@@ -65,10 +65,10 @@ export function useHq(audience: CampusAudience, reduceMotion: boolean, active = 
     return () => { live = false; };
   }, [audience]);
   const officeKey = office ? office.projects.map((p) => p.projectId).join(',') : '';
-  // Career Prep v27 (CP2.2): whether this member's Career Prep door is open (server-decided, fails closed). Members only.
+  // Career Prep v27 (CP2.2): whether this student's Career Prep door is open (server-decided, fails closed). Students only.
   const [careerPrep, setCareerPrep] = useState<CareerPrepFloorState | undefined>(undefined);
   useEffect(() => {
-    if (audience !== 'member') { setCareerPrep(undefined); return undefined; }
+    if (!isPrepAudience(audience)) { setCareerPrep(undefined); return undefined; }
     let live = true;
     fetchCareerPrepFlag().then((on) => { if (live) setCareerPrep({ on }); });
     return () => { live = false; };

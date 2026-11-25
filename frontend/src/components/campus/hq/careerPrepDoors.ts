@@ -6,18 +6,23 @@ import type { HqRoom } from './hqModel';
  * ONE door (Ali: "1 door that leads to multiple guided options instead of multiple doors"). Staff
  * doors are the sidebar's Placement links (built by hqModel like every floor), not this function.
  *
- *   member + Career Prep on   one own room, Career Prep, opening the room in place
+ *   student + Career Prep on  one own room, Career Prep, opening the room in place. A student is a member or an explorer:
+ *                             the pilot's volunteers (Ali, 2026-11-25) hold accounts without a class. The server decides
+ *                             who it is on for, per enrollment, so an explorer it is not on for sees no change.
  *   everyone else             no doors, and buildHq leaves the floor out entirely, so nobody Career Prep is
  *                             not open for sees any change (Release 1 ships dark). When M4 opens it, the
- *                             kit's explorer note ("Career Prep opens when you enroll") and the partners'
+ *                             partners'
  *                             Hiring doors (Release 3) are added here.
  */
 export const CAREER_PREP_ROOM_PATH = '/portal/career/room';
 
 export interface CareerPrepFloorState { on: boolean; doorStatus?: string }
 
+/** The audiences that can hold Career Prep at all (the server then decides, per enrollment). */
+export const isPrepAudience = (a: CampusAudience): boolean => a === 'member' || a === 'explorer';
+
 export function careerPrepDoorsFor(audience: CampusAudience, state: CareerPrepFloorState | undefined): HqRoom[] {
-  if (audience !== 'member' || !state?.on) return [];
+  if (!isPrepAudience(audience) || !state?.on) return [];
   return [{
     path: CAREER_PREP_ROOM_PATH, label: 'Career Prep', icon: 'focus-3-line', section: 'own',
     newTab: false, external: false, open: true, own: true,

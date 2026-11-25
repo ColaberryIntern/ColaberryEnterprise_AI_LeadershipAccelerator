@@ -10,6 +10,7 @@ import { buildingForPath, buildingName, roomLabel, CHOW_ROUTE } from './campusMa
 import { openOrderSheet } from './chow/OrderSheet';
 import AdminLink from './AdminLink';
 import { useIsMgmt } from './campusMgmt';
+import { CareerPrepMenuLink } from './CareerPrepMenuLink';
 
 /**
  * The campus in the portal's left column (Campus C2), in place of nav.te-nav when the campus
@@ -37,6 +38,8 @@ export default function CampusNav({ active }: { active: string }): React.ReactEl
       {isExplorer && buildings.some((b) => b.id === 'gate') && (
         <button type="button" className="cm-link cm-nav-tour" onClick={() => openMap('gate')} data-testid="cm-your-path">Your path to enrolling</button>
       )}
+      {/* Career Prep, one click, only for a student it is on for (renders nothing otherwise) */}
+      <CareerPrepMenuLink />
       {/* C11b: the rooms of the building you are in (the prototype's left side on a page) */}
       {here && here.rooms.some((r) => !r.admin && !r.planned) && (
         <section className="cm-nav-rooms" aria-label={`In ${buildingName(here, settings.workplaceNames)}`} data-testid="cm-page-side">
