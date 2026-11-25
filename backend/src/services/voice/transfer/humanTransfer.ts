@@ -15,6 +15,10 @@
 
 export const TRANSFER_REASON = 'transfer_to_human';
 export const DIAL_TIMEOUT_SECONDS = 20;
+/** The longest one transferred conversation may run. */
+export const DIAL_TIME_LIMIT_SECONDS = 30 * 60;
+/** Transfers per rolling hour, all lines together. Over it, callers get the safe fallback. */
+export const MAX_TRANSFERS_PER_HOUR = 20;
 
 /** Transfer hours: Monday to Friday, 9:00 to 17:00 Central (America/Chicago, DST-aware). */
 export function withinTransferHours(now: Date): boolean {
@@ -43,7 +47,7 @@ export const END_TWIML = `${HEAD}<Hangup/></Response>`;
 export function dialTwiml(target: string, dialActionUrl: string): string {
   if (!/^\+[1-9]\d{6,14}$/.test(target)) throw new Error('transfer target must be E.164');
   if (!dialActionUrl.startsWith('https://')) throw new Error('dial action URL must be https');
-  return `${HEAD}<Say>Connecting you with a teammate now.</Say><Dial timeout="${DIAL_TIMEOUT_SECONDS}" action="${xml(dialActionUrl)}" method="POST">${target}</Dial></Response>`;
+  return `${HEAD}<Say>Connecting you with a teammate now.</Say><Dial timeout="${DIAL_TIMEOUT_SECONDS}" timeLimit="${DIAL_TIME_LIMIT_SECONDS}" action="${xml(dialActionUrl)}" method="POST">${target}</Dial></Response>`;
 }
 
 export type ConnectDecision = 'dial' | 'fallback' | 'end';

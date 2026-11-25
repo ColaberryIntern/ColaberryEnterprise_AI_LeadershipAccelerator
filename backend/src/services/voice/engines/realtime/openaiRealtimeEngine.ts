@@ -47,7 +47,12 @@ export interface RealtimeDeps {
 
 export const MAX_PREBUFFER_FRAMES = 150; // ~3 s of 20 ms frames
 export const MAX_MALFORMED_FRAMES = 10;
+/** Follow-up answers after tool calls, per caller turn and per call (VS4.2: a caller must not be able to loop paid answers). */
+export const MAX_TOOL_FOLLOW_UPS_PER_TURN = 3;
+export const MAX_TOOL_CALLS_PER_CALL = 20;
 const MAX_TRACKED_ITEMS = 50;
+/** The answer is over. 'incomplete' = cut by the length limit; 'cancelled' is ours and handled where we cancel. */
+const ENDED: ReadonlySet<string> = new Set(['completed', 'incomplete', 'failed']);
 
 export class RealtimeBridge {
   private handle: SessionHandle | null = null;
@@ -66,6 +71,8 @@ export class RealtimeBridge {
   private greetingRequested = false;
   private current: { id: string; turnId: number; genId: number; active: boolean } | null = null;
   private followUpOf: { turnId: number; genId: number } | null = null;
+  private followUps = { turnId: -1, n: 0 };
+  private toolCalls = 0;
   private currentItem: string | null = null;
   private readonly sentMs = new Map<string, number>();
   private readonly playedMs = new Map<string, number>();
@@ -256,7 +263,9 @@ export class RealtimeBridge {
     let input: unknown = {};
     try { input = args ? JSON.parse(args) : {}; } catch { input = { __unparseable: true }; } // the broker's schema rejects it with a speakable error
     h.toolStarted(callId, name);
-    const out = await this.broker!.run(callId, name, input);
+    const out = ++this.toolCalls > MAX_TOOL_CALLS_PER_CALL
+      ? { content: 'No more lookups are available on this call. Offer to have a teammate follow up.', isError: true, committed: false, errorClass: 'ToolLimitReached' }
+      : await this.broker!.run(callId, name, input);
     const left = (this.toolsInFlight.get(key) ?? 1) - 1;
     if (left > 0) this.toolsInFlight.set(key, left); else this.toolsInFlight.delete(key);
     h.toolFinished(callId, out.committed, out.errorClass);
@@ -264,7 +273,16 @@ export class RealtimeBridge {
     if (this.closed || !this.model) return;
     this.model.send(functionOutput(callId, out.content)); // always: an unanswered call would corrupt the model's conversation
     // One follow-up per response, after its LAST tool call returns, and only while the answer is current.
-    if (left <= 0 && owner && h.accepts(owner.turnId, owner.genId)) { this.followUpOf = owner; this.model.send(responseCreate()); }
+    if (left > 0 || !owner || !h.accepts(owner.turnId, owner.genId)) return;
+    if (this.followUps.turnId !== owner.turnId) this.followUps = { turnId: owner.turnId, n: 0 };
+    if (++this.followUps.n > MAX_TOOL_FOLLOW_UPS_PER_TURN) {
+      this.log('warn', 'voice_tool_follow_up_limit', { error_class: 'ToolLimitReached', tool: name });
+      // Back to listening. If the response is still open, its own response.done does this.
+      if (!this.current?.active) h.dispatch({ type: 'generation_done', generationId: owner.genId });
+      return;
+    }
+    this.followUpOf = owner;
+    this.model.send(responseCreate());
   }
 
   private responseDone(id: string, status?: string): void {
@@ -276,7 +294,7 @@ export class RealtimeBridge {
       return;
     }
     // A response that made a tool call is not the end of the answer: its follow-up continues it.
-    if (this.followUpOf || this.toolsInFlight.has(id) || status !== 'completed' || this.current?.id !== id) return;
+    if (this.followUpOf || this.toolsInFlight.has(id) || !ENDED.has(status ?? '') || this.current?.id !== id) return;
     h.dispatch({ type: 'generation_done', generationId: this.current.genId });
   }
 

@@ -96,6 +96,36 @@ describe('Engine A, while the session reference is being checked', () => {
     c.onClose();
   });
 
+  it('early messages replay in order: the newest caller turn is the one answered, after the older', async () => {
+    const x = harness();
+    const asked: string[][] = [];
+    x.relay.llm = { streamTurn: async (a) => { asked.push(a.messages.filter((m) => m.role === 'user').map((m) => String(m.content))); a.onText('hi'); return { ok: true, stopReason: 'end_turn', text: 'hi', toolCalls: [], assistantContent: 'hi' }; } };
+    const c = new RelayConnection(x.transport, x.relay);
+    const p = c.onMessage(setupMsg(x.ref));
+    for (const t of ['first', 'second']) await c.onMessage(JSON.stringify({ type: 'prompt', voicePrompt: t, last: true }));
+    x.release();
+    await p;
+    const last = asked[asked.length - 1];
+    expect(last.indexOf('second')).toBeGreaterThan(last.indexOf('first'));
+    expect(last).toContain('first');
+    c.onClose();
+  });
+
+  it('an early interrupt cuts the early answer that came before it', async () => {
+    const x = harness();
+    const signals: AbortSignal[] = [];
+    x.relay.llm = { streamTurn: (a) => { signals.push(a.signal); return new Promise((r) => { a.signal.addEventListener('abort', () => r({ ok: false, errorClass: 'Aborted', aborted: true })); setTimeout(() => r({ ok: true, stopReason: 'end_turn', text: '', toolCalls: [], assistantContent: '' }), 200); }); } };
+    const c = new RelayConnection(x.transport, x.relay);
+    const p = c.onMessage(setupMsg(x.ref));
+    await c.onMessage(promptMsg);
+    await c.onMessage(JSON.stringify({ type: 'interrupt', utteranceUntilInterrupt: '' }));
+    x.release();
+    await p;
+    expect(signals).toHaveLength(1);
+    expect(signals[0].aborted).toBe(true);
+    c.onClose();
+  });
+
   it('the early queue is bounded', async () => {
     const x = harness();
     const c = new RelayConnection(x.transport, x.relay);

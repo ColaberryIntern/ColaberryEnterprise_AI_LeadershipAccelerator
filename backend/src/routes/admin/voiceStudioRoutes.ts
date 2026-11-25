@@ -12,7 +12,7 @@
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import { QueryTypes } from 'sequelize';
 import { z } from 'zod';
-import { requireAdmin } from '../../middlewares/authMiddleware';
+import { requireAdmin, requireFullAdmin } from '../../middlewares/authMiddleware';
 import { sequelize } from '../../config/database';
 import { loadVoiceConfig } from '../../services/voice/voiceConfig';
 import { productionTestLabDeps, startLiveTest, TEST_TENANT_ID, type TestLabDeps } from '../../services/voice/testlab/testLabService';
@@ -42,7 +42,7 @@ export function buildVoiceStudioRouter(deps: () => TestLabDeps = productionTestL
   const router = Router();
   const gate = (_req: Request, _res: Response, next: NextFunction) => (enabled() ? next() : next('router'));
 
-  router.post('/api/admin/voice-studio/tests', gate, requireAdmin, async (req: Request, res: Response) => {
+  router.post('/api/admin/voice-studio/tests', gate, requireAdmin, requireFullAdmin, async (req: Request, res: Response) => {
     const operator = req.admin?.sub ?? 'admin'; // the admin's id, never their email, in logs
     try {
       const r = await startLiveTest(req.body, operator, deps());
@@ -67,7 +67,7 @@ export function buildVoiceStudioRouter(deps: () => TestLabDeps = productionTestL
       res.status(500).json({ error: 'DatabaseError' });
     }
   });
-  router.post('/api/admin/voice-studio/tests/:callId/stop', gate, requireAdmin, async (req: Request, res: Response) => {
+  router.post('/api/admin/voice-studio/tests/:callId/stop', gate, requireAdmin, requireFullAdmin, async (req: Request, res: Response) => {
     const id = CallIdSchema.safeParse(req.params.callId);
     if (!id.success) { res.status(400).json({ error: 'ValidationError' }); return; }
     try {

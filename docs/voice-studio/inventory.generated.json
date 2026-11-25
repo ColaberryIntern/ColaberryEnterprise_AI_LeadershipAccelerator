@@ -1,6 +1,6 @@
 {
  "generatedFrom": "git ls-files",
- "total": 268,
+ "total": 269,
  "byRole": {
   "DISPATCH": 3,
   "INGEST": 3,
@@ -8,7 +8,7 @@
   "CALLER": 11,
   "CONFIG": 20,
   "UI": 33,
-  "CONSUMER": 65,
+  "CONSUMER": 66,
   "MENTION": 127
  },
  "rows": [
@@ -1516,6 +1516,12 @@
    "envVars": [
     "VOICE_TRANSFER_NUMBER"
    ]
+  },
+  {
+   "path": "backend/src/services/voice/transfer/transferGuard.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
   },
   {
    "path": "backend/src/services/voice/twilio/correlationToken.ts",

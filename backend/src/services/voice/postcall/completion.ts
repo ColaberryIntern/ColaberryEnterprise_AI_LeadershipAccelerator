@@ -90,9 +90,12 @@ export async function claimCompletion(logId: string, c: CallCompletion): Promise
   const claimed = await sequelize.query<{ id: string }>(
     `UPDATE communication_logs
         SET status = :status,
-            provider_response = COALESCE(provider_response, '{}'::jsonb) || (CAST(:patch AS jsonb) - CASE WHEN provider_response->>'transcript_state_reason' IS NOT NULL THEN 'transcript_state' ELSE '' END) || jsonb_build_object('completed_at', CAST(:completedAt AS text))
+            provider_response = COALESCE(provider_response, '{}'::jsonb) || (CAST(:patch AS jsonb) - CASE WHEN provider_response->>'transcript_state_reason' IS NOT NULL THEN 'transcript_state' ELSE '' END) || jsonb_build_object('completed_at', CAST(:completedAt AS text),
+                 -- every status already claimed, so completed -> failed -> completed is not "first" twice
+                 'claimed_statuses', COALESCE(provider_response->'claimed_statuses', CASE WHEN COALESCE(provider_response->>'completed_at', '') <> '' THEN jsonb_build_array(COALESCE(provider_response->>'call_status', '')) ELSE '[]'::jsonb END) || to_jsonb(CAST(:callStatus AS text)))
       WHERE id = :id
         AND NOT (COALESCE(provider_response->>'completed_at', '') <> '' AND COALESCE(provider_response->>'call_status', '') = :callStatus)
+        AND NOT (COALESCE(provider_response->'claimed_statuses', '[]'::jsonb) @> to_jsonb(CAST(:callStatus AS text)))
       RETURNING id`,
     // completedAt is bound, not written as SQL text: a literal time format such as HH24:MI would be
     // parsed by Sequelize as :MI replacements.

@@ -31,6 +31,8 @@ export interface InboundFacts {
   testEnabled: boolean;
   engineReady: boolean;
   transferTarget: string | undefined;
+  /** The emergency stop is on, or could not be read: no agent and no dial, only the message. */
+  stopped: boolean;
   now: Date;
 }
 
@@ -43,7 +45,7 @@ export const LIVE_PROFILE_BRAND = 'colaberry';
 export const agentSpeaksFor = (n: CalledNumber, testTenantId: string): boolean =>
   n.tenantId === testTenantId && (n.brandSlug === null || n.brandSlug === LIVE_PROFILE_BRAND);
 
-export type FallbackReason = 'unknown_number' | 'no_policy' | 'invalid_policy' | 'disabled' | 'no_agent_for_brand' | 'not_live' | 'engine_not_ready' | 'after_hours';
+export type FallbackReason = 'emergency_stop' | 'unknown_number' | 'no_policy' | 'invalid_policy' | 'disabled' | 'no_agent_for_brand' | 'not_live' | 'engine_not_ready' | 'after_hours';
 export type InboundPlan =
   | { kind: 'agent'; engine: 'conversation_relay'; number: CalledNumber; testMode: boolean }
   | { kind: 'human'; reason: FallbackReason; number: CalledNumber; testMode: boolean }
@@ -62,6 +64,7 @@ export function planInbound(f: InboundFacts): InboundPlan {
   const fallback = (reason: FallbackReason): InboundPlan => (p.data.fallback === 'human_line' && teammateAvailable(f.transferTarget, f.now)
     ? { kind: 'human', reason, number: n, testMode } : message(reason));
 
+  if (f.stopped) return message('emergency_stop');
   if (!p.data.enabled) return fallback('disabled');
   if (!agentSpeaksFor(n, f.testTenantId)) return fallback('no_agent_for_brand');
   // A customer number needs the studio switch; the dedicated test number needs the test switch.

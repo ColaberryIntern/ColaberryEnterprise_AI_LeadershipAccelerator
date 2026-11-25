@@ -8,7 +8,7 @@ jest.mock('../../../middlewares/authMiddleware', () => ({
     req.admin = { sub: 'admin-1', role: 'admin' };
     next();
   },
-  requireFullAdmin: (_q: unknown, _r: unknown, next: () => void) => next(),
+  requireFullAdmin: (req: { headers: Record<string, string> }, res: { status: (n: number) => { json: (b: unknown) => void } }, next: () => void) => { if (req.headers['x-scoped']) res.status(403).json({ error: 'Admin access required' }); else next(); },
 }));
 
 import { buildVoiceStudioRouter } from '../voiceStudioRoutes';
@@ -31,6 +31,12 @@ it('401 without an admin, and nothing is looked up or hung up', async () => {
   const m = make(live);
   expect((await m.post()).status).toBe(401);
   expect(m.stop.lookup).not.toHaveBeenCalled();
+  expect(m.hangup).not.toHaveBeenCalled();
+});
+
+it('VS4.2: a scoped admin cannot stop a call', async () => {
+  const m = make(live);
+  expect((await m.post().set({ ...A, 'x-scoped': '1' })).status).toBe(403);
   expect(m.hangup).not.toHaveBeenCalled();
 });
 

@@ -67,6 +67,9 @@ export async function startLiveTest(body: unknown, operatorId: string, d: TestLa
     if (auth.replay) return { refuse: { status: 409, body: { error: 'TestRefused', reason: 'duplicate_attempt' } } };
     await d.insertCall({ callId: auth.dispatch.callId, engine: req.engine, idempotencyKey: idempotencyKey(verdict.attemptNumber), purpose: `test:${req.script}` });
     return { auth, attempt: verdict.attemptNumber, provider };
+  }).catch((e: Error): Locked => {
+    if (e.name !== 'TestLockBusy') throw e;
+    return { refuse: { status: 409, body: { error: 'TestRefused', reason: 'test_starting' } } };
   });
   if ('refuse' in locked) {
     d.log({ level: 'warn', event: 'voice_test_refused', outcome: 'skipped', error_class: 'TestRefused', reason: locked.refuse.body.reason, run_id: req.runId, operator: operatorId });
@@ -111,7 +114,9 @@ export function productionTestLabDeps(): TestLabDeps {
     config: () => loadVoiceConfig(),
     ci: () => isCi(),
     withLock: (fn) => sequelize.transaction(async (t) => {
-      await sequelize.query("SELECT pg_advisory_xact_lock(hashtext('voice-test-lab'))", { transaction: t });
+      // Try, do not wait: waiting requests would each hold a pooled connection while this one needs more.
+      const [r] = await sequelize.query<{ ok: boolean }>("SELECT pg_try_advisory_xact_lock(hashtext('voice-test-lab')) AS ok", { transaction: t, type: QueryTypes.SELECT });
+      if (!r?.ok) throw Object.assign(new Error('another test is starting'), { name: 'TestLockBusy' });
       return fn();
     }),
     countAttempts: async (runId) => {

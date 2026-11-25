@@ -58,7 +58,7 @@ describe('transfer webhooks (handlers, after the shared Twilio checks)', () => {
   function app(over: Partial<TransferDeps> = {}) {
     const d: TransferDeps = {
       target: () => '+15555550199', publicBaseUrl: () => 'https://enterprise.example', now: () => TUE_10_CT.getTime(),
-      recordFallback: jest.fn().mockResolvedValue(undefined), closeInbound: jest.fn().mockResolvedValue(undefined), log: jest.fn(), ...over,
+      recordFallback: jest.fn().mockResolvedValue(undefined), refuseDial: jest.fn().mockResolvedValue(null), closeInbound: jest.fn().mockResolvedValue(undefined), log: jest.fn(), ...over,
     };
     const h = makeTransferHandlers(d);
     const a = express();
@@ -72,10 +72,19 @@ describe('transfer webhooks (handlers, after the shared Twilio checks)', () => {
     const { a, d } = app();
     const r = await request(a).post(`/c?ref=${encodeURIComponent(ref())}`).type('form').send({ HandoffData: HANDOFF });
     expect(r.status).toBe(200);
-    expect(r.text).toContain('<Dial timeout="20" action="https://enterprise.example/api/webhook/voice/twilio/dial-action?ref=');
+    expect(r.text).toContain('<Dial timeout="20" timeLimit="1800" action="https://enterprise.example/api/webhook/voice/twilio/dial-action?ref=');
     expect(r.text).toContain('>+15555550199</Dial>');
     expect(JSON.stringify((d.log as jest.Mock).mock.calls)).not.toContain('5555550199');
     expect(d.recordFallback).not.toHaveBeenCalled();
+  });
+
+  it.each(['emergency_stop', 'transfer_cap', 'transfer_loop', 'guard_unavailable'])('VS4.2: a refused dial (%s) is the fallback and no Dial', async (why) => {
+    const { a, d } = app({ refuseDial: jest.fn().mockResolvedValue(why) });
+    const r = await request(a).post(`/c?ref=${encodeURIComponent(ref())}`).type('form').send({ HandoffData: HANDOFF });
+    expect(r.text).toBe(FALLBACK_TWIML);
+    expect(d.refuseDial).toHaveBeenCalledWith(CALL, '+15555550199');
+    expect(d.recordFallback).toHaveBeenCalledWith(CALL);
+    expect(d.closeInbound).toHaveBeenCalledTimes(1);
   });
 
   it('unavailable agent: fallback TwiML and the call is marked for a callback', async () => {

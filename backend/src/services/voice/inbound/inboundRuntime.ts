@@ -15,7 +15,9 @@ import { mintToken } from '../twilio/correlationToken';
 
 export interface InboundDeps {
   findNumber: (calledNumber: string) => Promise<CalledNumber | null>;
-  facts: () => Omit<InboundFacts, 'number'>;
+  facts: () => Omit<InboundFacts, 'number' | 'stopped'>;
+  stopped: () => Promise<boolean>;
+  refuseDial: (callId: string, target: string) => Promise<string | null>;
   publicBaseUrl: () => string | undefined;
   /** One row per CallSid; returns the existing row on redelivery. */
   openCall: (s: CallSession) => Promise<{ callId: string }>;
@@ -30,7 +32,7 @@ export async function answerInbound(input: { calledNumber: string | undefined; c
   try {
     const number = input.calledNumber ? await d.findNumber(input.calledNumber) : null;
     const facts = d.facts();
-    const plan = planInbound({ ...facts, number });
+    const plan = planInbound({ ...facts, number, stopped: await d.stopped() });
     if (!plan.number || !input.callSid) {
       d.log({ level: 'warn', event: 'voice_inbound_fallback', outcome: 'skipped', error_class: 'InboundNotRoutable', reason: plan.number ? 'no_call_sid' : 'unknown_number' });
       return INBOUND_MESSAGE_TWIML;
@@ -43,7 +45,9 @@ export async function answerInbound(input: { calledNumber: string | undefined; c
     }
     d.log({ level: 'warn', event: 'voice_inbound_fallback', outcome: 'partial', call_id: callId, number_ref: plan.number.numberRef, reason: plan.reason, kind: plan.kind });
     const base = d.publicBaseUrl();
-    const dial = plan.kind === 'human' && Boolean(facts.transferTarget && base);
+    const refused = plan.kind === 'human' && facts.transferTarget && base ? await d.refuseDial(callId, facts.transferTarget) : null;
+    if (refused) d.log({ level: 'warn', event: 'voice_inbound_dial_refused', outcome: 'skipped', error_class: 'TransferRefused', call_id: callId, reason: refused });
+    const dial = plan.kind === 'human' && Boolean(facts.transferTarget && base) && !refused;
     await d.markFallback(callId, `inbound_${plan.reason}`, !dial);
     if (dial && facts.transferTarget && base) {
       return dialTwiml(facts.transferTarget, `${new URL(DIAL_ACTION_PATH, base).toString()}?ref=${encodeURIComponent(mintToken(callId, 'status', ACTION_TOKEN_TTL_SECONDS))}`);
@@ -107,6 +111,8 @@ export function productionInboundDeps(): InboundDeps {
         engineReady: Boolean(c.VOICE_WS_BASE_URL && process.env.ANTHROPIC_API_KEY), transferTarget: c.VOICE_TRANSFER_NUMBER, now: new Date(),
       };
     },
+    stopped: () => (require('../transfer/transferGuard') as typeof import('../transfer/transferGuard')).emergencyStopped(),
+    refuseDial: (callId, target) => (require('../transfer/transferGuard') as typeof import('../transfer/transferGuard')).refuseTransferDial(callId, target),
     publicBaseUrl: () => config().VOICE_PUBLIC_BASE_URL,
     openCall: openInboundCall,
     markFallback: markInboundFallback,

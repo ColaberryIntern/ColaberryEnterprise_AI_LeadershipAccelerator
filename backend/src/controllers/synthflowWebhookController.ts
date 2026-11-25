@@ -11,7 +11,7 @@ import { completeFlotationCall, isIntakeCallSource } from '../services/delivery/
 import OpenAI from 'openai';
 import { getInstrumentedOpenAI } from '../services/openaiInstrumented';
 import { env } from '../config/env';
-import { webhookTokenOk } from '../services/voice/synthflowWebhookAuth';
+import { logToken, safeRecordingUrl, webhookTokenOk } from '../services/voice/synthflowWebhookAuth';
 import { getTestOverrides } from '../services/settingsService';
 import { redactForLogs } from '../utils/piiRedaction';
 import { sendPostCallSms, sendVoicemailFallbackSms } from '../services/synthflowPostCallSms';
@@ -39,18 +39,18 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
     return;
   }
   try {
-    // Log raw payload to diagnose Synthflow's field names
-    console.log('[Synthflow Webhook] Raw payload:', redactForLogs(JSON.stringify(req.body)).slice(0, 2000));
-
     const body = req.body || {};
+    // Field names only, never values: the payload carries the conversation.
+    console.log('[Synthflow Webhook] Payload fields:', [...Object.keys(body), ...Object.keys(body.call || {}).map((k) => `call.${k}`)].map((k) => k.replace(/[^\w.]/g, '').slice(0, 40)).slice(0, 60).join(', '));
 
     // Synthflow V2 nests most data under body.call.*
     const call = body.call || {};
-    const call_id = call.call_id || body.call_id || call._id || body._id || null;
-    const status = call.status || body.status || '';
+    const rawId = call.call_id || body.call_id || call._id || body._id || null;
+    const call_id = typeof rawId === 'string' || typeof rawId === 'number' ? String(rawId).slice(0, 200) : null;
+    const status = typeof (call.status || body.status) === 'string' ? (call.status || body.status) as string : '';
     const duration = call.duration || body.duration || null;
     const transcript = call.transcript || body.transcript || '';
-    const recording_url = call.recording_url || body.recording_url || '';
+    const recording_url = safeRecordingUrl(call.recording_url || body.recording_url);
     const disposition = call.end_call_reason || body.disposition || '';
     const analysis = body.analysis || {};
     const metadata = body.metadata || {};
@@ -62,7 +62,7 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
       return;
     }
 
-    console.log(`[Synthflow Webhook] Call complete: ${call_id}, status: ${status}, disposition: ${disposition}`);
+    console.log(`[Synthflow Webhook] Call complete: ${logToken(call_id)}, status: ${logToken(status)}, disposition: ${logToken(disposition)}`);
 
     // Find the communication log entry by provider_message_id
     let commLog = await CommunicationLog.findOne({
@@ -94,19 +94,17 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
       }
     }
 
-    // Backfill CallContactLog with synthflow_call_id if it was null
-    if (call_id) {
-      CallContactLog.update(
-        { synthflow_call_id: call_id, call_status: 'completed' },
-        { where: { synthflow_call_id: { [Op.is]: null as any }, call_type: 'maya_initiated' }, limit: 1 } as any,
-      ).catch(() => {});
-    }
-
     if (!commLog) {
-      console.warn(`[Synthflow Webhook] No CommunicationLog found for call_id: ${call_id}`);
+      console.warn(`[Synthflow Webhook] No CommunicationLog found for call_id: ${logToken(call_id)}`);
       res.status(200).json({ ok: true, matched: false });
       return;
     }
+
+    // Backfill CallContactLog with synthflow_call_id if it was null. Only for a call we matched (VS4.2).
+    CallContactLog.update(
+      { synthflow_call_id: call_id, call_status: 'completed' },
+      { where: { synthflow_call_id: { [Op.is]: null as any }, call_type: 'maya_initiated' }, limit: 1 } as any,
+    ).catch((e: Error) => console.warn(JSON.stringify({ level: 'warn', service: 'synthflow-webhook', event: 'synthflow_contact_backfill_failed', outcome: 'failure', error_class: e.name || 'DatabaseError' })));
 
     // Record the completion exactly once per (call, status) - VS3.2. A redelivered webhook used to
     // re-run every step below, including a second text message to the lead. `firstDelivery` gates

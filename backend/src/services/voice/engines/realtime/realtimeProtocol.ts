@@ -14,6 +14,9 @@ export function toRealtimeTools(tools: VoiceToolDef[]): Array<{ type: 'function'
   return tools.map((t) => ({ type: 'function', name: t.name, description: t.description ?? '', parameters: t.input_schema }));
 }
 
+/** One spoken answer, audio tokens included (about two minutes): a runaway answer cannot bill without end. */
+export const MAX_OUTPUT_TOKENS = 2_048;
+
 export function sessionUpdate(o: RealtimeSessionOptions): string {
   return JSON.stringify({
     type: 'session.update',
@@ -21,6 +24,7 @@ export function sessionUpdate(o: RealtimeSessionOptions): string {
       type: 'realtime',
       instructions: o.instructions,
       output_modalities: ['audio'],
+      max_output_tokens: MAX_OUTPUT_TOKENS,
       audio: {
         input: { format: { type: 'audio/pcmu' }, turn_detection: { type: 'server_vad', create_response: true, interrupt_response: true } },
         output: { format: { type: 'audio/pcmu' }, ...(o.voice ? { voice: o.voice } : {}) },

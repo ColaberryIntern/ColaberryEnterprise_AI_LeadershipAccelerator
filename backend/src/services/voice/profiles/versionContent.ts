@@ -22,12 +22,18 @@ import type { VersionStatus } from './profileTypes';
 export const KB_SOURCES = ['admissions_knowledge'] as const;
 export const VOICE_ENGINES = ['conversation_relay', 'openai_realtime'] as const;
 
-const DISCLOSURE_RE = /\b(AI|artificial intelligence|virtual assistant)\b/i;
+/**
+ * A disclosure says the SPEAKER is an AI ("I'm an AI", "this is Colaberry's AI assistant", "you are
+ * speaking with an AI"). Merely containing "AI" ("our AI Accelerator") does not, and neither does denying it.
+ */
+const AI_SELF = /\b(?:I\s*(?:'|\u2019)?\s*a?m|this is|you(?:\s+are|\s*(?:'|\u2019)re)\s+(?:speaking|talking)\s+(?:with|to))\b[^.!?]{0,60}?\b(?:an?\s+(?:AI|artificial intelligence|virtual assistant)\b|AI(?:\s+\w+)?\s+(?:assistant|agent|caller|voice)\b|(?:AI|virtual)\s+assistant\b)/i;
+const AI_DENIAL = /\b(?:not|never|isn(?:'|\u2019)t|aren(?:'|\u2019)t)\b[^.!?]{0,30}\b(?:AI|artificial intelligence|virtual assistant)\b/i;
+export const disclosesAi = (s: string): boolean => AI_SELF.test(s) && !AI_DENIAL.test(s);
 
 export const VersionContentSchema = z.object({
   prompt: z.string().min(1).max(50_000),
   first_message: z.string().max(1_000).nullable(),
-  disclosure: z.string().min(10).max(500).refine((s) => DISCLOSURE_RE.test(s), 'disclosure must tell the caller they are speaking with an AI'),
+  disclosure: z.string().min(10).max(500).refine(disclosesAi, 'disclosure must tell the caller they are speaking with an AI'),
   kb_refs: z.array(z.enum(KB_SOURCES)).max(5),
   tool_permissions: z.array(z.string().regex(/^[a-z][a-z0-9_]{1,63}$/)).max(10),
   engine: z.enum(VOICE_ENGINES),
@@ -97,6 +103,6 @@ export function renderCall(c: VersionContent, call: PerCallInput): RenderOutcome
   const vars: Record<string, string> = { ...(call.variables ?? {}), prompt: perCall };
   const body = c.prompt.replace(/\{([a-z_]{1,40})\}/g, (m, key: string) => (key in vars ? cleanValue(vars[key]) : m));
   const first = (c.first_message ?? '').trim();
-  const greeting = first && DISCLOSURE_RE.test(first) ? first : [c.disclosure, first].filter(Boolean).join(' ');
+  const greeting = first && disclosesAi(first) ? first : [c.disclosure, first].filter(Boolean).join(' ');
   return { ok: true, system: `${body.trim()}\n\n${SAFETY_SUFFIX}`, greeting };
 }
