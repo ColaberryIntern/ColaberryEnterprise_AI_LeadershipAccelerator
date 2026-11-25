@@ -22,6 +22,7 @@
  *     Those false friends are recorded, because the next person to build on this will
  *     find them the same way and needs to know they were already rejected.
  */
+import type { BrandKey } from '../revenueFlow/revenueBrandVocabulary';
 
 /**
  * The five honest answers to "what is this number?".
@@ -41,6 +42,18 @@ export interface TileDefinition {
   key: string;
   label: string;
   status: TileStatus;
+  /**
+   * Which brand's business this tile reports on. R25 Phase 2.
+   *
+   * REQUIRED, and typed to the brand vocabulary rather than to `string`. Both halves of that
+   * matter. Required means a new tile cannot be added without someone deciding whose business
+   * it belongs to, so it cannot quietly disappear from a brand-filtered Revenue Room; typed
+   * means a mistyped slug is a compile error rather than a tile that matches no brand and is
+   * therefore hidden under every filter.
+   *
+   * The reason for each assignment is on the row, where the next person to edit it will look.
+   */
+  brandKey: BrandKey;
   /** The table the value comes from, or would come from. Null only when nothing fits. */
   sourceTable: string | null;
   /** One sentence a reader can act on: why this tile says what it says. */
@@ -59,6 +72,9 @@ export const TILE_DEFINITIONS: readonly TileDefinition[] = [
   {
     key: 'annualized_revenue',
     label: 'Annualized revenue',
+    // The same `subscriptions` figure the membership stream reports, computed by the same
+    // function. It is the training business's recurring revenue and nothing else's.
+    brandKey: 'colaberry-training',
     status: 'live',
     sourceTable: 'subscriptions',
     provenance:
@@ -69,6 +85,9 @@ export const TILE_DEFINITIONS: readonly TileDefinition[] = [
   {
     key: 'qualified_pipeline',
     label: 'Qualified pipeline',
+    // `revenue_opportunities` is the enterprise AI sales pipeline. Nothing in it describes a
+    // training enrolment or a Refactored.ai placement.
+    brandKey: 'colaberry-enterprise',
     status: 'measured_zero',
     sourceTable: 'revenue_opportunities',
     provenance:
@@ -80,6 +99,8 @@ export const TILE_DEFINITIONS: readonly TileDefinition[] = [
   {
     key: 'proposal_value_out',
     label: 'Proposal value out',
+    // Same table, same business: proposals go out under the Colaberry Enterprise identity.
+    brandKey: 'colaberry-enterprise',
     status: 'measured_zero',
     sourceTable: 'revenue_opportunities',
     provenance:
@@ -93,6 +114,8 @@ export const TILE_DEFINITIONS: readonly TileDefinition[] = [
   {
     key: 'win_rate',
     label: 'Win rate',
+    // A rate over the same enterprise opportunity table.
+    brandKey: 'colaberry-enterprise',
     status: 'undefined_rate',
     sourceTable: 'revenue_opportunities',
     provenance:
@@ -103,6 +126,8 @@ export const TILE_DEFINITIONS: readonly TileDefinition[] = [
   {
     key: 'active_pilots',
     label: 'Active pilots',
+    // `delivery_engagements` rows of engagement_type=commercial_client: enterprise delivery.
+    brandKey: 'colaberry-enterprise',
     status: 'proxy',
     sourceTable: 'delivery_engagements',
     provenance:
@@ -114,6 +139,9 @@ export const TILE_DEFINITIONS: readonly TileDefinition[] = [
   {
     key: 'executive_meetings',
     label: 'Executive meetings',
+    // Meetings booked from enterprise outbound. Not training admissions calls, which are
+    // counted nowhere near this tile.
+    brandKey: 'colaberry-enterprise',
     status: 'proxy',
     sourceTable: 'interaction_outcomes',
     provenance:
@@ -128,6 +156,9 @@ export const TILE_DEFINITIONS: readonly TileDefinition[] = [
   {
     key: 'paid_pilots',
     label: 'Paid pilots',
+    // A paid pilot is an enterprise engagement. The training business sells memberships, not
+    // pilots, and Refactored.ai places people rather than running them.
+    brandKey: 'colaberry-enterprise',
     status: 'unmeasurable',
     sourceTable: null,
     provenance:
@@ -139,6 +170,8 @@ export const TILE_DEFINITIONS: readonly TileDefinition[] = [
   {
     key: 'partner_conversations',
     label: 'Strategic partner conversations',
+    // Frontier labs and systems integrators, approached as Colaberry Enterprise.
+    brandKey: 'colaberry-enterprise',
     status: 'unmeasurable',
     sourceTable: null,
     provenance:
@@ -149,6 +182,8 @@ export const TILE_DEFINITIONS: readonly TileDefinition[] = [
   {
     key: 'demos_delivered',
     label: 'Demos delivered',
+    // A demo of the enterprise capability to an enterprise buyer.
+    brandKey: 'colaberry-enterprise',
     status: 'unmeasurable',
     sourceTable: null,
     provenance:
@@ -160,6 +195,8 @@ export const TILE_DEFINITIONS: readonly TileDefinition[] = [
   {
     key: 'deployment_outcomes',
     label: 'Deployment outcomes',
+    // Results measured against a `delivery_contracts` success measure: enterprise delivery.
+    brandKey: 'colaberry-enterprise',
     status: 'unmeasurable',
     sourceTable: null,
     provenance:

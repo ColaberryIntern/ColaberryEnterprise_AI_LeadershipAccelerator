@@ -1,5 +1,24 @@
 import { FlowStreamKey } from './revenueClassifications';
+import { BRAND_ORDER, UNASSIGNED_BRAND_KEY, resolveBrand } from './revenueBrandVocabulary';
+import type { BrandDirectoryEntry, BrandKey } from './revenueBrandVocabulary';
 import { RevenueStream, StreamBrand } from './revenueFlowTypes';
+
+/**
+ * Re-exported so Phase 1's consumers keep one import for "brand", even though the shared
+ * half moved out in Phase 2 to break a cycle (see `revenueBrandVocabulary`'s header). This
+ * file remains the answer to "which brand is this stream"; the vocabulary answers "which
+ * brands exist and what are they called".
+ */
+export {
+  BRAND_BASIS,
+  BRAND_ORDER,
+  DEMAND_BRAND_NOTE,
+  FALLBACK_BRAND_LABELS,
+  UNASSIGNED_BRAND_KEY,
+  UNASSIGNED_LABEL,
+  UNASSIGNED_NOTE,
+} from './revenueBrandVocabulary';
+export type { BrandDirectoryEntry, BrandKey } from './revenueBrandVocabulary';
 
 /**
  * Which brand each revenue stream belongs to, and why that is a DECLARATION.
@@ -35,17 +54,16 @@ import { RevenueStream, StreamBrand } from './revenueFlowTypes';
  * Overwriting either one to make the screen tidy would destroy the evidence that they do.
  */
 
-/** The group that holds streams belonging to no brand. Not a brand, and never rendered as one. */
-export const UNASSIGNED_BRAND_KEY = 'unassigned';
-
 /**
  * Stream to brand slug. `null` means "no brand yet", which is a different statement from
  * "this brand earns nothing" and is grouped separately.
  *
  * Every key of `FlowStreamKey` must appear. `assertBrandMappingIsComplete` enforces that, so
- * a seventh stream added later cannot quietly vanish from a brand-grouped page.
+ * a seventh stream added later cannot quietly vanish from a brand-grouped page. The VALUES
+ * are typed `BrandKey` rather than `string`, so a mistyped slug is a compile error instead of
+ * a stream that lands in no group and disappears off a brand-filtered page.
  */
-export const BRAND_BY_STREAM: Record<FlowStreamKey, string | null> = {
+export const BRAND_BY_STREAM: Record<FlowStreamKey, BrandKey | null> = {
   // The membership is the training business: the accelerator people pay for.
   membership: 'colaberry-training',
   // Converting a monthly member to yearly moves money inside the training business. The
@@ -67,58 +85,6 @@ export const BRAND_BY_STREAM: Record<FlowStreamKey, string | null> = {
   hypotheses: null,
 };
 
-/**
- * Reading order of the brand headings, and the reason each sits where it does.
- *
- * Fixed rather than sorted by revenue: a board that ordered by size would reshuffle the page
- * the first time a brand earned anything, and the reader's muscle memory for where to look
- * is worth more than ranking. Training first because it is the default and the only brand
- * earning today.
- */
-export const BRAND_ORDER: string[] = [
-  'colaberry-training',
-  'colaberry-enterprise',
-  'refactored',
-  UNASSIGNED_BRAND_KEY,
-];
-
-/**
- * What to call a brand when the `brands` table cannot be read or does not hold it.
- *
- * Deliberately NOT the primary source. The names and URLs live in `brands`, the Brands admin
- * page renders them from there, and a second hardcoded copy that drifts is exactly the
- * duplication this repo keeps paying for. These exist so a database hiccup degrades the
- * heading to a readable name instead of removing a brand's revenue from the page, and
- * `resolved: false` says which happened.
- */
-export const FALLBACK_BRAND_LABELS: Record<string, { label: string; url: string | null }> = {
-  'colaberry-training': { label: 'Colaberry Training', url: 'https://training.colaberry.com' },
-  'colaberry-enterprise': { label: 'Colaberry Enterprise', url: 'https://enterprise.colaberry.ai' },
-  refactored: { label: 'Refactored.ai', url: 'https://refactored.ai' },
-};
-
-/** The unassigned group's wording. Not a brand, so it carries no URL and never resolves. */
-export const UNASSIGNED_LABEL = 'No brand yet';
-export const UNASSIGNED_NOTE =
-  'Declared sources that do not belong to one brand. Several would be new brands if they '
-  + 'were set up. Filing them under the default would claim they are part of the training '
-  + 'business, which is not known and mostly not true.';
-
-/** The standing statement about what a brand heading on this board does and does not mean. */
-export const BRAND_BASIS =
-  'Brand is a property of the stream, not of each payment. No revenue table in this database '
-  + 'carries a brand: subscriptions, enrollments, leads, enterprise intakes and government '
-  + 'qualifications have no brand column, so a brand heading reports the streams filed under '
-  + 'it rather than a per-payment attribution. One brand cannot be shown taking a share of '
-  + "another brand's stream.";
-
-/** Rendered with the demand band, where the only real brand column in the data disagrees. */
-export const DEMAND_BRAND_NOTE =
-  'Every campaign below is tagged to Colaberry Enterprise in the campaigns table, while the '
-  + 'members they reach are filed under Colaberry Training. Both are shown as they are '
-  + 'recorded rather than reconciled, because nothing ties a campaign to a payment and '
-  + 'editing either one to agree would hide that.';
-
 /** Why a given stream sits under a given brand, in one sentence a reader can check. */
 export const BRAND_NOTE_BY_STREAM: Record<FlowStreamKey, string> = {
   membership: 'The accelerator membership people pay for.',
@@ -132,14 +98,6 @@ export const BRAND_NOTE_BY_STREAM: Record<FlowStreamKey, string> = {
     + 'brand rather than as a brand of its own.',
   hypotheses: 'Spans no single brand, and several would be new brands if they were set up.',
 };
-
-/** What a brand lookup provides. Supplied by `brandDirectoryService`, or absent. */
-export interface BrandDirectoryEntry {
-  slug: string;
-  name: string;
-  url: string | null;
-  status: string;
-}
 
 /**
  * Group the board's streams under their brands, in the fixed reading order.
@@ -155,7 +113,6 @@ export function buildBrandGroups(
   streams: Pick<RevenueStream, 'key'>[],
   directory: BrandDirectoryEntry[],
 ): StreamBrand[] {
-  const bySlug = new Map(directory.map((d) => [d.slug, d]));
   const groups: StreamBrand[] = [];
 
   for (const brandKey of BRAND_ORDER) {
@@ -164,33 +121,11 @@ export function buildBrandGroups(
       .filter((k) => (BRAND_BY_STREAM[k] ?? UNASSIGNED_BRAND_KEY) === brandKey);
     if (streamKeys.length === 0) continue;
 
-    if (brandKey === UNASSIGNED_BRAND_KEY) {
-      groups.push({
-        key: UNASSIGNED_BRAND_KEY,
-        label: UNASSIGNED_LABEL,
-        url: null,
-        resolved: false,
-        isBrand: false,
-        note: UNASSIGNED_NOTE,
-        streamKeys,
-      });
-      continue;
-    }
-
-    const found = bySlug.get(brandKey);
-    const fallback = FALLBACK_BRAND_LABELS[brandKey];
-    groups.push({
-      key: brandKey,
-      label: found?.name ?? fallback?.label ?? brandKey,
-      url: found?.url ?? fallback?.url ?? null,
-      resolved: Boolean(found),
-      isBrand: true,
-      note: found
-        ? ''
-        : 'This heading could not be read from the brands table, so its name comes from a '
-          + 'fallback in the code and may be out of date.',
-      streamKeys,
-    });
+    // The wording comes from the shared resolver rather than being decided here, so a brand
+    // whose name failed to load is labelled and flagged identically above the fold and below
+    // it. Phase 2 put the initiative cards on the same filter; two resolvers would have been
+    // two chances to call the same brand two things on one screen.
+    groups.push({ ...resolveBrand(brandKey, directory), streamKeys });
   }
 
   return groups;

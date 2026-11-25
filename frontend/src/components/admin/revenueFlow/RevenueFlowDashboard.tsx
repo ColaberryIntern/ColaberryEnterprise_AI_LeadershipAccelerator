@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import api from '../../../utils/api';
 import FlowTimeline from './FlowTimeline';
 import FlowTableView from './FlowTableView';
@@ -6,8 +6,11 @@ import BidPricingPanel from './BidPricingPanel';
 import DealPricingPanel from './DealPricingPanel';
 import FlowHeroRow from './FlowHeroRow';
 import FlowLegendBar from './FlowLegendBar';
+import BrandFilterBar from './BrandFilterBar';
+import BrandHeading from './BrandHeading';
 import StreamCard from './StreamCard';
-import type { Board, ClassMap } from './flowBoardTypes';
+import { groupStreamsByBrand, scopeStreams } from './brandScope';
+import type { Board, BrandGroup, ClassMap, Stream } from './flowBoardTypes';
 
 /**
  * R16 - the Revenue Flow dashboard, rendered at the TOP of the Revenue Room.
@@ -57,7 +60,32 @@ import type { Board, ClassMap } from './flowBoardTypes';
  * week, and it is the only place the table view lives, which the palette's contrast WARN
  * obliges this page to ship. Deleting it as now-redundant would remove both.
  */
-export default function RevenueFlowDashboard() {
+export default function RevenueFlowDashboard({
+  brandFilter = '', onPickBrand, onBrandsLoaded,
+}: {
+  /**
+   * The brand the whole page is scoped to, or '' for all brands. R25 Phase 2.
+   *
+   * Owned by `AdminRevenueRoomPage`, not here, because choosing a brand also scopes the
+   * seventeen initiative cards further down the page, which a different component fetches
+   * from a different endpoint. One answer to "which brand am I looking at" has to live above
+   * both, or the page can sit with the top saying Refactored.ai and the bottom saying all
+   * brands, with nothing on screen admitting it.
+   */
+  brandFilter?: string;
+  onPickBrand?: (key: string) => void;
+  /**
+   * The resolved brand list, raised once per fetch.
+   *
+   * The page needs brand NAMES to label the initiative cards below, and this component is the
+   * only thing that fetches them — the backend reads them from the `brands` table so there is
+   * one source of truth for what a brand is called. Raising the list is the alternative to the
+   * page either fetching the same expensive board a second time or keeping its own hardcoded
+   * table of brand names, which would drift from the Brands admin page the first time one was
+   * renamed.
+   */
+  onBrandsLoaded?: (brands: BrandGroup[]) => void;
+} = {}) {
   const [board, setBoard] = useState<Board | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [streamFilter, setStreamFilter] = useState<string>('');
@@ -67,10 +95,21 @@ export default function RevenueFlowDashboard() {
   // keeps one source of truth.
   const [reload, setReload] = useState(0);
 
+  // Held in a ref so the fetch effect keeps `[reload]` as its only dependency. Depending on
+  // the callback itself would refetch this whole board every time the parent re-rendered with
+  // a fresh closure, which on this page is every keystroke of the brand filter.
+  const onBrandsLoadedRef = useRef(onBrandsLoaded);
+  onBrandsLoadedRef.current = onBrandsLoaded;
+
   useEffect(() => {
     let alive = true;
     api.get('/api/admin/commercialization/revenue-flow')
-      .then((r) => { if (alive) setBoard(r.data?.data ?? null); })
+      .then((r) => {
+        if (!alive) return;
+        const next: Board | null = r.data?.data ?? null;
+        setBoard(next);
+        onBrandsLoadedRef.current?.(next?.brands ?? []);
+      })
       .catch((e) => { if (alive) setError(e?.message || 'Could not load the Revenue Flow board.'); });
     return () => { alive = false; };
   }, [reload]);
@@ -81,10 +120,24 @@ export default function RevenueFlowDashboard() {
     return m;
   }, [board]);
 
-  const visibleEvents = useMemo(
-    () => (board?.events ?? []).filter((e) => !streamFilter || e.stream === streamFilter),
-    [board, streamFilter],
+  /**
+   * What the reader is currently looking at, derived from the two filters rather than stored.
+   * The rules, and why they are pure functions rather than logic in this hook, are in
+   * `brandScope.ts`.
+   */
+  const scope = useMemo(
+    () => scopeStreams(board?.streams ?? [], brandFilter, streamFilter),
+    [board, brandFilter, streamFilter],
   );
+
+  const visibleEvents = useMemo(() => {
+    const all = board?.events ?? [];
+    // Unfiltered passes every event through untouched. Filtering on the stream list even when
+    // nothing is selected would silently drop any event whose stream failed to build, which
+    // would make a quiet failure look like a quiet week.
+    if (!scope.filtered) return all;
+    return all.filter((e) => scope.keys.includes(e.stream));
+  }, [board, scope]);
 
   if (error) {
     return (
@@ -98,6 +151,26 @@ export default function RevenueFlowDashboard() {
   const govBids = board.streams.find((s) => s.key === 'gov_pipeline')?.bids ?? [];
   const enterprise = board.streams.find((s) => s.key === 'enterprise_site');
 
+  // What the reader filtered to, in the words the backend chose, for the sentence the hero row
+  // shows when none of the top figures belong to the current scope.
+  const scopeLabel = brandFilter
+    ? board.brands.find((b) => b.key === brandFilter)?.label ?? null
+    : (scope.effectiveStream
+      ? board.streams.find((s) => s.key === scope.effectiveStream)?.label ?? null
+      : null);
+
+  const streamCard = (s: Stream) => (
+    <StreamCard
+      key={s.key}
+      stream={s}
+      events={board.events.filter((e) => e.stream === s.key)}
+      classMap={classMap}
+      windowDays={board.windowDays}
+    />
+  );
+
+  const groups = groupStreamsByBrand(board.brands, scope.streams);
+
   return (
     <div data-testid="revenue-flow">
       <div className="text-muted small mb-3" data-testid="revenue-flow-asof">
@@ -105,28 +178,46 @@ export default function RevenueFlowDashboard() {
         the numbers. As of {new Date(board.asOf).toLocaleString()}.
       </div>
 
-      {/* ── THE BIG PICTURE ───────────────────────────────────────────────────────────── */}
-      <FlowHeroRow headline={board.headline} />
+      {/* ── BRAND. The one control that scopes this board AND the cards below it. ─────── */}
+      {onPickBrand && (
+        <BrandFilterBar
+          brands={board.brands}
+          brandFilter={brandFilter}
+          onPickBrand={onPickBrand}
+          brandBasis={board.brandBasis}
+        />
+      )}
 
-      {/* ── LEGEND. Identity is never colour alone, so every tone carries a word. ─────── */}
+      {/* ── THE BIG PICTURE ───────────────────────────────────────────────────────────── */}
+      <FlowHeroRow
+        headline={board.headline}
+        figureStreams={board.headlineFigureStreams}
+        visibleStreamKeys={scope.filtered ? scope.keys : null}
+        scopeLabel={scopeLabel}
+      />
+
+      {/* ── LEGEND. Identity is never colour alone, so every tone carries a word. ───────
+          The stream buttons offer only the chosen brand's streams. Offering all of them
+          would let a reader pick a stream that is not in the brand they are viewing, and
+          the two filters would then describe two different boards. */}
       <FlowLegendBar
-        streams={board.streams}
-        streamFilter={streamFilter}
+        streams={scope.brandStreams}
+        streamFilter={scope.effectiveStream}
         onPickStream={setStreamFilter}
       />
 
-      {/* ── THE PIECES THAT WENT INTO IT ─────────────────────────────────────────────── */}
-      {board.streams
-        .filter((s) => !streamFilter || s.key === streamFilter)
-        .map((s) => (
-          <StreamCard
-            key={s.key}
-            stream={s}
-            events={board.events.filter((e) => e.stream === s.key)}
-            classMap={classMap}
-            windowDays={board.windowDays}
-          />
-        ))}
+      {/* ── THE PIECES THAT WENT INTO IT, UNDER THE BRAND THAT OWNS THEM ──────────────
+          Grouped when the backend could build the grouping, FLAT when it could not. The
+          degraded path matters: a failure to read the brands table must cost the headings,
+          never the revenue, so every stream still renders with nothing grouped wrongly. */}
+      {groups.length > 0
+        ? groups.map((g) => (
+          <div key={g.brand.key} data-testid={`brand-group-${g.brand.key}`}>
+            <BrandHeading brand={g.brand} streamCount={g.streams.length} />
+            {g.streams.map(streamCard)}
+          </div>
+        ))
+        : scope.streams.map(streamCard)}
 
       {/* ── THE CONTROL THAT MAKES THE PIPELINE REAL ─────────────────────────────────── */}
       {govBids.length > 0 && (

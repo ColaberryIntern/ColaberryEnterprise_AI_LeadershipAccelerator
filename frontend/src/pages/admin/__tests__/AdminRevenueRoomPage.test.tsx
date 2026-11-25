@@ -18,6 +18,7 @@ const card = (over: Partial<InitiativeCard> = {}): InitiativeCard => ({
   key: 'k',
   label: 'An initiative',
   kind: 'membership',
+  brandKey: 'colaberry-training',
   status: 'live',
   value: '$120,000',
   sourceTable: 'subscriptions',
@@ -146,6 +147,7 @@ describe('the page shell mounts', () => {
 const tile = (over: Partial<CommercialTile> = {}): CommercialTile => ({
   key: 'demos',
   label: 'Demos booked',
+  brandKey: 'colaberry-enterprise',
   status: 'unmeasurable',
   value: null,
   sourceTable: null,
@@ -214,5 +216,46 @@ describe('a commercialization tile survives becoming a card', () => {
     const html = render(tileAsCard(tile()));
     expect(html).toContain('Business proof');
     expect(html).not.toContain('Revenue bet');
+  });
+
+  it('carries its brand across, so it does not vanish from a brand-filtered Revenue Room', () => {
+    // The easiest way to break this merge is to drop a field in `tileAsCard`. A dropped brand
+    // would make the tile match no brand and disappear from every filtered view.
+    expect(tileAsCard(tile()).brandKey).toBe('colaberry-enterprise');
+    expect(tileAsCard(tile({ brandKey: 'colaberry-training' })).brandKey).toBe('colaberry-training');
+  });
+});
+
+/**
+ * R25 Phase 2 — a card names the brand whose business it reports on.
+ *
+ * The name is resolved from the `brands` table by the flow board and passed in. When it could
+ * not be resolved the card draws NOTHING rather than the raw slug: "colaberry-enterprise" is
+ * not a brand name, and printing it would invite a reader to quote it as one.
+ */
+describe('a card names its brand, or says nothing at all', () => {
+  const withBrand = (label: string | null) =>
+    renderToStaticMarkup(
+      <MemoryRouter><InitiativeCardView card={card()} brandLabel={label} /></MemoryRouter>,
+    );
+
+  it('prints the resolved brand name beside the kind', () => {
+    const html = withBrand('Colaberry Training');
+    expect(html).toContain('data-testid="brand-of-k"');
+    expect(html).toContain('Colaberry Training');
+  });
+
+  it('prints no brand, and never the slug, when the name could not be resolved', () => {
+    const html = withBrand(null);
+    expect(html).not.toContain('data-testid="brand-of-k"');
+    expect(html).not.toContain('colaberry-training');
+
+    // The control: the slug IS on the card object, so its absence from the markup is a
+    // decision rather than an accident of the fixture.
+    expect(card().brandKey).toBe('colaberry-training');
+  });
+
+  it('still shows the kind when there is no brand to show', () => {
+    expect(withBrand(null)).toContain('Recurring revenue');
   });
 });
