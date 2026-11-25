@@ -1,4 +1,4 @@
-# Voice AI Studio: Inventory
+| MENTION | 126 || CONSUMER | 61 || UI | 31 || CONFIG | 20 || CALLER | 11 || GUARD | 6 || INGEST | 3 || DISPATCH | 3 |# Voice AI Studio: Inventory
 
 Every caller, consumer, route, cron and config of AI voice calls in the repo (VS1.1). Hand-read on 2026-11-24 against workstream/voice-studio-p1 (base origin/main 89e6bf3bb), cross-checked with the repeatable classifier.
 
@@ -12,9 +12,9 @@ Status: **IMPLEMENTED_UNVERIFIED** until the VS1.1 task verifier passes.
 
 Other network touches: `fetchSynthflowCall` (GET one call, same file, used by pollers) and `systemHealthService.ts:294` (GET health probe, 5 s timeout; not a dial).
 
-## Classifier snapshot (254 files matching the search set, after VS3.3)
+## Classifier snapshot (261 files matching the search set, after VS3.4)
 
-Search set (the directive's list): synthflow, syntheflow, triggerVoiceCall, place_ai_call, voiceCall, SYNTHFLOW_*, ENABLE_VOICE_CALLS, VOICE_CALL_PATHS, call_id, CommunicationLog, VOICE_*. Scope: tracked non-test files under backend/src, frontend/src, scripts, nginx, docker-compose*.yml and .github. Excluded: tests, markdown, and the Voice Studio's own tooling (backend/src/scripts/voice/), which names every search term by design. The authoritative numbers are in inventory.generated.json; this table is regenerated with it.
+Search set (the directive's list): synthflow, syntheflow, triggerVoiceCall, place_ai_call, voiceCall, SYNTHFLOW_*, ENABLE_VOICE_CALLS, VOICE_CALL_PATHS, call_id, CommunicationLog, VOICE_*. Scope: tracked non-test files under backend/src, frontend/src, scripts, nginx, docker-compose*.yml and .github. Excluded: tests, markdown, and the Voice Studio's own tooling (backend/src/scripts/voice/), which names every search term by design. The authoritative numbers are in inventory.generated.json; this table is a hand-refreshed copy of it.
 
 | Role | Files |
 |---|---|

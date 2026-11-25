@@ -5,6 +5,7 @@
  *   POST /api/admin/voice-studio/tests          start ONE live test call (body: runId, destinationId,
  *                                               engine, script, confirm:true). Never a phone number.
  *   GET  /api/admin/voice-studio/tests/:callId  the call's state (no number, no transcript)
+ *   POST /api/admin/voice-studio/tests/:callId/stop  hang up one in-progress TEST call (VS3.4)
  *
  * Both routes do not exist (404) unless VOICE_TEST_ENABLED is on.
  */
@@ -16,13 +17,27 @@ import { sequelize } from '../../config/database';
 import { loadVoiceConfig } from '../../services/voice/voiceConfig';
 import { productionTestLabDeps, startLiveTest, TEST_TENANT_ID, type TestLabDeps } from '../../services/voice/testlab/testLabService';
 import { buildVoiceStudioConsoleRouter } from './voiceStudioConsoleRoutes';
+import { stopTestCall, type StopDeps } from '../../services/voice/testlab/stopTestCall';
+import { hangupThroughCarrier } from '../../services/voice/gateway/directEngineProvider';
+import { buildVoiceStudioLabRouter } from './voiceStudioLabRoutes';
 
 const CallIdSchema = z.string().uuid();
+
+/** VS3.4 stop button: the call row (Test Lab tenant only) and a Twilio hang-up. */
+export function productionStopDeps(): StopDeps {
+  return {
+    lookup: async (callId) => (await sequelize.query<{ provider_call_id: string | null; state: string; test_mode: boolean }>(
+      'SELECT provider_call_id, state, test_mode FROM voice_calls WHERE id = :callId AND tenant_id = :t',
+      { replacements: { callId, t: TEST_TENANT_ID }, type: QueryTypes.SELECT }))[0] ?? null,
+    hangup: hangupThroughCarrier,
+    log: (line) => (line.level === 'error' ? console.warn : console.log)(JSON.stringify(line)),
+  };
+}
 
 export function buildVoiceStudioRouter(deps: () => TestLabDeps = productionTestLabDeps, enabled: () => boolean = () => {
   const c = loadVoiceConfig();
   return c.valid && c.VOICE_TEST_ENABLED;
-}): Router {
+}, stopDeps: () => StopDeps = productionStopDeps): Router {
   const router = Router();
   const gate = (_req: Request, _res: Response, next: NextFunction) => (enabled() ? next() : next('router'));
 
@@ -51,14 +66,26 @@ export function buildVoiceStudioRouter(deps: () => TestLabDeps = productionTestL
       res.status(500).json({ error: 'DatabaseError' });
     }
   });
+  router.post('/api/admin/voice-studio/tests/:callId/stop', gate, requireAdmin, async (req: Request, res: Response) => {
+    const id = CallIdSchema.safeParse(req.params.callId);
+    if (!id.success) { res.status(400).json({ error: 'ValidationError' }); return; }
+    try {
+      const r = await stopTestCall(id.data, stopDeps());
+      res.status(r.status).json(r.body);
+    } catch (e) {
+      console.warn(JSON.stringify({ level: 'error', service: 'voice-studio', event: 'voice_test_stop_failed', outcome: 'failure', error_class: (e as { name?: string })?.name || 'DatabaseError' }));
+      res.status(500).json({ error: 'DatabaseError' });
+    }
+  });
   return router;
 }
 
 /**
  * The one router adminRoutes.ts mounts for Voice Studio: the Test Lab (VS2.5) plus the console API
- * (VS3.3). Composed here so the oversized adminRoutes.ts needs no new lines.
+ * (VS3.3) and the Voice Lab / Numbers & Routing API (VS3.4). Composed here so the oversized adminRoutes.ts needs no new lines.
  */
 const voiceStudioAdmin = Router();
 voiceStudioAdmin.use(buildVoiceStudioRouter());
 voiceStudioAdmin.use(buildVoiceStudioConsoleRouter());
+voiceStudioAdmin.use(buildVoiceStudioLabRouter());
 export default voiceStudioAdmin;

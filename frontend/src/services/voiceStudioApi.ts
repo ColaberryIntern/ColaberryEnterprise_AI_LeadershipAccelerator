@@ -113,3 +113,82 @@ export function studioErrorMessage(err: unknown, fallback: string): string {
   const msg = (err as { response?: { data?: { message?: unknown } } })?.response?.data?.message;
   return typeof msg === 'string' && msg ? msg : fallback;
 }
+
+/* ── Voice Lab and Numbers & Routing (VS3.4) ─────────────────────────────────── */
+
+export interface CatalogVoice { engine: 'openai_realtime' | 'conversation_relay'; id: string; label: string; recommended: boolean; preview: 'tts_approximation' | 'test_call_only'; source: string }
+
+export interface AbTrial {
+  trialId: string;
+  text: string;
+  scored: boolean;
+  preferred?: 'X' | 'Y' | 'tie';
+  /** Present only after scoring: which voice each label was. */
+  reveal?: { X: string; Y: string };
+}
+
+export interface NumberRow { id: string; provider: string; provider_number_id: string; number_ref: string; ownership: string; status: string; capabilities: Record<string, unknown>; brand_slug: string | null; verified_caller_id: boolean }
+export interface RouteRow { id: string; path_key: string; call_type: string; brand_slug: string; engine: string; mode: string; canary_percent: number; version_id: string | null; fallback: { kind?: string; ref?: string }; approved_by: string | null; approved_at: string | null; calls_7d: number }
+
+export interface RouteChange {
+  pathKey: string; callType: string; brandSlug: string; mode: string; canaryPercent: number; versionId: string | null;
+  fallback: { kind: string; ref?: string }; confirm?: string;
+}
+export type RouteValidation =
+  | { ok: false; issues: string[] }
+  | { ok: true; validationToken: string; impact: { callsLast7Days: number; currentMode: string | null; movesRealCallers: boolean; summary: string } };
+
+export async function getCatalog(): Promise<CatalogVoice[]> {
+  const { data } = await api.get<{ voices: CatalogVoice[] }>('/api/admin/voice-studio/lab/catalog');
+  return data.voices;
+}
+
+async function audioUrl(url: string, body?: unknown): Promise<string> {
+  const res = body === undefined ? await api.get<Blob>(url, { responseType: 'blob' }) : await api.post<Blob>(url, body, { responseType: 'blob' });
+  return URL.createObjectURL(res.data);
+}
+
+export const previewVoice = (voice: string, text: string): Promise<string> => audioUrl('/api/admin/voice-studio/lab/preview', { voice, text });
+
+export async function createTrial(voiceA: string, voiceB: string, text: string): Promise<AbTrial> {
+  const { data } = await api.post<AbTrial>('/api/admin/voice-studio/lab/ab', { voiceA, voiceB, text });
+  return data;
+}
+
+export const trialClip = (trialId: string, label: 'X' | 'Y'): Promise<string> => audioUrl(`/api/admin/voice-studio/lab/ab/${encodeURIComponent(trialId)}/clip/${label}`);
+
+export async function scoreTrial(trialId: string, preferred: 'X' | 'Y' | 'tie'): Promise<AbTrial> {
+  const { data } = await api.post<AbTrial>(`/api/admin/voice-studio/lab/ab/${encodeURIComponent(trialId)}/score`, { preferred });
+  return data;
+}
+
+export async function listNumbers(): Promise<NumberRow[]> {
+  const { data } = await api.get<{ numbers: NumberRow[] }>('/api/admin/voice-studio/numbers');
+  return data.numbers;
+}
+
+export async function listRoutes(): Promise<RouteRow[]> {
+  const { data } = await api.get<{ routes: RouteRow[] }>('/api/admin/voice-studio/routes');
+  return data.routes;
+}
+
+export async function validateRoute(routeId: string | null, change: RouteChange): Promise<RouteValidation> {
+  const { data } = await api.post<RouteValidation>('/api/admin/voice-studio/routes/validate', { routeId, change });
+  return data;
+}
+
+export async function applyRoute(routeId: string | null, change: RouteChange, validationToken: string): Promise<void> {
+  await api.post('/api/admin/voice-studio/routes/apply', { routeId, change, validationToken });
+}
+
+/** The Test Lab's published spend ceiling per test run, shown before a live test. */
+export const TEST_RUN_ESTIMATE_USD = 1.04;
+
+export async function startTestCall(runId: string, engine: 'conversation_relay' | 'openai_realtime'): Promise<{ callId?: string; error?: string }> {
+  const { data } = await api.post('/api/admin/voice-studio/tests', { runId, destinationId: 'test-allowed', engine, script: 'smoke', confirm: true });
+  return data as { callId?: string; error?: string };
+}
+
+export async function stopTestCall(callId: string): Promise<void> {
+  await api.post(`/api/admin/voice-studio/tests/${encodeURIComponent(callId)}/stop`);
+}

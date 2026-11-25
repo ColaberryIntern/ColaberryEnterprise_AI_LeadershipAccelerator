@@ -11,6 +11,8 @@ const CommsHubLayout = lazy(() => import('../components/admin/commsHub/CommsHubL
 const VoiceStudioLayout = lazy(() => import('../components/admin/voiceStudio/VoiceStudioLayout'));
 const VoiceStudioOverviewTab = lazy(() => import('../components/admin/voiceStudio/OverviewTab'));
 const VoiceStudioAgentsTab = lazy(() => import('../components/admin/voiceStudio/AgentsTab'));
+const VoiceStudioLabTab = lazy(() => import('../components/admin/voiceStudio/VoiceLabTab'));
+const VoiceStudioNumbersTab = lazy(() => import('../components/admin/voiceStudio/NumbersRoutingTab'));
 const PlatformOperationsLayout = lazy(() => import('../pages/admin/system/operations/PlatformOperationsLayout'));
 const OperationsFleetTab = lazy(() => import('../pages/admin/system/operations/FleetTab'));
 const CommsHubTodayTab = lazy(() => import('../components/admin/commsHub/TodayTab'));
@@ -248,6 +250,8 @@ const adminRoutes = (
         <Route path="/admin/voice-studio" element={<VoiceStudioLayout />}>
           <Route index element={<VoiceStudioOverviewTab />} />
           <Route path="agents" element={<VoiceStudioAgentsTab />} />
+          <Route path="lab" element={<VoiceStudioLabTab />} />
+          <Route path="numbers" element={<VoiceStudioNumbersTab />} />
         </Route>
         {/* Account self-service: reachable by every admin identity regardless
             of section scope (see UNIVERSAL_ADMIN_PATHS in adminNav.ts). */}

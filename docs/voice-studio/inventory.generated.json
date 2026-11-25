@@ -1,15 +1,15 @@
 {
  "generatedFrom": "git ls-files",
- "total": 254,
+ "total": 261,
  "byRole": {
   "DISPATCH": 3,
   "INGEST": 3,
   "GUARD": 6,
   "CALLER": 11,
   "CONFIG": 20,
-  "UI": 29,
-  "CONSUMER": 60,
-  "MENTION": 122
+  "UI": 31,
+  "CONSUMER": 61,
+  "MENTION": 126
  },
  "rows": [
   {
@@ -332,6 +332,15 @@
     "VOICE_STUDIO_ENABLED",
     "VOICE_STUDIO_UI_ENABLED",
     "VOICE_TEST_ENABLED"
+   ]
+  },
+  {
+   "path": "backend/src/routes/admin/voiceStudioLabRoutes.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_RELAY_VOICE",
+    "VOICE_STUDIO_UI_ENABLED"
    ]
   },
   {
@@ -1392,8 +1401,28 @@
    "envVars": []
   },
   {
+   "path": "backend/src/services/voice/studio/labStore.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
    "path": "backend/src/services/voice/studio/studioQueries.ts",
    "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/studio/voiceCatalog.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_RELAY_VOICE"
+   ]
+  },
+  {
+   "path": "backend/src/services/voice/studio/voiceLab.ts",
+   "role": "MENTION",
    "callTypes": [],
    "envVars": []
   },
@@ -1404,6 +1433,12 @@
    "envVars": [
     "SYNTHFLOW_WEBHOOK_TOKEN"
    ]
+  },
+  {
+   "path": "backend/src/services/voice/testlab/stopTestCall.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
   },
   {
    "path": "backend/src/services/voice/testlab/testLabPolicy.ts",
@@ -1611,6 +1646,14 @@
    ]
   },
   {
+   "path": "frontend/src/components/admin/voiceStudio/NumbersRoutingTab.tsx",
+   "role": "UI",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_STUDIO_UI_ENABLED"
+   ]
+  },
+  {
    "path": "frontend/src/components/admin/voiceStudio/OverviewTab.tsx",
    "role": "UI",
    "callTypes": [],
@@ -1623,6 +1666,14 @@
    "role": "UI",
    "callTypes": [],
    "envVars": []
+  },
+  {
+   "path": "frontend/src/components/admin/voiceStudio/VoiceLabTab.tsx",
+   "role": "UI",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_STUDIO_UI_ENABLED"
+   ]
   },
   {
    "path": "frontend/src/components/admin/voiceStudio/VoiceStudioLayout.tsx",

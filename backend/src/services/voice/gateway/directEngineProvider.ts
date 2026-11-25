@@ -80,3 +80,14 @@ export function productionDirectProvider(engine: 'conversation_relay' | 'openai_
     },
   });
 }
+
+/**
+ * VS3.4 stop button: hang up one call through the Twilio carrier. Lives in the gateway because only
+ * the gateway may import a provider (noDirectDispatch rule 2). The caller (stopTestCall) has already
+ * confirmed the row is an in-progress TEST call.
+ */
+export async function hangupThroughCarrier(providerCallId: string): Promise<void> {
+  const creds = loadTwilioCredentials();
+  if (!creds.ok) throw Object.assign(new Error('twilio credentials invalid'), { name: 'ConfigMissing' });
+  await createTwilioCarrier({ creds: creds.creds, resolveFromNumber: async () => null, statusCallbackUrl: () => '' }).hangup(providerCallId);
+}

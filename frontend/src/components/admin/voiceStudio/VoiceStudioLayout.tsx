@@ -12,8 +12,8 @@ export interface StudioTab { to: string; label: string; end: boolean; ready: boo
 export const VOICE_STUDIO_TABS: ReadonlyArray<StudioTab> = [
   { to: '/admin/voice-studio', label: 'Overview', end: true, ready: true },
   { to: '/admin/voice-studio/agents', label: 'Agents', end: false, ready: true },
-  { to: '/admin/voice-studio/lab', label: 'Voice Lab', end: false, ready: false },
-  { to: '/admin/voice-studio/numbers', label: 'Numbers & Routing', end: false, ready: false },
+  { to: '/admin/voice-studio/lab', label: 'Voice Lab', end: false, ready: true },
+  { to: '/admin/voice-studio/numbers', label: 'Numbers & Routing', end: false, ready: true },
   { to: '/admin/voice-studio/calls', label: 'Call Explorer', end: false, ready: false },
   { to: '/admin/voice-studio/trust', label: 'Trust Center', end: false, ready: false },
   { to: '/admin/voice-studio/quality', label: 'Quality & Release', end: false, ready: false },
