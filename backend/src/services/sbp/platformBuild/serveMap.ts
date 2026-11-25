@@ -138,3 +138,21 @@ export function injectShim(html: string, shimSrc: string = SHIM_PATH): string {
   }
   return tag + html;
 }
+
+/**
+ * Add the platform's own "Open the demo" link to a Command Center page. Ours, at serve time, not
+ * the agent's: an agent may or may not write one, and versions already stored have none. Fixed in
+ * the corner so it cannot disturb the page's layout, with room left below the content for it.
+ */
+export function injectDemoLink(html: string, href: string): string {
+  const tag = '<style>body{padding-bottom:72px!important}'
+    + '#platform-demo-link{position:fixed;right:16px;bottom:16px;z-index:2147483000;display:inline-flex;'
+    + 'align-items:center;min-height:44px;padding:0 18px;border-radius:22px;background:#13294b;color:#fff;'
+    + 'border:1px solid #fff;font:600 15px/1.2 system-ui,sans-serif;text-decoration:none;'
+    + 'box-shadow:0 4px 14px rgba(0,0,0,.3)}'
+    + '#platform-demo-link:focus-visible{outline:3px solid #fff;outline-offset:-6px}'
+    + '@media print{#platform-demo-link{display:none}}</style>'
+    + `<a id="platform-demo-link" href="${href}">Open the demo</a>`;
+  const at = html.toLowerCase().lastIndexOf('</body>');
+  return at === -1 ? html + tag : html.slice(0, at) + tag + html.slice(at);
+}

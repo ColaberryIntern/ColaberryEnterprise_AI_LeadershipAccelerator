@@ -32,6 +32,40 @@ export function fanOuts(arrows: readonly WorkflowArrow[]): { from: string; count
   return [...count.entries()].filter(([, n]) => n >= 3).map(([from, n]) => ({ from, count: n }));
 }
 
+/**
+ * The diagram's columns, left to right, so the builder places nodes instead of inventing a layout.
+ * An agent sits one column after the furthest agent that feeds it. An arrow that would close a loop
+ * does not push anything right. `apart` is every agent with no hand-off at all.
+ *
+ * ShiftFill v13 (2026-11-25): eleven arrows, but all ten agents were stacked in one column, so every
+ * arrow ran down the same side and crossed the others.
+ */
+export function workflowColumns(
+  names: readonly string[],
+  arrows: readonly WorkflowArrow[],
+): { columns: string[][]; apart: string[] } {
+  const inGraph = new Set(arrows.flatMap((a) => [a.from, a.to]));
+  const known = names.filter((n) => inGraph.has(n));
+  const feeders = new Map<string, string[]>(known.map((n) => [n, []]));
+  for (const a of arrows) if (feeders.has(a.from) && a.from !== a.to) feeders.get(a.to)?.push(a.from);
+
+  const depth = new Map<string, number>();
+  const visiting = new Set<string>();
+  const depthOf = (n: string): number => {
+    const done = depth.get(n);
+    if (done !== undefined) return done;
+    if (visiting.has(n)) return -1;
+    visiting.add(n);
+    const d = Math.max(-1, ...(feeders.get(n) ?? []).map(depthOf)) + 1;
+    visiting.delete(n);
+    depth.set(n, d);
+    return d;
+  };
+  const columns: string[][] = [];
+  for (const n of known) (columns[depthOf(n)] ??= []).push(n);
+  return { columns: columns.filter(Boolean), apart: names.filter((n) => !inGraph.has(n)) };
+}
+
 export function agentsTab(c: TabContext): string[] {
   const { plan, agents, handoffs } = c;
   const lines: string[] = [];
@@ -86,6 +120,12 @@ export function agentsTab(c: TabContext): string[] {
         + 'grouped for you here:',
       );
       arrows.forEach((a) => lines.push(bullet(`${a.from} → ${a.to} (${a.labels.join(', ')})`)));
+      const { columns, apart } = workflowColumns(agents.map((a) => a.name), arrows);
+      lines.push('Place the diagram\'s nodes in these columns, left to right:');
+      columns.forEach((names, i) => lines.push(bullet(`Column ${i + 1}: ${names.join(', ')}`)));
+      if (apart.length) {
+        lines.push(bullet(`Below the columns, in a row of their own with no arrows between them: ${apart.join(', ')}`));
+      }
       const busy = fanOuts(arrows);
       if (busy.length) {
         // ShiftFill v5: Offer Sender fed three agents and its labels drew on top of each other.
@@ -142,7 +182,11 @@ export function agentsTab(c: TabContext): string[] {
     + 'feeds several, spread the receiving nodes apart vertically and put each label near the '
     + 'receiving end of its own arrow, or, if it still does not fit, number the arrows and list '
     + 'the numbered labels in a key under the diagram. Check this at the narrowest width the page '
-    + 'supports, not only at full width. Nodes are '
+    + 'supports, not only at full width. The whole diagram is visible at desktop width with no '
+    + 'scrolling: nodes sit in the columns listed above when they are listed (never one tall stack), '
+    + 'arrows run left to right into the next column, one that skips a column passes above or below '
+    + 'the nodes between, and no two arrows share a line. Below 700px, drop the lines: stack the '
+    + 'nodes in column order and list under each node what it hands to whom. Nodes are '
     + 'shaped or coloured by autonomy, so a reader can see at a glance where a human sits in '
     + 'the loop. Then an approval queue: for each agent that waits for a human, what it would '
     + 'be waiting on and who releases it (empty on real data, and saying so). Then the cards, '

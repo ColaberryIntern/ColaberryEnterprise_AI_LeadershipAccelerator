@@ -23,6 +23,7 @@
 // module that merely wants to render documents — which is exactly what broke
 // the orchestrator's unit tests, none of which have a database.
 import { StoryProgressInput } from './verification/progressContract';
+import { awardedEvidenceRef } from './verification/verificationLatch';
 
 export interface BuildProgressSnapshot {
   /** Per-story progress, ready for `renderProgressFile`. */
@@ -46,28 +47,45 @@ function asIso(v: unknown): string | null {
   return String(v);
 }
 
+/** What a story's award lookup needs: its id and the write-once verification latch. */
+export interface AwardedTask { story_id: string; verified_at: string | null; verified_ref: string | null }
+
 /**
- * Builder XP awarded per story, from the immutable evidence trail.
+ * Builder XP awarded to THIS project's stories, from the immutable evidence trail. PURE.
  *
- * Evidence is keyed `${story_id}@${commit_sha}`, so the story id is the prefix.
- * Summed rather than taken singly: a story re-verified against a later commit
- * after a plan change legitimately has more than one record, and the profile
- * should report what was actually paid.
+ * Evidence is keyed by enrollment and `${story_id}@${commit_sha}`, with no project id, and every
+ * project has a STORY-001. Summing by story id alone therefore paid one project's award into every
+ * other project the student has: a new build with nothing verified showed 53 points (2026-11-25).
+ * So the key is rebuilt from the task's own frozen sha, the same rule `projectReadService` uses,
+ * including its `<story>@` prefix fallback for rows verified before `verified_ref` existed.
+ * An unverified story has been paid nothing.
  */
-async function pointsByStory(enrollmentId: string): Promise<Record<string, number>> {
+export function pointsForTasks(
+  tasks: readonly AwardedTask[],
+  evidence: readonly { source_ref: string | null; builder_xp: number | null }[],
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const task of tasks) {
+    if (!task.verified_at) continue;
+    const ref = awardedEvidenceRef(task.story_id, task);
+    // First match only: the latch is first-write-wins, so a second row is never a second award.
+    const row = evidence.find((e) => {
+      const key = String(e.source_ref ?? '');
+      return ref ? key === ref : key.startsWith(`${task.story_id}@`);
+    });
+    if (row) out[task.story_id] = Number(row.builder_xp ?? 0);
+  }
+  return out;
+}
+
+async function loadEvidence(enrollmentId: string): Promise<{ source_ref: string | null; builder_xp: number | null }[]> {
   const { default: EvidenceRecord } = await import('../../models/EvidenceRecord');
   const rows = await EvidenceRecord.findAll({
     where: { enrollment_id: enrollmentId, source_type: 'github_commit' },
     attributes: ['source_ref', 'builder_xp'],
+    order: [['created_at', 'ASC']],
   });
-  const out: Record<string, number> = {};
-  for (const row of rows) {
-    const ref = String((row as any).source_ref ?? '');
-    const storyId = ref.includes('@') ? ref.slice(0, ref.indexOf('@')) : ref;
-    if (!storyId) continue;
-    out[storyId] = (out[storyId] ?? 0) + Number((row as any).builder_xp ?? 0);
-  }
-  return out;
+  return rows.map((r) => ({ source_ref: r.source_ref ?? null, builder_xp: r.builder_xp ?? null }));
 }
 
 /**
@@ -93,7 +111,13 @@ export async function loadBuildProgress(
     });
     if (!tasks.length) return EMPTY;
 
-    const points = enrollmentId ? await pointsByStory(enrollmentId) : {};
+    const points = enrollmentId
+      ? pointsForTasks(tasks.map((t) => ({
+        story_id: String((t as any).story_id ?? ''),
+        verified_at: asIso((t as any).verified_at),
+        verified_ref: String((t as any).verified_ref ?? '').trim() || null,
+      })), await loadEvidence(enrollmentId))
+      : {};
 
     const progress: StoryProgressInput[] = [];
     const baselineByStory: Record<string, string | null> = {};
@@ -125,7 +149,8 @@ export async function loadBuildProgress(
         story_id: storyId,
         state,
         criteria_passed: Number(v?.criteria_passed ?? 0),
-        criteria_total: Number(v?.criteria_total ?? 0),
+        // Null when never checked: the story's own criteria count is the total then, not zero.
+        criteria_total: v?.criteria_total == null ? null : Number(v.criteria_total),
         verified_at: verifiedAt,
         // `verified_ref` is the sha frozen at award time and is the one a
         // stranger should be able to click; the json copy can move.
