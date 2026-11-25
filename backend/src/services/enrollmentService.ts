@@ -351,6 +351,35 @@ export async function createExplorerEnrollment(input: {
    * wording. services/marketing/snackbarFeedService.ts is what consumes it.
    */
   socialProofOptIn?: boolean;
+  /**
+   * Which `lead_sources` row this DOOR is, as a slug. Resolved to a `source_id` and
+   * written onto the Lead, which is the ONLY way origin brand is derivable:
+   * `Lead.source_id -> LeadSource.brand_id`. There is no brand column on a lead.
+   *
+   * WHY THIS ARGUMENT EXISTS. Every lead this function wrote carried `source_id`
+   * NULL, because nothing here ever resolved one. Measured on production
+   * 2026-11-25: of 352 leads captured through this path in 25 days, 0 were
+   * attributed, against 146 of 146 on the `free_signup` path which does pass a
+   * slug. That is 94 percent of recent leads attributable to no brand, which
+   * blinds brand reporting, every per-brand funnel metric, and the landing-page
+   * snack bar that reads leads by brand.
+   *
+   * NO DEFAULT, and no host map. The door names itself, exactly as
+   * `participantController` does for the free-signup door and for the same reason:
+   * this function has four callers and a default here would stamp a brand onto
+   * whichever of them was added next. A host map is specifically the wrong answer
+   * and was measured to be wrong: `www.refactored.ai` resolves to brand
+   * `refactored` through `lead_sources.domain`, yet all 146 attributed leads on
+   * that exact host resolve to `training`, because the door is the Colaberry
+   * Training class and the domain it is served on does not change that. Deriving
+   * the brand from the hostname would have misattributed 221 leads.
+   *
+   * An unresolved slug writes NULL. `growthJourney/journeyDefaults.ts` owns that
+   * doctrine - the default when nothing resolves is nothing, "not 'the first
+   * brand', not 'Colaberry Training'". An honest absence is recoverable; invented
+   * attribution cannot later be told apart from a real measurement.
+   */
+  sourceSlug?: string;
 }): Promise<{ enrollment: Enrollment; created: boolean; cohort_id: string }> {
   const email = input.email.toLowerCase().trim();
   if (!email) throw new AppError('email is required', 400);
@@ -442,6 +471,12 @@ export async function createExplorerEnrollment(input: {
   // NOTE: intentionally does NOT increment cohort.seats_taken — Explorers are not
   // paying students and must never consume a paid seat.
 
+  // Which brand's lead this is, resolved from the door's own slug. Returns NULL
+  // rather than guessing, and cannot throw or hang - see the module header for the
+  // measurement that made this necessary and for why the hostname is not used.
+  const { resolveDoorSourceId } = await import('./leads/explorerSourceAttribution');
+  const attribution = await resolveDoorSourceId(input.sourceSlug);
+
   // Capture as a Lead for CRM visibility (best-effort — never block the account).
   let leadId: number | null = null;
   try {
@@ -454,6 +489,12 @@ export async function createExplorerEnrollment(input: {
         source: 'open_house',
         form_type: 'open_house',
         status: 'new',
+        // The one column origin brand is derivable from. In `defaults` with the
+        // rest: an existing lead keeps the attribution it already has, so a
+        // returning person's first-touch brand is never rewritten by a later
+        // visit. Rows already written NULL stay NULL and are a backfill, not
+        // something this write should quietly reinterpret.
+        source_id: attribution.sourceId,
         utm_source: input.utm_source,
         utm_medium: input.utm_medium,
         utm_campaign: input.utm_campaign,

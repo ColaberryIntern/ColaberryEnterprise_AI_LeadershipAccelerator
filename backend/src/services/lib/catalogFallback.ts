@@ -2,6 +2,9 @@
  * Last-known-good Anthropic course catalog.
  *
  * Used as fallback when the scraper cannot reach https://www.anthropic.com/learn.
+ * Courses live on Claude Academy (academy.claude.com); Skilljar retires in early
+ * December 2026. 'Claude with the Anthropic API' was renamed 'Building with the
+ * Claude API' and its old slug 404s.
  * Outlines reflect course structure as of 2026-06-30; update when the scraper
  * confirms new modules or URLs from Anthropic.
  *
@@ -18,7 +21,7 @@ export interface KnownCourse {
 export const KNOWN_CATALOG: readonly KnownCourse[] = [
   {
     title: 'Claude Code 101',
-    url: 'https://anthropic.skilljar.com/claude-code-101',
+    url: 'https://academy.claude.com/courses/claude-code-101',
     outline: [
       'Introduction to Claude Code',
       'Installing and configuring Claude Code',
@@ -29,7 +32,7 @@ export const KNOWN_CATALOG: readonly KnownCourse[] = [
   },
   {
     title: 'Claude Code in Action',
-    url: 'https://anthropic.skilljar.com/claude-code-in-action',
+    url: 'https://academy.claude.com/courses/claude-code-in-action',
     outline: [
       'Building real projects with Claude Code',
       'Multi-file editing workflows',
@@ -40,7 +43,7 @@ export const KNOWN_CATALOG: readonly KnownCourse[] = [
   },
   {
     title: 'Introduction to Agent Skills',
-    url: 'https://anthropic.skilljar.com/introduction-to-agent-skills',
+    url: 'https://academy.claude.com/courses/introduction-to-agent-skills',
     outline: [
       'What are AI agents?',
       'Tool use and function calling',
@@ -50,8 +53,8 @@ export const KNOWN_CATALOG: readonly KnownCourse[] = [
     ].join('\n'),
   },
   {
-    title: 'Claude with the Anthropic API',
-    url: 'https://anthropic.skilljar.com/claude-with-the-anthropic-api',
+    title: 'Building with the Claude API',
+    url: 'https://academy.claude.com/courses/building-with-the-claude-api',
     outline: [
       'Anthropic API fundamentals',
       'Authentication and rate limits',
@@ -62,7 +65,7 @@ export const KNOWN_CATALOG: readonly KnownCourse[] = [
   },
   {
     title: 'Introduction to Model Context Protocol',
-    url: 'https://anthropic.skilljar.com/introduction-to-model-context-protocol',
+    url: 'https://academy.claude.com/courses/introduction-to-model-context-protocol',
     outline: [
       'What is MCP?',
       'MCP architecture and components',
@@ -73,7 +76,7 @@ export const KNOWN_CATALOG: readonly KnownCourse[] = [
   },
   {
     title: 'Model Context Protocol: Advanced Topics',
-    url: 'https://anthropic.skilljar.com/model-context-protocol-advanced-topics',
+    url: 'https://academy.claude.com/courses/model-context-protocol-advanced-topics',
     outline: [
       'Advanced MCP server patterns',
       'MCP resource management',
@@ -84,7 +87,7 @@ export const KNOWN_CATALOG: readonly KnownCourse[] = [
   },
   {
     title: 'Introduction to Subagents',
-    url: 'https://anthropic.skilljar.com/introduction-to-subagents',
+    url: 'https://academy.claude.com/courses/introduction-to-subagents',
     outline: [
       'What are subagents?',
       'Designing multi-agent architectures',

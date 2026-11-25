@@ -11,10 +11,12 @@
  * authentic, week-specific output.
  *
  * Grounding (per user intent):
- *   - Weeks with a mapped Anthropic Skilljar course (1,2,3,5,6,7,8) follow that
- *     course's real syllabus (modules + stated objectives captured 2026-07-18
- *     from anthropic.skilljar.com).
- *   - Weeks with no Skilljar course (0,4,9,10,11,12) are elaborated from their
+ *   - Weeks with a mapped Anthropic course (1,2,3,5,6,7,8) follow that course's
+ *     real syllabus (modules + stated objectives captured 2026-07-18, when the
+ *     courses were hosted on Skilljar). The courses now live on Claude Academy
+ *     at academy.claude.com, and week 3's was renamed; the syllabus content is
+ *     unchanged, only the host and that one slug.
+ *   - Weeks with no Anthropic course (0,4,9,10,11,12) are elaborated from their
  *     topic. Weeks 10–12 reuse the authored outlines in data/canonicalCourse.ts.
  *
  * Source of truth for the week→course map: scripts/lib/curriculumWeeks.js and
@@ -81,7 +83,12 @@ export interface WeekBlueprintContent {
   anthropic: { title: string | null; url: string | null; kind: CourseKind };
 }
 
-const SKILLJAR = 'https://anthropic.skilljar.com';
+// Claude Academy, not Skilljar (which retires in early December 2026). This
+// file is the source of truth that seedSkilljarCards.ts rewrites STUDENT CARDS
+// from, so a stale host here puts the whole cohort back on Skilljar the moment
+// anyone runs that seed. Slugs are the live Academy ones, not the Skilljar slugs
+// with the host swapped: week 3's course was renamed and its old name 404s.
+const ACADEMY = 'https://academy.claude.com/courses';
 const CCA_F = 'https://claudecertifications.com/claude-certified-architect/exam-guide';
 
 export const WEEK_BLUEPRINTS: WeekBlueprintContent[] = [
@@ -172,7 +179,7 @@ export const WEEK_BLUEPRINTS: WeekBlueprintContent[] = [
     certification_mapping: { 'CCA-F': ['Claude Code fundamentals', 'agentic workflow'] },
     instructor_notes:
       'Anchored on Skilljar "Claude Code 101". Modules: What is Claude Code / first prompt / daily workflows (explore→plan→code→commit, context management, code review) / customizing (CLAUDE.md, subagents, skills, MCP, hooks) / quiz. Wire the Skilljar section; Lab produces the Architect Workspace + CLAUDE.md.',
-    anthropic: { title: 'Claude Code 101', url: `${SKILLJAR}/claude-code-101`, kind: 'skilljar' },
+    anthropic: { title: 'Claude Code 101', url: `${ACADEMY}/claude-code-101`, kind: 'skilljar' },
   },
 
   /* ----------------------------------------------------------------- Week 2 */
@@ -219,7 +226,7 @@ export const WEEK_BLUEPRINTS: WeekBlueprintContent[] = [
     certification_mapping: { 'CCA-F': ['Agent Skills', 'reusable assets'] },
     instructor_notes:
       'Anchored on Skilljar "Introduction to Agent Skills". Modules: what are skills / creating your first skill / configuration and multi-file skills / skills vs other Claude Code features / sharing skills / troubleshooting skills. Lab = 3 project-specific skills.',
-    anthropic: { title: 'Introduction to Agent Skills', url: `${SKILLJAR}/introduction-to-agent-skills`, kind: 'skilljar' },
+    anthropic: { title: 'Introduction to Agent Skills', url: `${ACADEMY}/introduction-to-agent-skills`, kind: 'skilljar' },
   },
 
   /* ----------------------------------------------------------------- Week 3 */
@@ -233,7 +240,7 @@ export const WEEK_BLUEPRINTS: WeekBlueprintContent[] = [
     // the certificate is the wk4 Part 2 task. The two parts sum to 486 (the full course).
     anthropic_course_card: {
       title: 'Building with the Claude API · Part 1',
-      url: 'https://anthropic.skilljar.com/claude-with-the-anthropic-api',
+      url: 'https://academy.claude.com/courses/building-with-the-claude-api',
       minutes: 227,
       completion: 'progress',
       sections: 'Getting Started, Tool Use, Agents & Workflows',
@@ -276,8 +283,8 @@ export const WEEK_BLUEPRINTS: WeekBlueprintContent[] = [
     ],
     certification_mapping: { 'CCA-F': ['Claude API', 'tool use', 'evaluation'] },
     instructor_notes:
-      'Anchored on Skilljar "Building with the Claude API" (deep course: API access, prompt eval, prompt engineering, tool use, RAG, features, MCP intro, agents/workflows). For Week 3 focus on API access + tool use + eval + prompt technique; RAG/MCP are previews (MCP is Weeks 5-6). Lab = Business Workflow Assistant (Intensive 1 capstone).',
-    anthropic: { title: 'Building with the Claude API', url: `${SKILLJAR}/claude-with-the-anthropic-api`, kind: 'skilljar' },
+      'Anchored on the Claude Academy course "Building with the Claude API" (deep course: API access, prompt eval, prompt engineering, tool use, RAG, features, MCP intro, agents/workflows). For Week 3 focus on API access + tool use + eval + prompt technique; RAG/MCP are previews (MCP is Weeks 5-6). Lab = Business Workflow Assistant (Intensive 1 capstone).',
+    anthropic: { title: 'Building with the Claude API', url: `${ACADEMY}/building-with-the-claude-api`, kind: 'skilljar' },
   },
 
   /* ----------------------------------------------------------------- Week 4 */
@@ -290,7 +297,7 @@ export const WEEK_BLUEPRINTS: WeekBlueprintContent[] = [
     // (this is an added card). MCP is previewed here and taught fully in weeks 5-6.
     anthropic_course_card: {
       title: 'Building with the Claude API · Part 2 (Prompt, Retrieval & Integration)',
-      url: 'https://anthropic.skilljar.com/claude-with-the-anthropic-api',
+      url: 'https://academy.claude.com/courses/building-with-the-claude-api',
       minutes: 259,
       completion: 'certificate',
       sections: 'Prompt Engineering & Evaluation, RAG, Model Context Protocol, Claude Code & Computer Use',
@@ -381,7 +388,7 @@ export const WEEK_BLUEPRINTS: WeekBlueprintContent[] = [
     certification_mapping: { 'CCA-F': ['MCP', 'tools', 'integration'] },
     instructor_notes:
       'Anchored on Skilljar "Introduction to Model Context Protocol". Modules: intro + MCP clients / hands-on servers (project setup, defining tools, inspector) / connecting clients (implementing client, resources, prompts) / assessment. Prereq: Python + JSON/HTTP. Lab = first MCP server.',
-    anthropic: { title: 'Introduction to Model Context Protocol', url: `${SKILLJAR}/introduction-to-model-context-protocol`, kind: 'skilljar' },
+    anthropic: { title: 'Introduction to Model Context Protocol', url: `${ACADEMY}/introduction-to-model-context-protocol`, kind: 'skilljar' },
   },
 
   /* ----------------------------------------------------------------- Week 6 */
@@ -429,7 +436,7 @@ export const WEEK_BLUEPRINTS: WeekBlueprintContent[] = [
     certification_mapping: { 'CCA-F': ['MCP advanced', 'transports', 'integration', 'scaling'] },
     instructor_notes:
       'Anchored on Skilljar "Model Context Protocol: Advanced Topics". Modules: sampling / notifications / roots (file access) / JSON message types / STDIO transport / StreamableHTTP (+ in depth, state) / assessment. Lab = integrate the MCP server with a real system.',
-    anthropic: { title: 'Model Context Protocol: Advanced Topics', url: `${SKILLJAR}/model-context-protocol-advanced-topics`, kind: 'skilljar' },
+    anthropic: { title: 'Model Context Protocol: Advanced Topics', url: `${ACADEMY}/model-context-protocol-advanced-topics`, kind: 'skilljar' },
   },
 
   /* ----------------------------------------------------------------- Week 7 */
@@ -476,7 +483,7 @@ export const WEEK_BLUEPRINTS: WeekBlueprintContent[] = [
     certification_mapping: { 'CCA-F': ['subagents', 'multi-agent', 'orchestration'] },
     instructor_notes:
       'Anchored on Skilljar "Introduction to Subagents". Modules: what are subagents / creating a subagent / designing effective subagents / using subagents effectively. Lab = coordinated multi-agent team.',
-    anthropic: { title: 'Introduction to Subagents', url: `${SKILLJAR}/introduction-to-subagents`, kind: 'skilljar' },
+    anthropic: { title: 'Introduction to Subagents', url: `${ACADEMY}/introduction-to-subagents`, kind: 'skilljar' },
   },
 
   /* ----------------------------------------------------------------- Week 8 */
@@ -523,7 +530,7 @@ export const WEEK_BLUEPRINTS: WeekBlueprintContent[] = [
     certification_mapping: { 'CCA-F': ['Claude Code automation', 'hooks', 'CI/CD', 'verification'] },
     instructor_notes:
       'Anchored on Skilljar "Claude Code in Action". Modules: what is Claude Code / getting hands on (setup, context, custom commands, MCP, github) / hooks & SDK / additional (steering long sessions, verification skills, permission modes, routines & headless, github actions & code review, plugins). Lab = automate a real dev workflow.',
-    anthropic: { title: 'Claude Code in Action', url: `${SKILLJAR}/claude-code-in-action`, kind: 'skilljar' },
+    anthropic: { title: 'Claude Code in Action', url: `${ACADEMY}/claude-code-in-action`, kind: 'skilljar' },
   },
 
   /* ----------------------------------------------------------------- Week 9 */

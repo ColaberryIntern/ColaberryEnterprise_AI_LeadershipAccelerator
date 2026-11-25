@@ -333,7 +333,12 @@
 .tl-de .tld-hero{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:var(--r-12);border:1px solid var(--border-subtle);margin-bottom:18px}
 .tl-de .tld-about{margin-bottom:16px}
 .tl-de .tld-lab{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px}
-.tl-de .tld-desc{color:var(--text-body);font-size:15px;line-height:1.6;margin:0 0 12px}
+/* pre-line, not normal: .tld-desc renders STORED text (card.description,
+   content.summary, content.reflection) where the author typed line breaks on
+   purpose - announcements especially, which were arriving as one run-on
+   paragraph. `pre-line` honours those newlines and still collapses runs of
+   spaces, so indentation in the source does not leak through. */
+.tl-de .tld-desc{color:var(--text-body);font-size:15px;line-height:1.6;margin:0 0 12px;white-space:pre-line}
 .tl-de .tld-desc.muted{color:var(--text-muted)}
 .tl-de .tld-facts{display:flex;flex-wrap:wrap;gap:8px}
 .tl-de .tld-facts span{display:inline-flex;gap:5px;align-items:baseline;font-size:12.5px;color:var(--text-body);background:var(--surface-sunken);border:1px solid var(--border-subtle);border-radius:999px;padding:3px 11px}

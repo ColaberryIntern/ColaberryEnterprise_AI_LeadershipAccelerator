@@ -4053,7 +4053,12 @@ export function startScheduler(): void {
     instrumentCronJob('AnthropicCatalogScraper', async () => {
       const { runCatalogScraper } = require('./anthropicCatalogScraper');
       const result = await runCatalogScraper();
-      console.log(`[Scheduler] AnthropicCatalogScraper: source=${result.source} found=${result.courses_found} created=${result.created} updated=${result.updated} unchanged=${result.unchanged} errors=${result.errors}`);
+      console.log(`[Scheduler] AnthropicCatalogScraper: source=${result.source} found=${result.courses_found} created=${result.created} updated=${result.updated} unchanged=${result.unchanged} errors=${result.errors} outlines_missing=${result.outlines_missing} healthy=${result.healthy}`);
+      if (!result.healthy) {
+        // Loud on the scheduler's own surface too. The weekly job used to print a
+        // tidy line whether or not it had read anything.
+        console.error(`[Scheduler] AnthropicCatalogScraper UNHEALTHY: ${result.outlines_missing} of ${result.courses_found} courses produced no outline. Curriculum changes are NOT being detected.`);
+      }
     }).catch((err: any) => {
       console.error('[Scheduler] Anthropic catalog scraper error:', err.message);
     });

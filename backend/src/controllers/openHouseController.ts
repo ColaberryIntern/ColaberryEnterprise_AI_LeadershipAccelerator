@@ -13,6 +13,7 @@ import { captureSignupConsent, SIGNUP_CONSENT_TEXT } from '../services/consent/c
 import { isAffirmative } from '../services/consent/affirmative';
 import { capturePhoneConsent } from '../services/consent/capturePhoneConsent';
 import { instantAccessFor, greetInBackground } from '../services/openHouse/instantAccess';
+import { OPEN_HOUSE_DOOR_SOURCE_SLUG } from '../services/leads/doorSlugs';
 
 function log(
   level: 'info' | 'warn' | 'error',
@@ -36,7 +37,18 @@ export async function handleOpenHouseRegister(req: Request, res: Response, next:
 
   try {
     const payload = openHouseRegisterSchema.parse(req.body);
-    const { enrollment, created } = await createExplorerEnrollment(payload);
+    // The DOOR's claim about itself, so the lead is attributable to a brand.
+    // The slug is spread LAST, so it is the server's answer even if a caller
+    // ever sends one of its own.
+    //
+    // Bound to a variable rather than written inline: this schema also carries
+    // `marketing_opt_in`, `marketing_consent_text`, `ip_address` and
+    // `user_agent`, which `createExplorerEnrollment` does not declare. Passing a
+    // variable is what the previous `createExplorerEnrollment(payload)` did;
+    // spreading into an argument literal would subject those four extra keys to
+    // excess-property checking and fail the build.
+    const explorerInput = { ...payload, sourceSlug: OPEN_HOUSE_DOOR_SOURCE_SLUG };
+    const { enrollment, created } = await createExplorerEnrollment(explorerInput);
 
     // Marketing consent, if they ticked the box. Recorded on repeat registrations
     // too (created === false): someone who did not tick the first time and does
@@ -263,6 +275,11 @@ export async function handlePublicOpenHouseSignup(req: Request, res: Response, n
       utm_campaign: payload.utm_campaign || 'open_house',
       page_url: payload.page_url,
       source: 'Open House signup (public)',
+      // The DOOR's claim about itself. This landing page is served from
+      // refactored.ai and enterprise.colaberry.ai, and the class is Colaberry
+      // Training's either way - which is exactly why the brand comes from the
+      // door and not from `page_url`.
+      sourceSlug: OPEN_HOUSE_DOOR_SOURCE_SLUG,
       // The naming permission (SNACK-2), normalised with the SAME rule the consent helper uses
       // rather than a second definition of "ticked". Absent means no grant, which is not a
       // refusal: it simply leaves this signup showing as "Someone in <city>" like everyone else.

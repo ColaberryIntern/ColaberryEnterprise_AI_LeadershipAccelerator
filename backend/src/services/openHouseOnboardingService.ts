@@ -2,6 +2,7 @@ import * as sql from 'mssql';
 import { env } from '../config/env';
 import { dedupeAttendees, RawEventbriteAttendee } from '../utils/eventbriteSanitize';
 import { createExplorerEnrollment } from './enrollmentService';
+import { OPEN_HOUSE_DOOR_SOURCE_SLUG } from './leads/doorSlugs';
 
 // Eventbrite event id for the Forward Deployed AI Engineer Accelerator Open House.
 export const OPEN_HOUSE_EVENT_ID = '1992498063344';
@@ -149,6 +150,10 @@ export async function syncOpenHouseExplorers(
         order_id: a.order_id || undefined,
         utm_source: 'eventbrite',
         utm_campaign: 'open_house',
+        // Same door as the other three Open House entrances: an Eventbrite
+        // registrant for this class is a Colaberry Training lead, so they are
+        // attributable rather than arriving with no brand at all.
+        sourceSlug: OPEN_HOUSE_DOOR_SOURCE_SLUG,
       });
       if (created) summary.created++;
       else summary.existing++;

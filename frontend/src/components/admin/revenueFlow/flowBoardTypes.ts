@@ -75,6 +75,22 @@ export interface DemandMeasure {
  * `status` and `tone` are plain strings for the reason this whole file exists: an unknown value
  * must paint muted and still render, not fail the build.
  */
+/**
+ * One rate on a campaign, with the two numbers that produced it. R27.
+ *
+ * `defined: false` means the denominator was zero, and `display` then carries words rather
+ * than "0%" — the same rule the rest of this page follows for a figure nobody measured.
+ */
+export interface DemandRate {
+  key: string;
+  label: string;
+  numerator: number;
+  denominator: number;
+  display: string;
+  basis: string;
+  defined: boolean;
+}
+
 export interface DemandSource {
   key: string;
   label: string;
@@ -82,6 +98,11 @@ export interface DemandSource {
   /** What `count` counts, in words. The units genuinely differ between sources. */
   countLabel: string;
   measures: DemandMeasure[];
+  /**
+   * Read rate and click rate, in that order, for the bottom-left and bottom-right of the
+   * campaign tile. Empty on a channel, which sends nothing and therefore has no denominator.
+   */
+  rates?: DemandRate[];
   status: string;
   /** Whether this source can be tied to a downstream revenue record at all. */
   attributable: boolean;

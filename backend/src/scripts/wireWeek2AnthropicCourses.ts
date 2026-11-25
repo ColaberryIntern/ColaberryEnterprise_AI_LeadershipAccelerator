@@ -29,7 +29,7 @@ const ANTHROPIC_COURSES: Array<{ title: string; type: string; url: string }> = [
   {
     title: 'Introduction to Agent Skills (Anthropic Skilljar)',
     type: 'reading',
-    url: 'https://anthropic.skilljar.com/introduction-to-agent-skills',
+    url: 'https://academy.claude.com/courses/introduction-to-agent-skills',
   },
 ];
 

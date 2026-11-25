@@ -7,8 +7,9 @@
 // 11-swati-curriculum-twc.md (Track 1). Intensives map W1-3 / W4-6 / W7-9 /
 // W10-12 per the TWC 4-seminar frame.
 //
-// Each week is pre-mapped to its specific Anthropic Skilljar course (validated
-// against the live catalog at anthropic.skilljar.com, 2026-06-10). Weeks 4/9/
+// Each week is pre-mapped to its specific Anthropic course (validated against
+// the live catalog 2026-06-10, when it was hosted on Skilljar; the courses now
+// live on Claude Academy at academy.claude.com and week 3's was renamed). Weeks 4/9/
 // 10/11 have NO Anthropic course — they are Colaberry-original architecture
 // content (the "Forward Deployed AI Engineer" differentiator).
 //
@@ -33,7 +34,9 @@ const INTENSIVE_DUE = {
   4: '2026-07-10',
 };
 
-const SKILLJAR = 'https://anthropic.skilljar.com';
+// Claude Academy, not Skilljar (retires early December 2026). Week 3's course
+// was renamed on Academy; its old slug 404s.
+const ACADEMY = 'https://academy.claude.com/courses';
 const CCA_F = 'https://claudecertifications.com/claude-certified-architect/exam-guide';
 
 const INTENSIVE_NAMES = {
@@ -47,11 +50,11 @@ const INTENSIVE_NAMES = {
 // when the week is Colaberry-original (no Anthropic course exists).
 const WEEKS = [
   { week: 1, intensive: 1, theme: 'Claude Code Foundations + Architect Workspace setup',
-    anthropic: { course: 'Claude Code 101 (+ Claude Code in Action)', url: `${SKILLJAR}/claude-code-101` } },
+    anthropic: { course: 'Claude Code 101 (+ Claude Code in Action)', url: `${ACADEMY}/claude-code-101` } },
   { week: 2, intensive: 1, theme: 'Agent Skills (3 project-specific skills)',
-    anthropic: { course: 'Introduction to agent skills', url: `${SKILLJAR}/introduction-to-agent-skills` } },
+    anthropic: { course: 'Introduction to agent skills', url: `${ACADEMY}/introduction-to-agent-skills` } },
   { week: 3, intensive: 1, theme: 'Claude API + Business Workflow Assistant',
-    anthropic: { course: 'Building with the Claude API', url: `${SKILLJAR}/claude-with-the-anthropic-api` } },
+    anthropic: { course: 'Building with the Claude API', url: `${ACADEMY}/building-with-the-claude-api` } },
   { week: 4, intensive: 2, theme: 'Prompt Engineering + Enterprise Prompt Library',
     // DECISION 2026-06-18 (BC#9985688677, Ali): build Colaberry-original (lean). NOT
     // fold-into-W3 (W3 is Intensive 1, W4 opens Intensive 2 — folding breaks the 4x3-week
@@ -62,13 +65,13 @@ const WEEKS = [
     // foundation only. Tier-A artifact = the Enterprise Prompt Library on the student project.
     anthropic: { course: 'Prompt Engineering - Colaberry-original; background: Anthropic public Prompt Engineering tutorial + docs', url: null } },
   { week: 5, intensive: 2, theme: 'MCP Foundations + First MCP Server',
-    anthropic: { course: 'Introduction to Model Context Protocol', url: `${SKILLJAR}/introduction-to-model-context-protocol` } },
+    anthropic: { course: 'Introduction to Model Context Protocol', url: `${ACADEMY}/introduction-to-model-context-protocol` } },
   { week: 6, intensive: 2, theme: 'Advanced MCP + Business System Integration',
-    anthropic: { course: 'Model Context Protocol: Advanced Topics', url: `${SKILLJAR}/model-context-protocol-advanced-topics` } },
+    anthropic: { course: 'Model Context Protocol: Advanced Topics', url: `${ACADEMY}/model-context-protocol-advanced-topics` } },
   { week: 7, intensive: 3, theme: 'Subagents + Multi-Agent Team',
-    anthropic: { course: 'Introduction to subagents', url: `${SKILLJAR}/introduction-to-subagents` } },
+    anthropic: { course: 'Introduction to subagents', url: `${ACADEMY}/introduction-to-subagents` } },
   { week: 8, intensive: 3, theme: 'Claude Code Workflows + Development Automation',
-    anthropic: { course: 'Claude Code in Action (workflows section)', url: `${SKILLJAR}/claude-code-in-action` } },
+    anthropic: { course: 'Claude Code in Action (workflows section)', url: `${ACADEMY}/claude-code-in-action` } },
   { week: 9, intensive: 3, theme: 'Reliability Engineering + AI Quality Layer',
     anthropic: { course: 'Colaberry-original (no Anthropic course — architecture layer)', url: null } },
   { week: 10, intensive: 4, theme: 'Governance + AI Governance Engine',

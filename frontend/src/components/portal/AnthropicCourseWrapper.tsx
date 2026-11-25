@@ -28,7 +28,7 @@ function AnthropicCourseWrapper({ title, url, description, estimatedMinutes, cou
             className="badge bg-light border"
             style={{ color: '#C20E1E' }}
           >
-            <i className="bi bi-mortarboard me-1" aria-hidden="true"></i>Skilljar
+            <i className="bi bi-mortarboard me-1" aria-hidden="true"></i>Claude Academy
           </span>
           {courseNumber != null && (
             <span className="badge bg-light border text-muted">

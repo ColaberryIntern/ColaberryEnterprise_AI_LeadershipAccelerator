@@ -3,10 +3,10 @@ import './anthropicBento.css';
 
 /**
  * AnthropicCoursesBento — production React port of the approved
- * Colaberry Design System bento redesign for Anthropic / Skilljar
+ * Colaberry Design System bento redesign for the Anthropic / Claude Academy
  * Week-1 courses. Spec: docs/design/anthropic-course-wrapper-bento.{html,md}.
  *
- * Container component: it takes the WHOLE Skilljar course list and
+ * Container component: it takes the WHOLE Claude Academy course list and
  * arranges a featured entry point + compact supporting tiles + a
  * cherry "path" anchor (and computes the path summary), rather than
  * rendering one isolated card per course. All brand styling is scoped
@@ -76,7 +76,7 @@ function FeaturedTile({ course, showStartHere }: { course: AnthropicCourse; show
           <span className="cb-icon-tile acw__tile"><Icon name="bi-mortarboard" /></span>
           <div className="acw__head-text">
             <div className="acw__topline">
-              <p className="acw__overline">Anthropic · Skilljar</p>
+              <p className="acw__overline">Anthropic · Claude Academy</p>
               {showStartHere && <span className="cb-badge cb-badge--solid">Start here</span>}
             </div>
             <h3 className="acw__title cb-clamp-2">{course.title}</h3>
@@ -187,7 +187,7 @@ function AnthropicCoursesBento({ courses, pathLabel }: Props) {
   const ordered = orderCourses(courses);
   const featured = ordered[0];
   const compacts = ordered.slice(1);
-  const label = pathLabel || 'Anthropic · Skilljar path';
+  const label = pathLabel || 'Anthropic · Claude Academy path';
 
   // `.acw-ds` is the scope/token wrapper; the grid MUST be a child of it (not the
   // same element) so the descendant CSS selectors (`.acw-ds .acw-bento`,

@@ -1,5 +1,6 @@
 import React from 'react';
 import { paintFor } from './flowTokens';
+import { fmtCount, fmtCountOr } from './fmtCount';
 import type { DemandSource } from './flowBoardTypes';
 
 /**
@@ -87,7 +88,7 @@ export default function DemandSourceDetail({
           <tbody>
             <tr data-testid={`demand-measure-${streamKey}-${source.key}-headline`}>
               <td style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>{source.countLabel}</td>
-              <td className="text-end fw-bold">{source.count}</td>
+              <td className="text-end fw-bold">{fmtCountOr(source.count, 'Not recorded')}</td>
               <td className="text-muted">The headline count for this source.</td>
             </tr>
             {source.measures.map((m) => (
@@ -96,7 +97,7 @@ export default function DemandSourceDetail({
                 <td className="text-end">
                   {m.count === null
                     ? <span className="text-muted" style={{ whiteSpace: 'nowrap' }}>Not recorded</span>
-                    : <span className="fw-bold">{m.count}</span>}
+                    : <span className="fw-bold">{fmtCount(m.count)}</span>}
                 </td>
                 <td className="text-muted">{m.note}</td>
               </tr>

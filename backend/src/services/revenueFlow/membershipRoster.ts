@@ -43,14 +43,44 @@ export const MEMBERSHIP_STAGE_LABELS: Record<MembershipStageKey, string> = {
   refunded: 'Refunded',
 };
 
-export interface RosterPerson {
-  /** The subscription or refund row, so a reader can be pointed at the exact record. */
+/** One subscription or refund row, under the person who holds it. */
+export interface RosterRow {
   rowId: string;
+  /** What this row is in the stage's own terms: plan, amount, and the date that matters. */
+  detail: string;
+}
+
+/**
+ * One PERSON in a stage, with every row they hold in it. R27.
+ *
+ * ── WHY THIS IS GROUPED, AND WHY THE ROWS ARE KEPT ───────────────────────────────────────
+ *
+ * Ali, 25 Nov 2026, testing the stage roster: "Looks like a lot of duplicates in the list. If
+ * they are legit, group them and show information pertinent to what she would want to know."
+ *
+ * They are legitimate. Measured on production the same day: 296 subscription rows belong to
+ * 115 distinct people, one enrollment carries 18 of them, and 57 people hold exactly one. A
+ * renewal, a plan change and a retried payment each write another `subscriptions` row, so a
+ * row is a SUBSCRIPTION and listing rows shows the same name eight times to a reader who came
+ * looking for people.
+ *
+ * The rows are kept rather than collapsed away, because `rowCount` is the finding a support
+ * reader needs: four rows at "Payment failed" is somebody who tried four times, and deduping
+ * to one name would delete exactly the fact worth acting on.
+ */
+export interface RosterPerson {
+  /** Stable within a stage: the email where there is one, so two enrolments merge into one human. */
+  personKey: string;
   /** The person's name, or null when the row does not resolve to one. Never a placeholder. */
   name: string | null;
   email: string | null;
-  /** What this row is in the stage's own terms: plan, amount, and the date that matters. */
-  detail: string;
+  /** For the 360 link when no email exists. The frontend prefers email; this is the fallback. */
+  enrollmentId: string | null;
+  /** How many rows this person holds IN THIS STAGE. The reason grouping does not lose anything. */
+  rowCount: number;
+  rows: RosterRow[];
+  /** What differs between those rows, in words, when there is more than one. */
+  summary: string | null;
   /** Said plainly when the row carries no person, instead of printing a dash. */
   unresolvedReason: string | null;
 }
@@ -58,8 +88,17 @@ export interface RosterPerson {
 export interface StageRoster {
   stageKey: MembershipStageKey;
   label: string;
-  /** Always equal to `people.length`. The funnel's count is produced the same way. */
-  count: number;
+  /**
+   * The number the FUNNEL shows, which counts subscription rows.
+   *
+   * Kept and reported alongside `personCount` rather than replaced by it. Grouping by person
+   * broke the old "count equals the number of rows listed" invariant, and the honest fix is
+   * to show both numbers and say which is which, not to quietly start reporting a different
+   * one under the same name. Always equal to the sum of every person's `rowCount`.
+   */
+  subscriptionCount: number;
+  /** How many PEOPLE those rows belong to. Always equal to `people.length`. */
+  personCount: number;
   people: RosterPerson[];
   /** Why the list is empty, when it is. Null when there is nothing to explain. */
   emptyNote: string | null;
@@ -68,6 +107,7 @@ export interface StageRoster {
 
 interface SubRosterRow extends ClassifiableSubscription {
   id: string;
+  enrollment_id: string | null;
   full_name: string | null;
   email: string | null;
   started_at: string | null;
@@ -80,13 +120,94 @@ interface RefundRosterRow {
   status: string;
   created_at: string | null;
   reason: string | null;
+  enrollment_id: string | null;
   full_name: string | null;
   enrollment_email: string | null;
   customer_email: string | null;
 }
 
+/**
+ * Fold rows into people, preserving every row.
+ *
+ * The key is the EMAIL where there is one, so the same human holding two enrolments appears
+ * once; a reader chasing a support question does not care that the billing system filed them
+ * twice. Where there is no email the enrolment is the key, and where there is neither the row
+ * is its own group — which keeps an unresolved row visible instead of collapsing several
+ * unrelated ones into a single nameless entry.
+ */
+function groupByPerson(
+  entries: Array<{
+    rowId: string;
+    detail: string;
+    name: string | null;
+    email: string | null;
+    enrollmentId: string | null;
+    unresolvedReason: string | null;
+  }>,
+  summarize: (rows: RosterRow[]) => string | null,
+): RosterPerson[] {
+  const byKey = new Map<string, RosterPerson>();
+
+  for (const e of entries) {
+    const key = (e.email && e.email.includes('@') ? e.email.toLowerCase() : null)
+      ?? e.enrollmentId
+      ?? `row:${e.rowId}`;
+
+    const existing = byKey.get(key);
+    if (existing) {
+      existing.rows.push({ rowId: e.rowId, detail: e.detail });
+      existing.rowCount += 1;
+      // A name can be missing on one row and present on another; take the first real one
+      // rather than letting row order decide whether this person has a name.
+      if (!existing.name && e.name) existing.name = e.name;
+      if (!existing.email && e.email) existing.email = e.email;
+      if (!existing.enrollmentId && e.enrollmentId) existing.enrollmentId = e.enrollmentId;
+      if (existing.name) existing.unresolvedReason = null;
+      continue;
+    }
+
+    byKey.set(key, {
+      personKey: key,
+      name: e.name,
+      email: e.email,
+      enrollmentId: e.enrollmentId,
+      rowCount: 1,
+      rows: [{ rowId: e.rowId, detail: e.detail }],
+      summary: null,
+      unresolvedReason: e.unresolvedReason,
+    });
+  }
+
+  const people = Array.from(byKey.values());
+  for (const p of people) p.summary = p.rowCount > 1 ? summarize(p.rows) : null;
+
+  // Most rows first: a person with eight subscriptions in one stage is the one a support
+  // reader needs to see, and burying them alphabetically is how it gets missed. Named people
+  // before unnamed, then by name, so the order is stable between reads.
+  people.sort((a, b) => {
+    if (a.rowCount !== b.rowCount) return b.rowCount - a.rowCount;
+    if (!a.name && b.name) return 1;
+    if (a.name && !b.name) return -1;
+    return (a.name ?? '').localeCompare(b.name ?? '');
+  });
+  return people;
+}
+
 const dollars = (cents: number): string =>
   `$${Math.round(cents / 100).toLocaleString('en-US')}`;
+
+/**
+ * Why one person holds several rows in this stage, in words.
+ *
+ * Facts read off the rows, never a guess at intent: a renewal, a plan change and a retried
+ * payment all look like "another row" and the detail lines are what tell them apart. Said once
+ * per person rather than repeated on every row.
+ */
+function summarizeSubscriptions(rows: RosterRow[]): string {
+  return `${rows.length} subscription rows for this person in this stage. Each is a separate `
+    + 'record: a renewal, a plan change or a retried payment all write another row, so the '
+    + 'count is the history rather than a duplicate.';
+}
 
 /** What this row is, in the terms the stage cares about. Facts from the row, never a judgment. */
 function detailFor(r: SubRosterRow, stage: MembershipStageKey): string {
@@ -133,7 +254,8 @@ export async function getMembershipStageRoster(
     return {
       stageKey: stage,
       label,
-      count: 0,
+      subscriptionCount: 0,
+      personCount: 0,
       people: [],
       emptyNote:
         'subscriptions is not present in this database, so nobody can be listed. That is a '
@@ -153,6 +275,7 @@ export async function getMembershipStageRoster(
             s.current_period_end::text,
             s.started_at::text,
             s.canceled_at::text,
+            s.enrollment_id::text,
             e.full_name,
             e.email
        FROM subscriptions s
@@ -161,30 +284,29 @@ export async function getMembershipStageRoster(
   );
 
   const todayIso = day(now.toISOString()) as string;
-  const people: RosterPerson[] = rows
-    .filter((r) => stagesForSubscription(r, todayIso).includes(stage))
-    .map((r) => ({
+  const matched = rows.filter((r) => stagesForSubscription(r, todayIso).includes(stage));
+
+  const people = groupByPerson(
+    matched.map((r) => ({
       rowId: r.id,
+      detail: detailFor(r, stage),
       name: r.full_name,
       email: r.email,
-      detail: detailFor(r, stage),
+      enrollmentId: r.enrollment_id,
       unresolvedReason: r.full_name
         ? null
         : 'This subscription does not resolve to an enrollment, so no name is recorded for it.',
-    }));
-
-  // Sorted by name so the list is stable between reads. Unresolved rows last, where they read
-  // as the exception they are rather than as the start of the list.
-  people.sort((a, b) => {
-    if (!a.name && b.name) return 1;
-    if (a.name && !b.name) return -1;
-    return (a.name ?? '').localeCompare(b.name ?? '');
-  });
+    })),
+    summarizeSubscriptions,
+  );
 
   return {
     stageKey: stage,
     label,
-    count: people.length,
+    // From the rows, not from a second query: this is the number the funnel shows, and the two
+    // cannot disagree because both are the same filtered list.
+    subscriptionCount: matched.length,
+    personCount: people.length,
     people,
     emptyNote: people.length === 0
       ? `Nobody is at "${label}" right now. That is a measured zero: the table was read and no `
@@ -209,7 +331,8 @@ async function refundRoster(label: string): Promise<StageRoster> {
     return {
       stageKey: 'refunded',
       label,
-      count: 0,
+      subscriptionCount: 0,
+      personCount: 0,
       people: [],
       emptyNote:
         'refunds is not present in this database, so nobody can be listed. That is a missing '
@@ -224,6 +347,7 @@ async function refundRoster(label: string): Promise<StageRoster> {
             r.status::text AS status,
             r.created_at::text,
             r.reason,
+            r.enrollment_id::text,
             e.full_name,
             e.email       AS enrollment_email,
             r.customer_email
@@ -233,25 +357,28 @@ async function refundRoster(label: string): Promise<StageRoster> {
     { type: QueryTypes.SELECT },
   );
 
-  const people: RosterPerson[] = rows.map((r) => ({
-    rowId: r.id,
-    name: r.full_name,
-    // The refund's own customer_email is a real fallback rather than a guess: it is the
-    // address the refund was issued against.
-    email: r.enrollment_email ?? r.customer_email,
-    detail: `${dollars(r.amount_cents)} refunded ${day(r.created_at) ?? 'on an unrecorded date'}`
-      + `${r.reason ? `. Reason: ${r.reason}` : '.'}`,
-    unresolvedReason: r.full_name
-      ? null
-      : 'This refund does not resolve to an enrollment, so no name is recorded for it.',
-  }));
-
-  people.sort((a, b) => (a.name ?? '￿').localeCompare(b.name ?? '￿'));
+  const people = groupByPerson(
+    rows.map((r) => ({
+      rowId: r.id,
+      detail: `${dollars(r.amount_cents)} refunded ${day(r.created_at) ?? 'on an unrecorded date'}`
+        + `${r.reason ? `. Reason: ${r.reason}` : '.'}`,
+      name: r.full_name,
+      // The refund's own customer_email is a real fallback rather than a guess: it is the
+      // address the refund was issued against.
+      email: r.enrollment_email ?? r.customer_email,
+      enrollmentId: r.enrollment_id,
+      unresolvedReason: r.full_name
+        ? null
+        : 'This refund does not resolve to an enrollment, so no name is recorded for it.',
+    })),
+    (rs) => `${rs.length} separate refunds to this person.`,
+  );
 
   return {
     stageKey: 'refunded',
     label,
-    count: people.length,
+    subscriptionCount: rows.length,
+    personCount: people.length,
     people,
     emptyNote: people.length === 0
       ? 'No settled refund has been recorded. That is a measured zero.'

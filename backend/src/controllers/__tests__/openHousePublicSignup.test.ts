@@ -84,6 +84,28 @@ describe('handlePublicOpenHouseSignup', () => {
     }));
   });
 
+  it('names its own door, so the lead is attributable to a brand', async () => {
+    // The defect this guards: this door passed no slug, so every lead it captured
+    // was written with `source_id` NULL - 332 of them in the 15 days after the ad
+    // funnels moved onto it - and a lead with no source belongs to no brand.
+    const r = res();
+    await handlePublicOpenHouseSignup(req(body()), r, jest.fn());
+
+    expect(mkEnrollment).toHaveBeenCalledWith(expect.objectContaining({ sourceSlug: 'training' }));
+  });
+
+  it('refuses a body that tries to name its own brand, and creates nothing', async () => {
+    // A public endpoint where a visitor could choose their own attribution is a
+    // visitor who can write themselves into any brand's numbers. The schema is
+    // `.strict()`, so the attempt is a 400 for the whole signup rather than a
+    // silently ignored key - and the slug the service receives is the server's.
+    const r = res();
+    await handlePublicOpenHouseSignup(req(body({ sourceSlug: 'enterprise' })), r, jest.fn());
+
+    expect(r.status).toHaveBeenCalledWith(400);
+    expect(mkEnrollment).not.toHaveBeenCalled();
+  });
+
   it('never uses the word barred for a licensed career school', async () => {
     // 40 TAC 807.172(d): no "free" in advertising without written TWC approval.
     const r = res();
