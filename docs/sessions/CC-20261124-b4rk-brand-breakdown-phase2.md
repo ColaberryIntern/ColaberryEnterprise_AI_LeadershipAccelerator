@@ -154,6 +154,30 @@ which still fails on the deletion it exists to catch.
 | Frontend, revenue area | **8 suites / 160 tests pass** (33 new) |
 | Frontend, full suite | **864 suites / 11,229 tests pass** |
 | Scoped typecheck | clean across all changed files |
+| Mutation check | **17 of 17 killed**, 0 survived, control green first |
+
+### The mutation check earned its keep
+
+Seventeen mutations, each one a change that would make the page tell a lie. The control run
+went first, because a suite that is already red reports every mutation as killed without testing
+anything.
+
+Backend: booked revenue re-pointed at the gov pipeline; the unknown-stream guard made a no-op;
+the board no longer shipping the figure sources; the five bets defaulted into Colaberry Training;
+the membership card filed under the wrong brand; the annualized tile filed under Enterprise; a
+fallback name presented as the real one; the bucket presented as a brand.
+
+Frontend: out-of-scope hero tiles shown anyway (the $54,900 bug itself); every figure treated as
+in scope; an unattributed figure silently dropped; the win-rate sentence outliving its tile; a
+stale stream filter surviving a brand change; an empty brand heading rendered; the filter bar
+drawn with no brands behind it; the bucket given a brand link; the raw slug printed on a card.
+
+**One survived on the first pass** and is worth recording, because it is the failure mode this
+check exists to find. Removing `brand.isBrand &&` from the heading's link left every test
+passing: `resolveBrand` sends `url: null` for the unassigned bucket, so the assertion could not
+tell whether the guard or the null URL was keeping the link off it. The test now hands the bucket
+a URL, making the guard the only thing that can suppress the link, with a real brand carrying the
+same URL as the control. Killed on re-run.
 
 **The local typecheck proved itself rather than being trusted.** The full project `tsc` here is
 still a false clean (TypeScript 4.9.5 against an `@types/d3-dispatch` using a TS 5 `const` type
