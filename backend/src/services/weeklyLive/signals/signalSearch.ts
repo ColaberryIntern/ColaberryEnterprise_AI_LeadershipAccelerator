@@ -1,3 +1,4 @@
+import type { ResponseCreateParamsNonStreaming } from 'openai/resources/responses/responses';
 import { z } from 'zod';
 import { getInstrumentedOpenAI } from '../../openaiInstrumented';
 import { emitAiEvent } from '../../aiEventService';
@@ -87,9 +88,11 @@ export async function searchGroup(group: readonly number[], s: SearchInput): Pro
     const t0 = Date.now();
     const event = { event_type: 'llm.call' as const, external_system: 'openai', workflow_id: WORKFLOW, trace_id: ensureTraceId(), model: SEARCH_MODEL, cache_hit: false };
     try {
-      const res = await client.responses.create({
+      // The API takes max_tool_calls; the installed SDK's types do not list it yet.
+      const body: ResponseCreateParamsNonStreaming & { max_tool_calls: number } = {
         model: SEARCH_MODEL, tools: [{ type: 'web_search', search_context_size: 'medium' }], input: redactSensitive(prompt(group, s)), max_output_tokens: 8000, max_tool_calls: MAX_SEARCHES,
-      });
+      };
+      const res = await client.responses.create(body);
       const searches = res.output.filter((o) => o.type === 'web_search_call').length;
       const costUsd = searchCost(SEARCH_MODEL, res.usage, searches);
       emitAiEvent({ ...event, outcome: 'success', prompt_tokens: res.usage?.input_tokens ?? null, completion_tokens: res.usage?.output_tokens ?? null,
