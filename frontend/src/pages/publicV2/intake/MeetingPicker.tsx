@@ -13,9 +13,14 @@ export interface MeetingPickerProps {
   /** Changes when the interview time changes, so the times are fetched again. */
   anchorKey: string;
   onBooked: (meeting: Meeting) => void;
+  /**
+   * Q1: A (Ali, 2026-11-25): booking never blocks the interview. Given when they chose "now", so a
+   * calendar that fails or has no times cannot cost us their interview. Booking is offered again after it.
+   */
+  onSkip?: () => void;
 }
 
-export function MeetingPicker({ token, anchorKey, onBooked }: MeetingPickerProps): React.ReactElement {
+export function MeetingPicker({ token, anchorKey, onBooked, onSkip }: MeetingPickerProps): React.ReactElement {
   const [offered, setOffered] = useState<OfferedSlots | null>(null);
   const [day, setDay] = useState(0);
   const [chosen, setChosen] = useState<string | null>(null);
@@ -102,6 +107,11 @@ export function MeetingPicker({ token, anchorKey, onBooked }: MeetingPickerProps
       {failed ? (
         <button type="button" className="cbv2-btn cbv2-btn--line" onClick={() => { setNote(''); setReload((n) => n + 1); }}>
           Try again
+        </button>
+      ) : null}
+      {onSkip ? (
+        <button type="button" className="cbv2-btn cbv2-btn--line" onClick={onSkip} disabled={busy} data-testid="meeting-skip">
+          Skip for now, start my interview
         </button>
       ) : null}
     </section>
