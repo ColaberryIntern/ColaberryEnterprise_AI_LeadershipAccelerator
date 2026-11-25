@@ -1686,9 +1686,7 @@
    "path": "frontend/src/components/admin/voiceStudio/OverviewTab.tsx",
    "role": "UI",
    "callTypes": [],
-   "envVars": [
-    "VOICE_STUDIO_UI_ENABLED"
-   ]
+   "envVars": []
   },
   {
    "path": "frontend/src/components/admin/voiceStudio/QualityTab.tsx",

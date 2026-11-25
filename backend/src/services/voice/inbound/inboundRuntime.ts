@@ -72,13 +72,16 @@ export async function findNumber(calledNumber: string): Promise<CalledNumber | n
 export async function openInboundCall(c: CallSession): Promise<{ callId: string }> {
   const s = await db();
   const key = `inbound:${c.callSid}`;
+  // No conflict target on purpose. voice_calls has two unique indexes a redelivery can hit (idempotency
+  // key, and engine + provider call id). Naming one made the other throw under concurrency.
   const inserted = await s.query<{ id: string }>(
     `INSERT INTO voice_calls (tenant_id, direction, engine, idempotency_key, recipient_ref, purpose, state, test_mode, provider_call_id)
      VALUES (:tenant, 'inbound', :engine, :key, :ref, 'inbound', 'ringing', :test, :sid)
-     ON CONFLICT (tenant_id, idempotency_key) DO NOTHING RETURNING id`,
+     ON CONFLICT DO NOTHING RETURNING id`,
     { replacements: { tenant: c.number.tenantId, engine: c.engine, key, ref: `inbound:${c.number.numberRef}`, test: c.testMode, sid: c.callSid }, type: QueryTypes.SELECT });
   if (inserted[0]) return { callId: inserted[0].id };
   const [row] = await s.query<{ id: string }>('SELECT id FROM voice_calls WHERE tenant_id = :tenant AND idempotency_key = :key', { replacements: { tenant: c.number.tenantId, key }, type: QueryTypes.SELECT });
+  if (!row) throw Object.assign(new Error('this CallSid is already recorded for another line'), { name: 'ContractViolation' });
   return { callId: row.id };
 }
 

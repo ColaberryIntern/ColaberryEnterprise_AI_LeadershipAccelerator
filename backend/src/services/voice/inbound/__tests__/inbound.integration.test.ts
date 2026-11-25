@@ -51,6 +51,20 @@ describeIfDb('inbound calls against Postgres', () => {
     expect(JSON.stringify(r)).not.toContain('5555550151');
   });
 
+  it('no concurrent delivery ever throws (the second unique index raced: 117 of 300 rounds)', async () => {
+    for (let i = 0; i < 60; i += 1) {
+      const rs = await Promise.allSettled(Array.from({ length: 10 }, () => open(`r${i}-`)));
+      expect(rs.filter((x) => x.status === 'rejected')).toEqual([]);
+      expect(new Set(rs.map((x) => (x as PromiseFulfilledResult<{ callId: string }>).value.callId)).size).toBe(1);
+    }
+  });
+
+  it('a CallSid already recorded under another tenant is refused, never handed the other row', async () => {
+    await open('x9');
+    const other = { ...(await R.findNumber('+15555550151'))!, tenantId: '9b111111-1111-4111-8111-111111111112' };
+    await expect(R.openInboundCall({ callSid: sid('x9'), number: other, engine: 'conversation_relay', testMode: true })).rejects.toMatchObject({ name: 'ContractViolation' });
+  });
+
   it('a message fallback ends the row; a human fallback leaves it open for the dial action', async () => {
     const a = (await open('c2')).callId;
     await R.markInboundFallback(a, 'inbound_disabled', true);

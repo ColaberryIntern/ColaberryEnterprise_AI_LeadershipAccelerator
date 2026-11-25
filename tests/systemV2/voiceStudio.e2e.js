@@ -24,9 +24,12 @@ const { Client } = require('pg');
 
 const RUN = crypto.randomBytes(3).toString('hex');
 const SHOTS = process.env.SHOT_DIR || path.join(require('os').tmpdir(), `voiceStudio-e2e-${RUN}`);
+const MARK = { '': /Safety switches/i, '/agents': /\[e2e\] Agent/i, '/lab': /Blind comparison/i, '/numbers': /e2e-line-/i, '/calls': /dispatch unknown/i, '/trust': /Trust timeline/i, '/quality': /Evaluation runs/i, '/costs': /Caps and alerts/i };
 const TABS = ['', '/agents', '/lab', '/numbers', '/calls', '/trust', '/quality', '/costs'];
 const EXISTING = ['/admin/dashboard', '/admin/leads', '/admin/campaigns'];
 const P = '/api/admin/voice-studio';
+// A US number in any usual formatting. Not matched inside ids (hex and dashes around it).
+const PHONE = /(?<![\w-])(?:\+?1[\s.-]?)?(?:\(\d{3}\)\s?|\d{3}[\s.-]?)\d{3}[\s.-]?\d{4}(?![\w-])/;
 const results = [];
 const check = (name, ok, detail = '') => { results.push(!!ok); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? `  (${detail})` : ''}`); };
 const get = (url, jwt) => fetch(url, { headers: jwt ? { authorization: `Bearer ${jwt}` } : {}, signal: AbortSignal.timeout(20_000) });
@@ -73,20 +76,22 @@ async function main() {
     check('broad management role (admin): allowed', (await get(`${api}${P}/agents`, broad.jwt)).status === 200);
     check('a participant token: refused', [401, 403].includes((await get(`${api}${P}/agents`, token({ role: 'participant' }).jwt)).status));
 
+    check('the phone pattern catches the usual formats', ['+12145550100', '2145550100', '(214) 555-0100', '214-555-0100', '+1 214 555 0100'].every((n) => PHONE.test(`x ${n} y`)) && !PHONE.test('2026-11-25 10:00:00'));
     // 2. Every tab loads for an admin.
     const page = await open(author.jwt);
     for (const t of TABS) {
       await page.goto(`${base}/admin/voice-studio${t}`); // eslint-disable-line no-await-in-loop
       await page.locator('.voice-studio nav a.active').waitFor(); // eslint-disable-line no-await-in-loop
       await page.waitForLoadState('networkidle').catch(() => undefined); // eslint-disable-line no-await-in-loop
+      await page.locator('.voice-studio .spinner-border').waitFor({ state: 'detached' }); // eslint-disable-line no-await-in-loop
       const txt = await page.locator('.voice-studio').innerText(); // eslint-disable-line no-await-in-loop
-      check(`tab ${t || '/overview'} loads`, !/could not be loaded|switched off/.test(txt));
-      check(`tab ${t || '/overview'} shows no phone number`, !/\+1\d{10}|2145550100/.test(txt));
+      check(`tab ${t || '/overview'} loads its own content`, MARK[t].test(txt) && !/could not be loaded|switched off/.test(txt));
+      check(`tab ${t || '/overview'} shows no phone number`, !PHONE.test(txt));
     }
     await page.goto(`${base}/admin/voice-studio`);
     // The test view: calls exist but no turns or cost do, so some KPIs are null.
     await page.getByRole('button', { name: 'Test calls' }).click();
-    await page.getByText('Test calls in the last 7 days.').waitFor();
+    await page.getByText('Test calls in the last 7 days.').waitFor(); // appears only with its own data
     const kpis = (await (await get(`${api}${P}/overview?days=7&mode=test`, author.jwt)).json()).kpis;
     const nulls = kpis.filter((k) => k.value === null);
     const shown = [];
@@ -139,7 +144,7 @@ async function main() {
     await page.route(/\/lab\/(preview|ab\/[^/]+\/clip\/[XY])$/, (r) => { asked.push(`${r.request().method()} ${r.request().postData() || ''}`); r.fulfill({ status: 200, contentType: 'audio/mpeg', body: mp3 }); });
     await page.getByRole('button', { name: /\(recommended\)/ }).first().click();
     await page.getByTestId('preview-audio').waitFor();
-    check('a preview plays the chosen catalog voice', /"voice":"[a-z]+"/.test(asked[0] || ''), asked[0] || '');
+    check('a preview plays the chosen catalog voice', /"voice":"marin"/.test(asked[0] || ''), asked[0] || '');
     await page.getByRole('button', { name: 'Start a blind comparison' }).click();
     await page.getByTestId('trial').waitFor();
     await page.getByRole('button', { name: 'Play X' }).click();
@@ -193,7 +198,7 @@ async function main() {
     await page.getByRole('button', { name: 'Prepare audit export' }).click();
     const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('link', { name: 'Download CSV' }).click()]);
     const csv = fs.readFileSync(await dl.path(), 'utf8');
-    check('the audit export has the denied action and no phone number', /book_meeting/.test(csv) && !/2145550100/.test(csv));
+    check('the audit export has the denied action and no phone number', /book_meeting/.test(csv) && !PHONE.test(csv));
     await shot(page, '04-trust');
 
     // 8. Route change and rollback.

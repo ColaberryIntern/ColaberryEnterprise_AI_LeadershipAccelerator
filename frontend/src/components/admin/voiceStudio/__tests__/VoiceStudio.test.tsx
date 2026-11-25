@@ -43,6 +43,12 @@ const VERSION: AgentVersion = {
   tool_permissions: ['admissions_knowledge'], engine: 'conversation_relay', engine_config: { promptShell: true }, voice_id: null, language: 'en-US',
   safety_policy: { bookingRequiresHumanApproval: true, maxToolCallsPerCall: 6 }, max_call_seconds: 180,
 };
+const heldTest = (): { release: () => void } => {
+  let release: () => void = () => undefined;
+  mockApi.getOverview.mockImplementation((_d: number, mode: string) => (mode === 'live' ? Promise.resolve(OVERVIEW)
+    : new Promise((r) => { release = () => r({ ...OVERVIEW, window: { days: 7, mode: 'test' }, kpis: [{ ...OVERVIEW.kpis[0], value: 3 }] }); })));
+  return { release: () => release() };
+};
 const CARD: AgentCard = {
   profile: { id: 'p1', name: 'Edu: Cory - Outbound', brand_slug: 'colaberry', agent_key: 'edu-cory-outbound', direction: 'outbound', status: 'draft', active_version_id: null, updated_at: '2026-11-24T00:00:00Z' },
   versions: { total: 1, drafts: 0, approved: 1 }, active: null,
@@ -111,6 +117,20 @@ describe('Overview tab', () => {
     expect(q('[data-testid="migration-empty"]')).not.toBeNull();
   });
 
+  it('VS3.7: live figures are gone while the test view loads, and a late live answer never replaces it', async () => {
+    const held = heldTest();
+    await renderAt('/admin/voice-studio');
+    expect(text('[data-testid="kpi-attempted-value"]')).toBe('12');
+    await act(async () => { (Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Test calls') as HTMLButtonElement).click(); });
+    await settle();
+    expect(q('[data-testid="kpi-attempted-value"]')).toBeNull();
+    expect(container.textContent).not.toContain('Test calls in the last');
+    await act(async () => { held.release(); });
+    await settle();
+    expect(text('[data-testid="kpi-attempted-value"]')).toBe('3');
+    expect(container.textContent).toContain('Test calls in the last 7 days.');
+  });
+
   it('test traffic is labelled Simulated, never Observed', async () => {
     const sim: Overview = { ...OVERVIEW, window: { days: 7, mode: 'test' }, kpis: [{ key: 'attempted', label: 'Calls attempted', value: 2, unit: 'count', provenance: 'simulated' }] };
     mockApi.getOverview.mockResolvedValue(sim);
@@ -145,6 +165,21 @@ describe('Agents tab', () => {
     expect(mockApi.changeStatus).toHaveBeenCalledWith('v1', 'publish');
     expect(text('[data-testid="action-msg"]')).toContain('needs an approver role');
     expect(mockApi.listVersions).toHaveBeenCalledTimes(1); // nothing reloaded: nothing changed
+  });
+
+  it('VS3.7: versions of a previously selected agent never appear under the next one', async () => {
+    const B: AgentCard = { ...CARD, profile: { ...CARD.profile, id: 'p2', name: 'Second agent' } };
+    const waiting: Record<string, (v: AgentVersion[]) => void> = {};
+    mockApi.listAgents.mockResolvedValue([CARD, B]);
+    mockApi.listVersions.mockImplementation((id: string) => new Promise((r) => { waiting[id] = r; }));
+    await renderAt('/admin/voice-studio/agents');
+    await act(async () => { (Array.from(container.querySelectorAll('button')).find((b) => (b.textContent ?? '').includes('Second agent')) as HTMLButtonElement).click(); });
+    await settle();
+    await act(async () => { waiting.p2([{ ...VERSION, version: 22 }]); });
+    await act(async () => { waiting.p1([{ ...VERSION, version: 11 }]); });
+    await settle();
+    expect(container.querySelector('tbody')?.textContent).toContain('v22');
+    expect(container.querySelector('tbody')?.textContent).not.toContain('v11');
   });
 
   it('a successful publish says new calls use it and reloads', async () => {

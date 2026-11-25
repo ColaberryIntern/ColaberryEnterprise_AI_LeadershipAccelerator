@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { EmptyState, SectionCard, StatusBadge } from '../shell';
 import {
   changeStatus, listAgents, listVersions, statusOf, studioErrorMessage, type AgentCard, type AgentVersion, type LifecycleAction,
@@ -37,12 +37,15 @@ export default function AgentsTab(): React.ReactElement {
       .catch((e) => { if (statusOf(e) === 404) setOff(true); else setError(studioErrorMessage(e, 'Agents could not be loaded. Try again.')); });
   }, [selected]);
 
+  // Only the selected agent's latest request may render: one agent's versions never appear under another.
+  const request = useRef(0);
   const loadVersions = useCallback((profileId: string) => {
-    listVersions(profileId).then(setVersions).catch((e) => setError(studioErrorMessage(e, 'Versions could not be loaded. Try again.')));
+    const mine = ++request.current;
+    listVersions(profileId).then((v) => { if (mine === request.current) setVersions(v); }).catch((e) => { if (mine === request.current) setError(studioErrorMessage(e, 'Versions could not be loaded. Try again.')); });
   }, []);
 
   useEffect(() => { loadAgents(); }, [loadAgents]);
-  useEffect(() => { if (selected) { setEditFrom(null); loadVersions(selected); } }, [selected, loadVersions]);
+  useEffect(() => { if (selected) { setEditFrom(null); setVersions([]); setActionMsg(null); loadVersions(selected); } }, [selected, loadVersions]);
 
   const act = async (v: AgentVersion, action: LifecycleAction) => {
     setBusy(v.id);

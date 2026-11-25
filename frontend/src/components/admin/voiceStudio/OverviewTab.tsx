@@ -1,11 +1,13 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { EmptyState, SectionCard, StatusBadge } from '../shell';
-import { getOverview, statusOf, studioErrorMessage, type Kpi, type Overview, type OverviewMode } from '../../../services/voiceStudioApi';
+import React, { useState } from 'react';
+import { SectionCard, StatusBadge } from '../shell';
+import { getOverview, type Kpi, type OverviewMode } from '../../../services/voiceStudioApi';
+import { useStudioLoad } from './studioLoad';
 import { ENGINE_LABEL, PROVENANCE_HELP, PROVENANCE_LABEL, denominatorText, formatKpiValue } from './voiceStudioFormat';
 
 /**
  * Overview (VS3.3). Every KPI states its window, its provenance and its denominator; a KPI with no
- * data reads "No data", never 0. Test-mode traffic is a separate view, never mixed into live.
+ * data reads "No data", never 0. Test-mode traffic is a separate view, never mixed into live:
+ * useStudioLoad drops data loaded for another window or view, so one is never shown under the other's label.
  */
 const WINDOWS = [7, 30, 90] as const;
 
@@ -28,23 +30,7 @@ export function KpiTile({ kpi }: { kpi: Kpi }): React.ReactElement {
 export default function OverviewTab(): React.ReactElement {
   const [days, setDays] = useState<number>(7);
   const [mode, setMode] = useState<OverviewMode>('live');
-  const [data, setData] = useState<Overview | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [off, setOff] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(() => {
-    setLoading(true);
-    setError(null);
-    getOverview(days, mode)
-      .then((o) => { setData(o); setOff(false); })
-      .catch((e) => { if (statusOf(e) === 404) setOff(true); else setError(studioErrorMessage(e, 'The overview could not be loaded. Try again.')); })
-      .finally(() => setLoading(false));
-  }, [days, mode]);
-
-  useEffect(() => { load(); }, [load]);
-
-  if (off) return <EmptyState icon="toggle-line" title="Voice Studio is switched off on this server" description="An administrator turns it on with VOICE_STUDIO_UI_ENABLED. Calls are not affected either way." />;
+  const { data, blocked } = useStudioLoad(() => getOverview(days, mode), [days, mode], 'The overview could not be loaded. Try again.');
 
   return (
     <>
@@ -65,8 +51,7 @@ export default function OverviewTab(): React.ReactElement {
         </div>
       </div>
 
-      {error && <div className="alert alert-danger" role="alert">{error} <button type="button" className="btn btn-sm btn-link" onClick={load}>Retry</button></div>}
-      {loading && !data && <div className="text-center py-5"><div className="spinner-border text-primary" role="status"><span className="visually-hidden">Loading</span></div></div>}
+      {blocked}
 
       {data && (
         <>
