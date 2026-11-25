@@ -200,6 +200,29 @@ describe('DRILL: a provider that hangs', () => {
     const start = () => b.onTwilio(JSON.stringify({ event: 'start', streamSid: 'MZ1', start: { streamSid: 'MZ1', callSid: SID, accountSid: ACCOUNT, customParameters: { ref: mintToken('0b1c2d3e-4f50-4617-8899-aabbccddeeff', 'session', 120, Date.now(), correlationKey()) }, mediaFormat: { encoding: 'audio/x-mulaw', sampleRate: 8000, channels: 1 } } }));
     return { start, closes, worker, connectModel, logs };
   }
+  it('Engine A reports its session exactly once, and only when one exists', async () => {
+    const onSessionStarted = jest.fn();
+    const worker = new SessionWorker({ now: () => 0, log: () => undefined, reconcile: async () => undefined, recordTool: () => undefined });
+    const make = (consumed: 'consumed' | 'replay') => new RelayConnection({ send: () => undefined, close: () => undefined }, { worker, llm: { streamTurn: jest.fn() }, broker: () => new ToolBroker([]), profile: { versionId: 'v', greeting: 'g', system: 's', language: 'en-US' }, accountSid: () => ACCOUNT, consumeSessionRef: async () => consumed, callMatches: async () => true, now: () => Date.now(), log: () => undefined, onSessionStarted });
+    const setup = JSON.stringify({ type: 'setup', sessionId: 's', callSid: SID, accountSid: ACCOUNT, customParameters: { ref: mintToken('0b1c2d3e-4f50-4617-8899-aabbccddeeff', 'session', 120, Date.now(), correlationKey()) } });
+    await make('replay').onMessage(setup);
+    expect(onSessionStarted).not.toHaveBeenCalled();
+    const c = make('consumed');
+    await c.onMessage(setup);
+    await c.onMessage(setup);
+    expect(onSessionStarted.mock.calls).toEqual([['0b1c2d3e-4f50-4617-8899-aabbccddeeff']]);
+    c.onClose();
+  });
+  it('Engine B reports its session once, when the model accepts it', async () => {
+    const onSessionStarted = jest.fn();
+    let model: { onMessage(r: string): void } | null = null;
+    const x = bridge({ onSessionStarted, connectModel: (h: { onMessage(r: string): void }) => { model = h; return { send: () => undefined, close: () => undefined }; } });
+    await x.start();
+    expect(onSessionStarted).not.toHaveBeenCalled();
+    for (let i = 0; i < 2; i++) model!.onMessage(JSON.stringify({ type: 'session.updated' }));
+    await new Promise((r) => { setImmediate(r); });
+    expect(onSessionStarted.mock.calls).toEqual([['0b1c2d3e-4f50-4617-8899-aabbccddeeff']]);
+  });
   it('Engine B with the model unavailable refuses before a session or a connection exists', async () => {
     const x = bridge({ modelAvailable: () => false });
     await x.start();

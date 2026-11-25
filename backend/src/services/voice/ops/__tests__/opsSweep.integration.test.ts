@@ -125,6 +125,21 @@ describeIfDb('operations facts against Postgres', () => {
     expect((await facts()).optOutsPending).toBe(0);
   });
 
+  it('DRILL: an inbound call that ends through the real close, with and without a session', async () => {
+    const { closeInboundCall } = await import('../../../../controllers/voiceTransferController');
+    const { recordSessionStarted } = await import('../../engines/voiceRuntime');
+    const run = async (age: string, session: boolean) => {
+      const id = await call({ state: "'ringing'", direction: "'inbound'", provider_call_id: `'CA${String(++n).padStart(32, '0')}'`, test_mode: 'TRUE', created_at: ago(age) });
+      if (session) await recordSessionStarted(id);
+      await closeInboundCall(id, { Direction: 'inbound', CallSid: 'CA' + String(n).padStart(32, '0') });
+    };
+    await run('2 seconds', false);
+    await run('1 minute', true);
+    expect((await facts()).silentAnswered).toBe(0);
+    await run('1 minute', false);
+    expect((await facts()).silentAnswered).toBe(1);
+  });
+
   it('our own bookkeeping events never move a call state', async () => {
     const { recomputeCall } = await import('../../twilio/voiceCallStore');
     const { refuseTransferDial } = await import('../../transfer/transferGuard');

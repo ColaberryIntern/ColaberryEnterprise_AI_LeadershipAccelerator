@@ -42,7 +42,8 @@ export async function readFacts(s: Sequelize, ops: OpsMetrics = voiceOps, spendA
            (SELECT COUNT(*)::int FROM voice_calls c WHERE c.engine IN ('conversation_relay','openai_realtime') AND c.state = 'completed' AND c.created_at > NOW() - INTERVAL '1 hour'
               AND NOT EXISTS (SELECT 1 FROM voice_call_events e WHERE e.call_id = c.id AND (e.source = 'session' OR e.event_key = 'transfer_dialed'))
               -- answered for at least ten seconds, by the carrier's own times
-              AND (SELECT MIN(e.occurred_at) FROM voice_call_events e WHERE e.call_id = c.id AND e.source = 'carrier' AND e.state = 'answered')
+              -- (an inbound call is answered as it arrives, and its two events are written together when it ends)
+              AND (CASE WHEN c.direction = 'inbound' THEN c.created_at ELSE (SELECT MIN(e.occurred_at) FROM voice_call_events e WHERE e.call_id = c.id AND e.source = 'carrier' AND e.state = 'answered') END)
                   <= (SELECT MIN(e.occurred_at) FROM voice_call_events e WHERE e.call_id = c.id AND e.source = 'carrier' AND e.state = 'completed') - INTERVAL '10 seconds') AS silent,
            (SELECT COUNT(*)::int FROM voice_calls c LEFT JOIN voice_agent_versions v ON v.id = c.profile_version_id
              WHERE c.test_mode = FALSE AND c.engine IN ('conversation_relay','openai_realtime') AND c.direction = 'outbound' AND c.created_at > NOW() - INTERVAL '24 hours' AND (v.id IS NULL OR v.status NOT IN ('published','retired'))) AS wrong_version,

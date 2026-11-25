@@ -57,7 +57,7 @@ The only outbound calls so far are Test Lab calls (`test_mode`). `call_failures`
 
 ## Silent audio (`silent_audio`)
 
-- **Detection:** A call answered for ten seconds or more ended with no AI session (a transfer is not counted).
+- **Detection:** A call answered for ten seconds or more ended with no AI session (a transfer is not counted). A call that dies within ten seconds is not caught here; look for voice_ws_upgrade_refused.
 - **Containment:** Set the route to legacy.
 - **Diagnostics:** Did the WebSocket upgrade arrive (voice_ws_upgrade_refused, voice_ws_setup_timeout)? Did the session start line appear? Engine B: did session.updated arrive?
 - **Remediation:** Fix the address, flag or key it points to; test call on the same engine.

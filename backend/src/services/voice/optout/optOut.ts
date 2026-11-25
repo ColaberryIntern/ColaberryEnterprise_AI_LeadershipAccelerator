@@ -22,7 +22,7 @@ const CALL = '(?:call(?:ing|s|ed)?|phon(?:e|ing)|ring(?:ing)?|contact(?:ing|ed)?
 const NOT = "(?:do\\s*n[o'\u2019]?t|don\\s*t|do\\s+not|never|not)";
 const PATTERNS: readonly RegExp[] = [
   /\b(?:do\s*n[o'\u2019]?t|don\s*t|do\s+not|no\s+longer)\s+(?:want|wanna|wish|like|consent|agree)\b(?!\s+to\s+(?:miss|end|lose|drop|interrupt|hang|cut|finish|delay|cancel|rush|forget|call)\b)[^.?!]{0,30}\b(?:calls?|calling|called|contact(?:ed|ing)?|hear\s+from\s+you)\b(?![^.?!]{0,12}\btomorrow\b)/i,
-  /\b(?:can\s*n[o'\u2019]?t|can(?:'|\u2019)t|cannot|should\s*n(?:'|\u2019)?t|shouldn(?:'|\u2019)t|must\s*not|mustn(?:'|\u2019)t)\s+(?:be\s+)?call(?:ing)?\s+(?:me|us|here)\b(?!\s+(?:after|before|until|till|between|at|on|during|this|today|tonight|right\s+now)\b)/i,
+  /\b(?:can\s*n[o'\u2019]?t|can(?:'|\u2019)t|cannot|should\s*n(?:'|\u2019)?t|shouldn(?:'|\u2019)t|must\s*not|mustn(?:'|\u2019)t)\s+(?:be\s+)?call(?:ing)?\s+(?:me|us|here)\b(?!\s+(?:after|before|until|till|between|today|tonight|right\s+now|at\s+(?:noon|midnight|night|\d)|on\s+(?:mon|tues|wednes|thurs|fri|satur|sun)days?|this\s+(?:morning|afternoon|evening|week|weekend))\b)/i,
   /\brather\s+you\s+(?:did\s*n(?:'|\u2019)?t|didn(?:'|\u2019)t|not)\s+(?:call|contact|phone)\b/i,
   /\bstop\s+with\s+(?:the|these|all)\b[^.?!]{0,12}\bcalls?\b/i,
   /\bDNC\b/i,
