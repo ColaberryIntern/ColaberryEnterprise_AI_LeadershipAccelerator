@@ -25,6 +25,8 @@ const TIMEOUT_MS = 180_000;
 const UNREADABLE = ['axios.com', 'apnews.com', 'lemonde.fr', 'time.com', 'newegg.com', 'glassdoor.com'];
 const WORKFLOW = 'weekly_live_signals';
 
+/** A story tagged with everything says nothing, and would satisfy the three-factor rule by itself. */
+export const MAX_FACTORS = 3;
 export const FACTOR_GROUPS: readonly (readonly number[])[] = [[1, 6], [2, 7], [3, 4], [5, 10], [8, 9]];
 
 const Url = z.string().max(1000).regex(/^https?:\/\//);
@@ -47,7 +49,7 @@ export function parseCandidates(text: string): Candidate[] {
   try { raw = JSON.parse(m[0]); } catch { return []; }
   const items = (raw as { items?: unknown }).items;
   if (!Array.isArray(items)) return [];
-  return items.flatMap((i) => { const p = CandidateSchema.safeParse(i); return p.success ? [p.data] : []; });
+  return items.flatMap((i) => { const p = CandidateSchema.safeParse(i); return p.success ? [{ ...p.data, factors: [...new Set(p.data.factors)].slice(0, MAX_FACTORS) }] : []; });
 }
 
 export interface SearchInput { planId: string; from: string; to: string; airDate: string; forceNews?: string; avoid?: string; have?: string[]; }
@@ -65,7 +67,7 @@ These sites cannot be opened by our reader: ${UNREADABLE.join(', ')}. Do not use
 Use a spread of outlets, at most two stories from any one.
 ${s.have?.length ? `Already found, do not repeat: ${s.have.map((h) => JSON.stringify(h)).join('; ')}.` : ''}
 Course weeks: ${weeks}.
-Return JSON only: {"items":[{"headline":"","publisher":"","url":"the article itself","alternate_url":"the same story at another outlet or null","factors":[all that apply, numbers 1 to 10: ${Object.entries(VIRAL_FACTORS).map(([k, v]) => `${k} ${v}`).join('; ')}],"fits_weeks":[1 to 3 course week numbers],"idea":"one-line opening hook, plain words, no statistics, no prices"}]}
+Return JSON only: {"items":[{"headline":"","publisher":"","url":"the article itself","alternate_url":"the same story at another outlet or null","factors":[the 1 to 3 strongest, strongest first, numbers 1 to 10: ${Object.entries(VIRAL_FACTORS).map(([k, v]) => `${k} ${v}`).join('; ')}],"fits_weeks":[1 to 3 course week numbers],"idea":"one-line opening hook, plain words, no statistics, no prices"}]}
 Only use URLs you found in this search.`;
 }
 

@@ -175,6 +175,10 @@ it('parseCandidates keeps valid items only and survives a malformed answer', () 
   expect(parseCandidates(`Here you go: ${JSON.stringify({ items })} done`)).toHaveLength(1);
 });
 
+it('a story keeps its three strongest factors', () => {
+  expect(parseCandidates(JSON.stringify({ items: [cand({ factors: [7, 1, 7, 2, 5, 6] })] }))[0].factors).toEqual([7, 1, 2]);
+});
+
 it('shiftDays crosses months', () => { expect(shiftDays('2026-11-05', -14)).toBe('2026-10-22'); });
 
 it('the window starts 14 days before the air date, and always covers at least a week', () => {
