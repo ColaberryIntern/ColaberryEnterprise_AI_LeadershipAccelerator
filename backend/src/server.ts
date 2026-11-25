@@ -141,6 +141,7 @@ import { ensureStudioSetupSchema } from './db/ensureStudioSetupSchema';
 import { ensureWeeklyLiveRecapSchema } from './db/ensureWeeklyLiveRecapSchema';
 import { ensureWeeklyLiveSchema } from './db/ensureWeeklyLiveSchema';
 import weeklyLiveRecapRoutes from './routes/weeklyLiveRecapRoutes';
+import weeklyLivePlanRoutes from './routes/weeklyLivePlanRoutes';
 import { ensureBroadcastReplayIndexSchema } from './db/ensureBroadcastReplayIndexSchema';
 import { ensureFactoryTaskSchema } from './db/ensureFactoryTaskSchema';
 import { ensureAgentDomainStoryLadderSchema } from './db/ensureAgentDomainStoryLadderSchema';
@@ -407,6 +408,7 @@ app.use(publicRoomJoinRoutes);
 
 // Weekly Live recap (Basecamp WL1): admin recap panel + the public recap page data and opt-out.
 app.use(weeklyLiveRecapRoutes);
+app.use(weeklyLivePlanRoutes);
 
 app.use(adminRoutes);
 

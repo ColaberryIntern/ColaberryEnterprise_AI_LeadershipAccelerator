@@ -9,7 +9,7 @@ import * as store from '../services/weeklyLive/recap/recapStore';
 import { listMessages } from '../services/liveChat/liveChatStore';
 
 /**
- * Weekly Live recap routes (WL1.2 to WL1.4). Admin routes sit behind requireAdmin (in the router);
+ * Weekly Live recap routes (WL1.2 to WL1.4). Admin routes sit behind requireFullAdmin (in the router);
  * the two public routes are rate limited and validate every input with Zod. Logs carry the session id
  * only, never a token or an email address.
  */

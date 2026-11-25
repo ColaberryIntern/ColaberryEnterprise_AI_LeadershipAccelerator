@@ -18906,3 +18906,10 @@ Branch `workstream/career-prep-r2r3`, one PR (https://github.com/ColaberryIntern
   - What changed: aiCall.ts (strict, capped, logged AI call), topicPrompts.ts (writer, judge, calibration anchors), topicsJob.ts writes then judges
   - Verification: jest weeklyLive 251 passed; live calibration and one generation (wl3.3-judge-calibration.txt)
   - Notes: the judge scores viral about 6 to 15 points under the owner on held-out topics; control 27
+
+- [ ] Weekly Live Studio WL3.4: plan API (built, not graded)
+  - Date: 2026-11-25
+  - Session: CC-20261124-iwlu
+  - What changed: weeklyLivePlanRoutes (full administrators only), plan service and store, weekly_live_plan_runs table, one run per air date
+  - Verification: jest 518 passed (weeklyLive, routes, schema, timers, gates); Postgres suite runs in CI
+  - Notes: choosing stores the choice only; the session is WL4.1

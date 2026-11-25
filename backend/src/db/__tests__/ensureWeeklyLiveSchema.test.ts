@@ -13,7 +13,7 @@ it('every statement is CREATE ... IF NOT EXISTS, and nothing drops, renames or a
   }
 });
 
-it('creates each of the eight tables exactly once', () => {
+it('creates each of the nine tables exactly once', () => {
   for (const t of WEEKLY_LIVE_TABLES) {
     expect(WEEKLY_LIVE_DDL.filter((d) => d.startsWith(`CREATE TABLE IF NOT EXISTS ${t} (`))).toHaveLength(1);
   }
