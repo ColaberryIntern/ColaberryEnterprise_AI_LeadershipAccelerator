@@ -32,10 +32,10 @@
  */
 import { REVENUE_HYPOTHESES } from '../commercialization/hypothesisRegister';
 import { TileStatus } from '../commercialization/commercializationTiles';
-import { FlowEvent, FunnelStage, RevenueStream, noMoney } from './revenueFlowTypes';
+import { FlowEvent, FunnelStage, BuiltStream, noMoney } from './revenueFlowTypes';
 
 export interface IdeaFlows {
-  streams: RevenueStream[];
+  streams: BuiltStream[];
   events: FlowEvent[];
 }
 
@@ -88,7 +88,7 @@ function setupStage(
  * Each bet is still individually visible as a stage definition, with its own evidence
  * requirement and deadline, so nothing is hidden by the folding.
  */
-function betsStream(): RevenueStream {
+function betsStream(): BuiltStream {
   const bets = REVENUE_HYPOTHESES;
   const withDefinition = bets.filter((b) => b.evidenceRequired.trim().length > 0).length;
 
@@ -181,7 +181,7 @@ function betsStream(): RevenueStream {
  * same treatment `gov_bid_values` gives a priced bid: a human put their name to a figure,
  * and the figure still waits on an actual transaction before it counts.
  */
-function fdeStream(): RevenueStream {
+function fdeStream(): BuiltStream {
   return {
     key: 'hire_fde',
     label: 'FDE hiring (hire.refactored.ai)',
@@ -271,7 +271,7 @@ function fdeStream(): RevenueStream {
  * versus unknown distinction this whole surface is built on. They are therefore counted in
  * the DEFINED stage, where they genuinely stand, and their absence is stated in words.
  */
-function conversionStream(): RevenueStream {
+function conversionStream(): BuiltStream {
   return {
     key: 'subscription_conversion',
     label: 'Yearly conversion campaigns',

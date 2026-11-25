@@ -178,7 +178,7 @@ export interface DemandBand {
 }
 
 /** One revenue stream: its headline, its funnel, and why it says what it says. */
-export interface RevenueStream {
+export interface BuiltStream {
   key: FlowStreamKey;
   label: string;
   status: TileStatus;
@@ -218,6 +218,31 @@ export interface RevenueStream {
    * thing it was holding.
    */
   deals?: EnterpriseDeal[];
+}
+
+/**
+ * A stream as it reaches the page: everything a builder produced, plus its brand.
+ *
+ * ── WHY THE BRAND IS ADDED HERE AND NOT BY THE BUILDERS ──────────────────────────────────
+ *
+ * A stream builder knows about subscriptions or bids; it has no business knowing which
+ * public identity sells them, and if each builder set its own brand the mapping would be
+ * spread across five files with nothing checking they agreed. `streamBrands` holds the whole
+ * map in one place and `revenueFlowService` applies it as the streams are assembled.
+ *
+ * The split is enforced by the compiler rather than by discipline: builders return
+ * `BuiltStream`, which has no brand, and only the assembly step can produce a
+ * `RevenueStream`. There is no way to ship a stream to the page without giving it a brand,
+ * and no way for a builder to invent one.
+ */
+export interface RevenueStream extends BuiltStream {
+  /**
+   * The brand this stream's business belongs to, as a key into the board's `brands` list.
+   *
+   * `'unassigned'` for a stream that belongs to no brand, which is a different statement
+   * from a brand that earns nothing.
+   */
+  brandKey: string;
 }
 
 /**
@@ -351,10 +376,46 @@ export interface FlowHeadline {
   unpricedBids: number;
 }
 
+/**
+ * One brand heading on the board, and the streams filed under it.
+ *
+ * Shipped as an ordered list rather than derived in the frontend, so the heading order, the
+ * wording and the membership of each group have exactly one owner. The reasoning for the
+ * mapping itself lives in `streamBrands.ts`.
+ */
+export interface StreamBrand {
+  /** A brand slug from the `brands` table, or `'unassigned'`. */
+  key: string;
+  label: string;
+  url: string | null;
+  /**
+   * Whether `label` and `url` came from the `brands` table. False means the brands table
+   * could not be read, or does not hold this slug, and the wording is a fallback that may be
+   * out of date. The page says so rather than presenting a guess as the brand's name.
+   */
+  resolved: boolean;
+  /** False for the `unassigned` group, which is a bucket rather than a brand. */
+  isBrand: boolean;
+  /** Why this group exists, or why its name could not be resolved. Empty when neither applies. */
+  note: string;
+  /** The streams under this heading, in the board's own stream order. */
+  streamKeys: string[];
+}
+
 export interface RevenueFlowBoard {
   asOf: string;
   headline: FlowHeadline;
   streams: RevenueStream[];
+  /**
+   * The brand headings, in reading order. Every stream on the board appears under exactly
+   * one of these, and a brand with no streams is omitted rather than rendered empty.
+   */
+  brands: StreamBrand[];
+  /**
+   * What a brand heading on this board does and does not mean, in one sentence for the
+   * reader. Backend-owned, like every other piece of copy that states what a number is.
+   */
+  brandBasis: string;
   /** The combined timeline, newest first, across every stream. */
   events: FlowEvent[];
   /** The window `events` covers, in days, so an empty tail reads as out-of-window. */

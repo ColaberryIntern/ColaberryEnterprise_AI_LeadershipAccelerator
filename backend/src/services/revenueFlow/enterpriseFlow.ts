@@ -94,11 +94,11 @@ import {
 } from './enterpriseDealValueService';
 import { countCompanies, suspectReasons } from './enterpriseSuspect';
 import {
-  EnterpriseDeal, FlowEvent, FunnelStage, RevenueStream, formatCents, money, noMoney,
+  EnterpriseDeal, FlowEvent, FunnelStage, BuiltStream, formatCents, money, noMoney,
 } from './revenueFlowTypes';
 
 export interface EnterpriseFlow {
-  stream: RevenueStream;
+  stream: BuiltStream;
   events: FlowEvent[];
 }
 
