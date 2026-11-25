@@ -7,6 +7,10 @@ const CareerReviewPage = lazy(() => import('../pages/admin/CareerReviewPage'));
 const PlacementStudentsPage = lazy(() => import('../pages/admin/PlacementStudentsPage'));
 const CareerDeskPage = lazy(() => import('../pages/admin/careerDesk/CareerDeskPage'));
 const CommsHubLayout = lazy(() => import('../components/admin/commsHub/CommsHubLayout'));
+// Voice AI Studio console (VS3.3). Route only, no nav entry yet: the API answers 404 until VOICE_STUDIO_UI_ENABLED.
+const VoiceStudioLayout = lazy(() => import('../components/admin/voiceStudio/VoiceStudioLayout'));
+const VoiceStudioOverviewTab = lazy(() => import('../components/admin/voiceStudio/OverviewTab'));
+const VoiceStudioAgentsTab = lazy(() => import('../components/admin/voiceStudio/AgentsTab'));
 const PlatformOperationsLayout = lazy(() => import('../pages/admin/system/operations/PlatformOperationsLayout'));
 const OperationsFleetTab = lazy(() => import('../pages/admin/system/operations/FleetTab'));
 const CommsHubTodayTab = lazy(() => import('../components/admin/commsHub/TodayTab'));
@@ -240,6 +244,10 @@ const adminRoutes = (
           <Route path="events" element={<CommsHubEventsTab />} />
           <Route path="compose" element={<CommsHubComposeTab />} />
           <Route path="schedule" element={<CommsHubScheduleTab />} />
+        </Route>
+        <Route path="/admin/voice-studio" element={<VoiceStudioLayout />}>
+          <Route index element={<VoiceStudioOverviewTab />} />
+          <Route path="agents" element={<VoiceStudioAgentsTab />} />
         </Route>
         {/* Account self-service: reachable by every admin identity regardless
             of section scope (see UNIVERSAL_ADMIN_PATHS in adminNav.ts). */}
