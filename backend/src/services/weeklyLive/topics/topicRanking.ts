@@ -48,6 +48,7 @@ export function rankOne(c: CandidateTopic, ctx: RankContext): RankedTopic {
   teach.demand = demand && demand.score !== null
     ? { score: demand.score, why: demand.multiple === null ? 'Measured on YouTube; the channel has no usual view count to compare with' : `Measured: the best video ran ${demand.multiple}x its channel's usual views` }
     : { score: 1, why: 'No YouTube measurement for this week' };
+  if (/^\s*none\b/i.test(c.proof_use) && teach.proof.score > 2) teach.proof = { score: 2, why: 'The proof you gave does not show this topic, so this line is held to 2' };
   if (teach.news.score > ceiling) teach.news = { score: ceiling, why: `${teach.news.why} (held to ${ceiling}: ${newest === null ? 'no dated story' : `newest story is ${newest} days old on the air date`})`.slice(0, 400) };
 
   const lines = Object.fromEntries(Object.entries(teach).map(([k, v]) => [k, v.score])) as Partial<IdeaLines>;

@@ -18899,3 +18899,10 @@ Branch `workstream/career-prep-r2r3`, one PR (https://github.com/ColaberryIntern
   - What changed: services/weeklyLive/topics: strict answer schema, content lint, measured demand, news age ceiling, factors from cited signals, stable ranking
   - Verification: jest weeklyLive 239 passed; three live generations without a database (wl3.3-live-runs.txt)
   - Notes: first live run returned 0 usable topics (model left out score keys), fixed with a strict schema; topic copy quality still open
+
+- [ ] Weekly Live Studio WL3.3: separate writer and blind judge on gpt-6.2-sol (grading)
+  - Date: 2026-11-25
+  - Session: CC-20261124-iwlu
+  - What changed: aiCall.ts (strict, capped, logged AI call), topicPrompts.ts (writer, judge, calibration anchors), topicsJob.ts writes then judges
+  - Verification: jest weeklyLive 251 passed; live calibration and one generation (wl3.3-judge-calibration.txt)
+  - Notes: the judge scores viral about 6 to 15 points under the owner on held-out topics; control 27
