@@ -4,8 +4,7 @@ import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { requireParticipant } from '../middlewares/participantAuth';
 import { makeParticipantLimiter } from './participantLimiter';
-import { requireAdmin } from '../middlewares/authMiddleware';
-import { verifyKitToken } from '../services/classKit/kitToken';
+import { deckTokenOrFullAdmin, kitTokenOrAdmin } from '../middlewares/kitTokenGuards';
 import {
   handleRecordPulse, handleGetLiveState,
   handleSetBroadcast, handleGetCompanionState, handleRecordPollResponse,
@@ -432,11 +431,6 @@ router.post('/api/portal/sessions/:id/poll-response', requireParticipant, handle
 // Phone companion: mirrors whatever the instructor deck is currently showing.
 router.get('/api/portal/sessions/:id/companion-state', requireParticipant, handleGetCompanionState);
 // Deck-authed via a session-scoped kit token (or admin JWT):
-const kitTokenOrAdmin = (req: import('express').Request, res: import('express').Response, next: import('express').NextFunction) => {
-  const t = typeof req.query.t === 'string' ? req.query.t : undefined;
-  if (verifyKitToken(t, req.params.id as string)) return next();
-  return requireAdmin(req, res, next);
-};
 router.get('/api/portal/sessions/:id/live-state', kitTokenOrAdmin, handleGetLiveState);
 router.post('/api/portal/sessions/:id/broadcast', kitTokenOrAdmin, handleSetBroadcast);
 // Instructor's own phone: current slide's script + what's next. Same auth as
@@ -498,8 +492,8 @@ router.post('/api/portal/sessions/:id/chat-post', kitTokenOrAdmin, handleChatIns
 router.post('/api/portal/sessions/:id/raffle-draw', kitTokenOrAdmin, handleRaffleDraw);
 router.get('/api/portal/sessions/:id/raffle-winners', kitTokenOrAdmin, handleRaffleWinners);
 // Open House flash offer (the EVERYBODY draw) + the deck's "just enrolled" feed.
-// Same deck auth. See openHouseFlashDiscountService.ts.
-router.post('/api/portal/sessions/:id/flash-discount', kitTokenOrAdmin, handleFlashDiscount);
+// The feed has the deck auth above; opening the offer needs the deck's own token or a full admin. See openHouseFlashDiscountService.ts.
+router.post('/api/portal/sessions/:id/flash-discount', deckTokenOrFullAdmin, handleFlashDiscount);
 router.get('/api/portal/sessions/:id/enrollment-feed', kitTokenOrAdmin, handleEnrollmentFeed);
 router.get('/api/portal/submissions', requireParticipant, handleGetSubmissions);
 router.post('/api/portal/submissions', requireParticipant, handleCreateSubmission);

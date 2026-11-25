@@ -18835,3 +18835,10 @@ Branch `workstream/career-prep-r2r3`, one PR (https://github.com/ColaberryIntern
   - What changed: routes/weeklyLiveRecapRoutes.ts uses requireFullAdmin on the four admin routes. The router is mounted above adminRoutes, so mgmtSectionGate never ran and requireAdmin alone let every bridge-minted staff role (mentor, support, marketing, curriculum) read, edit and SEND a recap.
   - Verification: weeklyLiveRecapRoutes 32/32; mutation check with the old guard: the 16 scoped-role cases fail. Production read: weekly_live_recaps, _sends and _optouts all 0 rows, so it was not used.
   - Notes: live from the 2026-11-25 02:28 UTC deploy until this ships. The WL1.4 close-out's "non-admin calls are refused: PASS" was wrong; its tests covered logged-out and forged tokens only. Separate PR from the phase PRs because it is an access fix.
+
+- [x] Staff access gaps: CAPE routes and the class flash offer
+  - Date: 2026-11-25
+  - Session: CC-20261124-iwlu
+  - What changed: 16 /api/admin/cape routes now check the program section; opening the flash offer needs the deck's own token or a full administrator; the presenter page gets a weaker token
+  - Verification: kitTokenGuards.test.ts and capeRoutes.access.test.ts pass
+  - Notes: Ali's decision 2026-11-25: mentors keep the other class controls. Decks open during the deploy must be reopened before the offer button works

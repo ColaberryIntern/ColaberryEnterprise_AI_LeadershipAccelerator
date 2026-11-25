@@ -7,19 +7,33 @@
 import jwt from 'jsonwebtoken';
 import { env } from '../../config/env';
 
-interface KitTokenPayload { typ: 'kit'; sid: string; }
+/** 'deck' runs the class. 'notes' is the presenter's phone page: any staff login can open that page, so its token cannot open an offer. */
+export type KitScope = 'deck' | 'notes';
+interface KitTokenPayload { typ: 'kit'; sid: string; scope?: KitScope; }
 
-export function mintKitToken(sessionId: string): string {
-  return jwt.sign({ typ: 'kit', sid: sessionId } as KitTokenPayload, env.jwtSecret, { expiresIn: '12h' });
+export function mintKitToken(sessionId: string, scope: KitScope = 'deck'): string {
+  return jwt.sign({ typ: 'kit', sid: sessionId, scope } as KitTokenPayload, env.jwtSecret, { expiresIn: '12h' });
 }
 
 /** True only if `token` is a valid, unexpired kit token scoped to `sessionId`. */
 export function verifyKitToken(token: string | undefined, sessionId: string): boolean {
-  if (!token) return false;
+  return read(token, sessionId) !== null;
+}
+
+/**
+ * True only for a token from the deck itself. A token with no scope was minted before scopes existed and is
+ * refused: it may have come from the presenter page. Reopening the deck mints a good one.
+ */
+export function verifyDeckToken(token: string | undefined, sessionId: string): boolean {
+  return read(token, sessionId)?.scope === 'deck';
+}
+
+function read(token: string | undefined, sessionId: string): KitTokenPayload | null {
+  if (!token) return null;
   try {
     const p = jwt.verify(token, env.jwtSecret) as KitTokenPayload;
-    return p?.typ === 'kit' && p?.sid === sessionId;
+    return p?.typ === 'kit' && p?.sid === sessionId ? p : null;
   } catch {
-    return false;
+    return null; // expired, tampered or not a token: the caller falls back to the staff login check
   }
 }
