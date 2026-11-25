@@ -81,6 +81,7 @@ const {
   nextState,
   formatFailureEmail,
   formatRecoveryEmail,
+  signupBody,
 } = require('./lib/pointsSmokeChecks');
 
 const BASE = (process.env.BASE_URL || 'https://enterprise.colaberry.ai').replace(/\/$/, '');
@@ -216,10 +217,13 @@ async function runChecks() {
   const context = {};
 
   // 2) mint a throwaway guest JWT
+  //
+  // The body comes from the pure lib, where CI parses it against the real
+  // signup schema - see signupBody() for why that matters.
   const email = `e2e-points-${Date.now()}@colaberry-test.local`;
   context.guest_email = email;
   const signup = await api('/api/portal/free-signup', {
-    method: 'POST', headers: jsonHeaders, body: JSON.stringify({ full_name: 'Points Smoke', email }),
+    method: 'POST', headers: jsonHeaders, body: JSON.stringify(signupBody(email)),
   }, { label: 'POST /api/portal/free-signup' });
   const token = signup.body && signup.body.jwt;
   if (signup.status < 200 || signup.status >= 300 || !token) {
