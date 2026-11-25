@@ -88,6 +88,12 @@ describe('the course platform students read is Claude Academy', () => {
         'Open in Claude Academy',
         'This part of the course is on Claude Academy.',
         'The course is delivered on Claude Academy.',
+        // Academy awards a completion BADGE and issues no certificate, so asking a
+        // student to upload a certificate asks for something that does not exist.
+        // The verifier learned this in #4452; this is the copy the student reads.
+        'Upload your completion badge to complete',
+        'upload your completion badge to mark this complete',
+        'Choose badge or certificate',
       ]],
       ['frontend/src/components/portal/AnthropicCourseWrapper.tsx', ['Claude Academy']],
       ['frontend/src/components/portal/anthropic-bento/AnthropicCoursesBento.tsx', [

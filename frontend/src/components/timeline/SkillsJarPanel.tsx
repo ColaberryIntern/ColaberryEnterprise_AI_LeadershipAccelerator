@@ -6,7 +6,7 @@ import type { TimelineFeedCard } from './TimelineCard';
  * SkillsJarPanel — the Anthropic Skills Course experience, rendered identically
  * in the student feed card AND the detail drawer (one component, can't diverge).
  * Shows the branded "Anthropic · Claude Academy" panel, an Open-in-Academy button,
- * and a certificate upload that AI-verifies before completing the card.
+ * and a completion-badge upload that AI-verifies before completing the card.
  *
  * `preview` (admin) disables the live upload. `onComplete` fires after a valid
  * certificate so the surrounding surface can mark the card done + refresh.
@@ -25,7 +25,9 @@ interface Props {
 const SkillsJarPanel: React.FC<Props> = ({ card, preview, onComplete }) => {
   const course = card.course || null;
   // 'progress' = interim part of a split course (upload a progress screenshot);
-  // default 'certificate' = whole-course completion certificate.
+  // default 'certificate' = whole-course completion. The MODE is still called
+  // 'certificate' (it is a stored value); the artifact Claude Academy issues is a
+  // completion badge, which is what the copy below asks for.
   const isProgress = course?.completion === 'progress';
   const pts = totalPoints(card.points);
   const done = card.status === 'completed';
@@ -56,8 +58,8 @@ const SkillsJarPanel: React.FC<Props> = ({ card, preview, onComplete }) => {
       fd.append('file', file);
       const r = await portalApi.post(`/api/portal/runtime/cards/${card.id}/certificate`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
       const d = r.data || {};
-      const okMsg = isProgress ? 'Progress verified.' : 'Certificate verified.';
-      const noMsg = isProgress ? 'That does not look like a course-progress screenshot.' : 'That does not look like a valid certificate.';
+      const okMsg = isProgress ? 'Progress verified.' : 'Completion verified.';
+      const noMsg = isProgress ? 'That does not look like a course-progress screenshot.' : 'That does not look like a completion badge or certificate.';
       setResult({ valid: !!d.valid, reason: d.reason || (d.valid ? okMsg : noMsg) });
       if (d.valid) { if (d.branded) await loadCert(); if (onComplete) await onComplete(); }
     } catch (err: any) {
@@ -81,7 +83,7 @@ const SkillsJarPanel: React.FC<Props> = ({ card, preview, onComplete }) => {
         <div className="tld-jarbrand">Anthropic · Claude Academy</div>
         <div className="tld-jarfoot">
           <div className="tld-jarname">{course?.name || card.title}</div>
-          <div className="tld-jarkind">{isProgress ? 'External course · progress checkpoint' : 'External course · cert required'}</div>
+          <div className="tld-jarkind">{isProgress ? 'External course · progress checkpoint' : 'External course · completion badge required'}</div>
         </div>
       </div>
 
@@ -97,24 +99,24 @@ const SkillsJarPanel: React.FC<Props> = ({ card, preview, onComplete }) => {
         <div className="tld-certmsg ok">✓ Progress verified — this part is complete{pts > 0 ? ` · +${pts} pts earned` : ''}.</div>
       ) : done ? (
         <>
-          <div className="tld-certmsg ok">✓ Certificate verified — course complete{pts > 0 ? ` · +${pts} pts earned` : ''}.</div>
+          <div className="tld-certmsg ok">✓ Completion verified — course complete{pts > 0 ? ` · +${pts} pts earned` : ''}.</div>
           {certUrl && (
             <div className="tld-certshare">
-              <div className="tld-uplab" style={{ textAlign: 'left' }}>Your Colaberry-verified certificate</div>
-              <img className="tld-certimg" src={certUrl} alt="Your co-branded certificate" />
+              <div className="tld-uplab" style={{ textAlign: 'left' }}>Your Colaberry-verified credential</div>
+              <img className="tld-certimg" src={certUrl} alt="Your co-branded credential" />
               <div className="tld-sharerow">
                 <a className="tl-btn ghost" href={certUrl} download="colaberry-certificate.png">⬇ Download</a>
                 <button type="button" className="tl-btn ghost" onClick={() => openShare(`https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(shareText)}`)}>Share on LinkedIn</button>
                 <button type="button" className="tl-btn ghost" onClick={() => openShare(`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`)}>Share on X</button>
               </div>
-              <p className="tld-desc muted" style={{ margin: '8px 0 0', fontSize: 12.5 }}>Download the certificate, then attach it to your post.</p>
+              <p className="tld-desc muted" style={{ margin: '8px 0 0', fontSize: 12.5 }}>Download it, then attach it to your post.</p>
             </div>
           )}
         </>
       ) : preview ? (
         <div className="tld-note">For students, this has <b>Open in Claude Academy</b> and {isProgress
           ? <>a <b>progress-screenshot upload</b> (AI-verified) for this interim part of the course.</>
-          : <>a <b>certificate upload</b> that AI-verifies, co-brands with the Colaberry logo, and lets them share to social.</>}</div>
+          : <>a <b>badge or certificate upload</b> that AI-verifies, co-brands with the Colaberry logo, and lets them share to social.</>}</div>
       ) : isProgress ? (
         <div className="tld-upload">
           <div className="tld-uplab">Upload a screenshot of your progress to complete</div>
@@ -129,12 +131,12 @@ const SkillsJarPanel: React.FC<Props> = ({ card, preview, onComplete }) => {
         </div>
       ) : (
         <div className="tld-upload">
-          <div className="tld-uplab">Upload your certificate to complete</div>
+          <div className="tld-uplab">Upload your completion badge to complete</div>
           <p className="tld-desc muted" style={{ margin: '0 0 12px', fontSize: 13.5 }}>
-            The course is delivered on Claude Academy. Take it there, then upload your completion certificate to mark this complete{pts > 0 ? ` and earn +${pts} pts` : ''}.
+            The course is delivered on Claude Academy. Take it there, then upload your completion badge to mark this complete{pts > 0 ? ` and earn +${pts} pts` : ''}.
           </p>
           <label className={`tl-btn ghost tld-choosecert${busy ? ' busy' : ''}`}>
-            {busy ? 'Checking your certificate…' : '⬆ Choose certificate'}
+            {busy ? 'Checking your upload…' : '⬆ Choose badge or certificate'}
             <input type="file" accept="image/png,image/jpeg,image/webp,application/pdf" onChange={onPick} disabled={busy} style={{ display: 'none' }} />
           </label>
           {result && <div className={`tld-certmsg ${result.valid ? 'ok' : 'err'}`}>{result.valid ? '✓ ' : '✗ '}{result.reason}</div>}
