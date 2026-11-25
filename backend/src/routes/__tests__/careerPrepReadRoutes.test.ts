@@ -11,6 +11,9 @@ jest.mock('../../services/careerPrep/interviews', () => ({
   linkHireInterviews: (...a: unknown[]) => mockLink(...a), addInterview: (...a: unknown[]) => mockAdd(...a), createPractice: (...a: unknown[]) => mockPractice(...a),
 }));
 
+const mockCcpp = jest.fn();
+jest.mock('../../services/careerPrep/ccppInterviews', () => ({ linkCcppOnOpen: (...a: unknown[]) => mockCcpp(...a) }));
+
 import express from 'express';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
@@ -48,6 +51,7 @@ describe('reads link real Hire interviews first', () => {
     const res = await request(app()).get('/api/portal/career-prep/summary').set('Authorization', token());
     expect(res.status).toBe(200);
     expect(mockLink).toHaveBeenCalledWith('enr-ali');
+    expect(mockCcpp).toHaveBeenCalledWith('enr-ali');
   });
 });
 
