@@ -20,6 +20,7 @@
  * (callers are admin actions and a seed script; a failed call is safe to repeat because every write
  * is idempotent or transition-guarded).
  */
+import { randomUUID } from 'crypto';
 import { QueryTypes, type Transaction } from 'sequelize';
 import { sequelize } from '../../../config/database';
 import { VoiceAgentProfile, VoiceAgentVersion } from '../../../models/voiceStudioModels';
@@ -44,7 +45,9 @@ export interface EnsureProfileInput { tenantId: string; brandSlug: string; agent
 export async function ensureProfile(p: EnsureProfileInput): Promise<{ profile: VoiceAgentProfileAttrs; created: boolean }> {
   const [row, created] = await VoiceAgentProfile.findOrCreate({
     where: { tenant_id: p.tenantId, agent_key: p.agentKey, direction: p.direction },
-    defaults: { tenant_id: p.tenantId, brand_slug: p.brandSlug, agent_key: p.agentKey, name: p.name, direction: p.direction, status: 'draft' },
+    // id and timestamps are set here: the generated models validate NOT NULL client-side, before the
+    // database default could apply (caught by the CI Postgres tier).
+    defaults: { id: randomUUID(), tenant_id: p.tenantId, brand_slug: p.brandSlug, agent_key: p.agentKey, name: p.name, direction: p.direction, status: 'draft', created_at: new Date(), updated_at: new Date() },
   });
   return { profile: plain<VoiceAgentProfileAttrs>(row), created };
 }
@@ -63,7 +66,7 @@ export async function createDraftVersion(profileId: string, raw: unknown, author
     if (existing) return { version: plain<VoiceAgentVersionAttrs>(existing), created: false };
     const max = (await VoiceAgentVersion.max('version', { where: { profile_id: profileId }, transaction: t })) as number | null;
     const row = await VoiceAgentVersion.create({
-      tenant_id: plain<VoiceAgentProfileAttrs>(profile).tenant_id, profile_id: profileId, version: (max ?? 0) + 1,
+      id: randomUUID(), created_at: new Date(), tenant_id: plain<VoiceAgentProfileAttrs>(profile).tenant_id, profile_id: profileId, version: (max ?? 0) + 1,
       content_hash: hash, ...content, author: author.trim(), status: 'draft',
     }, { transaction: t });
     return { version: plain<VoiceAgentVersionAttrs>(row), created: true };
