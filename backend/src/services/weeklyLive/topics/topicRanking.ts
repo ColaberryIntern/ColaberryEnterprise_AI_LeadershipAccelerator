@@ -48,7 +48,7 @@ export function rankOne(c: CandidateTopic, ctx: RankContext): RankedTopic {
   teach.demand = demand && demand.score !== null
     ? { score: demand.score, why: demand.multiple === null ? 'Measured on YouTube; the channel has no usual view count to compare with' : `Measured: the best video ran ${demand.multiple}x its channel's usual views` }
     : { score: 1, why: 'No YouTube measurement for this week' };
-  if (/^\s*none\b/i.test(c.proof_use) && teach.proof.score > 2) teach.proof = { score: 2, why: 'The proof you gave does not show this topic, so this line is held to 2' };
+  if (!c.shows_proof && teach.proof.score > 2) teach.proof = { score: 2, why: 'The proof you gave does not show this topic, so this line is held to 2' };
   if (teach.news.score > ceiling) teach.news = { score: ceiling, why: `${teach.news.why} (held to ${ceiling}: ${newest === null ? 'no dated story' : `newest story is ${newest} days old on the air date`})`.slice(0, 400) };
 
   const lines = Object.fromEntries(Object.entries(teach).map(([k, v]) => [k, v.score])) as Partial<IdeaLines>;
@@ -78,9 +78,11 @@ export function rankOne(c: CandidateTopic, ctx: RankContext): RankedTopic {
 /** Best five first. Ties: viral, then the earlier week, then the title, so the same scores always give the same order. */
 export function rankTopics(cands: CandidateTopic[], ctx: RankContext): { topics: RankedTopic[]; recommended: RankedTopic | null } {
   const seen = new Set<string>();
-  const unique = cands.filter((c) => { const k = c.title.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
-  const topics = unique.map((c) => rankOne(c, ctx))
-    .sort((a, b) => b.score.topicScore - a.score.topicScore || b.score.viral.total - a.score.viral.total || a.week - b.week || a.title.localeCompare(b.title))
+  // Score and sort first, then drop repeated titles, so the best copy survives whatever the input order.
+  const topics = cands.map((c) => rankOne(c, ctx))
+    .sort((a, b) => b.score.topicScore - a.score.topicScore || b.score.viral.total - a.score.viral.total || a.week - b.week || a.title.localeCompare(b.title)
+      || JSON.stringify([a.spin, a.parody, a.hooks]).localeCompare(JSON.stringify([b.spin, b.parody, b.hooks])))
+    .filter((t) => { const k = t.title.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; })
     .slice(0, TOPIC_COUNT);
   return { topics, recommended: recommendPick(topics) };
 }

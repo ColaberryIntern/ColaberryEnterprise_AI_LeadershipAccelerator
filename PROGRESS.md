@@ -18913,3 +18913,10 @@ Branch `workstream/career-prep-r2r3`, one PR (https://github.com/ColaberryIntern
   - What changed: weeklyLivePlanRoutes (full administrators only), plan service and store, weekly_live_plan_runs table, one run per air date
   - Verification: jest 518 passed (weeklyLive, routes, schema, timers, gates); Postgres suite runs in CI
   - Notes: choosing stores the choice only; the session is WL4.1
+
+- [ ] Weekly Live Studio WL3.3: attempt 1 defects fixed (regrade pending)
+  - Date: 2026-11-25
+  - Session: CC-20261124-iwlu
+  - What changed: duplicate titles dropped after ranking, full tie-break, five-word titles, shows_proof is a required true/false, reservation follows the model's price, headlines marked as information
+  - Verification: jest weeklyLive suites pass; not rerun live after this change
+  - Notes: attendee names are not checked here, because a plan has no class list yet

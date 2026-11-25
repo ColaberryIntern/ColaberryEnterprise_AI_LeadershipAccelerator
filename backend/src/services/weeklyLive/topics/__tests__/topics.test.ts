@@ -18,7 +18,7 @@ const cand = (over: Partial<CandidateTopic> = {}): CandidateTopic => ({
   week: 3, title: 'It Works While You Sleep', spin: 'A plain spin on the news this week.', parody: 'An original shop owner sleeps while the helper works.',
   hooks: [{ text: 'I slept all night. My AI worked.', viral: full(VIRAL_WEIGHTS) }, { text: 'Who is answering at night?', viral: full(VIRAL_WEIGHTS, 0.8) }] as CandidateTopic['hooks'],
   package: { long_video: 'My night shift', shorts: 'Six shorts', thumbnail: 'Night shift' }, marketing: { before: 'Promo on Friday', class_day: 'Post at noon', after: 'Shorts all week' },
-  signals: ['S1', 'S2'], proof_use: 'The three nights of runs are on screen', teach: teach() as CandidateTopic['teach'], viral: full(VIRAL_WEIGHTS) as CandidateTopic['viral'], convert: full(CONVERT_WEIGHTS) as CandidateTopic['convert'], ...over,
+  signals: ['S1', 'S2'], shows_proof: true, proof_use: 'The three nights of runs are on screen', teach: teach() as CandidateTopic['teach'], viral: full(VIRAL_WEIGHTS) as CandidateTopic['viral'], convert: full(CONVERT_WEIGHTS) as CandidateTopic['convert'], ...over,
 });
 const draft = (over: Partial<Draft> = {}): Draft => { const { teach: _t, viral: _v, convert: _c, hooks, ...d } = cand(); return { ...d, hooks: hooks.map((h) => h.text), ...over }; };
 const judge = (id: string, hooks = 2, over: Record<string, unknown> = {}) => ({ id, hooks: Array.from({ length: hooks }, () => full(VIRAL_WEIGHTS)), teach: teach(), viral: full(VIRAL_WEIGHTS), convert: full(CONVERT_WEIGHTS), ...over });
@@ -58,7 +58,7 @@ describe('rankOne', () => {
     expect(t.score.needsOverride).toBe(true);
   });
   it('a topic that does not use the proof cannot score on it', () => {
-    const r = rankOne(cand({ proof_use: 'None.' }), ctx());
+    const r = rankOne(cand({ shows_proof: false, proof_use: 'N/A' }), ctx());
     expect([r.teach_lines.proof.score, r.hasProof]).toEqual([2, false]);
   });
   it('a signal id that does not exist counts for nothing', () => {
@@ -87,6 +87,17 @@ describe('ranking', () => {
     expect(r.recommended?.title).toBe('Next');
     expect(rankTopics([noProof], ctx()).recommended).toBeNull();
   });
+  it('of two topics with one title the better survives, in either order', () => {
+    const weak = cand({ convert: full(CONVERT_WEIGHTS, 0.3) as never });
+    const both = [cand(), weak];
+    const a = rankTopics(both, ctx()).topics; const b = rankTopics([...both].reverse(), ctx()).topics;
+    expect([a.length, a[0].score.convert.total]).toEqual([1, 100]);
+    expect(b).toEqual(a);
+  });
+  it('a full tie is still the same order both ways', () => {
+    const x = [cand({ spin: 'A spin that comes first.' }), cand({ spin: 'B spin that comes later.' })];
+    expect(rankTopics([...x].reverse(), ctx()).topics).toEqual(rankTopics(x, ctx()).topics);
+  });
   it('the same title twice is one topic', () => { expect(rankTopics([cand(), cand({ title: 'IT WORKS while you sleep' })], ctx()).topics).toHaveLength(1); });
 });
 
@@ -95,7 +106,7 @@ describe('parseDrafts', () => {
     expect(parseDrafts(raw, ALL)).toEqual({ drafts: [], rejected: ["the writer's answer had no topics list"] });
   });
   it.each([
-    ['an eight-word title', { title: 'one two three four five six seven eight' }], ['a missing parody', { parody: undefined as never }], ['a week that is closed', { week: 2 }],
+    ['a six-word title', { title: 'one two three four five six' }], ['no answer on proof', { shows_proof: undefined as never }], ['a missing parody', { parody: undefined as never }], ['a week that is closed', { week: 2 }],
     ['one hook', { hooks: ['only one line'] }], ['a price word in the parody', { parody: 'A free class for the whole town.' }], ['a number on the thumbnail', { package: { ...cand().package, thumbnail: '73% lost' } }],
     ['a partnership in marketing', { marketing: { ...cand().marketing, before: 'In partnership with Anthropic' } }],
   ])('drops %s with a reason', (_n, over) => {

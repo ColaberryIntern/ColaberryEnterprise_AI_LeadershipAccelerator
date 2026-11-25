@@ -25,6 +25,13 @@ export function callCost(model: string, usage: { input_tokens?: number; output_t
   return ((usage.input_tokens || 0) * p.input + (usage.output_tokens || 0) * p.output) / 1_000_000;
 }
 
+const UNPRICED_RESERVE = { input: 10, output: 50 };
+/** The most a call can cost: its model's price, or a high stand-in for a model not listed here. */
+export function reserveFor(model: string, maxInputTokens: number, maxOutputTokens: number): number {
+  const p = PRICES[model] || UNPRICED_RESERVE;
+  return (maxInputTokens * p.input + maxOutputTokens * p.output) / 1_000_000;
+}
+
 export interface AiCall { planId: string; purpose: string; model: string; system: string; user: string; schema: Record<string, unknown>; maxTokens: number; reserveUsd: number; }
 export type AskAi = (c: AiCall) => Promise<unknown>;
 

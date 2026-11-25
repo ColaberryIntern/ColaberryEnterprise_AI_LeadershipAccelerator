@@ -11,7 +11,7 @@ const keys = <W extends Record<string, number>>(w: W) => Object.keys(w);
 const linesOf = <W extends Record<string, number>>(w: W) => z.object(Object.fromEntries(keys(w).map((k) => [k, z.number()])) as Record<string, z.ZodNumber>);
 const teachLine = z.object({ score: z.number(), why: z.string().min(3).max(400) });
 
-export const TITLE_MAX_WORDS = 7;
+export const TITLE_MAX_WORDS = 5;
 
 export const DraftSchema = z.object({
   week: z.number().int().min(1).max(12),
@@ -22,6 +22,7 @@ export const DraftSchema = z.object({
   package: z.object({ long_video: z.string().min(3).max(300), shorts: z.string().min(3).max(600), thumbnail: z.string().min(1).max(60) }),
   marketing: z.object({ before: z.string().min(3).max(400), class_day: z.string().min(3).max(400), after: z.string().min(3).max(400) }),
   signals: z.array(z.string().regex(/^S\d{1,2}$/)).max(8),
+  shows_proof: z.boolean(),
   proof_use: z.string().max(400),
 });
 export type Draft = z.infer<typeof DraftSchema>;
@@ -50,7 +51,7 @@ const each = (w: Record<string, number>, v: Json) => obj(Object.fromEntries(Obje
 /** The same shapes as strict JSON schemas, so the API cannot leave a key out. Lengths and ranges stay with Zod. */
 export const DRAFTS_JSON_SCHEMA: Json = obj({ topics: arr(obj({
   week: { type: 'integer' }, title: str, spin: str, parody: str, hooks: arr(str),
-  package: obj({ long_video: str, shorts: str, thumbnail: str }), marketing: obj({ before: str, class_day: str, after: str }), signals: arr(str), proof_use: str,
+  package: obj({ long_video: str, shorts: str, thumbnail: str }), marketing: obj({ before: str, class_day: str, after: str }), signals: arr(str), shows_proof: { type: 'boolean' }, proof_use: str,
 })) });
 export const JUDGMENTS_JSON_SCHEMA: Json = obj({ scores: arr(obj({
   id: str, hooks: arr(each(VIRAL_WEIGHTS, num)), teach: each(IDEA_WEIGHTS, obj({ score: num, why: str })), viral: each(VIRAL_WEIGHTS, num), convert: each(CONVERT_WEIGHTS, num),

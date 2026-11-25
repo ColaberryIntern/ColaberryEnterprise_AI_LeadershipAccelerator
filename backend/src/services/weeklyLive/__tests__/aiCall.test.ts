@@ -2,7 +2,7 @@ const create = jest.fn(); const emit = jest.fn().mockResolvedValue(undefined); c
 jest.mock('../../openaiInstrumented', () => ({ getInstrumentedOpenAI: (_c: unknown, o: unknown) => { options.push(o); return { responses: { create } }; } }));
 jest.mock('../../aiEventService', () => ({ emitAiEvent: (e: unknown) => emit(e) }));
 jest.mock('../signals/researchBudget', () => ({ withBudget: async (_p: unknown, _n: unknown, _e: unknown, call: () => Promise<{ value: unknown; costUsd: number }>) => { const r = await call(); settled.push(r.costUsd); return r.value; } }));
-import { askAi, callCost } from '../aiCall';
+import { askAi, callCost, reserveFor } from '../aiCall';
 
 /** WL3.3: paid calls are strict, redacted, logged, never retried, and never priced at zero. */
 const call = { planId: 'p', purpose: 'topic_write', model: 'gpt-6.2-sol', system: 's', user: 'card 4111 1111 1111 1111', schema: {}, maxTokens: 10, reserveUsd: 0.3 };
@@ -11,6 +11,11 @@ beforeEach(() => { create.mockReset(); emit.mockClear(); settled.length = 0; });
 it('prices by model, and at the reservation when the price or usage is unknown', () => {
   expect(callCost('gpt-6.2-sol', { input_tokens: 10_000, output_tokens: 10_000 }, 0.3)).toBeCloseTo(0.12, 6);
   expect([callCost('new-model', { input_tokens: 1 }, 0.3), callCost('gpt-6.2-sol', undefined, 0.3)]).toEqual([0.3, 0.3]);
+});
+it('reserves by model, and high for a model it does not know', () => {
+  expect(reserveFor('gpt-6.2-sol', 25_000, 25_000)).toBeCloseTo(0.3, 6);
+  expect(reserveFor('gpt-6.2-astra', 25_000, 25_000)).toBeCloseTo(1.2, 6);
+  expect(reserveFor('unknown', 25_000, 25_000)).toBeCloseTo(1.5, 6);
 });
 it('sends a strict schema, redacts, records the event and settles the real cost', async () => {
   create.mockResolvedValue({ output_text: '{"a":1}', usage: { input_tokens: 10_000, output_tokens: 10_000, total_tokens: 20_000 } });

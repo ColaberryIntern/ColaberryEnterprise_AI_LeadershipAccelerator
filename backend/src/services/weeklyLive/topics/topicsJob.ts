@@ -1,6 +1,6 @@
 import { sequelize } from '../../../config/database';
 import { WeeklyLiveSignal, WeeklyLiveTopic } from '../../../models/WeeklyLive';
-import { askAi, type AskAi } from '../aiCall';
+import { askAi, reserveFor, type AskAi } from '../aiCall';
 import { curriculumMap } from '../curriculumMap';
 import { latestDemand } from '../demand/demandJob';
 import { shiftDays } from '../signals/signalsJob';
@@ -21,8 +21,6 @@ import { DRAFTS_JSON_SCHEMA, JUDGMENTS_JSON_SCHEMA, pairJudgments, parseDrafts, 
 export const WRITER_MODEL = process.env.WEEKLY_LIVE_TOPIC_MODEL || 'gpt-6.2-sol';
 export const JUDGE_MODEL = process.env.WEEKLY_LIVE_JUDGE_MODEL || 'gpt-6.2-sol';
 const MAX_TOKENS = 25_000;
-/** Worst case per call: 25k input and 25k output tokens on gpt-6.2-sol. */
-export const CALL_RESERVE_USD = 0.3;
 const ROUNDS = 2;
 
 export interface TopicsResult { topics: RankedTopic[]; recommendedRank: number | null; rejected: string[]; rounds: number; }
@@ -38,17 +36,17 @@ export async function runTopics(input: TopicsInput, ask: AskAi = askAi): Promise
   const weeks = openWeeks(map, input.inputs.week);
 
   const good: CandidateTopic[] = []; const rejected: string[] = [];
-  const call = { planId: input.planId, maxTokens: MAX_TOKENS, reserveUsd: CALL_RESERVE_USD };
+  const call = (purpose: string, model: string) => ({ planId: input.planId, purpose, model, maxTokens: MAX_TOKENS, reserveUsd: reserveFor(model, MAX_TOKENS, MAX_TOKENS) });
   let rounds = 0; let ranked = rankTopics(good, ctx);
   while (rounds < ROUNDS && ranked.topics.length < TOPIC_COUNT) {
     rounds += 1;
     const have = good.map((g) => ({ ...g, hooks: g.hooks.map((h) => h.text) }));
-    const { drafts, rejected: bad } = parseDrafts(await ask({ ...call, purpose: 'topic_write', model: WRITER_MODEL, system: WRITER_SYSTEM, user: writerPrompt(input, weeks, ctx, signals, have), schema: DRAFTS_JSON_SCHEMA }), new Set(weeks));
+    const { drafts, rejected: bad } = parseDrafts(await ask({ ...call('topic_write', WRITER_MODEL), system: WRITER_SYSTEM, user: writerPrompt(input, weeks, ctx, signals, have), schema: DRAFTS_JSON_SCHEMA }), new Set(weeks));
     rejected.push(...bad);
     if (drafts.length) {
       drafts.sort((a, b) => a.title.localeCompare(b.title)); // the judge sees no ranking in the order
       const ids = drafts.map((_, i) => `T${i + 1}`);
-      const judged = pairJudgments(drafts, ids, await ask({ ...call, purpose: 'topic_judge', model: JUDGE_MODEL, system: judgeSystem(), user: judgePrompt(drafts, ids, signals, input.inputs.proof), schema: JUDGMENTS_JSON_SCHEMA }));
+      const judged = pairJudgments(drafts, ids, await ask({ ...call('topic_judge', JUDGE_MODEL), system: judgeSystem(), user: judgePrompt(drafts, ids, signals, input.inputs.proof), schema: JUDGMENTS_JSON_SCHEMA }));
       good.push(...judged.topics); rejected.push(...judged.rejected);
     }
     ranked = rankTopics(good, ctx);
