@@ -151,3 +151,58 @@ the rest, but its door reaches `ensureLeadTenantContext` through `leadIngestionS
 why it arrived without one is a different question from the 25 and is not diagnosed here. If
 a contextless `ccpp_winback` profile appears again after this PR ships, that is the thread to
 pull.
+
+## Deployed and verified in production, 2026-11-25
+
+Merged as `18fe97559`. Its image build was **cancelled** 49 seconds later by PR #4393
+merging behind it, which is the documented behaviour of this repo's build workflow rather
+than a fault in the change. The replacement commit `061d966c6` carries this merge as its
+parent, and the only other content it adds is a 15-line session log under `docs/sessions/`,
+so deploying it ships this fix and no other runtime code.
+
+Deployed via `scripts/deploy-prod.sh` in registry mode. The script verified `:main` matched
+`sha-061d966c6ccd33ab2bd3a1e1df7e238b633751e4` for backend and nginx before pulling, so a
+mismatch would have stopped the deploy rather than shipping a different commit.
+
+**Verified against the running container, not the deploy's exit code:**
+
+| Check | Result |
+|---|---|
+| `explorerBrandRelationship.js` in `/app/dist` | present |
+| bridge references the writer | 2 |
+| `resolveExplorerBrandContext` in dist | 4 |
+| **control:** a symbol known present before this change | 2 |
+| **negative control:** a string that must not exist | 0 |
+| AD-1: Explorer Growth routes still mounted | yes |
+| flags | only `GROWTH_JOURNEY_ENABLED=true`, no sub-flag set |
+
+The negative control is what makes the rest of that table mean anything: without it, every
+count above is equally consistent with a grep pointed at a file that matches everything.
+
+**The forward fix proved by a real registration, which is the only evidence that counts.**
+Immediately after the deploy there was nothing to measure, because the fix only runs when an
+Explorer registers. A watcher polled production until one did, roughly an hour later:
+
+| Check | Result |
+|---|---|
+| profiles created after the backend came up at 00:12 UTC | 1 |
+| of those, holding a brand context | **1** |
+| `lead_tenant_contexts` rows created after 00:12 UTC | **1**, so the product wrote it rather than a backfill |
+| its tenant / brand / relationship | `colaberry` / `colaberry-training` / `learner` |
+| `consent_contact` | **false** |
+| `consent_at` / `consent_source` | neither set |
+| **control:** consented rows all-time | **222** |
+
+So the row the product writes at registration is identical in shape to the rows the backfill
+wrote, and it grants nothing. The gap no longer reopens.
+
+## Three profiles remain contextless, and deliberately so
+
+Three Explorers registered between the backfill and the deploy, at roughly 20:00 and 21:00
+UTC on 11-24. They sit in the gap by construction. The population is now 1,251 profiles with
+3 missing a context.
+
+They are harmless on the only axis that matters: `brandPreferenceGate` blocks a missing row
+(`no_relationship`) exactly as it blocks a consent-false row (`no_consent`), so these three
+are no more contactable than the 1,248 that do have one. Backfilling them is a production
+write and therefore Ali's call, not a tidy-up to perform unasked.
