@@ -136,6 +136,8 @@ import { ensureBroadcastClipMarkerSchema } from './db/ensureBroadcastClipMarkerS
 import { ensureBroadcastClipMarkSchema } from './db/ensureBroadcastClipMarkSchema';
 import { ensureBroadcastClipDecisionSchema } from './db/ensureBroadcastClipDecisionSchema';
 import { ensureStudioSetupSchema } from './db/ensureStudioSetupSchema';
+import { ensureWeeklyLiveRecapSchema } from './db/ensureWeeklyLiveRecapSchema';
+import weeklyLiveRecapRoutes from './routes/weeklyLiveRecapRoutes';
 import { ensureBroadcastReplayIndexSchema } from './db/ensureBroadcastReplayIndexSchema';
 import { ensureFactoryTaskSchema } from './db/ensureFactoryTaskSchema';
 import { ensureAgentDomainStoryLadderSchema } from './db/ensureAgentDomainStoryLadderSchema';
@@ -397,6 +399,9 @@ app.use(publicServiceRoutes);
 // opening the invite — and it would fail that way weeks after the deploy that
 // broke it, at the start of a session, for people who cannot debug it.
 app.use(publicRoomJoinRoutes);
+
+// Weekly Live recap (Basecamp WL1): admin recap panel + the public recap page data and opt-out.
+app.use(weeklyLiveRecapRoutes);
 
 app.use(adminRoutes);
 
@@ -3261,6 +3266,8 @@ async function start(): Promise<void> {
   // D11 - the keep-or-cut decisions an editor makes about an airing.
   await ensureBroadcastClipDecisionSchema();
   await ensureStudioSetupSchema();
+  // Weekly Live recap tables (WL1.1): after live_sessions and session_guests, which they reference.
+  await ensureWeeklyLiveRecapSchema();
   // L8.3 - the partial index the replay list reads through. The live ticker's index covers
   // backstage/live/reconnecting only, so replay_ready would otherwise scan the whole table.
   await ensureBroadcastReplayIndexSchema();

@@ -4,6 +4,7 @@ import { listStudioSessions, type StudioSessionRow } from '../../../services/stu
 import './studioSetup.css';
 import StudioRail from './StudioRail';
 import StudioTour from './StudioTour';
+import StudioRecapPanel from './StudioRecapPanel';
 import { indexTourSteps } from './studioTourSteps';
 
 /**
@@ -37,6 +38,7 @@ export default function StudioIndexPage(): React.ReactElement {
   const [rows, setRows] = useState<StudioSessionRow[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [tourOpen, setTourOpen] = useState(false);
+  const [recapFor, setRecapFor] = useState<string | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -97,6 +99,9 @@ export default function StudioIndexPage(): React.ReactElement {
                 </span>
               </div>
               <BroadcastState row={row} />
+              <button type="button" className="cls-btn cls-btn-ghost" onClick={() => setRecapFor(row.id)} data-testid={`recap-open-${row.id}`}>
+                Recap
+              </button>
               <Link className="cls-btn cls-btn-ghost" to={`/admin/live/studio/${row.id}`}>
                 Set up
               </Link>
@@ -104,6 +109,7 @@ export default function StudioIndexPage(): React.ReactElement {
           ))}
         </section>
       </div>
+      {recapFor && <StudioRecapPanel sessionId={recapFor} onClose={() => setRecapFor(null)} />}
     </div>
   );
 }

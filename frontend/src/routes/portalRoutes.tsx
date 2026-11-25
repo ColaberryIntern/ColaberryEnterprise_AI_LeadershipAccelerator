@@ -17,6 +17,7 @@ import LiveNowBadge from '../components/portal/LiveNowBadge';
 import { CampusProvider } from '../components/campus/CampusContext';
 const PortalHandoffPage = lazy(() => import('../pages/portal/PortalHandoffPage'));
 const ClassCheckinPage = lazy(() => import('../pages/portal/ClassCheckinPage'));
+const ClassRecapPage = lazy(() => import('../pages/portal/ClassRecapPage'));
 const ClassroomPage = lazy(() => import('../pages/portal/ClassroomPage'));
 const ShowcaseGalleryPage = lazy(() => import('../pages/portal/showcase/ShowcaseGalleryPage'));
 const ShowcasePiecePage = lazy(() => import('../pages/portal/showcase/ShowcasePiecePage'));
@@ -131,6 +132,9 @@ const portalRoutes = (
     {/* Live-class check-in — PUBLIC: a student may scan the room QR before signing
         in. Records attendance if signed in, else routes them to log in. */}
     <Route path="/portal/class-checkin/:sessionId" element={<ClassCheckinPage />} />
+    {/* Weekly Live recap (WL1.2) — PUBLIC like check-in: the link in the recap email carries a
+        personal token, and attendees from the livestream have no account. */}
+    <Route path="/portal/class-recap/:sessionId" element={<ClassRecapPage />} />
     {/* L7.2 — the persistent live link. PUBLIC for the same reason check-in is: these
         URLs are promoted and printed before the class exists, so they are clicked long
         before there is anything to watch. The server decides the moment; the page renders
