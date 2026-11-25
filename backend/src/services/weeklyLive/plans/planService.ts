@@ -31,30 +31,34 @@ function log(event: string, planId: string, outcome: 'success' | 'failure' | 'pa
 }
 
 /** Run a claimed plan to the end. Never throws: the outcome is on the plan. */
-export async function executePlan(planId: string, topicsOnly: boolean, deps: PlanDeps = REAL): Promise<void> {
+export async function executePlan(planId: string, runId: string, topicsOnly: boolean, deps: PlanDeps = REAL): Promise<void> {
   const t0 = Date.now();
   try {
     const plan = await store.getPlan(planId);
     if (!plan) return;
+    const stage = async (name: store.Stage, note: string | null = null) => {
+      if (!(await store.setStage(planId, runId, name, note))) throw Object.assign(new Error('replaced'), { name: 'RunReplaced' });
+    };
     if (!topicsOnly) {
-      await store.setStage(planId, 'signals');
+      await stage('signals');
       const s = await deps.signals({ planId, airDate: plan.air_date, forceNews: plan.inputs.forceNews, avoid: plan.inputs.avoid });
-      await store.setStage(planId, 'demand', s.short ? `Only ${s.kept} news stories could be confirmed this time.` : null);
-    } else await store.setStage(planId, 'demand');
+      await stage('demand', s.short ? `Only ${s.kept} news stories could be confirmed this time.` : null);
+    } else await stage('demand');
     try { await deps.demand(); } catch (e) { log('weekly_live.plan_demand', planId, 'partial', t0, classifyError(e)); }
-    await store.setStage(planId, 'topics');
+    await stage('topics');
     await deps.topics({ planId, airDate: plan.air_date, inputs: plan.inputs });
-    await store.finish(planId, true);
+    await store.finish(planId, runId, true);
     log('weekly_live.plan_run', planId, 'success', t0);
   } catch (e) {
+    if (e instanceof Error && e.name === 'RunReplaced') { log('weekly_live.plan_run', planId, 'partial', t0, 'RunReplaced'); return; }
     log('weekly_live.plan_run', planId, 'failure', t0, e instanceof Error && SHOWABLE.has(e.name) ? e.name : classifyError(e));
-    await store.finish(planId, false, explain(e)).catch((err: unknown) => log('weekly_live.plan_finish', planId, 'failure', t0, classifyError(err)));
+    await store.finish(planId, runId, false, explain(e)).catch((err: unknown) => log('weekly_live.plan_finish', planId, 'failure', t0, classifyError(err)));
   }
 }
 
 export interface StartInput { airDate: string; inputs: PlanInputs; createdBy: string | null; }
-type Background = (planId: string, topicsOnly: boolean) => void;
-const inBackground: Background = (planId, topicsOnly) => { void executePlan(planId, topicsOnly); };
+type Background = (planId: string, runId: string, topicsOnly: boolean) => void;
+const inBackground: Background = (planId, runId, topicsOnly) => { void executePlan(planId, runId, topicsOnly); };
 
 function batchOr(b: BatchResult): { cohortId: string; cohortName: string } {
   if (b.ok) return b;
@@ -64,8 +68,8 @@ function batchOr(b: BatchResult): { cohortId: string; cohortName: string } {
 export async function startPlan(input: StartInput, run: Background = inBackground): Promise<{ planId: string; started: boolean }> {
   if (input.airDate < centralDate()) throw new PlanError(400, 'The air date is in the past.', 'past_date');
   const { cohortId } = batchOr(await resolveBatch(input.airDate));
-  const { id, created } = await store.createOrJoin({ airDate: input.airDate, cohortId, inputs: input.inputs, createdBy: input.createdBy });
-  if (created) run(id, false);
+  const { id, created, runId } = await store.createOrJoin({ airDate: input.airDate, cohortId, inputs: input.inputs, createdBy: input.createdBy });
+  if (created && runId) run(id, runId, false);
   return { planId: id, started: created };
 }
 
@@ -74,8 +78,10 @@ export async function regenerate(planId: string, run: Background = inBackground)
   const plan = await store.getPlan(planId);
   if (!plan) throw new PlanError(404, 'Not found', 'not_found');
   if (plan.status === 'chosen') throw new PlanError(409, 'A topic is already chosen for this plan. Start a new plan to get different topics.', 'already_chosen');
-  if (!(await store.claimForRun(planId))) throw new PlanError(409, 'A run for this air date is still going.', 'running');
-  run(planId, (await WeeklyLiveSignal.count({ where: { plan_id: planId, dropped_reason: null } })) > 0);
+  const haveResearch = (await WeeklyLiveSignal.count({ where: { plan_id: planId, dropped_reason: null } })) > 0; // before claiming, so a failed read leaves the plan as it was
+  const runId = await store.claimForRun(planId);
+  if (!runId) throw new PlanError(409, 'A run for this air date is still going.', 'running');
+  run(planId, runId, haveResearch);
 }
 
 export async function choose(planId: string, topicId: string, override: boolean): Promise<void> {
@@ -83,7 +89,7 @@ export async function choose(planId: string, topicId: string, override: boolean)
   if (!plan) throw new PlanError(404, 'Not found', 'not_found');
   const topic = await WeeklyLiveTopic.findOne({ where: { id: topicId, plan_id: planId } });
   if (!topic) throw new PlanError(404, 'That topic is not in this plan.', 'topic_not_found');
-  if (plan.status !== 'ready' && plan.status !== 'chosen') throw new PlanError(409, 'The plan is not finished yet.', 'not_ready');
+  if (plan.status === 'researching' || plan.status === 'draft') throw new PlanError(409, 'The plan is not finished yet.', 'not_ready');
   const few = topic.factors.length < MIN_VIRAL_FACTORS;
   if (!override && (few || Number(topic.topic_score) < TOPIC_GATE)) {
     throw new PlanError(409, few ? `This topic uses ${topic.factors.length} viral factors and needs ${MIN_VIRAL_FACTORS}.` : `This topic scores ${topic.topic_score}, under the ${TOPIC_GATE} needed.`, 'needs_override');
@@ -119,7 +125,8 @@ export async function planView(planId: string) {
 export type PlanView = Awaited<ReturnType<typeof planView>>;
 
 /** What the picker needs before a run: the batch for the date, the curriculum map, demand, and any plan already made. */
-export async function planSetup(airDate: string): Promise<{ batch: BatchResult; map: CurriculumMap; demand: DemandView[]; latestPlanId: string | null }> {
+export interface PlanSetup { batch: BatchResult; map: CurriculumMap; demand: DemandView[]; latestPlanId: string | null; }
+export async function planSetup(airDate: string): Promise<PlanSetup> {
   const [batch, map, demand, latest] = await Promise.all([resolveBatch(airDate), curriculumMap(), demandView(), store.latestPlanFor(airDate)]);
   return { batch, map, demand, latestPlanId: latest?.id ?? null };
 }

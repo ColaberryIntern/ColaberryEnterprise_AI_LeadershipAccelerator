@@ -54,30 +54,38 @@ describeIfDb('weekly live plans against Postgres', () => {
     const b = await make('2099-01-12');
     expect(b).toMatchObject({ created: true });
     expect(b.id).not.toBe(a.id);
-    expect(await store.claimForRun(a.id)).toBe(false); // another plan for the date is running
+    expect(await store.claimForRun(a.id)).toBeNull(); // another plan for the date is running
   });
 
   it('a finished plan is claimed by one of two regenerates', async () => {
-    const { id } = await make('2099-01-19');
-    expect(await store.claimForRun(id)).toBe(false);
-    await store.setStage(id, 'topics', 'a note');
-    await store.finish(id, true);
+    const { id, runId } = await make('2099-01-19');
+    expect(await store.claimForRun(id)).toBeNull();
+    expect(await store.setStage(id, runId!, 'topics', 'a note')).toBe(true);
+    await store.finish(id, runId!, true);
     expect(await store.getPlan(id)).toMatchObject({ status: 'ready', stage: 'done', note: 'a note' });
-    expect((await Promise.all([store.claimForRun(id), store.claimForRun(id)])).sort()).toEqual([false, true]);
-    await store.finish(id, false, 'why');
+    const claims = (await Promise.all([store.claimForRun(id), store.claimForRun(id)])).filter(Boolean);
+    expect(claims).toHaveLength(1);
+    // the first run can no longer touch the plan the second one holds
+    expect(await store.setStage(id, runId!, 'signals')).toBe(false);
+    await store.finish(id, runId!, false, 'late');
+    expect(await store.getPlan(id)).toMatchObject({ status: 'researching', stage: 'queued', error: null });
+    await store.finish(id, claims[0]!, false, 'why');
     expect(await store.getPlan(id)).toMatchObject({ status: 'failed', error: 'why' });
   });
 
-  it('choosing needs a finished plan and one of its own topics, and can be changed', async () => {
-    const { id } = await make('2099-01-26'); const t = await topic(id);
+  it('choosing needs its own topic and no run in progress; a failed or stopped run still allows it', async () => {
+    const { id, runId } = await make('2099-01-26'); const t = await topic(id);
     expect(await store.setChosen(id, t)).toBe(false);
-    await store.finish(id, true);
+    await store.finish(id, runId!, false, 'why');
     expect(await store.setChosen(id, C1)).toBe(false);
     expect(await store.setChosen(id, t)).toBe(true);
     expect(await store.setChosen(id, t)).toBe(true);
-    expect(await store.claimForRun(id)).toBe(false);
-    await store.finish(id, false, 'late'); // a late finish cannot undo the choice
-    expect(await store.getPlan(id)).toMatchObject({ status: 'chosen', chosen_topic_id: t });
+    expect(await store.claimForRun(id)).toBeNull();
+    const stopped = await make('2099-02-02'); const t2 = await topic(stopped.id);
+    await age(stopped.id);
+    expect(await store.setChosen(stopped.id, t2)).toBe(true);
+    await store.finish(stopped.id, stopped.runId!, false, 'late'); // a late finish cannot undo the choice or leave an error on it
+    expect(await store.getPlan(stopped.id)).toMatchObject({ status: 'chosen', chosen_topic_id: t2, error: null });
     expect((await store.latestPlanFor('2099-01-26'))?.id).toBe(id);
   });
 

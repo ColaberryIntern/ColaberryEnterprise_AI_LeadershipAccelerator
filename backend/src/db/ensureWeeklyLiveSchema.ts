@@ -146,6 +146,7 @@ export const WEEKLY_LIVE_DDL: readonly string[] = [
   `CREATE INDEX IF NOT EXISTS ix_weekly_live_spend_created ON weekly_live_spend (created_at)`,
   `CREATE TABLE IF NOT EXISTS weekly_live_plan_runs (
      plan_id UUID PRIMARY KEY REFERENCES weekly_live_plans(id) ON DELETE CASCADE,
+     run_id UUID NOT NULL DEFAULT gen_random_uuid(),
      stage VARCHAR(16) NOT NULL DEFAULT 'queued',
      note VARCHAR(300),
      error VARCHAR(300),

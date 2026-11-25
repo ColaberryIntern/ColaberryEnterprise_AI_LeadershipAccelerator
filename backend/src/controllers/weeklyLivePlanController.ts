@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { batchNameFor } from '../services/weeklyLive/batchResolver';
-import { choose, PlanError, planSetup, planView, regenerate, startPlan } from '../services/weeklyLive/plans/planService';
+import { choose, PlanError, planSetup, planView, regenerate, startPlan, type PlanSetup, type PlanView } from '../services/weeklyLive/plans/planService';
 import { STAGES } from '../services/weeklyLive/plans/planStore';
 
 /** Plan API (WL3.4). Full administrators only (in the router). Every body and id is validated; responses are checked against the declared shape. */
@@ -15,17 +15,45 @@ const StartBody = z.object({
 const ChooseBody = z.object({ topicId: Id, override: z.boolean().optional() }).strict();
 const Empty = z.object({}).strict();
 
-const num = z.number();
+const num = z.number(); const str = z.string(); const strOrNull = z.string().nullable(); const ints = z.array(z.number().int());
+const week = z.number().int().min(1).max(12);
+const words = z.record(str, str);
+const DemandSchema = z.array(z.object({
+  week, video_url: strOrNull, video_title: strOrNull, channel: strOrNull, views: num.nullable(), multiple: num.nullable(), score: num.nullable(), thin_median: z.boolean(), measured_at: str, failed: z.boolean(),
+}).strict());
 const PlanViewSchema = z.object({
-  plan: z.object({ id: Id, air_date: z.string(), status: z.enum(['draft', 'researching', 'ready', 'chosen', 'failed']), stage: z.enum(STAGES), error: z.string().nullable(), note: z.string().nullable(), cost_usd: num, chosen_topic_id: z.string().nullable(), inputs: z.object({ week: z.union([z.literal('auto'), num]) }) }),
-  demand: z.array(z.object({ week: num, multiple: num.nullable(), score: num.nullable(), failed: z.boolean() })),
-  signals: z.array(z.object({ id: z.string(), headline: z.string(), url: z.string(), factors: z.array(num), dropped_reason: z.string().nullable() })),
-  topics: z.array(z.object({ id: z.string(), rank: num, week: num, title: z.string(), teach: num, viral: num, convert: num, topic_score: num, recommended: z.boolean(), hooks: z.array(z.object({ text: z.string(), viral: num })), warnings: z.array(z.object({ code: z.string(), message: z.string() })) })),
-});
+  plan: z.object({
+    id: Id, air_date: str, cohort_id: strOrNull, status: z.enum(['draft', 'researching', 'ready', 'chosen', 'failed']), stage: z.enum(STAGES), error: strOrNull, note: strOrNull, cost_usd: num, chosen_topic_id: strOrNull,
+    inputs: z.object({ week: z.union([z.literal('auto'), week]), proof: str.optional(), forceNews: str.optional(), audience: str.optional(), avoid: str.optional(), notes: str.optional() }).strict(),
+  }).strict(),
+  demand: DemandSchema,
+  signals: z.array(z.object({
+    id: str, headline: str, publisher: strOrNull, url: str, published_at: strOrNull, date_confirmed: z.boolean(), factors: ints, fits_weeks: ints, idea: strOrNull, dropped_reason: strOrNull,
+  }).strict()),
+  topics: z.array(z.object({
+    id: str, rank: num, week, title: str, spin: strOrNull, parody: strOrNull, hooks: z.array(z.object({ text: str, viral: num })), package: words, marketing: words, signals_used: z.array(str),
+    teach_lines: z.record(str, z.object({ score: num, why: str })), teach: num, viral: num, convert: num, topic_score: num, factors: ints, warnings: z.array(z.object({ code: str, message: str })), recommended: z.boolean(),
+  }).strict()),
+}).strict();
+const PlanSetupSchema = z.object({
+  batch: z.union([
+    z.object({ ok: z.literal(true), cohortId: str, cohortName: str }), z.object({ ok: z.literal(false), status: z.literal(409), error: str, cohortName: str }), z.object({ ok: z.literal(false), status: z.literal(400), error: str }),
+  ]),
+  map: z.object({
+    asOf: str, recentWeeks: z.array(num),
+    weeks: z.array(z.object({ week, theme: str, intensive: str, timesCovered: num, lastCovered: strOrNull, lastTitle: strOrNull, daysAgo: num.nullable(), coveredInLast4: z.boolean() })),
+  }),
+  demand: DemandSchema, latestPlanId: strOrNull,
+}).strict();
+
+/** The compiler refuses a service change the schemas do not follow, in either direction. */
+type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
+const inStep: [Same<z.infer<typeof PlanViewSchema>, PlanView>, Same<z.infer<typeof PlanSetupSchema>, PlanSetup>] = [true, true];
+void inStep;
 
 /** Development fails loud on a wrong shape; production logs it and still answers. */
-function checked<T>(value: T): T {
-  const p = PlanViewSchema.safeParse(value);
+function checked<T>(schema: z.ZodType, value: T): T {
+  const p = schema.safeParse(value);
   if (!p.success) {
     const where = p.error.issues[0].path.join('.');
     if (process.env.NODE_ENV !== 'production') throw Object.assign(new Error(`Plan response does not match its type at ${where}`), { name: 'ContractViolation' });
@@ -44,7 +72,7 @@ const invalid = (res: Response, e: z.ZodError) => res.status(400).json({ error: 
 export async function handlePlanSetup(req: Request, res: Response) {
   const d = AirDate.safeParse(req.query.airDate);
   if (!d.success) return invalid(res, d.error);
-  try { return res.json(await planSetup(d.data)); } catch (e) { return fail(res, e); }
+  try { return res.json(checked(PlanSetupSchema, await planSetup(d.data))); } catch (e) { return fail(res, e); }
 }
 
 export async function handleStartPlan(req: Request, res: Response) {
@@ -59,7 +87,7 @@ export async function handleStartPlan(req: Request, res: Response) {
 export async function handleGetPlan(req: Request, res: Response) {
   const id = Id.safeParse(req.params.id);
   if (!id.success) return res.status(404).json({ error: 'Not found' });
-  try { return res.json(checked(await planView(id.data))); } catch (e) { return fail(res, e); }
+  try { return res.json(checked(PlanViewSchema, await planView(id.data))); } catch (e) { return fail(res, e); }
 }
 
 export async function handleRegenerate(req: Request, res: Response) {

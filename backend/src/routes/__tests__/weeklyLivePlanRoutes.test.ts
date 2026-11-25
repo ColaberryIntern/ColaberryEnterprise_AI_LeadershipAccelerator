@@ -19,6 +19,7 @@ import { runTopics } from '../../services/weeklyLive/topics/topicsJob';
 import router from '../weeklyLivePlanRoutes';
 
 /** WL3.4: full administrators only, Zod on every body, one run per air date, honest stages and failures, checked response. */
+const RUN = '7b8a95b7-1a88-42d5-b257-fd786d071f6e';
 const PID = '5b8a95b7-1a88-42d5-b257-fd786d071f6e'; const TID = '6b8a95b7-1a88-42d5-b257-fd786d071f6e';
 const s = store as jest.Mocked<typeof store>;
 const signals = runSignals as jest.Mock; const demand = runDemand as jest.Mock; const topics = runTopics as jest.Mock;
@@ -34,7 +35,7 @@ const ROUTES: [M, string, unknown][] = [['get', '/api/admin/live/plan-setup?airD
 beforeEach(() => {
   jest.clearAllMocks();
   jest.spyOn(console, 'log').mockImplementation(() => undefined); jest.spyOn(console, 'error').mockImplementation(() => undefined);
-  s.getPlan.mockResolvedValue(plan()); s.createOrJoin.mockResolvedValue({ id: PID, created: true }); s.claimForRun.mockResolvedValue(true); s.setChosen.mockResolvedValue(true); s.setStage.mockResolvedValue(); s.finish.mockResolvedValue();
+  s.getPlan.mockResolvedValue(plan()); s.createOrJoin.mockResolvedValue({ id: PID, created: true, runId: RUN }); s.claimForRun.mockResolvedValue(RUN); s.setChosen.mockResolvedValue(true); s.setStage.mockResolvedValue(true); s.finish.mockResolvedValue();
   (resolveBatch as jest.Mock).mockResolvedValue({ ok: true, cohortId: 'c', cohortName: 'Cohort - November 2099' });
   (latestDemand as jest.Mock).mockResolvedValue([{ week: 3, video_url: null, video_title: null, channel: null, views: null, multiple: '3.50', score: 4, thin_median: false, measured_at: '2026-11-25', error: null }]);
   signals.mockResolvedValue({ kept: 14, dropped: 2, short: false, failedGroups: [] }); demand.mockResolvedValue({}); topics.mockResolvedValue({});
@@ -80,7 +81,7 @@ describe('starting', () => {
     expect([first.status, first.body]).toEqual([202, { planId: PID, started: true }]);
     await new Promise((r) => setImmediate(r));
     expect(signals).toHaveBeenCalledTimes(1);
-    s.createOrJoin.mockResolvedValue({ id: PID, created: false });
+    s.createOrJoin.mockResolvedValue({ id: PID, created: false, runId: null });
     const second = await go('post', '/api/admin/live/plans', start);
     expect([second.status, second.body]).toEqual([200, { planId: PID, started: false }]);
     await new Promise((r) => setImmediate(r));
@@ -89,35 +90,41 @@ describe('starting', () => {
 });
 
 describe('a run', () => {
-  const stages = () => s.setStage.mock.calls.map((c) => c[1]);
+  const stages = () => s.setStage.mock.calls.map((c) => c[2]);
   it('goes signals, demand, topics, done', async () => {
-    await executePlan(PID, false);
+    await executePlan(PID, RUN, false);
     expect(stages()).toEqual(['signals', 'demand', 'topics']);
     expect(signals).toHaveBeenCalledWith(expect.objectContaining({ planId: PID, forceNews: 'x' }));
-    expect(s.finish).toHaveBeenCalledWith(PID, true);
+    expect(s.finish).toHaveBeenCalledWith(PID, RUN, true);
   });
   it('says so when few stories were confirmed', async () => {
     signals.mockResolvedValue({ kept: 7, short: true });
-    await executePlan(PID, false);
-    expect(s.setStage).toHaveBeenCalledWith(PID, 'demand', 'Only 7 news stories could be confirmed this time.');
+    await executePlan(PID, RUN, false);
+    expect(s.setStage).toHaveBeenCalledWith(PID, RUN, 'demand', 'Only 7 news stories could be confirmed this time.');
   });
   it('demand failing does not stop it', async () => {
     demand.mockRejectedValue(new Error('quota'));
-    await executePlan(PID, false);
+    await executePlan(PID, RUN, false);
     expect(topics).toHaveBeenCalled();
-    expect(s.finish).toHaveBeenCalledWith(PID, true);
+    expect(s.finish).toHaveBeenCalledWith(PID, RUN, true);
   });
   it('the cost cap is shown in its own words; an internal error is not', async () => {
     signals.mockRejectedValue(Object.assign(new Error('Research stopped: cap'), { name: 'BudgetExceeded' }));
-    await executePlan(PID, false);
-    expect(s.finish).toHaveBeenLastCalledWith(PID, false, 'Research stopped: cap');
+    await executePlan(PID, RUN, false);
+    expect(s.finish).toHaveBeenLastCalledWith(PID, RUN, false, 'Research stopped: cap');
     topics.mockRejectedValue(new Error('password=hunter2'));
-    await executePlan(PID, true);
-    expect(s.finish).toHaveBeenLastCalledWith(PID, false, 'Something went wrong while planning. Run it again.');
+    await executePlan(PID, RUN, true);
+    expect(s.finish).toHaveBeenLastCalledWith(PID, RUN, false, 'Something went wrong while planning. Run it again.');
+  });
+  it('a run that was replaced stops without paying for topics or writing a result', async () => {
+    s.setStage.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    await executePlan(PID, RUN, false);
+    expect(topics).not.toHaveBeenCalled();
+    expect(s.finish).not.toHaveBeenCalled();
   });
   it('never throws, even when the outcome cannot be saved', async () => {
     topics.mockRejectedValue(new Error('x')); s.finish.mockRejectedValue(new Error('db down'));
-    await expect(executePlan(PID, true)).resolves.toBeUndefined();
+    await expect(executePlan(PID, RUN, true)).resolves.toBeUndefined();
   });
 });
 
@@ -131,8 +138,13 @@ describe('regenerate', () => {
     await new Promise((r) => setImmediate(r));
     expect(signals).toHaveBeenCalledTimes(1);
   });
+  it('a failed read leaves the plan unclaimed', async () => {
+    (WeeklyLiveSignal.count as jest.Mock).mockRejectedValue(new Error('db'));
+    expect((await go('post', `/api/admin/live/plans/${PID}/regenerate`)).status).toBe(500);
+    expect(s.claimForRun).not.toHaveBeenCalled();
+  });
   it('refuses while running, after a choice, and for an unknown plan', async () => {
-    s.claimForRun.mockResolvedValue(false);
+    s.claimForRun.mockResolvedValue(null);
     expect((await go('post', `/api/admin/live/plans/${PID}/regenerate`)).body.code).toBe('running');
     s.getPlan.mockResolvedValue(plan({ status: 'chosen' }));
     expect((await go('post', `/api/admin/live/plans/${PID}/regenerate`)).body.code).toBe('already_chosen');
@@ -146,6 +158,10 @@ describe('choose', () => {
   it('stores a topic that clears the gate', async () => {
     expect((await pick()).body).toEqual({ ok: true, chosenTopicId: TID });
     expect(s.setChosen).toHaveBeenCalledWith(PID, TID);
+  });
+  it('a failed run keeps its earlier topics choosable', async () => {
+    s.getPlan.mockResolvedValue(plan({ status: 'failed', error: 'why' }));
+    expect((await pick()).status).toBe(200);
   });
   it.each([[{ topic_score: '84.9' }], [{ factors: [1, 2] }]])('%j needs an explicit override', async (over) => {
     (WeeklyLiveTopic.findOne as jest.Mock).mockResolvedValue(topic(over));
@@ -171,9 +187,27 @@ describe('reading', () => {
     expect(r.body.topics[0]).toMatchObject({ topic_score: 87.4, recommended: true });
     expect(r.body.demand[0]).toMatchObject({ multiple: 3.5, failed: false });
   });
-  it('a response that does not match its type fails outside production, and is logged in production', async () => {
-    (WeeklyLiveTopic.findAll as jest.Mock).mockResolvedValue([topic({ hooks: 'broken' })]);
+  it.each([['hooks', 'broken'], ['spin', 5], ['parody', {}], ['package', 'x'], ['marketing', 7], ['teach_lines', { proof: 'bad' }], ['factors', ['a']], ['signals_used', 'zz'], ['warnings', [{}]], ['week', 40]])('a malformed topic %s fails outside production', async (k, v) => {
+    (WeeklyLiveTopic.findAll as jest.Mock).mockResolvedValue([topic({ [k as string]: v })]);
     expect((await go('get', `/api/admin/live/plans/${PID}`)).status).toBe(500);
+  });
+  it.each([['inputs', { week: 'x' }], ['cost_usd', '0.2'], ['stage', 'lost'], ['cohort_id', 4]])('a malformed plan %s fails outside production', async (k, v) => {
+    s.getPlan.mockResolvedValue(plan({ [k as string]: v } as never));
+    expect((await go('get', `/api/admin/live/plans/${PID}`)).status).toBe(500);
+  });
+  it('a malformed signal or demand row fails outside production', async () => {
+    (WeeklyLiveSignal.findAll as jest.Mock).mockResolvedValue([{ id: 'a', headline: 'h', publisher: null, url: 'u', published_at: null, date_confirmed: 'yes', factors: [1], fits_weeks: [], idea: null, dropped_reason: null }]);
+    expect((await go('get', `/api/admin/live/plans/${PID}`)).status).toBe(500);
+  });
+  it('plan-setup is checked too', async () => {
+    const map = jest.requireActual('../../services/weeklyLive/curriculumMap');
+    jest.spyOn(map, 'curriculumMap').mockResolvedValueOnce(map.buildCurriculumMap([], '2026-11-25'));
+    expect((await go('get', '/api/admin/live/plan-setup?airDate=2099-11-30')).status).toBe(200);
+    jest.spyOn(map, 'curriculumMap').mockResolvedValueOnce('junk');
+    expect((await go('get', '/api/admin/live/plan-setup?airDate=2099-11-30')).status).toBe(500);
+  });
+  it('production logs a wrong shape and still answers', async () => {
+    (WeeklyLiveTopic.findAll as jest.Mock).mockResolvedValue([topic({ hooks: 'broken' })]);
     const was = process.env.NODE_ENV; process.env.NODE_ENV = 'production';
     try { expect((await go('get', `/api/admin/live/plans/${PID}`)).status).toBe(200); } finally { process.env.NODE_ENV = was; }
     expect((console.error as jest.Mock).mock.calls.flat().join()).toContain('ContractViolation');
