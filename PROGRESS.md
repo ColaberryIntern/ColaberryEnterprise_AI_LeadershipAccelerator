@@ -18822,10 +18822,9 @@ Branch `workstream/career-prep-r2r3`, one PR (https://github.com/ColaberryIntern
   - Session: CC-20261124-iwlu
   - What changed: timerScan.ts regenerated after rebasing on main (server.ts lines moved); contentLint attendee rule matches the full name and each name part of 3+ letters in any case as a whole word (everyday-word names count only inside the full name), an approved earnings wording exempts only itself, more partnership and earnings phrasings, "Week 12"/"Ep 2" labels allowed on screen; the recap overview is linted as public text against the class's own check-ins (recapStore.loadAttendees, recapLint.lintRecapSummary at save, draft, send and the public page); scoring.ts records why score_topics.js is not ported.
   - Verification: scanUntrackedTimers --check exit 0; scanTimers + weeklyLive + recap routes + schema 167/167; recapLintWiring 4 new; backend tsc 5.9.3 clean apart from 2 packages not installed locally.
-
-- [x] L13.5: platform build runner uses OpenAI Codex with the stored key
+- [x] Weekly Live recap: admin routes limited to full administrators (access fix for WL1.4)
   - Date: 2026-11-24
-  - Session: CC-20261120-e2fc
-  - What changed: scripts/platformBuild runs the Codex CLI behind OpenAI's key proxy instead of the Claude Agent SDK; sandbox proven before every build; new CI sandbox check; uploads no longer follow symlinks or hard links (a hole in the L13.1 version, never run).
-  - Verification: codexRunner.test.ts and the platformBuild suites pass; real Codex 0.172.0 driven by codexEngine against a fake Responses server (success, 401, hang)
-  - Notes: Ali chose OpenAI over a new Anthropic key (model-class change). Not verified: a real build. Codex has no per-run dollar cap.
+  - Session: CC-20261124-iwlu
+  - What changed: routes/weeklyLiveRecapRoutes.ts uses requireFullAdmin on the four admin routes. The router is mounted above adminRoutes, so mgmtSectionGate never ran and requireAdmin alone let every bridge-minted staff role (mentor, support, marketing, curriculum) read, edit and SEND a recap.
+  - Verification: weeklyLiveRecapRoutes 32/32; mutation check with the old guard: the 16 scoped-role cases fail. Production read: weekly_live_recaps, _sends and _optouts all 0 rows, so it was not used.
+  - Notes: live from the 2026-11-25 02:28 UTC deploy until this ships. The WL1.4 close-out's "non-admin calls are refused: PASS" was wrong; its tests covered logged-out and forged tokens only. Separate PR from the phase PRs because it is an access fix.
