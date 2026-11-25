@@ -18859,3 +18859,16 @@ Branch `workstream/career-prep-r2r3`, one PR (https://github.com/ColaberryIntern
   - What changed: services/weeklyLive/demand/ (page parsers, channel median, score, 7-day cache, failed week stored with its error).
   - Verification: demand jest 16/16. LIVE CHECK FAILS: first run matched the reference on 4 of 12 weeks (needs 8); after widening the queries every full run failed with "redirect count exceeded" while single requests return 200 (cause not established; looks like throttling of automated traffic).
   - Notes: do not work around the throttling. Options are the YouTube Data API (Ali's decision, M0 chose public pages) or a much slower run.
+
+- [x] Weekly Live Studio WL2.5: Phase 2 shipped and verified
+  - Date: 2026-11-25
+  - Session: CC-20261124-iwlu
+  - What changed: PR 4410 (recap admin routes need a full administrator) deployed at 1fd6c1ca4; WL2.1 to WL2.5 closed with PDFs; WL1.4 record corrected
+  - Verification: loop-production-verifier cycle 2, 10 of 10
+  - Notes: cycle 1 failed 9 of 10 on the access gap shipped in Phase 1
+- [ ] Weekly Live Studio WL3.2: YouTube demand through the Data API (built, being graded)
+  - Date: 2026-11-25
+  - Session: CC-20261124-iwlu
+  - What changed: services/weeklyLive/demand/youtubeApi.ts replaces the page scraper; youtubeGet added to composer/youtubeClient.ts
+  - Verification: jest 233 passed (weeklyLive + composer); live from the production host 8 of 12 reference weeks within 1%
+  - Notes: title patterns for weeks 1, 2, 6, 10 were tightened after the first run; a full run uses about 2,500 of 10,000 shared daily API units
