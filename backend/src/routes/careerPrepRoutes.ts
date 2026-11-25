@@ -13,6 +13,7 @@ import { prepAttemptUpload } from '../config/prepAttemptUpload';
 import { getAttemptStatus, getReadAloudLine, guardUpload, postAttempt } from '../controllers/careerPrepAttemptController';
 import { getReminders, postReminder } from '../controllers/careerPrepReminderController';
 import { deleteSavedAnswer, getSavedAnswers, getSkillSources, postSaveAnswer, putShowPublic, serveAnswerVideo } from '../controllers/careerPrepAnswerController';
+import { getFeedback, postFeedback, postFeedbackSeen } from '../controllers/careerPrepFeedbackController';
 import rateLimit from 'express-rate-limit';
 import { sessionRecap, type Recap } from '../services/careerPrep/recap';
 import { DashboardResponse, SummaryResponse } from './careerPrepSchemas';
@@ -239,5 +240,12 @@ router.get('/api/portal/career-prep/answer-video/:assetId/:kind', answerVideoLim
 // CP4.5: reminders (tonight at 6:00 PM, same time tomorrow).
 router.post('/api/portal/career-prep/reminders', requireParticipant, requireCareerPrep, postReminder);
 router.get('/api/portal/career-prep/reminders', requireParticipant, requireCareerPrep, getReminders);
+
+// Pilot feedback: send it, see our answers. Limited per student, so a stuck button cannot flood the inbox.
+const feedbackLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false, keyGenerator: (req) => req.participant?.sub ?? 'none',
+  message: { error: 'That is a lot of feedback at once. Try again in a few minutes.' } });
+router.post('/api/portal/career-prep/feedback', requireParticipant, requireCareerPrep, feedbackLimiter, postFeedback);
+router.get('/api/portal/career-prep/feedback', requireParticipant, requireCareerPrep, getFeedback);
+router.post('/api/portal/career-prep/feedback/seen', requireParticipant, requireCareerPrep, postFeedbackSeen);
 
 export default router;
