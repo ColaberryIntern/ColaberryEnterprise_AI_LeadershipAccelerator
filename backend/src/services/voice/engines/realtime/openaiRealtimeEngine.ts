@@ -36,18 +36,32 @@ export interface RealtimeDeps {
   worker: SessionWorker;
   broker: () => ToolBroker;
   profile: VoiceProfile;
+  /**
+   * VS4.5: what THIS call may say and use, fixed at dial time. null = refuse the call. Absent = the
+   * deps' own profile and broker (tests, and the load harness).
+   */
+  sessionFor?: (callId: string) => Promise<{ profile: VoiceProfile; broker: ToolBroker } | null>;
   voice?: string;
   accountSid: () => string | undefined;
   consumeSessionRef: (claims: TokenClaims) => Promise<'consumed' | 'replay' | 'unknown_call'>;
   callMatches: (callId: string, callSid: string) => Promise<boolean>;
   connectModel: (h: ModelHandlers) => SocketLike;
+  /** VS4.3: the model accepted our session, so the caller can be heard and answered (never awaited, never throws). */
+  onSessionStarted?: (callId: string) => void;
+  /** VS4.3: false while the provider's circuit is open. The call is refused before a session exists. */
+  modelAvailable?: () => boolean;
   now: () => number;
   log: (line: Record<string, unknown>) => void;
 }
 
 export const MAX_PREBUFFER_FRAMES = 150; // ~3 s of 20 ms frames
 export const MAX_MALFORMED_FRAMES = 10;
+/** Follow-up answers after tool calls, per caller turn and per call (VS4.2: a caller must not be able to loop paid answers). */
+export const MAX_TOOL_FOLLOW_UPS_PER_TURN = 3;
+export const MAX_TOOL_CALLS_PER_CALL = 20;
 const MAX_TRACKED_ITEMS = 50;
+/** The answer is over. 'incomplete' = cut by the length limit; 'cancelled' is ours and handled where we cancel. */
+const ENDED: ReadonlySet<string> = new Set(['completed', 'incomplete', 'failed']);
 
 export class RealtimeBridge {
   private handle: SessionHandle | null = null;
@@ -61,11 +75,14 @@ export class RealtimeBridge {
   private malformed = 0;
   private closed = false;
   private settingUp = false;
+  private profile: VoiceProfile;
   // Response and playback tracking
   private greetingResponse: string | null = null;
   private greetingRequested = false;
   private current: { id: string; turnId: number; genId: number; active: boolean } | null = null;
   private followUpOf: { turnId: number; genId: number } | null = null;
+  private followUps = { turnId: -1, n: 0 };
+  private toolCalls = 0;
   private currentItem: string | null = null;
   private readonly sentMs = new Map<string, number>();
   private readonly playedMs = new Map<string, number>();
@@ -74,7 +91,10 @@ export class RealtimeBridge {
   /** Tool calls still running, per response id: that response's response.done does not end the answer. */
   private readonly toolsInFlight = new Map<string, number>();
 
-  constructor(private readonly twilio: SocketLike, private readonly d: RealtimeDeps) {}
+  constructor(private readonly twilio: SocketLike, private readonly d: RealtimeDeps) { this.profile = d.profile; }
+
+  /** A verified call is attached (the single-use reference was accepted). */
+  get established(): boolean { return this.handle !== null; }
 
   // ---------------- Twilio side ----------------
   async onTwilio(raw: string | Buffer): Promise<void> {
@@ -88,7 +108,12 @@ export class RealtimeBridge {
     const m = p.msg;
     if (!this.handle) {
       if (m.event === 'start' && !this.settingUp) await this.start(m);
-      else if (m.event !== 'connected' && m.event !== 'start') this.shutdown('message_before_start', 1008);
+      else if (this.settingUp) {
+        // Twilio streams audio from the moment it connects, so frames arrive while the session reference
+        // is still being checked: keep them (VS4.1; they used to end the call).
+        if (m.event === 'media') this.callerAudio(m.media.payload);
+        else if (m.event === 'stop') this.teardown('twilio_stop');
+      } else if (m.event !== 'connected' && m.event !== 'start') this.shutdown('message_before_start', 1008);
       return;
     }
     switch (m.event) {
@@ -108,24 +133,37 @@ export class RealtimeBridge {
     const v = verifyToken(s.customParameters.ref, 'session', this.d.now());
     if (!v.ok) return this.shutdown(`session_ref_${v.reason}`, 1008);
     if (s.accountSid !== this.d.accountSid()) return this.shutdown('account_mismatch', 1008);
+    let session: Awaited<ReturnType<NonNullable<RealtimeDeps['sessionFor']>>> | undefined;
     try {
       const used = await this.d.consumeSessionRef(v.claims);
       if (used !== 'consumed') return this.shutdown(used === 'replay' ? 'session_ref_replayed' : 'unknown_call', 1008);
       if (!(await this.d.callMatches(v.claims.callId, s.callSid))) return this.shutdown('call_sid_mismatch', 1008);
+      if (this.d.sessionFor) {
+        session = await this.d.sessionFor(v.claims.callId);
+        if (!session) return this.shutdown('no_session_profile', 1008);
+        this.profile = session.profile;
+      }
     } catch (e) {
       this.log('error', 'voice_stream_setup_failed', { error_class: (e as { name?: string })?.name || 'DatabaseError' });
       return this.shutdown('setup_lookup_failed', 1011);
     }
-    const opened = this.d.worker.open(v.claims.callId, this.d.profile.versionId);
+    if (this.closed) return; // the caller hung up while we were checking (VS4.1): open nothing, least of all a paid model connection
+    if (this.d.modelAvailable && !this.d.modelAvailable()) return this.shutdown('model_unavailable', 1013);
+    const opened = this.d.worker.open(v.claims.callId, this.profile.versionId);
     if (!opened.ok) return this.shutdown(`session_refused_${opened.reason}`, 1013);
     this.callId = v.claims.callId;
     this.streamSid = m.streamSid;
     this.handle = opened.handle;
-    this.broker = this.d.broker();
+    this.broker = session ? session.broker : this.d.broker();
     this.handle.onEnd((reason) => this.teardown(`session_${reason}`));
-    this.model = this.d.connectModel({ onMessage: (raw) => { void this.onModel(raw); }, onClose: (reason) => this.onModelClose(reason) });
-    this.model.send(sessionUpdate({ instructions: this.d.profile.system, voice: this.d.voice, tools: this.broker.defs() }));
-    this.log('info', 'voice_stream_session_started', { profile: this.d.profile.versionId });
+    try {
+      this.model = this.d.connectModel({ onMessage: (raw) => { this.onModel(raw).catch((e: Error) => { this.log('error', 'voice_realtime_handler_failed', { error_class: e?.name || 'HandlerError' }); this.teardown('handler_failed'); }); }, onClose: (reason) => this.onModelClose(reason) });
+    } catch (e) {
+      this.log('error', 'voice_realtime_connect_failed', { error_class: (e as { name?: string })?.name || 'ConnectError' });
+      return this.teardown('model_unavailable');
+    }
+    this.model.send(sessionUpdate({ instructions: this.profile.system, voice: this.d.voice, tools: this.broker.defs() }));
+    this.log('info', 'voice_stream_session_started', { profile: this.profile.versionId });
   }
 
   private callerAudio(payload: string): void {
@@ -142,8 +180,9 @@ export class RealtimeBridge {
     if (sep < 0) return;
     const item = name.slice(0, sep);
     const ms = Number(name.slice(sep + 1));
-    if (!Number.isFinite(ms)) return;
-    this.playedMs.set(item, Math.max(this.playedMs.get(item) ?? 0, ms));
+    const sent = this.sentMs.get(item);
+    if (!Number.isFinite(ms) || sent === undefined) return; // only audio we sent can have been played
+    this.playedMs.set(item, Math.max(this.playedMs.get(item) ?? 0, Math.min(ms, sent)));
   }
 
   private keypad(digit: string): void {
@@ -168,10 +207,11 @@ export class RealtimeBridge {
       case 'session.updated': {
         if (this.ready) return;
         this.ready = true;
+        this.d.onSessionStarted?.(this.callId!);
         for (const f of this.prebuffer.splice(0)) this.model!.send(appendAudio(f));
         h.dispatch({ type: 'connected' });
         this.greetingRequested = true;
-        this.model!.send(responseCreate(`Greet the caller with exactly these words and nothing else: "${this.d.profile.greeting}"`));
+        this.model!.send(responseCreate(`Greet the caller with exactly these words and nothing else: "${this.profile.greeting}"`));
         return;
       }
       case 'input_audio_buffer.speech_started': this.bargeIn(); return;
@@ -250,7 +290,9 @@ export class RealtimeBridge {
     let input: unknown = {};
     try { input = args ? JSON.parse(args) : {}; } catch { input = { __unparseable: true }; } // the broker's schema rejects it with a speakable error
     h.toolStarted(callId, name);
-    const out = await this.broker!.run(callId, name, input);
+    const out = ++this.toolCalls > MAX_TOOL_CALLS_PER_CALL
+      ? { content: 'No more lookups are available on this call. Offer to have a teammate follow up.', isError: true, committed: false, errorClass: 'ToolLimitReached' }
+      : await this.broker!.run(callId, name, input);
     const left = (this.toolsInFlight.get(key) ?? 1) - 1;
     if (left > 0) this.toolsInFlight.set(key, left); else this.toolsInFlight.delete(key);
     h.toolFinished(callId, out.committed, out.errorClass);
@@ -258,7 +300,16 @@ export class RealtimeBridge {
     if (this.closed || !this.model) return;
     this.model.send(functionOutput(callId, out.content)); // always: an unanswered call would corrupt the model's conversation
     // One follow-up per response, after its LAST tool call returns, and only while the answer is current.
-    if (left <= 0 && owner && h.accepts(owner.turnId, owner.genId)) { this.followUpOf = owner; this.model.send(responseCreate()); }
+    if (left > 0 || !owner || !h.accepts(owner.turnId, owner.genId)) return;
+    if (this.followUps.turnId !== owner.turnId) this.followUps = { turnId: owner.turnId, n: 0 };
+    if (++this.followUps.n > MAX_TOOL_FOLLOW_UPS_PER_TURN) {
+      this.log('warn', 'voice_tool_follow_up_limit', { error_class: 'ToolLimitReached', tool: name });
+      // Back to listening. If the response is still open, its own response.done does this.
+      if (!this.current?.active) h.dispatch({ type: 'generation_done', generationId: owner.genId });
+      return;
+    }
+    this.followUpOf = owner;
+    this.model.send(responseCreate());
   }
 
   private responseDone(id: string, status?: string): void {
@@ -270,7 +321,7 @@ export class RealtimeBridge {
       return;
     }
     // A response that made a tool call is not the end of the answer: its follow-up continues it.
-    if (this.followUpOf || this.toolsInFlight.has(id) || status !== 'completed' || this.current?.id !== id) return;
+    if (this.followUpOf || this.toolsInFlight.has(id) || !ENDED.has(status ?? '') || this.current?.id !== id) return;
     h.dispatch({ type: 'generation_done', generationId: this.current.genId });
   }
 

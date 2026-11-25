@@ -16,6 +16,7 @@
  * A route change without a matching, unexpired validation token is refused (409 validation_required /
  * validation_expired / validation_mismatch). Applying needs requireFullAdmin, like publishing.
  */
+import { tapVoiceLog } from '../../services/voice/ops/opsMetrics';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import { z } from 'zod';
 import * as Auth from '../../middlewares/authMiddleware';
@@ -67,7 +68,7 @@ const STATUS: Record<string, number> = { ValidationError: 400, RateLimitError: 4
 function fail(res: Response, event: string, e: unknown): void {
   const errorClass = e instanceof LabError ? e.errorClass : (e as { name?: string })?.name || 'StudioError';
   const status = STATUS[errorClass] ?? 500;
-  if (status >= 500) console.warn(JSON.stringify({ level: 'error', service: 'voice-studio', event, outcome: 'failure', error_class: errorClass }));
+  if (status >= 500) console.warn(JSON.stringify(tapVoiceLog({ level: 'error', service: 'voice-studio', event, outcome: 'failure', error_class: errorClass })));
   res.status(status).json({ error: errorClass, message: status >= 500 ? undefined : (e as Error).message });
 }
 
@@ -137,7 +138,7 @@ export function buildVoiceStudioLabRouter(deps: () => LabDeps = productionLabDep
     const current = routeId ? await d.store.getRoute(routeId) : null;
     if (routeId && !current) return { status: 404 as const };
     const facts = await d.store.versionFacts(shape.data.versionId);
-    return { status: 200 as const, current, v: validateRouteChange(shape.data, { versionPublished: facts.versionPublished }) };
+    return { status: 200 as const, current, v: validateRouteChange(shape.data, { versionPublished: facts.versionPublished, versionBrand: facts.versionBrand, versionEngine: facts.versionEngine }) };
   };
 
   router.post('/api/admin/voice-studio/routes/validate', gate, requireAdmin, async (req, res) => {
@@ -166,7 +167,7 @@ export function buildVoiceStudioLabRouter(deps: () => LabDeps = productionLabDep
       if (!t.ok) { res.status(409).json({ error: t.reason, message: 'Validate this exact change first, then apply it within 10 minutes.' }); return; }
       const applied = await deps().store.applyRouteChange(routeId, r.v.change, actor(req));
       if (!applied) { res.status(409).json({ error: 'Conflict', message: 'Another route already uses this path key.' }); return; }
-      console.log(JSON.stringify({ level: 'info', service: 'voice-studio', event: 'voice_route_applied', outcome: 'success', route_id: applied.id, mode: r.v.change.mode, canary_percent: r.v.change.canaryPercent }));
+      console.log(JSON.stringify(tapVoiceLog({ level: 'info', service: 'voice-studio', event: 'voice_route_applied', outcome: 'success', route_id: applied.id, mode: r.v.change.mode, canary_percent: r.v.change.canaryPercent })));
       res.json({ ok: true, routeId: applied.id });
     } catch (e) { fail(res, 'voice_route_apply_failed', e); }
   });

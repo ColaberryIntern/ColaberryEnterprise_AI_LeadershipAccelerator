@@ -15,6 +15,7 @@
  * requireAdmin alone would let it publish what a phone agent says. Author and approver must differ
  * (four eyes, enforced in versionContent.transition).
  */
+import { tapVoiceLog } from '../../services/voice/ops/opsMetrics';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import { z } from 'zod';
 import * as Auth from '../../middlewares/authMiddleware';
@@ -51,7 +52,7 @@ const PREVIEW_TOOLS = [nextOpenSlotsTool(async () => ({ dates: [], timezone: 'Am
 const fail = (res: Response, event: string, e: unknown): void => {
   const errorClass = (e as { errorClass?: string; name?: string })?.errorClass ?? (e as { name?: string })?.name ?? 'StudioError';
   const status = errorClass === 'ValidationError' ? 400 : errorClass === 'NotFound' ? 404 : errorClass === 'LifecycleError' ? 409 : 500;
-  if (status === 500) console.warn(JSON.stringify({ level: 'error', service: 'voice-studio', event, outcome: 'failure', error_class: errorClass }));
+  if (status === 500) console.warn(JSON.stringify(tapVoiceLog({ level: 'error', service: 'voice-studio', event, outcome: 'failure', error_class: errorClass })));
   res.status(status).json({ error: errorClass, message: status === 500 ? undefined : (e as Error).message });
 };
 

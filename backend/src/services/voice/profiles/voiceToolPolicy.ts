@@ -19,7 +19,7 @@
  * Every call is then recorded through agents/tools/toolInvocationRecorder.ts by the broker.
  */
 import { ToolBroker, type RegisteredTool } from '../engines/toolBroker';
-import { listAgentTools } from '../../agents/tools/agentToolRegistry';
+import { agentHasTool, listAgentTools } from '../../agents/tools/agentToolRegistry';
 import type { AgentKey } from '../../agents/tools/types';
 
 /** Brands each brand-sensitive tool may serve. Tools not listed here are brand-neutral. */
@@ -71,6 +71,14 @@ export function effectiveVoiceTools(p: ToolPolicyInput): ToolPolicyResult {
     else allowed.push(tool as RegisteredTool);
   }
   return { allowed, denied, held };
+}
+
+/**
+ * Until live calls run a published version (VS4.5), the engines build their own short, read-only tool
+ * list. It still answers to the shared grants and AGENT_TOOLS_DISABLED kill switch, and drops any tool that writes.
+ */
+export function toolsNotSwitchedOff(tools: readonly RegisteredTool[], agentKey: AgentKey = 'edu-cory-outbound'): RegisteredTool[] {
+  return tools.filter((t) => t.readOnly && agentHasTool(agentKey, t.def.name as Parameters<typeof agentHasTool>[1]));
 }
 
 /** The one way a voice call gets its broker: policy-filtered tools, recorded under the agent's key. */

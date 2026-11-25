@@ -41,7 +41,7 @@ function make(over: Partial<LabDeps> = {}, enabled = true) {
       listNumbers: jest.fn().mockResolvedValue([{ id: 'n1', provider: 'twilio', provider_number_id: 'PN1', number_ref: 'test-line', ownership: 'owned', status: 'active' }]),
       listRoutes: jest.fn().mockResolvedValue([]),
       getRoute: jest.fn().mockResolvedValue({ id: RID, mode: 'legacy', calls_7d: 5 }),
-      versionFacts: jest.fn().mockResolvedValue({ versionPublished: true, profileId: 'p1', engine: 'conversation_relay' }),
+      versionFacts: jest.fn().mockResolvedValue({ versionPublished: true, profileId: 'p1', engine: 'conversation_relay', versionBrand: 'colaberry', versionEngine: 'conversation_relay' }),
       applyRouteChange: jest.fn().mockResolvedValue({ id: RID }),
     },
     tokenKey: () => key, now: () => 1_790_000_000_000, ...over,
@@ -54,7 +54,7 @@ function make(over: Partial<LabDeps> = {}, enabled = true) {
 }
 const A = { 'x-test-admin': 'admin-1' };
 const FULL = { 'x-test-admin': 'admin-1', 'x-test-full': 'yes' };
-const change = { pathKey: 'interest', callType: 'interest', brandSlug: 'colaberry', mode: 'canary', canaryPercent: 10, versionId: VID, fallback: { kind: 'legacy' } };
+const change = { pathKey: 'interest', callType: 'interest', brandSlug: 'colaberry', mode: 'canary', canaryPercent: 10, versionId: VID, fallback: { kind: 'legacy', audience: ['lead:42'] } };
 
 describe('Voice Lab / Numbers & Routing API (VS3.4)', () => {
   it('does not exist while the console flag is off; needs an admin', async () => {

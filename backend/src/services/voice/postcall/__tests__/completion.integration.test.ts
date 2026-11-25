@@ -41,6 +41,19 @@ describeIfDb('call completion claim against Postgres', () => {
     await sequelize.close();
   });
 
+  it('VS4.2: alternating statuses are each first only once', async () => {
+    const LOG2 = '97777777-7777-4777-8777-777777777778';
+    await sequelize.query(`INSERT INTO communication_logs (id, channel, status, provider) VALUES ('${LOG2}', 'voice', 'pending', 'synthflow')`);
+    const seen: boolean[] = [];
+    for (const s of ['completed', 'failed', 'completed', 'failed', 'completed']) seen.push((await C.claimCompletion(LOG2, payload(s))).firstDelivery);
+    expect(seen).toEqual([true, true, false, false, false]);
+    await sequelize.query(`UPDATE communication_logs SET provider_response = '{"completed_at": "x", "call_status": "completed"}' WHERE id = '${LOG2}'`); // a row from before this change
+    expect((await C.claimCompletion(LOG2, payload('completed'))).firstDelivery).toBe(false);
+    expect((await C.claimCompletion(LOG2, payload('failed'))).firstDelivery).toBe(true);
+    expect((await C.claimCompletion(LOG2, payload('completed'))).firstDelivery).toBe(false);
+    await sequelize.query(`DELETE FROM communication_logs WHERE id = '${LOG2}'`);
+  });
+
   it('20 concurrent deliveries of the same completion: exactly one first delivery', async () => {
     const res = await Promise.all(Array.from({ length: 20 }, () => C.claimCompletion(LOG, payload('completed'))));
     expect(res.filter((r) => r.firstDelivery).length).toBe(1);

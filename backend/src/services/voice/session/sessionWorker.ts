@@ -20,6 +20,9 @@ import {
   DEFAULT_LIMITS, type SessionEvent, type SessionLimits, type SessionSnapshot, type TransitionResult,
 } from './stateMachine';
 
+/** Abort reason when WE gave up waiting for an answer. */
+export const GENERATION_TIMEOUT = 'voice_generation_timeout';
+
 export interface WorkerConfig { maxSessions: number; maxPerAgent: number; tickMs: number; queueMax: number }
 export const DEFAULT_WORKER_CONFIG: WorkerConfig = { maxSessions: 20, maxPerAgent: 3, tickMs: 250, queueMax: 200 };
 
@@ -163,7 +166,8 @@ export class SessionWorker {
     }
     s.snap = r.session;
     if (r.cancelGeneration) {
-      s.gen.abort();
+      // The reason tells a provider that never answered apart from a caller who interrupted or hung up.
+      if (ev.type === 'timeout') s.gen.abort(GENERATION_TIMEOUT); else s.gen.abort();
       s.gen = new AbortController();
       s.queue.length = 0; // queued speech for a canceled generation must never be sent
     }

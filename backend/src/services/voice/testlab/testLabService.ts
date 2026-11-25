@@ -12,6 +12,7 @@
  * The destination is resolved from VOICE_TEST_ALLOWED_NUMBER inside the server; responses and logs
  * never contain it.
  */
+import { tapVoiceLog } from '../ops/opsMetrics';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../../../config/database';
 import { isKillSwitchActiveStrict } from '../../launchSafety';
@@ -67,6 +68,9 @@ export async function startLiveTest(body: unknown, operatorId: string, d: TestLa
     if (auth.replay) return { refuse: { status: 409, body: { error: 'TestRefused', reason: 'duplicate_attempt' } } };
     await d.insertCall({ callId: auth.dispatch.callId, engine: req.engine, idempotencyKey: idempotencyKey(verdict.attemptNumber), purpose: `test:${req.script}` });
     return { auth, attempt: verdict.attemptNumber, provider };
+  }).catch((e: Error): Locked => {
+    if (e.name !== 'TestLockBusy') throw e;
+    return { refuse: { status: 409, body: { error: 'TestRefused', reason: 'test_starting' } } };
   });
   if ('refuse' in locked) {
     d.log({ level: 'warn', event: 'voice_test_refused', outcome: 'skipped', error_class: 'TestRefused', reason: locked.refuse.body.reason, run_id: req.runId, operator: operatorId });
@@ -95,12 +99,17 @@ export function testGatewayDeps(req: LiveTestRequest, c: VoiceConfig): GatewayDe
     resolveDestination: async (ref) => ({ e164: ref === `approved-destination:${req.destinationId}` && req.destinationId === 'test-allowed' ? allowed : null, timezone: 'America/Chicago' }),
     exemptionFor: async (e164) => (allowed && e164 === allowed ? 'test' : null),
     consentFor: async () => 'granted', // the owner authorized this number for test calls (M0 Q4); no other destination resolves
-    suppressedFor: async () => false,
+    // An opt-out said on a test call stops that test run's remaining attempts, and nobody else's calls.
+    suppressedFor: async () => {
+      const [r] = await sequelize.query<{ n: number }>("SELECT COUNT(*)::int AS n FROM voice_calls WHERE tenant_id = :t AND test_mode = TRUE AND state_reason = 'caller_opt_out' AND idempotency_key LIKE :k",
+        { replacements: { t: TEST_TENANT_ID, k: `testlab:${req.runId}:%` }, type: QueryTypes.SELECT });
+      return (r?.n ?? 1) > 0;
+    },
     resolveRoute: async () => ({ routeId: null, profileVersionId: TEST_PROFILE.versionId, engine: req.engine, fromNumberRef: TEST_FROM_NUMBER_REF, maxDurationSeconds: c.VOICE_TEST_MAX_DURATION_SECONDS,
       caps: { perDestination24h: c.VOICE_TEST_MAX_ATTEMPTS, perRoutePerDay: null, perTenantPerDay: null } }),
     reserve: reserveDial,
     transition: transitionReservation,
-    log: (e) => console.log(JSON.stringify({ level: 'info', service: 'voice-gateway', ...e })),
+    log: (e) => console.log(JSON.stringify(tapVoiceLog({ level: 'info', service: 'voice-gateway', ...e }))),
   };
 }
 
@@ -111,7 +120,9 @@ export function productionTestLabDeps(): TestLabDeps {
     config: () => loadVoiceConfig(),
     ci: () => isCi(),
     withLock: (fn) => sequelize.transaction(async (t) => {
-      await sequelize.query("SELECT pg_advisory_xact_lock(hashtext('voice-test-lab'))", { transaction: t });
+      // Try, do not wait: waiting requests would each hold a pooled connection while this one needs more.
+      const [r] = await sequelize.query<{ ok: boolean }>("SELECT pg_try_advisory_xact_lock(hashtext('voice-test-lab')) AS ok", { transaction: t, type: QueryTypes.SELECT });
+      if (!r?.ok) throw Object.assign(new Error('another test is starting'), { name: 'TestLockBusy' });
       return fn();
     }),
     countAttempts: async (runId) => {
@@ -141,6 +152,6 @@ export function productionTestLabDeps(): TestLabDeps {
     provider: productionDirectProvider,
     authorize: authorizeVoiceCall,
     dispatch: dispatchAuthorized,
-    log: (line) => (line.level === 'warn' || line.level === 'error' ? console.warn : console.log)(JSON.stringify({ timestamp: new Date().toISOString(), service: 'voice-studio', ...line })),
+    log: (line) => (line.level === 'warn' || line.level === 'error' ? console.warn : console.log)(JSON.stringify(tapVoiceLog({ service: 'voice-studio', ...line }))),
   };
 }

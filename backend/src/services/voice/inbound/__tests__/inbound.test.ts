@@ -13,7 +13,7 @@ const SUN_10_CT = new Date('2026-11-29T16:00:00Z');
 const HUMAN = '+15555550199';
 const policy = (p: object = {}) => ({ inbound: { enabled: true, engine: 'conversation_relay', hours: 'always', fallback: 'message', ...p } });
 const num = (p: Partial<CalledNumber> = {}): CalledNumber => ({ id: 'n1', tenantId: TEST, numberRef: 'test-line', brandSlug: 'colaberry', routingPolicy: policy(), ...p });
-const facts = (p: Partial<InboundFacts> = {}): InboundFacts => ({ number: num(), testTenantId: TEST, studioEnabled: false, testEnabled: true, engineReady: true, transferTarget: HUMAN, now: TUE_10_CT, ...p });
+const facts = (p: Partial<InboundFacts> = {}): InboundFacts => ({ number: num(), testTenantId: TEST, studioEnabled: false, testEnabled: true, engineReady: true, transferTarget: HUMAN, stopped: false, now: TUE_10_CT, ...p });
 
 describe('planInbound: only the called number decides', () => {
   it('the dedicated test number with an enabled policy is answered by our agent, as a test call', () => {
@@ -52,15 +52,39 @@ describe('planInbound: only the called number decides', () => {
 });
 
 function deps(over: Partial<InboundDeps> = {}, f: Partial<InboundFacts> = {}, n: CalledNumber | null = num()) {
-  const { number: _n, ...rest } = facts(f);
+  const { number: _n, stopped, ...rest } = facts(f);
   const d = {
     findNumber: jest.fn().mockResolvedValue(n), facts: () => rest, publicBaseUrl: () => 'https://enterprise.example',
+    stopped: async () => stopped, refuseDial: jest.fn().mockResolvedValue(null),
     openCall: jest.fn().mockResolvedValue({ callId: '4d5e6f70-8192-4a3b-8cdd-eeff00112233' }), markFallback: jest.fn().mockResolvedValue(undefined),
     agentTwiml: jest.fn().mockResolvedValue('<Response><Connect/></Response>'), log: jest.fn(), ...over,
   };
   return d as typeof d & InboundDeps;
 }
 const IN = { calledNumber: '+15555550142', callSid: 'CA' + 'a1'.repeat(16) };
+
+describe('VS4.2: inbound answers to the emergency stop and the transfer guard', () => {
+  const human = () => num({ routingPolicy: policy({ enabled: false, fallback: 'human_line' }) });
+  it('stopped: no agent and no teammate dial, only the message', async () => {
+    expect(planInbound(facts({ stopped: true }))).toMatchObject({ kind: 'message', reason: 'emergency_stop' });
+    for (const n of [num(), human()]) {
+      const d = deps({}, { stopped: true }, n);
+      expect(await answerInbound(IN, d)).toBe(INBOUND_MESSAGE_TWIML);
+      expect(d.agentTwiml).not.toHaveBeenCalled();
+      expect(d.markFallback).toHaveBeenCalledWith(expect.any(String), 'inbound_emergency_stop', true);
+    }
+  });
+  it('a refused dial is the message, and the row is ended', async () => {
+    const d = deps({ refuseDial: jest.fn().mockResolvedValue('transfer_cap') }, {}, human());
+    expect(await answerInbound(IN, d)).toBe(INBOUND_MESSAGE_TWIML);
+    expect(d.markFallback).toHaveBeenCalledWith(expect.any(String), 'inbound_disabled', true);
+  });
+  it('stop unreadable (throws) is the message, never an agent', async () => {
+    const d = deps({ stopped: async () => { throw new Error('db'); } });
+    expect(await answerInbound(IN, d)).toBe(INBOUND_MESSAGE_TWIML);
+    expect(d.agentTwiml).not.toHaveBeenCalled();
+  });
+});
 
 describe('answerInbound', () => {
   it('answers, opens one call from the number row, and stores or logs no phone number', async () => {

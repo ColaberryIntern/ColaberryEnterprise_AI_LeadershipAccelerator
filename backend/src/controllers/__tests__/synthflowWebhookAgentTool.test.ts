@@ -16,16 +16,17 @@ const m = {
   review: jest.fn(),
   release: jest.fn(),
   done: jest.fn(),
+  contact: jest.fn(),
 };
 
 jest.mock('../../config/env', () => ({ env: { synthflowWebhookToken: 't' } }));
-jest.mock('../../services/voice/synthflowWebhookAuth', () => ({ webhookTokenOk: () => true }));
+jest.mock('../../services/voice/synthflowWebhookAuth', () => ({ ...jest.requireActual('../../services/voice/synthflowWebhookAuth'), webhookTokenOk: () => true }));
 jest.mock('../../models', () => ({
   CommunicationLog: { findOne: (...a: unknown[]) => m.findOne(...a), findByPk: jest.fn().mockResolvedValue(null) },
   CampaignSimulationStep: { findOne: jest.fn() },
   Lead: { findByPk: jest.fn().mockResolvedValue({ id: 42, name: 'Pat Doe' }) },
   InteractionOutcome: { create: jest.fn() },
-  CallContactLog: { update: jest.fn().mockResolvedValue([0]) },
+  CallContactLog: { update: (...a: unknown[]) => m.contact(...a) },
   Activity: { findOne: jest.fn().mockResolvedValue(null) },
 }));
 jest.mock('../../services/scheduling/cancelScheduledMessage', () => ({ cancelScheduledMessagesWhere: jest.fn() }));
@@ -75,6 +76,7 @@ beforeEach(() => {
   m.extract.mockResolvedValue(undefined);
   m.claimEffect.mockResolvedValue(true);
   for (const fn of [m.review, m.release, m.done]) fn.mockResolvedValue(undefined);
+  m.contact.mockResolvedValue([0]);
   jest.spyOn(console, 'log').mockImplementation(() => undefined);
   jest.spyOn(console, 'warn').mockImplementation(() => undefined);
 });
@@ -164,4 +166,45 @@ it('VS3.2 a claim failure (DB down) skips extraction without failing the webhook
   await flush();
   expect(m.extract).not.toHaveBeenCalled();
   expect(r.json).toHaveBeenCalledWith({ ok: true, matched: true });
+});
+
+it.each(['javascript:alert(1)', 'http://plain.example/a'])('VS4.2 an unsafe recording link (%s) reaches neither the stored record nor the timeline', async (link) => {
+  m.findOne.mockResolvedValue(row({ source: 'interest' }));
+  await handleSynthflowCallComplete({ query: { token: 't' }, body: { call: { call_id: 'call-9', status: 'completed', duration: 65, transcript: TRANSCRIPT, recording_url: link } } } as never, res() as never);
+  await flush();
+  expect(m.claim.mock.calls[0][1]).toMatchObject({ recordingUrl: '' });
+  expect(JSON.stringify([m.claim.mock.calls, m.activity.mock.calls])).not.toContain(link);
+});
+
+it('VS4.2 an unmatched delivery changes nothing, including the contact log', async () => {
+  m.findOne.mockResolvedValue(null);
+  const r = res();
+  await handleSynthflowCallComplete(req(), r as never);
+  await flush();
+  expect(r.json).toHaveBeenCalledWith({ ok: true, matched: false });
+  expect(m.contact).not.toHaveBeenCalled();
+  expect(m.claim).not.toHaveBeenCalled();
+});
+
+it('VS4.2 a matched delivery still backfills the contact log', async () => {
+  m.findOne.mockResolvedValue(row({ source: 'interest' }));
+  await handleSynthflowCallComplete(req(), res() as never);
+  expect(m.contact).toHaveBeenCalledTimes(1);
+});
+
+it('VS4.2 no word of the conversation and no forged line reaches the logs', async () => {
+  m.findOne.mockResolvedValue(row({ source: 'agent-tool', agent_name: 'Reese' }));
+  const b = { query: { token: 't' }, body: { call: { call_id: 'call-9', status: 'completed\nforged line', duration: 65, transcript: TRANSCRIPT, end_call_reason: 'x\nforged line' }, 'evil\nkey': 1 } } as never;
+  await handleSynthflowCallComplete(b, res() as never);
+  await flush();
+  const out = [...(console.log as jest.Mock).mock.calls, ...(console.warn as jest.Mock).mock.calls].flat().map(String);
+  expect(out.join(' ')).not.toContain('How long is a pilot');
+  expect(out.some((l) => /\nforged line|evil\nkey/.test(l))).toBe(false);
+});
+
+it.each([[['a', 'b']], [{ $ne: null }], [null]])('VS4.2 a call id that is not plain text (%j) is not looked up', async (id) => {
+  const r = res();
+  await handleSynthflowCallComplete({ query: { token: 't' }, body: { call: { call_id: id, status: 'completed' } } } as never, r as never);
+  expect(m.findOne).not.toHaveBeenCalled();
+  expect(r.json).toHaveBeenCalledWith(expect.objectContaining({ matched: false, reason: 'no_call_id' }));
 });

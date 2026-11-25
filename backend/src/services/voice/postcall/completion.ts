@@ -23,6 +23,8 @@
 import { QueryTypes } from 'sequelize';
 
 
+import { safeRecordingUrl } from '../synthflowWebhookAuth';
+
 export type CompletionProvider = 'synthflow' | 'conversation_relay' | 'openai_realtime';
 
 export interface CallCompletion {
@@ -53,7 +55,7 @@ export function fromSynthflowPayload(body: unknown): CallCompletion | null {
   return {
     provider: 'synthflow', providerCallId: id, status, completed: status === 'completed',
     durationSeconds: Number.isFinite(d) && d >= 0 ? d : null,
-    transcript: str(call.transcript || b.transcript), recordingUrl: str(call.recording_url || b.recording_url),
+    transcript: str(call.transcript || b.transcript), recordingUrl: safeRecordingUrl(call.recording_url || b.recording_url),
     disposition: str(call.end_call_reason || b.disposition), analysis: obj(b.analysis), metadata: obj(b.metadata),
   };
 }
@@ -71,7 +73,7 @@ export function transcriptState(c: Pick<CallCompletion, 'completed' | 'transcrip
 /** The provider_response fields a completion writes (completed_at is added by the claim). */
 export function completionPatch(c: CallCompletion): Record<string, unknown> {
   return {
-    call_status: c.status, duration: c.durationSeconds, transcript: c.transcript, recording_url: c.recordingUrl,
+    call_status: c.status, duration: c.durationSeconds, transcript: c.transcript, recording_url: safeRecordingUrl(c.recordingUrl),
     end_call_reason: c.disposition, analysis: c.analysis, metadata: c.metadata, transcript_state: transcriptState(c),
   };
 }
@@ -90,9 +92,12 @@ export async function claimCompletion(logId: string, c: CallCompletion): Promise
   const claimed = await sequelize.query<{ id: string }>(
     `UPDATE communication_logs
         SET status = :status,
-            provider_response = COALESCE(provider_response, '{}'::jsonb) || (CAST(:patch AS jsonb) - CASE WHEN provider_response->>'transcript_state_reason' IS NOT NULL THEN 'transcript_state' ELSE '' END) || jsonb_build_object('completed_at', CAST(:completedAt AS text))
+            provider_response = COALESCE(provider_response, '{}'::jsonb) || (CAST(:patch AS jsonb) - CASE WHEN provider_response->>'transcript_state_reason' IS NOT NULL THEN 'transcript_state' ELSE '' END) || jsonb_build_object('completed_at', CAST(:completedAt AS text),
+                 -- every status already claimed, so completed -> failed -> completed is not "first" twice
+                 'claimed_statuses', COALESCE(provider_response->'claimed_statuses', CASE WHEN COALESCE(provider_response->>'completed_at', '') <> '' THEN jsonb_build_array(COALESCE(provider_response->>'call_status', '')) ELSE '[]'::jsonb END) || to_jsonb(CAST(:callStatus AS text)))
       WHERE id = :id
         AND NOT (COALESCE(provider_response->>'completed_at', '') <> '' AND COALESCE(provider_response->>'call_status', '') = :callStatus)
+        AND NOT (COALESCE(provider_response->'claimed_statuses', '[]'::jsonb) @> to_jsonb(CAST(:callStatus AS text)))
       RETURNING id`,
     // completedAt is bound, not written as SQL text: a literal time format such as HH24:MI would be
     // parsed by Sequelize as :MI replacements.

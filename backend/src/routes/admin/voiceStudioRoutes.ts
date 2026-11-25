@@ -9,10 +9,11 @@
  *
  * Both routes do not exist (404) unless VOICE_TEST_ENABLED is on.
  */
+import { tapVoiceLog } from '../../services/voice/ops/opsMetrics';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import { QueryTypes } from 'sequelize';
 import { z } from 'zod';
-import { requireAdmin } from '../../middlewares/authMiddleware';
+import { requireAdmin, requireFullAdmin } from '../../middlewares/authMiddleware';
 import { sequelize } from '../../config/database';
 import { loadVoiceConfig } from '../../services/voice/voiceConfig';
 import { productionTestLabDeps, startLiveTest, TEST_TENANT_ID, type TestLabDeps } from '../../services/voice/testlab/testLabService';
@@ -31,7 +32,7 @@ export function productionStopDeps(): StopDeps {
       'SELECT provider_call_id, state, test_mode FROM voice_calls WHERE id = :callId AND tenant_id = :t',
       { replacements: { callId, t: TEST_TENANT_ID }, type: QueryTypes.SELECT }))[0] ?? null,
     hangup: hangupThroughCarrier,
-    log: (line) => (line.level === 'error' ? console.warn : console.log)(JSON.stringify(line)),
+    log: (line) => (line.level === 'error' ? console.warn : console.log)(JSON.stringify(tapVoiceLog(line as unknown as Record<string, unknown>))),
   };
 }
 
@@ -42,13 +43,13 @@ export function buildVoiceStudioRouter(deps: () => TestLabDeps = productionTestL
   const router = Router();
   const gate = (_req: Request, _res: Response, next: NextFunction) => (enabled() ? next() : next('router'));
 
-  router.post('/api/admin/voice-studio/tests', gate, requireAdmin, async (req: Request, res: Response) => {
+  router.post('/api/admin/voice-studio/tests', gate, requireAdmin, requireFullAdmin, async (req: Request, res: Response) => {
     const operator = req.admin?.sub ?? 'admin'; // the admin's id, never their email, in logs
     try {
       const r = await startLiveTest(req.body, operator, deps());
       res.status(r.status).json(r.body);
     } catch (e) {
-      console.warn(JSON.stringify({ level: 'error', service: 'voice-studio', event: 'voice_test_start_failed', outcome: 'failure', error_class: (e as { name?: string })?.name || 'TestLabError' }));
+      console.warn(JSON.stringify(tapVoiceLog({ level: 'error', service: 'voice-studio', event: 'voice_test_start_failed', outcome: 'failure', error_class: (e as { name?: string })?.name || 'TestLabError' })));
       res.status(500).json({ error: 'TestLabError' });
     }
   });
@@ -63,18 +64,18 @@ export function buildVoiceStudioRouter(deps: () => TestLabDeps = productionTestL
       if (!rows.length) { res.status(404).json({ error: 'NotFound' }); return; }
       res.json(rows[0]);
     } catch (e) {
-      console.warn(JSON.stringify({ level: 'error', service: 'voice-studio', event: 'voice_test_status_failed', outcome: 'failure', error_class: (e as { name?: string })?.name || 'DatabaseError' }));
+      console.warn(JSON.stringify(tapVoiceLog({ level: 'error', service: 'voice-studio', event: 'voice_test_status_failed', outcome: 'failure', error_class: (e as { name?: string })?.name || 'DatabaseError' })));
       res.status(500).json({ error: 'DatabaseError' });
     }
   });
-  router.post('/api/admin/voice-studio/tests/:callId/stop', gate, requireAdmin, async (req: Request, res: Response) => {
+  router.post('/api/admin/voice-studio/tests/:callId/stop', gate, requireAdmin, requireFullAdmin, async (req: Request, res: Response) => {
     const id = CallIdSchema.safeParse(req.params.callId);
     if (!id.success) { res.status(400).json({ error: 'ValidationError' }); return; }
     try {
       const r = await stopTestCall(id.data, stopDeps());
       res.status(r.status).json(r.body);
     } catch (e) {
-      console.warn(JSON.stringify({ level: 'error', service: 'voice-studio', event: 'voice_test_stop_failed', outcome: 'failure', error_class: (e as { name?: string })?.name || 'DatabaseError' }));
+      console.warn(JSON.stringify(tapVoiceLog({ level: 'error', service: 'voice-studio', event: 'voice_test_stop_failed', outcome: 'failure', error_class: (e as { name?: string })?.name || 'DatabaseError' })));
       res.status(500).json({ error: 'DatabaseError' });
     }
   });

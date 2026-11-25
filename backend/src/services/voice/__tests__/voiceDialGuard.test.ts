@@ -7,7 +7,7 @@ jest.mock('../../../config/env', () => ({ env: { adminAlertPhone: '+16825975784'
 jest.mock('../../settingsService', () => ({ getSetting: jest.fn(async () => '"+12145550100"') }));
 
 import { withinDialHours, dialVerdict, checkDialGuard, MAX_DIALS_PER_NUMBER_PER_DAY } from '../voiceDialGuard';
-import { webhookTokenOk } from '../synthflowWebhookAuth';
+import { logToken, safeRecordingUrl, webhookTokenOk } from '../synthflowWebhookAuth';
 
 // Thursday Nov 19 2026, Central = UTC-6.
 const ct = (h: number, m = 0) => new Date(Date.UTC(2026, 10, 19, h + 6, m));
@@ -60,8 +60,22 @@ describe('checkDialGuard (with the database)', () => {
 });
 
 describe('webhookTokenOk (Synthflow call-complete)', () => {
-  it('is open when no token is configured (prior behaviour)', () => {
-    expect(webhookTokenOk('', undefined)).toBe(true);
+  it('VS4.2: with no token configured, production refuses everything; elsewhere it is open', () => {
+    expect(webhookTokenOk('', undefined, true)).toBe(false);
+    expect(webhookTokenOk('', '', true)).toBe(false);
+    expect(webhookTokenOk('', 'guess', true)).toBe(false);
+    expect(webhookTokenOk('', undefined, false)).toBe(true);
+  });
+  it('VS4.2: production is the default when NODE_ENV says so', () => {
+    const was = process.env.NODE_ENV;
+    try { process.env.NODE_ENV = 'production'; expect(webhookTokenOk('', undefined)).toBe(false); } finally { process.env.NODE_ENV = was; }
+  });
+  it.each(['javascript:alert(1)', 'http://a.example/x', 'data:text/html,x', 'https://u:p@a.example/', 'nope', 7, null])('VS4.2: recording link %p is dropped', (v) => {
+    expect(safeRecordingUrl(v)).toBe('');
+  });
+  it('VS4.2: an https recording link is kept; log values stay on one line', () => {
+    expect(safeRecordingUrl('https://rec.example/a.mp3')).toBe('https://rec.example/a.mp3');
+    expect(logToken('done\n{"level":"error"}')).not.toMatch(/[\n{"]/);
   });
   it('requires the exact token once one is configured', () => {
     expect(webhookTokenOk('s3cret-token', 's3cret-token')).toBe(true);

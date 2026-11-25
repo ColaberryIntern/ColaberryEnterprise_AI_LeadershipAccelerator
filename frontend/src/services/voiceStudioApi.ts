@@ -128,11 +128,11 @@ export interface AbTrial {
 }
 
 export interface NumberRow { id: string; provider: string; provider_number_id: string; number_ref: string; ownership: string; status: string; capabilities: Record<string, unknown>; routing_policy: Record<string, unknown>; brand_slug: string | null; verified_caller_id: boolean }
-export interface RouteRow { id: string; path_key: string; call_type: string; brand_slug: string; engine: string; mode: string; canary_percent: number; version_id: string | null; fallback: { kind?: string; ref?: string }; approved_by: string | null; approved_at: string | null; calls_7d: number }
+export interface RouteRow { id: string; path_key: string; call_type: string; brand_slug: string; engine: string; mode: string; canary_percent: number; version_id: string | null; fallback: { kind?: string; ref?: string; audience?: string[] }; approved_by: string | null; approved_at: string | null; calls_7d: number }
 
 export interface RouteChange {
   pathKey: string; callType: string; brandSlug: string; mode: string; canaryPercent: number; versionId: string | null;
-  fallback: { kind: string; ref?: string }; confirm?: string;
+  fallback: { kind: string; ref?: string; audience?: string[] }; confirm?: string;
 }
 export type RouteValidation =
   | { ok: false; issues: string[] }

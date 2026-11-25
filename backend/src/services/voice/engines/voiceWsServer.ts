@@ -66,14 +66,27 @@ export function decideUpgrade(req: Pick<IncomingMessage, 'url' | 'headers'>, env
 /** Test helper: the signature Twilio would send for a handshake to `url`. */
 export const signHandshake = (token: string, url: string): string => computeTwilioSignature(token, url, {});
 
-function refuse(socket: Duplex, status: 403 | 404): void {
-  socket.write(`HTTP/1.1 ${status} ${status === 403 ? 'Forbidden' : 'Not Found'}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
+const STATUS_TEXT = { 403: 'Forbidden', 404: 'Not Found', 503: 'Service Unavailable' } as const;
+
+function refuse(socket: Duplex, status: keyof typeof STATUS_TEXT): void {
+  socket.write(`HTTP/1.1 ${status} ${STATUS_TEXT[status]}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
   socket.destroy();
 }
 
+/** VS4.2: what one process will hold, and for how long, before a caller has proven which call it is. */
+export interface WsLimits {
+  /** Open voice sockets, established or not. Over it, the upgrade is refused 503. */
+  maxSockets: number;
+  /** A socket must become a session within this, or it is closed. */
+  setupMs: number;
+  /** Unsent bytes a peer may leave us holding before its socket is dropped. */
+  maxBufferedBytes: number;
+}
+export const DEFAULT_WS_LIMITS: WsLimits = { maxSockets: 40, setupMs: 10_000, maxBufferedBytes: 1024 * 1024 };
+
 export interface VoiceWsDeps { relay: () => RelayDeps; stream: () => RealtimeDeps }
 
-export function attachVoiceWsServer(server: Server, deps: VoiceWsDeps, log: (line: Record<string, unknown>) => void): WebSocketServer {
+export function attachVoiceWsServer(server: Server, deps: VoiceWsDeps, log: (line: Record<string, unknown>) => void, limits: WsLimits = DEFAULT_WS_LIMITS): WebSocketServer {
   const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_PAYLOAD });
   server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     socket.on('error', () => { socket.destroy(); }); // a reset by the peer must never reach the process
@@ -94,8 +107,32 @@ export function attachVoiceWsServer(server: Server, deps: VoiceWsDeps, log: (lin
       refuse(socket, d.status);
       return;
     }
+    if (wss.clients.size >= limits.maxSockets) {
+      log({ level: 'error', service: 'voice-studio', event: 'voice_ws_upgrade_refused', outcome: 'failure', error_class: 'SocketLimit', status: 503 });
+      refuse(socket, 503);
+      return;
+    }
     wss.handleUpgrade(req, socket, head, (ws) => {
-      const sock = { send: (t: string) => { if (ws.readyState === ws.OPEN) ws.send(t); }, close: (code?: number) => ws.close(code) };
+      const sock = {
+        send: (t: string) => {
+          if (ws.readyState !== ws.OPEN) return;
+          if (ws.bufferedAmount > limits.maxBufferedBytes) {
+            log({ level: 'warn', service: 'voice-studio', event: 'voice_ws_backpressure', outcome: 'failure', error_class: 'PeerStalled' });
+            ws.terminate();
+            return;
+          }
+          ws.send(t);
+        },
+        close: (code?: number) => ws.close(code),
+      };
+      let established: () => boolean = () => false;
+      const deadline = setTimeout(() => {
+        if (established()) return;
+        log({ level: 'warn', service: 'voice-studio', event: 'voice_ws_setup_timeout', outcome: 'failure', error_class: 'SetupTimeout' });
+        ws.close(1008);
+      }, limits.setupMs);
+      deadline.unref();
+      ws.on('close', () => clearTimeout(deadline));
       // A failure on one call ends that call, never the process.
       const fail = (e: unknown) => {
         log({ level: 'error', service: 'voice-studio', event: 'voice_ws_handler_failed', outcome: 'failure', error_class: (e as { name?: string })?.name || 'HandlerError' });
@@ -104,12 +141,14 @@ export function attachVoiceWsServer(server: Server, deps: VoiceWsDeps, log: (lin
       try {
         if (path === RELAY_PATH) {
           const conn = new RelayConnection(sock, deps.relay());
+          established = () => conn.established;
           ws.on('message', (data: Buffer) => { conn.onMessage(data).catch(fail); });
-          ws.on('close', () => conn.onClose());
+          ws.on('close', () => { try { conn.onClose(); } catch (e) { fail(e); } });
         } else {
           const bridge = new RealtimeBridge(sock, deps.stream());
+          established = () => bridge.established;
           ws.on('message', (data: Buffer) => { bridge.onTwilio(data).catch(fail); });
-          ws.on('close', () => bridge.onTwilioClose());
+          ws.on('close', () => { try { bridge.onTwilioClose(); } catch (e) { fail(e); } });
         }
       } catch (e) {
         fail(e);

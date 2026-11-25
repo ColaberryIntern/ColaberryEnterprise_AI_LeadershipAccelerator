@@ -7,6 +7,9 @@
  */
 import { z } from 'zod';
 
+/** One frame of caller audio is ~216 characters (20 ms); this allows about 750 ms at once. */
+export const MAX_MEDIA_PAYLOAD_CHARS = 8_000;
+
 const sid = (prefix: string) => z.string().regex(new RegExp(`^${prefix}[0-9a-f]{32}$`, 'i'));
 
 export const StreamInboundSchema = z.discriminatedUnion('event', [
@@ -24,7 +27,7 @@ export const StreamInboundSchema = z.discriminatedUnion('event', [
   }).passthrough(),
   z.object({
     event: z.literal('media'),
-    media: z.object({ track: z.string().optional(), payload: z.string().max(64_000), timestamp: z.union([z.string(), z.number()]).optional() }).passthrough(),
+    media: z.object({ track: z.string().optional(), payload: z.string().max(MAX_MEDIA_PAYLOAD_CHARS), timestamp: z.union([z.string(), z.number()]).optional() }).passthrough(),
   }).passthrough(),
   z.object({ event: z.literal('mark'), mark: z.object({ name: z.string().max(200) }) }).passthrough(),
   z.object({ event: z.literal('dtmf'), dtmf: z.object({ digit: z.string().regex(/^[0-9*#]$/) }).passthrough() }).passthrough(),

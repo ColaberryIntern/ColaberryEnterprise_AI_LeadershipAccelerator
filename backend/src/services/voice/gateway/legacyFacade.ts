@@ -18,6 +18,7 @@
  * Turning the flag back off within 24 h lets the legacy guard under-count those dials for the rest of
  * that window (it never over-dials beyond what the reservations admitted before the switch).
  */
+import { tapVoiceLog } from '../ops/opsMetrics';
 import { randomUUID } from 'crypto';
 import { env } from '../../../config/env';
 import { isKillSwitchActiveStrict } from '../../launchSafety';
@@ -81,7 +82,7 @@ export function legacyGatewayDeps(phoneE164: string, overrides: Partial<GatewayD
     resolveRoute: async () => ({ routeId: null, profileVersionId: 'legacy-synthflow', engine: 'synthflow_legacy', fromNumberRef: 'synthflow-agent', maxDurationSeconds: 3600 }),
     reserve: reserveDial,
     transition: transitionReservation,
-    log: (e) => console.log(JSON.stringify({ level: 'info', service: 'voice-gateway', consent_provenance: 'legacy_caller_owned', ...e })),
+    log: (e) => console.log(JSON.stringify(tapVoiceLog({ level: 'info', service: 'voice-gateway', consent_provenance: 'legacy_caller_owned', ...e }))),
     ...overrides,
   };
 }

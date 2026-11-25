@@ -3,6 +3,7 @@ import request from 'supertest';
 
 // requireAdmin is the real gate in production (route-auth lint); here a header stands in for a valid admin JWT.
 jest.mock('../../../../middlewares/authMiddleware', () => ({
+  requireFullAdmin: (req: { headers: Record<string, string> }, res: { status: (n: number) => { json: (b: unknown) => void } }, next: () => void) => { if (req.headers['x-scoped']) res.status(403).json({ error: 'Admin access required' }); else next(); },
   requireAdmin: (req: { headers: Record<string, string>; admin?: unknown }, res: { status: (n: number) => { json: (b: unknown) => void } }, next: () => void) => {
     if (req.headers['x-test-admin'] !== 'yes') { res.status(401).json({ error: 'Unauthorized' }); return; }
     req.admin = { sub: 'admin-7', email: 'x', role: 'admin' };
@@ -36,6 +37,13 @@ describe('Voice Studio admin route (VS2.5)', () => {
     const start = jest.fn();
     const res = await request(app(true, start)).post('/api/admin/voice-studio/tests').send({});
     expect(res.status).toBe(401);
+    expect(start).not.toHaveBeenCalled();
+  });
+
+  it('VS4.2: a scoped admin cannot start a call', async () => {
+    const start = jest.fn();
+    const res = await request(app(true, start)).post('/api/admin/voice-studio/tests').set('x-test-admin', 'yes').set('x-scoped', '1').send({});
+    expect(res.status).toBe(403);
     expect(start).not.toHaveBeenCalled();
   });
 

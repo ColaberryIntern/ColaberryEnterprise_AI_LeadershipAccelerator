@@ -2,8 +2,8 @@ import { completionPatch, fromSynthflowPayload, transcriptState, MIN_TRANSCRIPT_
 
 describe('fromSynthflowPayload (shared normalizer)', () => {
   it('reads the V2 nested shape', () => {
-    const c = fromSynthflowPayload({ call: { call_id: 'c1', status: 'completed', duration: 65, transcript: 'T', recording_url: 'r', end_call_reason: 'hangup' }, analysis: { a: 1 }, metadata: { source: 'x' } });
-    expect(c).toEqual({ provider: 'synthflow', providerCallId: 'c1', status: 'completed', completed: true, durationSeconds: 65, transcript: 'T', recordingUrl: 'r', disposition: 'hangup', analysis: { a: 1 }, metadata: { source: 'x' } });
+    const c = fromSynthflowPayload({ call: { call_id: 'c1', status: 'completed', duration: 65, transcript: 'T', recording_url: 'https://rec.example/r', end_call_reason: 'hangup' }, analysis: { a: 1 }, metadata: { source: 'x' } });
+    expect(c).toEqual({ provider: 'synthflow', providerCallId: 'c1', status: 'completed', completed: true, durationSeconds: 65, transcript: 'T', recordingUrl: 'https://rec.example/r', disposition: 'hangup', analysis: { a: 1 }, metadata: { source: 'x' } });
   });
   it('falls back to top-level fields and _id', () => {
     const c = fromSynthflowPayload({ _id: 'c2', status: 'no-answer', disposition: 'voicemail', duration: '12' });

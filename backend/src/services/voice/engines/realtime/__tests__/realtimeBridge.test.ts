@@ -1,4 +1,4 @@
-import { RealtimeBridge, MAX_PREBUFFER_FRAMES, MAX_MALFORMED_FRAMES, type ModelHandlers, type RealtimeDeps } from '../openaiRealtimeEngine';
+import { RealtimeBridge, MAX_PREBUFFER_FRAMES, MAX_MALFORMED_FRAMES, MAX_TOOL_CALLS_PER_CALL, MAX_TOOL_FOLLOW_UPS_PER_TURN, type ModelHandlers, type RealtimeDeps } from '../openaiRealtimeEngine';
 import { ToolBroker, nextOpenSlotsTool } from '../../toolBroker';
 import { TEST_PROFILE } from '../../voiceProfiles';
 import { SessionWorker } from '../../../session/sessionWorker';
@@ -323,4 +323,79 @@ it('VS3.5: a tool the broker refuses reaches the durable record with its error c
   await h.answer('resp_1', 'item_1', 0);
   await h.ev({ type: 'response.function_call_arguments.done', response_id: 'resp_1', call_id: 'no', name: 'book_meeting', arguments: '{}' });
   expect(h.tools).toEqual([expect.objectContaining({ name: 'book_meeting', errorClass: 'UnknownTool' })]);
+});
+
+describe('VS4.2: a caller cannot loop paid answers through tools', () => {
+  const settle = () => new Promise((r) => setTimeout(r, 5));
+  /** The model asks for a tool in every answer it is given. Returns how many answers it was given. */
+  async function loop(h: ReturnType<typeof harness>, rounds: number, tag: string) {
+    const asked = () => h.of(h.model, 'type', 'response.create').length;
+    await h.ev({ type: 'input_audio_buffer.speech_started', item_id: 'u' + tag, audio_start_ms: 1 });
+    let given = 0;
+    for (let i = 0; i < rounds; i++) {
+      const id = `${tag}_${i}`;
+      const before = asked();
+      await h.ev({ type: 'response.created', response: { id } });
+      await h.ev({ type: 'response.function_call_arguments.done', response_id: id, call_id: 'c_' + id, name: 'next_open_strategy_slots', arguments: '{}' });
+      await h.ev({ type: 'response.done', response: { id, status: 'completed' } });
+      await settle();
+      given++;
+      if (asked() === before) break;
+    }
+    return given;
+  }
+
+  it('stops asking for follow-ups after the limit, and goes back to listening', async () => {
+    const h = harness();
+    await h.ready();
+    expect(await loop(h, 20, 'a')).toBe(MAX_TOOL_FOLLOW_UPS_PER_TURN + 1);
+    expect(h.worker.size).toBe(1);
+    expect(h.logs.some((l) => l.event === 'voice_tool_follow_up_limit')).toBe(true);
+    expect(h.logs.some((l) => l.error_class === 'InvalidTransition')).toBe(false);
+    // every call the model made was still answered, so its conversation stays valid
+    expect(h.of(h.model, 'type', 'conversation.item.create')).toHaveLength(MAX_TOOL_FOLLOW_UPS_PER_TURN + 1);
+  });
+
+  it('a new caller turn gets a fresh allowance, but the whole call has a limit', async () => {
+    const h = harness();
+    await h.ready();
+    expect(await loop(h, 20, 'a')).toBe(MAX_TOOL_FOLLOW_UPS_PER_TURN + 1);
+    expect(await loop(h, 20, 'b')).toBe(MAX_TOOL_FOLLOW_UPS_PER_TURN + 1);
+    for (const t of ['c', 'd', 'e', 'f', 'g']) await loop(h, 20, t);
+    expect(h.slotRuns()).toBeLessThanOrEqual(MAX_TOOL_CALLS_PER_CALL);
+    expect(h.tools.some((t) => t.errorClass === 'ToolLimitReached')).toBe(true);
+  });
+
+  it.each(['incomplete', 'failed'])('an answer that ends %s returns the call to listening', async (status) => {
+    const h = harness();
+    await h.ready();
+    await h.answer('resp_x', 'item_x', 2);
+    await h.ev({ type: 'response.done', response: { id: 'resp_x', status } });
+    await h.ev({ type: 'response.created', response: { id: 'resp_y' } }); // a fresh answer is accepted
+    expect(h.logs.some((l) => l.error_class === 'InvalidTransition')).toBe(false);
+    expect(h.of(h.model, 'type', 'response.cancel')).toHaveLength(0);
+  });
+
+  it('a played mark can never claim more than was sent, or audio that was never sent', async () => {
+    const h = harness();
+    await h.ready();
+    await h.answer('resp_m', 'item_m', 3); // 60 ms sent
+    await h.tw({ event: 'mark', mark: { name: 'item_m|40' } });
+    await h.tw({ event: 'mark', mark: { name: 'never_sent|99999' } });
+    await h.ev({ type: 'input_audio_buffer.speech_started', item_id: 'u9', audio_start_ms: 1 });
+    expect((h.of(h.model, 'type', 'conversation.item.truncate').pop() as { audio_end_ms: number }).audio_end_ms).toBe(40);
+    const g = harness();
+    await g.ready();
+    await g.answer('resp_n', 'item_n', 3);
+    await g.tw({ event: 'mark', mark: { name: 'item_n|99999' } }); // clamped to 60: all of it played, so nothing to cut
+    await g.ev({ type: 'response.output_audio.delta', response_id: 'resp_n', item_id: 'item_n', delta: chunk20ms }); // 80 ms sent
+    await g.ev({ type: 'input_audio_buffer.speech_started', item_id: 'u9', audio_start_ms: 1 });
+    expect((g.of(g.model, 'type', 'conversation.item.truncate').pop() as { audio_end_ms: number }).audio_end_ms).toBe(60);
+  });
+
+  it('bounds one spoken answer', async () => {
+    const h = harness();
+    await h.start();
+    expect((h.model[0] as { session: { max_output_tokens: number } }).session.max_output_tokens).toBe(2048);
+  });
 });

@@ -22,12 +22,29 @@ import type { VersionStatus } from './profileTypes';
 export const KB_SOURCES = ['admissions_knowledge'] as const;
 export const VOICE_ENGINES = ['conversation_relay', 'openai_realtime'] as const;
 
-const DISCLOSURE_RE = /\b(AI|artificial intelligence|virtual assistant)\b/i;
+/**
+ * Does this text say the SPEAKER is an AI? The AI must be what the speaker IS ("I'm an AI", "this is
+ * Colaberry's AI assistant"), and the phrase must end there: "an AI class", "your AI agent builder
+ * class advisor" and "a person who teaches AI" do not count. A denial, or a claim to be a person,
+ * anywhere fails it. Deliberately narrow: a wording it does not know is refused and reworded.
+ */
+const NOUN = "(?:[Aa]ssistant|[Aa]gent|[Cc]aller|[Vv]oice)";
+const AI_NOUN = `(?:[Aa]utomated\\s+|[Vv]irtual\\s+)*(?:AI|artificial intelligence)\\s+(?:voice\\s+|phone\\s+|calling\\s+)?${NOUN}|[Vv]irtual\\s+assistant`;
+const AI_IS = `(?:(?:[Aa]n?|[Tt]he)\\s+)?(?:${AI_NOUN}|AI|artificial intelligence)`;
+const NAME = "[A-Z][\\w&.]*(?:\\s+[A-Z][\\w&.]*){0,2}";
+const OWNER = `(?:(?:[Tt]he\\s+)?${NAME}(?:'s|\u2019s)?\\s+)?`;
+const SPEAKER = "(?:I\\s*(?:'|\u2019)\\s*m|I\\s+am|[Tt]his\\s+is|[Yy]ou(?:\\s+are|(?:'|\u2019)re)\\s+(?:speaking|talking)\\s+(?:with|to))";
+const PHRASE_END = "(?=\\s*(?:[.!?,;]|$)|\\s+(?:from|calling\\s+(?:from|on\\s+behalf)|on\\s+behalf|with|at)\\s)";
+const START = "(?:^|[.!?,;]\\s*|\\b(?:[Hh]i|[Hh]ello|[Hh]ey)\\s+)";
+const AI_SELF = new RegExp(`${START}${SPEAKER}\\s+(?:${OWNER}(?:${AI_IS})${PHRASE_END}|${NAME},\\s+(?:[Aa]n?|[Tt]he)\\s+(?:${AI_NOUN})${PHRASE_END})`);
+const AI_DENIAL = /\b(?:not|never|no|isn(?:'|\u2019)t|aren(?:'|\u2019)t)\b[^.!?,;]{0,30}\b(?:AI|artificial intelligence|virtual assistant|robot|bot)\b/i;
+const CLAIMS_PERSON = /\b(?:I\s*(?:'|\u2019)\s*m|I\s+am|this\s+is)\s+(?:an?\s+)?(?:real\s+|actual\s+|live\s+)*(?:human|person)\b/i;
+export const disclosesAi = (t: string): boolean => AI_SELF.test(t) && !AI_DENIAL.test(t) && !CLAIMS_PERSON.test(t);
 
 export const VersionContentSchema = z.object({
   prompt: z.string().min(1).max(50_000),
   first_message: z.string().max(1_000).nullable(),
-  disclosure: z.string().min(10).max(500).refine((s) => DISCLOSURE_RE.test(s), 'disclosure must tell the caller they are speaking with an AI'),
+  disclosure: z.string().min(10).max(500).refine(disclosesAi, 'disclosure must tell the caller they are speaking with an AI'),
   kb_refs: z.array(z.enum(KB_SOURCES)).max(5),
   tool_permissions: z.array(z.string().regex(/^[a-z][a-z0-9_]{1,63}$/)).max(10),
   engine: z.enum(VOICE_ENGINES),
@@ -97,6 +114,7 @@ export function renderCall(c: VersionContent, call: PerCallInput): RenderOutcome
   const vars: Record<string, string> = { ...(call.variables ?? {}), prompt: perCall };
   const body = c.prompt.replace(/\{([a-z_]{1,40})\}/g, (m, key: string) => (key in vars ? cleanValue(vars[key]) : m));
   const first = (c.first_message ?? '').trim();
-  const greeting = first && DISCLOSURE_RE.test(first) ? first : [c.disclosure, first].filter(Boolean).join(' ');
+  // The approved disclosure is always spoken. A first message is never trusted to replace it unless it contains it word for word.
+  const greeting = first.includes(c.disclosure) ? first : [c.disclosure, first].filter(Boolean).join(' ');
   return { ok: true, system: `${body.trim()}\n\n${SAFETY_SUFFIX}`, greeting };
 }

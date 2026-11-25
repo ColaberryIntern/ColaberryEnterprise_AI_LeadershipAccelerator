@@ -13,6 +13,7 @@
  * (voice_calls.state_reason = 'transfer_fallback') so a teammate calls back. The teammate number is
  * read from the server env only, here, and is never logged.
  */
+import { tapVoiceLog } from '../services/voice/ops/opsMetrics';
 import type { Request, Response } from 'express';
 import { verifyToken } from '../services/voice/twilio/correlationToken';
 import {
@@ -20,12 +21,15 @@ import {
 } from '../services/voice/transfer/humanTransfer';
 import { mintToken } from '../services/voice/twilio/correlationToken';
 import { loadVoiceConfig } from '../services/voice/voiceConfig';
+import { refuseTransferDial } from '../services/voice/transfer/transferGuard';
 
 export interface TransferDeps {
   target: () => string | undefined;
   publicBaseUrl: () => string | undefined;
   now: () => number;
   recordFallback: (callId: string) => Promise<void>;
+  /** VS4.2: null = may dial; otherwise why not. Anything unreadable is a refusal. */
+  refuseDial: (callId: string, target: string) => Promise<string | null>;
   /** VS3.6: an inbound call ended here (no status callback carries our ref for inbound). Never throws. */
   closeInbound: (callId: string, body: Record<string, unknown>) => Promise<void>;
   log: (line: Record<string, unknown>) => void;
@@ -38,10 +42,11 @@ export function defaultTransferDeps(): TransferDeps {
     now: () => Date.now(),
     recordFallback: async (callId) => {
       const { sequelize } = await import('../config/database');
-      await sequelize.query("UPDATE voice_calls SET state_reason = 'transfer_fallback', updated_at = NOW() WHERE id = :callId", { replacements: { callId } });
+      await sequelize.query("UPDATE voice_calls SET state_reason = 'transfer_fallback', updated_at = NOW() WHERE id = :callId AND state_reason IS DISTINCT FROM 'caller_opt_out'", { replacements: { callId } });
     },
+    refuseDial: (callId, target) => refuseTransferDial(callId, target),
     closeInbound: closeInboundCall,
-    log: (line) => (line.level === 'error' || line.level === 'warn' ? console.warn : console.log)(JSON.stringify({ service: 'voice-studio', ...line })),
+    log: (line) => (line.level === 'error' || line.level === 'warn' ? console.warn : console.log)(JSON.stringify(tapVoiceLog(line))),
   };
 }
 
@@ -58,7 +63,7 @@ export async function closeInboundCall(callId: string, body: Record<string, unkn
       (await import('../services/voice/postcall/directCompletionRuntime')).completeDirectCall(callId);
     }
   } catch (e) {
-    console.warn(JSON.stringify({ level: 'error', service: 'voice-studio', event: 'voice_inbound_close_failed', outcome: 'failure', error_class: (e as Error).name || 'DatabaseError', call_id: callId }));
+    console.warn(JSON.stringify(tapVoiceLog({ level: 'error', service: 'voice-studio', event: 'voice_inbound_close_failed', outcome: 'failure', error_class: (e as Error).name || 'DatabaseError', call_id: callId })));
   }
 }
 
@@ -82,6 +87,8 @@ export function makeTransferHandlers(d: TransferDeps) {
     const base = d.publicBaseUrl();
     if (decision === 'fallback' || !base) await d.closeInbound(callId, (req.body ?? {}) as Record<string, unknown>);
     if (decision === 'fallback' || !base) return fallback(res, callId, decision === 'fallback' ? 'no_teammate_available' : 'config_missing');
+    const refused = await d.refuseDial(callId, d.target() as string);
+    if (refused) { await d.closeInbound(callId, (req.body ?? {}) as Record<string, unknown>); return fallback(res, callId, refused); }
     const dialAction = `${new URL(DIAL_ACTION_PATH, base).toString()}?ref=${encodeURIComponent(mintToken(callId, 'status', ACTION_TOKEN_TTL_SECONDS, d.now()))}`;
     d.log({ level: 'info', event: 'voice_transfer_dialing', outcome: 'success', call_id: callId });
     twiml(res, dialTwiml(d.target() as string, dialAction));

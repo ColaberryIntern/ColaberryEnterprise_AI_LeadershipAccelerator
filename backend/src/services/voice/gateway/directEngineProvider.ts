@@ -16,6 +16,7 @@ import { createTwilioCarrier } from '../providers/twilioCarrier';
 import { loadTwilioCredentials } from '../twilio/twilioCredentials';
 import { mintToken } from '../twilio/correlationToken';
 import { loadVoiceConfig } from '../voiceConfig';
+import { guardCarrier } from '../ops/providerGuards';
 
 export const TWIML_PATH = '/api/webhook/voice/twilio/twiml';
 export const STATUS_PATH = '/api/webhook/voice/twilio/status';
@@ -61,7 +62,7 @@ export function productionDirectProvider(engine: 'conversation_relay' | 'openai_
   if (!creds.ok) return { error: `twilio_credentials_invalid: ${creds.invalid.join(',')}` };
   const base = loadVoiceConfig().VOICE_PUBLIC_BASE_URL;
   if (!base) return { error: 'VOICE_PUBLIC_BASE_URL unset' };
-  const carrier = createTwilioCarrier({
+  const carrier = guardCarrier(createTwilioCarrier({
     creds: creds.creds,
     resolveFromNumber: async (ref) => {
       const rows = await sequelize.query<{ e164_restricted: string }>(
@@ -70,7 +71,7 @@ export function productionDirectProvider(engine: 'conversation_relay' | 'openai_
       return rows[0]?.e164_restricted ?? null;
     },
     statusCallbackUrl: (callId) => statusUrl(base, callId, loadVoiceConfig().VOICE_TEST_MAX_DURATION_SECONDS),
-  });
+  }));
   return createDirectEngineProvider(engine, {
     carrier, publicBaseUrl: base,
     recordProviderCallId: async (callId, sid) => { await sequelize.query('UPDATE voice_calls SET provider_call_id = COALESCE(provider_call_id, :sid), updated_at = NOW() WHERE id = :callId', { replacements: { callId, sid } }); },
@@ -90,4 +91,11 @@ export async function hangupThroughCarrier(providerCallId: string): Promise<void
   const creds = loadTwilioCredentials();
   if (!creds.ok) throw Object.assign(new Error('twilio credentials invalid'), { name: 'ConfigMissing' });
   await createTwilioCarrier({ creds: creds.creds, resolveFromNumber: async () => null, statusCallbackUrl: () => '' }).hangup(providerCallId);
+}
+
+/** VS4.5 reconcile: ask the carrier what happened to one call. Read-only. */
+export async function carrierStatus(providerCallId: string): Promise<ProviderStatus> {
+  const creds = loadTwilioCredentials();
+  if (!creds.ok) throw Object.assign(new Error('twilio credentials invalid'), { name: 'ConfigMissing' });
+  return createTwilioCarrier({ creds: creds.creds, resolveFromNumber: async () => null, statusCallbackUrl: () => '' }).getStatus(providerCallId);
 }

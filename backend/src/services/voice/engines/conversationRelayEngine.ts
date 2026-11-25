@@ -26,6 +26,7 @@ import { endSession, languageSwitch, parseRelayMessage, SUPPORTED_LANGUAGES, tex
 import type { ToolBroker } from './toolBroker';
 import type { VoiceProfile } from './voiceProfiles';
 import { TRANSFER_REASON } from '../transfer/humanTransfer';
+import { detectsOptOut } from '../optout/optOut';
 
 export interface RelayTransport { send(text: string): void; close(code?: number): void }
 
@@ -34,6 +35,11 @@ export interface RelayDeps {
   llm: VoiceLlm;
   broker: () => ToolBroker;
   profile: VoiceProfile;
+  /**
+   * VS4.5: what THIS call may say and use, fixed at dial time. null = refuse the call. Absent = the
+   * deps' own profile and broker (tests, and the load harness).
+   */
+  sessionFor?: (callId: string) => Promise<{ profile: VoiceProfile; broker: ToolBroker } | null>;
   accountSid: () => string | undefined;
   consumeSessionRef: (claims: TokenClaims) => Promise<'consumed' | 'replay' | 'unknown_call'>;
   /** Does this callId's voice_calls row carry this CallSid (or none yet)? */
@@ -46,6 +52,10 @@ export interface RelayDeps {
    * communication log. Never logged.
    */
   onTranscript?: (callId: string, transcript: string) => void;
+  /** VS4.3: the AI session is up (never awaited, never throws). */
+  onSessionStarted?: (callId: string) => void;
+  /** VS4.2: the caller asked not to be called. Called at most once per call; never awaited. */
+  onOptOut?: (callId: string) => void;
 }
 
 export const MAX_TRANSCRIPT_LINES = 400;
@@ -53,6 +63,10 @@ export const MAX_TRANSCRIPT_LINES = 400;
 export const MAX_TOOL_ROUNDS = 2;
 export const MAX_HISTORY = 24;
 export const MAX_MALFORMED = 10;
+/** Messages that arrive while the session reference is still being checked wait here (VS4.1). */
+export const MAX_EARLY_MESSAGES = 20;
+/** After we end the session, how long Twilio has to close the socket before we do. */
+export const END_GRACE_MS = 10_000;
 const SORRY = 'Sorry, I had trouble with that. Could you say it again?';
 const SAFE_DECLINE = "I can't help with that one, but a teammate can follow up.";
 
@@ -63,17 +77,23 @@ export class RelayConnection {
   private history: VoiceMessage[] = [];
   private malformed = 0;
   private settingUp = false;
+  private profile: VoiceProfile;
+  private early: RelayInbound[] = [];
   private closed = false;
   private lang: string | null = null;
   private readonly transcript: string[] = [];
   private transcriptSent = false;
+  private optedOut = false;
   /** VS3.2: a transfer_to_human tool returned the transfer control in the current answer. */
   private pendingTransfer = false;
   private handedOff = false;
   /** What the agent said in the current answer, for the transcript (spoken resets per tool round). */
   private turnSaid = '';
 
-  constructor(private readonly t: RelayTransport, private readonly d: RelayDeps) {}
+  constructor(private readonly t: RelayTransport, private readonly d: RelayDeps) { this.profile = d.profile; }
+
+  /** A verified call is attached (the single-use reference was accepted). */
+  get established(): boolean { return this.handle !== null; }
 
   /** Feed one raw frame. Never throws. */
   async onMessage(raw: string | Buffer): Promise<void> {
@@ -87,9 +107,15 @@ export class RelayConnection {
     const m = p.msg;
     if (!this.handle) {
       if (m.type === 'setup' && !this.settingUp) await this.setup(m);
+      else if (m.type !== 'setup' && this.settingUp) { if (this.early.length < MAX_EARLY_MESSAGES) this.early.push(m); }
       else if (m.type !== 'setup') this.shutdown('message_before_setup', 1008);
       return;
     }
+    await this.live(m);
+  }
+
+  private async live(m: RelayInbound): Promise<void> {
+    if (this.closed) return;
     switch (m.type) {
       case 'prompt':
         if (m.last && m.voicePrompt.trim()) {
@@ -106,7 +132,7 @@ export class RelayConnection {
 
   /** The caller is speaking a different supported language: switch Relay's recognition and voice once. */
   private switchLanguage(lang: string | undefined): void {
-    const current = this.lang ?? this.d.profile.language;
+    const current = this.lang ?? this.profile.language;
     if (!lang || lang === current || !SUPPORTED_LANGUAGES.has(lang)) return;
     this.lang = lang;
     this.t.send(languageSwitch(lang));
@@ -139,30 +165,41 @@ export class RelayConnection {
     const v = verifyToken(m.customParameters.ref, 'session', this.d.now());
     if (!v.ok) return this.shutdown(`session_ref_${v.reason}`, 1008);
     if (m.accountSid !== this.d.accountSid()) return this.shutdown('account_mismatch', 1008);
+    let session: Awaited<ReturnType<NonNullable<RelayDeps['sessionFor']>>> | undefined;
     try {
       const used = await this.d.consumeSessionRef(v.claims);
       if (used !== 'consumed') return this.shutdown(used === 'replay' ? 'session_ref_replayed' : 'unknown_call', 1008);
       if (!(await this.d.callMatches(v.claims.callId, m.callSid))) return this.shutdown('call_sid_mismatch', 1008);
+      if (this.d.sessionFor) {
+        session = await this.d.sessionFor(v.claims.callId);
+        if (!session) return this.shutdown('no_session_profile', 1008);
+        this.profile = session.profile;
+      }
     } catch (e) {
       this.log('error', 'voice_relay_setup_failed', { error_class: (e as { name?: string })?.name || 'DatabaseError' });
       return this.shutdown('setup_lookup_failed', 1011);
     }
-    const opened = this.d.worker.open(v.claims.callId, this.d.profile.versionId);
+    if (this.closed) return; // the caller hung up while we were checking (VS4.1): open nothing
+    const opened = this.d.worker.open(v.claims.callId, this.profile.versionId);
     if (!opened.ok) return this.shutdown(`session_refused_${opened.reason}`, 1013);
     this.callId = v.claims.callId;
     this.handle = opened.handle;
-    this.broker = this.d.broker();
+    this.broker = session ? session.broker : this.d.broker();
     this.handle.dispatch({ type: 'connected' });
     this.handle.dispatch({ type: 'greeting_done' }); // Twilio speaks the TwiML welcomeGreeting itself
-    this.history.push({ role: 'assistant', content: this.d.profile.greeting });
-    this.line('Agent', this.d.profile.greeting);
+    this.history.push({ role: 'assistant', content: this.profile.greeting });
+    this.line('Agent', this.profile.greeting);
     this.handle.onEnd((reason) => {
       this.emitTranscript();
+      if (!this.closed) setTimeout(() => { if (!this.closed) this.t.close(1000); }, END_GRACE_MS).unref();
       if (this.closed || this.handedOff) return; // a transfer already sent its own end
       this.t.send(endSession());
       this.log('info', 'voice_relay_end_sent', { reason });
     });
-    this.log('info', 'voice_relay_session_started', { profile: this.d.profile.versionId });
+    this.log('info', 'voice_relay_session_started', { profile: this.profile.versionId });
+    this.d.onSessionStarted?.(this.callId!);
+    // Started in arrival order, not awaited one by one: a later interrupt must be able to cut an earlier answer.
+    await Promise.all(this.early.splice(0).map((e) => this.live(e)));
   }
 
   private push(msg: VoiceMessage): void {
@@ -173,12 +210,21 @@ export class RelayConnection {
   }
 
   private async callerTurn(text: string): Promise<void> {
+    this.noticeOptOut(text); // before anything that can reject the turn
     const h = this.handle!;
     const r = h.dispatch({ type: 'caller_turn' });
     if (!r.ok) return;
     this.push({ role: 'user', content: text });
     this.line('Caller', text);
     await this.answer(h);
+  }
+
+  private noticeOptOut(text: string): void {
+    if (this.optedOut || !this.callId || !this.d.onOptOut || !detectsOptOut(text)) return;
+    this.optedOut = true;
+    try { this.d.onOptOut(this.callId); } catch (e) {
+      this.log('error', 'voice_opt_out_sink_failed', { error_class: (e as { name?: string })?.name || 'SinkError' });
+    }
   }
 
   /**
@@ -231,7 +277,7 @@ export class RelayConnection {
 
     for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
       const r = await this.d.llm.streamTurn({
-        system: this.d.profile.system, messages: this.history, tools: round < MAX_TOOL_ROUNDS ? this.broker!.defs() : [],
+        system: this.profile.system, messages: this.history, tools: round < MAX_TOOL_ROUNDS ? this.broker!.defs() : [],
         signal, onText: (delta) => { if (!signal.aborted) say(delta, false); },
       });
       if (local.signal.aborted && started) return this.finishAnswer(h, genId, spoken); // length cut: close politely
