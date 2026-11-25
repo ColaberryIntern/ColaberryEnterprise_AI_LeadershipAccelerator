@@ -57,7 +57,7 @@ export function assertSandbox(engine) {
   const fail = (what) => { throw new EngineError('SandboxUnavailable', `sandbox check failed: ${what}`); };
 
   const ok = run('echo ok > .sandbox-probe && cat .sandbox-probe && rm .sandbox-probe');
-  if (ok.status !== 0 || ok.stdout.trim() !== 'ok') fail('a command could not run and write in the workspace');
+  if (ok.status !== 0 || ok.stdout.trim() !== 'ok') fail(`a command could not run and write in the workspace (exit ${ok.status}: ${String(ok.error?.code ?? ok.stderr ?? '').trim().slice(-300)})`);
 
   // Listening right now on this machine, so refusal means the sandbox blocked it.
   const net = run('node -e \'const s=require("net").connect(+process.argv[1],"127.0.0.1");s.on("connect",()=>{console.log("OPEN");process.exit()});s.on("error",()=>{console.log("BLOCKED")});setTimeout(()=>{console.log("BLOCKED");process.exit()},5000)\' "$1"', String(engine.port));
