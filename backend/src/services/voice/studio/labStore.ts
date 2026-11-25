@@ -66,11 +66,11 @@ export async function getRoute(id: string): Promise<RouteRow | null> {
   return (await listRoutes()).find((r) => r.id === id) ?? null;
 }
 
-export async function versionFacts(versionId: string | null): Promise<{ versionPublished: boolean; profileId: string | null; engine: string | null }> {
-  if (!versionId) return { versionPublished: false, profileId: null, engine: null };
+export async function versionFacts(versionId: string | null): Promise<{ versionPublished: boolean; profileId: string | null; engine: string | null; versionBrand: string | null; versionEngine: string | null }> {
+  if (!versionId) return { versionPublished: false, profileId: null, engine: null, versionBrand: null, versionEngine: null };
   const s = await db();
-  const rows = await s.query<{ status: string; profile_id: string; engine: string }>('SELECT status, profile_id, engine FROM voice_agent_versions WHERE id = :versionId', { replacements: { versionId }, type: QueryTypes.SELECT });
-  return { versionPublished: rows[0]?.status === 'published', profileId: rows[0]?.profile_id ?? null, engine: rows[0]?.engine ?? null };
+  const rows = await s.query<{ status: string; profile_id: string; engine: string; brand: string | null }>('SELECT v.status, v.profile_id, v.engine, p.brand_slug AS brand FROM voice_agent_versions v LEFT JOIN voice_agent_profiles p ON p.id = v.profile_id WHERE v.id = :versionId', { replacements: { versionId }, type: QueryTypes.SELECT });
+  return { versionPublished: rows[0]?.status === 'published', profileId: rows[0]?.profile_id ?? null, engine: rows[0]?.engine ?? null, versionBrand: rows[0]?.brand ?? null, versionEngine: rows[0]?.engine ?? null };
 }
 
 /** Create or update one route. Returns null when the path key is already used by another route. */

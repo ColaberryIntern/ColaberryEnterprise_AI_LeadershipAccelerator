@@ -92,3 +92,10 @@ export async function hangupThroughCarrier(providerCallId: string): Promise<void
   if (!creds.ok) throw Object.assign(new Error('twilio credentials invalid'), { name: 'ConfigMissing' });
   await createTwilioCarrier({ creds: creds.creds, resolveFromNumber: async () => null, statusCallbackUrl: () => '' }).hangup(providerCallId);
 }
+
+/** VS4.5 reconcile: ask the carrier what happened to one call. Read-only. */
+export async function carrierStatus(providerCallId: string): Promise<ProviderStatus> {
+  const creds = loadTwilioCredentials();
+  if (!creds.ok) throw Object.assign(new Error('twilio credentials invalid'), { name: 'ConfigMissing' });
+  return createTwilioCarrier({ creds: creds.creds, resolveFromNumber: async () => null, statusCallbackUrl: () => '' }).getStatus(providerCallId);
+}

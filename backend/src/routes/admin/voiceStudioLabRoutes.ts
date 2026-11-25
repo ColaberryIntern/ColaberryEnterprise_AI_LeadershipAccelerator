@@ -138,7 +138,7 @@ export function buildVoiceStudioLabRouter(deps: () => LabDeps = productionLabDep
     const current = routeId ? await d.store.getRoute(routeId) : null;
     if (routeId && !current) return { status: 404 as const };
     const facts = await d.store.versionFacts(shape.data.versionId);
-    return { status: 200 as const, current, v: validateRouteChange(shape.data, { versionPublished: facts.versionPublished }) };
+    return { status: 200 as const, current, v: validateRouteChange(shape.data, { versionPublished: facts.versionPublished, versionBrand: facts.versionBrand, versionEngine: facts.versionEngine }) };
   };
 
   router.post('/api/admin/voice-studio/routes/validate', gate, requireAdmin, async (req, res) => {

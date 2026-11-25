@@ -14,7 +14,7 @@ const MODES = ['legacy', 'shadow', 'test', 'canary', 'live', 'disabled'] as cons
 
 const toChange = (r: RouteRow): RouteChange => ({
   pathKey: r.path_key, callType: r.call_type, brandSlug: r.brand_slug, mode: r.mode, canaryPercent: r.canary_percent, versionId: r.version_id,
-  fallback: { kind: r.fallback?.kind ?? 'legacy', ...(r.fallback?.ref ? { ref: r.fallback.ref } : {}) },
+  fallback: { kind: r.fallback?.kind ?? 'legacy', ...(r.fallback?.ref ? { ref: r.fallback.ref } : {}), ...(r.fallback?.audience?.length ? { audience: r.fallback.audience } : {}) },
 });
 
 const fallbackText = (f: RouteRow['fallback']): string => (f?.kind ? `${f.kind.replace('_', ' ')}${f.ref ? ` (${f.ref})` : ''}` : 'not set');
@@ -23,6 +23,9 @@ const capabilityText = (c: Record<string, unknown>): string => {
   return on.length ? `Can do ${on.join(', ')}` : 'Capabilities not recorded';
 };
 const policyText = (p: Record<string, unknown>): string => (Object.keys(p ?? {}).length ? `Inbound policy: ${Object.keys(p).join(', ')}` : 'No inbound mapping yet');
+
+/** Editing another field must never drop the approved audience. */
+const keepAudience = (c: RouteChange) => (c.fallback.audience?.length ? { audience: c.fallback.audience } : {});
 
 const NEW_ROUTE: RouteChange = { pathKey: '', callType: 'interest', brandSlug: 'colaberry', mode: 'shadow', canaryPercent: 0, versionId: null, fallback: { kind: 'legacy' } };
 
@@ -103,8 +106,9 @@ export default function NumbersRoutingTab(): React.ReactElement {
                 <div className="col-md-4"><label className="form-label small" htmlFor="vr-mode">Mode</label><select id="vr-mode" className="form-select form-select-sm" value={edit.change.mode} onChange={(e) => { change('mode', e.target.value); if (e.target.value !== 'canary') change('canaryPercent', 0); }}>{MODES.map((m) => <option key={m} value={m}>{m}</option>)}</select></div>
                 <div className="col-md-4"><label className="form-label small" htmlFor="vr-canary">Canary percent</label><input id="vr-canary" type="number" min={0} max={50} className="form-control form-control-sm" value={edit.change.canaryPercent} disabled={edit.change.mode !== 'canary'} onChange={(e) => change('canaryPercent', Number(e.target.value))} /></div>
                 <div className="col-md-6"><label className="form-label small" htmlFor="vr-version">Agent version id</label><input id="vr-version" className="form-control form-control-sm" value={edit.change.versionId ?? ''} onChange={(e) => change('versionId', e.target.value || null)} /></div>
-                <div className="col-md-6"><label className="form-label small" htmlFor="vr-fallback">Fallback</label><select id="vr-fallback" className="form-select form-select-sm" value={edit.change.fallback.kind} onChange={(e) => change('fallback', { kind: e.target.value, ...(e.target.value === 'human_line' && edit.change.fallback.ref ? { ref: edit.change.fallback.ref } : {}) })}>{['legacy', 'human_line', 'voicemail', 'none'].map((k) => <option key={k} value={k}>{k}</option>)}</select></div>
-                {edit.change.fallback.kind === 'human_line' && <div className="col-12"><label className="form-label small" htmlFor="vr-ref">Human line reference (a name such as admissions-line, never the phone number)</label><input id="vr-ref" className="form-control form-control-sm" maxLength={100} value={edit.change.fallback.ref ?? ''} onChange={(e) => change('fallback', { kind: 'human_line', ...(e.target.value ? { ref: e.target.value } : {}) })} /></div>}
+                <div className="col-md-6"><label className="form-label small" htmlFor="vr-fallback">Fallback</label><select id="vr-fallback" className="form-select form-select-sm" value={edit.change.fallback.kind} onChange={(e) => change('fallback', { kind: e.target.value, ...(e.target.value === 'human_line' && edit.change.fallback.ref ? { ref: edit.change.fallback.ref } : {}), ...keepAudience(edit.change) })}>{['legacy', 'human_line', 'voicemail', 'none'].map((k) => <option key={k} value={k}>{k}</option>)}</select></div>
+                {edit.change.fallback.kind === 'human_line' && <div className="col-12"><label className="form-label small" htmlFor="vr-ref">Human line reference (a name such as admissions-line, never the phone number)</label><input id="vr-ref" className="form-control form-control-sm" maxLength={100} value={edit.change.fallback.ref ?? ''} onChange={(e) => change('fallback', { kind: 'human_line', ...(e.target.value ? { ref: e.target.value } : {}), ...keepAudience(edit.change) })} /></div>}
+                {(edit.change.mode === 'canary' || (edit.change.fallback.audience?.length ?? 0) > 0) && <div className="col-12"><label className="form-label small" htmlFor="vr-audience">Canary audience, one reference per line (such as lead:42, never a phone number)</label><textarea id="vr-audience" className="form-control form-control-sm font-monospace" rows={3} value={(edit.change.fallback.audience ?? []).join('\n')} onChange={(e) => { const audience = e.target.value === '' ? [] : e.target.value.split('\n'); const { audience: _old, ...rest } = edit.change.fallback; change('fallback', audience.length ? { ...rest, audience } : rest); }} /></div>}
                 {edit.change.mode === 'live' && <div className="col-12"><label className="form-label small" htmlFor="vr-confirm">Type MOVE REAL CALLERS to confirm</label><input id="vr-confirm" className="form-control form-control-sm" value={edit.change.confirm ?? ''} onChange={(e) => change('confirm', e.target.value)} /></div>}
               </div>
               <div className="d-flex gap-2 mb-2">

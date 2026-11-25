@@ -15,6 +15,7 @@ export const TIMER_SCAN: TimerScan = {
   { file: "backend/src/intelligence/systemStateEngine/executionSubstrate/boundedExecutionWorker.ts", line: 54, kind: "interval", schedule: null, reportsAs: null },
   { file: "backend/src/intelligence/systemStateEngine/realtime/awarenessHeartbeatManager.ts", line: 36, kind: "interval", schedule: null, reportsAs: null },
   { file: "backend/src/intelligence/systemStateEngine/realtime/sseTransport.ts", line: 64, kind: "interval", schedule: null, reportsAs: null },
+  { file: "backend/src/scripts/voice/rollbackDrill.ts", line: 47, kind: "interval", schedule: "50 ms", reportsAs: null },
   { file: "backend/src/server.ts", line: 3894, kind: "cron", schedule: "*/10 * * * *", reportsAs: null },
   { file: "backend/src/server.ts", line: 3924, kind: "cron", schedule: "*/15 * * * *", reportsAs: null },
   { file: "backend/src/server.ts", line: 3929, kind: "cron", schedule: "*/5 * * * *", reportsAs: null },

@@ -29,7 +29,9 @@ export const RouteChangeSchema = z.object({
   mode: z.enum(ROUTE_MODES),
   canaryPercent: z.number().int().min(0).max(100),
   versionId: z.string().uuid().nullable(),
-  fallback: z.object({ kind: z.enum(['legacy', 'human_line', 'voicemail', 'none']), ref: z.string().max(100).optional() }).strict(),
+  fallback: z.object({ kind: z.enum(['legacy', 'human_line', 'voicemail', 'none']), ref: z.string().max(100).optional(),
+    /** VS4.5: the recipient references a canary may reach. References only, never a phone number. */
+    audience: z.array(z.string().regex(/^[a-z][a-z-]{1,30}:[A-Za-z0-9-]{1,60}$/)).max(500).optional() }).strict(),
   confirm: z.string().max(40).optional(),
 }).strict();
 export type RouteChange = z.infer<typeof RouteChangeSchema>;
@@ -37,6 +39,9 @@ export type RouteChange = z.infer<typeof RouteChangeSchema>;
 export interface RouteFacts {
   /** Is versionId a PUBLISHED version? (looked up by the caller) */
   versionPublished: boolean;
+  /** VS4.5: the brand the version's agent speaks for, and its engine. Undefined = not looked up (treated as not matching). */
+  versionBrand?: string | null;
+  versionEngine?: string | null;
 }
 
 export type ValidationResult = { ok: true; change: RouteChange } | { ok: false; issues: string[] };
@@ -49,6 +54,9 @@ export function validateRouteChange(input: unknown, facts: RouteFacts): Validati
   if (c.mode === 'canary' && (c.canaryPercent < 1 || c.canaryPercent > 50)) issues.push('canary needs between 1 and 50 percent');
   if (c.mode !== 'canary' && c.canaryPercent !== 0) issues.push('canary_percent must be 0 unless the mode is canary');
   if (['test', 'canary', 'live'].includes(c.mode) && (!c.versionId || !facts.versionPublished)) issues.push(`${c.mode} needs a published agent version`);
+  if (['test', 'canary', 'live'].includes(c.mode) && facts.versionPublished && facts.versionBrand !== c.brandSlug) issues.push('the agent version belongs to a different brand');
+  if (['canary', 'live'].includes(c.mode) && facts.versionEngine === 'openai_realtime') issues.push('this engine is for test calls only until it has a transcript');
+  if (c.mode === 'canary' && !c.fallback.audience?.length) issues.push('canary needs an explicit audience');
   if (c.mode === 'live') {
     if (c.fallback.kind === 'none') issues.push('live needs a fallback (legacy, a human line or voicemail)');
     if (c.confirm !== LIVE_CONFIRMATION) issues.push(`live needs the confirmation phrase "${LIVE_CONFIRMATION}"`);

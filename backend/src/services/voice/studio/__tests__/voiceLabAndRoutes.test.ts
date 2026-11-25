@@ -93,7 +93,9 @@ const base = (p: Partial<RouteChange> = {}): RouteChange => ({ pathKey: 'interes
 describe('route change rules', () => {
   it.each<[string, Partial<RouteChange>, boolean, boolean]>([
     ['shadow, no version', {}, false, true],
-    ['canary 10% with a published version', { mode: 'canary', canaryPercent: 10, versionId: VID }, true, true],
+    ['canary 10% with a published version and an audience', { mode: 'canary', canaryPercent: 10, versionId: VID, fallback: { kind: 'legacy', audience: ['lead:42'] } }, true, true],
+    ['canary with no audience', { mode: 'canary', canaryPercent: 10, versionId: VID }, true, false],
+    ['canary with a phone number as audience', { mode: 'canary', canaryPercent: 10, versionId: VID, fallback: { kind: 'legacy', audience: ['+15555550100'] } }, true, false],
     ['canary 0%', { mode: 'canary', canaryPercent: 0, versionId: VID }, true, false],
     ['canary 60%', { mode: 'canary', canaryPercent: 60, versionId: VID }, true, false],
     ['shadow with a canary percent', { canaryPercent: 5 }, false, false],
@@ -103,7 +105,12 @@ describe('route change rules', () => {
     ['live, confirmed, with fallback', { mode: 'live', versionId: VID, confirm: LIVE_CONFIRMATION }, true, true],
     ['human line without a reference', { fallback: { kind: 'human_line' } }, false, false],
   ])('%s', (_n, patch, published, ok) => {
-    expect(validateRouteChange(base(patch), { versionPublished: published }).ok).toBe(ok);
+    expect(validateRouteChange(base(patch), { versionPublished: published, versionBrand: 'colaberry', versionEngine: 'conversation_relay' }).ok).toBe(ok);
+  });
+  it('VS4.5: a version of another brand, or one whose brand was not looked up, cannot carry callers; Engine B cannot either', () => {
+    const live = base({ mode: 'live', versionId: VID, confirm: LIVE_CONFIRMATION });
+    for (const facts of [{ versionBrand: 'other', versionEngine: 'conversation_relay' }, { versionBrand: null, versionEngine: 'conversation_relay' }, {}, { versionBrand: 'colaberry', versionEngine: 'openai_realtime' }]) expect(validateRouteChange(live, { versionPublished: true, ...facts }).ok).toBe(false);
+    expect(validateRouteChange(base({ mode: 'test', versionId: VID }), { versionPublished: true, versionBrand: 'colaberry', versionEngine: 'openai_realtime' }).ok).toBe(true);
   });
   it('unknown fields and bad keys are refused', () => {
     expect(validateRouteChange({ ...base(), purchaseNumber: true }, { versionPublished: false }).ok).toBe(false);

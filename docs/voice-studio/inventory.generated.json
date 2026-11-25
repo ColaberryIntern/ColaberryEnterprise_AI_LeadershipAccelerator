@@ -1,6 +1,6 @@
 {
  "generatedFrom": "git ls-files",
- "total": 272,
+ "total": 275,
  "byRole": {
   "DISPATCH": 3,
   "INGEST": 3,
@@ -8,8 +8,8 @@
   "CALLER": 11,
   "CONFIG": 20,
   "UI": 33,
-  "CONSUMER": 69,
-  "MENTION": 127
+  "CONSUMER": 71,
+  "MENTION": 128
  },
  "rows": [
   {
@@ -1449,6 +1449,24 @@
   {
    "path": "backend/src/services/voice/retention/retention.ts",
    "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/rollout/allocation.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/rollout/reconcile.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/rollout/rolloutStore.ts",
+   "role": "MENTION",
    "callTypes": [],
    "envVars": []
   },

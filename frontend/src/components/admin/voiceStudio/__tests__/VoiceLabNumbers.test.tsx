@@ -137,6 +137,22 @@ describe('Numbers & Routing tab', () => {
     expect(mockApi.validateRoute).toHaveBeenCalledWith('r1', expect.objectContaining({ fallback: { kind: 'human_line', ref: 'admissions-line' } }));
   });
 
+  it('VS4.5: editing another field keeps the canary audience, and it can be edited', async () => {
+    mockApi.listRoutes.mockResolvedValue([{ ...ROUTE, mode: 'canary', canary_percent: 10, fallback: { kind: 'legacy', audience: ['lead:42', 'lead:43'] } }]);
+    mockApi.validateRoute.mockResolvedValue({ ok: false, issues: ['x'] });
+    await render(<NumbersRoutingTab />);
+    await click('Change');
+    const area = container.querySelector('#vr-audience') as HTMLTextAreaElement;
+    expect(area.value).toBe('lead:42\nlead:43');
+    const fb = container.querySelector('#vr-fallback') as HTMLSelectElement;
+    await act(async () => { fb.value = 'voicemail'; fb.dispatchEvent(new Event('change', { bubbles: true })); });
+    await click('Validate and show impact');
+    expect(mockApi.validateRoute).toHaveBeenLastCalledWith('r1', expect.objectContaining({ fallback: { kind: 'voicemail', audience: ['lead:42', 'lead:43'] } }));
+    await act(async () => { Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(area, 'lead:7'); area.dispatchEvent(new Event('input', { bubbles: true })); });
+    await click('Validate and show impact');
+    expect(mockApi.validateRoute).toHaveBeenLastCalledWith('r1', expect.objectContaining({ fallback: { kind: 'voicemail', audience: ['lead:7'] } }));
+  });
+
   it('apply stays disabled until the exact change validates; a change after validating disables it again', async () => {
     mockApi.validateRoute.mockResolvedValue({ ok: true, validationToken: 'tok', impact: { callsLast7Days: 4, currentMode: 'legacy', movesRealCallers: true, summary: 'legacy -> canary' } });
     mockApi.applyRoute.mockResolvedValue(undefined);
