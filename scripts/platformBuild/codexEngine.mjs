@@ -72,6 +72,9 @@ export function assertSandbox(engine) {
       s.on("error", blocked);
       setTimeout(() => process.exit(44), 5000);
     } catch (e) { blocked(e); }`;
+  // Control: the same probe outside the sandbox must connect, or a dead proxy would read as "blocked".
+  const open = spawnSync(process.execPath, ['-e', netProbe, String(engine.port)], { env: childEnv(engine.home), timeout: 60_000 });
+  if (open.status !== 43) fail(`the key proxy is not listening, so the network check proves nothing (exit ${open.status})`);
   const net = run('exec node -e "$1" "$2"', netProbe, String(engine.port));
   if (net.status !== 42) fail(`network is ${net.status === 43 ? 'REACHABLE' : 'untestable'} (exit ${net.status}: ${net.stderr.trim().slice(-300)})`);
 
