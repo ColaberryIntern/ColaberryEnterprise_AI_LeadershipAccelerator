@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Wednesday, November 25, 2026 at 12:49 PM</div>
-    <div><span class="sid">CC-20261124-g9p2</span><span class="count">4 changes</span></div>
+    <div class="meta">Generated Wednesday, November 25, 2026 at 3:12 PM</div>
+    <div><span class="sid">CC-20261124-g9p2</span><span class="count">5 changes</span></div>
   </header>
   <main>
     
@@ -117,6 +117,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">backend tsc --noEmit exit 0; proposalReadinessStories + materializeTasks.idempotency suites green (43 tests). Per Ali&#39;s review of PR #4429 (&quot;the rapport is for the people managing the contract ... the only person you are allowed to reach out to&quot;); rest of M3 approved (&quot;Everything else looks good&quot;).</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">amendment pushed to the open PR #4429 branch (not yet merged), so no conflict concern.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">05</span>
+          <h2>Gov Proposal Studio M4 - Engines</h2>
+          <span class="badge">2026-11-25</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">four engines, all NEW files under backend/src/services/factory/proposal/, reusing existing infra, NO migration. (T0 dropped: the cross-project store already exists, tenant-scoped gov_company_* tables.) (T1) collectionForm.ts - renderCollectionFormHtml (pure, HTML-escaped, DRAFT banner, empty-safe) builds one information-request document from collectProjectNeeds; buildSharathCollectionForm + ingestCollectionAnswers route each returned answer through the idempotent resolveProjectNeed (which already writes tenant-wide + propagates to sibling bids). (T2) govDossier.ts - getGovDossier resolves the tenant (GovQualification latest version) and returns the tenant-wide approved library (govCompanyLibrary reads), so an answer written on one bid reads back from any other bid of the same company; fail-soft, empty on no tenant. (T3) scoringImprovements.ts - nonEmptyImprovements guarantees a below-target review ALWAYS yields &gt;=1 concrete improvement, synthesizing one from the weakest check at the exact point the revise loop used to stop empty; uses the real pass rule (weighted&gt;=95, no check&lt;85, no fatal). (T4) selfHealingBrief.ts - composeSelfHealingBrief emits a four-section brief (problem/why it matters/the fix/what to do); draftSelfHealingBrief files it as a DRAFT via mayaOutboundQueue.enqueueOutbound (pending_approval), idempotent on defect key - nothing auto-sends.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend tsc --noEmit exit 0; test-file typecheck baseline matched; jest 304 suites / 4275 tests (factory+sbp, integration tier excluded locally); the 4 M4 suites 25 tests green. No existing file modified (all additive new modules), so zero regression surface.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">no migration (T0 dropped). All outbound email draft-only (enqueue pending_approval). Triggers/wiring (calling draftSelfHealingBrief on a detected defect, calling nonEmptyImprovements at the revise-loop stop, surfacing the dossier/form in a screen) are the integration surface - the form/brief UI belongs to M5. PR pending (one PR + one deploy, Ali merges).</span></div>
           
         </div>
       </article>
