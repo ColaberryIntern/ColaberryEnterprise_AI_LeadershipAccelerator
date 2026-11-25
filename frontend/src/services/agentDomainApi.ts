@@ -247,6 +247,25 @@ export interface ChangeRequest {
   decision_package?: ToolRequestPackage | null;
   /** AF11.8. Whether this is in front of you at all, and what is outstanding if not. */
   readiness?: PackageReadiness;
+  /**
+   * The capability ladder behind this request, and which rungs THIS decision frees.
+   *
+   * `null` when the request has no capability, or when that capability has fewer than two rungs:
+   * a one-rung ladder has no position to show, and drawing it would imply work is queued behind
+   * the decision when none is. `rungs[].state` distinguishes `waiting_on_you` from
+   * `blocked_elsewhere`, which is the difference between a decision that frees something and one
+   * that frees nothing.
+   */
+  releases?: { rungs: LadderRung[]; sentence: string | null } | null;
+}
+
+/** One rung of a capability ladder, as the approval queue renders it. */
+export interface LadderRung {
+  step: string;
+  label: string;
+  story_id: string;
+  state: 'credited' | 'waiting_on_you' | 'blocked_elsewhere' | 'not_started';
+  released_by_this: boolean;
 }
 
 /** AF11.8. The ten blocks a request must carry before it reaches a human. */

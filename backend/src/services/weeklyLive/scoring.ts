@@ -27,18 +27,21 @@ export const VIRAL_WEIGHTS = {
 } as const;
 export const CONVERT_WEIGHTS = { buyerFit: 30, nextStep: 25, proof: 25, trust: 20 } as const;
 
-/** The 10 external viral factors a topic can ride (Ali's list, 2026-11-24). Numbered 1 to 10. */
+/**
+ * The 10 external viral factors, exactly as Ali's list reads (kit: research-2026-11-24.md). The
+ * Phase 2 version of these labels was paraphrased and wrong for several numbers; the tests pin them.
+ */
 export const VIRAL_FACTORS: Readonly<Record<number, string>> = {
-  1: 'AI news about jobs or pay',
-  2: 'A public debate',
-  3: 'Famous people on AI and work',
-  4: 'Trends and memes',
-  5: 'Money',
-  6: 'Tech releases',
-  7: 'Fears',
-  8: 'Sports and entertainment',
-  9: 'Seasonal events',
-  10: 'Achievements and milestones',
+  1: 'Current events / breaking news',
+  2: 'Controversy / debate',
+  3: 'Celebrities / influential people',
+  4: 'Trending social topics',
+  5: 'Money / economic opportunity',
+  6: 'Emerging technology',
+  7: 'Societal fears / uncertainty',
+  8: 'Major sports / entertainment events',
+  9: 'Seasonal / cultural events',
+  10: 'Extraordinary human achievement',
 };
 
 export const TOPIC_GATE = 85;

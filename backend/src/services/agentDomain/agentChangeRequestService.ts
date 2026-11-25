@@ -108,6 +108,11 @@ export class ToolRequestRefusedError extends Error {
   }
 }
 
+import {
+  LadderRung, StoryRow, buildLadder, releasesSentence,
+} from './capabilityLadder';
+import { loadCapabilityStories } from './capabilityLadderLoader';
+
 export interface ChangeRequestRow {
   id: string;
   kind: ChangeRequestKind;
@@ -128,6 +133,16 @@ export interface ChangeRequestRow {
    * visible without opening another screen.
    */
   tool_request?: ToolRequestDetail | null;
+  /**
+   * AF-approvals. The capability ladder behind this request, and which rungs THIS decision frees.
+   *
+   * On the same row for the same reason `tool_request` is. An approver's real question is "what is
+   * stuck behind this", and it was answerable only by opening the builder's board. `null` when the
+   * request has no capability, or when that capability has fewer than two rungs and there is
+   * therefore no climb to show a position on.
+   */
+  releases?: { rungs: LadderRung[]; sentence: string | null } | null;
+
   /**
    * AF11.8. The ten-block case for deciding this request, or `null` when nobody has written one.
    *
@@ -280,14 +295,30 @@ async function withDetails(rows: AgentDomainChangeRequest[]): Promise<ChangeRequ
   const details = await loadDetails(toolIds);
   const checks = await loadDuplicateChecks(toolIds);
   const packages = await loadPackages(toolIds);
+  // A fourth per-page query, same discipline as the three above: every ladder in one round trip,
+  // keyed by capability. Only tool requests carry a capability id today, so a queue of pure change
+  // requests costs nothing here.
+  const capabilityIds = [...details.values()]
+    .map((d) => d.capability_id)
+    .filter(Boolean);
+  const sq = AgentDomainChangeRequest.sequelize;
+  const stories = sq && capabilityIds.length
+    ? await loadCapabilityStories(sq, capabilityIds)
+    : new Map<string, StoryRow[]>();
   // One clock for the whole page, so two rows on one screen cannot disagree about whether a
   // simulation is dated in the future.
   const now = new Date();
   return rows.map((r) => {
     const decisionPackage = r.kind === 'tool' ? (packages.get(r.id) ?? null) : null;
+    const detail = details.get(r.id) ?? null;
+    const capabilityId = detail?.capability_id ?? '';
+    const rungs = capabilityId
+      ? buildLadder(capabilityId, stories.get(capabilityId) ?? [], r.kind === 'tool' ? 'tool' : 'change')
+      : null;
     return {
       ...project(r),
-      tool_request: details.get(r.id) ?? null,
+      tool_request: detail,
+      releases: rungs ? { rungs, sentence: releasesSentence(rungs) } : null,
       duplicate_check: checks.get(r.id) ?? null,
       decision_package: decisionPackage,
       readiness: r.kind === 'tool' ? readinessOf(decisionPackage, now) : NO_PACKAGE,

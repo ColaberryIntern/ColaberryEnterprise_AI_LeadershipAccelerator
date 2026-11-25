@@ -4,7 +4,7 @@
  * Behavioural tests with a stubbed global fetch (no real network); mirrors the
  * jsonResponse-stub pattern in services/intel/sources/__tests__/keyedSources.test.ts.
  */
-import { getVideoDurationSeconds } from '../youtubeClient';
+import { getVideoDurationSeconds, youtubeGet } from '../youtubeClient';
 
 function jsonResponse(payload: unknown, ok = true, status = 200): Response {
   return { ok, status, json: async () => payload } as unknown as Response;
@@ -68,5 +68,26 @@ describe('getVideoDurationSeconds', () => {
   it('degrades to null when the API is unreachable after retries are exhausted', async () => {
     jest.spyOn(global, 'fetch').mockRejectedValue(new Error('network down'));
     await expect(getVideoDurationSeconds('abc123', { maxAttempts: 1 })).resolves.toBeNull();
+  });
+});
+
+describe('youtubeGet', () => {
+  const savedKey = process.env.YOUTUBE_API_KEY;
+  afterEach(() => {
+    if (savedKey === undefined) delete process.env.YOUTUBE_API_KEY; else process.env.YOUTUBE_API_KEY = savedKey;
+    jest.restoreAllMocks();
+  });
+  it('throws NotConfigured without a key and makes no call', async () => {
+    delete process.env.YOUTUBE_API_KEY;
+    const spy = jest.spyOn(global, 'fetch');
+    await expect(youtubeGet('videos', { id: 'a' })).rejects.toMatchObject({ name: 'NotConfigured' });
+    expect(spy).not.toHaveBeenCalled();
+  });
+  it('surfaces the API reason on a 403, once, without the key in the message', async () => {
+    process.env.YOUTUBE_API_KEY = 'test-key-do-not-log';
+    const spy = jest.spyOn(global, 'fetch').mockResolvedValue(jsonResponse({ error: { errors: [{ reason: 'quotaExceeded' }] } }, false, 403));
+    const err = await youtubeGet('search', { q: 'mcp' }).catch((e: Error) => e) as Error;
+    expect(err.message).toBe('YouTube API rejected: quotaExceeded');
+    expect(spy).toHaveBeenCalledTimes(1);
   });
 });
