@@ -9,6 +9,12 @@ import { centralTime, useStudioLoad } from './studioLoad';
 const PASS = new Set(['pass', 'passed']);
 const FAIL = new Set(['fail', 'failed']);
 
+/** Green needs a pass verdict AND recorded evidence. */
+export function runTone(r: { verdict: string; evidence_ref: string | null }): 'success' | 'danger' | 'neutral' {
+  if (PASS.has(r.verdict) && r.evidence_ref) return 'success';
+  return FAIL.has(r.verdict) ? 'danger' : 'neutral';
+}
+
 export default function QualityTab(): React.ReactElement {
   const { data, blocked } = useStudioLoad(getQuality, [], 'Quality data could not be loaded.');
   if (blocked || !data) return blocked as React.ReactElement;
@@ -28,11 +34,10 @@ export default function QualityTab(): React.ReactElement {
           {runs.length === 0 ? <p className="text-muted small mb-0" data-testid="runs-empty">No evaluation has been recorded, so nothing here has passed.</p> : (
             <ul className="list-unstyled d-grid gap-2 mb-0">
               {runs.map((r) => {
-                const green = PASS.has(r.verdict) && !!r.evidence_ref;
                 return (
                   <li key={r.id} className="d-flex justify-content-between gap-2 small" data-testid={`run-${r.id}`}>
                     <span>{r.scenario_set}, {ENGINE_LABEL[r.engine] ?? r.engine}, {r.environment}<br /><span className="text-muted">{centralTime(r.created_at)}, evidence {r.evidence_ref ?? 'missing'}</span></span>
-                    <StatusBadge label={PASS.has(r.verdict) && !r.evidence_ref ? 'no evidence' : r.verdict} tone={green ? 'success' : FAIL.has(r.verdict) ? 'danger' : 'neutral'} />
+                    <StatusBadge label={PASS.has(r.verdict) && !r.evidence_ref ? 'no evidence' : r.verdict} tone={runTone(r)} />
                   </li>
                 );
               })}

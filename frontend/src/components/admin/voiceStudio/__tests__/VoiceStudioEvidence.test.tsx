@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import axe from 'axe-core';
 import CallExplorerTab from '../CallExplorerTab';
 import TrustCenterTab from '../TrustCenterTab';
-import QualityTab from '../QualityTab';
+import QualityTab, { runTone } from '../QualityTab';
 import CostsTab from '../CostsTab';
 
 const mockApi: Record<string, jest.Mock> = { listCalls: jest.fn(), getCall: jest.fn(), exportTimeline: jest.fn(), getQuality: jest.fn(), getCosts: jest.fn() };
@@ -93,6 +93,50 @@ describe('Trust Center', () => {
     expect(text('timeline')).toContain('was refused');
   });
 
+  it('out-of-order responses never show one call under another', async () => {
+    const waiting: Record<string, (v: unknown) => void> = {};
+    const of = (id: string) => ({ ...DETAIL, timeline: [ENTRY({ detail: `FROM ${id}` })] });
+    mockApi.listCalls.mockResolvedValue(['c1', 'c2', 'c3'].map((id) => ({ ...CALL, id })));
+    mockApi.getCall.mockImplementation((id: string) => (id === 'c1' ? Promise.resolve(of('c1')) : new Promise((r) => { waiting[id] = r; })));
+    const choose = async (id: string) => {
+      const sel = container.querySelector('#tc-call') as HTMLSelectElement | null;
+      if (sel) await act(async () => { sel.value = id; sel.dispatchEvent(new Event('change', { bubbles: true })); });
+      await settle();
+    };
+    await render(<TrustCenterTab />, '/?call=c1');
+    expect(text('timeline')).toContain('FROM c1');
+    await choose('c2');
+    expect(container.textContent).not.toContain('FROM c1'); // loading c2 hides c1 at once
+    await act(async () => { waiting.c2(of('c2')); });
+    await settle();
+    expect(text('timeline')).toContain('FROM c2');
+  });
+
+  it('the call explorer ignores a superseded open', async () => {
+    const waiting: Record<string, (v: unknown) => void> = {};
+    mockApi.listCalls.mockResolvedValue(['c1', 'c2'].map((id) => ({ ...CALL, id })));
+    mockApi.getCall.mockImplementation((id: string) => new Promise((r) => { waiting[id] = r; }));
+    await render(<CallExplorerTab />);
+    const opens = Array.from(container.querySelectorAll('tbody button')) as HTMLButtonElement[];
+    await act(async () => { opens[0].click(); opens[1].click(); });
+    await act(async () => { waiting.c2({ ...DETAIL, call: { ...DETAIL.call, purpose: 'second' } }); });
+    await act(async () => { waiting.c1({ ...DETAIL, call: { ...DETAIL.call, purpose: 'first' } }); });
+    await settle();
+    expect(text('call-detail')).toContain('second');
+  });
+
+  it('a superseded list response is dropped (the hook every tab shares)', async () => {
+    const waiting: Array<(v: unknown) => void> = [];
+    mockApi.listCalls.mockImplementation(() => new Promise((r) => { waiting.push(r); }));
+    await render(<CallExplorerTab />);
+    const sel = container.querySelector('[aria-label="Engine"]') as HTMLSelectElement;
+    await act(async () => { sel.value = 'openai_realtime'; sel.dispatchEvent(new Event('change', { bubbles: true })); });
+    await act(async () => { waiting[1]([]); });
+    await act(async () => { waiting[0]([CALL]); });
+    await settle();
+    expect(text('calls-empty')).toContain('No calls match');
+  });
+
   it('export: a link for an approver, an explanation on 403', async () => {
     await render(<TrustCenterTab />, '/?call=c1');
     await click('Prepare audit export');
@@ -107,6 +151,8 @@ it('Quality: a pass without recorded evidence is never green', async () => {
   await render(<QualityTab />);
   expect(text('run-a')).toContain('pass');
   expect(text('run-b')).toContain('no evidence');
+  expect(QUALITY.runs.map((r) => runTone(r))).toEqual(['success', 'neutral', 'danger', 'neutral']);
+  expect(runTone({ verdict: 'pass', evidence_ref: '' })).toBe('neutral');
   expect(text('failures')).toBe('Scenario failures: 1. Blind voice comparisons: 1 (1 scored).');
 });
 

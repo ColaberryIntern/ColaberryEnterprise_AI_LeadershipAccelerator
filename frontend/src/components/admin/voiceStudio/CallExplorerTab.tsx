@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { SectionCard, StatusBadge } from '../shell';
 import { getCall, listCalls, studioErrorMessage, type CallDetail, type CallFilters } from '../../../services/voiceStudioApi';
@@ -14,8 +14,15 @@ export default function CallExplorerTab(): React.ReactElement {
   const [detail, setDetail] = useState<CallDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { data: calls, blocked } = useStudioLoad(() => listCalls(f), [f], 'Calls could not be loaded.');
-  const set = (p: Partial<CallFilters>) => { setDetail(null); setF((x) => ({ ...x, ...p })); };
-  const open = (id: string) => { setError(null); getCall(id).then(setDetail).catch((e) => setError(studioErrorMessage(e, 'This call could not be loaded.'))); };
+  const request = useRef(0); // only the latest opened call may render; a filter change cancels it
+  const set = (p: Partial<CallFilters>) => { request.current += 1; setDetail(null); setError(null); setF((x) => ({ ...x, ...p })); };
+  const open = (id: string) => {
+    const mine = ++request.current;
+    setError(null);
+    setDetail(null);
+    getCall(id).then((d) => { if (mine === request.current) setDetail(d); })
+      .catch((e) => { if (mine === request.current) setError(studioErrorMessage(e, 'This call could not be loaded.')); });
+  };
 
   return (
     <>

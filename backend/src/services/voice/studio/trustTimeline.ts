@@ -27,17 +27,18 @@ export const redact = (s: string): string => s.replace(EMAIL, '[redacted email]'
 const iso = (d: Date | string): string => new Date(d).toISOString();
 
 function verdictOf(decision: string): Verdict {
-  return decision === 'denied' ? 'denied' : decision === 'approval_required' ? 'approval_required' : 'allowed';
+  // Fail closed: only a recorded 'allowed' reads as allowed; an unknown value is merely observed.
+  return decision === 'allowed' || decision === 'denied' || decision === 'approval_required' ? decision : 'observed';
 }
 
 export function buildTimeline(i: TimelineInput): TimelineEntry[] {
   const out: TimelineEntry[] = [];
-  const add = (e: TimelineEntry) => out.push({ ...e, actor: redact(e.actor), detail: redact(e.detail) });
+  const add = (e: TimelineEntry) => out.push({ ...e, actor: redact(e.actor), action: redact(e.action), detail: redact(e.detail) });
 
   if (i.version?.approved_by && i.version.approved_at) {
     add({ at: iso(i.version.approved_at), actorType: 'human', actor: i.version.approved_by, action: 'approved_version', verdict: 'allowed', detail: `Approved agent version ${i.version.version} (author ${i.version.author})`, sourceId: i.version.id });
   }
-  add({ at: iso(i.call.created_at), actorType: 'deterministic_service', actor: 'voice gateway', action: 'call_requested', verdict: i.call.state === 'blocked' ? 'denied' : 'allowed',
+  add({ at: iso(i.call.created_at), actorType: 'deterministic_service', actor: 'voice gateway', action: 'call_requested', verdict: i.call.state === 'blocked' ? 'denied' : 'observed',
     detail: i.call.state === 'blocked' ? 'The gateway blocked this call before any dial' : `Call requested on ${i.call.engine}; consent ${i.call.consent_ref ? 'recorded' : 'not recorded'}`, sourceId: i.call.id });
   for (const e of i.events) {
     const carrier = e.source === 'carrier';

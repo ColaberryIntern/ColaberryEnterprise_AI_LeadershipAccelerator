@@ -55,7 +55,7 @@ describe('trust timeline (pure)', () => {
     const t = buildTimeline(input());
     expect(t.map((e) => [e.actorType, e.action, e.verdict])).toEqual([
       ['human', 'approved_version', 'allowed'],
-      ['deterministic_service', 'call_requested', 'allowed'],
+      ['deterministic_service', 'call_requested', 'observed'],
       ['carrier', 'state_answered', 'observed'],
       ['ai', 'tool_next_open_strategy_slots', 'allowed'],
       ['ai', 'tool_book_meeting', 'denied'],
@@ -68,6 +68,18 @@ describe('trust timeline (pure)', () => {
     expect(redact('call +1 555 555 0100 on 2026-11-24')).toBe('call [redacted number] on 2026-11-24');
     const blocked = buildTimeline(input({ call: { ...input().call, state: 'blocked' } }));
     expect(blocked.find((e) => e.action === 'call_requested')?.verdict).toBe('denied');
+  });
+
+  it('redacts detail text too, on screen and in the CSV; an unknown decision is never "allowed"', () => {
+    const t = buildTimeline(input({
+      version: { id: 'v1', version: 3, author: 'writer@example.com', approved_by: 'x', approved_at: '2026-11-24T19:00:00Z' },
+      tools: [{ id: 't9', tool_name: 'call_5555550100_now', auth_decision: 'mystery', status: 'completed', started_at: '2026-11-24T20:00:10Z' }],
+    }));
+    for (const s of [JSON.stringify(t.map((e) => e.detail)), timelineCsv(t)]) {
+      expect(s).not.toContain('writer@example.com');
+      expect(s).not.toContain('5555550100');
+    }
+    expect(t.find((e) => e.actorType === 'ai')?.verdict).toBe('observed');
   });
 
   it('CSV neutralizes a formula and doubles quotes', () => {

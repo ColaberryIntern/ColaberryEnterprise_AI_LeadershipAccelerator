@@ -316,3 +316,11 @@ describe('Engine B: disconnect and teardown (VS2.4)', () => {
     expect(JSON.stringify(h.logs)).not.toContain(chunk20ms.slice(0, 40));
   });
 });
+
+it('VS3.5: a tool the broker refuses reaches the durable record with its error class', async () => {
+  const h = harness();
+  await h.ready();
+  await h.answer('resp_1', 'item_1', 0);
+  await h.ev({ type: 'response.function_call_arguments.done', response_id: 'resp_1', call_id: 'no', name: 'book_meeting', arguments: '{}' });
+  expect(h.tools).toEqual([expect.objectContaining({ name: 'book_meeting', errorClass: 'UnknownTool' })]);
+});
