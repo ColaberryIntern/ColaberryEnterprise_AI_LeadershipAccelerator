@@ -1,0 +1,75 @@
+import { z } from 'zod';
+import { getInstrumentedOpenAI } from '../../openaiInstrumented';
+import { MODEL_PRICING } from '../../components/costEstimationService';
+import { allWeeks } from '../../../data/canonicalCourse';
+import { VIRAL_FACTORS } from '../scoring';
+import { withBudget } from './researchBudget';
+
+/**
+ * Find candidate news items with OpenAI's web search tool (M0: the production OpenAI key). The answer
+ * is only a list of CANDIDATES: nothing here is stored until signalsJob has fetched the page and read
+ * the date off it. One call per group of factors, 90 s each, one SDK retry, each call under the cap.
+ */
+export const SEARCH_MODEL = process.env.WEEKLY_LIVE_SEARCH_MODEL || 'gpt-4o';
+const WEB_SEARCH_CALL_USD = 0.01;
+/** Worst case reserved per call: about 60k input and 3k output tokens on gpt-4o, plus 6 searches. */
+export const SEARCH_RESERVE_USD = 0.25;
+const TIMEOUT_MS = 90_000;
+
+export const FACTOR_GROUPS: readonly (readonly number[])[] = [[1, 6], [2, 7], [3, 4], [5, 10], [8, 9]];
+
+const Url = z.string().max(1000).regex(/^https?:\/\//);
+export const CandidateSchema = z.object({
+  headline: z.string().min(5).max(500),
+  publisher: z.string().max(200).default(''),
+  url: Url,
+  alternate_url: Url.nullish().catch(null),
+  factors: z.array(z.number().int().min(1).max(10)).min(1),
+  fits_weeks: z.array(z.number().int().min(1).max(12)).default([]),
+  idea: z.string().max(300).default(''),
+});
+export type Candidate = z.infer<typeof CandidateSchema>;
+
+/** Keep the valid items of a model answer; a malformed item is dropped, never repaired. */
+export function parseCandidates(text: string): Candidate[] {
+  const m = text.match(/\{[\s\S]*\}/);
+  if (!m) return [];
+  let raw: unknown;
+  try { raw = JSON.parse(m[0]); } catch { return []; }
+  const items = (raw as { items?: unknown }).items;
+  if (!Array.isArray(items)) return [];
+  return items.flatMap((i) => { const p = CandidateSchema.safeParse(i); return p.success ? [p.data] : []; });
+}
+
+export interface SearchInput { planId: string; from: string; to: string; airDate: string; forceNews?: string; avoid?: string; }
+
+function prompt(group: readonly number[], s: SearchInput): string {
+  const factors = group.map((f) => `${f} = ${VIRAL_FACTORS[f]}`).join('; ');
+  const weeks = allWeeks().map((w) => `${w.week_number}. ${w.theme}`).join('; ');
+  return `Search the web for news about AI and work that a live class for working professionals could open with on ${s.airDate}.
+Find 5 to 6 real, separate stories published between ${s.from} and ${s.to}. For trends, entertainment and seasonal events, an event in the week of ${s.airDate} also counts.
+Look for these kinds of story: ${factors}.
+${s.forceNews ? `Also find the story behind this, from the user: ${JSON.stringify(s.forceNews)}.` : ''}
+${s.avoid ? `Leave out anything about: ${JSON.stringify(s.avoid)}.` : ''}
+Course weeks: ${weeks}.
+Return JSON only: {"items":[{"headline":"","publisher":"","url":"the article itself","alternate_url":"the same story at another outlet or null","factors":[all that apply, numbers 1 to 10: ${Object.entries(VIRAL_FACTORS).map(([k, v]) => `${k} ${v}`).join('; ')}],"fits_weeks":[1 to 3 course week numbers],"idea":"one-line opening hook, plain words, no statistics, no prices"}]}
+Only use URLs you found in this search.`;
+}
+
+export interface SearchUsage { input_tokens?: number; output_tokens?: number; }
+export function searchCost(model: string, usage: SearchUsage | undefined, searches: number): number {
+  if (!usage) return SEARCH_RESERVE_USD; // unknown usage is charged at the worst case, never zero
+  const p = MODEL_PRICING[model] || MODEL_PRICING['gpt-4o'];
+  return ((usage.input_tokens || 0) * p.input_per_1m + (usage.output_tokens || 0) * p.output_per_1m) / 1_000_000 + searches * WEB_SEARCH_CALL_USD;
+}
+
+export async function searchGroup(group: readonly number[], s: SearchInput): Promise<Candidate[]> {
+  return withBudget(s.planId, `signals:${group.join('+')}`, SEARCH_RESERVE_USD, async () => {
+    const client = getInstrumentedOpenAI({ workflow_id: 'weekly_live_signals' }, { timeout: TIMEOUT_MS, maxRetries: 1 });
+    const res = await client.responses.create({
+      model: SEARCH_MODEL, tools: [{ type: 'web_search', search_context_size: 'low' }], input: prompt(group, s), max_output_tokens: 3000,
+    });
+    const searches = res.output.filter((o) => o.type === 'web_search_call').length;
+    return { value: parseCandidates(res.output_text || ''), costUsd: searchCost(SEARCH_MODEL, res.usage, searches) };
+  });
+}
