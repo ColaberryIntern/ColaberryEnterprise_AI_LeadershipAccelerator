@@ -85,6 +85,35 @@ describe('Voice Lab / Numbers & Routing API (VS3.4)', () => {
     expect(deps.synth).toHaveBeenCalledTimes(3);
   });
 
+  it('every lab and routing route refuses an unauthenticated caller and spends nothing', async () => {
+    const { a, deps } = make();
+    const id = '00000000-0000-4000-8000-000000000001';
+    for (const p of ['lab/catalog', 'numbers', 'routes', `lab/ab/${id}`, `lab/ab/${id}/clip/X`]) expect((await request(a).get(`/api/admin/voice-studio/${p}`)).status).toBe(401);
+    for (const p of ['lab/preview', 'lab/ab', `lab/ab/${id}/score`, 'routes/validate', 'routes/apply']) expect((await request(a).post(`/api/admin/voice-studio/${p}`).send({ voice: 'marin', text: 'hi' })).status).toBe(401);
+    expect(deps.synth).not.toHaveBeenCalled();
+  });
+
+  it('A/B clips count against the same rate limit as previews', async () => {
+    const { a, deps } = make({ limiter: new PreviewLimiter(1, 100) });
+    const c = await request(a).post('/api/admin/voice-studio/lab/ab').set(A).send({ voiceA: 'marin', voiceB: 'cedar', text: 'Hello' });
+    const clip = (l: string) => request(a).get(`/api/admin/voice-studio/lab/ab/${c.body.trialId}/clip/${l}`).set(A);
+    expect((await clip('X')).status).toBe(200);
+    expect((await clip('Y')).status).toBe(429);
+    expect(deps.synth).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([['a typo', 'v3'], ['an array', ['x', 'y']], ['an object', { a: 1 }], ['a number', 7]])('malformed versionId (%s) is an issue, never a database call', async (_n, versionId) => {
+    const { a, deps } = make();
+    const v = await request(a).post('/api/admin/voice-studio/routes/validate').set(A).send({ routeId: RID, change: { ...change, versionId } });
+    expect(v.status).toBe(200);
+    expect(v.body.ok).toBe(false);
+    expect(v.body.issues.join()).toContain('versionId');
+    const ap = await request(a).post('/api/admin/voice-studio/routes/apply').set(FULL).send({ routeId: RID, change: { ...change, versionId } });
+    expect(ap.status).toBe(400);
+    expect(deps.store.versionFacts).not.toHaveBeenCalled();
+    expect(deps.store.getRoute).not.toHaveBeenCalled();
+  });
+
   it('blind A/B: no response names a voice until it is scored, then it reveals', async () => {
     const { a } = make();
     const c = await request(a).post('/api/admin/voice-studio/lab/ab').set(A).send({ voiceA: 'marin', voiceB: 'cedar', text: 'Hello' });

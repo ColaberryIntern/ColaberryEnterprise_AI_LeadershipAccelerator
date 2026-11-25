@@ -22,7 +22,7 @@ import * as Auth from '../../middlewares/authMiddleware';
 import { loadVoiceConfig } from '../../services/voice/voiceConfig';
 import { voiceCatalog } from '../../services/voice/studio/voiceCatalog';
 import { LabError, PreviewLimiter, PreviewSchema, clipVoice, createTrial, openAiSynth, publicTrial, scoreTrial, type Synth, type TrialStore } from '../../services/voice/studio/voiceLab';
-import { checkValidationToken, describeImpact, mintValidationToken, validateRouteChange, type RouteChange } from '../../services/voice/studio/routeChange';
+import { RouteChangeSchema, checkValidationToken, describeImpact, mintValidationToken, validateRouteChange, type RouteChange } from '../../services/voice/studio/routeChange';
 import * as LabStore from '../../services/voice/studio/labStore';
 
 export interface LabDeps {
@@ -131,10 +131,13 @@ export function buildVoiceStudioLabRouter(deps: () => LabDeps = productionLabDep
 
   const check = async (routeId: string | null, change: unknown) => {
     const d = deps();
+    // Shape first: nothing unvalidated reaches the database (a bad version id was a 500, not an issue).
+    const shape = RouteChangeSchema.safeParse(change);
+    if (!shape.success) return { status: 200 as const, current: null, v: validateRouteChange(change, { versionPublished: false }) };
     const current = routeId ? await d.store.getRoute(routeId) : null;
     if (routeId && !current) return { status: 404 as const };
-    const facts = await d.store.versionFacts((change as { versionId?: string | null })?.versionId ?? null);
-    return { status: 200 as const, current, v: validateRouteChange(change, { versionPublished: facts.versionPublished }) };
+    const facts = await d.store.versionFacts(shape.data.versionId);
+    return { status: 200 as const, current, v: validateRouteChange(shape.data, { versionPublished: facts.versionPublished }) };
   };
 
   router.post('/api/admin/voice-studio/routes/validate', gate, requireAdmin, async (req, res) => {

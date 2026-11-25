@@ -5,7 +5,7 @@
  *
  * A/B trials live in voice_evaluation_runs (scenario_set 'voice_ab', verdict pending -> scored):
  * scoring is one conditional UPDATE, so a trial is scored once even if two people click together.
- * Route writes happen in one transaction and record who approved them.
+ * A route write is one INSERT or UPDATE statement and records who approved it.
  */
 import { QueryTypes } from 'sequelize';
 import type { AbTrial, TrialStore } from './voiceLab';

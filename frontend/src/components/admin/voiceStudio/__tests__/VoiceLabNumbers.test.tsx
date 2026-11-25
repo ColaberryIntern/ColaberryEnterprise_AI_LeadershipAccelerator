@@ -107,7 +107,7 @@ describe('Voice Lab tab', () => {
 
 describe('Numbers & Routing tab', () => {
   beforeEach(() => {
-    mockApi.listNumbers.mockResolvedValue([{ id: 'n1', provider: 'twilio', provider_number_id: 'PN1', number_ref: 'test-line', ownership: 'owned', status: 'active', capabilities: {}, brand_slug: null, verified_caller_id: false }]);
+    mockApi.listNumbers.mockResolvedValue([{ id: 'n1', provider: 'twilio', provider_number_id: 'PN1', number_ref: 'test-line', ownership: 'owned', status: 'active', capabilities: { voice: true }, routing_policy: {}, brand_slug: null, verified_caller_id: false }]);
     mockApi.listRoutes.mockResolvedValue([ROUTE]);
   });
 
@@ -115,6 +115,18 @@ describe('Numbers & Routing tab', () => {
     await render(<NumbersRoutingTab />);
     expect(text('[data-testid="numbers"]')).toContain('test-line');
     expect(container.textContent).not.toMatch(/\+1\d{10}/);
+  });
+
+  it('shows capabilities, inbound mapping and each route fallback; a human line asks for its reference', async () => {
+    mockApi.listRoutes.mockResolvedValue([{ ...ROUTE, fallback: { kind: 'human_line', ref: 'admissions-line' } }]);
+    mockApi.validateRoute.mockResolvedValue({ ok: false, issues: ['x'] });
+    await render(<NumbersRoutingTab />);
+    expect(text('[data-testid="numbers"]')).toContain('Can do voice. No inbound mapping yet');
+    expect(text('[data-testid="fallback-r1"]')).toBe('human line (admissions-line)');
+    await click('Change');
+    expect((container.querySelector('#vr-ref') as HTMLInputElement).value).toBe('admissions-line');
+    await click('Validate and show impact');
+    expect(mockApi.validateRoute).toHaveBeenCalledWith('r1', expect.objectContaining({ fallback: { kind: 'human_line', ref: 'admissions-line' } }));
   });
 
   it('apply stays disabled until the exact change validates; a change after validating disables it again', async () => {

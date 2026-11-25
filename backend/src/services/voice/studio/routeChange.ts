@@ -9,7 +9,7 @@
  * Rules (the directive: no automatic purchase or porting; staged rollout; safe fallback):
  *   - mode is one of legacy, shadow, test, canary, live, disabled;
  *   - canary needs 1..50 percent; any other mode forces canary_percent 0;
- *   - test, canary and live need a PUBLISHED profile version for this route;
+ *   - test, canary and live need a PUBLISHED agent version (matching it to the route's agent is VS4.5);
  *   - live additionally needs a fallback (legacy or a human line reference), and an explicit
  *     confirmation phrase, because it moves real callers;
  *   - nothing here buys, ports or releases a number: routes only point at numbers we hold.

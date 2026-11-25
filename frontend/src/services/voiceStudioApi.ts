@@ -127,7 +127,7 @@ export interface AbTrial {
   reveal?: { X: string; Y: string };
 }
 
-export interface NumberRow { id: string; provider: string; provider_number_id: string; number_ref: string; ownership: string; status: string; capabilities: Record<string, unknown>; brand_slug: string | null; verified_caller_id: boolean }
+export interface NumberRow { id: string; provider: string; provider_number_id: string; number_ref: string; ownership: string; status: string; capabilities: Record<string, unknown>; routing_policy: Record<string, unknown>; brand_slug: string | null; verified_caller_id: boolean }
 export interface RouteRow { id: string; path_key: string; call_type: string; brand_slug: string; engine: string; mode: string; canary_percent: number; version_id: string | null; fallback: { kind?: string; ref?: string }; approved_by: string | null; approved_at: string | null; calls_7d: number }
 
 export interface RouteChange {

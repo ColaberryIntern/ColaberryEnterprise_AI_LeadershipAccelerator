@@ -1,4 +1,4 @@
-| MENTION | 126 || CONSUMER | 63 || UI | 31 || CONFIG | 20 || CALLER | 11 || GUARD | 6 || INGEST | 3 || DISPATCH | 3 || MENTION | 126 || CONSUMER | 61 || UI | 31 || CONFIG | 20 || CALLER | 11 || GUARD | 6 || INGEST | 3 || DISPATCH | 3 |# Voice AI Studio: Inventory
+# Voice AI Studio: Inventory
 
 Every caller, consumer, route, cron and config of AI voice calls in the repo (VS1.1). Hand-read on 2026-11-24 against workstream/voice-studio-p1 (base origin/main 89e6bf3bb), cross-checked with the repeatable classifier.
 
@@ -22,10 +22,10 @@ Search set (the directive's list): synthflow, syntheflow, triggerVoiceCall, plac
 | CALLER | 11 |
 | GUARD | 6 |
 | INGEST | 3 |
-| CONSUMER | 60 |
+| CONSUMER | 63 |
 | CONFIG | 20 |
-| UI | 29 |
-| MENTION | 122 |
+| UI | 31 |
+| MENTION | 126 |
 
 The three DISPATCH files are exactly the ones the no-direct-dispatch architecture test allows: `synthflowService.ts` (today's path, flag off), `voice/providers/synthflowLegacyProvider.ts` (the same Synthflow dial behind the Voice Gateway when `VOICE_GATEWAY_LEGACY_ENABLED=true`) and `voice/providers/twilioCarrier.ts` (the direct engines' Twilio dial, VS2.1). The drift check also runs as a jest test in CI (`voiceInventorySnapshot.test.ts`).
 
