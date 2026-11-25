@@ -10,8 +10,13 @@
 import { QueryTypes, type Sequelize } from 'sequelize';
 import { evaluateAlerts, type OpsFacts, type VoiceAlert } from './alertRules';
 import { voiceOps, type OpsMetrics } from './opsMetrics';
+import { WORST_CASE_USD_PER_MIN } from '../testlab/testLabPolicy';
 
-/** Alert level only. Hard spend caps are the gateway's (per route and per tenant). */
+/**
+ * Spend = priced usage rows, plus, for every call without any, its whole length (ringing included, at most
+ * an hour) at the worst published per-minute rate. An over-estimate on purpose: an alarm that is early, not late.
+ *
+ * Alert level only. Hard spend caps are the gateway's (per route and per tenant). */
 export const SPEND_ALERT_USD = 25;
 
 const ACTIVE = "('dispatching','queued','ringing','answered','session_active')";
@@ -38,14 +43,20 @@ export async function readFacts(s: Sequelize, ops: OpsMetrics = voiceOps, spendA
            (SELECT COUNT(*)::int FROM voice_calls c LEFT JOIN voice_agent_versions v ON v.id = c.profile_version_id
              WHERE c.test_mode = FALSE AND c.engine IN ('conversation_relay','openai_realtime') AND c.direction = 'outbound' AND c.created_at > NOW() - INTERVAL '24 hours' AND (v.id IS NULL OR v.status NOT IN ('published','retired'))) AS wrong_version,
            (SELECT COUNT(*)::int FROM (SELECT destination_hash FROM voice_dial_reservations WHERE status IN ('accepted','ambiguous') AND created_at > NOW() - INTERVAL '10 minutes' GROUP BY destination_hash HAVING COUNT(*) > 2) d) AS duplicates,
-           (SELECT SUM(quantity * unit_price_usd)::text FROM voice_usage WHERE created_at > NOW() - INTERVAL '24 hours') AS spend,
+           (COALESCE((SELECT SUM(quantity * unit_price_usd) FROM voice_usage WHERE created_at > NOW() - INTERVAL '24 hours'), 0)
+            + COALESCE((SELECT SUM(LEAST(EXTRACT(EPOCH FROM COALESCE(c.ended_at, NOW()) - c.created_at), 3600) / 60 * :rate) FROM voice_calls c
+                WHERE c.engine IN ('conversation_relay','openai_realtime') AND c.provider_call_id IS NOT NULL AND c.created_at > NOW() - INTERVAL '24 hours'
+                  AND NOT EXISTS (SELECT 1 FROM voice_usage u WHERE u.call_id = c.id)), 0))::text AS spend,
            (SELECT percentile_disc(0.95) WITHIN GROUP (ORDER BY ms)::int FROM turns) AS p95, (SELECT COUNT(*)::int FROM turns) AS turns,
            (SELECT COUNT(*)::int FROM voice_calls c WHERE c.state_reason = 'caller_opt_out' AND c.test_mode = FALSE AND c.lead_id IS NOT NULL AND c.updated_at < NOW() - INTERVAL '15 minutes'
               AND NOT EXISTS (SELECT 1 FROM voice_call_events e WHERE e.call_id = c.id AND e.event_key = 'opt_out_recorded')) AS opt_pending`,
-  { type: QueryTypes.SELECT });
+  { replacements: { rate: WORST_CASE_USD_PER_MIN }, type: QueryTypes.SELECT });
+  const firstText = ops.snapshot().find((o) => o.operation === 'anthropic.first_text');
   return {
     ended: r.ended, failed: r.failed, busyOrNoAnswer: r.no_answer, acceptedNeverRang: r.never_rang, dispatchUnknown24h: r.unknown24, orphaned: r.orphaned, stalled: r.stalled, queueStuck: r.stuck,
-    policyDenied: r.denied, silentAnswered: r.silent, wrongVersion: r.wrong_version, duplicateDials: r.duplicates, spend24hUsd: Number(r.spend ?? 0), spendAlertUsd, turnLatencyP95Ms: r.p95, turnLatencySamples: r.turns, optOutsPending: r.opt_pending,
+    policyDenied: r.denied, silentAnswered: r.silent, wrongVersion: r.wrong_version, duplicateDials: r.duplicates, spend24hUsd: Number(r.spend ?? 0), spendAlertUsd, 
+    // Recorded turns when there are any; otherwise Engine A's measured time to first word in this process.
+    turnLatencyP95Ms: r.turns ? r.p95 : firstText?.latency_ms.p95 ?? null, turnLatencySamples: r.turns || (firstText?.volume ?? 0), optOutsPending: r.opt_pending,
     webhookSignatureFailures: ops.count('voice_webhook_refused:TwilioSignatureInvalid') + ops.count('voice_ws_upgrade_refused:TwilioSignatureInvalid'),
     transitionsRejected: ops.count('voice_session_transition_rejected'), handlerFailures: ops.count('voice_ws_handler_failed') + ops.count('voice_realtime_handler_failed'),
     breakers: { twilio: ops.breakers.twilio.current, anthropic: ops.breakers.anthropic.current, openai_realtime: ops.breakers.openai_realtime.current },

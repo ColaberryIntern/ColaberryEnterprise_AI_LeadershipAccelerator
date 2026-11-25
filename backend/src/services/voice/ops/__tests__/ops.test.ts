@@ -98,11 +98,19 @@ describe('provider guards', () => {
     expect(m.breakers.anthropic.current).toBe('OPEN');
     expect(m.breakers.twilio.current).toBe('CLOSED');
   });
+  it('time to the first word is measured once per turn, and every word is still delivered', async () => {
+    const m = new OpsMetrics(() => 1);
+    let t = 0;
+    const heard: string[] = [];
+    await guardLlm({ streamTurn: async (a) => { t = 300; a.onText('a'); t = 900; a.onText('b'); return ok; } }, m, () => t).streamTurn({ ...turn, onText: (d) => heard.push(d) });
+    expect(heard).toEqual(['a', 'b']);
+    expect(m.snapshot().find((o) => o.operation === 'anthropic.first_text')).toMatchObject({ volume: 1, latency_ms: { p95: 300 } });
+  });
   it('a working provider is measured', async () => {
     const m = new OpsMetrics(() => 1);
     let t = 0;
     await guardLlm({ streamTurn: async () => { t = 40; return ok; } }, m, () => t).streamTurn(turn);
-    expect(m.snapshot()[0]).toMatchObject({ operation: 'anthropic.turn', volume: 1, success_rate: 1, latency_ms: { p50: 40 } });
+    expect(m.snapshot().find((o) => o.operation === 'anthropic.turn')).toMatchObject({ operation: 'anthropic.turn', volume: 1, success_rate: 1, latency_ms: { p50: 40 } });
   });
 
   const handlers: ModelHandlers = { onMessage: () => undefined, onClose: () => undefined };

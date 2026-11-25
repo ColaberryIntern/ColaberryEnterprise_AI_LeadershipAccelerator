@@ -44,7 +44,7 @@ describeIfDb('operations facts against Postgres', () => {
 
   it('each condition moves its own number, and test calls are left out of business rates', async () => {
     const rows: Array<[keyof Awaited<ReturnType<typeof facts>>, () => Promise<unknown>]> = [
-      ['acceptedNeverRang', () => call({ state: "'queued'", provider_call_id: "'CA-1'", created_at: ago('3 minutes') })],
+      ['acceptedNeverRang', () => call({ state: "'queued'", provider_call_id: "'CA-1'", created_at: ago('3 minutes'), engine: "'synthflow_legacy'" })],
       ['dispatchUnknown24h', () => call({ state: "'dispatch_unknown'" })],
       ['orphaned', () => call({ state: "'session_active'", created_at: ago('71 minutes') })],
       ['stalled', () => call({ state: "'session_active'", created_at: ago('6 minutes') })],
@@ -68,6 +68,23 @@ describeIfDb('operations facts against Postgres', () => {
     expect(await facts()).toMatchObject({ ended: 0, failed: 0, wrongVersion: 0 });
     await call({ state: "'failed'" });
     expect(await facts()).toMatchObject({ ended: 1, failed: 1, wrongVersion: 1 });
+  });
+
+  it('a call with no usage rows still counts toward spend, at the worst rate and at most an hour; priced usage replaces it', async () => {
+    await call({ state: "'failed'" }); // never reached the carrier: costs nothing
+    expect((await facts()).spend24hUsd).toBe(0);
+    const id = await call({ state: "'completed'", provider_call_id: "'CA-s1'", created_at: ago('30 minutes'), ended_at: ago('20 minutes') });
+    expect((await facts()).spend24hUsd).toBeCloseTo(1.15, 2);
+    await call({ state: "'session_active'", provider_call_id: "'CA-s2'", created_at: ago('5 hours') });
+    expect((await facts()).spend24hUsd).toBeCloseTo(1.15 + 6.9, 2);
+    await sequelize.query(`INSERT INTO voice_usage (tenant_id, call_id, provider, unit, quantity, unit_price_usd) VALUES ('${T}', '${id}', 'twilio', 'minute', 10, 0.02)`);
+    expect((await facts()).spend24hUsd).toBeCloseTo(0.2 + 6.9, 2);
+  });
+
+  it('with no recorded turns, the measured time to first word is used', async () => {
+    const m = new M.OpsMetrics(() => 1);
+    for (let i = 0; i < 12; i++) m.operation('anthropic.first_text', 'success', 3000);
+    expect(await S.readFacts(sequelize, m)).toMatchObject({ turnLatencyP95Ms: 3000, turnLatencySamples: 12 });
   });
 
   it('a recent event means not stalled; a recorded opt-out is not pending; turn latency is the 95th percentile', async () => {

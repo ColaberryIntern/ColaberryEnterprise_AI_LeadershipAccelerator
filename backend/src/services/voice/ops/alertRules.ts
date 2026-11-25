@@ -74,7 +74,7 @@ export function evaluateAlerts(f: OpsFacts): VoiceAlert[] {
   if (f.orphaned > 0) add('orphaned_sessions', 7, `${f.orphaned} call(s) are still open long after they can have ended.`);
   if (f.stalled > 0) add('stalled_events', 6, `${f.stalled} live call(s) have had no event for over five minutes.`);
   if (f.queueStuck > 0) add('queue_stuck', 6, `${f.queueStuck} dial reservation(s) are open past their lease.`);
-  if (f.spend24hUsd >= f.spendAlertUsd) add('runaway_cost', 9, `Voice spend in the last 24 hours is $${f.spend24hUsd.toFixed(2)} (alert level $${f.spendAlertUsd.toFixed(2)}).`);
+  if (f.spend24hUsd >= f.spendAlertUsd) add('runaway_cost', 9, `Estimated voice spend in the last 24 hours is $${f.spend24hUsd.toFixed(2)} (alert level $${f.spendAlertUsd.toFixed(2)}).`);
   if (f.turnLatencyP95Ms !== null && f.turnLatencySamples >= THRESHOLDS.minTurns && f.turnLatencyP95Ms > THRESHOLDS.turnLatencyMs) add('slow_turns', 5, `95th percentile time to first audio is ${Math.round(f.turnLatencyP95Ms)} ms over ${f.turnLatencySamples} turns.`);
   if (f.policyDenied >= THRESHOLDS.policyDenied) add('policy_failures', 6, `${f.policyDenied} tool calls were refused in the last hour.`);
   if (f.optOutsPending > 0) add('opt_out_pending', 9, `${f.optOutsPending} opt-out(s) older than 15 minutes are not recorded.`);

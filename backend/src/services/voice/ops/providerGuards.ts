@@ -23,7 +23,8 @@ export function guardLlm(llm: VoiceLlm, ops: OpsMetrics = voiceOps, now: () => n
       const t0 = now();
       let outcome: Outcome = 'failure'; // a throw is a provider failure
       try {
-        const r = await llm.streamTurn(a);
+        let first = true;
+        const r = await llm.streamTurn({ ...a, onText: (d) => { if (first) { first = false; ops.operation('anthropic.first_text', 'success', now() - t0); } a.onText(d); } });
         outcome = r.ok ? 'success' : r.aborted ? 'neutral' : outcomeOf(r.errorClass);
         return r;
       } finally {
