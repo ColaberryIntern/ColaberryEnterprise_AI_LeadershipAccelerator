@@ -370,12 +370,19 @@ describe('nginx body-size coverage for upload routes', () => {
     expect(unexplained).toEqual([]);
   });
 
-  it('THE FIX: the build-lab artifact upload is raised, and to the multer cap', () => {
+  it('THE FIX: the build-lab artifact upload is raised, with the envelope margin', () => {
     const hit = covered('/api/portal/runtime/cards/:cardId/build-artifact');
     expect(hit).toBeDefined();
-    // 100m matches MAX_BUILD_ARTIFACT_SIZE exactly. A file between the two limits should be
-    // refused by the backend with a readable error, never by nginx with an HTML 413.
-    expect(hit!.limit!.toLowerCase()).toBe('100m');
+    // 101m = MAX_BUILD_ARTIFACT_SIZE (100MB) + 1m, the margin every other route here uses.
+    //
+    // THIS SAID 100m UNTIL 2026-11-25, with a comment claiming "a file between the two
+    // limits should be refused by the backend with a readable error, never by nginx with
+    // an HTML 413." The limits were EQUAL, so there was no band between them: the comment
+    // described a margin that did not exist, and a near-100MB artifact got precisely the
+    // HTML 413 the sentence promised it would not. Three sibling routes were set the same
+    // way and are fixed in the same change - see the pairing table below, which now
+    // governs all four so none of them can drift back to the cap alone.
+    expect(hit!.limit!.toLowerCase()).toBe('101m');
   });
 
   it('the content-media raise is seen, quoted braces and all', () => {
@@ -433,6 +440,15 @@ describe('nginx body-size coverage for upload routes', () => {
       ['/api/portal/submissions/:id/upload', '51m'],
       ['/api/strategy-prep/:token/upload', '51m'],
       ['/api/admin/marketing/library/file', '201m'],
+      // The four 100MB routes. Every one of them was set to exactly 100m until
+      // 2026-11-25 - the cap with no envelope margin - so a file at the top of the
+      // range multer would have accepted was refused at the edge as HTML instead.
+      // Two are video uploads a student makes, where a near-cap file is the norm
+      // rather than the exception, and one takes gov solicitation ZIPs.
+      ['/api/portal/runtime/cards/:cardId/build-artifact', '101m'],
+      ['/api/admin/factory/qualification/:canonicalOpportunityId/attest-zip', '101m'],
+      ['/api/portal/career-prep/sessions/:sessionId/attempts', '101m'],
+      ['/api/portal/career/portfolio-page/hire-video', '101m'],
       // Not ours - the L12.2 intake block, whose author worked out the envelope margin
       // first. Pinned here so a change to it is noticed by this suite rather than by a
       // person failing to upload a scope document.

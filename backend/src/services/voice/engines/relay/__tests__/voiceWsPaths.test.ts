@@ -5,7 +5,8 @@
  */
 import http from 'http';
 import net from 'net';
-import { attachVoiceWsServer, classifyUpgradePath, RELAY_PATH, STREAM_PATH } from '../../voiceWsServer';
+import WebSocket from 'ws';
+import { attachVoiceWsServer, classifyUpgradePath, RELAY_PATH, signHandshake, STREAM_PATH } from '../../voiceWsServer';
 
 describe('classifyUpgradePath', () => {
   it.each([
@@ -62,5 +63,52 @@ describe('attachVoiceWsServer path handling (real socket)', () => {
     const res = await upgrade(port, '/socket.io/?EIO=4');
     expect(res.startsWith('HTTP/1.1 418')).toBe(true);
     expect(otherSeen).toContain('/socket.io/?EIO=4');
+  });
+});
+
+describe('as production runs it: no other upgrade listener', () => {
+  let server: http.Server;
+  let port = 0;
+  const sockets: net.Socket[] = [];
+  beforeAll(async () => {
+    server = http.createServer();
+    attachVoiceWsServer(server, { relay: () => { throw new Error('not used'); }, stream: () => { throw new Error('not used'); } }, () => undefined);
+    server.on('connection', (s) => sockets.push(s));
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));
+    port = (server.address() as net.AddressInfo).port;
+  });
+  afterAll(async () => { await new Promise<void>((r) => server.close(() => r())); });
+
+  it.each(['/preview/x', '/', '/socket.io/?EIO=4'])('answers an upgrade to %s at once and holds no socket', async (path) => {
+    const res = await upgrade(port, path);
+    expect(res.startsWith('HTTP/1.1 404')).toBe(true);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(sockets.every((s) => s.destroyed)).toBe(true);
+  });
+
+  it.each(['/preview/x', RELAY_PATH, '/api/voice-ws/nope'])('handles socket errors on %s', async (path) => {
+    // Prepended and gone before ours runs, so ours is the only listener, as in production.
+    const seen = new Promise<number>((r) => { server.prependOnceListener('upgrade', (_q, s) => { setImmediate(() => r(s.listenerCount('error'))); }); });
+    await upgrade(port, path);
+    expect(await seen).toBeGreaterThan(0);
+  });
+});
+
+describe('a handler failure', () => {
+  const env = { ...process.env };
+  afterEach(() => { process.env = { ...env }; });
+
+  it.each([[RELAY_PATH], [STREAM_PATH]])('on %s closes that socket with 1011 and is logged, not thrown', async (path) => {
+    Object.assign(process.env, { VOICE_STUDIO_ENABLED: 'true', VOICE_WS_BASE_URL: 'wss://ws-test.invalid', VOICE_PUBLIC_BASE_URL: 'https://ws-test.invalid', TWILIO_AUTH_TOKEN: 'not-a-real-token' });
+    const logs: Array<Record<string, unknown>> = [];
+    const server = http.createServer();
+    const boom = () => { throw Object.assign(new Error('x'), { name: 'ConfigError' }); };
+    attachVoiceWsServer(server, { relay: boom, stream: boom }, (l) => logs.push(l));
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));
+    const ws = new WebSocket(`ws://127.0.0.1:${(server.address() as net.AddressInfo).port}${path}`, { headers: { 'X-Twilio-Signature': signHandshake('not-a-real-token', `wss://ws-test.invalid${path}`) } });
+    const code = await new Promise<number>((r) => { ws.on('close', r); ws.on('error', () => undefined); });
+    expect(code).toBe(1011);
+    expect(logs).toContainEqual(expect.objectContaining({ event: 'voice_ws_handler_failed', error_class: 'ConfigError' }));
+    await new Promise<void>((r) => server.close(() => r()));
   });
 });

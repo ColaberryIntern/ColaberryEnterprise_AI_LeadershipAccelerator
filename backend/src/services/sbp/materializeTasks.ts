@@ -26,6 +26,7 @@ import { Schedule } from './buildSchedule';
 import { COMMAND_CENTER_STORY_ID } from './commandCenterStory';
 import { commandCenterTaskColumns } from './commandCenterTaskColumns';
 import { CONNECTED_DEMO_STORY_ID, connectedDemoTaskColumns } from './connectedDemoStory';
+import { proposalReadinessTaskColumns, proposalChainHeadBlockedBy } from './proposalReadinessStories';
 
 /**
  * One working day after `from`, skipping Saturday and Sunday.
@@ -151,6 +152,12 @@ export async function materializePlanAsTasks(
      * OMITTED MEANS OFF, so every existing caller creates exactly the rows it creates today.
      */
     connectedDemo?: boolean;
+    /**
+     * Materialize the P1-P8 proposal ladder into the R1 (Proposal) release. Gov-only.
+     *
+     * OMITTED MEANS OFF, so every existing (student) caller creates exactly the rows it creates today.
+     */
+    proposalStories?: boolean;
     /** L13.4: the platform built these pages, so no STORY-000 row. OMITTED MEANS the row is made. */
     setupRetired?: boolean;
   } = {},
@@ -276,6 +283,45 @@ export async function materializePlanAsTasks(
         }
         result.tasks += 1;
       }
+
+      // M3: the P1-P8 proposal ladder fills R1 (the Proposal release, the second release of the gov
+      // ladder). Injected like STORY-000/900, gov-only via ctx.proposalStories, chained
+      // P1 -> P2 -> ... -> P8 by blocked_by set here; P1 gates on the last R0 Foundation row so R1 stays
+      // locked until Foundation lands. Only the gov path sets the flag, and govReleaseLadder guarantees
+      // ordered = [r0, r1, r2], so ordered[1] is the (empty) Proposal release.
+      if (ctx.proposalStories === true && ordered.length > 1 && rel.key === ordered[1].key) {
+        const proposalCols = proposalReadinessTaskColumns(plan);
+        let prevProposalId: string | null = null;
+        for (const pc of proposalCols) {
+          const pAttrs = {
+            project_id: projectId, task_list_id: list.id, story_id: pc.story_id,
+            title: pc.title, description: pc.title, narrative: pc.narrative,
+            status: 'not_started', position: taskPos, release_key: rel.key,
+            acceptance: pc.acceptance, fulfills: [],
+            build: pc.build,
+            blocked_by: prevProposalId ? [prevProposalId] : proposalChainHeadBlockedBy(ctx.connectedDemo === true),
+            due_on: null,
+          };
+          taskPos += 1;
+          const [pRow, pCreated] = await StudentTask.findOrCreate({
+            where: { project_id: projectId, story_id: pc.story_id },
+            defaults: { ...pAttrs, due_baseline_on: pAttrs.due_on } as any,
+            transaction: t,
+          });
+          if (!pCreated) {
+            // Same keep-complete rule as every other injected row: a re-materialize never un-finishes work.
+            const keepComplete = pRow.status === 'complete';
+            if (keepComplete) result.preservedComplete += 1;
+            await pRow.update(
+              { ...pAttrs, status: keepComplete ? 'complete' : pRow.status } as any,
+              { transaction: t },
+            );
+          }
+          result.tasks += 1;
+          prevProposalId = pc.story_id;
+        }
+      }
+
       for (const story of inRel) {
         const computedDue = dueByStory.get(story.id) ?? null;
         // A story seen for the first time cannot already be overdue. See

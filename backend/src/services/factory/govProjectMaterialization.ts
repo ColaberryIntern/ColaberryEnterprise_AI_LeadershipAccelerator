@@ -188,7 +188,7 @@ export async function materializeGovBuildProject(input: MaterializeGovProjectInp
   //    Back-scheduled to finish the day before the deadline when one is known (owner's "day before" rule).
   const deadlineDate = input.deadline ? new Date(input.deadline) : null;
   const schedule = govSyntheticSchedule(plan, now, deadlineDate && !Number.isNaN(deadlineDate.getTime()) ? deadlineDate : null);
-  const mat = await materializePlanAsTasks(projectId, enrollmentId, plan, { schedule, now, connectedDemo: true });
+  const mat = await materializePlanAsTasks(projectId, enrollmentId, plan, { schedule, now, connectedDemo: true, proposalStories: true });
 
   // 5. Persist the REAL plan to build_plans so the repo-sync document path renders IT — the real
   //    requirements (REQ-001..), project name, dates and r0..rN releases — instead of the lossy,

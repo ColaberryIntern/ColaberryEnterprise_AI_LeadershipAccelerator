@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Wednesday, November 25, 2026 at 7:28 AM</div>
-    <div><span class="sid">CC-20261124-g9p2</span><span class="count">2 changes</span></div>
+    <div class="meta">Generated Wednesday, November 25, 2026 at 12:09 PM</div>
+    <div><span class="sid">CC-20261124-g9p2</span><span class="count">3 changes</span></div>
   </header>
   <main>
     
@@ -86,7 +86,22 @@
           <div class="row"><span class="k">What changed</span><span class="v">(T1) new govReleaseLadder.ts imposes the canonical R0 Foundation / R1 Proposal / R2 Full build-out ladder on the gated gov plan before scheduling - a pure, gov-only transform that reassigns release keys only (walking-skeleton release -&gt; R0, everything else -&gt; R2; R1 starts empty for M3&#39;s P1-P8), so requirement coverage is untouched and the student path is unchanged. (T2) R2 is parked by default via gov_parked_releases in the gov project&#39;s own project_variables (no shared-table column, no migration); withDefaultGovParking never overwrites an activated release, activateGovRelease is the deliberate switch. (T3) gov materialize now uses a new createDetachedProjectForEnrollment that creates the project row WITHOUT repointing the enrollment&#39;s single active_project_id, so an intern can own multiple gov projects at once and a gov build never hijacks the primary student build; the student &quot;+ New project&quot; path (createNewProjectForEnrollment) is byte-for-byte unchanged. (T4) the materialize-build-project action IS the assignment action, so after T1-T3 assigning a gov project picks up the whole lifecycle in one call, idempotently, and a second gov project for the same intern gets its own ladder - proven by test. (T5) regression gate.</span></div>
           <div class="row"><span class="k">Verification</span><span class="v ver">backend tsc --noEmit exit 0; test-file typecheck baseline matched exactly (no new errors); jest 191 suites / 3056 tests pass across sbp + factory + projectService (integration tier excluded locally, runs in CI with Postgres); the three M2 suites (govReleaseLadder, govProjectMaterialization, projectService.govDetached) green.</span></div>
           
-        <div class="row"><span class="k">Notes</span><span class="v">parking lives in project_variables rather than a new column by design (gov-scoped, additive, zero blast radius on shared tables). T4 required no new wiring because the assignment action already triggers materialize; T3&#39;s detached create is what enables the multi-project case. Rollback: all changes additive/gov-scoped; revert the six files, redeploy backend; no schema change. PR pending (one PR + one deploy, Ali merges).</span></div>
+        <div class="row"><span class="k">Notes</span><span class="v">parking lives in project_variables rather than a new column by design (gov-scoped, additive, zero blast radius on shared tables). T4 required no new wiring because the assignment action already triggers materialize; T3&#39;s detached create is what enables the multi-project case. Rollback: all changes additive/gov-scoped; revert the six files, redeploy backend; no schema change. MERGED #4421; deployed backend sha-0a101b1a2; loop-production-verifier PASS 97/100.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>Gov Proposal Studio M3 - Proposal stories P1-P8 fill R1</h2>
+          <span class="badge">2026-11-25</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">(T1) new backend/src/services/sbp/proposalReadinessStories.ts defines the 8-story proposal ladder - P1 orient / P2 rapport / P3 draft / P4 Sharath collect / P5 six-check review gates / P6 human QA / P7 Gold go + package submit / P8 mark-submitted - each with a grounded build prompt and Gherkin acceptance (one Trust line), content aligned to the shipped proposal engine (FLOW.md: Blueprint/Build/Judge/Revise/Needs/Gold/Package + six checks). (T2) materializeTasks.ts gains a gov-only ctx flag proposalStories (OMITTED=OFF, student path unchanged) that injects P1-P8 into the R1 (Proposal) release chained P1-&gt;...-&gt;P8 by blocked_by, with P1 gated on the last R0 Foundation row (connected demo if present, else Command Center); govProjectMaterialization passes proposalStories:true. (T3) P1 orient references the Command Center (STORY-000) + connected demo (STORY-900) already present. (T4) regression gate. Also: GOV_PROPOSAL_EMAIL_TAG = &#39;[Gov Proposal]&#39; added to the Story so interns tag the subject when emailing Sharath (he is cross-copied on many projects), which the tab&#39;s inbox watcher keys on; skillRunbookCoverage NOT_IN_RUNBOOK gets the gov-only module with its reason.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend tsc --noEmit exit 0; test-file typecheck baseline matched exactly; jest 192 suites / 3069 tests (sbp+factory, integration tier excluded locally, runs in CI with Postgres); the 3 M3-focused suites green (proposalReadinessStories 9, materializeTasks.idempotency incl. 5 new proposal-ladder tests, govProjectMaterialization wiring).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">ladder injected at the render/materialize layer like STORY-000/900 (not into plan.stories), so gateByRelease is bypassed and the P1-P8 chain is set explicitly; idempotent + keep-complete on re-materialize. No migration. PR pending (one PR + one deploy, Ali merges).</span></div>
           
         </div>
       </article>
