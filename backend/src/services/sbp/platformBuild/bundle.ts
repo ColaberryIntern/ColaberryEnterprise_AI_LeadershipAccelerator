@@ -9,6 +9,7 @@
 import type { BuildPlan } from '../planContract';
 import { renderProjectDocs } from '../renderProjectDocs';
 import { demoKitFiles } from '../demoKit';
+import { setupStoriesRetiredFor } from '../setupStories';
 import { platformCommandCenterPrompt, platformDemoPrompt, PLATFORM_BUILD_DONE } from './prompts';
 
 export interface RunnerBundle {
@@ -25,12 +26,13 @@ export async function runnerBundle(projectId: string, correlationId: string | nu
   for (const f of rendered.files) files[f.path] = f.content;
   for (const f of demoKitFiles()) if (!(f.path in files)) files[f.path] = f.content;
   const plan = rendered.stored.plan as BuildPlan;
+  const setupRetired = await setupStoriesRetiredFor(projectId);
   return {
     plan_version: rendered.stored.version,
     files,
     prompts: {
-      command_center: platformCommandCenterPrompt(plan, rendered.schedule, { projectId }),
-      demo: platformDemoPrompt(plan),
+      command_center: platformCommandCenterPrompt(plan, rendered.schedule, { projectId, setupRetired }),
+      demo: platformDemoPrompt(plan, { setupRetired }),
     },
     done_marker: PLATFORM_BUILD_DONE,
   };

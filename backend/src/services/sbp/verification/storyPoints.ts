@@ -29,6 +29,7 @@ import {
 import { domainKeyForProject } from '../../agentDomain/agentDomainCommandCenterForSync';
 import { getBudgetPerUnitXp } from '../../progression/pointsConfigService';
 import { connectedDemoMaterializedFor } from '../connectedDemoFlag';
+import { setupStoriesRetiredFor } from '../setupStories';
 import { prepPointsMap } from './prepPoints';
 import type { PlanStorySpec } from './verifyDecision';
 
@@ -76,7 +77,7 @@ export const STORY_XP_KEY = 'project_story_verified';
  * Fails SOFT, deliberately: any failure returns the bare spec, which is exactly
  * today's behaviour. A verifier run must not die because a domain lookup did.
  */
-export async function commandCenterSpecForProject(projectId: string): Promise<PlanStorySpec> {
+export async function commandCenterSpecForProject(projectId: string): Promise<PlanStorySpec | null> {
   const bare: PlanStorySpec = {
     id: COMMAND_CENTER_STORY_ID,
     acceptance: [...COMMAND_CENTER_ACCEPTANCE],
@@ -84,7 +85,8 @@ export async function commandCenterSpecForProject(projectId: string): Promise<Pl
   if (!projectId) return bare;
   try {
     const domainKey = await domainKeyForProject(projectId);
-    if (!domainKey) return bare;
+    // L13.4: null when the platform built the Command Center, so there is no such story to judge.
+    if (!domainKey) return (await setupStoriesRetiredFor(projectId)) ? null : bare;
     return {
       id: domainCommandCenterStoryId(domainKey),
       acceptance: [...DOMAIN_COMMAND_CENTER_ACCEPTANCE],
@@ -122,7 +124,7 @@ export async function commandCenterSpecForProject(projectId: string): Promise<Pl
  */
 export function planStorySpecs(
   plan: Pick<BuildPlan, 'stories'>,
-  commandCenter: PlanStorySpec = {
+  commandCenter: PlanStorySpec | null = {
     id: COMMAND_CENTER_STORY_ID,
     acceptance: [...COMMAND_CENTER_ACCEPTANCE],
   },
@@ -141,7 +143,7 @@ export function planStorySpecs(
     id: s.id,
     acceptance: Array.isArray(s.acceptance) ? s.acceptance.map(String) : [],
   }));
-  const withCommandCenter = planSpecs.some((s) => s.id === commandCenter.id)
+  const withCommandCenter = commandCenter === null || planSpecs.some((s) => s.id === commandCenter.id)
     ? planSpecs
     : [...planSpecs, { id: commandCenter.id, acceptance: [...commandCenter.acceptance] }];
 

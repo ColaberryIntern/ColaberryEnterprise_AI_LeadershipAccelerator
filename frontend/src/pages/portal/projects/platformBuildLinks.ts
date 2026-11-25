@@ -68,3 +68,15 @@ export function usableLink(url: string | null | undefined, expiresAt: string | n
   const expires = expiresAt ? Date.parse(expiresAt) : NaN;
   return Number.isFinite(expires) && expires > nowMs ? url : null;
 }
+
+/**
+ * True when the platform is building this project's pages AND the board has no Story 000 (L13.4).
+ * Both are needed: a project built before L13.4 has the links and keeps its Story 000, and a board
+ * that has not loaded its tasks yet has neither.
+ */
+export function startsWithoutStory000(
+  p: { platformBuild?: PlatformBuildLinks | null; lists: ReadonlyArray<{ tasks: ReadonlyArray<{ storyId?: string | null }> }> } | null | undefined,
+): boolean {
+  const tasks = p?.lists.flatMap((l) => l.tasks) ?? [];
+  return Boolean(p?.platformBuild) && tasks.length > 0 && !tasks.some((t) => t.storyId === 'STORY-000');
+}

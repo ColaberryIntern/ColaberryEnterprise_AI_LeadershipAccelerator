@@ -181,6 +181,10 @@ async function loadStudentFacts(email: string): Promise<StudentFacts | null> {
         where: { project_id: facts.projectId, story_id: { [Op.iLike]: 'STORY-000%' } },
       });
       facts.story000Present = Boolean(story);
+      if (!story) {
+        const { setupStoriesRetiredFor } = await import('../services/sbp/setupStories');
+        facts.setupRetired = await setupStoriesRetiredFor(facts.projectId);
+      }
       facts.acceptanceCriteriaCount = Array.isArray(story?.acceptance) ? story.acceptance.length : null;
     }
   } catch (err: any) {

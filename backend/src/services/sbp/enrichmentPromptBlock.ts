@@ -14,7 +14,7 @@ import { ENRICHMENT_SCHEMA_VERSION, EVIDENCE_KINDS, enrichmentPathFor } from './
 
 export const ENRICHMENT_BLOCK_HEADING = '## When you finish: record what this story taught the project';
 
-export function enrichmentPromptBlock(input: { projectId: string; storyId: string }): string {
+export function enrichmentPromptBlock(input: { projectId: string; storyId: string; setupRetired?: boolean }): string {
   const path = enrichmentPathFor(input.storyId);
   const example = {
     schemaVersion: ENRICHMENT_SCHEMA_VERSION,
@@ -44,9 +44,13 @@ export function enrichmentPromptBlock(input: { projectId: string; storyId: strin
     // `derived.understanding`, and the doc section is rendered when the truth
     // exists; the sentence names both and says which one wins if they differ.
     `Before you start, read \`.colaberry/plan.json\` (its \`derived.understanding\` is what the student`,
-    'told us, quoted) and, when it is there, the section "What the platform understands about this',
-    'project" in `docs/stories/STORY-000.md`. That is the current truth; if the two ever differ,',
-    'plan.json is the newer one. Note anything this story adds to it: a system it turns out to talk',
+    ...(input.setupRetired
+      ? ['told us, quoted). That is the current truth. Note anything this story adds to it: a system it turns out to talk']
+      : [
+        'told us, quoted) and, when it is there, the section "What the platform understands about this',
+        'project" in `docs/stories/STORY-000.md`. That is the current truth; if the two ever differ,',
+        'plan.json is the newer one. Note anything this story adds to it: a system it turns out to talk',
+      ]),
     'to, a decision you had to make, a limit you discovered, a role or approval point that appeared.',
     '',
     `When the acceptance criteria pass, write \`${path}\` with exactly this shape:`,

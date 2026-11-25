@@ -1,5 +1,5 @@
 import {
-  platformBuildFromDto, platformBuildChanged, usableLink, REFRESH_BEFORE_EXPIRY_MS,
+  platformBuildFromDto, platformBuildChanged, usableLink, REFRESH_BEFORE_EXPIRY_MS, startsWithoutStory000,
 } from '../platformBuildLinks';
 
 const NOW = Date.parse('2026-11-24T12:00:00Z');
@@ -63,5 +63,18 @@ describe('usableLink', () => {
     expect(usableLink('/x', inHours(-1), NOW)).toBeNull();
     expect(usableLink('/x', null, NOW)).toBeNull();
     expect(usableLink(null, inHours(1), NOW)).toBeNull();
+  });
+});
+
+describe('startsWithoutStory000', () => {
+  const lists = (...ids: string[]) => [{ tasks: ids.map((storyId) => ({ storyId })) }];
+  const platformBuild = platformBuildFromDto(dto());
+
+  it('needs both the platform build and a loaded board with no Story 000', () => {
+    expect(startsWithoutStory000({ platformBuild, lists: lists('STORY-001') })).toBe(true);
+    expect(startsWithoutStory000({ platformBuild, lists: lists('STORY-000', 'STORY-001') })).toBe(false);
+    expect(startsWithoutStory000({ platformBuild: null, lists: lists('STORY-001') })).toBe(false);
+    expect(startsWithoutStory000({ platformBuild, lists: [] })).toBe(false);
+    expect(startsWithoutStory000(undefined)).toBe(false);
   });
 });

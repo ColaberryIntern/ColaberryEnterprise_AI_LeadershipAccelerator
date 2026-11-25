@@ -435,3 +435,27 @@ describe('STORY-900 keep-complete, the part that actually protects the row', () 
     expect(taskTable.find((r) => r.story_id === CONNECTED_DEMO_STORY_ID)!.status).toBe('in_progress');
   });
 });
+
+// ── L13.4: the platform built the Command Center and demo ───────────────────
+describe('a platform-built project', () => {
+  const retired = (connectedDemo = false) =>
+    materializePlanAsTasks(PROJECT, ENROLLMENT, plan, { schedule, now: NOW, setupRetired: true, connectedDemo });
+
+  it('opens on the plan\'s own stories, and a second publish changes nothing', async () => {
+    await retired();
+    const ids = () => taskTable.all.map((r) => r.story_id);
+    expect(ids()).toEqual(expect.arrayContaining(['STORY-001', 'STORY-002']));
+    expect(ids()).not.toContain(COMMAND_CENTER_STORY_ID);
+    expect(ids()).not.toContain(CONNECTED_DEMO_STORY_ID);
+    expect(taskTable.find((r) => r.story_id === 'STORY-001')!.position).toBe(0);
+    expect(taskTable.all.some((r) => (r.blocked_by ?? []).includes(COMMAND_CENTER_STORY_ID))).toBe(false);
+    const creates = taskTable.creates;
+    await retired();
+    expect(taskTable.creates).toBe(creates);
+  });
+
+  it('keeps a STORY-900 the student already has, no longer waiting on STORY-000', async () => {
+    await retired(true);
+    expect(taskTable.find((r) => r.story_id === CONNECTED_DEMO_STORY_ID)!.blocked_by).toBeNull();
+  });
+});

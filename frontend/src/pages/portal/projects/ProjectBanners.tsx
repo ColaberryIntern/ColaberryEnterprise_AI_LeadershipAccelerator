@@ -68,16 +68,26 @@ export interface HandoffCounts {
 export const Story000Handoff: React.FC<{
   counts: HandoffCounts | null;
   onOpen: (() => void) | null;
-}> = ({ counts, onOpen }) => (
+  /** The platform builds the Command Center and demo, so there is no Story 000 to start with. */
+  platformBuilt?: boolean;
+}> = ({ counts, onOpen, platformBuilt = false }) => (
   <div className="card pjw-pane pj-pipe ok" role="status" aria-live="polite" data-testid="story000-handoff">
-    <strong>Your plan is ready. Start with Story 000.</strong>
-    <p className="lead" style={{ marginBottom: counts ? 8 : 0 }}>
-      Story 000 is your Command Center. Its prompt connects your repo so the platform
-      can see your pushes, and it writes down what we understood about your project
-      so the gaps are visible from day one rather than found in week six. Every later
-      story builds from it.
-    </p>
-    {counts && (
+    <strong>{platformBuilt ? 'Your plan is ready. Start with your first story.' : 'Your plan is ready. Start with Story 000.'}</strong>
+    {platformBuilt ? (
+      <p className="lead" style={{ marginBottom: 0 }} data-testid="handoff-platform-built">
+        We build your Command Center and demo for you. Both are linked from every story
+        as soon as they are ready. Connect your repo from the story page so the platform
+        can see your pushes.
+      </p>
+    ) : (
+      <p className="lead" style={{ marginBottom: counts ? 8 : 0 }}>
+        Story 000 is your Command Center. Its prompt connects your repo so the platform
+        can see your pushes, and it writes down what we understood about your project
+        so the gaps are visible from day one rather than found in week six. Every later
+        story builds from it.
+      </p>
+    )}
+    {counts && !platformBuilt && (
       <p className="lead" style={{ marginBottom: 0 }} data-testid="handoff-counts">
         It records {counts.told === 1 ? 'one thing' : `${counts.told} things`} you told us
         {counts.inferred > 0 ? `, ${counts.inferred === 1 ? 'one thing' : `${counts.inferred} things`} we worked out` : ''}
@@ -89,7 +99,7 @@ export const Story000Handoff: React.FC<{
     {onOpen && (
       <div className="pjw-actions" style={{ marginTop: 12 }}>
         <button className="btn primary" onClick={onOpen}>
-          Open Story 000
+          {platformBuilt ? 'Open your first story' : 'Open Story 000'}
           <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </button>
       </div>
@@ -118,7 +128,8 @@ export const PipelineBanner: React.FC<{
   pipeline: PipelineState;
   handoff?: HandoffCounts | null;
   onOpenStory000?: (() => void) | null;
-}> = ({ pipeline, handoff = null, onOpenStory000 = null, onRetry = null }) => {
+  platformBuilt?: boolean;
+}> = ({ pipeline, handoff = null, onOpenStory000 = null, platformBuilt = false, onRetry = null }) => {
   if (pipeline.state === 'idle') return null;
 
   if (pipeline.state === 'generating') {
@@ -134,7 +145,7 @@ export const PipelineBanner: React.FC<{
   }
 
   if (pipeline.state === 'delivered') {
-    return <Story000Handoff counts={handoff} onOpen={onOpenStory000} />;
+    return <Story000Handoff counts={handoff} onOpen={onOpenStory000} platformBuilt={platformBuilt} />;
   }
 
   if (pipeline.state === 'failed') {

@@ -46,6 +46,7 @@
 import { getPublishedPlan, getPlan } from './planStore';
 import { renderDocs } from './renderDocs';
 import { connectedDemoMaterializedFor } from './connectedDemoFlag';
+import { setupStoriesRetiredFor } from './setupStories';
 import { repoWriteAccessForProject } from './repoWriteAccess';
 import { loadBuildProgress } from './buildProgressSnapshot';
 import { readRepoProgressFile } from './repoWriter';
@@ -147,6 +148,7 @@ export async function buildStudentProgressFile(
     // story, STORY-900 included; omitting the resolution would make THIS download the fourth copy
     // that disagrees with the pushed one about whether the demo story exists.
     connectedDemo: await connectedDemoMaterializedFor(projectId),
+    setupRetired: await setupStoriesRetiredFor(projectId),
   }).find((f) => f.path === PROGRESS_FILE_PATH);
 
   if (!rendered) {

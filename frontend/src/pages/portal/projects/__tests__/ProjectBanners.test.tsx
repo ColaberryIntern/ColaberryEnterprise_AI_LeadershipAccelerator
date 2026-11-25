@@ -55,6 +55,17 @@ describe('the handoff on delivery', () => {
     expect(onOpen).toHaveBeenCalledTimes(1);
   });
 
+  it('names the first story, not Story 000, when the platform builds the Command Center', async () => {
+    const onOpen = jest.fn();
+    await mount(<PipelineBanner pipeline={{ state: 'delivered', projectId: PROJECT }} handoff={{ told: 4, inferred: 0, unanswered: 3 }} onOpenStory000={onOpen} platformBuilt />);
+    const text = container.textContent || '';
+    expect(text).toContain('Start with your first story.');
+    expect(text).not.toContain('Story 000');
+    const btn = Array.from(container.querySelectorAll('button')).find((b) => /Open your first story/.test(b.textContent || ''))!;
+    await act(async () => { btn.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    expect(onOpen).toHaveBeenCalledTimes(1);
+  });
+
   it('quotes the counts when it has them, in plain words', async () => {
     await mount(<Story000Handoff counts={{ told: 4, inferred: 0, unanswered: 3 }} onOpen={null} />);
     const text = container.querySelector('[data-testid="handoff-counts"]')!.textContent || '';

@@ -24,6 +24,7 @@ import {
 } from './projectsStore';
 import { syncProjectsWithBackend, refreshProjectsFromBackend, hydrateProjectById, pushActiveProject } from './projectSync';
 import ProjectReviewPane from './ProjectReviewPane';
+import { startsWithoutStory000 } from './platformBuildLinks';
 import { approveProject, requestProjectChanges } from './projectApprovalApi';
 import ProjectDriftBanner from './ProjectDriftBanner';
 import ArchiveProjectDialog from './ArchiveProjectDialog';
@@ -474,7 +475,8 @@ const ProjectsPage: React.FC = () => {
    */
   const openStory000 = (projectId: string) => {
     const p = projects.find((x) => x.id === projectId || x.pipelineProjectId === projectId);
-    const t = p?.lists.flatMap((l) => l.tasks).find((x) => x.storyId === 'STORY-000') ?? null;
+    const tasks = p?.lists.flatMap((l) => l.tasks) ?? [];
+    const t = tasks.find((x) => x.storyId === 'STORY-000') ?? (p && startsWithoutStory000(p) ? tasks[0] : null) ?? null;
     if (p && t) openTaskWorkspace(p.id, t);
     else if (p) openInterior(p.id);
   };
@@ -793,7 +795,7 @@ const ProjectsPage: React.FC = () => {
         {/* The screen the student is actually on after creating a build. The
             banner used to render only in the wizard branch they had already
             left, so every degraded path arrived here saying nothing at all. */}
-        <PipelineBanner pipeline={pipeline} handoff={handoff} onRetry={retryFailedBuild} onOpenStory000={pipeline.state === 'delivered' ? () => openStory000(pipeline.projectId) : null} />
+        <PipelineBanner pipeline={pipeline} handoff={handoff} onRetry={retryFailedBuild} onOpenStory000={pipeline.state === 'delivered' ? () => openStory000(pipeline.projectId) : null} platformBuilt={pipeline.state === 'delivered' && startsWithoutStory000(projects.find((x) => x.id === pipeline.projectId || x.pipelineProjectId === pipeline.projectId))} />
         <CallBanner notice={callNotice} />
         <ProjectPreview project={active} onOpen={() => openInterior(active.id)} onExplore={() => { setView({ kind: 'overview' }); window.scrollTo(0, 0); }} />
       </div></PortalShell>
@@ -805,7 +807,7 @@ const ProjectsPage: React.FC = () => {
       <PortalShell><div className="pj-root">
         <div className="page-h"><div className="crumbs0">Where work happens</div><h1>Start a new build</h1><div className="sub">Turn a raw idea into a scheduled build with lists and tasks — created in the background, right here in your portal.</div></div>
         <button className="pj-back" onClick={() => setView({ kind: 'overview' })}><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> Back to projects</button>
-        <PipelineBanner pipeline={pipeline} handoff={handoff} onRetry={retryFailedBuild} onOpenStory000={pipeline.state === 'delivered' ? () => openStory000(pipeline.projectId) : null} />
+        <PipelineBanner pipeline={pipeline} handoff={handoff} onRetry={retryFailedBuild} onOpenStory000={pipeline.state === 'delivered' ? () => openStory000(pipeline.projectId) : null} platformBuilt={pipeline.state === 'delivered' && startsWithoutStory000(projects.find((x) => x.id === pipeline.projectId || x.pipelineProjectId === pipeline.projectId))} />
         <CallBanner notice={callNotice} />
         <ProjectWizard onCreate={handleCreate} />
       </div></PortalShell>
@@ -838,7 +840,7 @@ const ProjectsPage: React.FC = () => {
       {/* Also here: a student who navigates back to the overview while their
           build is generating (or after it degraded) must not lose the only
           explanation they were given. */}
-      <PipelineBanner pipeline={pipeline} handoff={handoff} onRetry={retryFailedBuild} onOpenStory000={pipeline.state === 'delivered' ? () => openStory000(pipeline.projectId) : null} />
+      <PipelineBanner pipeline={pipeline} handoff={handoff} onRetry={retryFailedBuild} onOpenStory000={pipeline.state === 'delivered' ? () => openStory000(pipeline.projectId) : null} platformBuilt={pipeline.state === 'delivered' && startsWithoutStory000(projects.find((x) => x.id === pipeline.projectId || x.pipelineProjectId === pipeline.projectId))} />
       <CallBanner notice={callNotice} />
 
       {demo && (
