@@ -209,6 +209,52 @@ module.exports = {
       'URLs assembled at runtime are a documented limit of the static check; the import rule covers the likely path.',
     ],
   },
+  'VS2.4': {
+    code: 'VS2.4', short: 'Engine B: OpenAI hears and speaks directly, and stops at the exact word you interrupted',
+    title: 'R03 Engine B: Media Streams + OpenAI Realtime bridge (mu-law, marks, barge-in truncation)',
+    docName: 'ENGINE_B_REALTIME', date: '2026-11-24', session: SESSION, status: 'PASS 12/12 (verifier attempt 2); closes at the Phase 2 deploy',
+    asked: 'Build the second engine: the phone call\'s raw audio goes straight to OpenAI\'s speech-to-speech model and back, with playback tracked so that when the caller interrupts, the model forgets exactly the part the caller never heard. Same tool contract as Engine A.',
+    delivered: 'A bridge between Twilio Media Streams and OpenAI Realtime with no audio conversion (both speak 8 kHz mu-law), a bounded buffer while the model connects, a playback marker after every chunk, and barge-in that stops playback, cuts the model\'s memory at the last millisecond actually played and cancels the answer. Tools use the same broker as Engine A; every tool call gets its result back; a follow-up answer is only requested while it is still current.',
+    takeaway: 'Interrupt Engine B and it stops at once; the model remembers only what you actually heard, to the millisecond, because the cut is based on Twilio confirming playback, not on what was sent. The verifier caught a real-world ordering problem on attempt 1 (a calendar lookup would have ended in silence); it is fixed and tested in the real event order.',
+    cards: [
+      { n: '0', k: 'audio conversions on a live call', color: '#2e7d32' },
+      { n: 'to the ms', k: 'memory cut at audio actually played', color: '#2e7d32' },
+      { n: '33', k: 'bridge tests (mock Twilio + mock OpenAI)' },
+      { n: '2', k: 'real bugs caught before any live call' },
+      { n: 'gpt-realtime-2.1', k: 'default model, one setting to change' },
+    ],
+    decision: 'Nothing new. Engine B uses the OpenAI key already in production.',
+    ladder: ['done', 'active', 'todo', 'todo', 'todo', 'todo'],
+    bars: { title: 'Barge-in: what is cut (example from the tests)', max: 60, rows: [
+      { label: 'ms of answer sent to Twilio', value: 60, color: '#e0a100' }, { label: 'ms confirmed played = cut point', value: 40, color: '#2e7d32' },
+    ] },
+    checks: [
+      ['Delayed marks, repeated interrupts, silence, noise, disconnect, teardown pass in fixtures', true],
+      ['Truncation offset equals audio actually played', true],
+      ['A calendar lookup that outlasts the model\'s turn still gets answered', true],
+      ['A canceled or superseded answer is never played', true],
+    ],
+    diagramTitle: 'Barge-in on Engine B',
+    mermaid: `flowchart LR
+  M[OpenAI audio chunk] --> T[Twilio plays it]
+  T -->|mark back = played| P[Played-ms counter]
+  C[Caller starts talking] --> X[Clear Twilio buffer]
+  C --> U[Cut model memory at played ms]
+  C --> K[Cancel the answer]`,
+    evidenceLine: 'commits 422279716, a8a926270, 81d310ecf; verifier 7/12 then 12/12; realtime suites 33 passed; voice baseline 25 suites passed.',
+    sections: [
+      { h: 'What the verifier caught', p: ['On the real wire OpenAI reports a tool-calling answer as finished before a real calendar lookup returns. The bridge took that as the end of the answer, so the follow-up was never requested and the caller would have heard silence. Tool calls are now registered before the lookup starts, and the tests run in the real event order with held-open lookups. Earlier, testing also caught a duplicated tool event being recorded twice.'] },
+    ],
+    evidence: [
+      ['Tests', '33 bridge and protocol tests; reintroducing the verifier\'s bug fails 2'],
+      ['Protocol', 'Twilio Media Streams docs and the OpenAI SDK\'s own type definitions (read 2026-11-24)'],
+      ['Safety', 'same single-use session reference, account and call checks as Engine A; the OpenAI key stays on the server; no audio or transcript in logs'],
+    ],
+    notEstablished: [
+      'Real latency, OpenAI\'s voice activity detection on a phone line, and Twilio\'s real handshake are only proven in LIVE-02.',
+      'Cost per minute is measured in LIVE-02, not estimated here.',
+    ],
+  },
   'VS2.3': {
     code: 'VS2.3', short: 'Engine A: a real conversation, with a voice, that stops the moment you talk',
     title: 'R02 Engine A: Conversation Relay + ElevenLabs voice + streaming Claude, with interruption and one read-only tool',
