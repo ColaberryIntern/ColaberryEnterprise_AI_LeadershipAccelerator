@@ -18788,3 +18788,15 @@ Branch `workstream/career-prep-r2r3`, one PR (https://github.com/ColaberryIntern
   - Session: CC-20261118-e16w
   - What changed: `CheckinLiveController.tsx` hides GetClaudeHelp on narrow screens when Run it here is available (computers keep it). Session 3 deck (slides.js, build.js, saved to production): follow cards, lobby card and the hands-on strip say "tap Run it here, read the answer on the page", no install steps.
   - Verification: CheckinRunHere 7/7 (2 new: phone hides, computer keeps), CheckinFollowAlong 3/3; deck browser check 0 errors, save verify=OK.
+- [x] Weekly Live Studio WL0.2: execution contract + plan (43 tasks, 8 phases), audited by loop-plan-auditor
+  - Date: 2026-11-24
+  - Session: CC-20261124-iwlu
+  - What changed: run directory .loop-architect/runs/20261124-weekly-live-studio (gitignored: contract, plan rev 3, spec, ledger); new close-out PDF generator scripts/artifacts/buildWlArtifacts.js + tickets/wlCloseout.js (one-page visual measured, identical pair refused, a PDF on more than 3 tickets refused).
+  - Verification: loop-plan-auditor 12, 16, then 18/20 PASS (cycle 3); loop-task-verifier 11/12 PASS; Basecamp WL0.2 closed with VISUAL + DOCUMENT PDFs (read back completed=true).
+  - Notes: Ali answered all milestone questions up front (M0 OpenAI + $50 cap, M1 from ali@ and pre-approved send after test copy, M4 and M6 pre-approved).
+- [x] Weekly Live Studio WL1.1 to WL1.4: post-class recap to everyone who checked in (backend, recap page, Studio recap panel)
+  - Date: 2026-11-24
+  - Session: CC-20261124-iwlu
+  - What changed: db/ensureWeeklyLiveRecapSchema.ts (weekly_live_recaps, weekly_live_recap_sends UNIQUE(session_id,email_lower), weekly_live_recap_optouts); services/weeklyLive/recap/ (recipients from session_guests minus test/opted-out/suppressed-lead, 30-day personal token, Phase 1 content lint, AI draft from the deck with safe fallback, branded HTML+text email from ali@, dry/test/send with atomic per-row claim); controller + routes (admin under requireAdmin; public recap data + one-click opt-out, rate limited, Zod); frontend ClassRecapPage at /portal/class-recap/:id (no login, chat only with token), StudioRecapPanel on Studio setup (send disabled until saved + https Eventbrite + test copy), login-redirect exemption; tests/systemV2/weeklyLiveRecap.e2e.js; timerScan regenerated.
+  - Verification: backend jest recap 26 + routes 11 = 37/37; frontend ClassRecapPage 4, StudioRecapPanel 5, portalLoginHref, studioSetup = 57/57; copy + typography ratchets 42/42; route-auth lint OK; scanTimers 11/11; backend tsc (5.9) clean for new files. Production verification follows in WL1.5.
+  - Notes: recap opt-out is recap-only (does not touch marketing lists). Local frontend production build blocked by a missing bootstrap-icons in this machine's node_modules (CI builds it).

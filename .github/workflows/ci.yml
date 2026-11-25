@@ -146,12 +146,24 @@ jobs:
       # NODE_OPTIONS is inherited by child processes, which matters here because the
       # process that actually died was the fork-ts-checker-webpack-plugin fork, not
       # webpack itself.
+      #
+      # 2026-11-24: NODE_OPTIONS does NOT reach that fork. fork-ts-checker-webpack-plugin
+      # (6.5.3, via react-scripts) starts its type-check child with an explicit
+      # execArgv `--max-old-space-size=${memoryLimit}`, and react-scripts never sets
+      # memoryLimit, so the child always gets the library default of 2048 MB. The two
+      # runs that died on PR #4403 and main's 061d966c6 both stopped at ~2040 MB, which
+      # is that default, not 6144. So the default is raised to match, CI-only, right
+      # after install. The guard fails the job loudly if the library ever stops
+      # carrying the line, instead of silently falling back to 2048.
       - name: npm run build:frontend
         env:
           CI: 'true'
           NODE_OPTIONS: --max-old-space-size=6144
         run: |
           npm install --no-audit --no-fund
+          F=node_modules/fork-ts-checker-webpack-plugin/lib/typescript-reporter/TypeScriptReporterConfiguration.js
+          grep -q "memoryLimit: 2048" "$F" || { echo "fork-ts-checker memoryLimit default not found in $F"; exit 1; }
+          sed -i 's/memoryLimit: 2048/memoryLimit: 6144/' "$F"
           npm run build:frontend
 
   unit-tests:
