@@ -107,6 +107,17 @@ number is to hand.
 | Backend, commercialization | **12 suites / 172 tests pass** |
 | Frontend, revenue suites | **9 suites / 180 tests pass** (11 new) |
 | Backend project typecheck | clean for every file touched |
+| Mutation check | **15 of 15 killed**, 0 survived, control green first |
+
+Fifteen mutations, each one a change that would make the page lie: a lapsed term counted as
+paying again; the failed/never-paid overlap removed; `renewal_due` silently corrected to exclude
+comps; a cancel that never paid counted as churn; the term boundary moved so somebody drops out
+of revenue a day early; the tally counting a row once instead of per stage; unresolved rows
+dropped from the roster; an INNER JOIN shortening the list; an unknown stage answered with an
+empty list; a missing table reported as a measured zero; failed refund attempts counted as
+refunds; a count/list disagreement smoothed over; an unnamed row given an invented name; the
+count made clickable on every stream; and the overlap warning removed. All fifteen killed on the
+first pass.
 
 **The escaped-dash ratchet earned its keep.** I used `&#8212;` as the placeholder for a missing
 email and the lint refused it, with exactly the right message: *"Escaping the dash does not make
