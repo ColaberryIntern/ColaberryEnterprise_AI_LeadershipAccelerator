@@ -205,8 +205,9 @@ describe('toLibraryView', () => {
     // url at all, because its playable address is sourceUrl and there is nothing of ours to sign.
     expect(Object.keys(view).sort()).toEqual([
       'altText', 'archivedAt', 'byteSize', 'createdAt', 'durationMs', 'height', 'id', 'kind',
-      'mimeType', 'originalFilename', 'rightsExpiresAt', 'rightsHolder', 'rightsStatus',
-      'sourceUrl', 'storageKey', 'tags', 'url', 'width',
+      'likeCount', 'mimeType', 'originalFilename', 'rightsExpiresAt', 'rightsHolder',
+      'rightsStatus', 'sourceUrl', 'storageKey', 'tags', 'uploadedBy', 'uploadedByLabel',
+      'uploadedBySource', 'url', 'viewCount', 'viewsCheckedAt', 'width',
     ]);
     expect(view.url).toBeNull();
   });
