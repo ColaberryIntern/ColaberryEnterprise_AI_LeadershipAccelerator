@@ -115,7 +115,7 @@ function CourseLinkCard({ courseLink, weekNumber }: {
               )}
               {!isCert && !isOriginal && (
                 <span className="badge" style={{ background: '#e0f2fe', color: '#0369a1', fontSize: 11 }}>
-                  Anthropic · Skilljar
+                  Anthropic · Claude Academy
                 </span>
               )}
             </div>
@@ -126,7 +126,7 @@ function CourseLinkCard({ courseLink, weekNumber }: {
               <p className="small text-muted mb-2">Colaberry-authored content for this week. Reading list below.</p>
             ) : (
               <p className="small text-muted mb-2">
-                Opens in a new tab on Skilljar. No separate login expected for enrolled students.
+                Opens in a new tab on Claude Academy. No separate login expected for enrolled students.
                 Completion is confirmed by your post-quiz.
               </p>
             )}
@@ -139,7 +139,7 @@ function CourseLinkCard({ courseLink, weekNumber }: {
                 style={{ background: 'var(--color-primary)', color: '#fff', borderRadius: 6 }}
               >
                 <i className="bi bi-box-arrow-up-right me-1" />
-                Open course on Skilljar
+                Open course in Claude Academy
               </a>
             ) : courseLink?.status === 'pending_confirmation' ? (
               <span className="badge" style={{ background: '#fef9c3', color: '#854d0e', fontSize: 12 }}>
@@ -449,7 +449,7 @@ function ClassroomWeekPage(_props: Props) {
         <div className="d-flex align-items-center gap-2 flex-wrap">
           {meta?.type === 'skilljar' && (
             <span className="badge" style={{ background: '#e0f2fe', color: '#0369a1', fontSize: 11 }}>
-              Anthropic · Skilljar
+              Anthropic · Claude Academy
             </span>
           )}
           {meta?.type === 'original' && (

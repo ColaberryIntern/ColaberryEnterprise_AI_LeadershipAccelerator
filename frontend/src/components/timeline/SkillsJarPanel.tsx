@@ -5,7 +5,7 @@ import type { TimelineFeedCard } from './TimelineCard';
 /**
  * SkillsJarPanel — the Anthropic Skills Course experience, rendered identically
  * in the student feed card AND the detail drawer (one component, can't diverge).
- * Shows the branded "Anthropic · SkillsJar" panel, an Open-in-SkillsJar button,
+ * Shows the branded "Anthropic · Claude Academy" panel, an Open-in-Academy button,
  * and a certificate upload that AI-verifies before completing the card.
  *
  * `preview` (admin) disables the live upload. `onComplete` fires after a valid
@@ -71,14 +71,14 @@ const SkillsJarPanel: React.FC<Props> = ({ card, preview, onComplete }) => {
   return (
     <div className="tld-skilljar" onClick={(e) => e.stopPropagation()}>
       <div className="tld-jarcard">
-        <span className="tld-jarbadge">● SKILLSJAR COURSE</span>
+        <span className="tld-jarbadge">● CLAUDE ACADEMY COURSE</span>
         <svg className="tld-jarcap" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="M12 3l10 4.5-10 4.5L2 7.5z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
           <path d="M6 10.2v4.3c0 1.7 2.7 3 6 3s6-1.3 6-3v-4.3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
           <path d="M22 7.5v5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
           <circle cx="22" cy="13.2" r="1.1" fill="currentColor" />
         </svg>
-        <div className="tld-jarbrand">Anthropic · SkillsJar</div>
+        <div className="tld-jarbrand">Anthropic · Claude Academy</div>
         <div className="tld-jarfoot">
           <div className="tld-jarname">{course?.name || card.title}</div>
           <div className="tld-jarkind">{isProgress ? 'External course · progress checkpoint' : 'External course · cert required'}</div>
@@ -90,7 +90,7 @@ const SkillsJarPanel: React.FC<Props> = ({ card, preview, onComplete }) => {
       )}
 
       {course?.url
-        ? <a className="tl-btn primary tld-jaropen" href={course.url} target="_blank" rel="noreferrer">Open in SkillsJar ↗</a>
+        ? <a className="tl-btn primary tld-jaropen" href={course.url} target="_blank" rel="noreferrer">Open in Claude Academy ↗</a>
         : <div className="tld-note">No course link attached yet. An admin can add one from Orchestration → Timeline.</div>}
 
       {done && isProgress ? (
@@ -112,14 +112,14 @@ const SkillsJarPanel: React.FC<Props> = ({ card, preview, onComplete }) => {
           )}
         </>
       ) : preview ? (
-        <div className="tld-note">For students, this has <b>Open in SkillsJar</b> and {isProgress
+        <div className="tld-note">For students, this has <b>Open in Claude Academy</b> and {isProgress
           ? <>a <b>progress-screenshot upload</b> (AI-verified) for this interim part of the course.</>
           : <>a <b>certificate upload</b> that AI-verifies, co-brands with the Colaberry logo, and lets them share to social.</>}</div>
       ) : isProgress ? (
         <div className="tld-upload">
           <div className="tld-uplab">Upload a screenshot of your progress to complete</div>
           <p className="tld-desc muted" style={{ margin: '0 0 12px', fontSize: 13.5 }}>
-            This part of the course is on SkillsJar. Work through the sections above, then upload a screenshot of your progress (e.g. “X of N lessons completed”) to mark this complete{pts > 0 ? ` and earn +${pts} pts` : ''}. You’ll upload the full certificate in the final week.
+            This part of the course is on Claude Academy. Work through the sections above, then upload a screenshot of your progress (e.g. “X of N lessons completed”) to mark this complete{pts > 0 ? ` and earn +${pts} pts` : ''}. You’ll upload the full certificate in the final week.
           </p>
           <label className={`tl-btn ghost tld-choosecert${busy ? ' busy' : ''}`}>
             {busy ? 'Checking your screenshot…' : '⬆ Choose progress screenshot'}
@@ -131,7 +131,7 @@ const SkillsJarPanel: React.FC<Props> = ({ card, preview, onComplete }) => {
         <div className="tld-upload">
           <div className="tld-uplab">Upload your certificate to complete</div>
           <p className="tld-desc muted" style={{ margin: '0 0 12px', fontSize: 13.5 }}>
-            The course is delivered on SkillsJar. Take it there, then upload your completion certificate to mark this complete{pts > 0 ? ` and earn +${pts} pts` : ''}.
+            The course is delivered on Claude Academy. Take it there, then upload your completion certificate to mark this complete{pts > 0 ? ` and earn +${pts} pts` : ''}.
           </p>
           <label className={`tl-btn ghost tld-choosecert${busy ? ' busy' : ''}`}>
             {busy ? 'Checking your certificate…' : '⬆ Choose certificate'}
