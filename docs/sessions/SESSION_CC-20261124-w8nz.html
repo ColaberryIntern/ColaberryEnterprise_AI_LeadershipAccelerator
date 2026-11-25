@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20261124-w8nz — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Wednesday, November 25, 2026 at 6:52 AM</div>
+    <div><span class="sid">CC-20261124-w8nz</span><span class="count">2 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>Agent-domain plan-to-repo sweep: deliver each published plan into its builder&#39;s repo every six hours</h2>
+          <span class="badge">2026-11-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `services/agentDomain/planRepoSyncDecision.ts` (pure drift rule), `services/agentDomain/planRepoSyncSweep.ts` (the I/O shell, calling the product&#39;s own `refreshRepoDocuments`), `services/scheduling/planRepoSyncCrons.ts` (cron `41 */6 * * *`), `services/agentRegistry/agentDomainPlanSyncAgents.ts` (registry row, shipped enabled); wired into `schedulerService.ts` and `agentRegistrySeed.ts`; `cronRegistryWorld.ts`, `cronRegistryBaseline.ts` and the generated `data/platformOperations/timerScan.ts` updated to admit the new timer.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">PR #4409, all 10 required checks green on the merge commit; 31 new unit tests across three suites. Production-verified: first unattended run at 6:41 AM CST on 2026-11-25, correlation `1abb5809`, attempted 7, written 1, unchanged 6, skipped 3 (no repo), failed 0, drifted 0. The one write (commit `3956b164` to `MihretColaberry1/ColaberryInternship`) moved her verified count from 6 to 7 with `plan_sha256` byte-identical.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the root cause was that `refreshRepoDocuments` had exactly one production caller, the builder&#39;s own Sync button, so a republished plan sat in Postgres until a human pressed it. The six-hourly `repoTreeRefreshService` disguised it by stamping `last_sync_at` from a read-only pull, so a repo eleven days stale reported as synced today. Two repos had the files because those two builders had pressed Sync; their sync stamps are off the cron minute, which is how the two cases were told apart.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>Correct the session note&#39;s republish claim and record the first production run</h2>
+          <span class="badge">2026-11-25</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`docs/sessions/CC-20261124-w8nz-plan-repo-sync.md`. The note said the three plan libraries &quot;cannot execute in production at all&quot;; corrected to what its own `dist` proof shows, that the deployed application cannot reach them while a person copying them into `/app` still can, which is how the 13 and 22 Nov republish runs happened. Added the 25 Nov production drift measurement and the first-run diff, and rewrote the open item to say the TypeScript port is deliberately not being done.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">PR #4414. Read-only production query using the merged sweep&#39;s own `PROJECTS_SQL` returned &quot;DOMAINS WITH DRIFT: 0 of 10&quot; across all ten domains (598 stories). Docs only, no code or config touched.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the original wording would have sent a future session into an 986-line port of credit-bearing logic that has nothing to fix today, onto a cron that cannot make the credited-removal judgement a person made by hand on 13 Nov. This session also wrongly appended both entries to the sealed `PROGRESS.md` archive before reading main&#39;s current rule; that append is reverted here and the entries live in this file instead. The merged #4409 append was left in place rather than edited out, because editing the shared archive is what re-creates the CONFLICTING state the per-session split exists to prevent.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>docs/sessions/CC-20261124-w8nz.md</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>

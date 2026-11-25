@@ -157,9 +157,9 @@ Until then the sweep **reports** the debt: `plan_repo_sync_board_plan_drift` nam
 stories the board has that the published plan has never heard of, with the remedy command.
 That is the signal whose absence let this run for 23 days in October and 11 days in November.
 
-## Production-verified, 25 Nov 12:41 UTC
+## Production-verified, 6:41 AM CST on 2026-11-25
 
-#4409 merged at 11:24 UTC and was deployed by 11:30. The registry row was created at 11:31,
+#4409 merged at 5:24 AM CST and was deployed by 5:30 AM. The registry row was created at 5:31 AM,
 `enabled`, schedule `41 */6 * * *`. Checked before the first run: the auto-classifier set
 `autonomy_level: observe`, which sounds like it would stop the job writing, and does not.
 `agentControlDecision` reads only `enabled` and `status = 'paused'`; autonomy level is consumed
@@ -184,7 +184,7 @@ this change exists:
 Two things that diff proves, neither of which was certain beforehand:
 
 1. **The plan did not change; the delivery did.** Same plan hash, new verification state. Her
-   repo had been telling her 6 verified since her own Sync press on 24 Nov 06:23 UTC while the
+   repo had been telling her 6 verified since her own Sync press at 12:23 AM CST on 24 Nov while the
    platform had credited 7. Without the sweep she would have kept reading 6 until she pressed
    Sync again. That is the same withheld-credit harm that started this, found on a second
    builder, one run in.
