@@ -1,7 +1,7 @@
 import path from 'path';
 import {
   scoreTeach, scoreViral, scoreConvert, combine, bandOf, scoreTopic, recommendPick, normalizeFactors,
-  IDEA_WEIGHTS, VIRAL_WEIGHTS, CONVERT_WEIGHTS, type IdeaLines, type TopicScoreInput,
+  VIRAL_FACTORS, IDEA_WEIGHTS, VIRAL_WEIGHTS, CONVERT_WEIGHTS, type IdeaLines, type TopicScoreInput,
 } from '../scoring';
 
 /**
@@ -112,4 +112,11 @@ it('recommendPick takes the best that clears the gate and has proof', () => {
   const pick = recommendPick([mk(90.8, true, false, 'no proof'), mk(89.6, true, true, 'sleep'), mk(88, true, true, 'shop'), mk(84.4, false, true, 'low')]);
   expect(pick?.name).toBe('sleep');
   expect(recommendPick([mk(84, false, true, 'x')])).toBeNull();
+});
+
+it('the ten viral factors read exactly as the research kit lists them', () => {
+  // kit/research-2026-11-24.md, "The 10 viral factors".
+  expect(Object.values(VIRAL_FACTORS)).toEqual(['Current events / breaking news', 'Controversy / debate', 'Celebrities / influential people',
+    'Trending social topics', 'Money / economic opportunity', 'Emerging technology', 'Societal fears / uncertainty',
+    'Major sports / entertainment events', 'Seasonal / cultural events', 'Extraordinary human achievement']);
 });

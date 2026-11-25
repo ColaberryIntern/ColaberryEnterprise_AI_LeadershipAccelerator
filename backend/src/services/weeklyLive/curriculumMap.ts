@@ -23,6 +23,8 @@ export interface MapWeek {
   lastTitle: string | null;
   daysAgo: number | null;
   coveredInLast4: boolean;
+  /** The next class already scheduled on this week, after the map's date. */
+  planned: { date: string; title: string } | null;
 }
 export interface CurriculumMap { asOf: string; recentWeeks: number[]; weeks: MapWeek[]; }
 
@@ -41,10 +43,12 @@ export const daysBetween = (from: string, to: string): number => dayNumber(to) -
 /** Pure: build the map from coverage rows as of a date. Rows after asOf are ignored. */
 export function buildCurriculumMap(rows: CoverageRow[], asOf: string): CurriculumMap {
   const past = rows.filter((r) => r.date <= asOf).sort((a, b) => b.date.localeCompare(a.date) || a.sessionId.localeCompare(b.sessionId));
+  const ahead = rows.filter((r) => r.date > asOf).sort((x, y) => x.date.localeCompare(y.date) || x.sessionId.localeCompare(y.sessionId));
   const recentWeeks = past.slice(0, 4).map((r) => r.week);
   const weeks = allWeeks().map((w): MapWeek => {
     const mine = past.filter((r) => r.week === w.week_number);
     const last = mine[0] || null;
+    const next = ahead.find((r) => r.week === w.week_number) || null;
     return {
       week: w.week_number,
       theme: w.theme,
@@ -54,6 +58,7 @@ export function buildCurriculumMap(rows: CoverageRow[], asOf: string): Curriculu
       lastTitle: last ? last.title : null,
       daysAgo: last ? daysBetween(last.date, asOf) : null,
       coveredInLast4: recentWeeks.includes(w.week_number),
+      planned: next ? { date: next.date, title: next.title } : null,
     };
   });
   return { asOf, recentWeeks, weeks };
@@ -70,6 +75,18 @@ export async function loadCoverage(): Promise<CoverageRow[]> {
 
 export async function curriculumMap(asOf: string = centralDate()): Promise<CurriculumMap> {
   return buildCurriculumMap(await loadCoverage(), asOf);
+}
+
+export interface BatchSession { id: string; date: string | null; title: string; week: number | null; status: string | null; }
+/** Every session of a batch, oldest first, with the week it is tagged with. */
+export async function batchSessions(cohortId: string): Promise<BatchSession[]> {
+  const rows = await sequelize.query<BatchSession>(
+    `SELECT s.id, to_char(s.session_date, 'YYYY-MM-DD') AS date, s.title, w.week, s.status::text AS status
+       FROM live_sessions s LEFT JOIN weekly_live_session_weeks w ON w.session_id = s.id
+      WHERE s.cohort_id = :cohortId ORDER BY s.session_date NULLS LAST, s.start_time NULLS LAST, s.id LIMIT 200`,
+    { replacements: { cohortId }, type: QueryTypes.SELECT },
+  );
+  return rows.map((r) => ({ ...r, week: r.week === null ? null : Number(r.week) }));
 }
 
 /** Tag a session with the week it taught. Re-tagging the same session changes the week, never adds a row. */

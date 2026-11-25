@@ -86,6 +86,16 @@ async function fetchJson(url: string, timeoutMs: number, maxAttempts: number): P
 }
 
 /**
+ * One read from the Data API for callers that need fields the helpers below do not return. Unlike
+ * them it THROWS (including when the key is missing), so a caller can report a failure as a failure.
+ */
+export async function youtubeGet(path: string, params: Record<string, string>): Promise<unknown> {
+  const key = process.env.YOUTUBE_API_KEY;
+  if (!key) throw Object.assign(new Error('YOUTUBE_API_KEY is not set'), { name: 'NotConfigured' });
+  return fetchJson(`${API}/${path}?${new URLSearchParams({ ...params, key })}`, 10_000, 3);
+}
+
+/**
  * Search YouTube for embeddable videos matching a query and return only those
  * inside [minSeconds, maxSeconds]. Returns [] (never throws) when the key is
  * missing or the API is unreachable — the caller degrades gracefully.
