@@ -23,6 +23,7 @@ describe('ensureCareerPrepSchema (statements)', () => {
     }
     expect(CAREER_PREP_STATEMENTS.filter((s) => /\bALTER\b/i.test(s))).toEqual([
       'ALTER TABLE career_interviews ADD COLUMN IF NOT EXISTS placement_interview_id UUID',
+      'ALTER TABLE career_interviews ADD COLUMN IF NOT EXISTS ccpp_interview_id INTEGER',
       'ALTER TABLE prep_saved_answers ADD COLUMN IF NOT EXISTS show_public BOOLEAN NOT NULL DEFAULT false',
       "ALTER TABLE prep_attempts ADD COLUMN IF NOT EXISTS kind VARCHAR(10) NOT NULL DEFAULT 'try' CHECK (kind IN ('try','readaloud'))",
       'ALTER TABLE prep_attempts ADD COLUMN IF NOT EXISTS line_id VARCHAR(20)',
