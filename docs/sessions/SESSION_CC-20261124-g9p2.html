@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Wednesday, November 25, 2026 at 12:09 PM</div>
-    <div><span class="sid">CC-20261124-g9p2</span><span class="count">3 changes</span></div>
+    <div class="meta">Generated Wednesday, November 25, 2026 at 12:49 PM</div>
+    <div><span class="sid">CC-20261124-g9p2</span><span class="count">4 changes</span></div>
   </header>
   <main>
     
@@ -101,7 +101,22 @@
           <div class="row"><span class="k">What changed</span><span class="v">(T1) new backend/src/services/sbp/proposalReadinessStories.ts defines the 8-story proposal ladder - P1 orient / P2 rapport / P3 draft / P4 Sharath collect / P5 six-check review gates / P6 human QA / P7 Gold go + package submit / P8 mark-submitted - each with a grounded build prompt and Gherkin acceptance (one Trust line), content aligned to the shipped proposal engine (FLOW.md: Blueprint/Build/Judge/Revise/Needs/Gold/Package + six checks). (T2) materializeTasks.ts gains a gov-only ctx flag proposalStories (OMITTED=OFF, student path unchanged) that injects P1-P8 into the R1 (Proposal) release chained P1-&gt;...-&gt;P8 by blocked_by, with P1 gated on the last R0 Foundation row (connected demo if present, else Command Center); govProjectMaterialization passes proposalStories:true. (T3) P1 orient references the Command Center (STORY-000) + connected demo (STORY-900) already present. (T4) regression gate. Also: GOV_PROPOSAL_EMAIL_TAG = &#39;[Gov Proposal]&#39; added to the Story so interns tag the subject when emailing Sharath (he is cross-copied on many projects), which the tab&#39;s inbox watcher keys on; skillRunbookCoverage NOT_IN_RUNBOOK gets the gov-only module with its reason.</span></div>
           <div class="row"><span class="k">Verification</span><span class="v ver">backend tsc --noEmit exit 0; test-file typecheck baseline matched exactly; jest 192 suites / 3069 tests (sbp+factory, integration tier excluded locally, runs in CI with Postgres); the 3 M3-focused suites green (proposalReadinessStories 9, materializeTasks.idempotency incl. 5 new proposal-ladder tests, govProjectMaterialization wiring).</span></div>
           
-        <div class="row"><span class="k">Notes</span><span class="v">ladder injected at the render/materialize layer like STORY-000/900 (not into plan.stories), so gateByRelease is bypassed and the P1-P8 chain is set explicitly; idempotent + keep-complete on re-materialize. No migration. PR pending (one PR + one deploy, Ali merges).</span></div>
+        <div class="row"><span class="k">Notes</span><span class="v">ladder injected at the render/materialize layer like STORY-000/900 (not into plan.stories), so gateByRelease is bypassed and the P1-P8 chain is set explicitly; idempotent + keep-complete on re-materialize. No migration. PR #4429 (one PR + one deploy, Ali merges).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">04</span>
+          <h2>Gov Proposal Studio M3 - P2 rapport scope correction (amendment to PR #4429)</h2>
+          <span class="badge">2026-11-25</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">P2 is rapport with the SINGLE AUTHORIZED CLIENT CONTACT (the contract-managing person named in the solicitation), not Sharath. It enforces the only-contact rule (that contact is the only external person the intern may reach out to about the pursuit), requires emailing them at least once (DRAFT held for Ali), and preparing a set of questions for any client meeting. Sharath is the INTERNAL lead, contacted later during document build + submission (P4, P7), where the [Gov Proposal] subject tag stays; the tag was removed from P2. Test updated: Sharath-tag assertion now covers P4/P7 only, plus a new P2 client-contact/only-contact test.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend tsc --noEmit exit 0; proposalReadinessStories + materializeTasks.idempotency suites green (43 tests). Per Ali&#39;s review of PR #4429 (&quot;the rapport is for the people managing the contract ... the only person you are allowed to reach out to&quot;); rest of M3 approved (&quot;Everything else looks good&quot;).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">amendment pushed to the open PR #4429 branch (not yet merged), so no conflict concern.</span></div>
           
         </div>
       </article>
