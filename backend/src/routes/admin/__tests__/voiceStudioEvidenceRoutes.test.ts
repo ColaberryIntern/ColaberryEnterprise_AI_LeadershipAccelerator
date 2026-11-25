@@ -33,6 +33,7 @@ const detail = () => ({ ...input(), row: { id: CID, state: 'completed', provider
 
 function make(enabled = true) {
   const deps = {
+    findHistory: jest.fn(),
     enabled: () => enabled,
     config: () => ({ VOICE_TEST_MAX_ATTEMPTS: 3, VOICE_TEST_MAX_DURATION_SECONDS: 180, VOICE_TEST_BUDGET_USD: 5 }),
     store: {
@@ -154,5 +155,26 @@ describe('evidence API (VS3.5)', () => {
     deps.store.loadCosts.mockRejectedValueOnce(Object.assign(new Error('secret'), { name: 'ConnectionError' }));
     const f = await request(a).get(`${P}/costs`).set(A);
     expect([f.status, f.body]).toEqual([500, { error: 'ConnectionError' }]);
+  });
+});
+
+describe('history lookup (VS5.3)', () => {
+  const P = '/api/admin/voice-studio/history/abc-123456';
+  it('finds one call by the previous vendor id, says so when there is none, and validates', async () => {
+    const { a, deps } = make();
+    deps.findHistory.mockResolvedValueOnce({ provider: 'synthflow', providerCallId: 'abc-123456' }).mockResolvedValueOnce(null).mockRejectedValueOnce(Object.assign(new Error('x'), { name: 'DatabaseError' }));
+    const ok = await request(a).get(P).set(A);
+    expect([ok.status, ok.body.call.providerCallId]).toEqual([200, 'abc-123456']);
+    expect((await request(a).get(P).set(A)).status).toBe(404);
+    expect((await request(a).get(P).set(A)).status).toBe(500);
+    expect((await request(a).get('/api/admin/voice-studio/history/a%20b').set(A)).status).toBe(400);
+    expect(deps.findHistory).toHaveBeenCalledTimes(3);
+  });
+  it('needs an admin, and is absent while the console is off', async () => {
+    const on = make();
+    expect((await request(on.a).get(P)).status).toBe(401);
+    const off = make(false);
+    expect((await request(off.a).get(P).set(A)).body.error).toBe('fell through');
+    expect(on.deps.findHistory).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,6 @@
 {
  "generatedFrom": "git ls-files",
- "total": 280,
+ "total": 282,
  "byRole": {
   "DISPATCH": 3,
   "INGEST": 3,
@@ -8,7 +8,7 @@
   "CALLER": 11,
   "CONFIG": 20,
   "UI": 33,
-  "CONSUMER": 73,
+  "CONSUMER": 75,
   "MENTION": 131
  },
  "rows": [
@@ -1371,6 +1371,18 @@
   {
    "path": "backend/src/services/voice/migration/assistantInventory.ts",
    "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/migration/historyExport.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/migration/historyImport.ts",
+   "role": "CONSUMER",
    "callTypes": [],
    "envVars": []
   },

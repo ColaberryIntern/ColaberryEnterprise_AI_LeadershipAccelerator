@@ -16,6 +16,7 @@
     "voice:preflight": "ts-node src/scripts/voice/preflight.ts",
     "voice:load": "node --expose-gc -r ts-node/register/transpile-only src/scripts/voice/load.ts",
     "voice:migration:report": "ts-node --transpile-only src/scripts/voice/migrationReport.ts",
+    "voice:history": "ts-node --transpile-only src/scripts/voice/history.ts",
     "voice:scan-legacy": "ts-node --transpile-only src/scripts/voice/scanLegacy.ts",
     "voice:reconcile": "ts-node src/scripts/voice/reconcile.ts",
     "voice:rollback:drill": "ts-node --transpile-only src/scripts/voice/rollbackDrill.ts",

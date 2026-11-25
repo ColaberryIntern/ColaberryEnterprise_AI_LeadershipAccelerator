@@ -115,7 +115,7 @@ describe('private capture', () => {
     expect(c.assistants[0]).toMatchObject({ vendorId: 'm1', numberCount: 1, knowledgeBase: 'Admissions', variables: ['cohort', 'cohort_name', 'first_name'], callCount: 1545 });
     expect(c.assistants[0].config).toMatchObject({ agent: { greeting_message: 'Hi {cohort_name}', voice_id: 'voice-9', allowed_idle_time_seconds: 12 } });
     expect(JSON.stringify(c)).not.toMatch(/very-secret|secretvalue|5550100|zzzz|sk-abc/);
-    for (const call of f.mock.calls as unknown as Array<[string, RequestInit]>) expect(call[1]).toMatchObject({ method: 'GET' });
+    for (const call of f.mock.calls as unknown as Array<[string, RequestInit]>) expect(call[1]).toMatchObject({ method: 'GET', signal: expect.any(AbortSignal) });
   });
   it.each<[string, Record<string, unknown>, string]>([
     ['more actions listed than declared', { '/actions': reply({ actions: [{ action_id: 'a' }, { action_id: 'b' }], pagination: { total_records: 1 } }) }, 'ContractViolation'],
@@ -124,6 +124,13 @@ describe('private capture', () => {
     ['a call count that is missing', { '/calls': reply({ calls: [] }) }, 'ContractViolation'],
     ['a refusal', { '/actions': reply({}, 403) }, 'AuthError'], ['an outage', { '/knowledge_base': reply({}, 502) }, 'UpstreamUnavailable'],
   ])('%s is an error, never a partial capture', async (_n, over, name) => { await expect(captureAll('k', api(over) as never)).rejects.toMatchObject({ name }); });
+
+  it('reads every page of actions', async () => {
+    const f = api();
+    const ids = Array.from({ length: 130 }, (_x, i) => ({ action_id: `a${i}`, action_type: 'X' }));
+    const two = (async (u: string) => (u.includes('/actions') ? reply({ actions: ids.slice(Number(new URL(u).searchParams.get('offset')), Number(new URL(u).searchParams.get('offset')) + 100), pagination: { total_records: 130 } }) : f(u))) as never;
+    expect((await captureAll('k', two)).counts).toMatchObject({ actions: 130, actionsDeclared: 130 });
+  });
 
   it('every item is captured or is a real checklist step, and every step is used', () => {
     const md = fs.readFileSync(DEFAULT_MATRIX, 'utf8').replace(/\r\n/g, '\n');

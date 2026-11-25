@@ -6,6 +6,7 @@
  *   GET /api/admin/voice-studio/calls?days&engine&state&test&limit
  *   GET /api/admin/voice-studio/calls/:id                  detail + trust timeline
  *   GET /api/admin/voice-studio/calls/:id/timeline.csv     audit export: requireFullAdmin, redacted
+ *   GET /api/admin/voice-studio/history/:providerCallId    one imported call of the previous vendor
  *   GET /api/admin/voice-studio/quality                    rubric + evaluation runs
  *   GET /api/admin/voice-studio/costs?days                 actual vs estimated, caps, operations
  */
@@ -16,17 +17,20 @@ import * as Auth from '../../middlewares/authMiddleware';
 import { loadVoiceConfig } from '../../services/voice/voiceConfig';
 import * as Store from '../../services/voice/studio/evidenceStore';
 import { buildTimeline, timelineCsv } from '../../services/voice/studio/trustTimeline';
+import type { HistoryHit } from '../../services/voice/migration/historyImport';
 import { DIMENSIONS } from '../../services/voice/testlab/grade';
 
 export interface EvidenceDeps {
   enabled: () => boolean;
   config: () => Pick<ReturnType<typeof loadVoiceConfig>, 'VOICE_TEST_MAX_ATTEMPTS' | 'VOICE_TEST_MAX_DURATION_SECONDS' | 'VOICE_TEST_BUDGET_USD'>;
   store: Pick<typeof Store, 'listCalls' | 'getCallDetail' | 'listEvaluations' | 'loadCosts'>;
+  findHistory: (providerCallId: string) => Promise<HistoryHit | null>;
 }
 export const productionEvidenceDeps = (): EvidenceDeps => ({
   enabled: () => { const c = loadVoiceConfig(); return c.valid && c.VOICE_STUDIO_UI_ENABLED; },
   config: () => loadVoiceConfig(),
   store: Store,
+  findHistory: async (providerCallId) => (await import('../../services/voice/migration/historyImport')).findHistory((await import('../../config/database')).sequelize, (await import('../../services/voice/gateway/legacyFacade')).LEGACY_TENANT_ID, providerCallId),
 });
 
 const requireAdmin = (req: Request, res: Response, next: NextFunction): void => Auth.requireAdmin(req, res, next);
@@ -44,6 +48,7 @@ const ListQuery = z.object({
 }).strict();
 const DaysQuery = z.object({ days: z.coerce.number().int().min(1).max(90).default(30) }).strict();
 const Uuid = z.string().uuid();
+const ProviderCallId = z.string().regex(/^[A-Za-z0-9_-]{6,100}$/);
 
 export function buildVoiceStudioEvidenceRouter(deps: () => EvidenceDeps = productionEvidenceDeps): Router {
   const router = Router();
@@ -72,6 +77,16 @@ export function buildVoiceStudioEvidenceRouter(deps: () => EvidenceDeps = produc
       if (!d) { res.status(404).json({ error: 'NotFound' }); return; }
       res.json({ call: d.row, turns: d.turns, usage: d.usage, reconciliation: d.reconciliation, timeline: buildTimeline(d) });
     } catch (e) { fail(res, 'voice_call_detail_failed', e); }
+  });
+
+  router.get('/api/admin/voice-studio/history/:providerCallId', gate, requireAdmin, async (req, res) => {
+    const id = ProviderCallId.safeParse(req.params.providerCallId);
+    if (!id.success) { bad(res); return; }
+    try {
+      const hit = await deps().findHistory(id.data);
+      if (!hit) { res.status(404).json({ error: 'NotFound' }); return; }
+      res.json({ call: hit });
+    } catch (e) { fail(res, 'voice_history_lookup_failed', e); }
   });
 
   router.get('/api/admin/voice-studio/calls/:id/timeline.csv', gate, requireAdmin, requireFullAdmin, async (req, res) => {

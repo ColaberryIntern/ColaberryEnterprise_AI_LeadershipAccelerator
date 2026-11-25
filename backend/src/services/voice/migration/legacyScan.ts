@@ -20,7 +20,7 @@ const MARK = /synthflow-archival:\s*(.*)$/;
 const CODE = /\.(?:[cm]?[jt]sx?)$/;
 const SKIP = /(?:^|\/)(?:node_modules|dist|build|coverage)\/|(?:^|\/)__tests__\/|\.(?:test|spec)\.[cm]?[jt]sx?$|^docs\/|^directives\/|^tests\/|^\.claude\/|^scripts\/artifacts\/|\.(?:md|png|jpe?g|gif|svg|pdf|webp|mp4|lock|map)$|package-lock\.json$/;
 /** The scanner and the migration tools name it by design, and are removed with the last of it. */
-const TOOLING = /^backend\/src\/(?:scripts\/voice\/(?:scanLegacy|migrationReport|voiceInventory\w*)|services\/voice\/migration\/\w+)\.ts$/;
+const TOOLING = /^backend\/src\/(?:scripts\/voice\/(?:scanLegacy|migrationReport|history|voiceInventory\w*)|services\/voice\/migration\/\w+)\.ts$/;
 const CONFIG = /(?:^|\/)(?:\.env[^/]*|Dockerfile[^/]*|docker-compose[^/]*|[^/]*\.(?:ya?ml|json|toml|conf|ini|sh|sql|py|html?))$/;
 
 export const isScanned = (path: string): boolean => !SKIP.test(path) && !TOOLING.test(path) && (CODE.test(path) || CONFIG.test(path));
