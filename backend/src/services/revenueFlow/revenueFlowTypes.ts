@@ -10,24 +10,19 @@
 import { TileStatus } from '../commercialization/commercializationTiles';
 import { ClassificationKey, FlowStreamKey, FlowTone } from './revenueClassifications';
 import type { StreamBrand } from './revenueBrandVocabulary';
+// Type-only, so it is erased at compile time and this types module gains no runtime
+// dependency on a service that reads the database.
+import type { PreProjectTier } from './govPreProjectTier';
+import type { Money } from './money';
 
 /**
- * A money figure, carried as cents AND as a formatted string.
- *
- * Both, deliberately. `cents` is what arithmetic and tests use; `display` is what the page
- * shows. Letting the frontend format would mean two places deciding whether $72,816 rounds
- * to "$72.8K", and a headline that disagrees with its own drill-down by a rounding step is
- * the kind of thing that costs a reader's trust in everything else on the page.
- *
- * `cents: null` means the figure is genuinely not knowable, and `display` then says why in
- * words rather than printing a zero. A zero and an unknown are different answers.
+ * The money vocabulary moved to its own leaf module in R12, when this file crossed the
+ * 500-line ceiling and the rule required a split before new code. Re-exported here so every
+ * existing caller keeps importing `Money`, `money`, `noMoney` and `formatCents` from the one
+ * place it has always imported them from.
  */
-export interface Money {
-  cents: number | null;
-  display: string;
-  /** Where this figure came from, in one sentence a reader can act on. */
-  provenance: string;
-}
+export { formatCents, money, noMoney } from './money';
+export type { Money } from './money';
 
 /**
  * One dated, classified thing that happened.
@@ -219,6 +214,19 @@ export interface BuiltStream {
    * thing it was holding.
    */
   deals?: EnterpriseDeal[];
+  /**
+   * The stage behind the pipeline: opportunities still being assessed. R12.
+   *
+   * Populated ONLY for `gov_pipeline`, and undefined rather than a zero-count object when the
+   * qualification table is absent — a count of 0 would read as "every opportunity has been
+   * assessed", which is the opposite of "the instrument is missing".
+   *
+   * Deliberately NOT a funnel stage. The funnel describes the flagged bids and its counts
+   * partition; these are a different population of opportunities, most of which will never be
+   * flagged. See `govPreProjectTier` for the diagnosis that produced it and for why nothing
+   * here is backfilled.
+   */
+  preProject?: PreProjectTier;
 }
 
 /**
@@ -462,24 +470,3 @@ export interface ClassificationLegendEntry {
   means: string;
 }
 
-/** Format cents as a figure a reader can quote. Whole dollars: cents are noise at this scale. */
-export function formatCents(cents: number, currency = 'USD'): string {
-  const symbol = currency === 'USD' ? '$' : `${currency} `;
-  return `${symbol}${Math.round(cents / 100).toLocaleString('en-US')}`;
-}
-
-/** A knowable figure. */
-export function money(cents: number, provenance: string, currency = 'USD'): Money {
-  return { cents, display: formatCents(cents, currency), provenance };
-}
-
-/**
- * An unknowable figure, which says so in the place a number would have been.
- *
- * The `display` is words, not "—", because a dash on a revenue dashboard gets read as zero
- * by anyone scanning quickly, and the difference between "nobody has priced this" and
- * "this is worth nothing" is the difference between a task and a conclusion.
- */
-export function noMoney(display: string, provenance: string): Money {
-  return { cents: null, display, provenance };
-}
