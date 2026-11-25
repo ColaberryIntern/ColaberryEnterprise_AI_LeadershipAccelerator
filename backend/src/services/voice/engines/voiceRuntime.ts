@@ -27,6 +27,9 @@ import type { RelayDeps } from './conversationRelayEngine';
 import { buildRelayTwiml } from './relayProtocol';
 import { nextOpenSlotsTool, ToolBroker } from './toolBroker';
 import { TEST_PROFILE } from './voiceProfiles';
+import { ACTION_TOKEN_TTL_SECONDS, CONNECT_ACTION_PATH } from '../transfer/humanTransfer';
+import { transferToHumanTool } from '../transfer/transferTool';
+import { completeDirectCall, reconcileDirectCompletions, rememberTranscript } from '../postcall/directCompletionRuntime';
 import { attachVoiceWsServer, RELAY_PATH, STREAM_PATH } from './voiceWsServer';
 import type { ModelHandlers, RealtimeDeps, SocketLike } from './realtime/openaiRealtimeEngine';
 import { buildStreamTwiml } from './realtime/streamProtocol';
@@ -37,17 +40,27 @@ const log = (line: Record<string, unknown>): void => {
 };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * What the Trust Center shows for a tool call: the broker REFUSED it (unknown or unpermitted tool,
+ * invalid input) = denied; it was allowed but failed or timed out = failed; otherwise it ran.
+ */
+export function toolVerdict(rec: { committed: boolean; errorClass?: string }): { decision: 'allowed' | 'denied'; status: string } {
+  if (rec.errorClass === 'UnknownTool' || rec.errorClass === 'ValidationError' || rec.errorClass === 'CallerNotVerified') return { decision: 'denied', status: 'refused' };
+  if (rec.errorClass) return { decision: 'allowed', status: 'failed' };
+  return { decision: 'allowed', status: rec.committed ? 'committed' : 'completed' };
+}
+
 /** Idempotent tool-run insert with bounded retry. Exported for tests. */
-export async function persistToolRun(callId: string, rec: { toolCallId: string; name: string; turnId: number; committed: boolean; afterClose: boolean },
+export async function persistToolRun(callId: string, rec: { toolCallId: string; name: string; turnId: number; committed: boolean; afterClose: boolean; errorClass?: string },
   exec: (sql: string, replacements: Record<string, unknown>) => Promise<unknown> = (sql, replacements) => sequelize.query(sql, { replacements, type: QueryTypes.INSERT }),
   attempts = 3, backoffMs = 200): Promise<boolean> {
   for (let i = 1; i <= attempts; i++) {
     try {
       await exec(
         `INSERT INTO voice_tool_runs (tenant_id, call_id, turn_index, tool_name, idempotency_key, auth_decision, status, ended_at)
-         SELECT c.tenant_id, c.id, :turn, :name, :key, 'allowed', :status, NOW() FROM voice_calls c WHERE c.id = :callId
+         SELECT c.tenant_id, c.id, :turn, :name, :key, :decision, :status, NOW() FROM voice_calls c WHERE c.id = :callId
          ON CONFLICT (call_id, idempotency_key) DO NOTHING`,
-        { callId, turn: rec.turnId, name: rec.name, key: rec.toolCallId, status: rec.committed ? 'committed' : 'completed' },
+        { callId, turn: rec.turnId, name: rec.name, key: rec.toolCallId, ...toolVerdict(rec) },
       );
       return true;
     } catch (e) {
@@ -86,17 +99,29 @@ export function relayDeps(): RelayDeps {
   return {
     worker: getWorker(),
     llm: createClaudeVoiceLlm(c.VOICE_ENGINE_A_MODEL),
-    broker: slotTool,
+    broker: relayBroker,
     profile: TEST_PROFILE,
     accountSid: () => process.env.TWILIO_ACCOUNT_SID || undefined,
     consumeSessionRef: consumeToken,
     callMatches,
     now: () => Date.now(),
     log,
+    // VS3.2: the session hands its transcript to post-call, which records the completion exactly once.
+    onTranscript: (callId, transcript) => { rememberTranscript(callId, transcript); completeDirectCall(callId); },
   };
 }
 
-const slotTool = () => new ToolBroker([nextOpenSlotsTool(() => getAvailableSlots(14, admissionsCalendar()))]);
+export const slotTool = () => new ToolBroker([nextOpenSlotsTool(() => getAvailableSlots(14, admissionsCalendar()))]);
+
+/**
+ * Engine A also gets transfer_to_human (VS3.2): it acts on the transfer control by ending the relay
+ * session with handoffData. Engine B does not handle that control yet, so it does NOT get the tool
+ * (it would announce a transfer that never happens). Unset VOICE_TRANSFER_NUMBER = a callback offer.
+ */
+export const relayBroker = () => new ToolBroker([
+  nextOpenSlotsTool(() => getAvailableSlots(14, admissionsCalendar())),
+  transferToHumanTool(() => loadVoiceConfig().VOICE_TRANSFER_NUMBER),
+]);
 
 /** Open the OpenAI Realtime WebSocket. The key never leaves the server and is never logged. */
 export function connectOpenAiRealtime(model: string, h: ModelHandlers): SocketLike {
@@ -143,6 +168,9 @@ export async function connectTwimlFor(callId: string): Promise<string> {
       welcomeGreeting: TEST_PROFILE.greeting,
       language: TEST_PROFILE.language,
       voice: c.VOICE_RELAY_VOICE,
+      actionUrl: c.VOICE_PUBLIC_BASE_URL
+        ? `${new URL(CONNECT_ACTION_PATH, c.VOICE_PUBLIC_BASE_URL).toString()}?ref=${encodeURIComponent(mintToken(callId, 'status', ACTION_TOKEN_TTL_SECONDS))}`
+        : undefined,
     });
   }
   if (rows[0]?.engine === 'openai_realtime' && c.VOICE_WS_BASE_URL) {
@@ -152,7 +180,19 @@ export async function connectTwimlFor(callId: string): Promise<string> {
   return HANGUP;
 }
 
+/** VS3.2: how often the post-call sweep looks for ended calls whose completion never got recorded. */
+export const POSTCALL_SWEEP_MS = 5 * 60 * 1000;
+
 /** Called once at boot with the HTTP server. Cheap when voice is off: the upgrade handler only reads config per request. */
+
 export function installVoiceRuntime(server: Server): void {
   attachVoiceWsServer(server, { relay: relayDeps, stream: realtimeDeps }, log);
+  // Reconcile, do not trust delivery: Twilio does not redeliver status callbacks. The sweep is a
+  // no-op unless a direct engine is switched on, checked on every tick so a flag flip needs no restart.
+  const sweep = setInterval(() => {
+    const c = loadVoiceConfig();
+    if (!c.valid || !(c.VOICE_STUDIO_ENABLED || c.VOICE_TEST_ENABLED)) return;
+    reconcileDirectCompletions().catch((e: Error) => log({ level: 'error', event: 'voice_postcall_sweep_failed', outcome: 'failure', error_class: e.name || 'Error' }));
+  }, POSTCALL_SWEEP_MS);
+  sweep.unref();
 }

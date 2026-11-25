@@ -30,6 +30,8 @@ export class PromptAssemblyError extends Error {
 }
 
 export interface PromptContext {
+  /** L13.4: this project has no STORY-000 document to point at. */
+  setupRetired?: boolean;
   /** Paths known to exist in the repo — from `.colaberry/manifest.json`. */
   manifestPaths?: string[];
   repoUrl?: string | null;
@@ -289,6 +291,7 @@ export function buildStoryPrompt(
   sections.push(enrichmentPromptBlock({
     projectId: ctx.projectId ?? '<project_id from .colaberry/manifest.json>',
     storyId: story.id,
+    setupRetired: ctx.setupRetired,
   }));
 
   // ── 9. Working mode ───────────────────────────────────────────────────────

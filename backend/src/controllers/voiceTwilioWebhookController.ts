@@ -26,6 +26,9 @@ import { twilioAuthToken } from '../services/voice/twilio/twilioCredentials';
 import { verifyToken, type TokenClaims } from '../services/voice/twilio/correlationToken';
 import { twilioStatusToEvents } from '../services/voice/twilio/twilioStatusMap';
 import { connectTwimlFor } from '../services/voice/engines/voiceRuntime';
+import { INBOUND_MESSAGE_TWIML } from '../services/voice/inbound/inboundPlan';
+import { answerInbound, productionInboundDeps } from '../services/voice/inbound/inboundRuntime';
+import { completeDirectCall } from '../services/voice/postcall/directCompletionRuntime';
 import { appendCallEvents, consumeToken, isOwnedActiveNumber, recomputeCall, type AppendResult, type ConsumeResult } from '../services/voice/twilio/voiceCallStore';
 
 /** Shape every Twilio voice webhook body must have; other Twilio fields pass through unvalidated. */
@@ -58,12 +61,16 @@ export interface VoiceWebhookDeps {
   ownsNumber: (e164: string) => Promise<boolean>;
   /** Engine TwiML for a connected call (VS2.3: ConversationRelay); an unsupported engine ends the call safely. */
   connectTwiml: (callId: string) => Promise<string>;
+  /** VS3.6: TwiML for an inbound call, from the number that was called (never the caller's). Never throws. */
+  inboundTwiml: (input: { calledNumber: string | undefined; callSid: string | undefined }) => Promise<string>;
+  /** VS3.2: a call reached a terminal state; post-call records it exactly once (fire-and-forget). */
+  onCallEnded?: (callId: string) => void;
   now: () => number;
   log: (line: Record<string, unknown>) => void;
 }
 
 export const HANGUP_TWIML = '<?xml version="1.0" encoding="UTF-8"?><Response><Hangup/></Response>';
-export const INBOUND_FALLBACK_TWIML = '<?xml version="1.0" encoding="UTF-8"?><Response><Say>Sorry, this line is not taking calls right now. Goodbye.</Say><Hangup/></Response>';
+export const INBOUND_FALLBACK_TWIML = INBOUND_MESSAGE_TWIML;
 
 export function defaultVoiceWebhookDeps(): VoiceWebhookDeps {
   return {
@@ -72,6 +79,8 @@ export function defaultVoiceWebhookDeps(): VoiceWebhookDeps {
     accountSid: () => process.env.TWILIO_ACCOUNT_SID || undefined,
     appendCallEvents, consumeToken, recomputeCall, ownsNumber: isOwnedActiveNumber,
     connectTwiml: connectTwimlFor,
+    inboundTwiml: (input) => answerInbound(input, productionInboundDeps()),
+    onCallEnded: completeDirectCall,
     now: () => Date.now(),
     log: (line) => (line.level === 'error' || line.level === 'warn' ? console.warn : console.log)(JSON.stringify({ service: 'voice-studio', ...line })),
   };
@@ -110,9 +119,15 @@ export function makeVoiceWebhookHandlers(deps: VoiceWebhookDeps) {
       const ours = ownedNumberOf(route, parsed.data);
       if (!ours) return deny(res, deps, req, 'ValidationError', 400);
       try {
-        if (!(await deps.ownsNumber(ours))) return deny(res, deps, req, 'TwilioNumberMismatch');
+        if (!(await deps.ownsNumber(ours))) {
+          // A Twilio-signed inbound call to a number we do not hold: the caller hears the safe message,
+          // not Twilio's spoken application error. Nothing is routed or stored.
+          if (route === 'inbound') { deps.log({ level: 'warn', event: 'voice_inbound_fallback', outcome: 'skipped', error_class: 'TwilioNumberMismatch', reason: 'unknown_number' }); return xml(res, INBOUND_FALLBACK_TWIML); }
+          return deny(res, deps, req, 'TwilioNumberMismatch');
+        }
       } catch (e) {
         deps.log({ level: 'error', event: 'voice_number_lookup_failed', outcome: 'failure', error_class: (e as { name?: string })?.name || 'DatabaseError', route: req.path });
+        if (route === 'inbound') return xml(res, INBOUND_FALLBACK_TWIML);
         res.status(503).json({ error: 'Temporary failure' });
         return;
       }
@@ -137,7 +152,10 @@ export function makeVoiceWebhookHandlers(deps: VoiceWebhookDeps) {
         res.status(204).end();
         return;
       }
-      if (r.inserted) await deps.recomputeCall(callId);
+      if (r.inserted) {
+        const rec = (await deps.recomputeCall(callId)) as { terminalAt?: string } | null;
+        if (rec?.terminalAt) deps.onCallEnded?.(callId);
+      }
       deps.log({ level: 'info', event: 'voice_status_ingested', outcome: 'success', call_id: callId, state: events[0].state, inserted: r.inserted, duplicates: r.duplicates });
       res.status(204).end();
     } catch (e) {
@@ -163,10 +181,10 @@ export function makeVoiceWebhookHandlers(deps: VoiceWebhookDeps) {
     }
   }
 
-  /** Inbound routing arrives in VS3.6; until then every inbound call gets the safe fallback. */
-  function inbound(_req: Request, res: Response): void {
-    deps.log({ level: 'info', event: 'voice_inbound_fallback', outcome: 'skipped' });
-    xml(res, INBOUND_FALLBACK_TWIML);
+  /** VS3.6: routed by the called number alone; anything that cannot be routed is the safe fallback. */
+  async function inbound(req: Request, res: Response): Promise<void> {
+    const body = req.body as TwilioWebhookBody;
+    xml(res, await deps.inboundTwiml({ calledNumber: ownedNumberOf('inbound', body), callSid: body.CallSid }));
   }
 
   return { gate, verifyTwilio, status, twiml, inbound };

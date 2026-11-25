@@ -43,108 +43,17 @@ import { sequelize } from '../../config/database';
 import { TileStatus } from '../commercialization/commercializationTiles';
 import { getLiveBidValues, annualizedCents, BidValue } from './govBidValueService';
 import {
-  FlaggedBid, FlowEvent, FunnelStage, Money, BuiltStream, money, noMoney, formatCents,
+  FlaggedBid, FlowEvent, FunnelStage, Money, money, noMoney, formatCents,
 } from './revenueFlowTypes';
+// Row shapes, helpers and the honest empty result. Extracted in R12 because this file was
+// past the 500-line ceiling and the rule is to split BEFORE adding; see that file's header.
+import {
+  DocRow, FlaggedRow, GovFlow, SubmissionRow,
+  absentFlow, day, suspectReasons, tableExists,
+} from './govBidFlowShared';
+import { buildPreProjectTier } from './govPreProjectTier';
 
-/** True when the table exists. A missing table is not an empty one. */
-async function tableExists(name: string): Promise<boolean> {
-  const rows = await sequelize.query<{ n: number }>(
-    `SELECT COUNT(*)::int AS n FROM information_schema.tables
-     WHERE table_schema = 'public' AND table_name = :name`,
-    { type: QueryTypes.SELECT, replacements: { name } },
-  );
-  return (rows[0]?.n ?? 0) > 0;
-}
-
-interface FlaggedRow {
-  delivery_project_id: string | null;
-  canonical_opportunity_id: string | null;
-  project_name: string | null;
-  flagged_at: string;
-}
-
-interface SubmissionRow {
-  delivery_project_id: string;
-  status: string;
-  outcome: string;
-  exported_at: string | null;
-  externally_submitted_at: string | null;
-  acknowledged_at: string | null;
-  outcome_recorded_at: string | null;
-}
-
-interface DocRow {
-  delivery_project_id: string;
-  title: string | null;
-  observed_at: string;
-}
-
-/** Day precision. The timeline buckets by day, and a time-of-day would be false detail. */
-function day(iso: string | null): string | null {
-  return iso ? String(iso).slice(0, 10) : null;
-}
-
-export interface GovFlow {
-  stream: BuiltStream;
-  events: FlowEvent[];
-  /** Pulled up for the page headline, which reports winnings across streams. */
-  openPricedCents: number;
-  openPricedAnnualizedCents: number | null;
-  wonCents: number;
-  lostCents: number;
-  decidedWon: number;
-  decidedLost: number;
-  unpricedBids: number;
-}
-
-/**
- * An empty-but-honest stream, for when the tables this reads are not in the database.
- *
- * Returned rather than thrown so one missing table costs this section and not the page.
- * A dashboard that disappears under partial failure teaches people not to open it, which
- * costs more than the missing section — the rule `revenueRoomService` already follows.
- */
-function absentFlow(reason: string): GovFlow {
-  return {
-    stream: {
-      key: 'gov_pipeline',
-      label: 'Government bids in pursuit',
-      status: 'unmeasurable' as TileStatus,
-      headline: noMoney('Cannot be read', reason),
-      funnel: [],
-      provenance: reason,
-      caveat: reason,
-      drillDownKey: 'gov_bid_pursuit',
-    },
-    events: [],
-    openPricedCents: 0,
-    openPricedAnnualizedCents: null,
-    wonCents: 0,
-    lostCents: 0,
-    decidedWon: 0,
-    decidedLost: 0,
-    unpricedBids: 0,
-  };
-}
-
-/**
- * Flags derived from the row itself, never from a judgment about the opportunity.
- *
- * Each of these was really present on 2026-11-12, which is why they are computed rather
- * than assumed absent. `govBidFlow` emits a `bid_suspect` event for any row that trips one,
- * so a reader scanning the timeline sees the cleanup work as work.
- */
-function suspectReasons(
-  row: FlaggedRow,
-  titleCounts: Map<string, number>,
-): string[] {
-  const title = (row.project_name ?? '').trim();
-  const out: string[] = [];
-  if (!row.delivery_project_id) out.push('no delivery project, so it cannot be named or priced');
-  if (/\btest\b/i.test(title)) out.push('looks like a test row');
-  if (title && (titleCounts.get(title.toLowerCase()) ?? 0) > 1) out.push('duplicate title');
-  return out;
-}
+export type { GovFlow } from './govBidFlowShared';
 
 export async function buildGovFlow(windowStart: Date): Promise<GovFlow> {
   if (!(await tableExists('gov_qualifications'))) {
@@ -521,6 +430,10 @@ export async function buildGovFlow(windowStart: Date): Promise<GovFlow> {
       : null,
   ].filter(Boolean) as string[];
 
+  // R12 — the stage behind the pipeline. Guarded: a failure here costs the tier and nothing
+  // else, because the flagged pipeline above it is the part Ram opens this card for.
+  const preProject = await buildPreProjectTier().catch(() => null);
+
   return {
     stream: {
       key: 'gov_pipeline',
@@ -535,6 +448,10 @@ export async function buildGovFlow(windowStart: Date): Promise<GovFlow> {
       caveat: caveatParts.length ? caveatParts.join(' ') : null,
       drillDownKey: 'gov_bid_pursuit',
       bids,
+      // R12. Attached without mutating the funnel, and omitted entirely rather than set to a
+      // zero count when the table is absent, so "the instrument is missing" never renders as
+      // "every opportunity has been assessed".
+      ...(preProject ? { preProject } : {}),
     },
     events,
     openPricedCents,

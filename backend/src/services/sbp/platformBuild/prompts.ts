@@ -49,16 +49,25 @@ const SHARED_RULES: readonly string[] = [
     + 'replaces them with live data when it serves the page.',
 ];
 
+/** L13.4: what the student briefs say about stories a platform-built project does not have. */
+const RETIRED_RULES: readonly string[] = [
+  '- This project has no STORY-000 and no STORY-900: the platform does that work, so they are not in '
+    + '`docs/stories/` or `progress.json` and the totals count only the plan\'s own stories. Skip '
+    + 'every instruction to read, tick, seed or commit them, and never show them, or a count '
+    + '"including this Command Center", on a page.',
+];
+
 /** Brief 1: the Command Center. Writes `index.html` and `command-center/**` only. */
 export function platformCommandCenterPrompt(
   plan: BuildPlan,
   schedule: Schedule | null,
-  opts: { projectId?: string } = {},
+  opts: { projectId?: string; setupRetired?: boolean } = {},
 ): string {
   return [
     '# PLATFORM BUILD MODE: read this block first',
     '',
     ...SHARED_RULES,
+    ...(opts.setupRetired ? RETIRED_RULES : []),
     '- Build everything the brief\'s build steps describe: the root `index.html` and everything under '
       + '`command-center/`, including `command-center/data-model.json` (the demo is built from it next).',
     `- Keep \`index.html\` plus \`command-center/\` under ${Math.floor(PLATFORM_BUILD_MAX_CC_BYTES / 1000)} KB in total.`,
@@ -72,11 +81,12 @@ export function platformCommandCenterPrompt(
 }
 
 /** Brief 2: the Connected Demo. Writes `demo/demo-spec.json` only; the platform hosts the engine. */
-export function platformDemoPrompt(plan: BuildPlan): string {
+export function platformDemoPrompt(plan: BuildPlan, opts: { setupRetired?: boolean } = {}): string {
   return [
     '# PLATFORM BUILD MODE: read this block first',
     '',
     ...SHARED_RULES,
+    ...(opts.setupRetired ? RETIRED_RULES : []),
     '- The Command Center is already built beside you, including `command-center/data-model.json`.',
     '- Your only output is `demo/demo-spec.json`. Start from the scaffold the brief names '
       + '(`node docs/demo-kit/scaffold-demo-spec.mjs --repo .`) and refine it as the brief describes. '

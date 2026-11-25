@@ -367,3 +367,11 @@ describe('Engine A protocol: setup and malformed input (VS2.3)', () => {
     expect(JSON.stringify(h.logs)).not.toContain('secret account');
   });
 });
+
+it('VS3.5: a tool the broker refuses reaches the durable record with its error class', async () => {
+  const h = harness([{ tool: { id: 'no', name: 'book_meeting' } }, { deltas: ['Sorry.'] }, { tool: { id: 'yes', name: 'next_open_strategy_slots' } }, { deltas: ['Ok.'] }]);
+  await h.setup();
+  await h.prompt('book me');
+  await h.prompt('when are you free');
+  expect(h.tools.map((t) => [t.name, t.errorClass])).toEqual([['book_meeting', 'UnknownTool'], ['next_open_strategy_slots', undefined]]);
+});

@@ -158,6 +158,8 @@ export async function materializePlanAsTasks(
      * OMITTED MEANS OFF, so every existing (student) caller creates exactly the rows it creates today.
      */
     proposalStories?: boolean;
+    /** L13.4: the platform built these pages, so no STORY-000 row. OMITTED MEANS the row is made. */
+    setupRetired?: boolean;
   } = {},
 ): Promise<MaterializeResult> {
   const ordered = [...plan.releases].sort((a, b) => a.key.localeCompare(b.key));
@@ -200,7 +202,7 @@ export async function materializePlanAsTasks(
       // It stays out of the plan and the traceability gate on purpose: it
       // fulfils no requirement of the student's system because it is not part
       // of that system — it is the window onto it.
-      if (rel.key === ordered[0].key) {
+      if (rel.key === ordered[0].key && ctx.setupRetired !== true) {
         // `build` and `acceptance` come from ONE call, not two expressions that
         // happen to read the same constants. A backfill that rewrote the prompt
         // and left the criteria three versions behind put 19 of 20 live builds
@@ -234,52 +236,52 @@ export async function materializePlanAsTasks(
           );
         }
         result.tasks += 1;
+      }
 
-        /*
-         * STORY-900, the Connected Demo. Same release, immediately after STORY-000.
-         *
-         * `blocked_by: [COMMAND_CENTER_STORY_ID]` is the dependency made visible on the board,
-         * not just described in a prompt. The demo's sample data takes its shape from
-         * `command-center/data-model.json`, which STORY-000 authors; a student who starts here
-         * first has nothing to build against and the platform-side generator refuses for the
-         * same reason.
-         *
-         * `build` and `acceptance` come from ONE call, for the reason spelled out above the
-         * Command Center row: splitting them is what put 19 of 20 live builds three versions
-         * behind on their criteria.
-         */
-        if (ctx.connectedDemo === true) {
-          const demo = connectedDemoTaskColumns(plan);
-          const demoAttrs = {
-            project_id: projectId, task_list_id: list.id, story_id: demo.story_id,
-            title: demo.title, description: demo.title,
-            narrative: demo.narrative,
-            status: 'not_started', position: taskPos, release_key: rel.key,
-            acceptance: demo.acceptance, fulfills: [],
-            build: demo.build,
-            blocked_by: [COMMAND_CENTER_STORY_ID],
-            // One working day after the Command Center, which is due on buildStart. Null when
-            // there is no schedule, exactly as every other row behaves without one.
-            due_on: ctx.schedule?.buildStart ? nextWorkingDay(ctx.schedule.buildStart) : null,
-          };
-          taskPos += 1;
-          const [demoRow, demoCreated] = await StudentTask.findOrCreate({
-            where: { project_id: projectId, story_id: CONNECTED_DEMO_STORY_ID },
-            defaults: { ...demoAttrs, due_baseline_on: demoAttrs.due_on } as any,
-            transaction: t,
-          });
-          if (!demoCreated) {
-            // The same keep-complete rule. A re-materialize must never un-finish work somebody
-            // has already done and been credited for.
-            const keepComplete = demoRow.status === 'complete';
-            if (keepComplete) result.preservedComplete += 1;
-            await demoRow.update(
-              { ...demoAttrs, status: keepComplete ? 'complete' : demoRow.status } as any,
-              { transaction: t },
-            );
-          }
-          result.tasks += 1;
+      /*
+       * STORY-900, the Connected Demo. Same release, immediately after STORY-000.
+       *
+       * `blocked_by: [COMMAND_CENTER_STORY_ID]` is the dependency made visible on the board,
+       * not just described in a prompt. The demo's sample data takes its shape from
+       * `command-center/data-model.json`, which STORY-000 authors; a student who starts here
+       * first has nothing to build against and the platform-side generator refuses for the
+       * same reason.
+       *
+       * `build` and `acceptance` come from ONE call, for the reason spelled out above the
+       * Command Center row: splitting them is what put 19 of 20 live builds three versions
+       * behind on their criteria.
+       */
+      if (rel.key === ordered[0].key && ctx.connectedDemo === true) {
+        const demo = connectedDemoTaskColumns(plan);
+        const demoAttrs = {
+          project_id: projectId, task_list_id: list.id, story_id: demo.story_id,
+          title: demo.title, description: demo.title,
+          narrative: demo.narrative,
+          status: 'not_started', position: taskPos, release_key: rel.key,
+          acceptance: demo.acceptance, fulfills: [],
+          build: demo.build,
+          blocked_by: ctx.setupRetired === true ? null : [COMMAND_CENTER_STORY_ID],
+          // One working day after the Command Center, which is due on buildStart. Null when
+          // there is no schedule, exactly as every other row behaves without one.
+          due_on: ctx.schedule?.buildStart ? nextWorkingDay(ctx.schedule.buildStart) : null,
+        };
+        taskPos += 1;
+        const [demoRow, demoCreated] = await StudentTask.findOrCreate({
+          where: { project_id: projectId, story_id: CONNECTED_DEMO_STORY_ID },
+          defaults: { ...demoAttrs, due_baseline_on: demoAttrs.due_on } as any,
+          transaction: t,
+        });
+        if (!demoCreated) {
+          // The same keep-complete rule. A re-materialize must never un-finish work somebody
+          // has already done and been credited for.
+          const keepComplete = demoRow.status === 'complete';
+          if (keepComplete) result.preservedComplete += 1;
+          await demoRow.update(
+            { ...demoAttrs, status: keepComplete ? 'complete' : demoRow.status } as any,
+            { transaction: t },
+          );
         }
+        result.tasks += 1;
       }
 
       // M3: the P1-P8 proposal ladder fills R1 (the Proposal release, the second release of the gov
@@ -419,7 +421,7 @@ function taskAttrs(
   plan: BuildPlan,
   blockedBy: string[],
   position: number,
-  ctx: { repoUrl?: string | null; manifestPaths?: string[] },
+  ctx: { repoUrl?: string | null; manifestPaths?: string[]; setupRetired?: boolean },
   dueOn: Date | null,
 ) {
   // The prompt is assembled here so it is stored WITH the task — the drawer's
@@ -429,9 +431,9 @@ function taskAttrs(
   // slightly thinner prompt is far better off than one with an empty button.
   let prompt: string;
   try {
-    prompt = buildStoryPrompt(plan, story, { repoUrl: ctx.repoUrl, manifestPaths: ctx.manifestPaths, projectId });
+    prompt = buildStoryPrompt(plan, story, { repoUrl: ctx.repoUrl, manifestPaths: ctx.manifestPaths, projectId, setupRetired: ctx.setupRetired });
   } catch {
-    prompt = buildStoryPrompt(plan, story, { projectId });
+    prompt = buildStoryPrompt(plan, story, { projectId, setupRetired: ctx.setupRetired });
   }
 
   return {

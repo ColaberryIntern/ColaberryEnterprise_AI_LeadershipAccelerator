@@ -15,6 +15,8 @@ import { sequelize } from '../config/database';
  *  - weekly_live_moments: "mark a moment" timestamps during the live, for clips.
  *  - weekly_live_session_weeks: which curriculum week a live session taught (the curriculum map's
  *    coverage). import_batch lets the one-time history import be deleted by id.
+ *  - weekly_live_plan_runs: the stage, message and heartbeat of a plan's latest run.
+ *  - weekly_live_spend: one row per paid research call, reserved before the call (the monthly cap).
  */
 export const WEEKLY_LIVE_TABLES = [
   'weekly_live_plans',
@@ -24,6 +26,8 @@ export const WEEKLY_LIVE_TABLES = [
   'weekly_live_content_pieces',
   'weekly_live_moments',
   'weekly_live_session_weeks',
+  'weekly_live_spend',
+  'weekly_live_plan_runs',
 ] as const;
 
 export const PLAN_STATUSES = ['draft', 'researching', 'ready', 'chosen', 'failed'] as const;
@@ -130,6 +134,23 @@ export const WEEKLY_LIVE_DDL: readonly string[] = [
      source VARCHAR(32) NOT NULL DEFAULT 'studio',
      import_batch VARCHAR(64),
      created_at TIMESTAMPTZ DEFAULT NOW()
+   )`,
+  `CREATE TABLE IF NOT EXISTS weekly_live_spend (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     plan_id UUID REFERENCES weekly_live_plans(id) ON DELETE SET NULL,
+     purpose VARCHAR(64) NOT NULL,
+     cost_usd NUMERIC(10, 4) NOT NULL CHECK (cost_usd >= 0),
+     settled BOOLEAN NOT NULL DEFAULT false,
+     created_at TIMESTAMPTZ DEFAULT NOW()
+   )`,
+  `CREATE INDEX IF NOT EXISTS ix_weekly_live_spend_created ON weekly_live_spend (created_at)`,
+  `CREATE TABLE IF NOT EXISTS weekly_live_plan_runs (
+     plan_id UUID PRIMARY KEY REFERENCES weekly_live_plans(id) ON DELETE CASCADE,
+     run_id UUID NOT NULL DEFAULT gen_random_uuid(),
+     stage VARCHAR(16) NOT NULL DEFAULT 'queued',
+     note VARCHAR(300),
+     error VARCHAR(300),
+     heartbeat_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
    )`,
 ];
 

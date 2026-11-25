@@ -1,0 +1,19 @@
+/* Voice Studio console, scoped (VS3.7). Found by tests/systemV2/voiceStudio.a11y.js; same approach as
+   commsHub.css: the brand colors are a design-system decision, so they are darkened here only.
+   - The admin content column is a flex item that will not shrink below its content, so the tab strip
+     stretched every page to 1151 px on a phone. It may shrink on this console. */
+.admin-content:has(> * > .voice-studio) { min-width: 0; }
+.voice-studio { overflow-wrap: anywhere; }
+/* - Under 4.5:1 here: white on #fb2832 (3.85), the red, green and grey below. */
+.voice-studio {
+  --color-primary: #d91a23;
+  --color-primary-light: #b8141c;
+  --status-success: #2f6b1f;
+  --status-danger: #b8141c;
+}
+.voice-studio .btn-outline-primary { color: #c8101a; border-color: #c8101a; }
+.voice-studio .btn-outline-primary:hover, .voice-studio .btn-outline-primary:active { background-color: #c8101a; border-color: #c8101a; color: #fff; }
+.voice-studio .btn-outline-secondary { color: #565d63; border-color: #565d63; }
+.voice-studio .btn-outline-secondary:hover, .voice-studio .btn-outline-secondary:active { background-color: #565d63; border-color: #565d63; color: #fff; }
+/* - A link inside a sentence was told apart by color alone. */
+.voice-studio p a:not(.btn) { text-decoration: underline; }

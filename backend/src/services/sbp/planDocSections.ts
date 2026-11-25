@@ -180,7 +180,7 @@ export function renderStoryFile(plan: BuildPlan, story: PlanStory, release?: Pla
   ].join('\n');
 }
 
-export function renderStories(plan: BuildPlan, connectedDemo = false): string {
+export function renderStories(plan: BuildPlan, connectedDemo = false, setupRetired = false): string {
   const releases = byKey(plan.releases, (r) => r.key);
   const lines: string[] = [
     `# ${plan.project_name} — Stories`,
@@ -195,7 +195,7 @@ export function renderStories(plan: BuildPlan, connectedDemo = false): string {
   // before all of them. Listing it here matters as much as rendering its doc: an
   // agent that scans STORIES.md to find the work would otherwise never learn the
   // first story exists.
-  if (!plan.stories.some((s) => s.id === COMMAND_CENTER_STORY_ID)) {
+  if (!setupRetired && !plan.stories.some((s) => s.id === COMMAND_CENTER_STORY_ID)) {
     lines.push(
       '## Before the releases — start here',
       '',

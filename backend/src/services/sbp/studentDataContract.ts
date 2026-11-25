@@ -58,7 +58,7 @@ export const STUDENT_DATA_CONTRACT_PATH = 'docs/DATA_CONTRACT.md';
  * whenever their plan did, defeating the content-hash comparison in
  * `changedFiles`. Field names only, never their values.
  */
-export function renderStudentDataContract(): string {
+export function renderStudentDataContract(setupRetired = false): string {
   return [
     '# Data Contract — what is in `.colaberry/`',
     '',
@@ -196,10 +196,14 @@ export function renderStudentDataContract(): string {
     'absent and zero as different things: absent means not measured, zero means',
     'measured as zero. Show "not checked yet", never a `0` that reads as a result.',
     '',
-    '`totals` counts every story in this file, and that includes `STORY-000` (the',
-    'Command Center itself), which `plan.json` does not list. So `stories_total` is',
-    'one more than `plan.stories.length`. Say so beside the number rather than',
-    'showing two counts that disagree.',
+    ...(setupRetired
+      ? ['`totals` counts every story in this file: the same stories `plan.json` lists.']
+      : [
+        '`totals` counts every story in this file, and that includes `STORY-000` (the',
+        'Command Center itself), which `plan.json` does not list. So `stories_total` is',
+        'one more than `plan.stories.length`. Say so beside the number rather than',
+        'showing two counts that disagree.',
+      ]),
     '',
     '## Joining them',
     '',

@@ -100,3 +100,9 @@ describe('database calls', () => {
     expect(q).toHaveBeenCalledTimes(1);
   });
 });
+
+it('a class scheduled after the date is planned, not covered, and the nearest one wins', () => {
+  const m = buildCurriculumMap([{ week: 3, date: '2026-12-14', sessionId: 'b', title: 'Later' }, { week: 3, date: '2026-11-30', sessionId: 'a', title: 'Ep 2' }], '2026-11-25');
+  expect(m.weeks[2]).toMatchObject({ timesCovered: 0, lastCovered: null, planned: { date: '2026-11-30', title: 'Ep 2' } });
+  expect(m.weeks[3].planned).toBeNull();
+});

@@ -24,7 +24,7 @@ jest.mock('../../services/sbp/platformBuild/runStore', () => ({
 }));
 jest.mock('../../services/sbp/platformBuild/artifactStore', () => {
   class RunNotAcceptingUpload extends Error {}
-  return { RunNotAcceptingUpload, saveRunArtifacts: jest.fn(), activeArtifact: jest.fn() };
+  return { RunNotAcceptingUpload, saveRunArtifacts: jest.fn(), activeArtifact: jest.fn(), activeArtifactSummary: jest.fn(async () => ({ command_center: null, demo: null })) };
 });
 jest.mock('../../services/sbp/platformBuild/bundle', () => ({
   runnerBundle: jest.fn(),
@@ -123,6 +123,18 @@ describe('view route', () => {
     expect(res.headers['content-security-policy']).toMatch(/^sandbox allow-scripts/);
     expect(res.headers['cross-origin-resource-policy']).toBe('cross-origin');
     expect(res.text.indexOf('__platform/storage-shim.js')).toBeLessThan(res.text.indexOf('core.js'));
+  });
+
+  it('links the Command Center to the demo only when there is one, and survives a failed lookup', async () => {
+    artifacts.activeArtifact.mockResolvedValue({ version: 1, files: { 'index.html': '<html><head></head><body></body></html>' } });
+    const page = () => request(app).get(`/api/platform-view/${token()}/`);
+    expect((await page()).text).not.toContain('platform-demo-link');
+    artifacts.activeArtifactSummary.mockResolvedValueOnce({ command_center: null, demo: { version: 1, built_at: new Date() } });
+    expect((await page()).text).toContain('href="demo/"');
+    artifacts.activeArtifactSummary.mockRejectedValueOnce(new Error('db down'));
+    const res = await page();
+    expect(res.status).toBe(200);
+    expect(res.text).not.toContain('platform-demo-link');
   });
 
   it('serves .colaberry files live, readable from the sandboxed page', async () => {

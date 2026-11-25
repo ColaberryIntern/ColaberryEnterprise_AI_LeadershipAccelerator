@@ -163,6 +163,8 @@ export interface RenderContext {
    * its output because of an environment variable is one nobody can test in both states.
    */
   connectedDemo?: boolean;
+  /** L13.4: the platform built the Command Center and demo. OMITTED MEANS STORY-000 is rendered. */
+  setupRetired?: boolean;
 }
 
 /**
@@ -238,14 +240,14 @@ export function renderDocs(plan: BuildPlan, ctx: RenderContext = {}): RenderedFi
   const releaseByKey = new Map(plan.releases.map((r) => [r.key, r]));
   const files: RenderedFile[] = [
     { path: 'docs/REQUIREMENTS.md', content: renderRequirements(plan) },
-    { path: 'docs/STORIES.md', content: renderStories(plan, rendersDemo) },
+    { path: 'docs/STORIES.md', content: renderStories(plan, rendersDemo, ctx.setupRetired === true) },
     { path: 'docs/TRACEABILITY.md', content: renderTraceability(plan) },
     // The field-by-field spec of `.colaberry/plan.json` and `.colaberry/progress.json`.
     // Plan-independent by design (see studentDataContract), so it costs one
     // constant-content file per repo and never churns a sync. It is here rather
     // than only in the platform repo because a student writing a Command Center
     // against a schema they cannot read guesses — and three of them have.
-    { path: STUDENT_DATA_CONTRACT_PATH, content: renderStudentDataContract() },
+    { path: STUDENT_DATA_CONTRACT_PATH, content: renderStudentDataContract(ctx.setupRetired === true) },
     { path: 'CLAUDE.md', content: renderClaudeMd(plan, ctx) },
     // The builder-path entry point and its checklist.
     //
@@ -300,8 +302,9 @@ export function renderDocs(plan: BuildPlan, ctx: RenderContext = {}): RenderedFi
   // cannot disagree.
   const override = ctx.commandCenterOverride ?? null;
   const commandCenterStoryId = override?.storyId ?? COMMAND_CENTER_STORY_ID;
-  const planHasCommandCenter = plan.stories.some((s) => s.id === commandCenterStoryId);
-  if (!planHasCommandCenter) {
+  const addsCommandCenter = ctx.setupRetired !== true
+    && !plan.stories.some((s) => s.id === commandCenterStoryId);
+  if (addsCommandCenter) {
     files.push({
       path: `docs/stories/${commandCenterStoryId}.md`,
       // Ordered plan, so array order cannot reach the bytes. No schedule:
@@ -404,11 +407,11 @@ export function renderDocs(plan: BuildPlan, ctx: RenderContext = {}): RenderedFi
   // rather than left beside the real one — the file self-heals, which the markdown cannot.
   const progressSeeds: PlanStorySeed[] = [
     ...byKey(plan.stories, (s) => s.id),
-    ...(planHasCommandCenter
-      ? []
-      : [override
+    ...(addsCommandCenter
+      ? [override
         ? { id: override.storyId, release: override.release, acceptance: [...override.acceptance] }
-        : commandCenterStorySeed()]),
+        : commandCenterStorySeed()]
+      : []),
     // Seeded for the same reason STORY-000 is: without an entry the agent retypes the acceptance
     // criteria from memory, and the verifier then matches nothing it wrote. `rendersDemo` and
     // not `ctx.connectedDemo`, so a plan that carries its own STORY-900 is seeded from the plan.

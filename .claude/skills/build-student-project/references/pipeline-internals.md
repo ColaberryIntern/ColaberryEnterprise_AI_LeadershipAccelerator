@@ -520,6 +520,7 @@ Runbook: `directives/enable-platform-build.md`.
 |---|---|---|
 | `renderProjectDocs` | gathers every render input once, for the repo sync and the platform build | the hosted Command Center and the repo copy rendering different files for one project |
 | `buildBriefText` | the decomposer's brief, split out of the over-ceiling orchestrator | none student-visible; a size split |
+| `setupStories` | L13.4: a platform-built project has no STORY-000 / STORY-900 (row, doc, seed, spec, price); a project that already has the row keeps it | a student told to build pages the platform already built, or losing a verified story |
 | `platformBuild/queue` | publish's one call; never throws, never awaited | a slow GitHub dispatch holding up a student's publish |
 | `platformBuild/runStore` | the run state machine; one live run per project; stale runs failed after 120 min | a republish starting a second paid run; a lost dispatch blocking a project forever |
 | `platformBuild/dispatch` | starts the runner workflow; 3 attempts on 5xx/429/network, none on 4xx | retrying a bad token forever |

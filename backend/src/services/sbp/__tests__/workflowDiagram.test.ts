@@ -4,7 +4,7 @@
  * pair (one arrow each, same path), and three agents fed from one node with no
  * placement guidance. The hand-offs below are v5's, verbatim.
  */
-import { workflowArrows, fanOuts, agentsTab } from '../commandCenterAgentsTab';
+import { workflowArrows, workflowColumns, fanOuts, agentsTab } from '../commandCenterAgentsTab';
 import { commandCenterTabSections } from '../commandCenterTabs';
 import { BuildPlan, PlanAgent } from '../planContract';
 
@@ -78,5 +78,26 @@ describe('the Story 000 agents tab', () => {
     expect(agentsTab).toBeInstanceOf(Function);
     const lone = { ...plan, agents: [agent('Offer Sender', [], ['x'])] };
     expect(commandCenterTabSections(lone).join('\n')).not.toContain('Crowded spots');
+  });
+});
+
+describe('workflowColumns', () => {
+  const arrow = (from: string, to: string) => ({ from, to, labels: ['x'] });
+
+  it('places each agent after the furthest one that feeds it, and sets loners apart', () => {
+    expect(workflowColumns(
+      ['Opener', 'Guard', 'Ranker', 'Dispatcher', 'Summarizer'],
+      [arrow('Opener', 'Summarizer'), arrow('Opener', 'Ranker'), arrow('Ranker', 'Dispatcher'), arrow('Dispatcher', 'Summarizer')],
+    )).toEqual({ columns: [['Opener'], ['Ranker'], ['Dispatcher'], ['Summarizer']], apart: ['Guard'] });
+  });
+
+  it('terminates on a loop and a self-arrow, and keeps every agent once', () => {
+    const { columns, apart } = workflowColumns(['A', 'B', 'C'], [arrow('A', 'B'), arrow('B', 'C'), arrow('C', 'A'), arrow('B', 'B')]);
+    expect([...columns.flat(), ...apart].sort()).toEqual(['A', 'B', 'C']);
+  });
+
+  it('is empty for no agents and ignores an arrow naming an unknown agent', () => {
+    expect(workflowColumns([], [])).toEqual({ columns: [], apart: [] });
+    expect(workflowColumns(['A'], [arrow('Ghost', 'A')])).toEqual({ columns: [['A']], apart: [] });
   });
 });
