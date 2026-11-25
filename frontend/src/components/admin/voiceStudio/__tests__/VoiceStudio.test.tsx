@@ -117,7 +117,7 @@ describe('Overview tab', () => {
     expect(q('[data-testid="migration-empty"]')).not.toBeNull();
   });
 
-  it('VS3.7: live figures are gone while the test view loads, and a late live answer never replaces it', async () => {
+  it('VS3.7: live figures are gone while the test view loads', async () => {
     const held = heldTest();
     await renderAt('/admin/voice-studio');
     expect(text('[data-testid="kpi-attempted-value"]')).toBe('12');
@@ -180,6 +180,23 @@ describe('Agents tab', () => {
     await settle();
     expect(container.querySelector('tbody')?.textContent).toContain('v22');
     expect(container.querySelector('tbody')?.textContent).not.toContain('v11');
+  });
+
+  it('VS3.7: an action that finishes after another agent was selected does not reload or report under it', async () => {
+    const B: AgentCard = { ...CARD, profile: { ...CARD.profile, id: 'p2', name: 'Second agent' } };
+    let finish: (v: AgentVersion) => void = () => undefined;
+    mockApi.listAgents.mockResolvedValue([CARD, B]);
+    mockApi.listVersions.mockImplementation((id: string) => Promise.resolve([{ ...VERSION, version: id === 'p2' ? 22 : 11 }]));
+    mockApi.changeStatus.mockImplementation(() => new Promise((r) => { finish = r; }));
+    await renderAt('/admin/voice-studio/agents');
+    const press = async (label: string) => { await act(async () => { (Array.from(container.querySelectorAll('button')).find((b) => (b.textContent ?? '').includes(label)) as HTMLButtonElement).click(); }); await settle(); };
+    await press('Publish');
+    await press('Second agent');
+    await act(async () => { finish({ ...VERSION, status: 'published' }); });
+    await settle();
+    expect(container.querySelector('tbody')?.textContent).toContain('v22');
+    expect(container.querySelector('tbody')?.textContent).not.toContain('v11');
+    expect(q('[data-testid="action-msg"]')).toBeNull();
   });
 
   it('a successful publish says new calls use it and reloads', async () => {

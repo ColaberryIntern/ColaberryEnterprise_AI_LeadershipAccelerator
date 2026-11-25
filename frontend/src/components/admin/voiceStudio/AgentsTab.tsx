@@ -39,6 +39,8 @@ export default function AgentsTab(): React.ReactElement {
 
   // Only the selected agent's latest request may render: one agent's versions never appear under another.
   const request = useRef(0);
+  const current = useRef(selected); // the selection now, for work that finishes after the user moved on
+  current.current = selected;
   const loadVersions = useCallback((profileId: string) => {
     const mine = ++request.current;
     listVersions(profileId).then((v) => { if (mine === request.current) setVersions(v); }).catch((e) => { if (mine === request.current) setError(studioErrorMessage(e, 'Versions could not be loaded. Try again.')); });
@@ -48,15 +50,17 @@ export default function AgentsTab(): React.ReactElement {
   useEffect(() => { if (selected) { setEditFrom(null); setVersions([]); setActionMsg(null); loadVersions(selected); } }, [selected, loadVersions]);
 
   const act = async (v: AgentVersion, action: LifecycleAction) => {
+    const agent = selected;
+    const here = () => current.current === agent;
     setBusy(v.id);
     setActionMsg(null);
     try {
       await changeStatus(v.id, action);
-      setActionMsg({ tone: 'success', text: `Version ${v.version}: ${action === 'approve' ? 'approved' : action === 'publish' ? 'published. New calls use it.' : 'retired'}.` });
-      if (selected) loadVersions(selected);
+      if (here()) setActionMsg({ tone: 'success', text: `Version ${v.version}: ${action === 'approve' ? 'approved' : action === 'publish' ? 'published. New calls use it.' : 'retired'}.` });
+      if (agent && here()) loadVersions(agent);
       loadAgents();
     } catch (e) {
-      setActionMsg({ tone: 'danger', text: studioErrorMessage(e, `Version ${v.version} could not be changed. Try again.`) });
+      if (here()) setActionMsg({ tone: 'danger', text: studioErrorMessage(e, `Version ${v.version} could not be changed. Try again.`) });
     } finally {
       setBusy(null);
     }
