@@ -18848,3 +18848,14 @@ Branch `workstream/career-prep-r2r3`, one PR (https://github.com/ColaberryIntern
   - What changed: 16 /api/admin/cape routes now check the program section; opening the flash offer needs the deck's own token or a full administrator; the presenter page gets a weaker token
   - Verification: kitTokenGuards.test.ts and capeRoutes.access.test.ts pass
   - Notes: Ali's decision 2026-11-25: mentors keep the other class controls. Decks open during the deploy must be reopened before the offer button works
+- [x] Weekly Live Studio WL3.1: signals research (not yet graded or shipped)
+  - Date: 2026-11-24
+  - Session: CC-20261124-iwlu
+  - What changed: services/weeklyLive/signals/ (OpenAI web search candidates, SSRF-guarded page fetch reusing companySiteFetch's checks, publish date read from the page, one alternate outlet, dedupe, 12 to 18 kept, replace on rerun); weekly_live_spend table + researchBudget ($50 monthly cap, reserved before each call); VIRAL_FACTORS labels corrected to the research kit (Phase 2 shipped them paraphrased and wrong).
+  - Verification: backend jest weeklyLive + schema + bannedWord 180/180; tsc 5.9.3 clean for weeklyLive. No live OpenAI search has been run.
+- [ ] Weekly Live Studio WL3.2: YouTube demand (IN PROGRESS, acceptance not met)
+  - Date: 2026-11-24
+  - Session: CC-20261124-iwlu
+  - What changed: services/weeklyLive/demand/ (page parsers, channel median, score, 7-day cache, failed week stored with its error).
+  - Verification: demand jest 16/16. LIVE CHECK FAILS: first run matched the reference on 4 of 12 weeks (needs 8); after widening the queries every full run failed with "redirect count exceeded" while single requests return 200 (cause not established; looks like throttling of automated traffic).
+  - Notes: do not work around the throttling. Options are the YouTube Data API (Ali's decision, M0 chose public pages) or a much slower run.
