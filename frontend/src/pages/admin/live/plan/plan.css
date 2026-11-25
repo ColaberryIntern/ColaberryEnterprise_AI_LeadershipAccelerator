@@ -9,7 +9,7 @@
 .cls-hint { margin: 2px 0 0; font-size: 13px; color: var(--text-muted); overflow-wrap: anywhere; }
 .clp-h2 { margin: 0; font-size: 19px; color: var(--text-strong); }
 .clp-bars, .clp-list { list-style: none; margin: 8px 0 0; padding: 0; }
-.clp-bar { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px 0; font-size: 14px; }
+.clp-bar { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 150px; gap: 10px; align-items: center; padding: 6px 0; font-size: 14px; }
 .clp-bar-name { overflow-wrap: anywhere; }
 .clp-bar-track { height: 10px; border-radius: 999px; background: var(--surface-sunken); overflow: hidden; }
 .clp-bar-fill { display: block; height: 100%; background: var(--status-danger); }
@@ -22,7 +22,7 @@
 .clp-chip-btn[aria-pressed="true"] { border-color: var(--red-600); border-width: 2px; background: var(--surface-card); }
 .clp-chip-strong { border-color: var(--status-success); border-width: 2px; }
 .clp-signal { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border-subtle); }
-.clp-signal a, .clp-cols a { overflow-wrap: anywhere; }
+.clp-signal a, .clp-cols a { overflow-wrap: anywhere; text-decoration: underline; }
 .clp-idea { margin: 4px 0 0; font-size: 14px; }
 .clp-details { margin: 10px 0; }
 .clp-details summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 600; }

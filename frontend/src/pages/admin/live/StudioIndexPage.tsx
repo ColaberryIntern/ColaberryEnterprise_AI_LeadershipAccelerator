@@ -121,8 +121,8 @@ export default function StudioIndexPage(): React.ReactElement {
         <header className="cls-head">
           <h1 className="cls-title">Studio setup</h1>
           <p className="cls-sub">
-            Pick the class to set up. This list covers the last month and the next four months,
-            because a class further out than that is not usually what you came here for.
+            {mayPlan ? 'Every Weekly Live starts here. Plan the next topic, or pick a class to set up. ' : 'Pick the class to set up. '}
+            The class list covers the last month and the next four months.
           </p>
         </header>
 
