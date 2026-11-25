@@ -18,7 +18,7 @@ export const CLAUDE_CODE_101_CARD = {
   /** Merged into the card's top-level metadata (SkillsJarPanel reads `card.course`). */
   course: {
     name: 'Claude Code 101',
-    url: 'https://anthropic.skilljar.com/claude-code-101',
+    url: 'https://academy.claude.com/courses/claude-code-101',
     sections: 'Installing Claude Code, running your first session, working with files in your own project, and the explore-plan-code-commit workflow.',
   },
   content: {

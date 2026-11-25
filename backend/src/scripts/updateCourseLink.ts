@@ -1,13 +1,13 @@
 /**
- * Update one week's Skilljar CourseLink (URL / status / title) without editing code.
+ * Update one week's Claude Academy CourseLink (URL / status / title) without editing code.
  *
- * For Kes: once a pending week's URL is confirmed against the live Skilljar catalog,
+ * For Kes: once a pending week's URL is confirmed against the live Claude Academy catalog,
  * flip it to 'confirmed' (and correct the URL/title if needed) in one command — no
  * seed edit, no PR. Idempotent: re-running with the same args yields the same row.
  * The row must already exist (run seedCurriculumCourseLinks first).
  *
  * Run:
- *   npx ts-node backend/src/scripts/updateCourseLink.ts --week 7 --url https://anthropic.skilljar.com/<slug> --status confirmed
+ *   npx ts-node backend/src/scripts/updateCourseLink.ts --week 7 --url https://academy.claude.com/courses/<slug> --status confirmed
  *   npx ts-node backend/src/scripts/updateCourseLink.ts --week 6 --status confirmed
  *   (in the prod container: node /app/dist/scripts/updateCourseLink.js --week 1 --url ... --status confirmed)
  *
