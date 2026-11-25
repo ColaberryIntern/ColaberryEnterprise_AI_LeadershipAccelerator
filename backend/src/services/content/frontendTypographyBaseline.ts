@@ -120,7 +120,16 @@ export const FRONTEND_TYPOGRAPHY_BASELINE_TOTALS: Readonly<Record<string, number
   //
   // 2026-11-22: 2089 -> 2088. The member Events page's empty state ("Check back soon. New
   // sessions are added most weeks.") lost its dash. EventsPage's entry (1) is DELETED.
-  [DASH_RULE.id]: 2088,
+  //
+  // 2026-11-24: 2088 -> 2087. R25 Phase 2 split the Revenue Room's card view into its own
+  // file, and the deadline line's dash ("2026-12-01 — what happens on that date") became a
+  // colon on the way across, which is what the dash was doing. AdminRevenueRoomPage's entry
+  // drops 2 -> 1; the new InitiativeCardView.tsx gets NO entry, because it has no violation.
+  //
+  // Worth recording: this gate is what caught it. The dash had sat in the page's baseline
+  // unremarked, and moving the code into a new file is what forced the question, because a
+  // new file is allowed none.
+  [DASH_RULE.id]: 2087,
   // 2026-11-15: 74 -> 72. The v5 site adoption rewrote HomeV2 and ServicesV2,
   // and the four new pages were written to house style, so the two entries
   // those files held are gone rather than carried over.

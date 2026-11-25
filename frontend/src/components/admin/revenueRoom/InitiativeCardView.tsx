@@ -114,7 +114,13 @@ function DeadlineLine({ card }: { card: InitiativeCard }) {
   return (
     <span className="small" style={{ color: 'var(--text-secondary)' }}>
       <i className="ri-calendar-line" aria-hidden="true" /> <strong>{card.nextDeadline}</strong>
-      {card.nextDeadlineMeans ? ` — ${card.nextDeadlineMeans}` : ''}
+      {/*
+        A colon, not an em dash. House style is a comma, a full stop, a colon or the word
+        "to", and a colon is what this dash was doing: introducing what the date means. The
+        frontend typography ratchet caught it when the code moved into this new file, where
+        the baseline permits none.
+      */}
+      {card.nextDeadlineMeans ? `: ${card.nextDeadlineMeans}` : ''}
     </span>
   );
 }

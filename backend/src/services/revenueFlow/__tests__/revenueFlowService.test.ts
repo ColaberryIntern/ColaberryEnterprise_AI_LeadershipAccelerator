@@ -484,9 +484,13 @@ describe('the board is broken down by brand', () => {
     expect(Object.keys(board.headlineFigureStreams).sort()).toEqual(figures);
 
     // And each declared stream is one the board can actually group under a brand.
+    // Widened to a string lookup deliberately: `figures` is read off the headline at run time
+    // so that an undeclared figure is caught, which means it cannot be typed as the key union
+    // that is itself derived from the headline.
+    const declared: Record<string, string> = board.headlineFigureStreams;
     const streamKeys = board.streams.map((s) => s.key);
     for (const figure of figures) {
-      const stream = board.headlineFigureStreams[figure];
+      const stream = declared[figure];
       expect(typeof stream).toBe('string');
       expect(streamKeys).toContain(stream);
     }
