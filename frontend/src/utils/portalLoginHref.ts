@@ -45,5 +45,6 @@ export function loginHrefPreserving(pathname: string): string {
  */
 export function redirectsToLoginOn401(pathname: string): boolean {
   if (!pathname.startsWith('/portal')) return false;
-  return !pathname.startsWith('/portal/class-checkin/');
+  // The class recap (WL1.2) is the same: opened from an email by people with no account.
+  return !pathname.startsWith('/portal/class-checkin/') && !pathname.startsWith('/portal/class-recap/');
 }

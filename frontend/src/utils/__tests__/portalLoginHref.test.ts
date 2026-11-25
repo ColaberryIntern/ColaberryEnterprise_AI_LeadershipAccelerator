@@ -58,7 +58,11 @@ describe('redirectsToLoginOn401', () => {
   it('never redirects from the class check-in page', () => {
     expect(redirectsToLoginOn401('/portal/class-checkin/5b8a95b7-1a88-42d5-b257-fd786d071f6e')).toBe(false);
   });
+  it('never redirects from the class recap page either (WL1.2: opened from an email, no account)', () => {
+    expect(redirectsToLoginOn401('/portal/class-recap/5b8a95b7-1a88-42d5-b257-fd786d071f6e')).toBe(false);
+  });
   it('still redirects from every other portal page', () => {
+    expect(redirectsToLoginOn401('/portal/class-recap')).toBe(true);
     expect(redirectsToLoginOn401('/portal/today')).toBe(true);
     expect(redirectsToLoginOn401('/portal/rooms/r1')).toBe(true);
     expect(redirectsToLoginOn401('/portal/class-checkin')).toBe(true);
