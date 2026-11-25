@@ -49,7 +49,7 @@ describe('costUsd', () => {
 
 describe('readEvent', () => {
   const fold = (...events: unknown[]) =>
-    events.reduce((s: any, e) => config.readEvent(s, typeof e === 'string' ? e : JSON.stringify(e)), config.newState());
+    events.reduce<any>((s, e) => config.readEvent(s, typeof e === 'string' ? e : JSON.stringify(e)), config.newState());
 
   it('collects usage and the last message', () => {
     const s = fold(
