@@ -238,12 +238,36 @@ export function toLibraryView(
     rightsExpiresAt: a.rights_expires_at ? new Date(a.rights_expires_at).toISOString() : null,
     rightsStatus: rightsStatus({ rights_expires_at: a.rights_expires_at ?? null }, now),
     archivedAt: a.archived_at ? new Date(a.archived_at).toISOString() : null,
-    createdAt: a.created_at ? new Date(a.created_at).toISOString() : null,
+    createdAt: createdAtIso(a),
     uploadedBy: a.uploaded_by ?? null,
     uploadedByLabel: uploader ? uploader.label : NOT_RECORDED.label,
     uploadedBySource: uploader ? uploader.source : NOT_RECORDED.source,
     ...youtubeView(a.metadata),
   };
+}
+
+/**
+ * When this asset was added.
+ *
+ * READ BOTH NAMES, and this is not defensive padding. MediaAsset is declared with
+ * `timestamps: true` and `underscored: true`, so Sequelize names the ATTRIBUTE
+ * `createdAt` and maps it to the COLUMN `created_at`. A real instance therefore has
+ * `createdAt` and does NOT have `created_at`:
+ *
+ *   row.created_at  -> undefined
+ *   row.createdAt   -> 2026-11-24T17:13:19.843Z
+ *
+ * Reading only the column name meant this field was null for every asset ever served,
+ * which is why the library grid could not say when anything was added. Measured in the
+ * production container on 2026-11-25. The snake_case name is still accepted because
+ * plain objects built from a raw query do use it.
+ */
+export function createdAtIso(a: Record<string, any>): string | null {
+  const raw = a.created_at ?? a.createdAt ?? null;
+  if (!raw) return null;
+  const d = new Date(raw);
+  // An unparseable timestamp becomes null rather than the string 'Invalid Date'.
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
 /**
