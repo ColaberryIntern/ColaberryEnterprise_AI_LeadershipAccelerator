@@ -2,8 +2,10 @@ jest.mock('../../services/weeklyLive/recap/recapStore');
 jest.mock('../../services/liveChat/liveChatStore', () => ({ listMessages: jest.fn() }));
 
 import express from 'express';
+import jwt from 'jsonwebtoken';
 import request from 'supertest';
 import router from '../weeklyLiveRecapRoutes';
+import { env } from '../../config/env';
 import * as store from '../../services/weeklyLive/recap/recapStore';
 import { listMessages } from '../../services/liveChat/liveChatStore';
 import { mintOptOutToken, mintRecapToken } from '../../services/weeklyLive/recap/recapToken';
@@ -43,6 +45,29 @@ describe('admin recap routes', () => {
     const res = await request(app).get(`/api/admin/live/sessions/${SID}/recap`).set('Authorization', 'Bearer forged.token.value');
     expect([401, 403]).toContain(res.status);
   });
+  // Every bridge-minted staff token carries role 'admin', and this router is mounted above adminRoutes,
+  // so mgmtSectionGate never sees it. requireFullAdmin is the only thing refusing these people.
+  const ROUTES: [string, string][] = [
+    ['get', `/api/admin/live/sessions/${SID}/recap`],
+    ['put', `/api/admin/live/sessions/${SID}/recap`],
+    ['post', `/api/admin/live/sessions/${SID}/recap/draft`],
+    ['post', `/api/admin/live/sessions/${SID}/recap/send`],
+  ];
+  const call = (method: string, path: string, claims: Record<string, unknown>) =>
+    (request(app) as unknown as Record<string, (p: string) => request.Test>)[method](path)
+      .set('Authorization', `Bearer ${jwt.sign({ sub: 'u1', email: 'u@example.com', ...claims }, env.jwtSecret)}`);
+  it.each(ROUTES.flatMap(([m2, p]) => ['mentor', 'support', 'marketing', 'curriculum'].map((r) => [m2, p, r])))(
+    '%s %s refuses the scoped role %s', async (method, path, role) => {
+      const res = await call(method, path, { role: 'admin', mgmt_role: role }).send({ mode: 'dry' });
+      expect(res.status).toBe(403);
+      expect(m.getSession).not.toHaveBeenCalled();
+      expect(m.upsertRecap).not.toHaveBeenCalled();
+    });
+  it.each([[{ role: 'admin' }], [{ role: 'super_admin', mgmt_role: 'owner' }], [{ role: 'admin', mgmt_role: 'admin' }]])(
+    'a full administrator still gets through: %j', async (claims) => {
+      const res = await call('put', `/api/admin/live/sessions/${SID}/recap`, claims).send({ nextEventUrl: 'https://www.eventbrite.com/e/1' });
+      expect(res.status).toBe(200);
+    });
 });
 
 describe('public recap route', () => {

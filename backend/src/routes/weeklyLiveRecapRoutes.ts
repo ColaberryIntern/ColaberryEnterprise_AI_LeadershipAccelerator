@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
-import { requireAdmin } from '../middlewares/authMiddleware';
+import { requireFullAdmin } from '../middlewares/authMiddleware';
 import {
   handleGetRecap, handlePutRecap, handleDraftRecap, handleSendRecap, handlePublicRecap, handleRecapOptOut,
 } from '../controllers/weeklyLiveRecapController';
@@ -13,10 +13,10 @@ const router = Router();
 
 const publicLimiter = rateLimit({ windowMs: 60_000, max: 60, standardHeaders: true, legacyHeaders: false });
 
-router.get('/api/admin/live/sessions/:id/recap', requireAdmin, handleGetRecap);
-router.put('/api/admin/live/sessions/:id/recap', requireAdmin, handlePutRecap);
-router.post('/api/admin/live/sessions/:id/recap/draft', requireAdmin, handleDraftRecap);
-router.post('/api/admin/live/sessions/:id/recap/send', requireAdmin, handleSendRecap);
+router.get('/api/admin/live/sessions/:id/recap', requireFullAdmin, handleGetRecap);
+router.put('/api/admin/live/sessions/:id/recap', requireFullAdmin, handlePutRecap);
+router.post('/api/admin/live/sessions/:id/recap/draft', requireFullAdmin, handleDraftRecap);
+router.post('/api/admin/live/sessions/:id/recap/send', requireFullAdmin, handleSendRecap);
 
 router.get('/api/live/recap/unsubscribe', publicLimiter, handleRecapOptOut);
 router.get('/api/live/recap/:id', publicLimiter, handlePublicRecap);
