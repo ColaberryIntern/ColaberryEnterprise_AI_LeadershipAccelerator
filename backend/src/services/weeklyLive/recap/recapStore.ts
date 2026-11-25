@@ -103,3 +103,11 @@ export async function sentEmails(sessionId: string): Promise<Set<string>> {
 export async function addOptOut(emailLower: string): Promise<void> {
   await sequelize.query('INSERT INTO weekly_live_recap_optouts (email_lower) VALUES (:em) ON CONFLICT (email_lower) DO NOTHING', { replacements: { em: emailLower } });
 }
+
+/** Who checked in to the class (names and emails), for the content lint's attendee rule. */
+export async function loadAttendees(sessionId: string): Promise<{ name: string | null; email: string | null }[]> {
+  return sequelize.query<{ name: string | null; email: string | null }>(
+    'SELECT name, email FROM session_guests WHERE session_id = :sid',
+    { replacements: { sid: sessionId }, type: QueryTypes.SELECT },
+  );
+}

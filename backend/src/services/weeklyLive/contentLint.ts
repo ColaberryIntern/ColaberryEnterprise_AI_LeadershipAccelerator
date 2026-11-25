@@ -17,7 +17,10 @@
  *   partnership     wording that implies a partnership with Anthropic
  *   anthropic_logo  an Anthropic or Claude logo, in words or as an asset
  *   on_screen_stat  a percent, an "N in N", a number of 10 or more, or a money amount in onScreen
- *   attendee_data   an attendee's name or email in a public field (onScreen, voiceover, caption, post)
+ *   attendee_data   an attendee's email, full name, or any name part of 3+ letters (any case, whole
+ *                   word) in a public field (onScreen, voiceover, caption, post); a name part that is
+ *                   an everyday word ("will", "grace") only counts inside the full name
+ *   (onScreen "Week 12", "Ep 2", "Session 10" are labels, not statistics)
  *   earnings_claim  a salary or earnings claim that is not an approved Claim Registry wording
  *   dash            an em or en dash (house style)
  */
@@ -36,28 +39,49 @@ export interface LintContext {
 const PUBLIC_KINDS: ReadonlySet<FieldKind> = new Set<FieldKind>(['onScreen', 'voiceover', 'caption', 'post']);
 
 const ZERO_PRICE = /\b(free|no[\s-]cost|no[\s-]charge|zero[\s-]cost)\b|\$\s?0(?![\d.,])/i;
-const PARTNERSHIP = /\b(anthropic|claude)\s+(partner|partnership|certified partner|official partner)\b|\bin partnership with (anthropic|claude)\b|\bpowered by anthropic\b|\b(partnered|partnering) with anthropic\b/i;
+const PARTNERSHIP = /\b(anthropic|claude)\s+(partner|partnership|certified partner|official partner)\b|\bin partnership with (anthropic|claude)\b|\bpowered by anthropic\b|\b(partnered|partnering) with anthropic\b|\bpartners? (of|with) anthropic\b|\b(endorsed|certified|approved|sponsored|accredited) by anthropic\b|\banthropic[\s-](certified|endorsed|approved|accredited|sponsored)\b/i;
 const LOGO_WORDS = /\b(anthropic|claude)\b[^.\n]{0,30}\blogo\b|\blogo\b[^.\n]{0,30}\b(anthropic|claude)\b/i;
 const LOGO_ASSET = /(anthropic|claude)[^/\s]*\.(png|jpe?g|svg|webp|gif)\b|\/(anthropic|claude)[-_]?(logo|mark|brand)/i;
 const STAT = /\d+(\.\d+)?\s?%|\bpercent\b|\b\d+\s+(in|out of)\s+\d+\b|\$\s?\d|\b\d{1,3}(,\d{3})+\b|\b\d+(\.\d+)?\s?(k|m|bn|x)\b|\b[1-9]\d+\b/i;
-const EARNINGS = /\bsalar(y|ies)\b|\bsix[\s-]figures?\b|\b(earn|earns|earned|earning|make|makes|paid)\s+(up to\s+|over\s+|more than\s+)?\$\s?\d|\$\s?\d[\d,.]*\s?k?\s*(\/|per|a)\s*(year|yr|hour|hr|month)\b/i;
+const EARNINGS = /\bsalar(y|ies)\b|\b(six|seven|[67])[\s-]figures?\b|\b(earn|earns|earned|earning|make|makes|made|paid|pay|pays|paying)\s+(you\s+)?(up to\s+|over\s+|more than\s+)?\$\s?\d|\$\s?\d[\d,.]*\s?k?\s*(\/|per|a)\s*(year|yr|hour|hr|month)\b/i;
 const DASH = /[–—]/;
+/** A sequence label ("Week 12", "Ep 2", "Session 3") on a graphic is a name, not a statistic. */
+const SEQUENCE_LABEL = /\b(week|wk|ep|episode|session|part|day|step|module|lesson)\s+\d{1,2}\b/gi;
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+/**
+ * Everyday words that are also first names. A name part on this list only counts as part of the
+ * attendee's full name, so an attendee called Will does not block every sentence with "will" in it.
+ */
+const COMMON_WORD_NAMES: ReadonlySet<string> = new Set([
+  'will', 'may', 'june', 'april', 'august', 'grace', 'hope', 'joy', 'faith', 'mark', 'bill', 'rose', 'dawn',
+  'chase', 'art', 'max', 'sunny', 'summer', 'autumn', 'winter', 'rich', 'drew', 'pat', 'sue', 'jack', 'don',
+  'guy', 'gene', 'ray', 'rob', 'neil', 'jean', 'pierce', 'frank', 'king', 'young', 'long', 'white', 'brown',
+  'green', 'black', 'gray', 'grey', 'lee', 'hall', 'wood', 'hill', 'love', 'star', 'river', 'sky', 'dash',
+]);
+
 function attendeeMatch(text: string, ctx: LintContext): string | null {
+  const word = (s: string) => new RegExp(`(^|[^\\p{L}\\p{N}])(${escapeRe(s)})(?=$|[^\\p{L}\\p{N}])`, 'iu');
   for (const a of ctx.attendees || []) {
     const email = String(a.email || '').trim();
     if (email && text.toLowerCase().includes(email.toLowerCase())) return email;
     const name = String(a.name || '').trim().replace(/\s+/g, ' ');
-    if (name.length < 3) continue;
-    // A full name matches in any case; a single-word name only as a capitalized word, so "Ana" the
-    // attendee is caught but "banana" and "an analysis" are not.
-    const re = name.includes(' ') ? new RegExp(`\\b${escapeRe(name)}\\b`, 'i') : new RegExp(`\\b${escapeRe(name)}\\b`);
-    const m = text.match(re);
-    if (m) return m[0];
+    if (!name) continue;
+    // The full name, then each part of 3 or more letters (first or last name alone), in any case,
+    // as a whole word: attendee "Ana Ruiz" is caught by "ana" but "banana" and "an analysis" are not.
+    const parts = name.split(' ').filter((p) => p.length >= 3 && !COMMON_WORD_NAMES.has(p.toLowerCase()));
+    for (const candidate of name.includes(' ') ? [name, ...parts] : parts) {
+      const m = text.match(word(candidate));
+      if (m) return m[2];
+    }
   }
   return null;
+}
+
+/** Remove every approved Claim Registry wording, so only the rest of the text is checked for earnings. */
+function withoutApproved(text: string, approved: string[] | undefined): string {
+  return (approved || []).filter(Boolean).reduce((s, c) => s.split(c).join(' '), text);
 }
 
 export function lintField(f: TaggedField, ctx: LintContext = {}): LintViolation[] {
@@ -68,10 +92,9 @@ export function lintField(f: TaggedField, ctx: LintContext = {}): LintViolation[
   add('zero_price', s.match(ZERO_PRICE));
   add('partnership', s.match(PARTNERSHIP));
   add('anthropic_logo', s.match(f.kind === 'asset' ? LOGO_ASSET : LOGO_WORDS));
-  if (f.kind === 'onScreen') add('on_screen_stat', s.match(STAT));
+  if (f.kind === 'onScreen') add('on_screen_stat', s.replace(SEQUENCE_LABEL, ' ').match(STAT));
   if (PUBLIC_KINDS.has(f.kind)) add('attendee_data', attendeeMatch(s, ctx));
-  const e = s.match(EARNINGS);
-  if (e && !(ctx.approvedClaims || []).some((c) => c && s.includes(c))) add('earnings_claim', e);
+  add('earnings_claim', withoutApproved(s, ctx.approvedClaims).match(EARNINGS));
   if (f.kind !== 'asset') add('dash', s.match(DASH));
   return out;
 }

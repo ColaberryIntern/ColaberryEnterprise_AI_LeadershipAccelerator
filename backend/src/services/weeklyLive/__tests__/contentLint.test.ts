@@ -4,17 +4,21 @@ import { lintField, lintFields, tagObject, lintObjectAs, type FieldKind, type Li
 const rules = (kind: FieldKind, text: string, ctx = {}): LintRule[] => lintField({ path: 'f', kind, text }, ctx).map((v) => v.rule);
 
 describe('acceptance examples', () => {
-  it('the known bad hook is rejected', () => {
-    // The Ep 1 draft hook Ali struck: a zero price on a thumbnail, with a stat on screen.
-    expect(rules('onScreen', 'FREE class: 73% of jobs change')).toEqual(expect.arrayContaining(['zero_price', 'on_screen_stat']));
+  it('the known bad hook is rejected in every field kind', () => {
+    // spec.json, WL2.3: the known bad hook.
+    const hook = 'You can start building enterprise AI systems for $0';
+    for (const k of ['onScreen', 'voiceover', 'caption', 'post', 'email'] as FieldKind[]) expect(rules(k, hook)).toContain('zero_price');
   });
   it('"1 in 5 shoppers" passes in voiceover and fails onScreen', () => {
     expect(rules('voiceover', '1 in 5 shoppers this week is an AI agent')).toEqual([]);
     expect(rules('onScreen', '1 in 5 shoppers is an AI')).toEqual(['on_screen_stat']);
   });
-  it('an attendee name in a caption is rejected', () => {
-    const ctx = { attendees: [{ name: 'Ana Ruiz', email: 'ana@x.com' }] };
+  it('an attendee name in a caption is rejected: full name, first name, last name, any case', () => {
+    const ctx = { attendees: [{ name: 'Ana Ruiz', email: 'ana@x.com' }, { name: 'marcus', email: null }] };
     expect(rules('caption', 'Great question from ana ruiz tonight', ctx)).toEqual(['attendee_data']);
+    expect(rules('caption', 'Great question from Ana tonight', ctx)).toEqual(['attendee_data']);
+    expect(rules('caption', 'Thanks, Ruiz!', ctx)).toEqual(['attendee_data']);
+    expect(rules('caption', 'Shout out to Marcus', ctx)).toEqual(['attendee_data']);
     expect(rules('caption', 'Great question from the chat tonight', ctx)).toEqual([]);
   });
 });
@@ -25,7 +29,7 @@ describe('zero_price', () => {
 });
 
 describe('partnership and logo', () => {
-  it.each(['An official Anthropic partner', 'in partnership with Claude', 'Powered by Anthropic', 'partnered with Anthropic'])('rejects "%s"', (t) => { expect(rules('post', t)).toContain('partnership'); });
+  it.each(['An official Anthropic partner', 'in partnership with Claude', 'Powered by Anthropic', 'partnered with Anthropic', 'a partner of Anthropic', 'endorsed by Anthropic', 'Anthropic-certified course', 'certified by Anthropic'])('rejects "%s"', (t) => { expect(rules('post', t)).toContain('partnership'); });
   it('allows naming the tool plainly', () => { expect(rules('post', 'We build with Claude Code tonight')).toEqual([]); });
   it('rejects a logo in words and as an asset', () => {
     expect(rules('onScreen', 'Put the Claude logo top right')).toContain('anthropic_logo');
@@ -40,7 +44,7 @@ describe('on_screen_stat (onScreen only)', () => {
     expect(rules('onScreen', t)).toContain('on_screen_stat');
     expect(rules('voiceover', t)).not.toContain('on_screen_stat');
   });
-  it.each(['It Works While You Sleep', '3 skills, 1 assistant', 'Week 3'])('allows "%s" on screen', (t) => { expect(rules('onScreen', t)).toEqual([]); });
+  it.each(['It Works While You Sleep', '3 skills, 1 assistant', 'Week 3', 'Week 12', 'Ep 12: the capstone', 'Session 10'])('allows "%s" on screen', (t) => { expect(rules('onScreen', t)).toEqual([]); });
 });
 
 describe('attendee_data', () => {
@@ -48,9 +52,15 @@ describe('attendee_data', () => {
   it('rejects an email in any public kind, in any case', () => {
     for (const k of ['onScreen', 'voiceover', 'caption', 'post'] as FieldKind[]) expect(rules(k, 'ping ana.r@example.com', ctx)).toContain('attendee_data');
   });
-  it('a single-word name matches only as a capitalized word', () => {
+  it('a name matches as a whole word in any case, never inside another word', () => {
     expect(rules('post', 'Thanks Ana for asking', ctx)).toContain('attendee_data');
+    expect(rules('post', 'thanks ANA for asking', ctx)).toContain('attendee_data');
     expect(rules('post', 'banana and an analysis', ctx)).toEqual([]);
+  });
+  it('a name that is an everyday word counts only as part of the full name', () => {
+    const c = { attendees: [{ name: 'Will Grace', email: null }] };
+    expect(rules('post', 'This will save you an hour', c)).toEqual([]);
+    expect(rules('post', 'Thanks to will grace', c)).toContain('attendee_data');
   });
   it('names under 3 letters are ignored, and the 1:1 email may greet the reader', () => {
     expect(rules('post', 'Li said hi', ctx)).toEqual([]);
@@ -59,10 +69,14 @@ describe('attendee_data', () => {
 });
 
 describe('earnings_claim', () => {
-  it.each(['a six-figure job', 'earn up to $150k', 'Average salary jumps', 'makes $90,000 a year', '$45/hr roles'])('rejects "%s"', (t) => { expect(rules('voiceover', t)).toContain('earnings_claim'); });
+  it.each(['a six-figure job', 'a 6-figure job', 'earn up to $150k', 'Average salary jumps', 'makes $90,000 a year', '$45/hr roles', 'they pay $120,000'])('rejects "%s"', (t) => { expect(rules('voiceover', t)).toContain('earnings_claim'); });
   it('allows an approved Claim Registry wording', () => {
     const approved = 'Graduates earn $85,000 on average (registry CLM-X)';
     expect(rules('voiceover', approved, { approvedClaims: [approved] })).not.toContain('earnings_claim');
+  });
+  it('an approved wording exempts only itself, not the rest of the field', () => {
+    const approved = 'Graduates earn $85,000 on average.';
+    expect(rules('voiceover', `${approved} Others earn $200k a year.`, { approvedClaims: [approved] })).toContain('earnings_claim');
   });
   it('allows learning and earning a certificate', () => { expect(rules('voiceover', 'learn the skill and earn a badge')).toEqual([]); });
 });

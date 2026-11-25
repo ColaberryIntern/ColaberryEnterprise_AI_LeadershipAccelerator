@@ -9,6 +9,12 @@
  *   Convert = buyer fit 30, clear next step 25, our proof 25, trust 20 (points up to each weight).
  *   Topic   = 0.4 Teach + 0.4 Viral + 0.2 Convert, one decimal.
  *
+ * Not ported on purpose: score_topics.js (the skill's 0-100 ranking of the twelve weeks by closeness,
+ * coverage, demand, buildability and news fit). In the Studio the unit being chosen is a topic, not a
+ * week: WL3.3 generates topics across all 12 weeks, the curriculum map (curriculumMap.ts) supplies
+ * coverage and the "covered in the last four" skip, demand feeds the Teach demand line, and this topic
+ * score ranks the result. A separate week ranking would be a second, competing order.
+ *
  * Gate 85. A topic that uses fewer than 3 of the 10 viral factors is flagged and cannot be chosen
  * without an explicit override. Bands: 90+ prioritize, 85 to 89.9 approve, 70 to 84.9 improve,
  * under 70 start over.
