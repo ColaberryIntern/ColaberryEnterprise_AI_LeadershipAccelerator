@@ -192,3 +192,46 @@ export async function startTestCall(runId: string, engine: 'conversation_relay' 
 export async function stopTestCall(callId: string): Promise<void> {
   await api.post(`/api/admin/voice-studio/tests/${encodeURIComponent(callId)}/stop`);
 }
+
+/* -- Call Explorer, Trust Center, Quality, Costs (VS3.5) ------------------------ */
+
+export interface CallRow { id: string; engine: string; direction: string; state: string; purpose: string; test_mode: boolean; human_answered: boolean; duration_seconds: number | null; cost_usd: string | null; error_class: string | null; created_at: string }
+export interface TimelineEntry { at: string; actorType: 'human' | 'ai' | 'deterministic_service' | 'carrier'; actor: string; action: string; verdict: 'allowed' | 'denied' | 'approval_required' | 'observed'; detail: string; sourceId: string }
+export interface CallDetail {
+  call: CallRow & { provider_call_id_masked: string | null; consent_ref: string | null };
+  turns: Array<{ turn_index: number; speaker: string; first_audio_latency_ms: number | null; interrupted: boolean }>;
+  usage: Array<{ provider: string; unit: string; quantity: string; unit_price_usd: string | null; measured: boolean }>;
+  reconciliation: { logged: boolean; logStatus: string | null; transcriptState: string | null };
+  timeline: TimelineEntry[];
+}
+export interface CallFilters { days: number; engine?: string; state?: string; test?: 'true' | 'false' }
+export interface Quality { passMark: number; rubric: Array<{ key: string; weight: number; critical: boolean }>; runs: Array<{ id: string; engine: string; scenario_set: string; environment: string; verdict: string; evidence_ref: string | null; created_at: string }> }
+export interface Costs {
+  days: number;
+  byProvider: Array<{ provider: string; measured: boolean; usd: string | null; rows: number; unpriced: number }>;
+  activeCalls: number;
+  reservations: Array<{ status: string; n: number }>;
+  deadLetters: Array<{ id: string; state: string; error_class: string | null; created_at: string }>;
+  caps: { testAttemptsPerRun: number; testMaxSeconds: number; testBudgetUsd: number };
+}
+
+export async function listCalls(f: CallFilters): Promise<CallRow[]> {
+  const { data } = await api.get<{ calls: CallRow[] }>('/api/admin/voice-studio/calls', { params: f });
+  return data.calls;
+}
+export async function getCall(id: string): Promise<CallDetail> {
+  const { data } = await api.get<CallDetail>(`/api/admin/voice-studio/calls/${encodeURIComponent(id)}`);
+  return data;
+}
+export async function exportTimeline(id: string): Promise<string> {
+  const { data } = await api.get<Blob>(`/api/admin/voice-studio/calls/${encodeURIComponent(id)}/timeline.csv`, { responseType: 'blob' });
+  return URL.createObjectURL(data);
+}
+export async function getQuality(): Promise<Quality> {
+  const { data } = await api.get<Quality>('/api/admin/voice-studio/quality');
+  return data;
+}
+export async function getCosts(days: number): Promise<Costs> {
+  const { data } = await api.get<Costs>('/api/admin/voice-studio/costs', { params: { days } });
+  return data;
+}

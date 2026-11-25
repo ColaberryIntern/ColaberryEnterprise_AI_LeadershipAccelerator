@@ -4,8 +4,8 @@ import { PageHeader } from '../shell';
 
 /**
  * Voice Studio shell (VS3.3): the header and the tabs as real routes (a refresh keeps the tab).
- * Overview and Agents are live; the other tabs arrive in VS3.4 and VS3.5 and are listed, disabled,
- * so the layout does not jump when they land. Nothing on this page places a call.
+ * All eight tabs are live. A tab marked not ready is listed but disabled. Only the Voice Lab test call
+ * can dial, and only the authorized test phone.
  */
 export interface StudioTab { to: string; label: string; end: boolean; ready: boolean }
 
@@ -14,10 +14,10 @@ export const VOICE_STUDIO_TABS: ReadonlyArray<StudioTab> = [
   { to: '/admin/voice-studio/agents', label: 'Agents', end: false, ready: true },
   { to: '/admin/voice-studio/lab', label: 'Voice Lab', end: false, ready: true },
   { to: '/admin/voice-studio/numbers', label: 'Numbers & Routing', end: false, ready: true },
-  { to: '/admin/voice-studio/calls', label: 'Call Explorer', end: false, ready: false },
-  { to: '/admin/voice-studio/trust', label: 'Trust Center', end: false, ready: false },
-  { to: '/admin/voice-studio/quality', label: 'Quality & Release', end: false, ready: false },
-  { to: '/admin/voice-studio/costs', label: 'Costs & Operations', end: false, ready: false },
+  { to: '/admin/voice-studio/calls', label: 'Call Explorer', end: false, ready: true },
+  { to: '/admin/voice-studio/trust', label: 'Trust Center', end: false, ready: true },
+  { to: '/admin/voice-studio/quality', label: 'Quality & Release', end: false, ready: true },
+  { to: '/admin/voice-studio/costs', label: 'Costs & Operations', end: false, ready: true },
 ];
 
 export default function VoiceStudioLayout(): React.ReactElement {
@@ -25,7 +25,7 @@ export default function VoiceStudioLayout(): React.ReactElement {
     <div className="voice-studio">
       <PageHeader
         title="Voice Studio"
-        subtitle="Our own phone agents: what they say, what they may do, and how calls are going. Nothing here places a call."
+        subtitle="Our own phone agents: what they say, what they may do, and how calls are going. Only the Voice Lab test call can dial."
         icon="phone-line"
       />
       <nav aria-label="Voice Studio sections" className="mb-3">

@@ -1,13 +1,13 @@
 {
  "generatedFrom": "git ls-files",
- "total": 263,
+ "total": 265,
  "byRole": {
   "DISPATCH": 3,
   "INGEST": 3,
   "GUARD": 6,
   "CALLER": 11,
   "CONFIG": 20,
-  "UI": 31,
+  "UI": 33,
   "CONSUMER": 63,
   "MENTION": 126
  },
@@ -1679,6 +1679,12 @@
    ]
   },
   {
+   "path": "frontend/src/components/admin/voiceStudio/QualityTab.tsx",
+   "role": "UI",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
    "path": "frontend/src/components/admin/voiceStudio/VersionEditor.tsx",
    "role": "UI",
    "callTypes": [],
@@ -1698,6 +1704,14 @@
    "callTypes": [],
    "envVars": [
     "VOICE_STUDIO_TABS"
+   ]
+  },
+  {
+   "path": "frontend/src/components/admin/voiceStudio/studioLoad.tsx",
+   "role": "UI",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_STUDIO_UI_ENABLED"
    ]
   },
   {
