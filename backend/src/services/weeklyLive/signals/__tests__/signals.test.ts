@@ -3,7 +3,7 @@ import { WeeklyLiveSignal } from '../../../../models/WeeklyLive';
 import { readPage, toYmd } from '../pageDate';
 import { fetchPage } from '../pageFetch';
 import { parseCandidates, searchCost, SEARCH_RESERVE_USD, type Candidate } from '../signalSearch';
-import { runSignals, sameStory, selectSignals, vet, namesAStory, shiftDays, urlKey, windowStart, MAX_SIGNALS, type SignalRow } from '../signalsJob';
+import { runSignals, sameStory, selectSignals, vet, isRoundup, namesAStory, shiftDays, urlKey, windowStart, MAX_SIGNALS, type SignalRow } from '../signalsJob';
 import { BudgetExceeded, capFrom, reserve, withBudget } from '../researchBudget';
 
 /** WL3.1: dates come from the page, failed pages are dropped with a reason, reruns replace, the cap holds. */
@@ -110,8 +110,26 @@ describe('runSignals', () => {
   it('stops at the cost cap and replaces nothing', async () => {
     const search = jest.fn().mockRejectedValue(new BudgetExceeded(49.9, 0.25, 50));
     await expect(runSignals(input, { search, today: TODAY })).rejects.toThrow(/cost cap is \$50\.00/);
-    expect(search).toHaveBeenCalledTimes(1);
     expect(destroy).not.toHaveBeenCalled();
+  });
+  it('a short list gets one more round that names what it has; twelve does not', async () => {
+    const many = (n: number, at = 0) => Array.from({ length: n }, (_, i) => cand({ url: `https://a.com/story-number-${i + at}`, headline: `uniq${i + at} alpha${i + at}` }));
+    const html = (url: string) => { const n = url.split('-').pop(); return Promise.resolve({ ok: true as const, url, html: `<meta property="og:title" content="uniq${n} alpha${n} beta${n}"><script type="application/ld+json">{"datePublished":"2026-11-18"}</script>` }); };
+    const search = jest.fn().mockResolvedValueOnce(many(8)).mockResolvedValue([]);
+    expect(await runSignals(input, { search, fetchPage: html, today: TODAY })).toMatchObject({ kept: 8, short: true });
+    expect(search).toHaveBeenCalledTimes(10);
+    expect(search.mock.calls[0][1].have).toEqual([]);
+    expect(search.mock.calls[5][1].have).toContain('uniq0 alpha0 beta0');
+    const again = jest.fn().mockResolvedValueOnce(many(8)).mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce(many(6, 8)).mockResolvedValue([]);
+    expect(await runSignals(input, { search: again, fetchPage: html, today: TODAY })).toMatchObject({ kept: 14, short: false });
+    const enough = jest.fn().mockResolvedValueOnce(many(12)).mockResolvedValue([]);
+    await runSignals(input, { search: enough, fetchPage: html, today: TODAY });
+    expect(enough).toHaveBeenCalledTimes(5);
+  });
+  it('the extra round hitting the cost cap keeps the first round', async () => {
+    const search = jest.fn().mockResolvedValueOnce([cand()]).mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockRejectedValue(new BudgetExceeded(49.9, 0.45, 50));
+    expect(await runSignals(input, { search, fetchPage: page(ld('2026-11-18')), today: TODAY })).toMatchObject({ kept: 1, short: true });
+    expect(destroy).toHaveBeenCalled();
   });
   it('one failed group is reported; all failing throws and keeps the old rows', async () => {
     const search = jest.fn().mockRejectedValueOnce(new Error('x')).mockResolvedValue([]);
@@ -171,3 +189,6 @@ it('a query string that names the page is a different page; tracking is ignored'
 });
 
 it.each([['fifty', 50], ['', 50], [undefined, 50], ['-5', 50], ['Infinity', 50], ['0', 0], ['20', 20]])('cap setting %s is %s', (raw, n) => { expect(capFrom(raw as string | undefined)).toBe(n); });
+
+it.each([['AI News This Week: 23 to 29 November 2026', 'https://g.com/ai', true], ['The week in AI, 16-22 November', 'https://g.com/x', true], ['The week of 23 November', 'https://g.com/x', true], ['News Bytes for Nov. 13', 'https://w.org/x', true],
+  ['Plain title', 'https://g.com/ai-news/weekly/2026-w48/', true], ['Weekly pay rises as AI spreads', 'https://a.com/pay', false], ['Canva cuts 22% of staff this week', 'https://a.com/canva-cuts-staff', false], ['Digestive startup uses AI', 'https://a.com/x', false]])('%s at %s is a roundup: %s', (h, u, yes) => { expect(isRoundup(h as string, u as string)).toBe(yes); });

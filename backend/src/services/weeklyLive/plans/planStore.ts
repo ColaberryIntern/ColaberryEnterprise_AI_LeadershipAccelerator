@@ -82,6 +82,20 @@ export async function claimForRun(id: string): Promise<string | null> {
   });
 }
 
+/**
+ * Runs live in the server process, so at startup none can still be going. Mark them stopped now instead
+ * of after STALE_MINUTES. Their topics, if any, stay choosable.
+ */
+export async function failInterruptedRuns(): Promise<number> {
+  return sequelize.transaction(async (transaction) => {
+    const rows = await sequelize.query<{ id: string }>("UPDATE weekly_live_plans SET status = 'failed', updated_at = NOW() WHERE status = 'researching' RETURNING id", { type: QueryTypes.SELECT, transaction });
+    if (rows.length) {
+      await sequelize.query("UPDATE weekly_live_plan_runs SET run_id = gen_random_uuid(), stage = 'failed', error = 'The server restarted during this run. Run it again.' WHERE plan_id IN (:ids)", { replacements: { ids: rows.map((r) => r.id) }, transaction });
+    }
+    return rows.length;
+  });
+}
+
 /** Move the run to a stage. False when a newer run or a choice has replaced it: the caller must stop. */
 export async function setStage(id: string, runId: string, stage: Stage, note: string | null = null): Promise<boolean> {
   const rows = await sequelize.query<{ plan_id: string }>(
