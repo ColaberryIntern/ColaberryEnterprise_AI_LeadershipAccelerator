@@ -31,6 +31,14 @@ const TICKETS = {
     pr: 'https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/4408',
     state: 'LIVE',
   },
+  r27: {
+    key: 'R27',
+    id: '10548340320',
+    title: 'One row per person, a name that opens the 360, and rates on the campaigns',
+    subtitle: 'Ali, testing R26 live: group the duplicates and show what she needs to know',
+    pr: 'https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/4444',
+    state: 'IN REVIEW',
+  },
   r26: {
     key: 'R26',
     id: '10547700764',
@@ -111,12 +119,12 @@ const CONSTRAINT = {
 
 /** Where each ticket really is on the shipping ladder. "Live" means read from the container. */
 const LADDER = [
-  { step: 'Built', r12: true, r25: true, r26: true },
-  { step: 'Tested', r12: true, r25: true, r26: true },
-  { step: 'CI green', r12: true, r25: true, r26: true },
-  { step: 'Merged', r12: true, r25: true, r26: true },
-  { step: 'Deployed', r12: true, r25: true, r26: true },
-  { step: 'Verified in production', r12: true, r25: true, r26: true },
+  { step: 'Built', r12: true, r25: true, r26: true, r27: true },
+  { step: 'Tested', r12: true, r25: true, r26: true, r27: true },
+  { step: 'CI green', r12: true, r25: true, r26: true, r27: true },
+  { step: 'Merged', r12: true, r25: true, r26: true, r27: false },
+  { step: 'Deployed', r12: true, r25: true, r26: true, r27: false },
+  { step: 'Verified in production', r12: true, r25: true, r26: true, r27: false },
 ];
 
 /** Verification totals, per ticket. Counted from the runs, not estimated. */
@@ -124,6 +132,7 @@ const EVIDENCE = {
   r12: { tests: 28, mutations: '11 of 11', gates: '10 of 10', suites: '27 suites / 547 tests' },
   r25: { tests: 50, mutations: '17 of 17', gates: '10 of 10', suites: '864 suites / 11,229 tests' },
   r26: { tests: 44, mutations: '15 of 15', gates: '10 of 10', suites: '29 suites / 580 tests' },
+  r27: { tests: 44, mutations: '16 of 16', gates: '10 of 10', suites: '29 suites / 597 tests' },
 };
 
 /**
