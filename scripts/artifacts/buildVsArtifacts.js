@@ -10,7 +10,7 @@
 const path = require('path');
 const { renderPdf } = require('./renderArtifactPdf');
 const R = require('./tickets/vsRender');
-const DATA = require('./tickets/vsData');
+const DATA = { ...require('./tickets/vsData'), ...require('./tickets/vsData3') };
 
 async function main() {
   const code = process.argv[2];

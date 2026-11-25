@@ -6,6 +6,6 @@ Source of truth: [MASTER_BUILD_PROMPT.md](MASTER_BUILD_PROMPT.md) (authorized te
 
 Readiness: 0 of 12 requirements verified (0%).
 
-Current phase: 1 Foundation. Current ticket: VS0.1.
+Current phase: 4 Hardening and pilot (as of 2026-11-25). Phases 1 to 3 are deployed and switched off; VS4.1, VS4.2, VS4.3 and VS4.5 passed independent review and ship in PR 4430. VS4.4 (grading) and LIVE-01 to LIVE-03 wait for the two provider keys and a call window.
 
 Synthflow status: ACTIVE (not retired). Live calls placed by this build: 0.
