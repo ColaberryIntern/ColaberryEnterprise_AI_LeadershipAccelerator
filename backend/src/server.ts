@@ -47,6 +47,7 @@ import buildArtifactRoutes from './routes/buildArtifactRoutes';
 import buildLogDraftRoutes from './routes/buildLogDraftRoutes';
 import publicPortfolioRoutes from './routes/publicPortfolioRoutes';
 import demoRoutes from './routes/demoRoutes';
+import platformBuildRoutes from './routes/platformBuildRoutes';
 import publicCareerPortfolioRoutes from './routes/publicCareerPortfolioRoutes';
 import internVideoStreamRoutes from './routes/internVideoStreamRoutes';
 import publicHireTalentRoutes from './routes/publicHireTalentRoutes';
@@ -99,6 +100,7 @@ import { ensureContractTrackSchema } from './db/ensureContractTrackSchema';
 import { ensureProjectTenantSchema } from './db/ensureProjectTenantSchema';
 import { ensureProjectLifecycleSchema } from './db/ensureProjectLifecycleSchema';
 import { ensureConnectedDemoSchema } from './db/ensureConnectedDemoSchema';
+import { ensurePlatformBuildSchema } from './db/ensurePlatformBuildSchema';
 import { ensureGovQualificationSchema } from './db/ensureGovQualificationSchema';
 import { ensureGovOpportunityDismissalSchema } from './db/ensureGovOpportunityDismissalSchema';
 import { ensureGovSourceBundleSchema } from './db/ensureGovSourceBundleSchema';
@@ -321,6 +323,8 @@ app.use(buildLogDraftRoutes);
 app.use(publicPortfolioRoutes);
 // The public Connected Demo. Unauthenticated, gated on demo_share_enabled, which defaults false.
 app.use(demoRoutes);
+// L13.1: the platform build runner's calls (GitHub OIDC) and the hosted Command Center / Demo (signed link).
+app.use(platformBuildRoutes);
 app.use(advisorRoutes);
 app.use(alumniReferralRoutes);
 app.use(qrRedirectRoutes);
@@ -3031,6 +3035,14 @@ async function start(): Promise<void> {
     await ensureConnectedDemoSchema();
   } catch (err: any) {
     console.warn('[boot] connected demo schema unavailable:', err?.error_class || err?.message);
+  }
+  // L13.1: the platform-built Command Center and Demo (platform_build_runs, platform_build_artifacts).
+  // Two NEW tables, nothing altered. Wrapped like the demo schema: the feature ships behind
+  // SBP_PLATFORM_BUILD (default off) and must never take the platform down.
+  try {
+    await ensurePlatformBuildSchema();
+  } catch (err: any) {
+    console.warn('[boot] platform build schema unavailable:', err?.error_class || err?.message);
   }
   // AI Project Factory Phase 2: the Enterprise-owned gov qualification model (gov_qualifications,
   // build_authorizations, gov_opportunity_aliases). Additive NEW tables that FK to delivery_projects

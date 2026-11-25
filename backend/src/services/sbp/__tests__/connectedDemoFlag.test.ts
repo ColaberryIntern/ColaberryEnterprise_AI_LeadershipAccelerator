@@ -429,7 +429,8 @@ describe('every renderDocs caller resolves the Connected Demo story', () => {
     // Found the ones we know about: a sweep that found nothing would pass trivially.
     expect(files).toContain('services/sbp/sbpOrchestrator.ts');
     expect(files).toContain('services/sbp/docsBundle.ts');
-    expect(files).toContain('services/sbp/refreshRepoDocuments.ts');
+    // The repo sync's render moved into renderProjectDocs (L13.1), shared with the platform build.
+    expect(files).toContain('services/sbp/renderProjectDocs.ts');
     expect(files).toContain('services/sbp/studentProgressFile.ts');
 
     // The ARGUMENT, not the file. See `callExpressions` for what the file-level version missed.

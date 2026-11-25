@@ -41,14 +41,20 @@ async function buildTree(projectId: string): Promise<ProjectTreeDto | null> {
     return pl;
   });
   const plainProject = project.get({ plain: true }) as any;
-  const [xpEarned, pointsByStory] = await Promise.all([
+  const [xpEarned, pointsByStory, platformBuild] = await Promise.all([
     verifiedStoryXp(
       String(plainProject.enrollment_id ?? ''),
       tasks.map((t) => t.get({ plain: true })),
     ),
     storyPointsMap(projectId),
+    // L13.1: the platform-built Command Center and Demo, with freshly signed links. Every caller of
+    // buildTree has already checked ownership. Never throws; null for projects it does not cover.
+    import('../sbp/platformBuild/portalView').then((m) => m.platformBuildForPortal(projectId)).catch(() => null),
   ]);
-  return toProjectTreeDto(plainProject, plainLists, xpEarned, pointsByStory);
+  const dto = toProjectTreeDto(plainProject, plainLists, xpEarned, pointsByStory);
+  // Only present when there is something to show, so every existing consumer sees the same shape.
+  if (platformBuild) dto.platform_build = platformBuild;
+  return dto;
 }
 
 /**

@@ -27,6 +27,7 @@ import type {
   StudentProject, ProjectList, ProjectTask, ProjectReq, TaskDue, TaskState,
 } from './projectsStore';
 import { UUID_RE } from './projectIdentity';
+import { platformBuildFromDto, platformBuildChanged, type PlatformBuildDto } from './platformBuildLinks';
 
 // ── the slice of the backend ProjectTreeDto this module consumes ──────────────
 export interface BackendTaskNode {
@@ -83,6 +84,8 @@ export interface BackendProjectTree {
    * reason as `verified_at`: an older server omits the key entirely.
    */
   command_center_url?: string | null;
+  /** L13.1: the platform-hosted Command Center and Demo. Absent on older servers. */
+  platform_build?: PlatformBuildDto | null;
   /**
    * Review-and-approve. Optional so an older server yields `undefined`, which
    * maps to null → ungated. Only 'pending_approval' gates.
@@ -457,6 +460,11 @@ export function overlayCompletions(p: StudentProject, tree: BackendProjectTree):
   const nextApproval = tree.approval_state ?? null;
   const approvalChanged = nextApproval !== (p.approvalState ?? null);
 
+  // L13.1. The signed links are new on every read, so this compares build state, versions and
+  // the held link's remaining life rather than the URL itself. See platformBuildLinks.ts.
+  const nextPlatformBuild = platformBuildFromDto(tree.platform_build);
+  const platformBuildMoved = platformBuildChanged(p.platformBuild ?? null, nextPlatformBuild);
+
   // A project the server is actively describing is not being CREATED, whatever
   // this device last wrote down. `status` was the one field this path never
   // normalised, so a card stranded at `creating` — by the id-adoption race in
@@ -480,12 +488,13 @@ export function overlayCompletions(p: StudentProject, tree: BackendProjectTree):
   const reqs = deriveReqStates(reconcileReqCatalog(withContent.reqs, mergedLists), mergedLists);
   const reqsChanged = reqs !== withContent.reqs;
 
-  const base: StudentProject = (!changed && !urlChanged && !adopted && !contentChanged && !statusStale && !reqsChanged && !approvalChanged) ? p : {
+  const base: StudentProject = (!changed && !urlChanged && !adopted && !contentChanged && !statusStale && !reqsChanged && !approvalChanged && !platformBuildMoved) ? p : {
     ...withContent,
     ...(changed ? { lists } : {}),
     ...(reqsChanged ? { reqs } : {}),
     ...(urlChanged ? { commandCenterUrl: nextUrl } : {}),
     ...(approvalChanged ? { approvalState: nextApproval } : {}),
+    ...(platformBuildMoved ? { platformBuild: nextPlatformBuild } : {}),
     ...(statusStale ? { status: 'ready' as StudentProject['status'] } : {}),
   };
   // Applied last and on the merged object, so a rename and a completion arriving
@@ -735,6 +744,7 @@ export function backendTreeToProject(tree: BackendProjectTree): StudentProject {
     reqs,
     lists,
     commandCenterUrl: tree.command_center_url ?? null,
+    platformBuild: platformBuildFromDto(tree.platform_build),
     approvalState: tree.approval_state ?? null,
     activity: [
       { id: 'a-restored', kind: 'note', who: 'Cory', time: 'just now',

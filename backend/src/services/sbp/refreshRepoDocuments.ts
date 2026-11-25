@@ -31,17 +31,11 @@
  * turn a successful pull into an error. Every outcome is classified and
  * returned, and the caller renders it beside the verification result.
  */
-import { BuildPlan } from './planContract';
 import { getPublishedPlan } from './planStore';
 import { repoForProject } from './workspaceRepo';
-import { repoWriteAccessForProject } from './repoWriteAccess';
-import { renderDocs } from './renderDocs';
 import { writeDocsToRepo, readRepoManifest, RepoWriteError } from './repoWriter';
-import { loadBuildProgress } from './buildProgressSnapshot';
-import { scheduleForEnrollment, truthForRender } from './scheduleForEnrollment';
-import { ensureGovPlanPublishedForSync, isGovBuildProjectVariables } from './govPlanForSync';
-import { scheduleFromBoard } from './scheduleFromBoard';
-import { connectedDemoMaterializedFor } from './connectedDemoFlag';
+import { ensureGovPlanPublishedForSync } from './govPlanForSync';
+import { renderProjectDocs } from './renderProjectDocs';
 
 export type RefreshOutcome =
   | 'written'          // files changed and were committed
@@ -95,83 +89,30 @@ export async function refreshRepoDocuments(
   try {
     // Gov builds publish their plan only when the gov cockpit view is opened, so a repo sync must
     // publish it itself — otherwise a gov student who clicks "Sync from GitHub" gets no_plan forever
-    // and their repo is never written. Idempotent, gated to gov builds, best-effort: a non-gov
-    // project or a failure just falls through to the normal no_plan path below.
+    // and their repo is never written. Idempotent, gated to gov builds, best-effort.
     await ensureGovPlanPublishedForSync(projectId, opts.correlationId ?? null);
 
+    // The plan is checked before the repo, as it always was, so a project with neither reports
+    // no_plan rather than no_repo.
     const stored = await getPublishedPlan(projectId);
     if (!stored) return result('no_plan');
 
     const repo = await repoForProject(projectId);
     if (!repo) return result('no_repo');
 
-    const { default: Project } = await import('../../models/Project');
-    const project = await Project.findByPk(projectId);
-    const enrollmentId = String((project as any)?.enrollment_id ?? '');
-    // The schedule is looked up by enrollment, and the progress snapshot needs
-    // it for Builder XP. Without one we can still write plan data, so this is a
-    // degraded pass rather than a refusal.
-    if (!enrollmentId) {
+    // Every render input (schedule, progress, truth, write access, domain override, demo flag)
+    // is gathered in ONE place now, shared with the platform-hosted Command Center so the two
+    // can never render different files for the same project. See renderProjectDocs.ts.
+    const rendered = await renderProjectDocs(projectId, {
+      repoUrl: repo.url, correlationId: opts.correlationId, govPlanEnsured: true,
+    });
+    if (!rendered) return result('no_plan');
+    // The schedule is looked up by enrollment, and the progress snapshot needs it for Builder
+    // XP. Without one we can still write plan data, so this is a degraded pass, not a refusal.
+    if (!rendered.enrollmentId) {
       log('sbp_doc_refresh_no_enrollment', opts.correlationId, 'partial', { projectId });
     }
-
-    const plan = stored.plan as BuildPlan;
-    // A GOV build's tasks are dated by the deadline back-scheduler (govSyntheticSchedule), not the
-    // cohort scheduler, so its plan.json must take its dates FROM THE BOARD or every release reads the
-    // same wrong day — the symptom Omolola saw on Saratoga. `scheduleFromBoard` reads the real
-    // `student_tasks.due_on` back; a non-gov build keeps the cohort schedule; a null from either falls
-    // through to no dates, as before.
-    //
-    // `stored.published_at`, never `new Date()`: this path runs on every repo sync, and a wall-clock
-    // floor would nudge the student's whole schedule further out each time they pushed, making plan.json
-    // disagree with the tasks table it is supposed to mirror.
-    const isGov = isGovBuildProjectVariables((project as { project_variables?: unknown } | null)?.project_variables);
-    const schedule =
-      (isGov ? await scheduleFromBoard(projectId) : null)
-      ?? (enrollmentId
-        ? await scheduleForEnrollment(enrollmentId, plan, opts.correlationId ?? null, stored.published_at)
-        : null);
-    const snapshot = await loadBuildProgress(projectId, enrollmentId || null);
-
-    // Asked explicitly rather than inferred from `repoForProject` having
-    // returned a repo. That predicate answers "worth attempting a write", and on
-    // an unrecorded permission it currently answers yes — so inferring `push`
-    // from it would put the "your criteria are already seeded" claim back into
-    // the doc for exactly the students it was wrong for. See repoWriteAccess.ts.
-    const writeAccess = await repoWriteAccessForProject(projectId, opts.correlationId ?? null);
-
-    // AF3.9. An agent-domain project's Command Center is `<domain>.STORY-000` with six acceptance
-    // criteria; `renderDocs` looked for the bare `STORY-000`, missed, and supplied the SBP's
-    // generic five instead. Null for every ordinary build, which keeps their behaviour unchanged.
-    // Never throws: a failure here costs the correct Command Center, not the sync.
-    const { domainCommandCenterOverrideForProject } =
-      await import('../agentDomain/agentDomainCommandCenterForSync');
-    const commandCenterOverride =
-      await domainCommandCenterOverrideForProject(projectId, opts.correlationId ?? null);
-
-    // The student's own account of the project, for plan.json's
-    // `derived.understanding` and STORY-000.md's truth section. Never throws.
-    const truth = await truthForRender(projectId, opts.correlationId ?? null);
-
-    const files = renderDocs(plan, {
-      repoUrl: repo.url,
-      generatedAt: new Date().toISOString(),
-      planVersion: stored.version,
-      planSha256: stored.plan_sha256,
-      correlationId: opts.correlationId,
-      projectId,
-      truthRevision: stored.truth_revision ?? null,
-      truth,
-      schedule,
-      progress: snapshot.progress,
-      baselineByStory: snapshot.baselineByStory,
-      repoWriteAccess: writeAccess,
-      commandCenterOverride,
-      // From the BOARD, not from the env flag. A refresh must keep rendering STORY-900.md for
-      // every build that has the row; asking the flag instead would delete the instructions out
-      // from under a student the day the rollout narrowed. See connectedDemoFlag.ts.
-      connectedDemo: await connectedDemoMaterializedFor(projectId),
-    });
+    const files = rendered.files;
 
     const existingManifest = await readRepoManifest(
       { owner: repo.owner, repo: repo.repo },
