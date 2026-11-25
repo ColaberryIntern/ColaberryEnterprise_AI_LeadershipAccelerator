@@ -40,7 +40,8 @@ function childEnv(home) {
 }
 
 export function createEngine({ codexBin, model, port, workspace }) {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-home-'));
+  // Never under /tmp: the agent's commands can write there, and this file IS their sandbox policy.
+  const home = fs.mkdtempSync(path.join(os.homedir(), '.codex-build-'));
   fs.writeFileSync(path.join(home, 'config.toml'), codexConfigToml({ model, proxyPort: port }));
   return { codexBin, home, workspace, port };
 }
