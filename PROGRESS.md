@@ -18885,3 +18885,10 @@ Branch `workstream/career-prep-r2r3`, one PR (https://github.com/ColaberryIntern
   - What changed: YouTube Data API replies validated with Zod
   - Verification: one 12-week run on 992dd74ff, 8 of 12 within 10% (raw rows in wl3.2-clean-run.txt); run one day after the reference
   - Notes: supersedes the two-run 8 of 12 claim
+
+- [ ] Weekly Live Studio WL3.2: one video per week, English only (live check after the quota resets)
+  - Date: 2026-11-25
+  - Session: CC-20261124-iwlu
+  - What changed: a video is evidence for one week; non-English videos are skipped; week 1 title pattern drops "first"
+  - Verification: demand jest suite passes; not yet rerun live
+  - Notes: Ali accepted the one-day gap and the tuned patterns on 2026-11-25

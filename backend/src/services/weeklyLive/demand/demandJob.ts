@@ -20,7 +20,7 @@ import { channelUploads, median, searchIds, videosById, type ApiGet, type Video 
 export interface Angle { queries: readonly string[]; exact: RegExp; }
 /** `exact` is the week's own subject in a title: week 2 is the Skills feature (plural), not one template; week 10 governs agents. */
 export const ANGLES: Readonly<Record<number, Angle>> = {
-  1: { queries: ['claude code tutorial', 'claude code for beginners'], exact: /claude code.*(tutorial|course|beginner|learn|first)|(tutorial|course|beginner|learn|first).*claude code/i },
+  1: { queries: ['claude code tutorial', 'claude code for beginners'], exact: /claude code.*(tutorial|course|beginner|learn)|(tutorial|course|beginner|learn).*claude code/i },
   2: { queries: ['claude skills', 'claude agent skills'], exact: /\bskills\b/i },
   3: { queries: ['build ai agent claude', 'claude api assistant'], exact: /\bagents?\b|assistant|workflow/i },
   4: { queries: ['claude prompt engineering', 'stop prompting claude'], exact: /prompt/i },
@@ -56,10 +56,11 @@ export function channelMedian(uploads: Video[]): { value: number | null; thin: b
   return { value: median(old.map((v) => v.views)), thin: old.length < UPLOADS };
 }
 
-export async function measureWeek(week: number, get: ApiGet, now = Date.now()): Promise<DemandRow> {
+/** `taken`: videos other weeks already use. One video is evidence for one week. */
+export async function measureWeek(week: number, get: ApiGet, now = Date.now(), taken: ReadonlySet<string> = new Set()): Promise<DemandRow> {
   const angle = ANGLES[week];
   const ids = await searchIds(angle.queries, MAX_AGE_DAYS, get, now);
-  const recent = (ids.length ? await videosById(ids, get, now) : []).filter((v) => v.ageDays <= MAX_AGE_DAYS && v.views !== null)
+  const recent = (ids.length ? await videosById(ids, get, now) : []).filter((v) => v.ageDays <= MAX_AGE_DAYS && v.views !== null && v.english && !taken.has(v.id))
     .sort((a, b) => (b.views || 0) - (a.views || 0));
   // The week's own angle comes first: a bigger video about something else is not demand for this week.
   const exact = recent.filter((v) => angle.exact.test(v.title));
@@ -78,6 +79,8 @@ export async function measureWeek(week: number, get: ApiGet, now = Date.now()): 
   return rows.sort((a, b) => (b.score || 0) - (a.score || 0) || (b.views || 0) - (a.views || 0))[0];
 }
 
+const videoId = (url: string | null): string[] => { const id = url?.split('v=')[1]; return id ? [id] : []; };
+
 export interface DemandDeps { get?: ApiGet; today?: string; pause?: (ms: number) => Promise<void>; }
 export interface DemandResult { measured: number[]; cached: number[]; failed: number[]; }
 
@@ -86,10 +89,11 @@ export async function runDemand(deps: DemandDeps = {}): Promise<DemandResult> {
   const spaced: ApiGet = async (path, params) => { await pause(SPACING_MS); return get(path, params); };
   const fresh = await WeeklyLiveDemand.findAll({ where: { measured_at: { [Op.gt]: shiftDays(today, -CACHE_DAYS) }, error: null } });
   const cached = [...new Set(fresh.map((r) => r.week))].sort((a, b) => a - b);
+  const taken = new Set(fresh.flatMap((r) => videoId(r.video_url)));
   const result: DemandResult = { measured: [], cached, failed: [] };
   for (const week of Object.keys(ANGLES).map(Number).filter((w) => !cached.includes(w))) {
     let row: DemandRow;
-    try { row = await measureWeek(week, spaced); result.measured.push(week); } catch (e) {
+    try { row = await measureWeek(week, spaced, Date.now(), taken); videoId(row.video_url).forEach((id) => taken.add(id)); result.measured.push(week); } catch (e) {
       const errorClass = classifyError(e);
       console.warn(JSON.stringify({ level: 'warn', service: 'backend', event: 'weekly_live.demand_week', outcome: 'failure', error_class: errorClass, context: { week } }));
       row = { week, video_url: null, video_title: null, channel: null, views: null, channel_median: null, multiple: null, score: null, thin_median: false, error: `${errorClass}: ${e instanceof Error ? e.message : 'failed'}`.slice(0, 200) };

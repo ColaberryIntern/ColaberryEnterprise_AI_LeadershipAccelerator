@@ -8,15 +8,18 @@ import { iso8601ToSeconds, youtubeGet } from '../../composer/youtubeClient';
  * Quota: the key is shared with the composer, openclaw and video health, 10,000 units a day. A search
  * is 100 units and every other read is 1, so a full 12-week run is about 2,500 units, once every 7 days.
  */
-export interface Video { id: string; title: string; channel: string; channelId: string; views: number | null; ageDays: number; seconds: number; }
+export interface Video { id: string; title: string; channel: string; channelId: string; views: number | null; ageDays: number; seconds: number; english: boolean; }
 export type ApiGet = (path: string, params: Record<string, string>) => Promise<unknown>;
 
+/** Many channels never set a language tag but name the language, or write in another script. */
+const OTHER_LANGUAGE = /\b(malayalam|hindi|tamil|telugu|kannada|bengali|bangla|marathi|urdu|spanish|español|portugu[eê]s|french|français|german|deutsch|indonesia|arabic|vietnamese)\b|[\p{Script=Devanagari}\p{Script=Arabic}\p{Script=Han}\p{Script=Cyrillic}\p{Script=Malayalam}\p{Script=Tamil}\p{Script=Telugu}\p{Script=Hangul}\p{Script=Hiragana}]/iu;
 const DAY_MS = 86_400_000;
 /** Shorts run up to 3 minutes and earn views differently, so they are never compared with full videos. */
 const SHORT_MAX_SECONDS = 180;
 
 const VideoItem = z.object({
-  id: z.string(), snippet: z.object({ title: z.string(), channelTitle: z.string(), channelId: z.string(), publishedAt: z.string() }),
+  id: z.string(), snippet: z.object({ title: z.string(), channelTitle: z.string(), channelId: z.string(), publishedAt: z.string(),
+    defaultAudioLanguage: z.string().optional(), defaultLanguage: z.string().optional() }),
   statistics: z.object({ viewCount: z.string().regex(/^\d+$/).optional() }).optional(), contentDetails: z.object({ duration: z.string().optional() }).optional(),
 });
 const SearchItem = z.object({ id: z.object({ videoId: z.string().optional() }) });
@@ -36,6 +39,13 @@ export function median(xs: (number | null)[]): number | null {
   return s.length % 2 ? s[i] : Math.round((s[i - 1] + s[i]) / 2);
 }
 
+/** relevanceLanguage is only a hint to YouTube. The spoken language decides, else the title's; unmarked videos are kept. */
+export function isEnglish(s: { defaultAudioLanguage?: string; defaultLanguage?: string; title: string; channelTitle: string }): boolean {
+  const tag = s.defaultAudioLanguage || s.defaultLanguage;
+  if (tag && tag !== 'zxx' && !/^en\b/i.test(tag)) return false;
+  return !OTHER_LANGUAGE.test(`${s.title} ${s.channelTitle}`);
+}
+
 /** Full-length videos among these ids. A hidden view count is null, never 0. */
 export async function videosById(ids: string[], get: ApiGet, now: number): Promise<Video[]> {
   const out: Video[] = [];
@@ -43,7 +53,7 @@ export async function videosById(ids: string[], get: ApiGet, now: number): Promi
     for (const v of items(await get('videos', { part: 'snippet,statistics,contentDetails', id: ids.slice(i, i + 50).join(','), maxResults: '50' }), VideoItem)) {
       const seconds = iso8601ToSeconds(v.contentDetails?.duration || '');
       if (seconds <= SHORT_MAX_SECONDS) continue;
-      out.push({ id: v.id, title: v.snippet.title, channel: v.snippet.channelTitle, channelId: v.snippet.channelId, seconds,
+      out.push({ id: v.id, title: v.snippet.title, channel: v.snippet.channelTitle, channelId: v.snippet.channelId, seconds, english: isEnglish(v.snippet),
         views: v.statistics?.viewCount === undefined ? null : Number(v.statistics.viewCount),
         ageDays: Math.floor((now - Date.parse(v.snippet.publishedAt)) / DAY_MS) });
     }

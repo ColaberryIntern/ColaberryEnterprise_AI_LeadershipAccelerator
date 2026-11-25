@@ -1,13 +1,13 @@
 import { WeeklyLiveDemand } from '../../../../models/WeeklyLive';
 import { ANGLES, channelMedian, demandScore, latestDemand, measureWeek, runDemand } from '../demandJob';
-import { channelUploads, median, searchIds, videosById, type ApiGet, type Video } from '../youtubeApi';
+import { channelUploads, isEnglish, median, searchIds, videosById, type ApiGet, type Video } from '../youtubeApi';
 
 /** WL3.2: API replies, median math, thin flag, cache, and a failed week reported instead of guessed. */
 const NOW = Date.parse('2026-11-25T12:00:00Z');
 const item = (id: string, title: string, views: string | undefined, ageDays: number, duration = 'PT10M', channelId = 'UCchan') => ({ id,
   snippet: { title, channelTitle: 'Chan', channelId, publishedAt: new Date(NOW - ageDays * 86_400_000).toISOString() },
   statistics: views === undefined ? {} : { viewCount: views }, contentDetails: { duration } });
-const vid = (views: number | null, ageDays: number): Video => ({ id: 'x', title: 't', channel: '', channelId: '', views, ageDays, seconds: 600 });
+const vid = (views: number | null, ageDays: number): Video => ({ id: 'x', title: 't', channel: '', channelId: '', views, ageDays, seconds: 600, english: true });
 /** A fake API over fixed videos: search returns `found`, the channel's uploads are `uploads`. */
 const api = (found: ReturnType<typeof item>[], uploads: ReturnType<typeof item>[] = []): ApiGet => async (path, p) => {
   if (path === 'search') return { items: found.map((v) => ({ id: { videoId: v.id } })) };
@@ -58,6 +58,16 @@ it('measureWeek picks the most viewed video on the exact angle over a bigger one
     .toMatchObject({ week: 5, video_url: 'https://www.youtube.com/watch?v=v1', views: 639144, channel_median: 84000, multiple: 7.6, score: 5, thin_median: false });
 });
 
+it('a video another week uses, or one not in English, is not picked', async () => {
+  const found = [item('v1', 'MCP Explained', '900000', 5), item('v2', 'MCP in Malayalam', '800000', 5), item('v3', 'MCP basics', '10000', 5)];
+  const r = await measureWeek(5, api(found, Array.from({ length: 10 }, (_, i) => item(`u${i}`, 'up', '9000', 21))), NOW, new Set(['v1']));
+  expect(r.video_url).toContain('v3');
+});
+it.each([[{ defaultAudioLanguage: 'ml' }, false], [{ defaultAudioLanguage: 'en-US' }, true], [{ defaultLanguage: 'hi' }, false], [{ defaultAudioLanguage: 'en', defaultLanguage: 'hi' }, true],
+  [{}, true], [{ channelTitle: 'Brototype Malayalam' }, false], [{ title: 'MCP क्या है' }, false]])('%j in English: %s', (s, yes) => {
+  expect(isEnglish({ title: 'MCP', channelTitle: 'C', ...(s as object) })).toBe(yes);
+});
+
 it('nothing found scores 1 with no video', async () => {
   expect(await measureWeek(5, api([]), NOW)).toMatchObject({ video_url: null, score: 1 });
 });
@@ -76,6 +86,15 @@ describe('runDemand', () => {
     expect(get).toHaveBeenCalledTimes(2); // two queries, nothing found
     expect(pause).toHaveBeenCalledTimes(2);
     expect(JSON.stringify((find.mock.calls[0][0] as { where: { error: null } }).where.error)).toBe('null');
+  });
+  it('two weeks in one run never use the same video, and cached weeks keep theirs', async () => {
+    jest.spyOn(WeeklyLiveDemand, 'findAll').mockResolvedValue([{ week: 1, video_url: 'https://www.youtube.com/watch?v=v1' }] as never);
+    const at = (id: string, views: string) => ({ ...item(id, 'Claude agent MCP build', views, 0), snippet: { ...item(id, 'x', views, 0).snippet, title: 'Claude agent MCP build', publishedAt: new Date(Date.now() - 86_400_000).toISOString() } });
+    await runDemand({ get: api([at('v1', '900'), at('v2', '800'), at('v3', '700')]), pause: async () => undefined, today: '2026-11-24' });
+    const used = upsert.mock.calls.map((c) => (c[0] as { video_url: string | null }).video_url).filter(Boolean);
+    expect(used.length).toBe(2);
+    expect(new Set(used).size).toBe(2);
+    expect(used.join()).not.toContain('v=v1');
   });
   it('a failed week is stored with its error and no score; the rest continue', async () => {
     jest.spyOn(WeeklyLiveDemand, 'findAll').mockResolvedValue([] as never);
