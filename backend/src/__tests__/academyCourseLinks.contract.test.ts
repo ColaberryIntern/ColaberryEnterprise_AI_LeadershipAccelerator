@@ -40,7 +40,11 @@ const ALLOWED: ReadonlyArray<{ file: string; why: string }> = [
   },
   {
     file: 'services/__tests__/anthropicCatalogScraper.test.ts',
-    why: 'URL-normalization fixtures (trailing slash, casing, query strings). Moves with the scraper itself, which still reads Skilljar selectors - tracked as the next step of this migration.',
+    why: 'URL-normalization fixtures (trailing slash, casing, query strings). Their host is irrelevant to what they assert.',
+  },
+  {
+    file: 'services/content/__tests__/academyLabelCopy.test.ts',
+    why: 'The sibling lint, which bans the user-facing Skilljar PHRASINGS in frontend/src. It has to name the host it forbids, the same way this file does. Found the hard way: both guards were green on their own branches and only met on main.',
   },
 ];
 
