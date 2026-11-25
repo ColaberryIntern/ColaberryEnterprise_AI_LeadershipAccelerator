@@ -157,6 +157,48 @@ Until then the sweep **reports** the debt: `plan_repo_sync_board_plan_drift` nam
 stories the board has that the published plan has never heard of, with the remedy command.
 That is the signal whose absence let this run for 23 days in October and 11 days in November.
 
+## Production-verified, 25 Nov 12:41 UTC
+
+#4409 merged at 11:24 UTC and was deployed by 11:30. The registry row was created at 11:31,
+`enabled`, schedule `41 */6 * * *`. Checked before the first run: the auto-classifier set
+`autonomy_level: observe`, which sounds like it would stop the job writing, and does not.
+`agentControlDecision` reads only `enabled` and `status = 'paused'`; autonomy level is consumed
+by `agentAuthorizationService`, which this job never calls.
+
+The first unattended run, correlation id `1abb5809`:
+
+```
+attempted 7   written 1   unchanged 6   skipped 3 (no repo)   failed 0   drifted 0
+```
+
+**I predicted it would write nothing, and that was wrong.** It wrote three files to
+`MihretColaberry1/ColaberryInternship`, commit `3956b164`, and the diff is the whole reason
+this change exists:
+
+| File | What moved |
+|---|---|
+| `.colaberry/agent-domain.json` | `verified` 6 to 7. `product_experience.CAP.design_token_drift_audit` went from `in_progress`, 0 of 1 criteria, to `complete`. |
+| `.colaberry/manifest.json` | New `generated_at` and correlation id. `plan_version` stayed 3 and `plan_sha256` was BYTE-IDENTICAL. |
+| `.colaberry/progress.json` | The matching criteria state. |
+
+Two things that diff proves, neither of which was certain beforehand:
+
+1. **The plan did not change; the delivery did.** Same plan hash, new verification state. Her
+   repo had been telling her 6 verified since her own Sync press on 24 Nov 06:23 UTC while the
+   platform had credited 7. Without the sweep she would have kept reading 6 until she pressed
+   Sync again. That is the same withheld-credit harm that started this, found on a second
+   builder, one run in.
+2. **There is no timestamp churn.** `manifest.json` carries a fresh `generated_at` and
+   correlation id on every render, so the obvious worry is a commit to all seven repos every
+   six hours forever. Six repos came back `changed: 0` in this same run, which settles it
+   empirically rather than by reading the writer: a changed manifest alone does not produce a
+   commit.
+
+One observation, not a defect in this change: the completed story now carries `verified: true`
+with `criteria_passed: null` and `criteria_total: null`, because the renderer treats
+`status = 'complete'` as verified without criteria. Pre-existing behaviour in
+`refreshRepoDocuments`, worth a look if those nulls ever reach a learner-facing surface.
+
 ## Still open after this
 
 1. **The republish half, deliberately NOT ported.** Zero drift measured on 25 Nov (above), so
