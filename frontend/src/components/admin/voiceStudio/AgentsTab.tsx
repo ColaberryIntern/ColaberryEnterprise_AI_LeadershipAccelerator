@@ -29,7 +29,7 @@ export default function AgentsTab(): React.ReactElement {
   const [versions, setVersions] = useState<AgentVersion[]>([]);
   const [editFrom, setEditFrom] = useState<AgentVersion | null>(null);
   const [actionMsg, setActionMsg] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
+  const [busy, setBusy] = useState<ReadonlySet<string>>(new Set()); // versions with an action in flight; actions may overlap
 
   const loadAgents = useCallback(() => {
     listAgents()
@@ -42,6 +42,7 @@ export default function AgentsTab(): React.ReactElement {
   const current = useRef(selected); // the selection now, for work that finishes after the user moved on
   current.current = selected;
   const loadVersions = useCallback((profileId: string) => {
+    if (profileId !== current.current) return; // asked for by work that outlived its selection
     const mine = ++request.current;
     listVersions(profileId).then((v) => { if (mine === request.current) setVersions(v); }).catch((e) => { if (mine === request.current) setError(studioErrorMessage(e, 'Versions could not be loaded. Try again.')); });
   }, []);
@@ -52,17 +53,17 @@ export default function AgentsTab(): React.ReactElement {
   const act = async (v: AgentVersion, action: LifecycleAction) => {
     const agent = selected;
     const here = () => current.current === agent;
-    setBusy(v.id);
+    setBusy((b) => new Set(b).add(v.id));
     setActionMsg(null);
     try {
       await changeStatus(v.id, action);
       if (here()) setActionMsg({ tone: 'success', text: `Version ${v.version}: ${action === 'approve' ? 'approved' : action === 'publish' ? 'published. New calls use it.' : 'retired'}.` });
-      if (agent && here()) loadVersions(agent);
+      if (agent) loadVersions(agent);
       loadAgents();
     } catch (e) {
       if (here()) setActionMsg({ tone: 'danger', text: studioErrorMessage(e, `Version ${v.version} could not be changed. Try again.`) });
     } finally {
-      setBusy(null);
+      setBusy((b) => { const n = new Set(b); n.delete(v.id); return n; });
     }
   };
 
@@ -110,7 +111,7 @@ export default function AgentsTab(): React.ReactElement {
                           <div className="d-inline-flex flex-wrap gap-1 justify-content-end">
                             <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => setEditFrom(v)}>Edit a copy</button>
                             {ACTIONS[v.status].map((a) => (
-                              <button key={a.action} type="button" className={`btn btn-sm ${a.style}`} disabled={busy === v.id} onClick={() => { void act(v, a.action); }}>{a.label}</button>
+                              <button key={a.action} type="button" className={`btn btn-sm ${a.style}`} disabled={busy.has(v.id)} onClick={() => { void act(v, a.action); }}>{a.label}</button>
                             ))}
                           </div>
                         </td>

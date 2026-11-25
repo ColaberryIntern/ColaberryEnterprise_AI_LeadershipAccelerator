@@ -199,6 +199,68 @@ describe('Agents tab', () => {
     expect(q('[data-testid="action-msg"]')).toBeNull();
   });
 
+  describe('VS3.7: work that outlives the selected agent', () => {
+    const B: AgentCard = { ...CARD, profile: { ...CARD.profile, id: 'p2', name: 'Second agent' } };
+    const button = (label: string) => Array.from(container.querySelectorAll('button')).find((b) => (b.textContent ?? '').includes(label)) as HTMLButtonElement;
+    const press = async (label: string) => { await act(async () => { button(label).click(); }); await settle(); };
+    beforeEach(() => {
+      mockApi.listAgents.mockResolvedValue([CARD, B]);
+      mockApi.listVersions.mockImplementation((id: string) => Promise.resolve([{ ...VERSION, id: id === 'p2' ? 'vb' : 'va', version: id === 'p2' ? 22 : 11 }]));
+    });
+
+    it('a late draft save does not load its agent under the next one', async () => {
+      let finish: (r: unknown) => void = () => undefined;
+      mockApi.saveDraft.mockImplementation(() => new Promise((r) => { finish = r; }));
+      await renderAt('/admin/voice-studio/agents');
+      await press('Edit a copy');
+      await press('Save as draft');
+      await press('Second agent');
+      await act(async () => { finish({ created: true, version: VERSION }); });
+      await settle();
+      expect(container.querySelector('tbody')?.textContent).toContain('v22');
+      expect(container.querySelector('tbody')?.textContent).not.toContain('v11');
+    });
+
+    it('a late failure shows nothing under the next agent and leaves its buttons usable', async () => {
+      let fail: (e: Error) => void = () => undefined;
+      mockApi.changeStatus.mockImplementation(() => new Promise((_r, j) => { fail = j; }));
+      await renderAt('/admin/voice-studio/agents');
+      await press('Publish');
+      await press('Second agent');
+      await act(async () => { fail(new Error('late')); });
+      await settle();
+      expect(q('[data-testid="action-msg"]')).toBeNull();
+      expect(button('Publish').disabled).toBe(false);
+    });
+
+    it('back on its own agent, the result is shown and the button is released', async () => {
+      let finish: (v: AgentVersion) => void = () => undefined;
+      mockApi.changeStatus.mockImplementation(() => new Promise((r) => { finish = r; }));
+      await renderAt('/admin/voice-studio/agents');
+      const own = CARD.profile.name;
+      await press('Publish');
+      await press('Second agent');
+      await press(own);
+      expect(button('Publish').disabled).toBe(true);
+      await act(async () => { finish({ ...VERSION, status: 'published' }); });
+      await settle();
+      expect(q('[data-testid="action-msg"]')).not.toBeNull();
+      expect(button('Publish').disabled).toBe(false);
+    });
+
+    it('one action finishing does not release another still in flight', async () => {
+      const finish: Record<string, (v: AgentVersion) => void> = {};
+      mockApi.changeStatus.mockImplementation((id: string) => new Promise((r) => { finish[id] = r; }));
+      await renderAt('/admin/voice-studio/agents');
+      await press('Publish');
+      await press('Second agent');
+      await press('Publish');
+      await act(async () => { finish.va({ ...VERSION, status: 'published' }); });
+      await settle();
+      expect(button('Publish').disabled).toBe(true);
+    });
+  });
+
   it('a successful publish says new calls use it and reloads', async () => {
     mockApi.listAgents.mockResolvedValue([CARD]);
     mockApi.listVersions.mockResolvedValue([VERSION]);
