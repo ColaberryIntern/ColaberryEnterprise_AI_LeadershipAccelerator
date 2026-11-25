@@ -138,6 +138,15 @@ belongs in its own ticket rather than riding in on a display change.
 | Frontend, revenue suites | **8 suites / 169 tests pass** (13 new) |
 | Backend project typecheck | clean, with a planted control reported |
 | Frontend project typecheck | clean for every file touched |
+| Mutation check | **11 of 11 killed**, 0 survived, control green first |
+
+Eleven mutations, each one a change that would make the page assert something nobody measured:
+a missing table reported as a measured zero; the nameable count summed so it could exceed its
+own population; the copy frozen at "none can be named"; a linked row at this stage hidden; a
+money figure added to the tier; the alias guard dropped; the count rendered as a currency
+amount; the explanation removed; the unlock sentence removed; the lifecycle warning shown
+unconditionally; and the block rendered when no tier exists. All eleven killed on the first
+pass.
 
 **The typecheck is real this time.** TypeScript 5.7.3 was installed into the session scratchpad
 (the version `package.json` declares; the hoisted local install is 4.9.5, which aborts inside
