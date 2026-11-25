@@ -271,3 +271,11 @@
 @media (prefers-reduced-motion: reduce) {
   .clv-rail, .clv-rail-text { transition: none; }
 }
+
+/* Weekly Live recap panel (WL1.4): a modal over the class list. */
+.cls-modal { position: fixed; inset: 0; background: rgba(16, 26, 46, .55); display: flex; align-items: flex-start; justify-content: center; padding: 24px 12px; overflow-y: auto; z-index: 1050; }
+.cls-modal-body { background: var(--surface-card, #fff); border-radius: 12px; width: 100%; max-width: 720px; padding: 18px 20px; display: flex; flex-direction: column; gap: 8px; }
+.cls-recap-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }
+.cls-recap-actions .cls-btn-primary { width: auto; }
+.cls-recap-idea { display: grid; grid-template-columns: 64px minmax(0, 1fr) minmax(0, 2fr); gap: 6px; }
+@media (max-width: 600px) { .cls-recap-idea { grid-template-columns: 56px minmax(0, 1fr); } .cls-recap-idea input:last-child { grid-column: 1 / -1; } }
