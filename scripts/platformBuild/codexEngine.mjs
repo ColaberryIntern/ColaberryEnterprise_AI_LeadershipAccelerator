@@ -52,7 +52,7 @@ export function createEngine({ codexBin, model, port, workspace }) {
  * "pass" every probe that expects a failure.
  */
 export function assertSandbox(engine) {
-  const run = (script, ...args) => spawnSync(engine.codexBin, ['sandbox', '--', '/bin/sh', '-c', script, 'sh', ...args], {
+  const run = (script, ...args) => spawnSync(engine.codexBin, ['sandbox', '--permission-profile', ':workspace', '--cd', engine.workspace, '--', '/bin/sh', '-c', script, 'sh', ...args], {
     cwd: engine.workspace, env: childEnv(engine.home), timeout: 60_000, encoding: 'utf8',
   });
   const fail = (what) => { throw new EngineError('SandboxUnavailable', `sandbox check failed: ${what}`); };
@@ -82,7 +82,7 @@ export function runCodex(engine, { prompt, timeoutMs }) {
     let timedOut = false;
     const child = spawn(engine.codexBin, [
       'exec', '--json', '--strict-config', '--ephemeral', '--ignore-rules', '--skip-git-repo-check',
-      '--sandbox', 'workspace-write', '--cd', engine.workspace, '-',
+      '--cd', engine.workspace, '-',
     ], { env: childEnv(engine.home), stdio: ['pipe', 'pipe', 'pipe'], detached: process.platform !== 'win32' });
 
     let stderrTail = '';

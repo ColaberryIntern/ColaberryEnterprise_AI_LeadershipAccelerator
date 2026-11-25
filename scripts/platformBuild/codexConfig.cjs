@@ -30,7 +30,9 @@ function codexConfigToml({ model, proxyPort }) {
     'model_provider = "build-proxy"',
     'model_reasoning_effort = "high"',
     'approval_policy = "never"',
-    'sandbox_mode = "workspace-write"',
+    // One profile for `codex exec` and `codex sandbox` (which ignores the legacy sandbox_mode), so
+    // the sandbox that is proven is the one the agent runs in. :workspace grants no network.
+    'default_permissions = ":workspace"',
     'web_search = "disabled"',
     // The workspace carries a CLAUDE.md managed block, as a student's session would read.
     'project_doc_fallback_filenames = ["CLAUDE.md"]',
@@ -40,10 +42,6 @@ function codexConfigToml({ model, proxyPort }) {
     'name = "build-proxy"',
     `base_url = "http://127.0.0.1:${proxyPort}/v1"`,
     'wire_api = "responses"',
-    '',
-    '[sandbox_workspace_write]',
-    'network_access = false',
-    'exclude_slash_tmp = false',
     '',
     '[shell_environment_policy]',
     'inherit = "none"',

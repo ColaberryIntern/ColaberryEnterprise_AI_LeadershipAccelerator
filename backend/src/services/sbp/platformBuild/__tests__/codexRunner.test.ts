@@ -15,7 +15,8 @@ describe('codexConfigToml', () => {
   const toml: string = config.codexConfigToml({ model: 'gpt-6.2-sol', proxyPort: 4100 });
 
   it('keeps the network, web search and the environment closed, and never asks', () => {
-    expect(toml).toContain('network_access = false');
+    expect(toml).toContain('default_permissions = ":workspace"');
+    expect(toml).not.toMatch(/network_access = true|danger|sandbox_mode/);
     expect(toml).toContain('web_search = "disabled"');
     expect(toml).toMatch(/\[shell_environment_policy\]\ninherit = "none"/);
     expect(toml).toContain('approval_policy = "never"');
