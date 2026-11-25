@@ -46,7 +46,16 @@ export type OutlineFailure =
   | 'TimeoutError'
   | 'NetworkError'
   | 'UpstreamUnavailable'
-  | 'SelectorMiss';
+  | 'SelectorMiss'
+  /**
+   * Unreachable by construction: `scrapeOutline` returns a reason on every path
+   * that yields an empty outline. If this ever appears in a log, the plumbing
+   * between the extractor and the reporter has been broken by a refactor - and
+   * that matters, because the alternative was defaulting to 'SelectorMiss' and
+   * sending whoever reads the alert to inspect markup for what may have been a
+   * timeout or a 404.
+   */
+  | 'ContractViolation';
 
 export interface CatalogScraperRunResult {
   source: 'curriculum_course_links' | 'fallback';
@@ -204,7 +213,7 @@ async function syncCourse(
       log('info', 'course_created', { url: course.url, outcome: 'success', change_flagged: hasOutline });
       return hasOutline
         ? { url: course.url, outcome: 'created' }
-        : { url: course.url, outcome: 'created', error_class: failure ?? 'SelectorMiss' };
+        : { url: course.url, outcome: 'created', error_class: failure ?? 'ContractViolation' };
     }
 
     // Guard: a fresh scrape that yields an empty outline almost always means a
@@ -223,9 +232,9 @@ async function syncCourse(
       log('warn', 'outline_empty_skipped', {
         url: course.url,
         outcome: 'partial',
-        error_class: failure ?? 'SelectorMiss',
+        error_class: failure ?? 'ContractViolation',
       });
-      return { url: course.url, outcome: 'unchanged', error_class: failure ?? 'SelectorMiss' };
+      return { url: course.url, outcome: 'unchanged', error_class: failure ?? 'ContractViolation' };
     }
 
     const titleChanged = existing.title !== course.title;
