@@ -13,7 +13,9 @@ export type AgentToolName =
   | 'read_attachments'
   /** Voice AI Studio (VS3.1): read-only phone tools, run through the voice ToolBroker. */
   | 'next_open_strategy_slots'
-  | 'admissions_knowledge';
+  | 'admissions_knowledge'
+  /** VS3.2: ask to hand the call to a teammate. The engine does it; the model never sees a number. */
+  | 'transfer_to_human';
 
 /** Every agent that can hold a tool grant. */
 export type AgentKey =

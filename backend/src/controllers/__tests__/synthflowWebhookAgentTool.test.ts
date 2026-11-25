@@ -10,6 +10,7 @@ const m = {
   sms: jest.fn(),
   update: jest.fn(),
   findOne: jest.fn(),
+  claim: jest.fn(),
 };
 
 jest.mock('../../config/env', () => ({ env: { synthflowWebhookToken: 't' } }));
@@ -32,6 +33,11 @@ jest.mock('../../services/settingsService', () => ({ getTestOverrides: (...a: un
 jest.mock('../../utils/piiRedaction', () => ({ redactForLogs: (s: string) => s }));
 jest.mock('../../services/ghlMirrorService', () => ({ mirrorToGhlInBackground: jest.fn(), resolveGhlContactId: jest.fn().mockResolvedValue(null) }));
 jest.mock('../../services/agents/tools/agentCallCompletion', () => ({ completeAgentToolCallFromWebhook: (...a: unknown[]) => m.complete(...a) }));
+// VS3.2: the real payload normalizer, a faked DB claim (its SQL is proven in completion.integration).
+jest.mock('../../services/voice/postcall/completion', () => ({
+  ...jest.requireActual('../../services/voice/postcall/completion'),
+  claimCompletion: (...a: unknown[]) => m.claim(...a),
+}));
 
 import { handleSynthflowCallComplete } from '../synthflowWebhookController';
 
@@ -55,6 +61,7 @@ beforeEach(() => {
   m.update.mockResolvedValue(undefined);
   m.complete.mockResolvedValue({ outcome: 'summarized' });
   m.testOverrides.mockResolvedValue({ enabled: false });
+  m.claim.mockResolvedValue({ firstDelivery: true });
   jest.spyOn(console, 'log').mockImplementation(() => undefined);
   jest.spyOn(console, 'warn').mockImplementation(() => undefined);
 });
@@ -79,4 +86,34 @@ it('CONTROL: a non-agent call keeps the old path (no agent completion; post-call
   expect(m.complete).not.toHaveBeenCalled();
   expect(m.activity.mock.calls[0][0].subject).toBe('Maya called Pat (1m 5s)');
   expect(m.testOverrides).toHaveBeenCalled();
+});
+
+it('VS3.2 replay: a redelivered completion sends no second text and writes no second timeline entry', async () => {
+  m.findOne.mockResolvedValue(row({ source: 'interest' }));
+  m.claim.mockResolvedValue({ firstDelivery: false });
+  const r = res();
+  await handleSynthflowCallComplete(req(), r as never);
+  await flush();
+  expect(m.claim).toHaveBeenCalledWith('log-9', expect.objectContaining({ providerCallId: 'call-9', status: 'completed', completed: true }));
+  expect(m.activity).not.toHaveBeenCalled();
+  expect(m.testOverrides).not.toHaveBeenCalled(); // post-call SMS path never starts
+  expect(m.sms).not.toHaveBeenCalled();
+  expect(r.json).toHaveBeenCalledWith({ ok: true, matched: true });
+});
+
+it('VS3.2 replay: idempotent branches still run, so a retry after a mid-way failure can finish them', async () => {
+  m.findOne.mockResolvedValue(row({ source: 'agent-tool', agent_name: 'Reese' }));
+  m.claim.mockResolvedValue({ firstDelivery: false });
+  await handleSynthflowCallComplete(req(), res() as never);
+  await flush();
+  expect(m.complete).toHaveBeenCalledTimes(1);
+  expect(m.activity).not.toHaveBeenCalled();
+});
+
+it('VS3.2: the old unconditional row update is gone (the claim is the only write of the completion)', async () => {
+  m.findOne.mockResolvedValue(row({ source: 'interest' }));
+  await handleSynthflowCallComplete(req(), res() as never);
+  await flush();
+  expect(m.update).not.toHaveBeenCalled();
+  expect(m.claim).toHaveBeenCalledTimes(1);
 });

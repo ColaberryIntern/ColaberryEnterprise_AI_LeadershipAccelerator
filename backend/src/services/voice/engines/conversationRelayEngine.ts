@@ -25,6 +25,7 @@ import type { VoiceLlm, VoiceMessage } from './claudeVoiceLlm';
 import { endSession, languageSwitch, parseRelayMessage, SUPPORTED_LANGUAGES, textToken, type RelayInbound } from './relayProtocol';
 import type { ToolBroker } from './toolBroker';
 import type { VoiceProfile } from './voiceProfiles';
+import { TRANSFER_REASON } from '../transfer/humanTransfer';
 
 export interface RelayTransport { send(text: string): void; close(code?: number): void }
 
@@ -39,7 +40,15 @@ export interface RelayDeps {
   callMatches: (callId: string, callSid: string) => Promise<boolean>;
   now: () => number;
   log: (line: Record<string, unknown>) => void;
+  /**
+   * VS3.2: called ONCE when the session ends, with the plain-text transcript (what the caller said
+   * and what the agent actually spoke, cut at interruptions). Post-call stores it on the call's
+   * communication log. Never logged.
+   */
+  onTranscript?: (callId: string, transcript: string) => void;
 }
+
+export const MAX_TRANSCRIPT_LINES = 400;
 
 export const MAX_TOOL_ROUNDS = 2;
 export const MAX_HISTORY = 24;
@@ -56,6 +65,13 @@ export class RelayConnection {
   private settingUp = false;
   private closed = false;
   private lang: string | null = null;
+  private readonly transcript: string[] = [];
+  private transcriptSent = false;
+  /** VS3.2: a transfer_to_human tool returned the transfer control in the current answer. */
+  private pendingTransfer = false;
+  private handedOff = false;
+  /** What the agent said in the current answer, for the transcript (spoken resets per tool round). */
+  private turnSaid = '';
 
   constructor(private readonly t: RelayTransport, private readonly d: RelayDeps) {}
 
@@ -101,6 +117,21 @@ export class RelayConnection {
   onClose(): void {
     this.closed = true;
     this.handle?.close('socket_closed');
+    this.emitTranscript();
+  }
+
+  private line(speaker: 'Agent' | 'Caller', text: string): void {
+    const t = text.replace(/\s+/g, ' ').trim();
+    if (t && this.transcript.length < MAX_TRANSCRIPT_LINES) this.transcript.push(`${speaker}: ${t}`);
+  }
+
+  /** Hand the transcript over once, however the session ended. */
+  private emitTranscript(): void {
+    if (this.transcriptSent || !this.callId || !this.d.onTranscript) return;
+    this.transcriptSent = true;
+    try { this.d.onTranscript(this.callId, this.transcript.join('\n')); } catch (e) {
+      this.log('warn', 'voice_relay_transcript_sink_failed', { error_class: (e as { name?: string })?.name || 'SinkError' });
+    }
   }
 
   private async setup(m: Extract<RelayInbound, { type: 'setup' }>): Promise<void> {
@@ -124,8 +155,10 @@ export class RelayConnection {
     this.handle.dispatch({ type: 'connected' });
     this.handle.dispatch({ type: 'greeting_done' }); // Twilio speaks the TwiML welcomeGreeting itself
     this.history.push({ role: 'assistant', content: this.d.profile.greeting });
+    this.line('Agent', this.d.profile.greeting);
     this.handle.onEnd((reason) => {
-      if (this.closed) return;
+      this.emitTranscript();
+      if (this.closed || this.handedOff) return; // a transfer already sent its own end
       this.t.send(endSession());
       this.log('info', 'voice_relay_end_sent', { reason });
     });
@@ -144,6 +177,7 @@ export class RelayConnection {
     const r = h.dispatch({ type: 'caller_turn' });
     if (!r.ok) return;
     this.push({ role: 'user', content: text });
+    this.line('Caller', text);
     await this.answer(h);
   }
 
@@ -164,6 +198,12 @@ export class RelayConnection {
     const last = this.history[this.history.length - 1];
     if (last?.role === 'assistant' && typeof last.content === 'string') last.content = said || '(interrupted)';
     else if (said) this.push({ role: 'assistant', content: said });
+    // The transcript keeps only what the caller heard, like the history.
+    const tail = this.transcript[this.transcript.length - 1];
+    if (tail?.startsWith('Agent: ')) {
+      if (said) this.transcript[this.transcript.length - 1] = `Agent: ${said.replace(/\s+/g, ' ')} (interrupted)`;
+      else this.transcript.pop();
+    } else if (said) this.line('Agent', `${said} (interrupted)`);
   }
 
   /** One answer: up to MAX_TOOL_ROUNDS tool rounds, streamed, abandoned the moment it goes stale. */
@@ -174,6 +214,7 @@ export class RelayConnection {
     const signal = AbortSignal.any([h.generationSignal(), local.signal]);
     let started = false;
     let spoken = '';
+    this.turnSaid = ''; // everything said this answer, across tool rounds (spoken resets per round)
     const start = (): boolean => {
       if (started) return h.accepts(turnId, genId);
       started = h.dispatch({ type: 'generation_started', generationId: genId }).ok;
@@ -183,6 +224,7 @@ export class RelayConnection {
       if (!start()) return false;
       this.t.send(textToken(delta, last));
       spoken += delta;
+      this.turnSaid += delta;
       if (!last && h.addChars(delta.length)) { local.abort(); this.t.send(textToken('', true)); }
       return true;
     };
@@ -206,15 +248,16 @@ export class RelayConnection {
         const out = await this.broker!.run(c.id, c.name, c.input);
         h.toolFinished(c.id, out.committed);
         if (out.errorClass) this.log('warn', 'voice_tool_failed', { tool: c.name, error_class: out.errorClass });
-        return { type: 'tool_result' as const, tool_use_id: c.id, content: out.content, is_error: out.isError };
+        return { type: 'tool_result' as const, tool_use_id: c.id, content: out.content, is_error: out.isError, control: out.control };
       }));
       // The tool round enters history ATOMICALLY and only if this answer is still current. While the
       // tool ran, the caller may have spoken (a new turn) or interrupted: their message is already in
       // history, and a tool_use separated from its tool_result is a 400 from the API on every later
       // turn (verifier attempt 1). A stale round is dropped; the tool run itself was still recorded.
       if (signal.aborted || (started && !h.accepts(turnId, genId))) return;
+      if (results.some((x) => x.control === 'transfer')) this.pendingTransfer = true;
       this.push({ role: 'assistant', content: r.assistantContent });
-      this.push({ role: 'user', content: results });
+      this.push({ role: 'user', content: results.map(({ control: _c, ...rest }) => rest) });
       spoken = ''; // already in history inside assistantContent; do not add it twice
     }
     say(SORRY, true);
@@ -223,7 +266,16 @@ export class RelayConnection {
 
   private finishAnswer(h: SessionHandle, genId: number, spoken: string): void {
     if (spoken.trim()) this.push({ role: 'assistant', content: spoken.trim() });
+    this.line('Agent', this.turnSaid);
+    this.turnSaid = '';
     h.dispatch({ type: 'generation_done', generationId: genId });
+    if (this.pendingTransfer && !this.handedOff) {
+      // Hand the call to a person: Twilio finishes speaking, then requests our <Connect action> URL.
+      this.handedOff = true;
+      this.t.send(endSession(JSON.stringify({ reason: TRANSFER_REASON })));
+      this.log('info', 'voice_relay_handoff_sent', { reason: TRANSFER_REASON });
+      h.close('transfer_to_human');
+    }
   }
 
   private shutdown(reason: string, code: number): void {

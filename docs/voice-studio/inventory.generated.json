@@ -1,6 +1,6 @@
 {
  "generatedFrom": "git ls-files",
- "total": 241,
+ "total": 247,
  "byRole": {
   "DISPATCH": 3,
   "INGEST": 3,
@@ -8,8 +8,8 @@
   "CALLER": 11,
   "CONFIG": 20,
   "UI": 22,
-  "CONSUMER": 55,
-  "MENTION": 121
+  "CONSUMER": 60,
+  "MENTION": 122
  },
  "rows": [
   {
@@ -99,6 +99,15 @@
    "role": "MENTION",
    "callTypes": [],
    "envVars": []
+  },
+  {
+   "path": "backend/src/controllers/voiceTransferController.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_PUBLIC_BASE_URL",
+    "VOICE_TRANSFER_NUMBER"
+   ]
   },
   {
    "path": "backend/src/controllers/voiceTwilioWebhookController.ts",
@@ -1151,6 +1160,12 @@
    "envVars": []
   },
   {
+   "path": "backend/src/services/synthflowPostCallSms.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
    "path": "backend/src/services/synthflowService.ts",
    "role": "DISPATCH",
    "callTypes": [],
@@ -1241,8 +1256,11 @@
    "envVars": [
     "VOICE_ENGINE_A_MODEL",
     "VOICE_ENGINE_B_MODEL",
+    "VOICE_PUBLIC_BASE_URL",
     "VOICE_REALTIME_VOICE",
     "VOICE_RELAY_VOICE",
+    "VOICE_STUDIO_ENABLED",
+    "VOICE_TEST_ENABLED",
     "VOICE_WS_BASE_URL"
    ]
   },
@@ -1302,6 +1320,24 @@
   },
   {
    "path": "backend/src/services/voice/gateway/voiceReservation.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/postcall/completion.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/postcall/directCompletion.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/postcall/directCompletionRuntime.ts",
    "role": "CONSUMER",
    "callTypes": [],
    "envVars": []
@@ -1392,6 +1428,14 @@
    ]
   },
   {
+   "path": "backend/src/services/voice/transfer/humanTransfer.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_TRANSFER_NUMBER"
+   ]
+  },
+  {
    "path": "backend/src/services/voice/twilio/correlationToken.ts",
    "role": "MENTION",
    "callTypes": [],
@@ -1446,6 +1490,7 @@
     "VOICE_TEST_ENABLED",
     "VOICE_TEST_MAX_ATTEMPTS",
     "VOICE_TEST_MAX_DURATION_SECONDS",
+    "VOICE_TRANSFER_NUMBER",
     "VOICE_WS_BASE_URL"
    ]
   },

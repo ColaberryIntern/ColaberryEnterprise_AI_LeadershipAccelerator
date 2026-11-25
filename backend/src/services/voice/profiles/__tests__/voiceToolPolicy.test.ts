@@ -31,12 +31,12 @@ afterEach(() => {
 });
 
 describe('effectiveVoiceTools (grants from the shared agent tool registry)', () => {
-  it('the registry grants Cory outbound exactly the two read-only tools', () => {
-    expect(Registry.listAgentTools('edu-cory-outbound').sort()).toEqual(['admissions_knowledge', 'next_open_strategy_slots']);
+  it('the registry grants Cory outbound the two read-only lookups and transfer_to_human; a version without transfer does not get it', () => {
+    expect(Registry.listAgentTools('edu-cory-outbound').sort()).toEqual(['admissions_knowledge', 'next_open_strategy_slots', 'transfer_to_human']);
     const r = effectiveVoiceTools(cory);
     expect(r.allowed.map((t) => t.def.name)).toEqual(['admissions_knowledge', 'next_open_strategy_slots']);
-    expect(r.denied).toEqual([{ name: 'book_meeting', reason: 'not_granted_or_switched_off' }]);
-    expect(r.held.sort()).toEqual(['admissions_knowledge', 'next_open_strategy_slots']);
+    expect(r.denied).toEqual([{ name: 'book_meeting', reason: 'not_granted_or_switched_off' }, { name: 'transfer_to_human', reason: 'not_in_version' }]);
+    expect(r.held.sort()).toEqual(['admissions_knowledge', 'next_open_strategy_slots', 'transfer_to_human']);
   });
 
   it('removing a grant in the shared registry denies the voice tool', () => {
@@ -48,7 +48,7 @@ describe('effectiveVoiceTools (grants from the shared agent tool registry)', () 
     process.env.AGENT_TOOLS_DISABLED = ' Admissions_Knowledge ';
     const r = effectiveVoiceTools(cory);
     expect(r.denied).toContainEqual({ name: 'admissions_knowledge', reason: 'not_granted_or_switched_off' });
-    expect(r.held).toEqual(['next_open_strategy_slots']);
+    expect(r.held).toEqual(['next_open_strategy_slots', 'transfer_to_human']);
   });
 
   it('a granted tool whose implementation writes is still refused: voice calls have no human approval step', () => {

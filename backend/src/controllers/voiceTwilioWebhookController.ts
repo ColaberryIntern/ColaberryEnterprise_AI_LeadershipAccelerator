@@ -26,6 +26,7 @@ import { twilioAuthToken } from '../services/voice/twilio/twilioCredentials';
 import { verifyToken, type TokenClaims } from '../services/voice/twilio/correlationToken';
 import { twilioStatusToEvents } from '../services/voice/twilio/twilioStatusMap';
 import { connectTwimlFor } from '../services/voice/engines/voiceRuntime';
+import { completeDirectCall } from '../services/voice/postcall/directCompletionRuntime';
 import { appendCallEvents, consumeToken, isOwnedActiveNumber, recomputeCall, type AppendResult, type ConsumeResult } from '../services/voice/twilio/voiceCallStore';
 
 /** Shape every Twilio voice webhook body must have; other Twilio fields pass through unvalidated. */
@@ -58,6 +59,8 @@ export interface VoiceWebhookDeps {
   ownsNumber: (e164: string) => Promise<boolean>;
   /** Engine TwiML for a connected call (VS2.3: ConversationRelay); an unsupported engine ends the call safely. */
   connectTwiml: (callId: string) => Promise<string>;
+  /** VS3.2: a call reached a terminal state; post-call records it exactly once (fire-and-forget). */
+  onCallEnded?: (callId: string) => void;
   now: () => number;
   log: (line: Record<string, unknown>) => void;
 }
@@ -72,6 +75,7 @@ export function defaultVoiceWebhookDeps(): VoiceWebhookDeps {
     accountSid: () => process.env.TWILIO_ACCOUNT_SID || undefined,
     appendCallEvents, consumeToken, recomputeCall, ownsNumber: isOwnedActiveNumber,
     connectTwiml: connectTwimlFor,
+    onCallEnded: completeDirectCall,
     now: () => Date.now(),
     log: (line) => (line.level === 'error' || line.level === 'warn' ? console.warn : console.log)(JSON.stringify({ service: 'voice-studio', ...line })),
   };
@@ -137,7 +141,10 @@ export function makeVoiceWebhookHandlers(deps: VoiceWebhookDeps) {
         res.status(204).end();
         return;
       }
-      if (r.inserted) await deps.recomputeCall(callId);
+      if (r.inserted) {
+        const rec = (await deps.recomputeCall(callId)) as { terminalAt?: string } | null;
+        if (rec?.terminalAt) deps.onCallEnded?.(callId);
+      }
       deps.log({ level: 'info', event: 'voice_status_ingested', outcome: 'success', call_id: callId, state: events[0].state, inserted: r.inserted, duplicates: r.duplicates });
       res.status(204).end();
     } catch (e) {

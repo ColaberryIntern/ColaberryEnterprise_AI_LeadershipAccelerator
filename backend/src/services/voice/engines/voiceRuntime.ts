@@ -27,6 +27,8 @@ import type { RelayDeps } from './conversationRelayEngine';
 import { buildRelayTwiml } from './relayProtocol';
 import { nextOpenSlotsTool, ToolBroker } from './toolBroker';
 import { TEST_PROFILE } from './voiceProfiles';
+import { ACTION_TOKEN_TTL_SECONDS, CONNECT_ACTION_PATH } from '../transfer/humanTransfer';
+import { completeDirectCall, reconcileDirectCompletions, rememberTranscript } from '../postcall/directCompletionRuntime';
 import { attachVoiceWsServer, RELAY_PATH, STREAM_PATH } from './voiceWsServer';
 import type { ModelHandlers, RealtimeDeps, SocketLike } from './realtime/openaiRealtimeEngine';
 import { buildStreamTwiml } from './realtime/streamProtocol';
@@ -93,6 +95,8 @@ export function relayDeps(): RelayDeps {
     callMatches,
     now: () => Date.now(),
     log,
+    // VS3.2: the session hands its transcript to post-call, which records the completion exactly once.
+    onTranscript: (callId, transcript) => { rememberTranscript(callId, transcript); completeDirectCall(callId); },
   };
 }
 
@@ -143,6 +147,9 @@ export async function connectTwimlFor(callId: string): Promise<string> {
       welcomeGreeting: TEST_PROFILE.greeting,
       language: TEST_PROFILE.language,
       voice: c.VOICE_RELAY_VOICE,
+      actionUrl: c.VOICE_PUBLIC_BASE_URL
+        ? `${new URL(CONNECT_ACTION_PATH, c.VOICE_PUBLIC_BASE_URL).toString()}?ref=${encodeURIComponent(mintToken(callId, 'status', ACTION_TOKEN_TTL_SECONDS))}`
+        : undefined,
     });
   }
   if (rows[0]?.engine === 'openai_realtime' && c.VOICE_WS_BASE_URL) {
@@ -152,7 +159,19 @@ export async function connectTwimlFor(callId: string): Promise<string> {
   return HANGUP;
 }
 
+/** VS3.2: how often the post-call sweep looks for ended calls whose completion never got recorded. */
+export const POSTCALL_SWEEP_MS = 5 * 60 * 1000;
+
 /** Called once at boot with the HTTP server. Cheap when voice is off: the upgrade handler only reads config per request. */
+
 export function installVoiceRuntime(server: Server): void {
   attachVoiceWsServer(server, { relay: relayDeps, stream: realtimeDeps }, log);
+  // Reconcile, do not trust delivery: Twilio does not redeliver status callbacks. The sweep is a
+  // no-op unless a direct engine is switched on, checked on every tick so a flag flip needs no restart.
+  const sweep = setInterval(() => {
+    const c = loadVoiceConfig();
+    if (!c.valid || !(c.VOICE_STUDIO_ENABLED || c.VOICE_TEST_ENABLED)) return;
+    reconcileDirectCompletions().catch((e: Error) => log({ level: 'error', event: 'voice_postcall_sweep_failed', outcome: 'failure', error_class: e.name || 'Error' }));
+  }, POSTCALL_SWEEP_MS);
+  sweep.unref();
 }

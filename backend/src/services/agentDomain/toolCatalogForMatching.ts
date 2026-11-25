@@ -16,8 +16,8 @@
  * |---|---|---|
  * | `TOOL_CAPABILITIES` | 53 | The documented tool chest. The only source carrying `reads`/`produces` |
  * | `ai_agents.tools_granted` | 56 distinct | Adds `assignHandoff`, `materializeHandoffs`, `rankQueue` |
- * | the `GRANTS` table in `agents/tools/agentToolRegistry.ts` | 3 | Adds `read_attachments`, plus the two read-only voice tools `next_open_strategy_slots` and `admissions_knowledge` (Voice AI Studio VS3.1, 2026-11-24), in NEITHER of the above |
- * | **union** | **59** | 57 measured 2026-11-04, plus the 2 voice tools granted 2026-11-24 |
+ * | the `GRANTS` table in `agents/tools/agentToolRegistry.ts` | 4 | Adds `read_attachments`, plus the voice tools `next_open_strategy_slots`, `admissions_knowledge` (VS3.1) and `transfer_to_human` (VS3.2), 2026-11-24, in NEITHER of the above |
+ * | **union** | **60** | 57 measured 2026-11-04, plus the 3 voice tools granted 2026-11-24 |
  *
  * Every one of those sources earns its place: dropping the dictionary loses all behavior text,
  * dropping `tools_granted` loses three tools, and dropping the grant table loses exactly one —

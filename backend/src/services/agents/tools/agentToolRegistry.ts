@@ -25,7 +25,7 @@ const GRANTS: Record<AgentKey, readonly AgentToolName[]> = {
   dara: ['read_attachments'],
   // Voice AI Studio (VS3.1): the outbound phone agent may look up open strategy-call times and an
   // approved admissions answer. Both are read-only; the voice tool policy refuses any write tool.
-  'edu-cory-outbound': ['next_open_strategy_slots', 'admissions_knowledge'],
+  'edu-cory-outbound': ['next_open_strategy_slots', 'admissions_knowledge', 'transfer_to_human'],
 };
 
 /** Tools disabled globally by the env kill switch (comma-separated names). */

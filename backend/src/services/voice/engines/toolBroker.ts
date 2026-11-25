@@ -15,13 +15,16 @@
 import { z } from 'zod';
 import type { VoiceToolDef } from './claudeVoiceLlm';
 
-export interface ToolOutcome { content: string; isError: boolean; committed: boolean; errorClass?: string }
+/** control: a session action the ENGINE performs after the answer (VS3.2: hand the call to a person). */
+export type ToolControl = 'transfer';
+export interface ToolOutcome { content: string; isError: boolean; committed: boolean; errorClass?: string; control?: ToolControl }
 
 export interface RegisteredTool {
   def: VoiceToolDef;
   schema: z.ZodType<unknown>;
   readOnly: boolean;
-  run: (input: unknown) => Promise<string>;
+  /** A plain string, or text plus a control the engine acts on (never a world-changing write). */
+  run: (input: unknown) => Promise<string | { content: string; control?: ToolControl }>;
 }
 
 export interface SlotDay { date: string; slots: Array<{ start: string; end: string }> }
@@ -110,8 +113,9 @@ export class ToolBroker {
     const parsed = tool.schema.safeParse(input ?? {});
     if (!parsed.success) return { content: 'The tool input was invalid.', isError: true, committed: false, errorClass: 'ValidationError' };
     try {
-      const content = await withTimeout(tool.run(parsed.data), this.timeoutMs);
-      return { content, isError: false, committed: !tool.readOnly };
+      const out = await withTimeout(tool.run(parsed.data), this.timeoutMs);
+      const r = typeof out === 'string' ? { content: out } : out;
+      return { content: r.content, isError: false, committed: !tool.readOnly, ...(r.control ? { control: r.control } : {}) };
     } catch (e) {
       const errorClass = (e as { name?: string })?.name === 'TimeoutError' ? 'TimeoutError' : 'ToolFailed';
       return { content: 'That could not be looked up right now. Offer to have a teammate follow up.', isError: true, committed: false, errorClass };

@@ -79,15 +79,15 @@ describe('the three sources, each one proved to be load-bearing', () => {
     expect(Object.keys(TOOL_CAPABILITIES)).not.toContain('read_attachments');
   });
 
-  it('reproduces the production count of 59 from the three sources', async () => {
+  it('reproduces the production count of 60 from the three sources', async () => {
     // Guards the claim in the module header rather than leaving it as prose. If the dictionary
     // grows or a grant is added this fails and gets re-measured, which is the point: a stale
     // number in a comment is how the ticket came to say 47.
     mockQuery.mockResolvedValue(granted('assignHandoff', 'materializeHandoffs', 'rankQueue'));
     const { tools } = await loadToolCatalogForMatching();
     expect(Object.keys(TOOL_CAPABILITIES).length).toBe(53);
-    // 57 measured 2026-11-04 + next_open_strategy_slots and admissions_knowledge (voice, VS3.1).
-    expect(tools.length).toBe(59);
+    // 57 measured 2026-11-04 + next_open_strategy_slots, admissions_knowledge (VS3.1) and transfer_to_human (VS3.2), all voice.
+    expect(tools.length).toBe(60);
   });
 });
 

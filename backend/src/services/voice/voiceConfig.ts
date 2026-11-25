@@ -34,6 +34,8 @@ const RawVoiceEnvSchema = z.object({
   VOICE_PUBLIC_BASE_URL: httpsUrl.optional(),
   VOICE_WS_BASE_URL: wssUrl.optional(),
   VOICE_DESTINATION_HASH_KEY: z.string().min(16).optional(),
+  /** VS3.2: the teammate line a call is handed to (server env only; never logged or returned). Unset = no transfers, callers get the safe fallback. */
+  VOICE_TRANSFER_NUMBER: e164.optional(),
   /** Engine A's Claude model (VS2.3). Default per the Claude API guidance; a faster model is an owner decision. */
   VOICE_ENGINE_A_MODEL: z.string().regex(/^claude-[a-z0-9.-]+$/).default('claude-opus-5-5'),
   /** ElevenLabs voice for ConversationRelay ([VoiceID] or [VoiceID]-[model]...). Unset = Twilio's documented default for the language. */
@@ -76,6 +78,7 @@ export function redactedVoiceConfig(c: VoiceConfig): Record<string, unknown> {
     testMaxAttempts: c.VOICE_TEST_MAX_ATTEMPTS, testMaxDurationSeconds: c.VOICE_TEST_MAX_DURATION_SECONDS, testBudgetUsd: c.VOICE_TEST_BUDGET_USD,
     publicBaseUrl: c.VOICE_PUBLIC_BASE_URL ? 'set' : 'unset', wsBaseUrl: c.VOICE_WS_BASE_URL ? 'set' : 'unset',
     destinationHashKey: c.VOICE_DESTINATION_HASH_KEY ? 'set' : 'unset (derived from JWT_SECRET)',
+    transferNumber: c.VOICE_TRANSFER_NUMBER ? 'set' : 'unset',
     engineAModel: c.VOICE_ENGINE_A_MODEL, relayVoice: c.VOICE_RELAY_VOICE ? 'set' : 'default',
     engineBModel: c.VOICE_ENGINE_B_MODEL, realtimeVoice: c.VOICE_REALTIME_VOICE ?? 'default',
   };
