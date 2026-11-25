@@ -40,17 +40,27 @@ const log = (line: Record<string, unknown>): void => {
 };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * What the Trust Center shows for a tool call: the broker REFUSED it (unknown or unpermitted tool,
+ * invalid input) = denied; it was allowed but failed or timed out = failed; otherwise it ran.
+ */
+export function toolVerdict(rec: { committed: boolean; errorClass?: string }): { decision: 'allowed' | 'denied'; status: string } {
+  if (rec.errorClass === 'UnknownTool' || rec.errorClass === 'ValidationError') return { decision: 'denied', status: 'refused' };
+  if (rec.errorClass) return { decision: 'allowed', status: 'failed' };
+  return { decision: 'allowed', status: rec.committed ? 'committed' : 'completed' };
+}
+
 /** Idempotent tool-run insert with bounded retry. Exported for tests. */
-export async function persistToolRun(callId: string, rec: { toolCallId: string; name: string; turnId: number; committed: boolean; afterClose: boolean },
+export async function persistToolRun(callId: string, rec: { toolCallId: string; name: string; turnId: number; committed: boolean; afterClose: boolean; errorClass?: string },
   exec: (sql: string, replacements: Record<string, unknown>) => Promise<unknown> = (sql, replacements) => sequelize.query(sql, { replacements, type: QueryTypes.INSERT }),
   attempts = 3, backoffMs = 200): Promise<boolean> {
   for (let i = 1; i <= attempts; i++) {
     try {
       await exec(
         `INSERT INTO voice_tool_runs (tenant_id, call_id, turn_index, tool_name, idempotency_key, auth_decision, status, ended_at)
-         SELECT c.tenant_id, c.id, :turn, :name, :key, 'allowed', :status, NOW() FROM voice_calls c WHERE c.id = :callId
+         SELECT c.tenant_id, c.id, :turn, :name, :key, :decision, :status, NOW() FROM voice_calls c WHERE c.id = :callId
          ON CONFLICT (call_id, idempotency_key) DO NOTHING`,
-        { callId, turn: rec.turnId, name: rec.name, key: rec.toolCallId, status: rec.committed ? 'committed' : 'completed' },
+        { callId, turn: rec.turnId, name: rec.name, key: rec.toolCallId, ...toolVerdict(rec) },
       );
       return true;
     } catch (e) {

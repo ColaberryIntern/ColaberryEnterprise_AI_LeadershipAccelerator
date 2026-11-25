@@ -1,6 +1,6 @@
 {
  "generatedFrom": "git ls-files",
- "total": 261,
+ "total": 263,
  "byRole": {
   "DISPATCH": 3,
   "INGEST": 3,
@@ -8,7 +8,7 @@
   "CALLER": 11,
   "CONFIG": 20,
   "UI": 31,
-  "CONSUMER": 61,
+  "CONSUMER": 63,
   "MENTION": 126
  },
  "rows": [
@@ -332,6 +332,17 @@
     "VOICE_STUDIO_ENABLED",
     "VOICE_STUDIO_UI_ENABLED",
     "VOICE_TEST_ENABLED"
+   ]
+  },
+  {
+   "path": "backend/src/routes/admin/voiceStudioEvidenceRoutes.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_STUDIO_UI_ENABLED",
+    "VOICE_TEST_BUDGET_USD",
+    "VOICE_TEST_MAX_ATTEMPTS",
+    "VOICE_TEST_MAX_DURATION_SECONDS"
    ]
   },
   {
@@ -1396,6 +1407,12 @@
   },
   {
    "path": "backend/src/services/voice/session/sessionWorker.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/studio/evidenceStore.ts",
    "role": "CONSUMER",
    "callTypes": [],
    "envVars": []

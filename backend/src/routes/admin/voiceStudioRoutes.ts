@@ -20,6 +20,7 @@ import { buildVoiceStudioConsoleRouter } from './voiceStudioConsoleRoutes';
 import { stopTestCall, type StopDeps } from '../../services/voice/testlab/stopTestCall';
 import { hangupThroughCarrier } from '../../services/voice/gateway/directEngineProvider';
 import { buildVoiceStudioLabRouter } from './voiceStudioLabRoutes';
+import { buildVoiceStudioEvidenceRouter } from './voiceStudioEvidenceRoutes';
 
 const CallIdSchema = z.string().uuid();
 
@@ -88,4 +89,5 @@ const voiceStudioAdmin = Router();
 voiceStudioAdmin.use(buildVoiceStudioRouter());
 voiceStudioAdmin.use(buildVoiceStudioConsoleRouter());
 voiceStudioAdmin.use(buildVoiceStudioLabRouter());
+voiceStudioAdmin.use(buildVoiceStudioEvidenceRouter()); // VS3.5: calls, trust, quality, costs (read-only)
 export default voiceStudioAdmin;

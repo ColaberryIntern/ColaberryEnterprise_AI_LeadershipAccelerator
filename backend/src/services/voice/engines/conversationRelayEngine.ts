@@ -246,7 +246,7 @@ export class RelayConnection {
       const results = await Promise.all(r.toolCalls.map(async (c) => {
         h.toolStarted(c.id, c.name);
         const out = await this.broker!.run(c.id, c.name, c.input);
-        h.toolFinished(c.id, out.committed);
+        h.toolFinished(c.id, out.committed, out.errorClass);
         if (out.errorClass) this.log('warn', 'voice_tool_failed', { tool: c.name, error_class: out.errorClass });
         return { type: 'tool_result' as const, tool_use_id: c.id, content: out.content, is_error: out.isError, control: out.control };
       }));
