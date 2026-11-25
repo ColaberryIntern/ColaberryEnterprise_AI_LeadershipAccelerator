@@ -5,8 +5,9 @@
 # push, schedule or pull_request trigger, so nothing merged can start a paid agent run.
 #
 # WHERE IT RUNS. A GitHub-hosted, ephemeral runner (ESC-4: agent execution never shares the
-# internet-facing backend's machine). It holds exactly one secret, ANTHROPIC_API_KEY, and the
-# step below fails if any production credential appears in its environment.
+# internet-facing backend's machine). One secret, OPENAI_API_KEY, reaches exactly one step: the one
+# that starts OpenAI's key proxy. The build step talks to the proxy and never holds the key, and a
+# step below fails if any credential appears in its environment.
 #
 # HOW THE PLATFORM KNOWS IT IS US. GitHub OIDC (`id-token: write`). The backend accepts only a
 # token whose claims say: this repository, this workflow file, refs/heads/main,
@@ -44,12 +45,10 @@ jobs:
     timeout-minutes: 60
 
     env:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       PLATFORM_API_BASE: ${{ vars.PLATFORM_API_BASE || 'https://enterprise.colaberry.ai' }}
-      PLATFORM_BUILD_MODEL: ${{ vars.PLATFORM_BUILD_MODEL || 'claude-opus-5-5' }}
+      PLATFORM_BUILD_MODEL: ${{ vars.PLATFORM_BUILD_MODEL || 'gpt-6.2-sol' }}
       RUN_ID: ${{ inputs.run_id }}
       WORKSPACE: ${{ github.workspace }}/workspace
-      AGENT_SDK_DIR: ${{ runner.temp }}/agent-sdk
 
     steps:
       - name: Refuse to run anywhere but a GitHub-hosted runner
@@ -79,22 +78,21 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Install the shell sandbox
-        # The agent's shell commands run sandboxed (no network, no API key in their environment);
-        # on Linux that needs bubblewrap and socat. The script fails if the sandbox cannot start.
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap socat > /dev/null
+      - name: Install the agent engine and its sandbox (pinned)
+        run: bash scripts/platformBuild/prepareRunner.sh install
 
-      - name: Install the agent engine (pinned)
-        # Installed on the runner, never into the backend image: the engine belongs here.
-        run: |
-          mkdir -p "$AGENT_SDK_DIR"
-          cd "$AGENT_SDK_DIR"
-          npm init -y > /dev/null
-          npm install --no-audit --no-fund --silent @anthropic-ai/claude-agent-sdk@0.3.245
+      - name: Start the key proxy
+        # The only step that sees the key.
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: bash scripts/platformBuild/prepareRunner.sh proxy
 
-      - name: Fail if a production credential is present
+      - name: Drop sudo
+        run: bash scripts/platformBuild/prepareRunner.sh drop-sudo
+
+      - name: Fail if a credential is present
         run: |
-          for forbidden in DATABASE_URL MANDRILL_API_KEY BASECAMP_TOKEN OPENAI_API_KEY AWS_ACCESS_KEY_ID JWT_SECRET GITHUB_TOKEN; do
+          for forbidden in DATABASE_URL MANDRILL_API_KEY BASECAMP_TOKEN OPENAI_API_KEY CODEX_API_KEY ANTHROPIC_API_KEY AWS_ACCESS_KEY_ID JWT_SECRET GITHUB_TOKEN; do
             if [ -n "$(printenv "$forbidden" || true)" ]; then
               echo "::error::$forbidden is present in the runner environment. Remove it."
               exit 1
@@ -102,8 +100,11 @@ jobs:
           done
 
       - name: Build and upload
+        env:
+          PROXY_INFO: ${{ runner.temp }}/proxy.json
+          CODEX_BIN: ${{ runner.temp }}/agent/node_modules/.bin/codex
         run: node scripts/platformBuild/runPlatformBuild.mjs
 
       - name: Destroy the workspace
         if: always()
-        run: rm -rf "$WORKSPACE" "$AGENT_SDK_DIR"
+        run: rm -rf "$WORKSPACE" "$RUNNER_TEMP/agent"
