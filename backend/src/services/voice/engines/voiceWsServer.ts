@@ -12,7 +12,9 @@
  *     host; the session ref travels in the first message, single-use, never in the URL.
  * The single-use session ref, account and CallSid are then checked on the first (setup) message.
  *
- * Upgrades for any other path are left alone (no other handler exists today; nothing is destroyed).
+ * Node hands EVERY upgrade to this listener once it exists, with its own error handling detached. So
+ * the socket gets an error handler first, and an upgrade nobody owns is answered 404 here. A path
+ * outside the voice prefix is left alone only when another upgrade listener is registered.
  */
 import type { IncomingMessage, Server } from 'http';
 import type { Duplex } from 'stream';
@@ -74,9 +76,13 @@ export interface VoiceWsDeps { relay: () => RelayDeps; stream: () => RealtimeDep
 export function attachVoiceWsServer(server: Server, deps: VoiceWsDeps, log: (line: Record<string, unknown>) => void): WebSocketServer {
   const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_PAYLOAD });
   server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
+    socket.on('error', () => { socket.destroy(); }); // a reset by the peer must never reach the process
     const path = (req.url || '').split('?')[0];
     const kind = classifyUpgradePath(path);
-    if (kind === 'other') return;
+    if (kind === 'other') {
+      if (server.listenerCount('upgrade') <= 1) refuse(socket, 404);
+      return;
+    }
     if (kind === 'unknown_voice') {
       log({ level: 'warn', service: 'voice-studio', event: 'voice_ws_upgrade_refused', outcome: 'failure', error_class: 'UnknownPath', status: 404 });
       refuse(socket, 404);
@@ -90,14 +96,23 @@ export function attachVoiceWsServer(server: Server, deps: VoiceWsDeps, log: (lin
     }
     wss.handleUpgrade(req, socket, head, (ws) => {
       const sock = { send: (t: string) => { if (ws.readyState === ws.OPEN) ws.send(t); }, close: (code?: number) => ws.close(code) };
-      if (path === RELAY_PATH) {
-        const conn = new RelayConnection(sock, deps.relay());
-        ws.on('message', (data: Buffer) => { void conn.onMessage(data); });
-        ws.on('close', () => conn.onClose());
-      } else {
-        const bridge = new RealtimeBridge(sock, deps.stream());
-        ws.on('message', (data: Buffer) => { void bridge.onTwilio(data); });
-        ws.on('close', () => bridge.onTwilioClose());
+      // A failure on one call ends that call, never the process.
+      const fail = (e: unknown) => {
+        log({ level: 'error', service: 'voice-studio', event: 'voice_ws_handler_failed', outcome: 'failure', error_class: (e as { name?: string })?.name || 'HandlerError' });
+        ws.close(1011);
+      };
+      try {
+        if (path === RELAY_PATH) {
+          const conn = new RelayConnection(sock, deps.relay());
+          ws.on('message', (data: Buffer) => { conn.onMessage(data).catch(fail); });
+          ws.on('close', () => conn.onClose());
+        } else {
+          const bridge = new RealtimeBridge(sock, deps.stream());
+          ws.on('message', (data: Buffer) => { bridge.onTwilio(data).catch(fail); });
+          ws.on('close', () => bridge.onTwilioClose());
+        }
+      } catch (e) {
+        fail(e);
       }
       ws.on('error', (e: Error) => log({ level: 'warn', service: 'voice-studio', event: 'voice_ws_socket_error', outcome: 'failure', error_class: e.name || 'SocketError' }));
     });
