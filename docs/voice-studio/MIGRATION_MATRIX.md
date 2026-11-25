@@ -28,27 +28,53 @@ One row per assistant the API key can see. The key is a hash of the assistant id
 | Key | Assistant | Direction | Owner | Route today | Recommendation | New profile / number | Feature mapping | Tests | Consent | History | Risk | Stage | Rollback | Evidence | Status |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | sf-1a632a94 | Edu: Cory - Outbound | outbound | Ali | ai-flotation; default shell for enterprise-intake, cpn, colaberry-internship, agent-tool (SYNTHFLOW_AI_FLOTATION_AGENT_ID) | migrate first | edu-cory-outbound draft from the live assistant | prompt-only shell: mapped; knowledge: admissions lookup, vendor knowledge base to compare; voice: to choose | profile seed and shell tests | per route (see routes above) | export plan in VS5.3 | one assistant serves several routes: move one route at a time | legacy | route back to synthflow_legacy (voice:route:rollback) | - | IN_PROGRESS |
-| sf-b6ebd069 | ROI Architect | outbound | Ali | welcome, interest (SYNTHFLOW_WELCOME_AGENT_ID, SYNTHFLOW_INTEREST_AGENT_ID) | replace with two purpose-built profiles | n/a until M4 | see private inventory | n/a until M4 | evaluateSend on campaign steps; none on internal alerts | export plan in VS5.3 | one very short saved script serves two different purposes; its saved webhook address predates the required token | decision | nothing changes until decided | - | APPROVAL_REQUIRED |
-| sf-80649369 | Cora - Outbound Admissions Agent - New L | outbound | Kes (to confirm) | callback (SYNTHFLOW_CALLBACK_AGENT_ID) | decide with Kes; our callback route moves to its own profile | n/a until M4 | see private inventory | n/a until M4 | captureSignupConsent and evaluateSend | export plan in VS5.3 | a platform route uses an agent that belongs to another campaign | decision | nothing changes until decided | - | APPROVAL_REQUIRED |
-| sf-f1fb4044 | Cora - Outbound Admissions Agent - ColdL | outbound | Kes | none of our routes | leave with Kes; not ours to move | n/a until M4 | see private inventory | n/a until M4 | n/a until M4 | export plan in VS5.3 | its number belongs to Kes's campaign | decision | nothing changes until decided | - | APPROVAL_REQUIRED |
-| sf-28d71c32 | Cora - Inbound Admissions Agent | inbound | Kes (to confirm) | none of our routes | decide with Kes; untouched until then | n/a until M4 | see private inventory | n/a until M4 | n/a until M4 | export plan in VS5.3 | answers a live line; needs its own inbound tests first | decision | nothing changes until decided | - | APPROVAL_REQUIRED |
-| sf-5c7fcddf | Cora2 - Outbound Admissions Agent - New L | outbound | Kes (to confirm) | none of our routes | ask Kes whether it is in use; nearly identical to the New L agent | n/a until M4 | see private inventory | n/a until M4 | n/a until M4 | export plan in VS5.3 | duplicate of another agent | decision | nothing changes until decided | - | APPROVAL_REQUIRED |
-| sf-0037f176 | Edu: Cory - Inbound | inbound | Ali | none of our routes | migrate after inbound is proven on the test line | n/a until M4 | see private inventory | n/a until M4 | n/a until M4 | export plan in VS5.3 | answers a live line; needs its own inbound tests first | decision | nothing changes until decided | - | APPROVAL_REQUIRED |
-| sf-7217a397 | Edu Cory: Inbound_before_a_call | inbound | Ali | none of our routes | retire candidate: no number attached | n/a until M4 | see private inventory | n/a until M4 | n/a until M4 | export plan in VS5.3 | low: nothing can reach it | decision | nothing changes until decided | - | APPROVAL_REQUIRED |
-| sf-77c93bb5 | Edu: Cory - Website Widget | widget | Ali | none of our routes | decide separately: a web widget, not a phone call | n/a until M4 | see private inventory | n/a until M4 | n/a until M4 | export plan in VS5.3 | the new engines have no browser widget | decision | nothing changes until decided | - | APPROVAL_REQUIRED |
-| sf-39f60bd8 | Colaberry Student Outreach | outbound | Ali | none of our routes | find its owner and whether it still runs before anything else | n/a until M4 | see private inventory | n/a until M4 | n/a until M4 | export plan in VS5.3 | fed and read by an automation outside this platform | decision | nothing changes until decided | - | APPROVAL_REQUIRED |
-| sf-3072573b | Cory - AI Cybersecurity Training Outreach Q1 2026 | outbound | Ali | none of our routes | retire candidate: no number attached, past campaign | n/a until M4 | see private inventory | n/a until M4 | n/a until M4 | export plan in VS5.3 | low: cannot dial | decision | nothing changes until decided | - | APPROVAL_REQUIRED |
-| sf-5b86fc49 | Cory - AI Governance Training Program Outreach Q1 2026 | outbound | Ali | none of our routes | retire candidate: no number attached, past campaign | n/a until M4 | see private inventory | n/a until M4 | n/a until M4 | export plan in VS5.3 | low: cannot dial | decision | nothing changes until decided | - | APPROVAL_REQUIRED |
-| sf-91faa67d | Little Ali | outbound | Ali | none of our routes | retire candidate: same script as My Outbound Assistant | n/a until M4 | see private inventory | n/a until M4 | n/a until M4 | export plan in VS5.3 | holds a number: release only with approval | decision | nothing changes until decided | - | APPROVAL_REQUIRED |
-| sf-bdfc2c1b | My Outbound Assistant | outbound | Ali | none of our routes | retire candidate: vendor starter agent | n/a until M4 | see private inventory | n/a until M4 | n/a until M4 | export plan in VS5.3 | holds a number: release only with approval | decision | nothing changes until decided | - | APPROVAL_REQUIRED |
+| sf-b6ebd069 | ROI Architect | outbound | Ali | welcome, interest (SYNTHFLOW_WELCOME_AGENT_ID, SYNTHFLOW_INTEREST_AGENT_ID) | replace with two purpose-built profiles | n/a until M4 | settings in the private capture; mapped at M4 | n/a until M4 | evaluateSend on campaign steps; none on internal alerts | export plan in VS5.3 | one very short saved script serves two different purposes; its saved webhook address predates the required token | decision | nothing changes until decided | - | APPROVAL_REQUIRED |
+| sf-80649369 | Cora - Outbound Admissions Agent - New L | outbound | Kes (to confirm) | callback (SYNTHFLOW_CALLBACK_AGENT_ID) | decide with Kes; our callback route moves to its own profile | n/a until M4 | settings in the private capture; mapped at M4 | n/a until M4 | captureSignupConsent and evaluateSend | export plan in VS5.3 | a platform route uses an agent that belongs to another campaign | decision | nothing changes until decided | - | APPROVAL_REQUIRED |
+| sf-f1fb4044 | Cora - Outbound Admissions Agent - ColdL | outbound | Kes | none of our routes | leave with Kes; not ours to move | n/a until M4 | settings in the private capture; mapped at M4 | n/a until M4 | n/a until M4 | export plan in VS5.3 | its number belongs to Kes's campaign (recorded in the plan) | decision | nothing changes until decided | - | APPROVAL_REQUIRED |
+| sf-28d71c32 | Cora - Inbound Admissions Agent | inbound | Kes (to confirm) | none of our routes | decide with Kes; untouched until then | n/a until M4 | settings in the private capture; mapped at M4 | n/a until M4 | n/a until M4 | export plan in VS5.3 | has a number attached; whether callers use it is unverified; needs its own inbound tests first | decision | nothing changes until decided | - | APPROVAL_REQUIRED |
+| sf-5c7fcddf | Cora2 - Outbound Admissions Agent - New L | outbound | Kes (to confirm) | none of our routes | ask Kes whether it is in use; nearly identical to the New L agent | n/a until M4 | settings in the private capture; mapped at M4 | n/a until M4 | n/a until M4 | export plan in VS5.3 | duplicate of another agent | decision | nothing changes until decided | - | APPROVAL_REQUIRED |
+| sf-0037f176 | Edu: Cory - Inbound | inbound | Ali | none of our routes | migrate after inbound is proven on the test line | n/a until M4 | settings in the private capture; mapped at M4 | n/a until M4 | n/a until M4 | export plan in VS5.3 | has a number attached; whether callers use it is unverified; needs its own inbound tests first | decision | nothing changes until decided | - | APPROVAL_REQUIRED |
+| sf-7217a397 | Edu Cory: Inbound_before_a_call | inbound | Ali | none of our routes | retire candidate: no number attached | n/a until M4 | settings in the private capture; mapped at M4 | n/a until M4 | n/a until M4 | export plan in VS5.3 | unverified: no number attached, but that alone does not prove it cannot be used | decision | nothing changes until decided | - | APPROVAL_REQUIRED |
+| sf-77c93bb5 | Edu: Cory - Website Widget | widget | Ali | none of our routes | decide separately: a web widget, not a phone call | n/a until M4 | settings in the private capture; mapped at M4 | n/a until M4 | n/a until M4 | export plan in VS5.3 | the new engines have no browser widget | decision | nothing changes until decided | - | APPROVAL_REQUIRED |
+| sf-39f60bd8 | Colaberry Student Outreach | outbound | Ali | none of our routes | find its owner and whether it still runs before anything else | n/a until M4 | settings in the private capture; mapped at M4 | n/a until M4 | n/a until M4 | export plan in VS5.3 | its webhook goes to an automation outside this platform; what starts its calls is unverified | decision | nothing changes until decided | - | APPROVAL_REQUIRED |
+| sf-3072573b | Cory - AI Cybersecurity Training Outreach Q1 2026 | outbound | Ali | none of our routes | retire candidate: no number attached and named for Q1 2026; confirm unused | n/a until M4 | settings in the private capture; mapped at M4 | n/a until M4 | n/a until M4 | export plan in VS5.3 | unverified: no number attached, but that alone does not prove it cannot be used | decision | nothing changes until decided | - | APPROVAL_REQUIRED |
+| sf-5b86fc49 | Cory - AI Governance Training Program Outreach Q1 2026 | outbound | Ali | none of our routes | retire candidate: no number attached and named for Q1 2026; confirm unused | n/a until M4 | settings in the private capture; mapped at M4 | n/a until M4 | n/a until M4 | export plan in VS5.3 | unverified: no number attached, but that alone does not prove it cannot be used | decision | nothing changes until decided | - | APPROVAL_REQUIRED |
+| sf-91faa67d | Little Ali | outbound | Ali | none of our routes | retire candidate: same script as My Outbound Assistant | n/a until M4 | settings in the private capture; mapped at M4 | n/a until M4 | n/a until M4 | export plan in VS5.3 | holds a number: release only with approval | decision | nothing changes until decided | - | APPROVAL_REQUIRED |
+| sf-bdfc2c1b | My Outbound Assistant | outbound | Ali | none of our routes | retire candidate: named like a vendor default; confirm unused | n/a until M4 | settings in the private capture; mapped at M4 | n/a until M4 | n/a until M4 | export plan in VS5.3 | holds a number: release only with approval | decision | nothing changes until decided | - | APPROVAL_REQUIRED |
 
-## What the API does not show: manual export checklist
+## Coverage
 
-The key can read assistants, their actions and the knowledge base list. It returns no numbers list and refuses the call list without an assistant, so these need the Synthflow dashboard (owner only):
+Every item the migration needs is captured from the API or is a step below (services/voice/migration/privateCapture.ts, COVERAGE; a test keeps the two in step). The capture is private.
 
-1. Phone Numbers: for each number, its type (bought at the vendor, or imported from a carrier), monthly cost, and the assistant it is attached to. Screenshot into the private inventory, never here.
-2. Knowledge bases (3): download each source document or URL list.
-3. Actions (44): for each one, what it calls and which assistant uses it. Credentials are noted as present or absent, never copied.
-4. Calls and transcripts: whether a bulk export exists on this plan, for which dates, and whether recordings can be downloaded.
-5. Workflows or integrations attached to an assistant (for example the automation behind Colaberry Student Outreach).
-6. Contract: renewal date, notice period, and what happens to numbers and history on cancellation.
+| Item | Where |
+|---|---|
+| Ids, direction, count of numbers | captured |
+| Prompts, first messages, voices, language, model, timezone, working hours | captured |
+| Which knowledge base each assistant uses | captured |
+| Variables in the prompt, the greeting and the input list | captured |
+| Tool actions and post-call extraction: settings | captured |
+| Webhooks and callbacks (host only) | captured |
+| Maximum duration, idle time, ring pause, reminders, end-call reasons, voicemail | captured |
+| Recording and consent settings | captured |
+| Calls per assistant: how many | captured |
+| Numbers: type, cost, ownership | step 1 |
+| Knowledge base contents | step 2 |
+| Which assistant uses which action or extraction | step 3 |
+| Recordings and transcripts download | step 4 |
+| Integrations and workflows | step 5 |
+| Concurrency | step 6 |
+| Contract and cancellation terms | step 7 |
+
+Read 2026-11-25 (read-only GET requests from the production container): /assistants 14; /actions 45 declared and 44 listed at every page size (19 information extractors, 13 custom actions, 6 live transfers, 5 real-time bookings, 1 custom evaluation; the unlisted one is found in step 3); /knowledge_base 3; /numbers 0; /calls is refused without an assistant and answers with one (pages of up to 100; about 99,000 calls over 14 assistants; the API did not answer a page 69,000 deep in 15 seconds, so a full API export is not proven). Every assistant's own action list came back empty, which is why step 3 is manual.
+
+## Manual export checklist
+
+Owner only, in the Synthflow dashboard. Screenshots and files go to the private inventory, never here.
+
+1. Phone Numbers: for each number, bought at the vendor or imported from a carrier, monthly cost, and the assistant it is attached to.
+2. Knowledge bases: download each source document or URL list, for every knowledge base listed.
+3. Each assistant, Actions tab: which tool actions and which post-call extractors are attached. The API lists them but not who uses them, and it declares one more than it lists: find that one here.
+4. Calls: whether recordings and transcripts can be downloaded in bulk on this plan, and for which dates.
+5. Workflows and integrations attached to an assistant (start with Colaberry Student Outreach).
+6. Plan limits: concurrent calls allowed, and any per-assistant limit.
+7. Contract: renewal date, notice period, and what happens to numbers and history on cancellation.

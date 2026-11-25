@@ -1,6 +1,6 @@
 {
  "generatedFrom": "git ls-files",
- "total": 279,
+ "total": 280,
  "byRole": {
   "DISPATCH": 3,
   "INGEST": 3,
@@ -8,7 +8,7 @@
   "CALLER": 11,
   "CONFIG": 20,
   "UI": 33,
-  "CONSUMER": 72,
+  "CONSUMER": 73,
   "MENTION": 131
  },
  "rows": [
@@ -1383,6 +1383,12 @@
   {
    "path": "backend/src/services/voice/migration/matrix.ts",
    "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/migration/privateCapture.ts",
+   "role": "CONSUMER",
    "callTypes": [],
    "envVars": []
   },

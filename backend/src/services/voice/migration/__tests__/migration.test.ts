@@ -1,7 +1,10 @@
 import fs from 'fs';
 import { assistantKey, fetchAssistants, toRow, type RawAssistant } from '../assistantInventory';
 import { checkMatrix, COLUMNS, compareLive, HEADING, parseMatrix, type MatrixRow } from '../matrix';
-import { DEFAULT_MATRIX, lineFor, parseReportArgs } from '../../../../scripts/voice/migrationReport';
+import os from 'os';
+import path from 'path';
+import { captureAll, COVERAGE, redactDeep, redactText } from '../privateCapture';
+import { DEFAULT_MATRIX, insideRepo, lineFor, parseReportArgs, run } from '../../../../scripts/voice/migrationReport';
 
 const row = (over: Partial<MatrixRow> = {}): MatrixRow => ({ ...Object.fromEntries(COLUMNS.map((c) => [c, 'x'])), Key: 'sf-0123abcd', Stage: 'decision', Status: 'APPROVAL_REQUIRED', Evidence: '-', ...over } as MatrixRow);
 const doc = (rows: MatrixRow[], head: readonly string[] = COLUMNS) => `# t\n\n${HEADING}\n\ntext\n\n| ${head.join(' | ')} |\n|${head.map(() => '---').join('|')}|\n${rows.map((r) => `| ${COLUMNS.map((c) => r[c]).join(' | ')} |`).join('\n')}\n\n## Next\n| not | a row |\n`;
@@ -74,6 +77,97 @@ describe('inventory', () => {
 
 it('the command refuses what it does not know', () => {
   expect(parseReportArgs([])).toMatchObject({ ok: true, live: false });
-  expect(parseReportArgs(['--live', '--inventory', 'x.json'])).toMatchObject({ ok: true, live: true, inventory: 'x.json' });
-  for (const bad of [['--apply'], ['--matrix'], ['--inventory', 'x'], ['--matrix', '--live']]) expect(parseReportArgs(bad).ok).toBe(false);
+  const out = path.join(os.tmpdir(), 'x.json');
+  expect(parseReportArgs(['--live', '--inventory', out, '--capture', out])).toMatchObject({ ok: true, live: true, inventory: out, capture: out });
+  for (const bad of [['--apply'], ['--matrix'], ['--inventory', out], ['--capture', out], ['--matrix', '--live'], ['--live', '--capture', path.join(__dirname, 'x.json')], ['--live', '--inventory', 'x.json']]) expect(parseReportArgs(bad).ok).toBe(false);
+});
+
+describe('private capture', () => {
+  it.each([
+    ['a URL keeps only its host', 'see https://hooks.example.com/a/b?token=zzz now', 'see https://hooks.example.com/<redacted> now'],
+    ['an email', 'write to pat@example.com', 'write to <email>'],
+    ['phone numbers', 'call (214) 555-0100 or +1 214-555-0100 or 2145550100', 'call <phone> or <phone> or <phone>'],
+    ['a key', 'use sk-abcdefghijklmnop123', 'use <redacted key>'],
+    ['ordinary text, years and prices', 'In 2026 it costs 1,200 dollars for 12 weeks', 'In 2026 it costs 1,200 dollars for 12 weeks'],
+  ])('%s', (_n, a, b) => expect(redactText(a)).toBe(b));
+  it('redacts by key at any depth, in header lists and in JSON kept as text, and keeps the settings', () => {
+    const r = JSON.stringify(redactDeep({ agent: { prompt: 'Hello', voice_id: 'v1' }, phone_number: '+12145550100', headers: { Authorization: 'x' }, http: { api_key: 'kkkk', params: [{ key: 'X-Auth-Token', value: 'tttt' }, { key: 'city', value: 'Plano' }] }, body: '{"password":"pppp","city":"Frisco"}', to_phone_number: 12145550100, api_response: { contact: { first: 'Zelda' } }, max_duration: { duration_seconds: 300 } }));
+    expect(r).not.toMatch(/5550100|Zelda|"x"|kkkk|tttt|pppp/);
+    for (const keep of ['Hello', 'v1', 'Plano', 'Frisco', '300']) expect(r).toContain(keep);
+  });
+
+  const reply = (response: unknown, status = 200) => ({ ok: status === 200, status, json: async () => ({ response }) }) as Response;
+  const A = { model_id: 'm1', name: 'Agent', type: 'outbound', phone_number: '+12145550100', attached_phone_numbers: ['+12145550100'], knowledge_base_id: 'k1', input_variables: [{ name: 'cohort' }], external_webhook_url: 'https://h.example/p?token=secretvalue', agent: { prompt: 'Say {first_name}. Key sk-abcdefghijklmnop123', greeting_message: 'Hi {cohort_name}', voice_id: 'voice-9', allowed_idle_time_seconds: 12 } };
+  const api = (over: Record<string, unknown> = {}) => jest.fn(async (u: string) => {
+    const p = u.replace('https://api.synthflow.ai/v2', '');
+    for (const [k, v] of Object.entries(over)) if (p.startsWith(k)) return v as Response;
+    if (p.startsWith('/assistants')) return reply({ assistants: [A], pagination: { total_records: 1 } });
+    if (p.startsWith('/actions')) return reply({ actions: [{ action_id: 'a1', action_type: 'INFORMATION_EXTRACTOR', name: 'n', parameters_hard_coded: { api_key: 'zzzz' } }], pagination: { total_records: 1 } });
+    if (p.startsWith('/knowledge_base')) return reply({ knowledge_bases: [{ id: 'k1', name: 'Admissions' }], total_records: 1 });
+    if (p.startsWith('/numbers')) return reply({ phone_numbers: [], pagination: { total_records: 0 } });
+    if (p.startsWith('/calls')) return reply({ calls: [], pagination: { total_records: 1545 } });
+    return reply(null, 404);
+  });
+  it('captures every field the migration needs, with GET only, and no credential or number', async () => {
+    const f = api();
+    const c = await captureAll('very-secret', f as never);
+    expect(c.counts).toEqual({ assistants: 1, actions: 1, actionsDeclared: 1, actionTypes: { INFORMATION_EXTRACTOR: 1 }, knowledgeBases: 1, numbersListed: 0 });
+    expect(c.assistants[0]).toMatchObject({ vendorId: 'm1', numberCount: 1, knowledgeBase: 'Admissions', variables: ['cohort', 'cohort_name', 'first_name'], callCount: 1545 });
+    expect(c.assistants[0].config).toMatchObject({ agent: { greeting_message: 'Hi {cohort_name}', voice_id: 'voice-9', allowed_idle_time_seconds: 12 } });
+    expect(JSON.stringify(c)).not.toMatch(/very-secret|secretvalue|5550100|zzzz|sk-abc/);
+    for (const call of f.mock.calls as unknown as Array<[string, RequestInit]>) expect(call[1]).toMatchObject({ method: 'GET' });
+  });
+  it.each<[string, Record<string, unknown>, string]>([
+    ['more actions listed than declared', { '/actions': reply({ actions: [{ action_id: 'a' }, { action_id: 'b' }], pagination: { total_records: 1 } }) }, 'ContractViolation'],
+    ['an action with no id', { '/actions': reply({ actions: [{}], pagination: { total_records: 1 } }) }, 'ContractViolation'],
+    ['a knowledge base list that does not add up', { '/knowledge_base': reply({ knowledge_bases: [], total_records: 3 }) }, 'ContractViolation'],
+    ['a call count that is missing', { '/calls': reply({ calls: [] }) }, 'ContractViolation'],
+    ['a refusal', { '/actions': reply({}, 403) }, 'AuthError'], ['an outage', { '/knowledge_base': reply({}, 502) }, 'UpstreamUnavailable'],
+  ])('%s is an error, never a partial capture', async (_n, over, name) => { await expect(captureAll('k', api(over) as never)).rejects.toMatchObject({ name }); });
+
+  it('every item is captured or is a real checklist step, and every step is used', () => {
+    const md = fs.readFileSync(DEFAULT_MATRIX, 'utf8').replace(/\r\n/g, '\n');
+    const steps = new Set([...md.slice(md.indexOf('## Manual export checklist')).matchAll(/^(\d+)\. /gm)].map((m) => m[1]));
+    const used = new Set(COVERAGE.filter((c) => c.from === 'checklist').map((c) => c.where));
+    expect([...used].sort()).toEqual([...steps].sort());
+    for (const word of ['ids', 'direction', 'numbers', 'prompts', 'first messages', 'voices', 'knowledge base', 'variables', 'actions', 'webhooks', 'extraction', 'integrations', 'timeouts', 'concurrency', 'history', 'contract']) expect(COVERAGE.some((c) => c.item.includes(word))).toBe(true);
+  });
+
+  describe('the command', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mig-'));
+    const file = (n: string, s: string) => { const p = path.join(dir, n); fs.writeFileSync(p, s); return p; };
+    beforeEach(() => { jest.spyOn(console, 'log').mockImplementation(() => undefined); jest.spyOn(console, 'error').mockImplementation(() => undefined); });
+    afterEach(() => jest.restoreAllMocks());
+    afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const key = assistantKey('m1');
+    it('exits 0 on a clean matrix, 1 when a row lacks an owner, 2 when it cannot read', async () => {
+      expect(await run(['--matrix', file('ok.md', doc([row()]))])).toBe(0);
+      expect(await run(['--matrix', file('bad.md', doc([row({ Owner: '' })]))])).toBe(1);
+      expect(await run(['--matrix', file('none.md', '# x')])).toBe(2);
+      expect(await run(['--matrix', path.join(dir, 'absent.md')])).toBe(2);
+      expect(await run(['--nope'])).toBe(2);
+    });
+    it('--live exits 1 when the vendor and the matrix differ, 2 with no key, and writes its files privately', async () => {
+      const good = file('live.md', doc([row({ Key: key, Assistant: 'Agent' })]));
+      const cap = path.join(dir, 'cap.json');
+      expect(await run(['--live', '--matrix', good, '--capture', cap], { SYNTHFLOW_API_KEY: 'k' }, api() as never)).toBe(0);
+      expect(JSON.parse(fs.readFileSync(cap, 'utf8')).counts.assistants).toBe(1);
+      expect((console.log as jest.Mock).mock.calls.flat().join(' ')).not.toContain('Say {first_name}');
+      expect(await run(['--live', '--matrix', file('live2.md', doc([row()]))], { SYNTHFLOW_API_KEY: 'k' }, api() as never)).toBe(1);
+      expect(await run(['--live', '--matrix', good], {}, api() as never)).toBe(2);
+      // declared 2, listed 1, and past the end the same page again (as the vendor does): kept, reported, not a clean exit
+      const short = api();
+      const gap = (async (u: string) => (u.includes('/actions') ? reply({ actions: [{ action_id: 'x', action_type: 'X' }], pagination: { total_records: 2 } }) : short(u))) as never;
+      expect(await run(['--live', '--matrix', good, '--capture', cap], { SYNTHFLOW_API_KEY: 'k' }, gap)).toBe(1);
+      expect((console.log as jest.Mock).mock.calls.flat().join(' ')).toContain('CAPTURE GAP: the vendor declares 2 actions and lists 1');
+      expect(JSON.parse(fs.readFileSync(cap, 'utf8')).counts).toMatchObject({ actions: 1, actionsDeclared: 2 });
+      const empty = (async (u: string) => (u.includes('/actions') && !u.endsWith('offset=0') ? reply({ actions: [] }) : (gap as (u: string) => unknown)(u))) as never;
+      expect(await run(['--live', '--matrix', good, '--capture', cap], { SYNTHFLOW_API_KEY: 'k' }, empty)).toBe(1);
+    });
+    it('knows what is inside the repository', () => {
+      expect(insideRepo(path.join(__dirname, 'x.json'))).toBe(true);
+      expect(insideRepo(path.join(dir, 'x.json'))).toBe(false);
+      expect(insideRepo('/tmp/x', dir)).toBe(false);
+    });
+  });
 });
