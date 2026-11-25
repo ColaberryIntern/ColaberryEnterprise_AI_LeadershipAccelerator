@@ -159,6 +159,6 @@ export function queueHeadline(rows: ReadonlyArray<ChangeRequest>, now: Date = ne
     return d !== null && (m === null || d > m) ? d : m;
   }, null);
   const n = `${rows.length} decision${rows.length === 1 ? ' is' : 's are'} yours.`;
-  if (longest === null || longest < 2) return `${n} Nothing here starts a build.`;
-  return `${n} The longest has waited ${ageLabel(longest)}. Nothing here starts a build.`;
+  if (longest === null || longest < 2) return n;
+  return `${n} The longest has waited ${ageLabel(longest)}.`;
 }

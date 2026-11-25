@@ -100,6 +100,19 @@ beforeEach(() => {
 const text = () => container.textContent ?? '';
 
 /**
+ * A row is ONE LINE until it is opened.
+ *
+ * Ali, 25 Nov 2026: *"give me the basics at 1st where I can click on it and then the bigger
+ * picture opens up. This is hard to read."* The verbs live behind a disclosure, so a test that
+ * wants one opens the row the way a person would. Module scope because two separate describes
+ * need it, and a helper defined inside one of them is not in scope in the other.
+ */
+async function openFirstRow() {
+  const bar = container.querySelector('[data-testid^="approval-row-"] button') as HTMLElement;
+  await act(async () => { bar.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+}
+
+/**
  * Type into a CONTROLLED input.
  *
  * Setting `el.value` directly and firing `input` does not work: React keeps its own value tracker,
@@ -169,8 +182,13 @@ describe('who sees the decision queue', () => {
     mocked.fetchAllChangeRequests.mockResolvedValue([CR()]);
     await render();
     expect(text()).toContain('Decide');
-    expect([...container.querySelectorAll('button')].map((b) => b.textContent))
-      .toContain('Approve');
+    // Visible without a click: the row itself.
+    expect(container.querySelector('[data-testid^="approval-row-"]')).not.toBeNull();
+    expect(text()).toContain('Let an intern rename their own agent');
+    // Behind the disclosure: the decision.
+    expect(container.querySelector('[data-testid="verb-approved"]')).toBeNull();
+    await openFirstRow();
+    expect(container.querySelector('[data-testid="verb-approved"]')).not.toBeNull();
   });
 
   it('says plainly that approving starts no work', async () => {
@@ -238,7 +256,10 @@ describe('refusals are rendered in the server’s own words', () => {
       },
     });
     await render();
-    const approve = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Approve')!;
+    await openFirstRow();
+    // By test id rather than by text: the button carries its label AND a line explaining what the
+    // verb does, so an exact textContent match would break on copy it is not testing.
+    const approve = container.querySelector('[data-testid="verb-approved"]') as HTMLElement;
     await act(async () => { approve.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
     await act(async () => { await Promise.resolve(); });
     expect(text()).toContain('cannot be the person who approves it');

@@ -151,7 +151,7 @@ describe('queueHeadline', () => {
       req({ id: 'b', requested_at: '2026-11-23T15:52:00Z' }),
     ];
     expect(queueHeadline(rows, NOW))
-      .toBe('2 decisions are yours. The longest has waited 11 days. Nothing here starts a build.');
+      .toBe('2 decisions are yours. The longest has waited 11 days.');
   });
 
   it('says so plainly when nothing is waiting', () => {
@@ -160,10 +160,12 @@ describe('queueHeadline', () => {
 
   it('does not manufacture urgency when everything is fresh', () => {
     expect(queueHeadline([req({ requested_at: '2026-11-25T06:00:00Z' })], NOW))
-      .toBe('1 decision is yours. Nothing here starts a build.');
+      .toBe('1 decision is yours.');
   });
 
-  it('always says that nothing starts a build, which is the page’s standing promise', () => {
-    expect(queueHeadline([req()], NOW)).toContain('Nothing here starts a build.');
+  it('does NOT carry the "starts no work" promise, which is a fixed line on the page', () => {
+    // It lives in ApprovalQueue as static copy, verbatim, because AdminChangeRequestsPage.test.tsx
+    // pins that exact sentence. A headline that rebuilt it per render could drift from it.
+    expect(queueHeadline([req()], NOW)).not.toContain('work');
   });
 });

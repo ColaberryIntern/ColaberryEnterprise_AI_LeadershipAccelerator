@@ -73,7 +73,14 @@ export default function ApprovalQueue({
       <div className="card border-0 shadow-sm mb-3">
         <div className="card-body">
           <h2 className="h5 fw-bold mb-1" id="approval-queue-heading">Waiting on you</h2>
-          <p className="mb-2">{queueHeadline(sorted, now)}</p>
+          <p className="mb-1">{queueHeadline(sorted, now)}</p>
+          {/* Verbatim, and pinned by AdminChangeRequestsPage.test.tsx. A button labelled
+              "Approve" invites the reader to assume a build follows, so the page says
+              otherwise in its own words. "Starts no build" is NOT the same promise: a build is
+              one kind of work and this starts none of them. */}
+          <p className="text-muted small mb-2">
+            Approving records that you approved it, and when. It does not start any work.
+          </p>
 
           {sorted.length > 0 && (
             <>
