@@ -1,0 +1,43 @@
+# Proves the platform build runner's sandbox on a real GitHub-hosted runner (L13.5).
+# No secret, no paid call, no OIDC: a dummy value goes through the real proxy setup, and the
+# runner's own check must find the network closed and the runner's environment unreadable.
+
+name: Platform build sandbox check
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/platformBuild/**'
+      - '.github/workflows/platform-build-*.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  sandbox:
+    name: Prove the agent sandbox
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      WORKSPACE: ${{ github.workspace }}/workspace
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts/platformBuild
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install
+        run: bash scripts/platformBuild/prepareRunner.sh install
+      - name: Start the key proxy with a dummy key
+        env:
+          OPENAI_API_KEY: dummy-not-a-key
+        run: bash scripts/platformBuild/prepareRunner.sh proxy
+      - name: Drop sudo
+        run: bash scripts/platformBuild/prepareRunner.sh drop-sudo
+      - name: Prove the sandbox
+        env:
+          PROXY_INFO: ${{ runner.temp }}/proxy.json
+          CODEX_BIN: ${{ runner.temp }}/agent/node_modules/.bin/codex
+        run: node scripts/platformBuild/checkSandbox.mjs
