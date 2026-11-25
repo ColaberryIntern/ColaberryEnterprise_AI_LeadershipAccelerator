@@ -344,6 +344,22 @@ describe('a brand heading', () => {
     expect(heading(BRANDS[0])).not.toContain('(not a brand)');
   });
 
+  it('refuses it a brand link even if a URL arrives in the payload', () => {
+    /*
+     * Added because the mutation check caught this one surviving. `resolveBrand` sends
+     * `url: null` for the bucket today, so the assertion above could not tell whether the
+     * `brand.isBrand` guard or the null URL was doing the work — removing the guard left every
+     * test passing. A bucket carrying a URL must still never be drawn as a brand.
+     */
+    const html = heading({ ...BRANDS[3], url: 'https://example.com' }, 1);
+    expect(html).not.toContain('data-testid="brand-link-unassigned"');
+    expect(html).not.toContain('example.com');
+
+    // The control: a real brand with the very same URL DOES get the link.
+    expect(heading({ ...BRANDS[2], url: 'https://example.com' }))
+      .toContain('data-testid="brand-link-refactored"');
+  });
+
   it('flags a name it could not read from the brands table', () => {
     const html = heading({ ...BRANDS[0], resolved: false });
     expect(html).toContain('Name may be out of date');
