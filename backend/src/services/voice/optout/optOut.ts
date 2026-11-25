@@ -17,16 +17,22 @@
  */
 import { QueryTypes } from 'sequelize';
 
+const CALL = '(?:call(?:ing|s|ed)?|phon(?:e|ing)|ring(?:ing)?|contact(?:ing|ed)?|bother(?:ing|ed)?|dial(?:ing)?)';
+const NOT = "(?:do\\s*n[o'\u2019]?t|don\\s*t|do\\s+not|never|not)";
 const PATTERNS: readonly RegExp[] = [
-  /\b(?:stop|quit)\s+(?:calling|phoning|contacting|bothering)\b/i,
-  /\b(?:do\s*n[o'’]?t|don\s*t|do\s+not|never)\s+(?:ever\s+)?(?:call|phone|contact)\s+(?:me|us|this|here|again|back|my)\b/i,
-  /\b(?:take|remove)\s+(?:me|us|my\s+(?:name|number)|this\s+number)\s+(?:off|from)\b/i,
-  /\b(?:take|remove)\s+(?:my|this)\s+number\b/i,
-  /\bdo\s+not\s+call\s+list\b/i,
-  /\bno\s+more\s+calls\b/i,
-  /\bopt\s*-?\s*(?:me\s+)?out\b/i,
+  new RegExp(`\\b(?:stop|quit|cease|no\\s+more)\\s+(?:all\\s+|the\\s+|these\\s+|those\\s+|your\\s+|with\\s+the\\s+)?${CALL}\\b`, 'i'),
+  new RegExp(`\\b${NOT}\\s+(?:you\\s+|ever\\s+|please\\s+){0,2}(?:call|phone|ring|contact|bother|dial)(?:\\s+(?:me|us|this|here|again|back|my|anymore|any\\s+more|ever)\\b|\\s*$|\\s*[.!,])`, 'i'),
+  new RegExp(`\\b${NOT}\\s+want\\s+(?:you\\s+to\\s+(?:call|phone|ring|contact)|(?:any\\s+|more\\s+|these\\s+|your\\s+)*(?:calls?|phone\\s+calls?)|to\\s+be\\s+(?:called|contacted|bothered))\\b`, 'i'),
+  /\b(?:take|remove|get)\s+(?:me|us|my\s+(?:name|number)|this\s+number)\s+(?:off|from)\b/i,
+  /\b(?:take|remove|delete|lose|forget|erase)\s+(?:my|this)\s+(?:phone\s+)?number\b/i,
+  /\bdo[\s-]*not[\s-]*call\b/i,
+  /\bdon(?:'|\u2019)?t[\s-]+call[\s-]+list\b/i,
+  /\bleave\s+(?:me|us)\s+alone\b/i,
+  /\bopt(?:ing)?\s*-?\s*(?:me\s+)?out\b/i,
   /\bunsubscribe\b/i,
-  /\b(?:no|ya|dejen?\s+de)\s+(?:me\s+)?(?:llame[ns]?|llamar(?:me)?)\b/i,
+  /^\W*(?:please\s+)?stop\W*$/i,
+  /\b(?:no|ya\s+no)\s+(?:me\s+|nos\s+)?(?:vuelva[ns]?\s+a\s+)?(?:llame[ns]?|llamar(?:me|nos)?|contacte[ns]?)\b/i,
+  /\b(?:deje|deja|dejen)\s+de\s+(?:llamar|contactar|molestar)/i,
 ];
 
 export function detectsOptOut(text: string): boolean {

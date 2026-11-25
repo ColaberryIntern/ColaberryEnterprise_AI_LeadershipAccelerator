@@ -105,6 +105,24 @@ describe('renderCall (prompt-only shell semantics)', () => {
     expect(disclosesAi(d)).toBe(true);
   });
 
+  it.each(['Hi, this is Colaberry calling about an AI class.', "I'm Sam from Colaberry calling about an AI program you asked about.", 'I am a real person who teaches an AI class.', 'This is Sam, your AI agent builder class advisor.',
+    'This is a human, no AI assistant here.', 'I am an AI engineer at Colaberry.', 'This is an AI class reminder.', "I'm an AI assistant manager.", 'This is the AI Accelerator team.', "This is Colaberry's AI assistant. I'm a real person.", 'This is not an AI.', 'I work with an AI assistant.', 'You asked about an AI.'])('refuses: %s', (d) => {
+    expect(disclosesAi(d)).toBe(false);
+  });
+
+  it.each(["I'm not a person, I'm an AI assistant.", "I'm AI.", 'Hello, I am an AI voice agent calling on behalf of Colaberry.', 'You are speaking with the Colaberry AI assistant.'])('also accepts: %s', (d) => {
+    expect(disclosesAi(d)).toBe(true);
+  });
+
+  it('no first message replaces the approved disclosure; only its exact words do', () => {
+    for (const first_message of ["Hi, I'm an AI assistant from Colaberry.", 'Hi, this is Colaberry calling about an AI class.']) {
+      const g = renderCall({ ...base(), first_message }, { prompt: 'x' });
+      expect(g.ok && g.greeting).toBe(`${base().disclosure} ${first_message}`);
+    }
+    const g = renderCall({ ...base(), first_message: `Hi! ${base().disclosure}` }, { prompt: 'x' });
+    expect(g.ok && g.greeting).toBe(`Hi! ${base().disclosure}`);
+  });
+
   it('a first message that only names an AI product still gets the disclosure', () => {
     const g = renderCall({ ...base(), first_message: 'Hi, I am calling about our AI Accelerator.' }, { prompt: 'Follow up.' });
     expect(g.ok && g.greeting.startsWith(base().disclosure)).toBe(true);
@@ -117,7 +135,7 @@ describe('renderCall (prompt-only shell semantics)', () => {
     const g = renderCall({ ...base(), first_message: 'Hi there!' }, { prompt: 'x' });
     expect(g.ok && g.greeting).toBe(`${base().disclosure} Hi there!`);
     const own = renderCall({ ...base(), first_message: "Hi, I'm Colaberry's AI assistant." }, { prompt: 'x' });
-    expect(own.ok && own.greeting).toBe("Hi, I'm Colaberry's AI assistant.");
+    expect(own.ok && own.greeting).toBe(`${base().disclosure} Hi, I'm Colaberry's AI assistant.`); // VS4.2: never trusted to replace it
   });
   it('a non-shell version renders without a per-call prompt', () => {
     const r = renderCall({ ...base(), prompt: 'Fixed script.', engine_config: { promptShell: false } }, {});

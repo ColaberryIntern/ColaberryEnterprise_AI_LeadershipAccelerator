@@ -11,7 +11,7 @@
  * Kept on purpose: the communication-log and timeline rows themselves (that a call happened), and dial
  * reservations (a destination hash that enforces call caps).
  *
- * Never deleted: a call that has not ended, or one whose recording still exists in external storage
+ * Never deleted: a call that has not ended, one whose opt-out is not recorded yet, or one whose recording still exists in external storage
  * (deleting the reference would orphan the recording). Both are reported. A failure on one call is
  * rolled back, reported, and does not stop the rest; a rerun picks it up.
  */
@@ -22,7 +22,9 @@ export const TERMINAL_STATES = ['blocked', 'completed', 'busy', 'no_answer', 'fa
 export const DEFAULT_LIMIT = 200;
 
 const DUE = `c.retention_until IS NOT NULL AND c.retention_until <= NOW() AND c.state IN (:terminal)
-  AND NOT EXISTS (SELECT 1 FROM voice_artifacts a WHERE a.call_id = c.id AND a.kind = 'recording' AND a.deleted_at IS NULL)`;
+  AND NOT EXISTS (SELECT 1 FROM voice_artifacts a WHERE a.call_id = c.id AND a.kind = 'recording' AND a.deleted_at IS NULL)
+  AND NOT (c.state_reason IS NOT DISTINCT FROM 'caller_opt_out' AND c.test_mode = FALSE AND c.lead_id IS NOT NULL
+    AND NOT EXISTS (SELECT 1 FROM voice_call_events e WHERE e.call_id = c.id AND e.event_key = 'opt_out_recorded'))`;
 
 export interface RetentionReport {
   applied: boolean;

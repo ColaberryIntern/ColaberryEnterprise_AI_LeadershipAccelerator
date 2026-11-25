@@ -108,6 +108,13 @@ describeIfDb('retention against Postgres', () => {
     } finally { await sequelize.query('ALTER TABLE audit_logs_away RENAME TO audit_logs'); }
   });
 
+  it('a call whose opt-out is still pending is kept until it is recorded', async () => {
+    await sequelize.query(`UPDATE voice_calls SET state_reason = 'caller_opt_out', lead_id = 5 WHERE id = '${ids.expired}'`);
+    expect((await R.runRetention(sequelize, { apply: true })).deleted).toEqual([ids.expired2]);
+    await sequelize.query(`INSERT INTO voice_call_events (tenant_id, call_id, event_key, source, state, occurred_at) VALUES ('${T}', '${ids.expired}', 'opt_out_recorded', 'studio', 'session_active', NOW())`);
+    expect((await R.runRetention(sequelize, { apply: true })).deleted).toEqual([ids.expired]);
+  });
+
   it('the limit bounds one run', async () => {
     expect((await R.runRetention(sequelize, { apply: true, limit: 1 })).deleted).toHaveLength(1);
   });

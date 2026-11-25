@@ -168,6 +168,14 @@ it('VS3.2 a claim failure (DB down) skips extraction without failing the webhook
   expect(r.json).toHaveBeenCalledWith({ ok: true, matched: true });
 });
 
+it.each(['javascript:alert(1)', 'http://plain.example/a'])('VS4.2 an unsafe recording link (%s) reaches neither the stored record nor the timeline', async (link) => {
+  m.findOne.mockResolvedValue(row({ source: 'interest' }));
+  await handleSynthflowCallComplete({ query: { token: 't' }, body: { call: { call_id: 'call-9', status: 'completed', duration: 65, transcript: TRANSCRIPT, recording_url: link } } } as never, res() as never);
+  await flush();
+  expect(m.claim.mock.calls[0][1]).toMatchObject({ recordingUrl: '' });
+  expect(JSON.stringify([m.claim.mock.calls, m.activity.mock.calls])).not.toContain(link);
+});
+
 it('VS4.2 an unmatched delivery changes nothing, including the contact log', async () => {
   m.findOne.mockResolvedValue(null);
   const r = res();

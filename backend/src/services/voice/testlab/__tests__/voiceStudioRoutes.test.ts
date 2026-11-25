@@ -40,6 +40,13 @@ describe('Voice Studio admin route (VS2.5)', () => {
     expect(start).not.toHaveBeenCalled();
   });
 
+  it('VS4.2: a scoped admin cannot start a call', async () => {
+    const start = jest.fn();
+    const res = await request(app(true, start)).post('/api/admin/voice-studio/tests').set('x-test-admin', 'yes').set('x-scoped', '1').send({});
+    expect(res.status).toBe(403);
+    expect(start).not.toHaveBeenCalled();
+  });
+
   it('passes the body and the admin id (never an email) to the Test Lab and returns its status', async () => {
     const start = jest.fn().mockResolvedValue({ status: 202, body: { callId: 'c1', attempt: 1, outcome: 'accepted' } });
     const res = await request(app(true, start)).post('/api/admin/voice-studio/tests').set('x-test-admin', 'yes').send({ runId: 'run-123456' });

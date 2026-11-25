@@ -376,6 +376,23 @@ describe('VS4.2: a caller cannot loop paid answers through tools', () => {
     expect(h.of(h.model, 'type', 'response.cancel')).toHaveLength(0);
   });
 
+  it('a played mark can never claim more than was sent, or audio that was never sent', async () => {
+    const h = harness();
+    await h.ready();
+    await h.answer('resp_m', 'item_m', 3); // 60 ms sent
+    await h.tw({ event: 'mark', mark: { name: 'item_m|40' } });
+    await h.tw({ event: 'mark', mark: { name: 'never_sent|99999' } });
+    await h.ev({ type: 'input_audio_buffer.speech_started', item_id: 'u9', audio_start_ms: 1 });
+    expect((h.of(h.model, 'type', 'conversation.item.truncate').pop() as { audio_end_ms: number }).audio_end_ms).toBe(40);
+    const g = harness();
+    await g.ready();
+    await g.answer('resp_n', 'item_n', 3);
+    await g.tw({ event: 'mark', mark: { name: 'item_n|99999' } }); // clamped to 60: all of it played, so nothing to cut
+    await g.ev({ type: 'response.output_audio.delta', response_id: 'resp_n', item_id: 'item_n', delta: chunk20ms }); // 80 ms sent
+    await g.ev({ type: 'input_audio_buffer.speech_started', item_id: 'u9', audio_start_ms: 1 });
+    expect((g.of(g.model, 'type', 'conversation.item.truncate').pop() as { audio_end_ms: number }).audio_end_ms).toBe(60);
+  });
+
   it('bounds one spoken answer', async () => {
     const h = harness();
     await h.start();

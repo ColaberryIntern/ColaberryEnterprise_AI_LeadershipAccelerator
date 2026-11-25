@@ -9,8 +9,10 @@ import { correlationKey, mintToken } from '../../twilio/correlationToken';
 
 describe('detectsOptOut', () => {
   it.each(['Please stop calling me.', 'stop calling', "don't call me again", 'Do not call me', 'don\u2019t ever call this number', 'never call here again', 'take me off your list', 'remove my number', 'Remove me from the list please',
-    'put me on the do not call list', 'no more calls', 'I want to opt out', 'unsubscribe', 'quit bothering me', 'no me llame'])('yes: %s', (t) => expect(detectsOptOut(t)).toBe(true));
-  it.each(['Can you call me back tomorrow?', 'I did not get the call', 'When should I call you?', 'Stop by the office', 'What time is the call?', 'I have to take my kid off the bus', 'They never called me', ''])('no: %s', (t) => expect(detectsOptOut(t)).toBe(false));
+    'put me on the do not call list', 'no more calls', 'I want to opt out', 'unsubscribe', 'quit bothering me', 'no me llame',
+    'put me on your do-not-call list', "I don't want you to call me again", "I don't want any more calls", 'I do not want to be called', "Please don't call anymore", "don't you call me again", 'stop all calls', 'stop the calls', 'stop ringing me',
+    'lose my number', 'delete my number', 'leave me alone', 'STOP', 'Stop.', 'no me vuelvan a llamar', 'deja de llamarme', "don't call."])('yes: %s', (t) => expect(detectsOptOut(t)).toBe(true));
+  it.each(['Can you call me back tomorrow?', 'I did not get the call', 'When should I call you?', 'Stop by the office', 'What time is the call?', 'I have to take my kid off the bus', 'They never called me', '', 'I do not want to miss the call', 'I want you to call me', 'Do you take calls on Sunday?', 'Stop, go back to the first option', 'I forgot my number', 'Why did you not call yesterday?', 'I will not be able to call you until noon'])('no: %s', (t) => expect(detectsOptOut(t)).toBe(false));
 });
 
 const deps = (over: Partial<OptOutDeps> = {}) => {

@@ -46,6 +46,16 @@ it.each([[RELAY_PATH, RelayConnection], [STREAM_PATH, RealtimeBridge]] as const)
   ws.terminate();
 });
 
+it.each([RELAY_PATH, STREAM_PATH])('%s: a frame over 64 KB closes the socket (1009) before any handler sees it', async (path) => {
+  const seen = jest.spyOn((path === RELAY_PATH ? RelayConnection : RealtimeBridge).prototype as never, (path === RELAY_PATH ? 'onMessage' : 'onTwilio') as never).mockImplementation((async () => undefined) as never);
+  const s = await serve({});
+  const ws = s.open(path);
+  await opened(ws);
+  ws.send('x'.repeat(64 * 1024 + 1));
+  expect(await closed(ws)).toBe(1009);
+  expect(seen).not.toHaveBeenCalled();
+});
+
 it('over the socket limit the upgrade is refused 503, and a freed place is usable again', async () => {
   const s = await serve({ maxSockets: 2 });
   const a = s.open(RELAY_PATH); const b = s.open(STREAM_PATH);

@@ -56,7 +56,7 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
     const metadata = body.metadata || {};
 
     if (!call_id) {
-      console.warn('[Synthflow Webhook] No call_id found. Payload keys:', Object.keys(body).join(', '));
+      console.warn('[Synthflow Webhook] No call_id found');
       // Accept it anyway with 200 so Synthflow doesn't retry, but log for debugging
       res.status(200).json({ ok: true, matched: false, reason: 'no_call_id', keys: Object.keys(body) });
       return;

@@ -18,6 +18,7 @@
  * webhook landing during the sweep, or two sweeps at once, finish the row once. Voice off or no API key
  * means the sweep does nothing at all (it does not burn attempts on a call it cannot read).
  */
+import { safeRecordingUrl } from '../voice/synthflowWebhookAuth';
 import type { SynthflowCallRecord } from '../synthflowService';
 import { errorClassOf } from '../inbound/agentRecipientRouter';
 
@@ -133,7 +134,7 @@ export function defaultSweepDeps(): SweepDeps {
             provider_response = coalesce(provider_response, '{}'::jsonb) || CAST(:pr AS jsonb)
           WHERE id = :id AND status IN ('sent', 'pending') RETURNING id`,
         { id: row.id, status: rec.status === 'completed' ? 'delivered' : 'failed', pr: JSON.stringify({
-          call_status: rec.status, duration: rec.durationSeconds, transcript: rec.transcript, recording_url: rec.recordingUrl,
+          call_status: rec.status, duration: rec.durationSeconds, transcript: rec.transcript, recording_url: safeRecordingUrl(rec.recordingUrl),
           end_call_reason: rec.endedReason, completed_at: new Date().toISOString(), reconciled_by: 'agent_comms_sweep',
         }) });
       return updated.length > 0;
