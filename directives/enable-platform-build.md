@@ -35,7 +35,11 @@ Student projects are never built by the platform (Ali, 2026-11-25). No student r
 3. **Turn it on.** Set `SBP_PLATFORM_BUILD=on` and `PLATFORM_BUILD_CLIENT_ENROLLMENT=<enrollment id>` in
    the production backend env and redeploy the backend. Success: both are visible in
    `docker exec accelerator-backend printenv SBP_PLATFORM_BUILD PLATFORM_BUILD_CLIENT_ENROLLMENT`.
-4. **Start a client demo** (`startClientDemo({ understandingId })`). Success: a log line
+4. **Start a client demo.** The enterprise intake does it when an interview finishes
+   (`services/enterpriseIntake/enterpriseIntakeDemo.ts`, retried by the 5-minute sweep for interviews from
+   the last 7 days, so **turning the switch on also builds for recent interviews that were refused while it
+   was off**, at most one per sweep, up to the daily cap). By hand:
+   `startClientDemo({ understandingId })`. Success: a log line
    `"event":"platform_build_dispatched"` with the project id, and a new run in the repository's
    Actions tab named "Platform build runner".
 5. **Wait for the run** (typically 15 to 40 minutes). Success: the run is green, its log ends with

@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import api from '../../utils/api';
 import { EmptyState, PageHeader, SectionCard, StatusBadge } from '../../components/admin/shell';
 import EnterpriseClientMeetingCard, { ClientPlan } from './EnterpriseClientMeetingCard';
+import EnterpriseClientDemoCard, { ClientDemo } from './EnterpriseClientDemoCard';
 import type { Tone } from '../../components/admin/shell/StatusBadge';
 
 /**
@@ -55,6 +56,7 @@ export interface ClientDetail extends ClientRow {
   research: { summary?: string; industry?: string; size_signals?: string; systems?: string[]; open_questions?: string[]; site?: string | null } | null;
   pilotOptions: Array<{ title: string; service: string; what_it_does: string; success_measure: string; first_step: string; why_this_fits: string; roi?: { hours_low: number | null; hours_high: number | null; share_low: number; share_high: number } }> | null;
   plan?: ClientPlan | null;
+  demo?: ClientDemo | null;
   optionsEmail: Message;
   proposal: Message;
   signedAt: string | null;
@@ -210,6 +212,7 @@ function ClientView({ id }: { id: string }): React.ReactElement {
       <div className="row g-3">
         <div className="col-lg-5">
           <EnterpriseClientMeetingCard plan={c.plan} interviewed={Boolean(c.interviewedAt)} />
+          <EnterpriseClientDemoCard demo={c.demo} />
           <SectionCard title="What they told us" icon="file-list-3-line">
             <dl className="row small mb-0">
               <dt className="col-5">Process</dt>

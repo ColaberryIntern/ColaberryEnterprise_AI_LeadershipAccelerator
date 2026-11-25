@@ -1,17 +1,18 @@
 /**
  * enterpriseIntakeSweep - the Enterprise intake's 5-minute catch-up, in one place (v2).
  *
- * server.ts used to chain three steps inline. v2 adds four more, and server.ts is far past the
+ * server.ts used to chain three steps inline. v2 adds four more, L13.7 one, and server.ts is far past the
  * 500-line ceiling, so the chain lives here and server.ts makes one call.
  *
  * Order matters only loosely (each step is idempotent and retried next run):
  *   1. Basecamp lists (W29)        - open/finish lists, post interview write-ups
  *   2. Client files (v2)           - attach uploaded research to their list
  *   3. Research (W30)              - research + options for finished interviews, then post
- *   4. Comms (W31)                 - copy emails and calls onto the list, rename by stage
- *   5. Interview reminders (v2)    - "later" interviews whose time has come
- *   6. Meeting posts (v2)          - booked meetings onto the list
- *   7. Ali's briefs (v2)           - one email per client once research + meeting are in
+ *   4. Client demos (L13.7)        - start the Command Center and demo the interview could not
+ *   5. Comms (W31)                 - copy emails and calls onto the list, rename by stage
+ *   6. Interview reminders (v2)    - "later" interviews whose time has come
+ *   7. Meeting posts (v2)          - booked meetings onto the list
+ *   8. Ali's briefs (v2)           - one email per client once research + meeting are in
  *
  * Every step has its own catch: one failing (Basecamp down, SMTP down) never skips the others.
  * A step that did something, or failed, logs one structured line.
@@ -25,6 +26,7 @@ export const STEPS: Step[] = [
   { name: 'basecamp', run: async () => (await import('./enterpriseIntakeBasecamp')).syncEnterpriseIntakesToBasecamp() },
   { name: 'files', run: async () => (await import('./enterpriseIntakeFiles')).syncClientFiles() },
   { name: 'research', run: async () => (await import('./enterpriseIntakeResearch')).syncEnterpriseResearch() },
+  { name: 'client_demos', run: async () => (await import('./enterpriseIntakeDemo')).syncClientDemos() },
   { name: 'comms', run: async () => (await import('./enterpriseIntakeSync')).syncEnterpriseComms() },
   { name: 'reminders', run: async () => (await import('./enterpriseIntakeReminders')).syncInterviewReminders() },
   { name: 'meeting_posts', run: async () => (await import('./enterpriseIntakeMeetingPost')).syncMeetingPosts() },
