@@ -1,7 +1,8 @@
 import { sequelize } from '../../../config/database';
 import { WeeklyLiveSignal, WeeklyLiveTopic } from '../../../models/WeeklyLive';
-import { askAi, reserveFor, type AskAi } from '../aiCall';
+import { askAi, type AskAi } from '../aiCall';
 import { curriculumMap } from '../curriculumMap';
+import { reserveFor } from '../modelPrices';
 import { latestDemand } from '../demand/demandJob';
 import { shiftDays } from '../signals/signalsJob';
 import { judgePrompt, judgeSystem, writerPrompt, WRITER_SYSTEM, type TopicsInput } from './topicPrompts';

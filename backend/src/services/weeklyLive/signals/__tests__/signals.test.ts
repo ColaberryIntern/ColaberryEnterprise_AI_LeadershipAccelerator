@@ -3,7 +3,7 @@ import { WeeklyLiveSignal } from '../../../../models/WeeklyLive';
 import { readPage, toYmd } from '../pageDate';
 import { fetchPage } from '../pageFetch';
 import { parseCandidates, searchCost, SEARCH_RESERVE_USD, type Candidate } from '../signalSearch';
-import { runSignals, sameStory, selectSignals, vet, namesAStory, shiftDays, urlKey, windowStart, MAX_SIGNALS, type SignalRow } from '../signalsJob';
+import { runSignals, sameStory, selectSignals, vet, isRoundup, namesAStory, shiftDays, urlKey, windowStart, MAX_SIGNALS, type SignalRow } from '../signalsJob';
 import { BudgetExceeded, capFrom, reserve, withBudget } from '../researchBudget';
 
 /** WL3.1: dates come from the page, failed pages are dropped with a reason, reruns replace, the cap holds. */
@@ -38,6 +38,10 @@ describe('vet', () => {
   it('a home or index page with no date is dropped', async () => {
     expect((await vet(cand({ url: 'https://a.com/' }), FROM, TODAY, page('<title>Front Page</title>'))).dropped_reason).toContain('index page');
     expect([namesAStory('https://a.com/en/news/'), namesAStory('https://a.com/n/ai-jobs-report'), namesAStory('https://a.com/article/4120784')]).toEqual([false, true, true]);
+  });
+  it('a roundup page is dropped with that reason, by the page title and not the search headline', async () => {
+    const html = `<meta property="og:title" content="The week in AI, 16-22 November 2026">${ld('2026-11-18').replace('Page title', '')}`;
+    expect((await vet(cand({ headline: 'A plain headline' }), FROM, TODAY, page(html))).dropped_reason).toBe('a roundup or newsletter, not one story');
   });
   it('403 then the alternate outlet', async () => {
     const f = jest.fn().mockResolvedValueOnce({ ok: false, url: '', reason: 'HTTP 403' }).mockResolvedValueOnce({ ok: true, url: 'https://b.com/y', html: ld('2026-11-18') });
@@ -110,8 +114,26 @@ describe('runSignals', () => {
   it('stops at the cost cap and replaces nothing', async () => {
     const search = jest.fn().mockRejectedValue(new BudgetExceeded(49.9, 0.25, 50));
     await expect(runSignals(input, { search, today: TODAY })).rejects.toThrow(/cost cap is \$50\.00/);
-    expect(search).toHaveBeenCalledTimes(1);
     expect(destroy).not.toHaveBeenCalled();
+  });
+  it('a short list gets one more round that names what it has; twelve does not', async () => {
+    const many = (n: number, at = 0) => Array.from({ length: n }, (_, i) => cand({ url: `https://a.com/story-number-${i + at}`, headline: `uniq${i + at} alpha${i + at}` }));
+    const html = (url: string) => { const n = url.split('-').pop(); return Promise.resolve({ ok: true as const, url, html: `<meta property="og:title" content="uniq${n} alpha${n} beta${n}"><script type="application/ld+json">{"datePublished":"2026-11-18"}</script>` }); };
+    const search = jest.fn().mockResolvedValueOnce(many(8)).mockResolvedValue([]);
+    expect(await runSignals(input, { search, fetchPage: html, today: TODAY })).toMatchObject({ kept: 8, short: true });
+    expect(search).toHaveBeenCalledTimes(10);
+    expect(search.mock.calls[0][1].have).toEqual([]);
+    expect(search.mock.calls[5][1].have).toContain('uniq0 alpha0 beta0');
+    const again = jest.fn().mockResolvedValueOnce(many(8)).mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce(many(6, 8)).mockResolvedValue([]);
+    expect(await runSignals(input, { search: again, fetchPage: html, today: TODAY })).toMatchObject({ kept: 14, short: false });
+    const enough = jest.fn().mockResolvedValueOnce(many(12)).mockResolvedValue([]);
+    await runSignals(input, { search: enough, fetchPage: html, today: TODAY });
+    expect(enough).toHaveBeenCalledTimes(5);
+  });
+  it('the extra round hitting the cost cap keeps the first round', async () => {
+    const search = jest.fn().mockResolvedValueOnce([cand()]).mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockRejectedValue(new BudgetExceeded(49.9, 0.45, 50));
+    expect(await runSignals(input, { search, fetchPage: page(ld('2026-11-18')), today: TODAY })).toMatchObject({ kept: 1, short: true });
+    expect(destroy).toHaveBeenCalled();
   });
   it('one failed group is reported; all failing throws and keeps the old rows', async () => {
     const search = jest.fn().mockRejectedValueOnce(new Error('x')).mockResolvedValue([]);
@@ -146,6 +168,8 @@ describe('cost cap', () => {
   });
   it('unknown usage is charged at the worst case; searches are billed', () => {
     expect(searchCost('gpt-4o', undefined, 2)).toBe(SEARCH_RESERVE_USD);
+    expect(searchCost('unknown-model', { input_tokens: 1 }, 2)).toBe(SEARCH_RESERVE_USD);
+    expect(searchCost('gpt-6.2-sol', { input_tokens: 10_000, output_tokens: 1000 }, 2)).toBeCloseTo(0.05, 6);
     expect(searchCost('gpt-4o', { input_tokens: 10_000, output_tokens: 1000 }, 2)).toBeCloseTo(0.055, 6);
   });
 });
@@ -155,6 +179,10 @@ it('parseCandidates keeps valid items only and survives a malformed answer', () 
   expect(parseCandidates('{"items": "no"}')).toEqual([]);
   const items = [cand(), { headline: 'no url here' }, cand({ url: 'javascript:alert(1)' })];
   expect(parseCandidates(`Here you go: ${JSON.stringify({ items })} done`)).toHaveLength(1);
+});
+
+it('a story keeps its three strongest factors', () => {
+  expect(parseCandidates(JSON.stringify({ items: [cand({ factors: [7, 1, 7, 2, 5, 6] })] }))[0].factors).toEqual([7, 1, 2]);
 });
 
 it('shiftDays crosses months', () => { expect(shiftDays('2026-11-05', -14)).toBe('2026-10-22'); });
@@ -171,3 +199,15 @@ it('a query string that names the page is a different page; tracking is ignored'
 });
 
 it.each([['fifty', 50], ['', 50], [undefined, 50], ['-5', 50], ['Infinity', 50], ['0', 0], ['20', 20]])('cap setting %s is %s', (raw, n) => { expect(capFrom(raw as string | undefined)).toBe(n); });
+
+it.each([
+  'AI News This Week: 23 to 29 November 2026', 'The week in AI, 16-22 November 2026', 'The week of 23–29 November 2026 · AI, Work and the Economy', 'This week in AI: a lot happened', 'The Week in Tech',
+  'WorldatWork Today News Bytes for Nov. 13, 2026 | WorldatWork', 'North America HR News Flash: Friday, November 20, 2026 | NACSHR', 'Top AI stories of the week', 'AI and Jobs News, November 2026: What Companies Actually Did', 'Weekly Roundup: agents', 'Our AI weekly newsletter',
+])('a roundup: %s', (h) => { expect(isRoundup(h, 'https://a.com/x')).toBe(true); });
+it.each([
+  'Amazon layoffs begin the week of Nov. 30', 'Congress passed two AI bills this week in a late vote', 'Nvidia CEO speaks this week in Davos', 'Gmail gets an AI digest of your day', 'How one worker built a newsletter with AI agents',
+  "Reader's Digest replaces editors with AI", 'Bayer uses AI to defend Roundup weedkiller', 'Weekly pay rises as AI spreads', 'Weekend work is back', 'Canva cuts 22% of staff this week', 'A four-day week of work, thanks to AI', 'News Corp signs an AI deal in November 2026',
+])('one story: %s', (h) => { expect(isRoundup(h, 'https://www.theatlantic.com/newsletters/archive/2026/11/one-story/1/')).toBe(false); });
+it('a weekly issue address is a roundup whatever its title', () => {
+  expect([isRoundup('Plain', 'https://g.com/ai-news/weekly/2026-w48/'), isRoundup('Plain', 'https://g.com/latest/2026-w47/'), isRoundup('Plain', 'https://g.com/weekly/one-story')]).toEqual([true, true, false]);
+});

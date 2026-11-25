@@ -4,33 +4,16 @@ import { redactSensitive } from '../../utils/piiRedaction';
 import { ensureTraceId } from '../../utils/requestContext';
 import { emitAiEvent } from '../aiEventService';
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
+import { callCost } from './modelPrices';
 import { withBudget } from './signals/researchBudget';
 
 /**
  * One paid structured AI call for the Studio (WL3.3): reserved under the monthly cap, redacted, logged to
  * ai_events, answered in a strict JSON schema. No SDK retry, because a retry could bill twice against one
  * reservation. The instrumented client wraps only chat completions, so the event is recorded here.
- *
- * Prices per million tokens from developers.openai.com/api/docs/pricing, read 2026-11-25. A model that
- * is not listed is charged at the reservation, never at zero.
+ * Costs come from modelPrices.ts.
  */
-const PRICES: Readonly<Record<string, { input: number; output: number }>> = {
-  'gpt-6.2-sol': { input: 2, output: 10 }, 'gpt-6.2-astra': { input: 8, output: 40 }, 'gpt-6.1-terra': { input: 1, output: 5 }, 'gpt-4o': { input: 2.5, output: 10 },
-};
 const TIMEOUT_MS = 240_000;
-
-export function callCost(model: string, usage: { input_tokens?: number; output_tokens?: number } | undefined, reserveUsd: number): number {
-  const p = PRICES[model];
-  if (!usage || !p) return reserveUsd;
-  return ((usage.input_tokens || 0) * p.input + (usage.output_tokens || 0) * p.output) / 1_000_000;
-}
-
-const UNPRICED_RESERVE = { input: 10, output: 50 };
-/** The most a call can cost: its model's price, or a high stand-in for a model not listed here. */
-export function reserveFor(model: string, maxInputTokens: number, maxOutputTokens: number): number {
-  const p = PRICES[model] || UNPRICED_RESERVE;
-  return (maxInputTokens * p.input + maxOutputTokens * p.output) / 1_000_000;
-}
 
 export interface AiCall { planId: string; purpose: string; model: string; system: string; user: string; schema: Record<string, unknown>; maxTokens: number; reserveUsd: number; }
 export type AskAi = (c: AiCall) => Promise<unknown>;
