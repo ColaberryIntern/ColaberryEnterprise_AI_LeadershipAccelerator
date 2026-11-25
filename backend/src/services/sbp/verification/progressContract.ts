@@ -365,7 +365,8 @@ export interface StoryProgressInput {
   story_id: string;
   state: StoryVerificationSummary['state'];
   criteria_passed: number;
-  criteria_total: number;
+  /** Null when no verification run has counted it; the plan's own count is used instead. */
+  criteria_total: number | null;
   verified_at?: string | null;
   commit_sha?: string | null;
   commit_at?: string | null;
@@ -455,7 +456,7 @@ export function renderProgressFile(
           ? {
             state: p.state,
             criteria_passed: p.criteria_passed,
-            criteria_total: p.criteria_total,
+            criteria_total: p.criteria_total ?? acceptance.length,
             verified_at: p.verified_at ?? null,
             commit_sha: p.commit_sha ?? null,
             commit_url: commitUrl(input.repoUrl, p.commit_sha),

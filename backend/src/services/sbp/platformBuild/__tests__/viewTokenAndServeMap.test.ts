@@ -1,5 +1,5 @@
 import { mintViewToken, verifyViewToken, VIEW_TOKEN_TTL_SECONDS } from '../viewToken';
-import { resolveServePath, viewHeaders, injectShim, contentTypeFor, SHIM_PATH } from '../serveMap';
+import { resolveServePath, viewHeaders, injectShim, injectDemoLink, contentTypeFor, SHIM_PATH } from '../serveMap';
 
 const SECRET = 'test-secret-value';
 const PROJECT = '3f2b6c1e-8a1d-4c2b-9d3e-1a2b3c4d5e6f';
@@ -79,5 +79,17 @@ describe('serveMap headers and shim', () => {
     expect(contentTypeFor('a.json')).toMatch(/json/);
     expect(contentTypeFor('a.css')).toMatch(/css/);
     expect(contentTypeFor('index.html')).toMatch(/html/);
+  });
+});
+
+describe('injectDemoLink', () => {
+  it('goes last in the body, once, with the href it was given', () => {
+    const out = injectDemoLink('<html><body><p>hi</p></BODY></html>', '../demo/');
+    expect(out).toMatch(/<a id="platform-demo-link" href="\.\.\/demo\/">Open the demo<\/a><\/BODY><\/html>$/);
+    expect(out.match(/<a id="platform-demo-link"/g)).toHaveLength(1);
+  });
+
+  it('is appended when the page has no closing body tag', () => {
+    expect(injectDemoLink('<p>hi', 'demo/')).toContain('href="demo/"');
   });
 });

@@ -19,11 +19,11 @@ import { env } from '../config/env';
 import { verifyRunnerToken, RunnerIdentityError } from '../services/sbp/platformBuild/runnerIdentity';
 import { getRun, transitionRun } from '../services/sbp/platformBuild/runStore';
 import { checkUpload } from '../services/sbp/platformBuild/uploadContract';
-import { saveRunArtifacts, activeArtifact, RunNotAcceptingUpload } from '../services/sbp/platformBuild/artifactStore';
+import { saveRunArtifacts, activeArtifact, activeArtifactSummary, RunNotAcceptingUpload } from '../services/sbp/platformBuild/artifactStore';
 import { runnerBundle, liveProjectFile } from '../services/sbp/platformBuild/bundle';
 import { verifyViewToken } from '../services/sbp/platformBuild/viewToken';
 import {
-  resolveServePath, contentTypeFor, viewHeaders, injectShim, STORAGE_SHIM_JS, SHIM_PATH,
+  resolveServePath, contentTypeFor, viewHeaders, injectShim, injectDemoLink, STORAGE_SHIM_JS, SHIM_PATH,
 } from '../services/sbp/platformBuild/serveMap';
 
 const router = Router();
@@ -151,6 +151,16 @@ function send(res: Response, status: number, body: string, type: string, headers
   res.send(body);
 }
 
+/** Whether to offer the demo link. A failed lookup costs the link, never the Command Center. */
+async function hasDemo(projectId: string): Promise<boolean> {
+  try {
+    return Boolean((await activeArtifactSummary(projectId)).demo);
+  } catch (err) {
+    log('platform_view_demo_lookup_failed', 'partial', { projectId, message: (err as Error).message }, (err as Error).name);
+    return false;
+  }
+}
+
 async function serveView(req: Request, res: Response, token: string, rest: string): Promise<void> {
   const projectId = verifyViewToken(token, env.jwtSecret);
   const target = projectId ? resolveServePath(rest) : null;
@@ -198,7 +208,9 @@ async function serveView(req: Request, res: Response, token: string, rest: strin
         if (body === undefined) break;
         const isHtml = target.path.endsWith('.html');
         const depth = target.path.split('/').length - 1;
-        const out = isHtml ? injectShim(body, `${'../'.repeat(depth)}${SHIM_PATH}`) : body;
+        const up = '../'.repeat(depth);
+        let out = isHtml ? injectShim(body, `${up}${SHIM_PATH}`) : body;
+        if (isHtml && await hasDemo(projectId)) out = injectDemoLink(out, `${up}demo/`);
         send(res, 200, out, contentTypeFor(target.path), viewHeaders({ html: isHtml }));
         return;
       }
