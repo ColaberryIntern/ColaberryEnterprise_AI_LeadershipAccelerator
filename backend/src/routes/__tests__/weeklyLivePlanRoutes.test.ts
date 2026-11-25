@@ -201,8 +201,13 @@ describe('reading', () => {
   });
   it('plan-setup is checked too', async () => {
     const map = jest.requireActual('../../services/weeklyLive/curriculumMap');
+    const row = { id: 'a', date: '2099-11-30', title: 'T', week: 3, status: 'scheduled' };
+    const sessions = jest.spyOn(map, 'batchSessions').mockResolvedValue([row]);
     jest.spyOn(map, 'curriculumMap').mockResolvedValueOnce(map.buildCurriculumMap([], '2026-11-25'));
     expect((await go('get', '/api/admin/live/plan-setup?airDate=2099-11-30')).status).toBe(200);
+    jest.spyOn(map, 'curriculumMap').mockResolvedValueOnce(map.buildCurriculumMap([], '2026-11-25'));
+    sessions.mockResolvedValueOnce([{ ...row, week: 'three' }]);
+    expect((await go('get', '/api/admin/live/plan-setup?airDate=2099-11-30')).status).toBe(500);
     jest.spyOn(map, 'curriculumMap').mockResolvedValueOnce('junk');
     expect((await go('get', '/api/admin/live/plan-setup?airDate=2099-11-30')).status).toBe(500);
   });

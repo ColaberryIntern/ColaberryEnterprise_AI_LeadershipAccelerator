@@ -1,7 +1,7 @@
 import { WeeklyLiveSignal, WeeklyLiveTopic, type PlanInputs } from '../../../models/WeeklyLive';
 import { classifyError } from '../../../utils/errorClassifier';
 import { resolveBatch, type BatchResult } from '../batchResolver';
-import { centralDate, curriculumMap, type CurriculumMap } from '../curriculumMap';
+import { batchSessions, centralDate, curriculumMap, type BatchSession, type CurriculumMap } from '../curriculumMap';
 import { latestDemand, runDemand } from '../demand/demandJob';
 import { MIN_VIRAL_FACTORS, TOPIC_GATE } from '../scoring';
 import { runSignals } from '../signals/signalsJob';
@@ -125,8 +125,8 @@ export async function planView(planId: string) {
 export type PlanView = Awaited<ReturnType<typeof planView>>;
 
 /** What the picker needs before a run: the batch for the date, the curriculum map, demand, and any plan already made. */
-export interface PlanSetup { batch: BatchResult; map: CurriculumMap; demand: DemandView[]; latestPlanId: string | null; }
+export interface PlanSetup { batch: BatchResult; map: CurriculumMap; demand: DemandView[]; latestPlanId: string | null; sessions: BatchSession[]; }
 export async function planSetup(airDate: string): Promise<PlanSetup> {
   const [batch, map, demand, latest] = await Promise.all([resolveBatch(airDate), curriculumMap(), demandView(), store.latestPlanFor(airDate)]);
-  return { batch, map, demand, latestPlanId: latest?.id ?? null };
+  return { batch, map, demand, latestPlanId: latest?.id ?? null, sessions: batch.ok ? await batchSessions(batch.cohortId) : [] };
 }

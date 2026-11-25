@@ -16,8 +16,9 @@ export interface PlanView {
   demand: PlanDemand[]; signals: PlanSignal[]; topics: PlanTopic[];
 }
 export type PlanBatch = { ok: true; cohortId: string; cohortName: string } | { ok: false; status: number; error: string };
-export interface MapWeek { week: number; theme: string; intensive: string; timesCovered: number; lastCovered: string | null; lastTitle: string | null; daysAgo: number | null; coveredInLast4: boolean }
-export interface PlanSetup { batch: PlanBatch; map: { asOf: string; recentWeeks: number[]; weeks: MapWeek[] }; demand: PlanDemand[]; latestPlanId: string | null }
+export interface MapWeek { week: number; theme: string; intensive: string; timesCovered: number; lastCovered: string | null; lastTitle: string | null; daysAgo: number | null; coveredInLast4: boolean; planned: { date: string; title: string } | null }
+export interface BatchSession { id: string; date: string | null; title: string; week: number | null; status: string | null }
+export interface PlanSetup { batch: PlanBatch; map: { asOf: string; recentWeeks: number[]; weeks: MapWeek[] }; demand: PlanDemand[]; latestPlanId: string | null; sessions: BatchSession[] }
 
 export interface PlanFailure { status: number | null; message: string; code: string | null }
 export function planFailure(e: unknown): PlanFailure {

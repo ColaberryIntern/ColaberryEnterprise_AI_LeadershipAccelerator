@@ -18,9 +18,9 @@ import { POLL_MS } from '../plan/PlanTab';
 import { nextMonday } from '../plan/planModel';
 
 const api = plans as jest.Mocked<typeof plans>;
-const weeks = Array.from({ length: 12 }, (_, i) => ({ week: i + 1, theme: `Theme ${i + 1}`, intensive: 'I', timesCovered: i === 1 ? 1 : 0, lastCovered: i === 1 ? '2026-11-23' : null, lastTitle: i === 1 ? 'Ep 1' : null, daysAgo: i === 1 ? 2 : null, coveredInLast4: i === 1 }));
+const weeks = Array.from({ length: 12 }, (_, i) => ({ week: i + 1, theme: `Theme ${i + 1}`, intensive: 'I', timesCovered: i === 1 ? 1 : 0, lastCovered: i === 1 ? '2026-11-23' : null, lastTitle: i === 1 ? 'Ep 1' : null, daysAgo: i === 1 ? 2 : null, coveredInLast4: i === 1, planned: i === 2 ? { date: '2026-11-30', title: 'Ep 2' } : null }));
 const demand = weeks.map((w) => ({ week: w.week, video_url: null, video_title: null, channel: null, views: 10, multiple: w.week === 3 ? null : 3.5, score: w.week === 3 ? 2 : 4, thin_median: w.week === 4, measured_at: '2026-11-25', failed: w.week === 5 }));
-const setup = (over: Partial<plans.PlanSetup> = {}): plans.PlanSetup => ({ batch: { ok: true, cohortId: 'c', cohortName: 'Cohort - November 2026' }, map: { asOf: '2026-11-25', recentWeeks: [2], weeks }, demand, latestPlanId: 'p1', ...over });
+const setup = (over: Partial<plans.PlanSetup> = {}): plans.PlanSetup => ({ batch: { ok: true, cohortId: 'c', cohortName: 'Cohort - November 2026' }, map: { asOf: '2026-11-25', recentWeeks: [2], weeks }, demand, latestPlanId: 'p1', sessions: [{ id: 'x', date: '2020-01-06', title: 'An old class', week: 2, status: 'completed' }, { id: 'y', date: '2099-01-05', title: 'A future class', week: null, status: 'scheduled' }], ...over });
 const signal = (id: string, factors: number[], over: Partial<plans.PlanSignal> = {}): plans.PlanSignal => ({ id, headline: `Story ${id}`, publisher: 'Outlet', url: `https://example.com/${id}`, published_at: '2026-11-19', date_confirmed: true, factors, fits_weeks: [3], idea: 'A hook idea', dropped_reason: null, ...over });
 const topic = (rank: number, over: Partial<plans.PlanTopic> = {}): plans.PlanTopic => ({
   id: `t${rank}`, rank, week: 3, title: `Topic ${rank}`, spin: 'The spin.', parody: 'The parody.', hooks: [{ text: 'Hook one', viral: 85 }, { text: 'Hook two', viral: 80 }], package: { long_video: 'LV', shorts: 'S', thumbnail: 'TH' }, marketing: { before: 'B', class_day: 'C', after: 'A' },
@@ -71,11 +71,20 @@ describe('who sees the tabs', () => {
   it('a full administrator gets four tabs, and arrow keys move between them', async () => {
     await open('classes');
     for (const t of ['classes', 'plan', 'map', 'rubric']) expect(q(`tab-${t}`)).not.toBeNull();
-    expect(q('pipe-s1')!.textContent).toContain('Aired');
+    expect(q('pipe-s1')!.textContent).toContain('Date passed');
     act(() => { Simulate.keyDown(q('studio-tabs')!, { key: 'ArrowRight' }); });
     expect(q('tab-plan')!.getAttribute('aria-selected')).toBe('true');
     act(() => { Simulate.keyDown(q('studio-tabs')!, { key: 'ArrowLeft' }); Simulate.keyDown(q('studio-tabs')!, { key: 'x' }); });
     expect(q('tab-classes')!.getAttribute('aria-selected')).toBe('true');
+  });
+  it('administrators keep the broadcast state and access mode, and nothing is called aired', async () => {
+    (listStudioSessions as jest.Mock).mockResolvedValue([{ id: 's1', title: 'Ep 1', session_date: '2020-01-06', start_time: '18:30', cohort_name: 'Cohort', editorial_state: 'cancelled', access_mode: 'cohort' }, { id: 's2', title: 'Ep 0', session_date: '2020-01-05', start_time: null, cohort_name: null, editorial_state: null, access_mode: null }]);
+    await open('classes');
+    const text = q('classes-panel')!.textContent!;
+    expect(text).toContain('cancelled · cohort');
+    expect(text).toContain('Not set up');
+    expect(q('pipe-s2')!.textContent).toContain('No broadcast yet');
+    expect(text).not.toMatch(/aired/i);
   });
   it('a server error shows the tabs and says the planner could not be loaded', async () => {
     api.getPlanSetup.mockRejectedValue(refused(500));
@@ -186,6 +195,31 @@ describe('running', () => {
     await click('find-topics');
     expect(q('plan-error')!.textContent).toBe('No cohort');
   });
+  it('a start still in flight when the date changes never lands on the new date', async () => {
+    let answer: (v: { planId: string; started: boolean }) => void = () => undefined;
+    api.startPlan.mockReturnValueOnce(new Promise((ok) => { answer = ok; }));
+    api.getPlanSetup.mockImplementation(async (d) => setup(d === '2099-01-05' ? { latestPlanId: null, batch: { ok: true, cohortId: 'j', cohortName: 'Cohort - January 2099' } } : {}));
+    await open();
+    await click('find-topics');
+    act(() => { Simulate.change(q('input-airDate')!, { target: { value: '2099-01-05' } } as never); });
+    await flush();
+    await act(async () => { answer({ planId: 'p2', started: true }); });
+    await flush();
+    expect((q('input-airDate') as HTMLInputElement).value).toBe('2099-01-05');
+    expect(q('plan-batch')!.textContent).toBe('Goes into Cohort - January 2099');
+    expect(q('topics')).toBeNull();
+    expect(api.getPlan).not.toHaveBeenCalledWith('p2');
+  });
+  it('a start refused after the date changed says nothing on the new date', async () => {
+    let refuse: (e: unknown) => void = () => undefined;
+    api.startPlan.mockReturnValueOnce(new Promise((_ok, no) => { refuse = no; }));
+    await open();
+    await click('find-topics');
+    act(() => { Simulate.change(q('input-airDate')!, { target: { value: '2099-01-05' } } as never); });
+    await flush();
+    await act(async () => { refuse(refused(409, { error: 'No cohort' })); });
+    expect(q('plan-error')).toBeNull();
+  });
   it('changing the date shows that date, not a late answer for the old one', async () => {
     let late: (v: plans.PlanView) => void = () => undefined;
     api.getPlan.mockReturnValueOnce(new Promise((r) => { late = r; }));
@@ -213,6 +247,12 @@ describe('choosing', () => {
     await open();
     await click('choose-4');
     expect(q('topic-4')!.textContent).toContain('under the 85 needed');
+    const cancel = Array.from(q('topic-4')!.querySelectorAll('button')).find((x) => x.textContent === 'Cancel')!;
+    act(() => { cancel.click(); }); await flush();
+    expect(api.chooseTopic).toHaveBeenCalledTimes(1);
+    expect(q('choose-anyway-4')).toBeNull();
+    api.chooseTopic.mockRejectedValueOnce(refused(409, { error: 'This topic scores 80, under the 85 needed.', code: 'needs_override' }));
+    await click('choose-4');
     await click('choose-anyway-4');
     expect(api.chooseTopic).toHaveBeenLastCalledWith('p1', 't4', true);
   });
@@ -221,7 +261,13 @@ describe('choosing', () => {
 it('the map shows what was taught, and the rubric adds up to 100 in each part', async () => {
   await open('map');
   expect(q('map-week-2')!.textContent).toContain('2 days ago');
-  expect(q('map-week-3')!.textContent).toContain('Open');
+  expect(q('map-week-3')!.textContent).toContain('Planned for Nov 30: Ep 2');
+  expect(q('map-week-4')!.textContent).toContain('Open');
+  expect(q('map-week-1')!.textContent).toContain('Demand 3.5x');
+  expect(q('map-week-5')!.textContent).toContain('Demand not measured');
+  expect(q('map-legend')!.textContent).toBe('CoveredPlannedOpen');
+  expect(q('session-table')!.textContent).toMatch(/An old class.*Week 2.*ago.*completed/);
+  expect(q('session-table')!.textContent).toMatch(/A future class.*Not tagged.*In \d+ days/);
   const sums = Array.from(q('rubric')!.querySelectorAll('.clp-lines')).slice(0, 3).map((dl) => Array.from(dl.querySelectorAll('dd')).reduce((t, d) => t + Number(d.textContent), 0));
   expect(sums).toEqual([100, 100, 100]);
 });

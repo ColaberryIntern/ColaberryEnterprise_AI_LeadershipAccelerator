@@ -33,3 +33,7 @@ export function nextMonday(now: Date = new Date()): string {
 export function shortDate(ymd: string): string {
   return new Date(`${ymd}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 }
+/** Whole days from one date to another (negative when the second is earlier). */
+export function daysBetween(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
+}

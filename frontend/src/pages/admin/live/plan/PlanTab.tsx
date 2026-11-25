@@ -24,6 +24,8 @@ export default function PlanTab({ airDate, onAirDate, setup, setupError, onSetup
   const [offline, setOffline] = useState(false);
   const [confirm, setConfirm] = useState<{ id: string; text: string } | null>(null);
   const current = useRef<string | null>(null);
+  const shownDate = useRef(airDate);
+  shownDate.current = airDate;
   const planId = view?.plan.id ?? setup?.latestPlanId ?? null;
 
   const load = useCallback(async (id: string) => {
@@ -54,20 +56,24 @@ export default function PlanTab({ airDate, onAirDate, setup, setupError, onSetup
 
   const act = async (fn: () => Promise<void>) => {
     setBusy(true); setError(null);
-    try { await fn(); } catch (e) { setError(planFailure(e).message); } finally { setBusy(false); }
+    const on = shownDate.current;
+    try { await fn(); } catch (e) { if (shownDate.current === on) setError(planFailure(e).message); } finally { setBusy(false); }
   };
   const start = () => act(async () => {
     const clean = Object.fromEntries(Object.entries(inputs).filter(([, v]) => v !== '' && v !== undefined)) as unknown as PlanInputs;
     const r = await startPlan(airDate, clean);
+    if (shownDate.current !== airDate) return; // the date changed: this run belongs to the other date, where it will be found
     current.current = r.planId;
     await load(r.planId);
-    onSetup(await getPlanSetup(airDate));
+    const fresh = await getPlanSetup(airDate);
+    if (shownDate.current === airDate) onSetup(fresh);
   });
-  const again = () => act(async () => { if (planId) { await regeneratePlan(planId); await load(planId); } });
+  const again = () => act(async () => { if (planId) { await regeneratePlan(planId); if (current.current === planId) await load(planId); } });
   const choose = (topicId: string, override: boolean) => act(async () => {
     if (!planId) return;
     try { await chooseTopic(planId, topicId, override); setConfirm(null); await load(planId); } catch (e) {
       const f = planFailure(e);
+      if (current.current !== planId) return;
       if (f.code === 'needs_override') setConfirm({ id: topicId, text: f.message }); else throw e;
     }
   });

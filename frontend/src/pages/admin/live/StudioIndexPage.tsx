@@ -33,14 +33,14 @@ import { indexTourSteps } from './studioTourSteps';
 const TABS = [['classes', 'Classes'], ['plan', 'Plan next Weekly Live'], ['map', 'Curriculum map'], ['rubric', 'Scoring rubric']] as const;
 type Tab = (typeof TABS)[number][0];
 
-/** How far each class has come, in words. Only what this list really knows. */
+/** How far each class has come, beside its broadcast state. A past date is called past, never aired: the list cannot know that. */
 function Pipeline({ row }: { row: StudioSessionRow }): React.ReactElement {
-  const aired = Boolean(row.session_date && row.session_date < centralToday());
+  const past = Boolean(row.session_date && row.session_date < centralToday());
   return (
     <span className="clp-pipe" data-testid={`pipe-${row.id}`}>
       <span className="clp-chip">Session made</span>
-      <span className="clp-chip">{row.editorial_state ? 'Broadcast set up' : 'Broadcast not set up'}</span>
-      {aired && <span className="clp-chip">Aired</span>}
+      <span className="clp-chip">{row.editorial_state ? 'Broadcast made' : 'No broadcast yet'}</span>
+      {past && <span className="clp-chip">Date passed</span>}
     </span>
   );
 }
@@ -141,7 +141,7 @@ export default function StudioIndexPage(): React.ReactElement {
               <PlanTab airDate={airDate} onAirDate={setAirDate} setup={setup} setupError={setupError} onSetup={setSetup} />
             </div>
             <div role="tabpanel" id="panel-map" aria-labelledby="tab-map" hidden={tab !== 'map'}>
-              {setup ? <CurriculumTab weeks={setup.map.weeks} /> : <p className="cls-empty">{setupError || 'Loading the curriculum map.'}</p>}
+              {setup ? <CurriculumTab weeks={setup.map.weeks} demand={setup.demand} sessions={setup.sessions} batchName={setup.batch.ok ? setup.batch.cohortName : null} /> : <p className="cls-empty">{setupError || 'Loading the curriculum map.'}</p>}
             </div>
             <div role="tabpanel" id="panel-rubric" aria-labelledby="tab-rubric" hidden={tab !== 'rubric'}><RubricTab /></div>
           </>
@@ -174,7 +174,8 @@ export default function StudioIndexPage(): React.ReactElement {
                   {row.cohort_name ? ` · ${row.cohort_name}` : ''}
                 </span>
               </div>
-              {mayPlan ? <Pipeline row={row} /> : <BroadcastState row={row} />}
+              {mayPlan && <Pipeline row={row} />}
+              <BroadcastState row={row} />
               <button type="button" className="cls-btn cls-btn-ghost" onClick={() => setRecapFor(row.id)} data-testid={`recap-open-${row.id}`}>
                 Recap
               </button>

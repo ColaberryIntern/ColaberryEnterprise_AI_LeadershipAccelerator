@@ -41,9 +41,10 @@ const PlanSetupSchema = z.object({
   ]),
   map: z.object({
     asOf: str, recentWeeks: z.array(num),
-    weeks: z.array(z.object({ week, theme: str, intensive: str, timesCovered: num, lastCovered: strOrNull, lastTitle: strOrNull, daysAgo: num.nullable(), coveredInLast4: z.boolean() })),
+    weeks: z.array(z.object({ week, theme: str, intensive: str, timesCovered: num, lastCovered: strOrNull, lastTitle: strOrNull, daysAgo: num.nullable(), coveredInLast4: z.boolean(), planned: z.object({ date: str, title: str }).nullable() })),
   }),
   demand: DemandSchema, latestPlanId: strOrNull,
+  sessions: z.array(z.object({ id: str, date: strOrNull, title: str, week: week.nullable(), status: strOrNull }).strict()),
 }).strict();
 
 /** The compiler refuses a service change the schemas do not follow, in either direction. */

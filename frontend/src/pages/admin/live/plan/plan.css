@@ -25,10 +25,15 @@
 .clp-signal a, .clp-cols a { overflow-wrap: anywhere; text-decoration: underline; }
 .clp-idea { margin: 4px 0 0; font-size: 14px; }
 .clp-details { margin: 10px 0; }
-.clp-details summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 600; }
+.clp-details summary { min-height: 44px; padding: 11px 0; cursor: pointer; font-weight: 600; }
 .clp-weeks { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
 .clp-week { display: flex; flex-direction: column; gap: 3px; padding: 12px; border: 1px solid var(--border-default); border-left: 5px solid var(--border-default); border-radius: 12px; }
-.clp-week.is-covered { border-left-color: var(--status-success); }
+.clp-week.is-covered, .clp-key.is-covered { border-left: 5px solid var(--status-success); }
+.clp-week.is-planned, .clp-key.is-planned { border-left: 5px solid var(--status-info); }
+.clp-key { border-left-width: 5px; }
+.clp-legend { list-style: none; padding: 0; }
+.clp-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.clp-table th, .clp-table td { padding: 8px; text-align: left; border-bottom: 1px solid var(--border-subtle); overflow-wrap: anywhere; }
 .clp-rubric { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 14px; align-items: start; }
 .clp-lines { margin: 0; }
 .clp-lines > div { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--border-subtle); }
@@ -69,6 +74,10 @@
   .clp-bar-track { grid-column: 1 / -1; grid-row: 2; }
   .clp-signal { grid-template-columns: minmax(0, 1fr); gap: 2px; }
   .clp-choose { width: 100%; }
+  .clp-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .clp-table, .clp-table tbody, .clp-table tr, .clp-table td { display: block; }
+  .clp-table td { border: 0; padding: 1px 0; }
+  .clp-table tr { padding: 8px 0; border-bottom: 1px solid var(--border-subtle); }
   .cls-row { flex-wrap: wrap; }
   .cls-row-main { flex: 1 1 100%; }
 }

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import type { MapWeek, PlanDemand, PlanSignal } from '../../../../services/weeklyLivePlanApi';
-import { BANDS, CONVERT, FACTORS, shortDate, TEACH, VIRAL } from './planModel';
+import type { BatchSession, MapWeek, PlanDemand, PlanSignal } from '../../../../services/weeklyLivePlanApi';
+import { BANDS, centralToday, CONVERT, daysBetween, FACTORS, shortDate, TEACH, VIRAL } from './planModel';
 
 /** The pieces of the planner that only display: demand bars, signals, the curriculum map and the rubric. */
 export function DemandBars({ demand, weeks }: { demand: PlanDemand[]; weeks: MapWeek[] }): React.ReactElement {
@@ -67,21 +67,53 @@ export function SignalList({ signals }: { signals: PlanSignal[] }): React.ReactE
   );
 }
 
-export function CurriculumTab({ weeks }: { weeks: MapWeek[] }): React.ReactElement {
+const days = (n: number) => `${n} ${n === 1 ? 'day' : 'days'}`;
+function when(date: string | null): string {
+  if (!date) return 'No date';
+  const d = daysBetween(centralToday(), date);
+  return d === 0 ? 'Today' : d > 0 ? `In ${days(d)}` : `${days(-d)} ago`;
+}
+
+interface CurriculumProps { weeks: MapWeek[]; demand: PlanDemand[]; sessions: BatchSession[]; batchName: string | null }
+export function CurriculumTab({ weeks, demand, sessions, batchName }: CurriculumProps): React.ReactElement {
   return (
-    <section className="cls-card" data-testid="curriculum-map">
-      <h2 className="cls-card-title">12 weeks: taught and open</h2>
-      <div className="clp-weeks">
-        {weeks.map((w) => (
-          <div key={w.week} className={`clp-week${w.timesCovered ? ' is-covered' : ''}`} data-testid={`map-week-${w.week}`}>
-            <strong>Week {w.week}</strong>
-            <span>{w.theme}</span>
-            <span className="cls-row-when">{w.lastCovered ? `${shortDate(w.lastCovered)} · ${w.daysAgo === 0 ? 'today' : `${w.daysAgo} ${w.daysAgo === 1 ? 'day' : 'days'} ago`}` : 'Open'}</span>
-            {w.lastTitle && <span className="cls-hint">{w.lastTitle}</span>}
-          </div>
-        ))}
-      </div>
-    </section>
+    <div data-testid="curriculum-map">
+      <section className="cls-card">
+        <h2 className="cls-card-title">12 weeks: covered, planned, open</h2>
+        <ul className="clp-chips clp-legend" data-testid="map-legend">
+          {([['covered', 'Covered'], ['planned', 'Planned'], ['open', 'Open']] as const).map(([k, label]) => <li key={k} className={`clp-chip clp-key is-${k}`}>{label}</li>)}
+        </ul>
+        <div className="clp-weeks">
+          {weeks.map((w) => {
+            const state = w.planned ? 'planned' : w.timesCovered ? 'covered' : 'open';
+            const d = demand.find((x) => x.week === w.week);
+            return (
+              <div key={w.week} className={`clp-week is-${state}`} data-testid={`map-week-${w.week}`}>
+                <strong>Week {w.week}</strong>
+                <span>{w.theme}</span>
+                {w.planned && <span className="cls-row-when">Planned for {shortDate(w.planned.date)}: {w.planned.title}</span>}
+                {w.lastCovered && <span className="cls-row-when">Covered {shortDate(w.lastCovered)}{w.daysAgo === null ? '' : w.daysAgo === 0 ? ', today' : `, ${days(w.daysAgo)} ago`}{w.lastTitle ? `: ${w.lastTitle}` : ''}</span>}
+                {state === 'open' && <span className="cls-row-when">Open</span>}
+                <span className="cls-hint">{!d || d.failed ? 'Demand not measured' : d.multiple === null ? 'Demand: no usual view count' : `Demand ${d.multiple.toFixed(1)}x`}</span>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+      <section className="cls-card">
+        <h2 className="cls-card-title">Every live session{batchName ? ` (${batchName})` : ''}</h2>
+        {sessions.length === 0 ? <p className="cls-empty">No sessions in this batch yet.</p> : (
+          <table className="clp-table" data-testid="session-table">
+            <thead><tr><th scope="col">Date</th><th scope="col">Session</th><th scope="col">Week</th><th scope="col">When</th><th scope="col">Status</th></tr></thead>
+            <tbody>
+              {sessions.map((x) => (
+                <tr key={x.id}><td>{x.date ? shortDate(x.date) : ''}</td><td>{x.title}</td><td>{x.week ? `Week ${x.week}` : 'Not tagged'}</td><td>{when(x.date)}</td><td>{x.status || ''}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+    </div>
   );
 }
 
