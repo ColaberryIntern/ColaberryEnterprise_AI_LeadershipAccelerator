@@ -25,6 +25,7 @@ describe('committed voice inventory snapshot', () => {
     expect(inv.rows.filter((r) => r.role === 'DISPATCH').map((r) => r.path)).toEqual([
       'backend/src/services/synthflowService.ts',
       'backend/src/services/voice/providers/synthflowLegacyProvider.ts',
+      'backend/src/services/voice/providers/twilioCarrier.ts',
     ]);
   });
 });

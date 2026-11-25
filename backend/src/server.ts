@@ -13,6 +13,8 @@ import deliveryAdminRoutes from './routes/deliveryAdminRoutes';
 import leadRoutes from './routes/leadRoutes';
 import enrollmentRoutes from './routes/enrollmentRoutes';
 import webhookRoutes from './routes/webhookRoutes';
+import voiceWebhookRoutes from './routes/voiceWebhookRoutes';
+import { installVoiceRuntime } from './services/voice/engines/voiceRuntime';
 import unsubscribeRoutes from './routes/unsubscribeRoutes';
 import broadcastRoutes from './routes/broadcastRoutes';
 import broadcastMediaRoutes from './routes/broadcastMediaRoutes';
@@ -45,6 +47,7 @@ import buildArtifactRoutes from './routes/buildArtifactRoutes';
 import buildLogDraftRoutes from './routes/buildLogDraftRoutes';
 import publicPortfolioRoutes from './routes/publicPortfolioRoutes';
 import demoRoutes from './routes/demoRoutes';
+import platformBuildRoutes from './routes/platformBuildRoutes';
 import publicCareerPortfolioRoutes from './routes/publicCareerPortfolioRoutes';
 import internVideoStreamRoutes from './routes/internVideoStreamRoutes';
 import publicHireTalentRoutes from './routes/publicHireTalentRoutes';
@@ -97,6 +100,7 @@ import { ensureContractTrackSchema } from './db/ensureContractTrackSchema';
 import { ensureProjectTenantSchema } from './db/ensureProjectTenantSchema';
 import { ensureProjectLifecycleSchema } from './db/ensureProjectLifecycleSchema';
 import { ensureConnectedDemoSchema } from './db/ensureConnectedDemoSchema';
+import { ensurePlatformBuildSchema } from './db/ensurePlatformBuildSchema';
 import { ensureGovQualificationSchema } from './db/ensureGovQualificationSchema';
 import { ensureGovOpportunityDismissalSchema } from './db/ensureGovOpportunityDismissalSchema';
 import { ensureGovSourceBundleSchema } from './db/ensureGovSourceBundleSchema';
@@ -134,6 +138,9 @@ import { ensureBroadcastClipMarkerSchema } from './db/ensureBroadcastClipMarkerS
 import { ensureBroadcastClipMarkSchema } from './db/ensureBroadcastClipMarkSchema';
 import { ensureBroadcastClipDecisionSchema } from './db/ensureBroadcastClipDecisionSchema';
 import { ensureStudioSetupSchema } from './db/ensureStudioSetupSchema';
+import { ensureWeeklyLiveRecapSchema } from './db/ensureWeeklyLiveRecapSchema';
+import { ensureWeeklyLiveSchema } from './db/ensureWeeklyLiveSchema';
+import weeklyLiveRecapRoutes from './routes/weeklyLiveRecapRoutes';
 import { ensureBroadcastReplayIndexSchema } from './db/ensureBroadcastReplayIndexSchema';
 import { ensureFactoryTaskSchema } from './db/ensureFactoryTaskSchema';
 import { ensureAgentDomainStoryLadderSchema } from './db/ensureAgentDomainStoryLadderSchema';
@@ -261,6 +268,8 @@ app.use(traceMiddleware);
 
 // Webhook routes — each sub-route handles its own body parsing
 app.use(webhookRoutes);
+// Voice AI Studio Twilio webhooks (VS2.1): absent unless a voice flag is on; Twilio-signed; own body parser.
+app.use(voiceWebhookRoutes);
 
 // Public one-click unsubscribe — mounted before the JSON parser; the POST
 // (RFC 8058 one-click) handles its own urlencoded body parsing.
@@ -315,6 +324,8 @@ app.use(buildLogDraftRoutes);
 app.use(publicPortfolioRoutes);
 // The public Connected Demo. Unauthenticated, gated on demo_share_enabled, which defaults false.
 app.use(demoRoutes);
+// L13.1: the platform build runner's calls (GitHub OIDC) and the hosted Command Center / Demo (signed link).
+app.use(platformBuildRoutes);
 app.use(advisorRoutes);
 app.use(alumniReferralRoutes);
 app.use(qrRedirectRoutes);
@@ -393,6 +404,9 @@ app.use(publicServiceRoutes);
 // opening the invite — and it would fail that way weeks after the deploy that
 // broke it, at the start of a session, for people who cannot debug it.
 app.use(publicRoomJoinRoutes);
+
+// Weekly Live recap (Basecamp WL1): admin recap panel + the public recap page data and opt-out.
+app.use(weeklyLiveRecapRoutes);
 
 app.use(adminRoutes);
 
@@ -3023,6 +3037,14 @@ async function start(): Promise<void> {
   } catch (err: any) {
     console.warn('[boot] connected demo schema unavailable:', err?.error_class || err?.message);
   }
+  // L13.1: the platform-built Command Center and Demo (platform_build_runs, platform_build_artifacts).
+  // Two NEW tables, nothing altered. Wrapped like the demo schema: the feature ships behind
+  // SBP_PLATFORM_BUILD (default off) and must never take the platform down.
+  try {
+    await ensurePlatformBuildSchema();
+  } catch (err: any) {
+    console.warn('[boot] platform build schema unavailable:', err?.error_class || err?.message);
+  }
   // AI Project Factory Phase 2: the Enterprise-owned gov qualification model (gov_qualifications,
   // build_authorizations, gov_opportunity_aliases). Additive NEW tables that FK to delivery_projects
   // (and the qualification table itself) — no existing table is altered; placed after the contract
@@ -3257,6 +3279,10 @@ async function start(): Promise<void> {
   // D11 - the keep-or-cut decisions an editor makes about an airing.
   await ensureBroadcastClipDecisionSchema();
   await ensureStudioSetupSchema();
+  // Weekly Live recap tables (WL1.1): after live_sessions and session_guests, which they reference.
+  await ensureWeeklyLiveRecapSchema();
+  // Weekly Live Studio tables (WL2.1): plans, signals, demand, topics, content pieces, moments.
+  await ensureWeeklyLiveSchema();
   // L8.3 - the partial index the replay list reads through. The live ticker's index covers
   // backstage/live/reconnecting only, so replay_ready would otherwise scan the whole table.
   await ensureBroadcastReplayIndexSchema();
@@ -4039,9 +4065,11 @@ async function start(): Promise<void> {
     });
   });
 
-  app.listen(env.port, () => {
+  const httpServer = app.listen(env.port, () => {
     console.log(`Server running on port ${env.port} [${env.nodeEnv}]`);
   });
+  // Voice AI Studio WebSockets (VS2.3): Twilio-signed upgrades on /api/voice-ws/relay only; absent while voice is off.
+  installVoiceRuntime(httpServer);
 }
 
 start();

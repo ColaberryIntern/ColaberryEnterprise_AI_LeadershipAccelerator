@@ -1,15 +1,15 @@
 {
  "generatedFrom": "git ls-files",
- "total": 214,
+ "total": 234,
  "byRole": {
-  "DISPATCH": 2,
+  "DISPATCH": 3,
   "INGEST": 3,
   "GUARD": 6,
   "CALLER": 11,
   "CONFIG": 20,
   "UI": 22,
-  "CONSUMER": 44,
-  "MENTION": 106
+  "CONSUMER": 54,
+  "MENTION": 115
  },
  "rows": [
   {
@@ -99,6 +99,16 @@
    "role": "MENTION",
    "callTypes": [],
    "envVars": []
+  },
+  {
+   "path": "backend/src/controllers/voiceTwilioWebhookController.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_PUBLIC_BASE_URL",
+    "VOICE_STUDIO_ENABLED",
+    "VOICE_TEST_ENABLED"
+   ]
   },
   {
    "path": "backend/src/db/ensureAgentCommsSchema.ts",
@@ -304,10 +314,34 @@
    "envVars": []
   },
   {
+   "path": "backend/src/routes/admin/voiceStudioRoutes.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_TEST_ENABLED"
+   ]
+  },
+  {
+   "path": "backend/src/routes/adminRoutes.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_TEST_ENABLED"
+   ]
+  },
+  {
    "path": "backend/src/routes/v1Routes.ts",
    "role": "MENTION",
    "callTypes": [],
    "envVars": []
+  },
+  {
+   "path": "backend/src/routes/voiceWebhookRoutes.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_ROUTE_TABLE"
+   ]
   },
   {
    "path": "backend/src/routes/webhookRoutes.ts",
@@ -1151,11 +1185,74 @@
    "envVars": []
   },
   {
+   "path": "backend/src/services/voice/engines/claudeVoiceLlm.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_ENGINE_A_MODEL"
+   ]
+  },
+  {
+   "path": "backend/src/services/voice/engines/conversationRelayEngine.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/engines/realtime/openaiRealtimeEngine.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/engines/realtime/realtimeProtocol.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/engines/voiceProfiles.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/engines/voiceRuntime.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_ENGINE_A_MODEL",
+    "VOICE_ENGINE_B_MODEL",
+    "VOICE_REALTIME_VOICE",
+    "VOICE_RELAY_VOICE",
+    "VOICE_WS_BASE_URL"
+   ]
+  },
+  {
+   "path": "backend/src/services/voice/engines/voiceWsServer.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_STUDIO_ENABLED",
+    "VOICE_TEST_ENABLED",
+    "VOICE_WS_BASE_URL"
+   ]
+  },
+  {
    "path": "backend/src/services/voice/gateway/destinationHash.ts",
    "role": "MENTION",
    "callTypes": [],
    "envVars": [
     "VOICE_DESTINATION_HASH_KEY"
+   ]
+  },
+  {
+   "path": "backend/src/services/voice/gateway/directEngineProvider.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_PUBLIC_BASE_URL",
+    "VOICE_TEST_MAX_DURATION_SECONDS"
    ]
   },
   {
@@ -1201,12 +1298,73 @@
    ]
   },
   {
+   "path": "backend/src/services/voice/providers/twilioCarrier.ts",
+   "role": "DISPATCH",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/session/sessionWorker.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
    "path": "backend/src/services/voice/synthflowWebhookAuth.ts",
    "role": "GUARD",
    "callTypes": [],
    "envVars": [
     "SYNTHFLOW_WEBHOOK_TOKEN"
    ]
+  },
+  {
+   "path": "backend/src/services/voice/testlab/testLabPolicy.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_TEST_ALLOWED_NUMBER",
+    "VOICE_TEST_BUDGET_USD",
+    "VOICE_TEST_ENABLED",
+    "VOICE_TEST_MAX_ATTEMPTS",
+    "VOICE_TEST_MAX_DURATION_SECONDS"
+   ]
+  },
+  {
+   "path": "backend/src/services/voice/testlab/testLabService.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_TEST_ALLOWED_NUMBER",
+    "VOICE_TEST_ENABLED",
+    "VOICE_TEST_MAX_ATTEMPTS",
+    "VOICE_TEST_MAX_DURATION_SECONDS"
+   ]
+  },
+  {
+   "path": "backend/src/services/voice/twilio/correlationToken.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/twilio/twilioSignature.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_PUBLIC_BASE_URL"
+   ]
+  },
+  {
+   "path": "backend/src/services/voice/twilio/twilioStatusMap.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/twilio/voiceCallStore.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
   },
   {
    "path": "backend/src/services/voice/voiceCallPaths.ts",
@@ -1223,9 +1381,13 @@
    "callTypes": [],
    "envVars": [
     "VOICE_DESTINATION_HASH_KEY",
+    "VOICE_ENGINE_A_MODEL",
+    "VOICE_ENGINE_B_MODEL",
     "VOICE_ENGINE_DEFAULT",
     "VOICE_GATEWAY_LEGACY_ENABLED",
     "VOICE_PUBLIC_BASE_URL",
+    "VOICE_REALTIME_VOICE",
+    "VOICE_RELAY_VOICE",
     "VOICE_STUDIO_ENABLED",
     "VOICE_TEST_ALLOWED_NUMBER",
     "VOICE_TEST_BUDGET_USD",

@@ -272,6 +272,17 @@ export const env = {
   // services/sbp/connectedDemoFlag.ts for why a read path that consulted this variable instead
   // of the board would orphan a story the student had already been asked to build.
   sbpConnectedDemo: (process.env.SBP_CONNECTED_DEMO ?? 'off').trim(),
+  // L13.1: does the PLATFORM build this project's Command Center and Demo right after publish?
+  // 'off' (default), 'all', or a comma-separated list of enrollment ids. When on, publish queues
+  // one run on the GitHub-hosted runner (.github/workflows/platform-build-runner.yml); the result
+  // is stored and served by the platform, never by the student's repo. Each run spends model
+  // budget, which is why this defaults off and is enabled per enrollment first.
+  sbpPlatformBuild: (process.env.SBP_PLATFORM_BUILD ?? 'off').trim(),
+  // The repository whose workflow builds it. Our own repo: the runner must never be the
+  // student's, or the platform would be "held hostage" by a repo it does not control.
+  platformBuildRepo: (process.env.PLATFORM_BUILD_REPO
+    ?? 'ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator').trim(),
+  platformBuildWorkflow: (process.env.PLATFORM_BUILD_WORKFLOW ?? 'platform-build-runner.yml').trim(),
   // Review-and-approve gate. When a build publishes for an enrollment in scope,
   // the project is held in `pending_approval`: the student reviews the whole
   // build and must Approve before the workspace unlocks. 'off' (default), 'all',

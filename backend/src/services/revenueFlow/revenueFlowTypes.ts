@@ -9,6 +9,7 @@
  */
 import { TileStatus } from '../commercialization/commercializationTiles';
 import { ClassificationKey, FlowStreamKey, FlowTone } from './revenueClassifications';
+import type { StreamBrand } from './revenueBrandVocabulary';
 
 /**
  * A money figure, carried as cents AND as a formatted string.
@@ -178,7 +179,7 @@ export interface DemandBand {
 }
 
 /** One revenue stream: its headline, its funnel, and why it says what it says. */
-export interface RevenueStream {
+export interface BuiltStream {
   key: FlowStreamKey;
   label: string;
   status: TileStatus;
@@ -218,6 +219,31 @@ export interface RevenueStream {
    * thing it was holding.
    */
   deals?: EnterpriseDeal[];
+}
+
+/**
+ * A stream as it reaches the page: everything a builder produced, plus its brand.
+ *
+ * ── WHY THE BRAND IS ADDED HERE AND NOT BY THE BUILDERS ──────────────────────────────────
+ *
+ * A stream builder knows about subscriptions or bids; it has no business knowing which
+ * public identity sells them, and if each builder set its own brand the mapping would be
+ * spread across five files with nothing checking they agreed. `streamBrands` holds the whole
+ * map in one place and `revenueFlowService` applies it as the streams are assembled.
+ *
+ * The split is enforced by the compiler rather than by discipline: builders return
+ * `BuiltStream`, which has no brand, and only the assembly step can produce a
+ * `RevenueStream`. There is no way to ship a stream to the page without giving it a brand,
+ * and no way for a builder to invent one.
+ */
+export interface RevenueStream extends BuiltStream {
+  /**
+   * The brand this stream's business belongs to, as a key into the board's `brands` list.
+   *
+   * `'unassigned'` for a stream that belongs to no brand, which is a different statement
+   * from a brand that earns nothing.
+   */
+  brandKey: string;
 }
 
 /**
@@ -351,10 +377,54 @@ export interface FlowHeadline {
   unpricedBids: number;
 }
 
+/**
+ * Every figure the headline carries, as a key.
+ *
+ * DERIVED from `FlowHeadline` rather than written out, and that is the whole point. R25
+ * Phase 2 made the top tiles respond to the brand filter, which they can only do honestly if
+ * something declares which stream each figure comes from. Deriving the key union means adding
+ * a figure to `FlowHeadline` breaks the build until its stream is declared too — so a new
+ * number cannot arrive at the top of the page with no brand and silently survive every
+ * filter, which is the exact failure the brand breakdown exists to prevent.
+ *
+ * `winRateBasis` is excluded because it is the sentence explaining `winRate`, not a figure of
+ * its own; it travels with the tile its rate is on.
+ */
+export type HeadlineFigureKey = Exclude<keyof FlowHeadline, 'winRateBasis'>;
+
+/**
+ * A brand heading is shipped as an ordered list rather than derived in the frontend, so the
+ * heading order, the wording and the membership of each group have exactly one owner. The
+ * shape lives in `revenueBrandVocabulary` beside the resolver that produces it, and the
+ * mapping's reasoning lives in `streamBrands`. Re-exported here so the board's consumers
+ * still read every shape of the payload from one module.
+ */
+export type { StreamBrand } from './revenueBrandVocabulary';
+
 export interface RevenueFlowBoard {
   asOf: string;
   headline: FlowHeadline;
   streams: RevenueStream[];
+  /**
+   * The brand headings, in reading order. Every stream on the board appears under exactly
+   * one of these, and a brand with no streams is omitted rather than rendered empty.
+   */
+  brands: StreamBrand[];
+  /**
+   * What a brand heading on this board does and does not mean, in one sentence for the
+   * reader. Backend-owned, like every other piece of copy that states what a number is.
+   */
+  brandBasis: string;
+  /**
+   * For each figure in `headline`, the stream it is derived from.
+   *
+   * Shipped so the four tiles across the top can respond to the brand filter without the
+   * frontend hardcoding which stream each number came from. Every one of those tiles is a
+   * single stream's figure under a board-level label, so a brand filter that left them
+   * untouched would show one brand's revenue beneath another brand's heading. The reasoning
+   * and the map live in `headlineSources.ts`.
+   */
+  headlineFigureStreams: Record<HeadlineFigureKey, FlowStreamKey>;
   /** The combined timeline, newest first, across every stream. */
   events: FlowEvent[];
   /** The window `events` covers, in days, so an empty tail reads as out-of-window. */

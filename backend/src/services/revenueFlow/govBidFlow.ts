@@ -43,7 +43,7 @@ import { sequelize } from '../../config/database';
 import { TileStatus } from '../commercialization/commercializationTiles';
 import { getLiveBidValues, annualizedCents, BidValue } from './govBidValueService';
 import {
-  FlaggedBid, FlowEvent, FunnelStage, Money, RevenueStream, money, noMoney, formatCents,
+  FlaggedBid, FlowEvent, FunnelStage, Money, BuiltStream, money, noMoney, formatCents,
 } from './revenueFlowTypes';
 
 /** True when the table exists. A missing table is not an empty one. */
@@ -85,7 +85,7 @@ function day(iso: string | null): string | null {
 }
 
 export interface GovFlow {
-  stream: RevenueStream;
+  stream: BuiltStream;
   events: FlowEvent[];
   /** Pulled up for the page headline, which reports winnings across streams. */
   openPricedCents: number;

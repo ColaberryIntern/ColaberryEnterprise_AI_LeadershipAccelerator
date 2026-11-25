@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import salonData from './salonData.json';
 import { adoptServerIds, isUuid } from './projectIdentity';
+import type { PlatformBuildLinks } from './platformBuildLinks';
 import {
   VIEW_AS_TOKEN_KEY, decodeParticipantClaims, getParticipantToken,
 } from '../../../utils/participantToken';
@@ -139,6 +140,12 @@ export type StudentProject = {
    * dead link.
    */
   commandCenterUrl?: string | null;
+  /**
+   * L13.1: the Command Center and Demo the PLATFORM built and hosts, with signed links. Preferred
+   * over `commandCenterUrl` (a GitHub Pages address) wherever both exist. Absent for projects the
+   * platform has not built, which is the normal state for every build that predates L13.1.
+   */
+  platformBuild?: PlatformBuildLinks | null;
   /**
    * Review-and-approve state. Absent or null = never gated (legacy, or the gate
    * is off) and the project behaves exactly as today. ONLY `'pending_approval'`

@@ -38,7 +38,10 @@ export function isInventoryCandidate(path: string): boolean {
 const DISPATCH_DEF = /export\s+(async\s+)?function\s+triggerVoiceCall\b/;
 /** A Synthflow URL is only a dispatch when it is POSTed to; a GET (e.g. the health check) only reads. */
 const SYNTHFLOW_URL = /api\.synthflow\.ai/;
-const POST_METHOD = /method\s*:\s*['"]POST['"]|axios\.post\s*\(/;
+/** VS2.1: the Twilio REST Calls API (create/update a call) is a dispatch when the file also POSTs. */
+const TWILIO_CALLS = /api\.twilio\.com[\s\S]*\/Calls\b|\/Calls\b[\s\S]*api\.twilio\.com/;
+// `request('POST', url)`: a POST passed as an argument to a local HTTP helper (VS2.1 carrier style).
+const POST_METHOD = /method\s*:\s*['"]POST['"]|axios\.post\s*\(|\(\s*['"]POST['"]\s*,/;
 const CALLS_TRIGGER = /\btriggerVoiceCall\s*\(/;
 const GUARD_PATH = /services\/voice\/(voiceDial|voiceCallPaths|synthflowWebhookAuth)|communicationSafetyService|consentGate|explorerVoiceEligibility/;
 const INGEST_PATH = /controllers\/.*synthflow|webhook/i;
@@ -54,7 +57,7 @@ function uniqSorted(xs: string[]): string[] {
 export function classifyVoiceFile(path: string, content: string): VoiceInventoryRow {
   const p = path.replace(/\\/g, '/');
   let role: VoiceRole;
-  const dispatches = DISPATCH_DEF.test(content) || (SYNTHFLOW_URL.test(content) && POST_METHOD.test(content));
+  const dispatches = DISPATCH_DEF.test(content) || ((SYNTHFLOW_URL.test(content) || TWILIO_CALLS.test(content)) && POST_METHOD.test(content));
   if (dispatches && !/\/__tests__\//.test(p)) role = 'DISPATCH';
   else if (p.startsWith('frontend/')) role = 'UI';
   else if (GUARD_PATH.test(p)) role = 'GUARD';

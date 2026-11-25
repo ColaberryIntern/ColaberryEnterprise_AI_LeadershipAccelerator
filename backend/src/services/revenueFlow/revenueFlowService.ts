@@ -48,12 +48,24 @@ import {
   classificationFor,
 } from './revenueClassifications';
 import { buildEnterpriseFlow } from './enterpriseFlow';
+import { getBrandDirectory } from './brandDirectoryService';
+import {
+  HEADLINE_FIGURE_STREAM,
+  assertHeadlineSourcesAreKnownStreams,
+} from './headlineSources';
 import { getMembershipDemandPath } from './demandPathService';
+import {
+  BRAND_BASIS,
+  BRAND_BY_STREAM,
+  UNASSIGNED_BRAND_KEY,
+  assertBrandGroupingIsHonest,
+  buildBrandGroups,
+} from './streamBrands';
 import { buildGovFlow } from './govBidFlow';
 import { buildIdeaFlows } from './ideaFlow';
 import { buildMembershipFlow } from './membershipFlow';
 import {
-  FlowEvent, FlowHeadline, RevenueFlowBoard, money, noMoney,
+  BuiltStream, FlowEvent, FlowHeadline, RevenueFlowBoard, money, noMoney,
 } from './revenueFlowTypes';
 
 /**
@@ -110,11 +122,15 @@ export async function getRevenueFlowBoard(
   windowDays: number = DEFAULT_WINDOW_DAYS,
 ): Promise<RevenueFlowBoard> {
   assertClassificationKeysAreUnique();
+  // A headline figure whose declared stream does not exist would be hidden under every brand
+  // filter, so a real number would leave the page with nothing logged. Checked here, where a
+  // throw costs the board rather than shipping a declaration the page cannot act on.
+  assertHeadlineSourcesAreKnownStreams(CLASSIFICATIONS.map((c) => c.stream));
 
   const windowStart = new Date(now.getTime() - windowDays * 24 * 60 * 60 * 1000);
   const caveats: string[] = [];
 
-  const [membership, gov, enterprise, ideas, demand] = await Promise.all([
+  const [membership, gov, enterprise, ideas, demand, brandDirectory] = await Promise.all([
     buildMembershipFlow(windowStart).catch((e: Error) => {
       caveats.push(`The membership stream could not be built: ${e.message}`);
       return null;
@@ -142,6 +158,16 @@ export async function getRevenueFlowBoard(
       );
       return undefined;
     }),
+    // Names and URLs for the brand headings. A failure here costs the WORDING, never the
+    // grouping: the map lives in code, so the page still groups correctly and each heading
+    // falls back to a declared label that says it may be out of date.
+    getBrandDirectory().catch((e: Error) => {
+      caveats.push(
+        'The brands table could not be read, so each brand heading shows a name from a '
+        + `fallback in the code rather than the brand's own record: ${e.message}`,
+      );
+      return [];
+    }),
   ]);
 
   // Order is the page's reading order and is fixed: what earns today, then what might, then
@@ -161,10 +187,33 @@ export async function getRevenueFlowBoard(
     ? { ...membership.stream, ...(demand ? { demand } : {}) }
     : undefined;
 
-  const streams = [
+  const built = [
     membershipStream, gov?.stream, enterprise?.stream, ...(ideas?.streams ?? []),
-  ].filter(Boolean) as RevenueFlowBoard['streams'];
+  ].filter(Boolean) as BuiltStream[];
+
+  // ── BRAND ─────────────────────────────────────────────────────────────────────────────
+  // Applied here rather than in each builder, so the whole map lives in one file and the
+  // compiler refuses a stream that reaches the page without one (see `BuiltStream`).
+  const streams: RevenueFlowBoard['streams'] = built.map((s) => ({
+    ...s,
+    brandKey: BRAND_BY_STREAM[s.key] ?? UNASSIGNED_BRAND_KEY,
+  }));
   for (const s of streams) if (s.caveat) caveats.push(s.caveat);
+
+  // A grouping that has gone wrong would render as a fact about the business: a stream under
+  // two brands double-counts it, a stream under none makes it vanish from the page. Both
+  // throw, and the cost is the grouping plus a caveat rather than the board.
+  let brands: RevenueFlowBoard['brands'] = [];
+  try {
+    brands = buildBrandGroups(streams, brandDirectory);
+    assertBrandGroupingIsHonest(brands, streams);
+  } catch (e) {
+    brands = [];
+    caveats.push(
+      'The brand grouping could not be built, so this board is shown ungrouped rather than '
+      + `grouped wrongly: ${(e as Error).message}`,
+    );
+  }
 
   const rawEvents = [
     ...(membership?.events ?? []), ...(gov?.events ?? []),
@@ -236,6 +285,9 @@ export async function getRevenueFlowBoard(
     asOf: now.toISOString(),
     headline,
     streams,
+    brands,
+    brandBasis: BRAND_BASIS,
+    headlineFigureStreams: HEADLINE_FIGURE_STREAM,
     events: honest,
     windowDays,
     // Projected rather than passed through, so an internal field added to the registry is

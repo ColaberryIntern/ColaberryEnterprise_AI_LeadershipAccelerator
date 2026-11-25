@@ -36,6 +36,7 @@ export const VoiceArtifact = built.VoiceArtifact;
 export const VoiceEvaluationRun = built.VoiceEvaluationRun;
 export const VoiceTestCase = built.VoiceTestCase;
 export const VoiceUsage = built.VoiceUsage;
+export const VoiceTokenUse = built.VoiceTokenUse;
 
 /** Every Voice Studio model by name (used by tests and the retention job). */
 export const VOICE_STUDIO_MODELS: Readonly<Record<string, ModelStatic<Model>>> = built;

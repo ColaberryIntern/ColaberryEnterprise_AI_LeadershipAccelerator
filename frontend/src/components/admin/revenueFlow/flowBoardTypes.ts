@@ -113,6 +113,15 @@ export interface DemandBand {
 export interface Stream {
   key: string;
   label: string;
+  /**
+   * The brand this stream is filed under. A slug from the `brands` table, or `'unassigned'`.
+   *
+   * A plain string for the reason this whole file exists: a brand the frontend has never
+   * heard of must render under its own heading, not fail the build. The heading's WORDS come
+   * from `Board.brands`, never from a frontend table of brand names — the backend reads them
+   * from the `brands` table so there is one source of truth for what a brand is called.
+   */
+  brandKey: string;
   status: string;
   headline: Money;
   funnel: FunnelStage[];
@@ -142,10 +151,53 @@ export interface BoardHeadline {
   unpricedBids: number;
 }
 
+/**
+ * One brand heading, and the streams filed under it. R25.
+ *
+ * Shipped by the backend as an ORDERED list, and rendered in that order without re-sorting,
+ * for the same reason the funnel stages are not re-sorted here: the order is a decision with
+ * reasoning behind it (see `streamBrands.ts`), and a page that sorted by revenue would
+ * reshuffle itself the first time a brand earned anything.
+ */
+export interface BrandGroup {
+  key: string;
+  label: string;
+  url: string | null;
+  /**
+   * Whether `label` came from the `brands` table. False means the table could not be read and
+   * the name is a fallback that may be out of date — which the page says, rather than
+   * presenting a guess as the brand's name.
+   */
+  resolved: boolean;
+  /** False for the "No brand yet" bucket, which must never be presented as a brand. */
+  isBrand: boolean;
+  note: string;
+  streamKeys: string[];
+}
+
 export interface Board {
   asOf: string;
   headline: BoardHeadline;
   streams: Stream[];
+  /**
+   * The brand headings in reading order. Empty when the grouping could not be built, in
+   * which case the board renders UNGROUPED with every stream still present — a brand filter
+   * that could not be built must cost the grouping, never the revenue.
+   */
+  brands: BrandGroup[];
+  /** What a brand heading here does and does not mean. Backend-owned copy. */
+  brandBasis: string;
+  /**
+   * For each headline figure, the stream key it was derived from.
+   *
+   * This is what lets the four tiles across the top respond to the brand filter. Every one of
+   * them is a single stream's number under a board-level label, so without this the page
+   * would have to hardcode "the booked tile is membership" — true the day it was written and
+   * silently wrong the day the backend changed, leaving a real number attributed to the wrong
+   * brand. A wrong brand on a real number is worse than no number, because it looks like an
+   * answer.
+   */
+  headlineFigureStreams: Record<string, string>;
   events: TimelineEvent[];
   windowDays: number;
   classifications: Array<TimelineClassification & {
