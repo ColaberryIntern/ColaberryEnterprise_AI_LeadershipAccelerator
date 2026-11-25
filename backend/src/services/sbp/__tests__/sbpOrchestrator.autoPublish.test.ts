@@ -181,6 +181,17 @@ describe('a gate-clean plan reaches the student without anyone publishing it', (
     expect(finalStatus()).toBe('awaiting_repo');
   });
 
+  it.each([
+    ['student', null, 1], ['platform', null, 0], ['student', REPO, 1], ['platform', REPO, 0],
+  ])('a %s build (repo %j) moves the holder's active project %i time(s)', async (mode, repo, times) => {
+    mockRepoFor.mockResolvedValue(repo);
+    mockGetIntake.mockResolvedValue({ project_id: PROJECT, idea: INPUT.idea, status: 'captured', correlation_id: 'corr-1', setup_mode: mode });
+    await startBuild(INPUT as any);
+    await flush();
+    expect(mockMaterialize).toHaveBeenCalled();
+    expect(mockSequelizeQuery.mock.calls.filter((c) => /SET active_project_id/.test(String(c[0])))).toHaveLength(times as number);
+  });
+
   it('publishes a plan whose only leftover violations are advisory', async () => {
     // The production case: repair could not clear one `story_redundant_scaffold`.
     // Advisory violations are warnings on a real plan, not a reason to hand the

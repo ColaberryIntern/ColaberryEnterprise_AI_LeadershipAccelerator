@@ -11,6 +11,7 @@ import * as path from 'path';
 
 const mockFindByPk = jest.fn();
 const mockResolveProject = jest.fn();
+const mockDetached = jest.fn();
 const mockStartBuild = jest.fn();
 
 jest.mock('../../../models/ProjectUnderstandingRecord', () => ({
@@ -19,6 +20,7 @@ jest.mock('../../../models/ProjectUnderstandingRecord', () => ({
 }));
 jest.mock('../../projectService', () => ({
   resolveProjectForNewBuild: (...a: any[]) => mockResolveProject(...a),
+  createDetachedProjectForEnrollment: (...a: any[]) => mockDetached(...a),
 }));
 jest.mock('../../sbp/sbpOrchestrator', () => ({
   startBuild: (...a: any[]) => mockStartBuild(...a),
@@ -49,6 +51,23 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockResolveProject.mockResolvedValue({ project: { id: 'proj-1' }, reused: false });
   mockStartBuild.mockResolvedValue({ projectId: 'proj-1', correlationId: 'corr-1', status: 'generating' });
+});
+
+describe('a client demo gets its own project', () => {
+  it('never reuses the holder's active project', async () => {
+    mockFindByPk.mockResolvedValue(record());
+    mockDetached.mockResolvedValue({ id: 'own-1' });
+    await startBuildFromUnderstanding({ recordId: 'rec-1', enrollmentId: 'enr-1', setupMode: 'platform' });
+    expect(mockResolveProject).not.toHaveBeenCalled();
+    expect(mockStartBuild).toHaveBeenCalledWith(expect.objectContaining({ projectId: 'own-1', setupMode: 'platform' }));
+  });
+
+  it('leaves every other build on the normal path', async () => {
+    mockFindByPk.mockResolvedValue(record());
+    await startBuildFromUnderstanding({ recordId: 'rec-1', enrollmentId: 'enr-1' });
+    expect(mockDetached).not.toHaveBeenCalled();
+    expect(mockStartBuild).toHaveBeenCalledWith(expect.objectContaining({ projectId: 'proj-1' }));
+  });
 });
 
 describe('startBuildFromUnderstanding', () => {

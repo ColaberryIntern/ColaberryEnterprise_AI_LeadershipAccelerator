@@ -809,7 +809,7 @@ export async function publishBuild(
     const m = await materializePlanAsTasks(
       projectId, opts.enrollmentId, published.plan as BuildPlan, { schedule, connectedDemo, setupRetired },
     );
-    await makeActiveProject(opts.enrollmentId, projectId, correlationId);
+    if (setupMode !== 'platform') await makeActiveProject(opts.enrollmentId, projectId, correlationId);
     // Hold it for review, IF the gate is on for this enrollment (no-op otherwise).
     // Never throws — a failed mark must not fail the publish.
     await markProjectPendingApproval(projectId, opts.enrollmentId);
@@ -901,7 +901,7 @@ export async function publishBuild(
     connectedDemo,
     setupRetired,
   });
-  await makeActiveProject(opts.enrollmentId, projectId, correlationId);
+  if (setupMode !== 'platform') await makeActiveProject(opts.enrollmentId, projectId, correlationId);
   // Hold it for review, IF the gate is on for this enrollment (no-op otherwise).
   // Never throws — a failed mark must not fail the publish.
   await markProjectPendingApproval(projectId, opts.enrollmentId);
@@ -953,6 +953,9 @@ const scheduleFor = scheduleForEnrollment;
  * Only ever sets it when it is empty or points at a different project; never
  * steals focus from a project the student is actively working, because
  * republishing an old plan should not move their portal.
+ *
+ * Not called for a platform-mode build: that is a client's demo, held under an enrollment whose owner
+ * did not start it, so it must not move their portal (L13.9).
  */
 async function makeActiveProject(
   enrollmentId: string, projectId: string, correlationId: string | null,

@@ -40,7 +40,7 @@
  */
 
 import ProjectUnderstandingRecord from '../../models/ProjectUnderstandingRecord';
-import { resolveProjectForNewBuild } from '../projectService';
+import { createDetachedProjectForEnrollment, resolveProjectForNewBuild } from '../projectService';
 import { startBuild } from '../sbp/sbpOrchestrator';
 import type { SetupMode } from '../sbp/planStore';
 import { toBuildIntake, type BuildIntake } from './buildIntakeAdapter';
@@ -147,7 +147,11 @@ export async function startBuildFromUnderstanding(params: {
   }
 
   try {
-    const { project } = await resolveProjectForNewBuild(params.enrollmentId);
+    // A client demo always gets its OWN row. The holding enrollment is a person with projects of their
+    // own: reusing their empty active one would put a client's plan inside it (L13.9).
+    const project = params.setupMode === 'platform'
+      ? await createDetachedProjectForEnrollment(params.enrollmentId)
+      : (await resolveProjectForNewBuild(params.enrollmentId)).project;
 
     const started = await startBuild({
       projectId: project.id,
