@@ -19,11 +19,14 @@
 import TimelineCard from '../../models/TimelineCard';
 import TimelineCardProgress from '../../models/TimelineCardProgress';
 import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
-import { videoFromMetadata } from '../timeline/timelineService';
+// From cardVideoMetadata, NOT timelineService: the feed now asks this module for
+// watch state, so importing the feed's module back would be a cycle.
+import { videoFromMetadata } from '../timeline/cardVideoMetadata';
 import { getAssignedTestimonialDurationS } from '../timeline/networkVideoService';
 import { getAssignedPodcastDurationS } from '../timeline/podcastMediaService';
 import { accumulateWatch, requiredWatchPct, meetsWatchRequirement, withAuthoritativeDuration, WatchBeat, WatchState } from './watchProgressMath';
 import { isCardServable } from '../timeline/curriculumScope';
+import { resumePointOf, WatchResumePoint } from './watchResumePoint';
 
 export { DEFAULT_WATCH_PCT, MAX_DELTA_PER_BEAT_S, accumulateWatch, requiredWatchPct, meetsWatchRequirement, isWatchableCard } from './watchProgressMath';
 export type { WatchBeat, WatchState } from './watchProgressMath';
@@ -78,6 +81,9 @@ async function typeCompletionRules(slug: string): Promise<any> {
 
 export interface WatchVerdict { watched_pct: number; required_pct: number | null; met: boolean }
 
+/** The gate verdict plus where to start playing — what a player needs, in one read. */
+export type WatchVerdictWithResume = WatchVerdict & WatchResumePoint;
+
 /**
  * The one verdict both the UI and the completion gate read, so the button can
  * never say "go" while the server says "no". required_pct null = type isn't
@@ -102,11 +108,36 @@ export async function watchVerdictFor(enrollmentId: string, card: TimelineCard):
   return { watched_pct: verdict.watched_pct, required_pct: requiredPct, met: verdict.met };
 }
 
-/** Current verdict for a card, no write — the UI hydrates its button from this on open. */
-export async function getWatchVerdict(enrollmentId: string, cardId: string): Promise<WatchVerdict> {
+/**
+ * Current verdict for a card, no write — the UI hydrates its button AND its
+ * player start point from this on open.
+ *
+ * The resume point is read here rather than inside `watchVerdictFor` on purpose.
+ * That function is also the completion gate, called on every card completion in
+ * the app, and it short-circuits before touching the progress row for a type
+ * that isn't watch-gated; making it fetch a playhead it does not need would put
+ * a query on that path for no one's benefit. A player, by contrast, wants the
+ * position even when the type has no watch requirement at all — the student
+ * still left off somewhere. One extra indexed read, on a GET a student asked for.
+ */
+export async function getWatchVerdict(enrollmentId: string, cardId: string): Promise<WatchVerdictWithResume> {
   const card = await TimelineCard.findByPk(cardId);
   if (!card || !isCardServable(card.visibility)) throw Object.assign(new Error('Card not available'), { status: 404 });
-  return watchVerdictFor(enrollmentId, card);
+  const [verdict, resume] = await Promise.all([
+    watchVerdictFor(enrollmentId, card),
+    storedResumePoint(enrollmentId, card.id),
+  ]);
+  return { ...verdict, ...resume };
+}
+
+/** The playhead stored for one (card, enrollment), or no resume point at all. */
+async function storedResumePoint(enrollmentId: string, cardId: string): Promise<WatchResumePoint> {
+  const progress = await TimelineCardProgress.findOne({
+    where: { card_id: cardId, enrollment_id: enrollmentId },
+    attributes: ['analytics'],
+  });
+  const stored = (progress?.analytics && typeof progress.analytics === 'object' ? progress.analytics.watch : null) as WatchState | null;
+  return resumePointOf(stored);
 }
 
 /**

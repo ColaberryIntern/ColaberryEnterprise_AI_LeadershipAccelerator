@@ -202,9 +202,11 @@ export const runtimeApi = {
   // `exiting` (C119): the learner is leaving the page, so send it as keepalive to survive unload.
   watch: (cardId: string, beat: { delta_s: number; position_s?: number | null; duration_s?: number | null; provider?: string | null }, exiting?: boolean) =>
     portalApi.post(`/api/portal/runtime/cards/${cardId}/watch`, beat, keepaliveConfig(exiting)).then((r) => r.data as { watched_pct: number; required_pct: number | null; met: boolean }),
-  // Current watch verdict, no write: hydrates Mark complete on open so it starts dimmed until the bar is met.
+  // Current watch verdict, no write: hydrates Mark complete on open so it starts dimmed until the bar is met,
+  // and carries the stored playhead so the player can resume where the student left off.
   watchVerdict: (cardId: string) =>
-    portalApi.get(`/api/portal/runtime/cards/${cardId}/watch`).then((r) => r.data as { watched_pct: number; required_pct: number | null; met: boolean }),
+    portalApi.get(`/api/portal/runtime/cards/${cardId}/watch`)
+      .then((r) => r.data as { watched_pct: number; required_pct: number | null; met: boolean; position_s?: number | null; duration_s?: number | null }),
   // Blog 2-minute read gate (ambient blogs, keyed on blogId): heartbeat + collect.
   blogRead: (blogId: string, beat: { delta_s: number }) =>
     portalApi.post(`/api/portal/runtime/today/blog/${blogId}/read`, beat).then((r) => r.data as { read_s: number; required_s: number; met: boolean }),
