@@ -173,6 +173,32 @@ describe('toLibraryView', () => {
     created_at: new Date('2026-11-01T00:00:00Z'), ...over,
   }) as any;
 
+  /**
+   * THE SHAPE SEQUELIZE ACTUALLY PRODUCES.
+   *
+   * MediaAsset is `timestamps: true, underscored: true`, so an instance carries the
+   * ATTRIBUTE `createdAt` and has no `created_at` at all. The fixture above uses the
+   * column name, which is why this field read null in production for every asset
+   * while this suite stayed green. Pinned here so it cannot regress quietly.
+   */
+  it('reads the timestamp under the name Sequelize actually uses', () => {
+    const sequelizeShaped = {
+      ...row(),
+      created_at: undefined,
+      createdAt: new Date('2026-11-24T17:13:19.843Z'),
+    } as any;
+    expect(toLibraryView(sequelizeShaped, NOW).createdAt).toBe('2026-11-24T17:13:19.843Z');
+  });
+
+  it('still reads the snake_case name, which a raw query does produce', () => {
+    expect(toLibraryView(row(), NOW).createdAt).toBe('2026-11-01T00:00:00.000Z');
+  });
+
+  it('reports a missing or unusable timestamp as null, never as Invalid Date', () => {
+    expect(toLibraryView({ ...row(), created_at: undefined } as any, NOW).createdAt).toBeNull();
+    expect(toLibraryView({ ...row(), created_at: 'not a date' } as any, NOW).createdAt).toBeNull();
+  });
+
   it('converts BIGINT byte_size from string to number, as the contract says', () => {
     expect(toLibraryView(row(), NOW).byteSize).toBe(12345);
     expect(toLibraryView(row({ byte_size: null }), NOW).byteSize).toBeNull();
@@ -205,8 +231,9 @@ describe('toLibraryView', () => {
     // url at all, because its playable address is sourceUrl and there is nothing of ours to sign.
     expect(Object.keys(view).sort()).toEqual([
       'altText', 'archivedAt', 'byteSize', 'createdAt', 'durationMs', 'height', 'id', 'kind',
-      'mimeType', 'originalFilename', 'rightsExpiresAt', 'rightsHolder', 'rightsStatus',
-      'sourceUrl', 'storageKey', 'tags', 'url', 'width',
+      'likeCount', 'mimeType', 'originalFilename', 'rightsExpiresAt', 'rightsHolder',
+      'rightsStatus', 'sourceUrl', 'storageKey', 'tags', 'uploadedBy', 'uploadedByLabel',
+      'uploadedBySource', 'url', 'viewCount', 'viewsCheckedAt', 'width',
     ]);
     expect(view.url).toBeNull();
   });

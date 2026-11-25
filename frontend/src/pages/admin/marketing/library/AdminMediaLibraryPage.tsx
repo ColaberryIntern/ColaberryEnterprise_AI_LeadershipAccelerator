@@ -13,6 +13,8 @@ import {
   type LibraryKind,
 } from '../../../../services/libraryApi';
 import { parseVideoUrl, videoThumbnail } from '../../../../utils/videoEmbed';
+import { formatCentral } from '../centralTime';
+import { showsViews, uploaderClassName, uploaderPrefix, viewsLabel } from './libraryProvenance';
 import VideoEmbed from '../../../../components/timeline/VideoEmbed';
 // VideoEmbed styles itself with tlv-* classes that live in timeline.css and it does NOT import
 // them, so every host has to. Same pattern as admin/orchestration/studio/StudentPreview.tsx.
@@ -558,6 +560,46 @@ export function AssetTile(props: {
             <p className="small text-muted mb-2" style={{ overflowWrap: 'anywhere' }}>
               {asset.kind === 'link' ? asset.sourceUrl : [asset.originalFilename, size].filter(Boolean).join(' · ')}
             </p>
+            {/*
+              WHO PUT THIS HERE, AND WHEN.
+
+              Two thirds of this library turned out to be output from an automated
+              thumbnail run that nobody recognised, and there was no way to tell from the
+              screen. The label is never blank: an uploader we cannot name still says so
+              with its short id, because "Unknown (c0ffee00)" and a silent gap mean very
+              different things to whoever is deciding what to delete.
+            */}
+            <p className={`small mb-2 ${uploaderClassName(asset.uploadedBySource)}`}>
+              {uploaderPrefix(asset.uploadedBySource)}{' '}
+              <span className="fw-medium">{asset.uploadedByLabel}</span>
+              {asset.createdAt && (
+                <>
+                  {' · '}
+                  <time dateTime={asset.createdAt}>{formatCentral(asset.createdAt)}</time>
+                </>
+              )}
+            </p>
+            {/*
+              VIEWS, AND WHEN THEY WERE COUNTED.
+
+              Only a link has views; a file we host has no counter anywhere, so it gets no
+              badge rather than a fabricated zero. The counts come from the row, written by
+              the daily refresh, never fetched during this render. The "checked" stamp is
+              shown so a stale number is visibly stale, and a link we have not counted yet
+              says so plainly instead of showing nothing.
+            */}
+            {showsViews(asset) && (
+              <p className="small text-muted mb-2">
+                {viewsLabel(asset.viewCount)
+                  ? (
+                    <>
+                      <span className="fw-semibold text-body">{viewsLabel(asset.viewCount)}</span>
+                      {asset.viewsCheckedAt && <> {'·'} checked {formatCentral(asset.viewsCheckedAt)}</>}
+                    </>
+                  )
+                  : <span className="fst-italic">Views not counted yet</span>}
+              </p>
+            )}
             {asset.tags.length > 0 && (
               <div className="d-flex gap-1 flex-wrap mb-2">
                 {asset.tags.map((t) => <span className="badge bg-light text-dark border" key={t}>{t}</span>)}

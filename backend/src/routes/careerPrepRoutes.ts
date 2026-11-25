@@ -6,6 +6,7 @@ import { careerPrepEnabled } from '../services/careerPrep/careerPrepFlag';
 import { loadPrepData } from '../services/careerPrep/prepData';
 import { addInterview, createPractice, linkHireInterviews } from '../services/careerPrep/interviews';
 import { buildDashboard, buildSummary } from '../services/careerPrep/prepViews';
+import { linkCcppOnOpen } from '../services/careerPrep/ccppInterviews';
 import { askCora } from '../services/careerPrep/coraService';
 import { activePlan, createPlan, NotYoursError, PastInterviewError } from '../services/careerPrep/plans';
 import { currentSession, NotFoundError, startSession, updateSession } from '../services/careerPrep/sessions';
@@ -58,9 +59,10 @@ export const InterviewBody = z.discriminatedUnion('mode', [
   z.object({ mode: z.literal('practice'), role: z.string().trim().min(1).max(120), type: TYPE }).strict(),
 ]);
 
-/** Real interviews from Hire are linked before every read; idempotent, and a failure never blocks the read. */
+/** Real interviews from Hire and from CCPP are linked before every read; idempotent, and a failure never blocks the read. */
 async function linkQuietly(enrollmentId: string): Promise<void> {
   try { await linkHireInterviews(enrollmentId); } catch (err) { logFailure('career_prep_link_hire_failed', err); }
+  await linkCcppOnOpen(enrollmentId);
 }
 
 export async function getSummary(req: Request, res: Response): Promise<void> {

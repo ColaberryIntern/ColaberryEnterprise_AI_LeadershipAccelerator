@@ -32,6 +32,7 @@ import {
   handleGetBidValueHistory,
   handleGetDealValueHistory,
   handleGetRevenueFlowBoard,
+  handleGetMembershipStageRoster,
 } from '../../controllers/revenueFlowController';
 
 const router = Router();
@@ -58,6 +59,13 @@ router.get('/api/admin/commercialization/channel-truth', requireAdmin, handleGet
 // behind each number. `?window=<days>` narrows the timeline; it defaults to 180, which is
 // wider than the oldest real datum production holds.
 router.get('/api/admin/commercialization/revenue-flow', requireAdmin, handleGetRevenueFlowBoard);
+// R26 - the named people behind one membership funnel count. Declared AFTER the bare
+// revenue-flow route above and with a literal path segment, so neither can shadow the other.
+router.get(
+  '/api/admin/commercialization/revenue-flow/membership/stage/:stageKey/people',
+  requireAdmin,
+  handleGetMembershipStageRoster,
+);
 // R16 - the only write on this surface: record what a government bid is worth. `confirmedBy`
 // comes from the session and is NOT accepted from the body; see revenueFlowController's
 // header for why that is the difference between a confirmation and a string. Declared with a

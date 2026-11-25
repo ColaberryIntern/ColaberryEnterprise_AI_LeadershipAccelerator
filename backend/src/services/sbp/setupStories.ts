@@ -7,23 +7,22 @@
  *
  * Two questions, the same split as connectedDemoFlag.ts and for its reason:
  *
- *   WRITE: should this publish leave them out?  Covered by SBP_PLATFORM_BUILD, or already retired.
+ *   WRITE: should this publish leave them out?  The build is in platform mode, or already retired.
  *   READ:  were they left out?                  From rows, never the flag: the project has a platform
  *                                               build run and no STORY-000 row.
  *
- * A project that already has the row KEEPS it, whatever the flag says: the row may be verified and
+ * A project that already has the row KEEPS it, whatever the mode says: the row may be verified and
  * paid, and nothing here may take that back. An agent-domain board is never retired; its Command
  * Center is `<domain>.STORY-000` and belongs to another subsystem.
  *
  * FAILS SOFT TO "NOT RETIRED", which is today's behavior. In the read paths that adds STORY-000 to a
  * list of stories for one run. It cannot wrongly latch a milestone, because it makes the list longer,
- * never shorter. If the flag covers a build whose run never got queued, the read answer is also "not
+ * never shorter. If a platform-mode build's run never got queued, the read answer is also "not
  * retired" until the next publish queues one.
  */
 import { COMMAND_CENTER_STORY_ID } from './commandCenterStory';
-// `connectedDemoEnabledFor` is the shared off/all/ids rule platformBuild/queue also uses. Imported from
-// here because queue.ts loads the database at import time.
-import { connectedDemoEnabledFor, connectedDemoForPublish, connectedDemoMaterializedFor } from './connectedDemoFlag';
+import { connectedDemoForPublish, connectedDemoMaterializedFor } from './connectedDemoFlag';
+import type { SetupMode } from './planStore';
 
 interface SetupFacts { hasRow: boolean; hasRun: boolean; isDomain: boolean }
 
@@ -74,11 +73,10 @@ export interface PublishSetup { setupRetired: boolean; connectedDemo: boolean }
 export async function setupForPublish(
   projectId: string,
   enrollmentId: string | null | undefined,
-  settings: { platformBuild: string | null | undefined; connectedDemo: string | null | undefined },
+  settings: { platformBuild: boolean; connectedDemo: string | null | undefined },
 ): Promise<PublishSetup> {
-  const covered = connectedDemoEnabledFor(enrollmentId, settings.platformBuild);
   const f = await softFacts(projectId);
-  const setupRetired = f !== null && !f.hasRow && !f.isDomain && (covered || f.hasRun);
+  const setupRetired = f !== null && !f.hasRow && !f.isDomain && (settings.platformBuild || f.hasRun);
   return {
     setupRetired,
     // A STORY-900 row a student already has is kept even here; a new one is never made.
@@ -86,4 +84,20 @@ export async function setupForPublish(
       ? await connectedDemoMaterializedFor(projectId)
       : await connectedDemoForPublish(projectId, enrollmentId, settings.connectedDemo),
   };
+}
+
+/** The build's stored mode. FAILS SOFT TO 'student', the mode that spends nothing. */
+export async function setupModeFor(projectId: string): Promise<SetupMode> {
+  try {
+    const { getIntake } = await import('./planStore');
+    return (await getIntake(projectId))?.setup_mode === 'platform' ? 'platform' : 'student';
+  } catch (err) {
+    const e = err as Error;
+    console.warn(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'warn', service: 'sbp-platform-build',
+      event: 'setup_mode_lookup_failed', outcome: 'partial', error_class: e?.constructor?.name ?? 'Error',
+      context: { projectId, message: e?.message, fell_back_to: 'student' },
+    }));
+    return 'student';
+  }
 }

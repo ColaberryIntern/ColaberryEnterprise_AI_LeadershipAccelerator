@@ -12,8 +12,10 @@
  * (`runIntakeTurn` / `finishIntake`, shared with AI Flotation and the admin side), so the
  * mirror rule holds: a change to how we interview changes it everywhere. Two things differ
  * here, on purpose:
- *   - Nothing is built. An Enterprise prospect gets a first meeting with pilot options, not
- *     a student project, so every turn and every call ends with `buildFor: none`.
+ *   - No student project is built: every turn and every call ends with `buildFor: none`, because
+ *     that route starts a student-mode build. The first finished interview starts the client's
+ *     Command Center and demo instead (enterpriseIntakeDemo, through sbp/clientDemo), for Ali to
+ *     show on the call. It is never shown or sent to the client automatically.
  *   - The written brief is composed on the server from the stored form and put in front of
  *     the conversation, so the interviewer never asks what the form already answered and
  *     the browser cannot rewrite what the form said.
@@ -285,6 +287,10 @@ async function recordInterviewed(
     import('./enterpriseIntakeResearch')
       .then(({ researchSoon }) => researchSoon(intake.id))
       .catch(() => undefined);
+    // L13.7: and their Command Center and demo. Never awaited. If it cannot start now the sweep tries again.
+    import('./enterpriseIntakeDemo')
+      .then(({ demoSoon }) => demoSoon(intake.id))
+      .catch((err) => console.error(JSON.stringify({ timestamp: new Date().toISOString(), level: 'error', service: 'enterprise-intake-demo', event: 'enterprise_demo_not_attempted', outcome: 'failure', error_class: (err as Error)?.name || 'UnknownError', context: { intake_id: intake.id, message: String((err as Error)?.message || err).slice(0, 200) } })));
   }
   return ok;
 }

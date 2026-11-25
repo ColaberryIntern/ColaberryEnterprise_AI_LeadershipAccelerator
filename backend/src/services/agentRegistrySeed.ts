@@ -3331,6 +3331,34 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
       + 'writes nothing. Bounded per tick, so one tick cannot become a stampede. No LLM.',
   },
   {
+    agent_name: 'YoutubeViewRefresh',
+    agent_type: 'scheduled_processor',
+    module: 'media',
+    source_file: 'backend/src/services/media/refreshYoutubeViews.ts',
+    trigger_type: 'cron',
+    // Must stay IDENTICAL to this agent's SCHEDULE_REGISTRY row in aiOpsScheduler.ts;
+    // a disagreement between the two is exactly what the cron-registry ratchet reports.
+    schedule: '20 6 * * *',
+    category: 'reporting',
+    // Seeded ENABLED, on the same reasoning as DeptCampaignPerformanceAgent rather than
+    // MarketingPublishingWorker: there is no blast radius to hold for review. It reads
+    // public view counts and writes one jsonb key on at most a few dozen media_assets
+    // rows. It sends nothing, posts nothing, and touches no lead, campaign or email.
+    enabled: true,
+    description:
+      'Refreshes the stored YouTube view and like counts for every link asset in the '
+      + 'media library, so a tile can say how the video is doing. ONE quota unit per run: '
+      + 'videos.list takes 50 ids per call and the whole library is 17 links, against a '
+      + '10,000 unit daily budget. Runs on a schedule rather than during a render because '
+      + 'an external call on the critical path of a 100-tile grid would make the page as '
+      + 'slow and as fragile as YouTube is; each tile shows when its count was last '
+      + 'checked, so a stale number is visibly stale. A video YouTube omits (private or '
+      + 'deleted) stores NO count rather than zero, because a deleted video must not read '
+      + 'as a video nobody watched. A failed run writes nothing and leaves the previous '
+      + 'counts readable, so the screen degrades to last-known. Idempotent: a second run '
+      + 'writes the same counts and reports no change. No LLM.',
+  },
+  {
     agent_name: 'MarketingPublishingWorker',
     agent_type: 'scheduled_processor',
     module: 'publishing',

@@ -85,6 +85,9 @@ export const CAREER_PREP_STATEMENTS: readonly string[] = [
   // No foreign key: placement_interviews is created after this schema at boot. Revert by hand: PLACEMENT_LINK_ROLLBACK.
   'ALTER TABLE career_interviews ADD COLUMN IF NOT EXISTS placement_interview_id UUID',
   'CREATE UNIQUE INDEX IF NOT EXISTS uq_career_interviews_placement ON career_interviews (placement_interview_id) WHERE placement_interview_id IS NOT NULL',
+  // The CCPP interview (CB_Auto_Interview_Job_Submissions.ID) a 'real' row came from (ccppInterviews.ts). Revert by hand: CCPP_LINK_ROLLBACK.
+  'ALTER TABLE career_interviews ADD COLUMN IF NOT EXISTS ccpp_interview_id INTEGER',
+  'CREATE UNIQUE INDEX IF NOT EXISTS uq_career_interviews_ccpp ON career_interviews (ccpp_interview_id) WHERE ccpp_interview_id IS NOT NULL',
   `CREATE TABLE IF NOT EXISTS prep_skills (
      key VARCHAR(40) PRIMARY KEY,
      label VARCHAR(80) NOT NULL,
@@ -193,6 +196,9 @@ export const CAREER_PREP_STATEMENTS: readonly string[] = [
 
 /** Run by hand to remove only CP8.3's link column (its unique index goes with it). Never run at boot. */
 export const PLACEMENT_LINK_ROLLBACK = 'ALTER TABLE career_interviews DROP COLUMN IF EXISTS placement_interview_id';
+
+/** Run by hand to remove only the CCPP link column (its unique index goes with it). Never run at boot. */
+export const CCPP_LINK_ROLLBACK = 'ALTER TABLE career_interviews DROP COLUMN IF EXISTS ccpp_interview_id';
 
 /** Run by hand to roll CP1.2 back. Never run at boot. Dependents first. */
 export const CAREER_PREP_ROLLBACK: readonly string[] = [

@@ -34,8 +34,8 @@ describe('runEnterpriseIntakeSweep', () => {
     expect(await runEnterpriseIntakeSweep([{ name: 'x', run: async () => ({}) }])).toEqual({ x: {} });
   });
 
-  it('wires the seven intake steps in order', () => {
-    expect(STEPS.map((s) => s.name)).toEqual(['basecamp', 'files', 'research', 'comms', 'reminders', 'meeting_posts', 'ali_briefs']);
+  it('wires the eight intake steps in order', () => {
+    expect(STEPS.map((s) => s.name)).toEqual(['basecamp', 'files', 'research', 'client_demos', 'comms', 'reminders', 'meeting_posts', 'ali_briefs']);
   });
 });
 

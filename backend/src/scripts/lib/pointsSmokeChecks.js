@@ -162,6 +162,29 @@ function formatRecoveryEmail({ base, awarded, badge, total0, total1, renderBand 
   ].join('\n');
 }
 
+/**
+ * The body this monitor posts to /api/portal/free-signup.
+ *
+ * IT LIVES HERE, in the pure half, for one reason: a request body is a DECISION
+ * about a contract, and this file's whole premise is that decisions are testable
+ * and the runner's I/O is not. While the body sat inline in the runner, nothing
+ * in CI could compare it with the schema the server actually enforces - so when
+ * PH1 made `phone` required on every public signup form (Ali, 2026-11-19), this
+ * monitor went on posting a body the endpoint had started refusing. It answered
+ * 400 every morning from 2026-11-21 to 2026-11-25, and because check 2 returns
+ * early, the badge-to-HUD points parity that the whole script exists to defend
+ * did not run once in those five days.
+ *
+ * The companion test parses this against `portalFreeSignupSchema` itself, so the
+ * next required field fails in CI instead of five mornings of alerts that say
+ * production is broken when it is not.
+ *
+ * The phone is a fictional 555-01xx number, the range reserved for exactly this.
+ */
+function signupBody(email) {
+  return { full_name: 'Points Smoke', email, phone: '512-555-0142' };
+}
+
 module.exports = {
   GATED_BANDS,
   badgeOf,
@@ -171,4 +194,5 @@ module.exports = {
   nextState,
   formatFailureEmail,
   formatRecoveryEmail,
+  signupBody,
 };

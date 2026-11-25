@@ -32,6 +32,15 @@ export interface LibraryAsset {
   rightsStatus: RightsStatus;
   archivedAt: string | null;
   createdAt: string | null;
+  /** The raw uploader uuid, or null when it was never recorded. */
+  uploadedBy: string | null;
+  /** Always non-empty: a name, 'Not recorded', or 'Unknown (abcd1234)'. */
+  uploadedByLabel: string;
+  uploadedBySource: 'admin' | 'member' | 'system' | 'unknown' | 'none';
+  /** YouTube views for a link. Null means no answer from YouTube, NOT zero views. */
+  viewCount: number | null;
+  likeCount: number | null;
+  viewsCheckedAt: string | null;
   /** Signed and time-limited, for a FILE. Null for a link - use `sourceUrl` there. */
   url: string | null;
 }

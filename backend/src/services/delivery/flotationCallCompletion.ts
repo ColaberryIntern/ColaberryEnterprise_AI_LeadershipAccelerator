@@ -37,9 +37,9 @@ export const FLOTATION_SOURCE = 'ai-flotation';
 
 /**
  * W28: the intake calls this completion owns. The Enterprise intake places the same call
- * under its own source; it ends the same way, except that nothing is built from it (an
- * Enterprise prospect gets a first meeting, not a student project) and its intake row
- * records the write-up.
+ * under its own source; it ends the same way, except that no student project is built from
+ * it: its intake row records the write-up, and that is what starts the client's demo
+ * (recordEnterpriseCallOutcome, then enterpriseIntakeDemo). Any new voice agent must end here.
  */
 export const isIntakeCallSource = (source: unknown): boolean =>
   source === FLOTATION_SOURCE || source === ENTERPRISE_INTAKE_SOURCE;

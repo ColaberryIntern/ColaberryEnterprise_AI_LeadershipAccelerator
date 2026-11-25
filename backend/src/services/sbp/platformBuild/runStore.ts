@@ -95,6 +95,15 @@ export async function countFailedRuns(projectId: string): Promise<number> {
   return Number(rows[0]?.n ?? 0);
 }
 
+/** Every run started in the window, whatever became of it: a failed run may still have spent. */
+export async function countRunsSince(hours: number): Promise<number> {
+  const rows = await sequelize.query<{ n: string }>(
+    `SELECT count(*)::text AS n FROM platform_build_runs WHERE created_at > now() - (:hours || ' hours')::interval`,
+    { replacements: { hours: String(hours) }, type: QueryTypes.SELECT },
+  );
+  return Number(rows[0]?.n ?? 0);
+}
+
 export async function getRun(runId: string, t?: Transaction, forUpdate = false): Promise<PlatformBuildRun | null> {
   const rows = await sequelize.query<PlatformBuildRun>(
     `SELECT * FROM platform_build_runs WHERE id = :runId${forUpdate ? ' FOR UPDATE' : ''}`,

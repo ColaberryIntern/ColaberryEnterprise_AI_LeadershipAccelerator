@@ -12,7 +12,8 @@ import { FACTOR_GROUPS, searchGroup as realSearch, type Candidate, type SearchIn
 /**
  * The signals job (WL3.1): search, then FETCH every candidate and read its date from the page. A page
  * that cannot be fetched gets one alternate outlet, then is dropped with a reason. Kept: at most 18.
- * Fewer than 12 is reported as `short`, never padded. Re-running a plan replaces its rows in one
+ * Fewer than 12 triggers ONE more search round that names
+ * what was found; still fewer is reported as `short`, never padded. Re-running a plan replaces its rows in one
  * transaction, so a rerun never duplicates and a failed rerun leaves the old rows in place.
  *
  * Failure modes: over the cost cap stops the job (BudgetExceeded, nothing replaced). One search group
@@ -69,6 +70,20 @@ export function namesAStory(url: string): boolean {
   return /[-_][^-_]+[-_]/.test(last) || /\d{5,}/.test(last);
 }
 
+/**
+ * Roundups and newsletters retell many stories, so they cannot date or source any one of them. Only
+ * title-shaped forms count (how the headline starts or ends, once the site's name is cut off): the same
+ * words inside a sentence are ordinary news ("AI layoffs begin the week of Nov. 30", "Gmail gets an AI digest").
+ */
+const ROUNDUP_START = /^((the|your|this|last)\s+)?week\s+(in|of)\b|^this week in\b|^(top|biggest|best)\b.*\b(stories|news|headlines)\b.*\bweek\b|^(weekly|daily)\s+(round-?up|recap|digest|brief|wrap|newsletter)\b/i;
+const ROUNDUP_END = /\b(news|stories|headlines)\s+(this|of the|for the)\s+week\b|\bnews\s+(bytes|briefs?|flash|round-?up|digest)\b|\b(weekly|daily)\s+(round-?up|recap|digest|brief|wrap|newsletter)$/i;
+const PERIOD_NEWS = /\bnews,?\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2}(\s*(to|-|–)\s*\d{1,2})?,?\s+)?\d{4}/i;
+const WEEK_URL = /\/weekly\/\d{4}|\/\d{4}-w\d{2}\b/i;
+export function isRoundup(headline: string, url: string): boolean {
+  const h = headline.split(/\s[|·]\s/)[0].trim();
+  return ROUNDUP_START.test(h) || ROUNDUP_END.test(h) || PERIOD_NEWS.test(h) || WEEK_URL.test(new URL(url).pathname);
+}
+
 export async function vet(c: Candidate, from: string, today: string, fetchPage: FetchPage): Promise<SignalRow> {
   const base = { headline: c.headline, publisher: c.publisher || null, factors: normalizeFactors(c.factors), fits_weeks: [...new Set(c.fits_weeks)].sort((a, b) => a - b), idea: c.idea || null };
   const drop = (url: string, reason: string, fetched = false): SignalRow => ({ ...base, url: url.slice(0, 1000), published_at: null, date_confirmed: false, fetched_ok: fetched, dropped_reason: reason.slice(0, 200) });
@@ -85,6 +100,7 @@ export async function vet(c: Candidate, from: string, today: string, fetchPage: 
   // The outlet whose page was read: the named publisher belongs to the first URL only.
   if (facts.site) base.publisher = facts.site;
   else if (alternate) base.publisher = new URL(page.url).hostname.replace(/^www\./, '');
+  if (isRoundup(headline, page.url)) return { ...drop(page.url, 'a roundup or newsletter, not one story', true), headline };
   if (facts.date && facts.date > today) return { ...drop(page.url, `page date ${facts.date} is in the future`, true), headline };
   if (!facts.date && !namesAStory(page.url)) return { ...drop(page.url, 'a home or index page, not one story', true), headline };
   const oldest = base.factors.some((f) => EVENT_FACTORS.has(f)) ? shiftDays(today, -EVENT_MAX_AGE_DAYS) : from;
@@ -117,26 +133,38 @@ export interface SignalsDeps { search?: typeof realSearch; fetchPage?: FetchPage
 export async function runSignals(input: { planId: string; airDate: string; forceNews?: string; avoid?: string }, deps: SignalsDeps = {}): Promise<SignalsResult> {
   const { search = realSearch, fetchPage = realFetch, today = centralDate() } = deps;
   const s: SearchInput = { ...input, from: windowStart(input.airDate, today), to: today };
-  const candidates: Candidate[] = []; const failedGroups: string[] = [];
-  for (const group of FACTOR_GROUPS) {
-    try { candidates.push(...await search(group, s)); } catch (e) {
-      if (e instanceof BudgetExceeded) throw e;
-      failedGroups.push(group.join('+'));
-      console.warn(JSON.stringify({ level: 'warn', service: 'backend', event: 'weekly_live.signals_search', outcome: 'failure', error_class: classifyError(e), context: { plan_id: input.planId, group } }));
+  const failedGroups = new Set<string>();
+  const round = async (have: string[]): Promise<SignalRow[]> => {
+    const found = await Promise.allSettled(FACTOR_GROUPS.map((group) => search(group, { ...s, have })));
+    const candidates: Candidate[] = [];
+    found.forEach((f, i) => {
+      if (f.status === 'fulfilled') { candidates.push(...f.value); return; }
+      if (f.reason instanceof BudgetExceeded) throw f.reason;
+      failedGroups.add(FACTOR_GROUPS[i].join('+'));
+      console.warn(JSON.stringify({ level: 'warn', service: 'backend', event: 'weekly_live.signals_search', outcome: 'failure', error_class: classifyError(f.reason), context: { plan_id: input.planId, group: FACTOR_GROUPS[i] } }));
+    });
+    if (found.every((f) => f.status === 'rejected')) throw Object.assign(new Error('Every news search failed. Try again in a few minutes.'), { name: 'UpstreamUnavailable' });
+    const vetted: SignalRow[] = [];
+    for (let i = 0; i < candidates.length; i += FETCH_CONCURRENCY) {
+      vetted.push(...await Promise.all(candidates.slice(i, i + FETCH_CONCURRENCY).map((c) => vet(c, s.from, today, fetchPage))));
+    }
+    return vetted;
+  };
+  const first = await round([]);
+  let rows = selectSignals(first);
+  const keptNow = rows.filter((r) => !r.dropped_reason);
+  if (keptNow.length < MIN_SIGNALS) {
+    // The extra round is a bonus: if it fails or hits the cap, the first round still stands.
+    try { rows = selectSignals([...first, ...await round(keptNow.map((r) => r.headline))]); } catch (e) {
+      console.warn(JSON.stringify({ level: 'warn', service: 'backend', event: 'weekly_live.signals_topup', outcome: 'failure', error_class: e instanceof BudgetExceeded ? 'BudgetExceeded' : classifyError(e), context: { plan_id: input.planId } }));
     }
   }
-  if (failedGroups.length === FACTOR_GROUPS.length) throw Object.assign(new Error('Every news search failed. Try again in a few minutes.'), { name: 'UpstreamUnavailable' });
-  const vetted: SignalRow[] = [];
-  for (let i = 0; i < candidates.length; i += FETCH_CONCURRENCY) {
-    vetted.push(...await Promise.all(candidates.slice(i, i + FETCH_CONCURRENCY).map((c) => vet(c, s.from, today, fetchPage))));
-  }
-  const rows = selectSignals(vetted);
   await sequelize.transaction(async (transaction) => {
     await WeeklyLiveSignal.destroy({ where: { plan_id: input.planId }, transaction });
     await WeeklyLiveSignal.bulkCreate(rows.map((r) => ({ ...r, plan_id: input.planId })), { transaction });
   });
   const kept = rows.filter((r) => !r.dropped_reason).length;
-  const result = { kept, dropped: rows.length - kept, short: kept < MIN_SIGNALS, failedGroups };
-  console.log(JSON.stringify({ level: 'info', service: 'backend', event: 'weekly_live.signals', outcome: failedGroups.length || result.short ? 'partial' : 'success', context: { plan_id: input.planId, ...result } }));
+  const result = { kept, dropped: rows.length - kept, short: kept < MIN_SIGNALS, failedGroups: [...failedGroups] };
+  console.log(JSON.stringify({ level: 'info', service: 'backend', event: 'weekly_live.signals', outcome: failedGroups.size || result.short ? 'partial' : 'success', context: { plan_id: input.planId, ...result } }));
   return result;
 }

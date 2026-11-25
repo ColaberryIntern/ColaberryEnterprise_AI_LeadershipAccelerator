@@ -89,6 +89,16 @@ describeIfDb('weekly live plans against Postgres', () => {
     expect((await store.latestPlanFor('2099-01-26'))?.id).toBe(id);
   });
 
+  it('at startup every running plan is marked stopped, and nothing else changes', async () => {
+    const running = await make('2099-03-02'); const done = await make('2099-03-09');
+    await store.finish(done.id, done.runId!, true);
+    expect(await store.failInterruptedRuns()).toBeGreaterThanOrEqual(1);
+    expect(await store.getPlan(running.id)).toMatchObject({ status: 'failed', error: expect.stringContaining('restarted') });
+    expect(await store.getPlan(done.id)).toMatchObject({ status: 'ready', error: null });
+    expect(await store.setStage(running.id, running.runId!, 'topics')).toBe(false);
+    expect((await make('2099-03-02')).created).toBe(true);
+  });
+
   it('the cost cap refuses at the limit, even for two reservations at once', async () => {
     const r = await Promise.allSettled([budget.reserve(null, 'a', 0.6, 1), budget.reserve(null, 'b', 0.6, 1)]);
     expect(r.map((x) => x.status).sort()).toEqual(['fulfilled', 'rejected']);

@@ -2,18 +2,23 @@
 
 ## Purpose
 
-After a student's plan is published, the platform builds that project's Command Center and
-Connected Demo itself, stores every version, and serves them from our own site. Every story in the
-portal then links to both. The student's GitHub repository is not involved: the result works
-before a repo exists, and it stays under our control after one does. The feature ships OFF and is
-turned on per enrollment.
+Two options, chosen per project when its build starts (`setupMode`):
+
+| Mode | Who makes the Command Center and demo | Cost to us | Who uses it |
+|---|---|---|---|
+| `student` (default) | The student: STORY-000 and STORY-900 are tasks on their board | none | every student project |
+| `platform` | The platform builds, stores and hosts them; those two stories do not exist | about $2 a project | client demos from the enterprise intake (`services/sbp/clientDemo.ts`) |
+
+Student projects are never built by the platform (Ali, 2026-11-25). No student route accepts the mode.
 
 ## Inputs
 
 | Input | Where | Notes |
 |---|---|---|
 | `OPENAI_API_KEY` | GitHub repo **Actions secret** | The stored production key (Ali, 2026-11-24). Only the step that starts the key proxy sees it. Rotating the backend key means updating this secret too. |
-| `SBP_PLATFORM_BUILD` | backend env | `off` (default), `all`, or comma-separated enrollment ids |
+| `SBP_PLATFORM_BUILD` | backend env | Master switch: `on`, or anything else for off (default). It does not choose projects; the older `all` and id-list values mean off. |
+| `PLATFORM_BUILD_DAILY_MAX` | backend env | Most platform builds in any 24 hours, all projects together. Default 5 (about $10). |
+| `PLATFORM_BUILD_CLIENT_ENROLLMENT` | backend env | The one enrollment that holds client demo projects. Empty refuses client demos. |
 | `GITHUB_TOKEN` | backend env (already set in production) | Needs `workflow` scope to dispatch the runner. Production's token has it. |
 | `PLATFORM_API_BASE` | GitHub repo **Actions variable**, optional | Defaults to `https://enterprise.colaberry.ai` |
 | `PLATFORM_BUILD_MODEL` | GitHub repo **Actions variable**, optional | Defaults to `gpt-6.2-sol`. Must have a price in `scripts/platformBuild/codexConfig.cjs`. |
@@ -27,20 +32,22 @@ turned on per enrollment.
    boot log has no `[boot] platform build schema unavailable` line, and
    `SELECT to_regclass('platform_build_runs'), to_regclass('platform_build_artifacts');`
    returns two non-null values.
-3. **Turn it on for ONE test enrollment first.** Set `SBP_PLATFORM_BUILD=<enrollment id>` in the
-   production backend env and redeploy the backend. Success: the env var is visible in
-   `docker exec accelerator-backend printenv SBP_PLATFORM_BUILD`.
-4. **Publish a plan for that enrollment.** Success: a log line
+3. **Turn it on.** Set `SBP_PLATFORM_BUILD=on` and `PLATFORM_BUILD_CLIENT_ENROLLMENT=<enrollment id>` in
+   the production backend env and redeploy the backend. Success: both are visible in
+   `docker exec accelerator-backend printenv SBP_PLATFORM_BUILD PLATFORM_BUILD_CLIENT_ENROLLMENT`.
+4. **Start a client demo.** The enterprise intake does it when an interview finishes
+   (`services/enterpriseIntake/enterpriseIntakeDemo.ts`, retried by the 5-minute sweep for interviews from
+   the last 7 days, so **turning the switch on also builds for recent interviews that were refused while it
+   was off**, at most one per sweep, up to the daily cap). By hand:
+   `startClientDemo({ understandingId })`. Success: a log line
    `"event":"platform_build_dispatched"` with the project id, and a new run in the repository's
    Actions tab named "Platform build runner".
 5. **Wait for the run** (typically 15 to 40 minutes). Success: the run is green, its log ends with
    `{"event":"uploaded",...}`, and `platform_build_runs.status = 'uploaded'` for that run.
-6. **Open any story of that project in the portal.** Success: "Command Center" and "Demo" buttons
-   in the story header open the hosted pages, and both render with no console errors.
-7. **Check the board of a NEW project.** Success: its first release starts with the plan's own
-   first story; there is no STORY-000 or STORY-900 task. A project published before the flag
-   covered it keeps the rows it has.
-8. **Widen** to more enrollment ids, then to `all`.
+6. **Read the status** (`clientDemoStatus(understandingId)`). Success: `state: "ready"` with both links,
+   and both pages render.
+7. **Confirm students are untouched.** Success: a new student project has STORY-000 and no row in
+   `platform_build_runs`.
 
 ## Outputs
 
@@ -74,6 +81,7 @@ turned on per enrollment.
 | Sandbox cannot be proven | Runner reports `SandboxUnavailable` before any paid call. | Run the "Platform build sandbox check" workflow on a PR; a runner image change is the usual cause. |
 | Demo spec invalid but Command Center fine | Command Center stored, demo not; run `uploaded` with `error_class = DemoSpecInvalid` and the reasons in `error_detail`. | Optional: re-run later. |
 | 3 failed runs for one project | Queue stops (`attempts_exhausted`). | Fix the cause, then `DELETE FROM platform_build_runs WHERE project_id = '<id>' AND status = 'failed';` and re-publish. |
+| Daily cap reached | `startClientDemo` refuses with `daily_cap` before any spend; a start that slips through is refused at queue time and logged as `platform_build_daily_cap`. | Raise `PLATFORM_BUILD_DAILY_MAX`, or publish again tomorrow. |
 | A covered build could not be queued at all | The board has no STORY-000 and there is no hosted Command Center yet. | Re-publish; that queues a run. If attempts are exhausted, see the row above. |
 | The flag is turned off after a project was retired | It stays retired: a republish adds nothing back while the project has a platform build run. | Nothing. Deleting that project's runs and republishing with the flag off brings STORY-000 back. |
 | A link is opened after 12 hours | "Not ready yet" page. | Re-open the story in the portal; it mints a fresh link. |
@@ -84,8 +92,8 @@ turned on per enrollment.
   runner. Its shell commands run in Codex's sandbox with no network and an empty environment, the
   key lives only in a separate proxy process, sudo is removed first, and the runner proves the
   sandbox before every build.
-- **There is no per-build dollar cap.** Codex has none. The limits are the timeouts, one run per
-  project, three failed runs, and the spend limit on the OpenAI project.
+- **There is no per-build dollar cap.** Codex has none. The limits are the daily cap, the timeouts, one
+  run per project, three failed runs, and the spend limit on the OpenAI project.
 - **The repository is public.** The workflow takes only a run id as input, proves itself with
   GitHub OIDC (no stored secret), and prints counts, states and costs only, never project content.
 - **The backend accepts only** a token from `platform-build-runner.yml` on `refs/heads/main`,

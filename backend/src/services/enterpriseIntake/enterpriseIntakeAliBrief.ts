@@ -19,6 +19,7 @@ import { env } from '../../config/env';
 import { meetingWhen, TZ } from './enterpriseIntakeTime';
 import { hoursPerYear, roiLabel, Roi } from './enterpriseIntakeRoi';
 import { sendAliBrief } from './enterpriseIntakeEmails';
+import { clientDemoView, type ClientDemoView } from './enterpriseIntakeDemo';
 
 export const MAX_BRIEF_ATTEMPTS = 3;
 const CLAIM_STALE_MS = 10 * 60 * 1000;
@@ -71,6 +72,8 @@ export interface BriefInput {
   facts: Array<{ dimension: string; value: string }>;
   now: Date;
   adminUrl: string;
+  /** State and words only: the brief never carries a demo link (they expire, and email is forever). */
+  demo?: Pick<ClientDemoView, 'state' | 'message'>;
 }
 
 const section = (title: string, body: string) =>
@@ -84,7 +87,7 @@ const chip = (text: string, tone: 'ok' | 'warn' | 'bad') => {
   return `<span style="display:inline-block;padding:4px 10px;border-radius:12px;background:${c[0]};color:${c[1]};font:700 12px Arial,sans-serif">${e(text)}</span>`;
 };
 
-export function buildAliBriefHtml({ intake: i, facts, now, adminUrl }: BriefInput): string {
+export function buildAliBriefHtml({ intake: i, facts, now, adminUrl, demo }: BriefInput): string {
   const m = new Date(i.meeting_start!);
   const r = (i.research || {}) as ResearchView;
   const options = (i.pilot_options || []) as OptionView[];
@@ -98,6 +101,9 @@ export function buildAliBriefHtml({ intake: i, facts, now, adminUrl }: BriefInpu
       : chip('AI interview NOT done yet', 'bad');
   const research = i.researched_at ? chip('Research and options ready', 'ok') : chip('Research waiting on the interview', 'warn');
   const files = (i.client_files || []);
+  const demoChip = !demo ? '' : demo.state === 'ready' ? chip('Demo ready', 'ok')
+    : demo.state === 'failed' || demo.state === 'refused' ? chip('Demo NOT ready', 'bad')
+      : chip('Demo not ready yet', 'warn');
 
   const hero = [
     '<tr><td style="background:#1f4fd1;padding:28px 24px;color:#ffffff;font-family:Arial,sans-serif">',
@@ -108,7 +114,7 @@ export function buildAliBriefHtml({ intake: i, facts, now, adminUrl }: BriefInpu
     `<div style="font-size:17px;margin-top:10px">${e(i.full_name)}${i.role ? `, ${e(i.role)}` : ''} at <strong>${e(i.company)}</strong></div>`,
     i.meeting_link ? `<div style="margin-top:16px"><a href="${e(i.meeting_link)}" style="display:inline-block;background:#ffffff;color:#1f4fd1;padding:10px 18px;border-radius:6px;font-weight:700;text-decoration:none">Join Google Meet</a></div>` : '',
     '</td></tr>',
-    `<tr><td style="padding:14px 24px 0">${interview} ${research} ${chip(`${files.length} file${files.length === 1 ? '' : 's'} from the client`, files.length ? 'ok' : 'warn')}</td></tr>`,
+    `<tr><td style="padding:14px 24px 0">${interview} ${research} ${chip(`${files.length} file${files.length === 1 ? '' : 's'} from the client`, files.length ? 'ok' : 'warn')} ${demoChip}</td></tr>`,
   ].join('');
 
   const who = ul([
@@ -146,6 +152,7 @@ export function buildAliBriefHtml({ intake: i, facts, now, adminUrl }: BriefInpu
     hero,
     section('The client', who),
     section('Their process and numbers', numbers),
+    demo ? section('Command Center and demo', `<div>${e(demo.message)}</div><div style="font-size:13px;color:#5b6578">As of when this email was sent. <a href="${e(adminUrl)}" style="color:#1f4fd1">Check or open it in Admin</a>.</div>`) : '',
     section('AI interview: what we learned', facts.length ? ul(facts.slice(0, 10).map((f) => `<strong>${e(f.dimension)}:</strong> ${e(f.value)}`)) : '<div style="color:#b42318">No interview yet. Their form answers above are all we have.</div>'),
     section('Their own research', files.length ? ul(files.map((f) => `${e(f.name)} <span style="color:#5b6578">(${f.size >= 1024 * 1024 ? `${(f.size / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(f.size / 1024))} KB`})</span>`)) : '<div style="color:#5b6578">None uploaded.</div>'),
     section('Our research', i.researched_at ? `<div>${e(r.summary)}</div><div style="margin-top:6px;font-size:13px;color:#5b6578">Industry: ${e(r.industry)}. Size: ${e(r.size_signals)}. Systems: ${e((r.systems || []).join(', ') || 'none named')}.</div>` : '<div style="color:#9a5b00">Not ready yet: it runs right after the AI interview.</div>'),
@@ -182,7 +189,8 @@ export async function sendAliBriefOnce(intakeId: string, now = new Date()): Prom
   try {
     const record = i.understanding_id ? await ProjectUnderstandingRecord.findByPk(i.understanding_id) : null;
     const facts = ((record?.items as Array<{ dimension: string; value: string }>) || []).map((x) => ({ dimension: x.dimension, value: x.value }));
-    await sendAliBrief(briefSubject(i), buildAliBriefHtml({ intake: i, facts, now, adminUrl: adminUrlOf(i.id) }));
+    const { state, message } = await clientDemoView(i, now);
+    await sendAliBrief(briefSubject(i), buildAliBriefHtml({ intake: i, facts, now, adminUrl: adminUrlOf(i.id), demo: { state, message } }));
   } catch (err) {
     await EnterpriseIntake.update({ ali_brief_claimed_at: null } as Partial<EnterpriseIntake>, { where: { id: i.id, ali_brief_sent_at: null } as Record<string, unknown> })
       .catch((x) => log('enterprise_ali_brief_release_failed', 'failure', { intake_id: i.id, message: String((x as Error)?.message || x).slice(0, 200) }, 'UpstreamUnavailable'));
