@@ -86,6 +86,7 @@ const bands = (over: Partial<DemandBand>[] = []): DemandBand[] => [
 const stream = (over: Partial<Stream> = {}): Stream => ({
   key: 'membership',
   label: 'Membership',
+  brandKey: 'colaberry-training',
   status: 'live',
   headline: { cents: 7_881_600, display: '$78,816', provenance: 'Active rows carrying a PaySimple payment id.' },
   funnel: [

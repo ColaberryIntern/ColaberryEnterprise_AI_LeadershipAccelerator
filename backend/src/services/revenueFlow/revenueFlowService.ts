@@ -49,6 +49,10 @@ import {
 } from './revenueClassifications';
 import { buildEnterpriseFlow } from './enterpriseFlow';
 import { getBrandDirectory } from './brandDirectoryService';
+import {
+  HEADLINE_FIGURE_STREAM,
+  assertHeadlineSourcesAreKnownStreams,
+} from './headlineSources';
 import { getMembershipDemandPath } from './demandPathService';
 import {
   BRAND_BASIS,
@@ -118,6 +122,10 @@ export async function getRevenueFlowBoard(
   windowDays: number = DEFAULT_WINDOW_DAYS,
 ): Promise<RevenueFlowBoard> {
   assertClassificationKeysAreUnique();
+  // A headline figure whose declared stream does not exist would be hidden under every brand
+  // filter, so a real number would leave the page with nothing logged. Checked here, where a
+  // throw costs the board rather than shipping a declaration the page cannot act on.
+  assertHeadlineSourcesAreKnownStreams(CLASSIFICATIONS.map((c) => c.stream));
 
   const windowStart = new Date(now.getTime() - windowDays * 24 * 60 * 60 * 1000);
   const caveats: string[] = [];
@@ -279,6 +287,7 @@ export async function getRevenueFlowBoard(
     streams,
     brands,
     brandBasis: BRAND_BASIS,
+    headlineFigureStreams: HEADLINE_FIGURE_STREAM,
     events: honest,
     windowDays,
     // Projected rather than passed through, so an internal field added to the registry is

@@ -26,9 +26,18 @@ const read = (p: string) => fs.readFileSync(path.join(SRC, p), 'utf8');
 describe('the Revenue Room renders the Flow dashboard', () => {
   const roomPage = read('pages/admin/AdminRevenueRoomPage.tsx');
 
+  /**
+   * Matched as an OPENING TAG rather than the self-closing `<RevenueFlowDashboard />`.
+   *
+   * R25 Phase 2 gave the dashboard props — the page now owns the brand filter, because that
+   * filter also scopes the initiative cards below — and the exact-string assertion broke on a
+   * change that was not the regression it exists to catch. The guard is "the page still
+   * renders the dashboard"; whether it passes props is not its business. The deletion it
+   * guards against still fails it, which is the only thing that matters here.
+   */
   it('imports and renders the dashboard component', () => {
     expect(roomPage).toMatch(/import RevenueFlowDashboard from/);
-    expect(roomPage).toContain('<RevenueFlowDashboard />');
+    expect(roomPage).toMatch(/<RevenueFlowDashboard[\s/>]/);
   });
 
   /**
@@ -37,7 +46,7 @@ describe('the Revenue Room renders the Flow dashboard', () => {
    * underneath them.
    */
   it('renders it above the initiative cards, which is the order Ali asked for', () => {
-    const dash = roomPage.indexOf('<RevenueFlowDashboard />');
+    const dash = roomPage.search(/<RevenueFlowDashboard[\s/>]/);
     const cards = roomPage.indexOf('InitiativeCardView');
     expect(dash).toBeGreaterThan(-1);
     expect(cards).toBeGreaterThan(-1);

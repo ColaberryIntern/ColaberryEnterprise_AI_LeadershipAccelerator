@@ -35,6 +35,8 @@
  * test row in front of Ram as revenue.
  */
 import { TileStatus } from '../commercialization/commercializationTiles';
+import { UNASSIGNED_BRAND_KEY } from '../revenueFlow/revenueBrandVocabulary';
+import type { BrandKey } from '../revenueFlow/revenueBrandVocabulary';
 import { REVENUE_HYPOTHESES } from '../commercialization/hypothesisRegister';
 
 /** What kind of thing a card represents. Drives which fields are meaningful. */
@@ -44,6 +46,14 @@ export interface InitiativeDefinition {
   key: string;
   label: string;
   kind: InitiativeKind;
+  /**
+   * Which brand's business this initiative belongs to. R25 Phase 2.
+   *
+   * REQUIRED and typed to the brand vocabulary, so a new initiative cannot be added without
+   * a brand decision and a mistyped slug is a compile error rather than a card that matches
+   * no brand and is hidden under every filter.
+   */
+  brandKey: BrandKey;
   /**
    * The status this initiative reports before any measurement. The service may DEGRADE
    * it (a missing table is not an empty one) or PROMOTE it (a table that has gained rows
@@ -78,6 +88,15 @@ const HYPOTHESIS_CARDS: readonly InitiativeDefinition[] = REVENUE_HYPOTHESES.map
   key: `hypothesis_${h.key}`,
   label: h.label,
   kind: 'hypothesis' as const,
+  // Unassigned, and this MUST stay in step with the flow board's `hypotheses` stream, which
+  // Ali also left unassigned on 2026-11-24. Two surfaces on one page disagreeing about which
+  // brand a bet belongs to would be worse than either answer: the same bet would appear under
+  // a brand heading above the fold and under "No brand yet" below it.
+  //
+  // Filing them under Colaberry Training because it is the default would be the tempting
+  // mistake. Several of these bets would be new brands if they were set up, so the default
+  // would claim they are part of the training business, which is not known and mostly untrue.
+  brandKey: UNASSIGNED_BRAND_KEY,
   status: 'unmeasurable' as const,
   sourceTable: null,
   provenance:
@@ -98,6 +117,9 @@ export const INITIATIVE_DEFINITIONS: readonly InitiativeDefinition[] = [
     key: 'membership_subscriptions',
     label: 'Membership subscriptions',
     kind: 'membership',
+    // The accelerator membership people pay for: the training business. Matches the flow
+    // board's `membership` stream, which is the same figure from the same function.
+    brandKey: 'colaberry-training',
     status: 'live',
     sourceTable: 'subscriptions',
     provenance:
@@ -110,6 +132,9 @@ export const INITIATIVE_DEFINITIONS: readonly InitiativeDefinition[] = [
     key: 'gov_bid_pursuit',
     label: 'Government bids in pursuit',
     kind: 'gov_pipeline',
+    // Bid under the Colaberry Enterprise identity, matching the flow board's `gov_pipeline`
+    // stream. Ali's call on 2026-11-24, taken over a separate heading for the bidding entity.
+    brandKey: 'colaberry-enterprise',
     status: 'proxy',
     sourceTable: 'gov_qualifications',
     provenance:

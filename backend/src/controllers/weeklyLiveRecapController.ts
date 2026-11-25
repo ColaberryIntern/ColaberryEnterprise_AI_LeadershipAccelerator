@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 import { RecapSummarySchema, NextEventUrlSchema } from '../services/weeklyLive/recap/recapContent';
 import { draftSummary } from '../services/weeklyLive/recap/recapDraft';
-import { lintObject } from '../services/weeklyLive/recap/recapLint';
+import { lintRecapSummary } from '../services/weeklyLive/recap/recapLint';
 import { RecapError, recapState, sendAll, sendTest, dryRun, classDate, previewEmail } from '../services/weeklyLive/recap/recapSendService';
 import { verifyOptOutToken, verifyRecapToken } from '../services/weeklyLive/recap/recapToken';
 import * as store from '../services/weeklyLive/recap/recapStore';
@@ -43,7 +43,7 @@ export async function handlePutRecap(req: Request, res: Response) {
   try {
     if (!(await store.getSession(sid.data))) return res.status(404).json({ error: 'Not found' });
     await store.upsertRecap(sid.data, { summary: body.data.summary, nextEventUrl: body.data.nextEventUrl === undefined ? undefined : (body.data.nextEventUrl || null) });
-    return res.json({ ok: true, violations: body.data.summary ? lintObject(body.data.summary) : [] });
+    return res.json({ ok: true, violations: body.data.summary ? await lintRecapSummary(sid.data, body.data.summary) : [] });
   } catch (e) { return fail(res, e); }
 }
 
@@ -81,7 +81,7 @@ export async function handlePublicRecap(req: Request, res: Response) {
     const [session, recap] = await Promise.all([store.getSession(sid.data), store.getRecap(sid.data)]);
     const summary = RecapSummarySchema.safeParse(recap?.summary ?? null);
     // An overview that breaks a content rule is never shown publicly (the send is blocked for it too).
-    if (!session || !summary.success || lintObject(summary.data).length) return res.status(404).json({ error: 'Not found' });
+    if (!session || !summary.success || (await lintRecapSummary(sid.data, summary.data)).length) return res.status(404).json({ error: 'Not found' });
     const guestId = verifyRecapToken(tq.data, sid.data);
     if (tq.data && !guestId) logBadToken('weekly_live.recap_page_token', sid.data);
     const chat = guestId
