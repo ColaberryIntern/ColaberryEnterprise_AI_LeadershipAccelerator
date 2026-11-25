@@ -1,6 +1,6 @@
 {
  "generatedFrom": "git ls-files",
- "total": 240,
+ "total": 241,
  "byRole": {
   "DISPATCH": 3,
   "INGEST": 3,
@@ -9,7 +9,7 @@
   "CONFIG": 20,
   "UI": 22,
   "CONSUMER": 55,
-  "MENTION": 120
+  "MENTION": 121
  },
  "rows": [
   {
@@ -606,6 +606,12 @@
   },
   {
    "path": "backend/src/services/agents/tools/agentEmailTool.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/agents/tools/types.ts",
    "role": "MENTION",
    "callTypes": [],
    "envVars": []
@@ -1324,9 +1330,7 @@
    "path": "backend/src/services/voice/profiles/voiceToolPolicy.ts",
    "role": "MENTION",
    "callTypes": [],
-   "envVars": [
-    "VOICE_TOOL_GRANTS"
-   ]
+   "envVars": []
   },
   {
    "path": "backend/src/services/voice/providers/synthflowLegacyProvider.ts",
