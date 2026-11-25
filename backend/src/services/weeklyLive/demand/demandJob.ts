@@ -3,7 +3,8 @@ import { WeeklyLiveDemand } from '../../../models/WeeklyLive';
 import { classifyError } from '../../../utils/errorClassifier';
 import { centralDate } from '../curriculumMap';
 import { shiftDays } from '../signals/signalsJob';
-import { getPage as realGet, median, parseVideos, parseWatchViews, type GetPage, type Video } from './youtubePages';
+import { youtubeGet } from '../../composer/youtubeClient';
+import { channelUploads, median, searchIds, videosById, type ApiGet, type Video } from './youtubeApi';
 
 /**
  * YouTube demand by curriculum week (WL3.2): the best video on the week's angle in the last 90 days,
@@ -13,21 +14,22 @@ import { getPage as realGet, median, parseVideos, parseWatchViews, type GetPage,
  * Score, deterministic: 5 = 3x or more on the exact angle; 4 = 3x or more near it; 3 = beat the
  * median; 1 = did not; no median caps at 2; nothing found in 90 days is 1.
  *
- * Cached 7 days per week. Requests are spaced 1.2 s apart. A week that fails is stored with its error
+ * Cached 7 days per week, requests spaced, so a full run is about 2,500 API units a week. A week that fails is stored with its error
  * and no score, never guessed, and is retried on the next run; the other weeks still complete.
  */
 export interface Angle { queries: readonly string[]; exact: RegExp; }
+/** `exact` is the week's own subject in a title: week 2 is the Skills feature (plural), not one template; week 10 governs agents. */
 export const ANGLES: Readonly<Record<number, Angle>> = {
-  1: { queries: ['claude code tutorial', 'claude code for beginners'], exact: /claude code/i },
-  2: { queries: ['claude skills', 'claude agent skills'], exact: /\bskills?\b/i },
+  1: { queries: ['claude code tutorial', 'claude code for beginners'], exact: /claude code.*(tutorial|course|beginner|learn|first)|(tutorial|course|beginner|learn|first).*claude code/i },
+  2: { queries: ['claude skills', 'claude agent skills'], exact: /\bskills\b/i },
   3: { queries: ['build ai agent claude', 'claude api assistant'], exact: /\bagents?\b|assistant|workflow/i },
   4: { queries: ['claude prompt engineering', 'stop prompting claude'], exact: /prompt/i },
   5: { queries: ['mcp explained', 'model context protocol'], exact: /\bmcp\b/i },
-  6: { queries: ['mcp integration', 'mcp server tutorial'], exact: /\bmcp\b/i },
+  6: { queries: ['mcp integration', 'mcp server tutorial'], exact: /\bmcp\b.*(server|integrat|connect|build)|(server|integrat|connect|build).*\bmcp\b/i },
   7: { queries: ['claude subagents', 'multi agent team'], exact: /sub-?agents?|multi-?agent/i },
   8: { queries: ['automate with claude code', 'claude code workflow automation'], exact: /automat|workflow/i },
   9: { queries: ['ai evals', 'ai agent reliability testing'], exact: /\bevals?\b|evaluation|reliab/i },
-  10: { queries: ['ai governance', 'ai agent human in the loop'], exact: /governance|guardrail|human in the loop/i },
+  10: { queries: ['ai governance', 'ai agent human in the loop'], exact: /agent.*(governance|guardrail)|(governance|guardrail).*agent|humans?.in.the.loop/i },
   11: { queries: ['agentic ai system design', 'ai agent architecture'], exact: /system design|architecture/i },
   12: { queries: ['ai software factory', 'build app end to end claude code'], exact: /factory|end.to.end/i },
 };
@@ -36,9 +38,7 @@ const MAX_AGE_DAYS = 90;
 const MIN_UPLOAD_AGE_DAYS = 14;
 const UPLOADS = 10;
 const TOP = 3;
-const SPACING_MS = 1200;
-/** No filter, this month, this year. */
-const RECENCY = ['', '&sp=EgQIBBAB', '&sp=EgQIBRAB'];
+const SPACING_MS = 250;
 
 export interface DemandRow {
   week: number; video_url: string | null; video_title: string | null; channel: string | null; views: number | null;
@@ -52,20 +52,14 @@ export function demandScore(multiple: number | null, exact: boolean): number {
 }
 
 export function channelMedian(uploads: Video[]): { value: number | null; thin: boolean } {
-  const old = uploads.filter((v) => v.ageDays !== null && v.ageDays >= MIN_UPLOAD_AGE_DAYS && v.views !== null).slice(0, UPLOADS);
+  const old = uploads.filter((v) => v.ageDays >= MIN_UPLOAD_AGE_DAYS && v.views !== null).slice(0, UPLOADS);
   return { value: median(old.map((v) => v.views)), thin: old.length < UPLOADS };
 }
 
-export async function measureWeek(week: number, get: GetPage): Promise<DemandRow> {
+export async function measureWeek(week: number, get: ApiGet, now = Date.now()): Promise<DemandRow> {
   const angle = ANGLES[week];
-  // Plain search ranks years-old videos first, so each query is also asked for this month and this year.
-  const found = new Map<string, Video>();
-  for (const q of angle.queries) {
-    for (const sp of RECENCY) {
-      for (const v of parseVideos(await get(`https://www.youtube.com/results?search_query=${encodeURIComponent(q)}${sp}`))) if (!found.has(v.id)) found.set(v.id, v);
-    }
-  }
-  const recent = [...found.values()].filter((v) => v.ageDays !== null && v.ageDays <= MAX_AGE_DAYS && v.views !== null && v.handle)
+  const ids = await searchIds(angle.queries, MAX_AGE_DAYS, get, now);
+  const recent = (ids.length ? await videosById(ids, get, now) : []).filter((v) => v.ageDays <= MAX_AGE_DAYS && v.views !== null)
     .sort((a, b) => (b.views || 0) - (a.views || 0));
   // The week's own angle comes first: a bigger video about something else is not demand for this week.
   const exact = recent.filter((v) => angle.exact.test(v.title));
@@ -75,21 +69,21 @@ export async function measureWeek(week: number, get: GetPage): Promise<DemandRow
   const rows: DemandRow[] = [];
   for (const v of top) {
     const url = `https://www.youtube.com/watch?v=${v.id}`;
-    const views = parseWatchViews(await get(url)) ?? v.views;
-    const med = channelMedian(parseVideos(await get(`https://www.youtube.com/${v.handle}/videos`)));
+    const { views } = v;
+    const med = channelMedian(await channelUploads(v.channelId, get, now));
     const multiple = med.value && views !== null ? Math.round((views / med.value) * 10) / 10 : null;
-    rows.push({ week, video_url: url, video_title: v.title.slice(0, 500), channel: (v.channel || v.handle).slice(0, 200), views,
+    rows.push({ week, video_url: url, video_title: v.title.slice(0, 500), channel: v.channel.slice(0, 200), views,
       channel_median: med.value, multiple, score: demandScore(multiple, angle.exact.test(v.title)), thin_median: med.thin, error: null });
   }
   return rows.sort((a, b) => (b.score || 0) - (a.score || 0) || (b.views || 0) - (a.views || 0))[0];
 }
 
-export interface DemandDeps { get?: GetPage; today?: string; pause?: (ms: number) => Promise<void>; }
+export interface DemandDeps { get?: ApiGet; today?: string; pause?: (ms: number) => Promise<void>; }
 export interface DemandResult { measured: number[]; cached: number[]; failed: number[]; }
 
 export async function runDemand(deps: DemandDeps = {}): Promise<DemandResult> {
-  const { get = realGet, today = centralDate(), pause = (ms) => new Promise<void>((r) => { setTimeout(r, ms); }) } = deps;
-  const spaced: GetPage = async (url) => { await pause(SPACING_MS); return get(url); };
+  const { get = youtubeGet, today = centralDate(), pause = (ms) => new Promise<void>((r) => { setTimeout(r, ms); }) } = deps;
+  const spaced: ApiGet = async (path, params) => { await pause(SPACING_MS); return get(path, params); };
   const fresh = await WeeklyLiveDemand.findAll({ where: { measured_at: { [Op.gt]: shiftDays(today, -CACHE_DAYS) }, error: null } });
   const cached = [...new Set(fresh.map((r) => r.week))].sort((a, b) => a - b);
   const result: DemandResult = { measured: [], cached, failed: [] };

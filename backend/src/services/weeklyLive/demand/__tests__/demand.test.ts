@@ -1,28 +1,43 @@
 import { WeeklyLiveDemand } from '../../../../models/WeeklyLive';
 import { ANGLES, channelMedian, demandScore, latestDemand, measureWeek, runDemand } from '../demandJob';
-import { median, parseAgeDays, parseVideos, parseViews, parseWatchViews, type Video } from '../youtubePages';
+import { channelUploads, median, searchIds, videosById, type ApiGet, type Video } from '../youtubeApi';
 
-/** WL3.2: parser fixtures, median math, thin flag, cache, and a failed week reported instead of guessed. */
-const wrap = (data: unknown) => `<script>var ytInitialData = ${JSON.stringify(data)};</script>`;
-const hit = (id: string, title: string, views: string, age: string, handle = '@chan') => ({ videoRenderer: {
-  videoId: id, title: { runs: [{ text: title }] }, viewCountText: { simpleText: views }, publishedTimeText: { simpleText: age },
-  ownerText: { runs: [{ text: 'Chan', navigationEndpoint: { browseEndpoint: { canonicalBaseUrl: `/${handle}` } } }] } } });
-const upload = (id: string, label: string, age: string) => ({ lockupViewModel: { contentId: id, metadata: { lockupMetadataViewModel: { title: { content: `Upload ${id}` },
-  metadata: { contentMetadataViewModel: { metadataRows: [{ metadataParts: [{ text: { content: '1K' }, accessibilityLabel: label }, { text: { content: age } }] }] } } } } } });
-const vid = (views: number | null, ageDays: number | null): Video => ({ id: 'x', title: 't', channel: '', handle: '', views, ageDays });
+/** WL3.2: API replies, median math, thin flag, cache, and a failed week reported instead of guessed. */
+const NOW = Date.parse('2026-11-25T12:00:00Z');
+const item = (id: string, title: string, views: string | undefined, ageDays: number, duration = 'PT10M', channelId = 'UCchan') => ({ id,
+  snippet: { title, channelTitle: 'Chan', channelId, publishedAt: new Date(NOW - ageDays * 86_400_000).toISOString() },
+  statistics: views === undefined ? {} : { viewCount: views }, contentDetails: { duration } });
+const vid = (views: number | null, ageDays: number): Video => ({ id: 'x', title: 't', channel: '', channelId: '', views, ageDays, seconds: 600 });
+/** A fake API over fixed videos: search returns `found`, the channel's uploads are `uploads`. */
+const api = (found: ReturnType<typeof item>[], uploads: ReturnType<typeof item>[] = []): ApiGet => async (path, p) => {
+  if (path === 'search') return { items: found.map((v) => ({ id: { videoId: v.id } })) };
+  if (path === 'playlistItems') return { items: uploads.map((v) => ({ contentDetails: { videoId: v.id } })) };
+  return { items: [...found, ...uploads].filter((v) => p.id.split(',').includes(v.id)) };
+};
 afterEach(() => jest.restoreAllMocks());
 
-it('parses view counts and ages', () => {
-  expect([parseViews('1.2M views'), parseViews('18 thousand views'), parseViews('134,322 views'), parseViews('No views'), parseViews('Live')]).toEqual([1_200_000, 18_000, 134_322, 0, null]);
-  expect([parseAgeDays('12 days ago'), parseAgeDays('2w ago'), parseAgeDays('3 months ago'), parseAgeDays('5 minutes ago'), parseAgeDays('1mo ago'), parseAgeDays('')]).toEqual([12, 14, 90, 0, 30, null]);
-  expect(parseWatchViews('"viewCount":"234461"')).toBe(234461);
+it('reads videos: exact views, age in days, Shorts dropped, a hidden count is null', async () => {
+  const got = await videosById(['a', 's', 'h'], api([item('a', 'MCP Explained', '639144', 14), item('s', 'short', '9', 1, 'PT3M'), item('h', 'hidden', undefined, 1)]), NOW);
+  expect(got.map((v) => [v.id, v.views, v.ageDays])).toEqual([['a', 639144, 14], ['h', null, 1]]);
 });
-
-it('parses search and channel pages, and throws when the page carries no data', () => {
-  expect(parseVideos(wrap({ a: [hit('v1', 'MCP Explained', '639,144 views', '2 weeks ago')] }))).toEqual([{ id: 'v1', title: 'MCP Explained', channel: 'Chan', handle: '@chan', views: 639144, ageDays: 14 }]);
-  expect(parseVideos(wrap({ a: [upload('u1', '84 thousand views', '3 weeks ago')] }))[0]).toMatchObject({ id: 'u1', views: 84000, ageDays: 21 });
-  expect(() => parseVideos('<html>consent</html>')).toThrow(/no data/);
+it('asks for ids 50 at a time, and searches only the last 90 days', async () => {
+  const get = jest.fn().mockResolvedValue({ items: [] });
+  await videosById(Array.from({ length: 101 }, (_, i) => `v${i}`), get, NOW);
+  expect(get).toHaveBeenCalledTimes(3);
+  await searchIds(['mcp'], 90, get, NOW);
+  expect(get).toHaveBeenLastCalledWith('search', expect.objectContaining({ publishedAfter: '2026-08-27T12:00:00.000Z', q: 'mcp' }));
 });
+it('reads the uploads playlist, newest first', async () => {
+  const get = jest.fn(api([], [item('old', 'o', '1', 30), item('new', 'n', '2', 2)]));
+  expect((await channelUploads('UCabc', get, NOW)).map((v) => v.id)).toEqual(['new', 'old']);
+  expect(get.mock.calls[0][1].playlistId).toBe('UUabc');
+});
+it('a reply without a list is a failure, not an empty answer', async () => {
+  await expect(searchIds(['mcp'], 90, async () => ({ error: 'x' }), NOW)).rejects.toMatchObject({ name: 'ContractViolation' });
+});
+it.each([[2, 'Everything You Know About Skills IS OUTDATED', true], [2, 'Make Shorts with Claude (Skill)', false], [10, 'Human in the Loop Is Not a Governance Strategy', true],
+  [10, 'AI Governance: How Business Can Adopt AI Safely', false], [1, 'Fable 5.2 or Opus? When to use each model in Claude Code', false], [1, 'Claude Code for Beginners', true],
+  [6, 'MCP Explained Simply', false], [6, 'Build an MCP Server', true]])('week %s: %s is on the exact angle: %s', (w, title, yes) => { expect(ANGLES[w as number].exact.test(title as string)).toBe(yes); });
 
 it('median of even, odd and empty lists', () => {
   expect([median([3, 1, 2]), median([4, 1, 3, 2]), median([]), median([null, 5])]).toEqual([2, 3, null, 5]);
@@ -37,17 +52,14 @@ it('the channel median uses the 10 latest uploads 14 or more days old, and flags
 
 it.each([[3, true, 5], [3, false, 4], [2.9, true, 3], [1, true, 3], [0.8, true, 1], [null, true, 2]])('score for %s exact=%s is %s', (m, e, s) => { expect(demandScore(m as number | null, e as boolean)).toBe(s); });
 
-it('measureWeek picks the best video and uses the exact watch-page count', async () => {
-  const get = async (url: string) => {
-    if (url.includes('/results')) return wrap({ a: [hit('old', 'MCP old', '9M views', '5 months ago'), hit('v1', 'MCP Explained', '600K views', '2 weeks ago'), hit('v2', 'Other thing', '700K views', '1 week ago')] });
-    if (url.includes('/watch')) return url.endsWith('v1') ? '"viewCount":"639144"' : '"viewCount":"700000"';
-    return wrap({ a: Array.from({ length: 10 }, (_, i) => upload(`u${i}`, '84 thousand views', '3 weeks ago')) });
-  };
-  expect(await measureWeek(5, get)).toMatchObject({ week: 5, video_url: 'https://www.youtube.com/watch?v=v1', views: 639144, channel_median: 84000, multiple: 7.6, score: 5, thin_median: false });
+it('measureWeek picks the most viewed video on the exact angle over a bigger one off it', async () => {
+  const found = [item('v1', 'MCP Explained', '639144', 14), item('v2', 'Other thing', '700000', 7)];
+  expect(await measureWeek(5, api(found, Array.from({ length: 10 }, (_, i) => item(`u${i}`, 'up', '84000', 21))), NOW))
+    .toMatchObject({ week: 5, video_url: 'https://www.youtube.com/watch?v=v1', views: 639144, channel_median: 84000, multiple: 7.6, score: 5, thin_median: false });
 });
 
-it('nothing in 90 days scores 1 with no video', async () => {
-  expect(await measureWeek(5, async () => wrap({ a: [hit('old', 'MCP', '9M views', '5 months ago')] }))).toMatchObject({ video_url: null, score: 1 });
+it('nothing found scores 1 with no video', async () => {
+  expect(await measureWeek(5, api([]), NOW)).toMatchObject({ video_url: null, score: 1 });
 });
 
 describe('runDemand', () => {
@@ -58,20 +70,20 @@ describe('runDemand', () => {
   });
   it('skips weeks measured in the last 7 days and spaces every request', async () => {
     const find = jest.spyOn(WeeklyLiveDemand, 'findAll').mockResolvedValue([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((week) => ({ week })) as never);
-    const pause = jest.fn().mockResolvedValue(undefined); const get = jest.fn().mockResolvedValue(wrap({ a: [] }));
+    const pause = jest.fn().mockResolvedValue(undefined); const get = jest.fn().mockResolvedValue({ items: [] });
     const r = await runDemand({ get, pause, today: '2026-11-24' });
     expect(r).toEqual({ measured: [12], cached: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], failed: [] });
-    expect(get).toHaveBeenCalledTimes(6); // two queries, each unfiltered, this month and this year
-    expect(pause).toHaveBeenCalledTimes(6);
+    expect(get).toHaveBeenCalledTimes(2); // two queries, nothing found
+    expect(pause).toHaveBeenCalledTimes(2);
     expect(JSON.stringify((find.mock.calls[0][0] as { where: { error: null } }).where.error)).toBe('null');
   });
   it('a failed week is stored with its error and no score; the rest continue', async () => {
     jest.spyOn(WeeklyLiveDemand, 'findAll').mockResolvedValue([] as never);
-    const get = jest.fn().mockRejectedValueOnce(Object.assign(new Error('YouTube HTTP 429'), { status: 429 })).mockResolvedValue(wrap({ a: [] }));
+    const get = jest.fn().mockRejectedValueOnce(Object.assign(new Error('YouTube API rejected: quotaExceeded'), { status: 403 })).mockResolvedValue({ items: [] });
     const r = await runDemand({ get, pause: async () => undefined, today: '2026-11-24' });
     expect(r.failed).toEqual([1]);
     expect(r.measured).toHaveLength(11);
-    expect(upsert.mock.calls[0][0]).toMatchObject({ week: 1, score: null, views: null, error: expect.stringContaining('429') });
+    expect(upsert.mock.calls[0][0]).toMatchObject({ week: 1, score: null, views: null, error: expect.stringContaining('quotaExceeded') });
   });
 });
 
