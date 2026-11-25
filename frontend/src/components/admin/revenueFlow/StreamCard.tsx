@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import FlowSparkline from './FlowSparkline';
 import type { TimelineEvent } from './FlowTimeline';
 import DemandPath from './DemandPath';
+import PreProjectTierBlock from './PreProjectTierBlock';
 import StreamTimelinePanel from './StreamTimelinePanel';
 import { paintFor, streamPaint } from './flowTokens';
 import type { ClassMap, Stream } from './flowBoardTypes';
@@ -95,6 +96,15 @@ export default function StreamCard({
             openSourceKey={openSourceKey}
             onPickSource={setOpenSourceKey}
           />
+        )}
+
+        {/* ── WHAT IS QUEUED BEHIND THE FUNNEL, WHERE THERE IS ANY (R12) ────────────────
+            Placed ABOVE the funnel, where the demand path sits, because it is upstream of
+            it: these opportunities are still being assessed and have not been flagged for
+            pursuit. Deliberately NOT a funnel row, because the funnel's counts partition one
+            population and this is a different one. */}
+        {s.preProject && (
+          <PreProjectTierBlock streamKey={s.key} tier={s.preProject} />
         )}
 
         <div className="table-responsive">
