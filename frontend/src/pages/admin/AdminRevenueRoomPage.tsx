@@ -1,18 +1,33 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import api from '../../utils/api';
 import RevenueFlowDashboard from '../../components/admin/revenueFlow/RevenueFlowDashboard';
+import type { BrandGroup } from '../../components/admin/revenueFlow/flowBoardTypes';
 import { PageHeader, SectionCard } from '../../components/admin/shell';
 // C8.6 — hypothesis health. It came across with the Commercialization tiles in R13.
 import HypothesisHealthPanel from '../../components/admin/commercialization/HypothesisHealthPanel';
 import ChannelTruthPanel from '../../components/admin/revenueRoom/ChannelTruthPanel';
+import { InitiativeCardView, tileAsCard } from '../../components/admin/revenueRoom/InitiativeCardView';
+import type {
+  CommercialTile, InitiativeCard,
+} from '../../components/admin/revenueRoom/InitiativeCardView';
 import {
   ORDER,
-  STATUS,
   StatusChip,
 } from '../../components/admin/commercialization/statusVocabulary';
 import type { TileStatus } from '../../components/admin/commercialization/statusVocabulary';
 import type { TrustSignal } from '../../components/admin/shell';
+
+/**
+ * Re-exported, so the card view and its types are still reachable from the page module.
+ *
+ * R25 Phase 2 moved them into their own file when this one crossed the 500-line ceiling.
+ * `AdminRevenueRoomPage.test.tsx` addresses them here and the structural `oneDoorIntoRevenue`
+ * guard reads this file for them, and a move is not a reason to break either.
+ */
+export { InitiativeCardView, tileAsCard } from '../../components/admin/revenueRoom/InitiativeCardView';
+export type {
+  CommercialTile, HypothesisVerdict, InitiativeCard, InitiativeKind,
+} from '../../components/admin/revenueRoom/InitiativeCardView';
 
 /**
  * The Revenue Room (/admin/revenue-room) — R1, read-only.
@@ -39,55 +54,6 @@ import type { TrustSignal } from '../../components/admin/shell';
  * be worse than one that says where it is going.
  */
 
-/**
- * `commercial_proof` is R13: the ten tiles that used to live on their own page at
- * /admin/commercialization. Ali, 11 Nov 2026: "I do not understand the difference between
- * the two. I only need one, and it goes to drill downs into how that revenue flows."
- *
- * They are a kind rather than a separate board because the two pages were already the same
- * page twice. Both read the same `statusVocabulary`, both enforce the same rule that a card
- * shows a number only if a number was measured, and both order by status. What differed was
- * the rows and the reader, which is a difference in content rather than in kind.
- */
-export type InitiativeKind = 'hypothesis' | 'gov_pipeline' | 'membership' | 'commercial_proof';
-
-export type HypothesisVerdict =
-  | 'confirmed' | 'in_flight' | 'no_evidence' | 'past_deadline' | 'uncountable';
-
-export interface InitiativeCard {
-  key: string;
-  label: string;
-  kind: InitiativeKind;
-  status: TileStatus;
-  value: string | null;
-  sourceTable: string | null;
-  provenance: string;
-  /**
-   * Required of a revenue initiative, because R1's rule is that no initiative is unowned.
-   * Absent on a commercial-proof card: the Commercialization board never recorded owners,
-   * and inventing one here would be a claim about a person rather than a gap in the data.
-   * That gap is stated once on the page rather than ten times on the cards.
-   */
-  owner?: string;
-  unlockedBy?: string;
-  caveat?: string;
-  verdict?: HypothesisVerdict;
-  nextDeadline: string | null;
-  nextDeadlineMeans: string | null;
-  lastActivity: string | null;
-  /**
-   * Absent on a commercial-proof card. Those came from the Commercialization board, which
-   * never had a drill-down, and a link that looked clickable and went nowhere would be
-   * worse than no link — the same reasoning R1 used before R4 built the timeline.
-   */
-  drillDownKey?: string;
-  /**
-   * "Not this" — the table or metric a reader is most likely to mistake for this one.
-   * Carried over from the Commercialization tiles, where it exists so a rejected source is
-   * not rediscovered and quietly adopted by the next person who looks.
-   */
-  falseFriend?: string;
-}
 
 interface Board {
   asOf: string;
@@ -96,199 +62,6 @@ interface Board {
   caveats: string[];
 }
 
-/**
- * The verdict vocabulary, in words rather than color alone for the same reason the status
- * chips are. `uncountable` is deliberately phrased as an admission rather than a neutral
- * label: a reader skimming five bets must not read it as "fine".
- */
-const VERDICT: Record<HypothesisVerdict, { label: string; color: string }> = {
-  confirmed: { label: 'Evidence exists', color: 'var(--status-success)' },
-  in_flight: { label: 'In flight', color: 'var(--status-info)' },
-  no_evidence: { label: 'Pipe is empty', color: 'var(--status-warning)' },
-  past_deadline: { label: 'Past deadline', color: 'var(--status-danger)' },
-  uncountable: { label: 'Cannot be measured yet', color: 'var(--text-muted)' },
-};
-
-const KIND_LABEL: Record<InitiativeKind, string> = {
-  membership: 'Recurring revenue',
-  gov_pipeline: 'Government pipeline',
-  hypothesis: 'Revenue bet',
-  commercial_proof: 'Business proof',
-};
-
-/** A date, or an explicit statement that nothing records one. Never a bare dash. */
-function DeadlineLine({ card }: { card: InitiativeCard }) {
-  if (!card.nextDeadline) {
-    return (
-      <span className="small" style={{ color: 'var(--text-muted)' }}>
-        <i className="ri-calendar-line" aria-hidden="true" /> No deadline is recorded for this
-        anywhere in the system.
-      </span>
-    );
-  }
-  return (
-    <span className="small" style={{ color: 'var(--text-secondary)' }}>
-      <i className="ri-calendar-line" aria-hidden="true" /> <strong>{card.nextDeadline}</strong>
-      {card.nextDeadlineMeans ? ` — ${card.nextDeadlineMeans}` : ''}
-    </span>
-  );
-}
-
-/**
- * Exported so the "no number unless measured" rule can be tested against fixtures.
- * `renderToStaticMarkup` never runs effects, so the page's own loading shell cannot
- * exercise a populated card — the invariant has to be reachable directly or it is only
- * asserted by reading the source.
- */
-export function InitiativeCardView({ card }: { card: InitiativeCard }) {
-  const s = STATUS[card.status];
-  // The invariant, enforced at render rather than trusted: no number unless measured.
-  const showNumber = s.showsNumber && card.value !== null;
-  const verdict = card.verdict ? VERDICT[card.verdict] : null;
-
-  return (
-    <div
-      className="h-100 p-3 rounded border d-flex flex-column gap-2"
-      style={{ background: 'var(--surface-card)', borderColor: 'var(--border-subtle)' }}
-      data-testid={`initiative-${card.key}`}
-      data-status={card.status}
-      data-has-number={showNumber ? 'yes' : 'no'}
-    >
-      <div className="d-flex justify-content-between align-items-start gap-2">
-        <div className="d-flex flex-column">
-          <span className="fw-semibold" style={{ color: 'var(--text-primary)' }}>
-            {card.label}
-          </span>
-          <span className="small" style={{ color: 'var(--text-muted)' }}>
-            {KIND_LABEL[card.kind]}
-          </span>
-        </div>
-        <StatusChip status={card.status} />
-      </div>
-
-      {showNumber ? (
-        <div
-          className="fw-bold"
-          style={{ fontSize: '1.75rem', lineHeight: 1.1, color: s.color }}
-          data-testid={`value-${card.key}`}
-        >
-          {card.value}
-        </div>
-      ) : (
-        <div className="small fst-italic" style={{ color: 'var(--text-muted)' }}>
-          {/*
-            An undefined rate gets its own sentence. "None can be measured" would be wrong
-            here: the measurement ran and the denominator was empty, which is a different
-            fact from an unrecorded metric and leads to a different decision.
-          */}
-          {card.status === 'undefined_rate'
-            ? 'No closed deals either way, so there is no rate to report.'
-            : 'No number is shown because none can be measured.'}
-        </div>
-      )}
-
-      {verdict && (
-        <span
-          className="small fw-semibold"
-          style={{ color: verdict.color }}
-          data-testid={`verdict-${card.key}`}
-        >
-          {verdict.label}
-        </span>
-      )}
-
-      <p className="small mb-0" style={{ color: 'var(--text-secondary)' }}>{card.provenance}</p>
-
-      {card.caveat && (
-        <p className="small mb-0 fw-medium" style={{ color: 'var(--status-warning)' }}>
-          {card.caveat}
-        </p>
-      )}
-
-      {card.falseFriend && (
-        <p className="small mb-0" style={{ color: 'var(--text-muted)' }}>
-          <strong>Not this:</strong> {card.falseFriend}
-        </p>
-      )}
-
-      {/*
-        A deadline is only a meaningful property of a revenue initiative. Printing "no
-        deadline is recorded" on a business-proof card would imply one ought to exist and
-        is missing, when in truth a metric like pipeline value simply has no deadline.
-        Stating an absence is honest; implying a gap that is not there is not.
-      */}
-      {card.kind !== 'commercial_proof' && <DeadlineLine card={card} />}
-
-      <div className="mt-auto pt-1 d-flex flex-column gap-1">
-        {card.sourceTable && (
-          <code className="small" style={{ color: 'var(--text-muted)' }}>{card.sourceTable}</code>
-        )}
-        {card.owner && (
-          <span className="small" style={{ color: 'var(--text-muted)' }}>
-            <i className="ri-user-line" aria-hidden="true" /> {card.owner}
-          </span>
-        )}
-        {card.unlockedBy && (
-          <span className="small" style={{ color: 'var(--text-muted)' }}>
-            <i className="ri-key-2-line" aria-hidden="true" /> {card.unlockedBy}
-          </span>
-        )}
-        {card.drillDownKey && (
-          <Link
-            to={`/admin/revenue-room/${card.drillDownKey}`}
-            className="small text-decoration-none"
-            data-testid={`drill-${card.key}`}
-          >
-            Open the full history <i className="ri-arrow-right-line" aria-hidden="true" />
-          </Link>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/** One tile of the former Commercialization board, as that endpoint still returns it. */
-export interface CommercialTile {
-  key: string;
-  label: string;
-  status: TileStatus;
-  value: string | null;
-  sourceTable: string | null;
-  provenance: string;
-  falseFriend?: string;
-  unlockedBy?: string;
-  caveat?: string;
-}
-
-/**
- * A commercialization tile, as a card on this board. R13.
- *
- * Exported so the round trip is testable: everything the tile carried has to survive, and
- * the easiest way to break this merge is to drop `falseFriend` and quietly re-admit a
- * source someone already rejected.
- *
- * The key is namespaced. Tile keys and initiative keys are two vocabularies that have never
- * had to be unique against each other, and React would silently render only one of a
- * duplicate pair.
- */
-export function tileAsCard(tile: CommercialTile): InitiativeCard {
-  return {
-    key: `proof_${tile.key}`,
-    label: tile.label,
-    kind: 'commercial_proof',
-    status: tile.status,
-    value: tile.value,
-    sourceTable: tile.sourceTable,
-    provenance: tile.provenance,
-    caveat: tile.caveat,
-    falseFriend: tile.falseFriend,
-    unlockedBy: tile.unlockedBy,
-    // Not invented: the Commercialization board recorded none of these.
-    nextDeadline: null,
-    nextDeadlineMeans: null,
-    lastActivity: null,
-  };
-}
 
 export default function AdminRevenueRoomPage() {
   const [board, setBoard] = useState<Board | null>(null);
@@ -296,6 +69,19 @@ export default function AdminRevenueRoomPage() {
   const [error, setError] = useState<string | null>(null);
   const [tileError, setTileError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  /**
+   * The brand the WHOLE tab is scoped to, '' for all brands. R25 Phase 2.
+   *
+   * Ali, 2026-11-24: "Everything in the revenue tab should be broken down by brand."
+   *
+   * It lives here, above both halves of the page, because the flow board and these cards are
+   * fetched by different components from different endpoints. Held lower down, the page could
+   * sit with the dashboard scoped to Refactored.ai while seventeen Colaberry Enterprise cards
+   * carried on rendering underneath it, and nothing on screen would admit it.
+   */
+  const [brandFilter, setBrandFilter] = useState('');
+  /** Raised by the flow board, which is the only component that reads the `brands` table. */
+  const [brands, setBrands] = useState<BrandGroup[]>([]);
 
   useEffect(() => {
     let alive = true;
@@ -340,14 +126,55 @@ export default function AdminRevenueRoomPage() {
     ...(board?.cards ?? []),
     ...(tiles ?? []).map(tileAsCard),
   ];
-  const counts = allCards.reduce<Partial<Record<TileStatus, number>>>((acc, c) => {
+
+  /** A brand's own name, or null when it could not be resolved. Never the raw slug. */
+  const brandLabelFor = (key: string): string | null =>
+    brands.find((b) => b.key === key)?.label ?? null;
+
+  // R25 Phase 2. The brand filter scopes these cards exactly as it scopes the board above.
+  const visibleCards = brandFilter
+    ? allCards.filter((c) => c.brandKey === brandFilter)
+    : allCards;
+  const hiddenByBrand = allCards.length - visibleCards.length;
+
+  /**
+   * Counted over the cards actually ON SCREEN, not over every card fetched.
+   *
+   * This matters more than it looks. The headline sentence reads "N of M cards carry a
+   * measured number", and that claim is about what the reader can see. Counting all seventeen
+   * while showing three would put a sentence about the whole business above a view of one
+   * brand, which is the same class of error as leaving the top tiles unfiltered.
+   */
+  const counts = visibleCards.reduce<Partial<Record<TileStatus, number>>>((acc, c) => {
     acc[c.status] = (acc[c.status] ?? 0) + 1;
     return acc;
   }, {});
   const measured = counts.live ?? 0;
-  const total = allCards.length;
-  const proofCount = (tiles ?? []).length;
+  const total = visibleCards.length;
+  const proofCount = visibleCards.filter((c) => c.kind === 'commercial_proof').length;
   const anything = board !== null || (tiles !== null && tiles.length > 0);
+
+  /**
+   * Which single-brand panels survive the filter.
+   *
+   * Declared rather than inferred: each of the two panels below reports on one brand's
+   * business and nothing else, so each has to name which. The alternative — leaving them
+   * always visible — would put one brand's data under another brand's heading, which is the
+   * exact failure the top tiles were fixed for.
+   */
+  const SINGLE_BRAND_PANELS = [
+    { id: 'channelTruth', title: 'Which channels produced paying members', brandKey: 'colaberry-training' },
+    { id: 'hypothesisHealth', title: 'Revenue bet health', brandKey: 'unassigned' },
+  ] as const;
+
+  const panelInScope = (key: string) => !brandFilter || brandFilter === key;
+  const panelsInScope = {
+    channelTruth: panelInScope('colaberry-training'),
+    hypothesisHealth: panelInScope('unassigned'),
+  };
+  const hiddenPanels = SINGLE_BRAND_PANELS
+    .filter((p) => !panelInScope(p.brandKey))
+    .map((p) => ({ title: p.title, brandName: brandLabelFor(p.brandKey) ?? 'another brand' }));
 
   return (
     <div data-testid="revenue-room">
@@ -367,7 +194,11 @@ export default function AdminRevenueRoomPage() {
 
       {/* R16 - the dashboard Ali asked for, at the TOP of this page. It fetches its own
           board, so a failure there costs this section and not the cards below. */}
-      <RevenueFlowDashboard />
+      <RevenueFlowDashboard
+        brandFilter={brandFilter}
+        onPickBrand={setBrandFilter}
+        onBrandsLoaded={setBrands}
+      />
 
       {tileError && (
         <div className="alert alert-warning" role="alert" data-testid="proof-error">{tileError}</div>
@@ -376,6 +207,17 @@ export default function AdminRevenueRoomPage() {
       {anything && (
         <>
           <SectionCard title="How to read this page">
+            {/*
+              Named BEFORE the count, because the count that follows is a claim about what is
+              on screen and a reader who meets the number first will read it as a claim about
+              the whole business.
+            */}
+            {brandFilter !== '' && (
+              <p className="mb-2" data-testid="card-scope">
+                Showing <strong>{brandLabelFor(brandFilter) ?? 'one brand'}</strong> only.
+                Every count on this page describes that brand alone.
+              </p>
+            )}
             <p className="mb-2">
               <strong>{measured} of {total} cards carry a measured number.</strong> The rest
               show the reason they are empty. That gap is the finding rather than a defect
@@ -414,22 +256,85 @@ export default function AdminRevenueRoomPage() {
             </SectionCard>
           )}
 
+          {/*
+            Ordered by STATUS, not by brand, even while a brand filter is active. The status
+            order is the page's own finding — measured first, unmeasurable last — and nesting
+            brand headings inside it would impose a second grouping on a seventeen-card grid
+            and bury the one that answers "can I trust this number". The brand filter narrows
+            which cards appear; it does not re-sort them.
+          */}
           <div className="row g-3 mt-1">
-            {ORDER.flatMap((s) => allCards.filter((c) => c.status === s)).map((c) => (
+            {ORDER.flatMap((s) => visibleCards.filter((c) => c.status === s)).map((c) => (
               <div className="col-12 col-md-6 col-xl-4" key={c.key}>
-                <InitiativeCardView card={c} />
+                <InitiativeCardView card={c} brandLabel={brandLabelFor(c.brandKey)} />
               </div>
             ))}
           </div>
 
-          {/* R19 - which channels produced the members who pay. Placed ABOVE the hypothesis
-              panel because it is about revenue that exists rather than revenue that is bet on,
-              and it fetches its own data so a failure costs this panel and not the page. */}
-          <ChannelTruthPanel />
+          {/*
+            A filter that removed cards says how many and offers the way back. Silence here
+            would let a reader scroll a short page and conclude the business has three
+            initiatives.
+          */}
+          {hiddenByBrand > 0 && (
+            <p className="small text-muted mt-3 mb-0" data-testid="cards-hidden-by-brand">
+              <strong>
+                {hiddenByBrand === 1
+                  ? '1 more card belongs to another brand'
+                  : `${hiddenByBrand} more cards belong to other brands`}
+              </strong>
+              {' and is not shown while '}
+              {brandLabelFor(brandFilter) ?? 'this brand'}
+              {' is selected. '}
+              <button
+                type="button"
+                className="btn btn-link btn-sm p-0 align-baseline"
+                onClick={() => setBrandFilter('')}
+                data-testid="clear-brand-filter"
+              >
+                Show every brand
+              </button>
+            </p>
+          )}
 
-          {/* Moved here with the tiles it belongs to, rather than left on a page that no
-              longer exists. R13. */}
-          <HypothesisHealthPanel />
+          {/*
+            Nothing under this brand, said in words. An empty grid would read as a page that
+            failed to load, and a zero count would read as a brand measured at nothing.
+          */}
+          {brandFilter !== '' && visibleCards.length === 0 && (
+            <p className="small mt-3 mb-0" data-testid="no-cards-for-brand">
+              No initiative or business-proof card is filed under
+              {` ${brandLabelFor(brandFilter) ?? 'this brand'}`}. That is not a measurement of
+              zero: these cards were written before the brand breakdown existed, and none of
+              them has been assigned to this brand yet.
+            </p>
+          )}
+
+          {/* ── THE TWO PANELS BELOW EACH DESCRIBE EXACTLY ONE BRAND ────────────────────
+              R25 Phase 2. Neither is a cross-brand view, so neither may stay on screen while
+              a different brand is selected:
+
+                - Channel truth answers which channels produced the members who PAY. Those
+                  members are the training business, so it is Colaberry Training's panel.
+                - Hypothesis health grades the five revenue bets, which are unassigned for the
+                  same reason the flow board's `hypotheses` stream is.
+
+              Left unscoped, filtering to Refactored.ai would leave Colaberry Training's
+              channel breakdown sitting under a Refactored.ai heading — the same error as
+              leaving the top tiles unfiltered, further down the page where it is harder to
+              catch. A hidden panel is named rather than silently dropped. */}
+          {panelsInScope.channelTruth && <ChannelTruthPanel />}
+          {panelsInScope.hypothesisHealth && <HypothesisHealthPanel />}
+
+          {hiddenPanels.length > 0 && (
+            <p className="small text-muted mt-3 mb-0" data-testid="panels-hidden-by-brand">
+              {hiddenPanels.length === 1
+                ? `Also hidden while this brand is selected: ${hiddenPanels[0].title}, which `
+                  + `reports on ${hiddenPanels[0].brandName}.`
+                : `Also hidden while this brand is selected: ${hiddenPanels.map((p) => p.title).join(' and ')}. `
+                  + 'Each reports on a different brand than the one selected.'}
+            </p>
+          )}
         </>
       )}
     </div>

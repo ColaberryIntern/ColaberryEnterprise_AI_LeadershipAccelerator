@@ -297,7 +297,7 @@
     "frontend/src/pages/admin/AdminRefundsPage.tsx": 5,
     "frontend/src/pages/admin/AdminReportsPage.tsx": 6,
     "frontend/src/pages/admin/AdminRevenueDashboardPage.tsx": 4,
-    "frontend/src/pages/admin/AdminRevenueRoomPage.tsx": 2,
+    "frontend/src/pages/admin/AdminRevenueRoomPage.tsx": 1,
     "frontend/src/pages/admin/AdminSequencesPage.tsx": 2,
     "frontend/src/pages/admin/AdminSettingsPage.tsx": 4,
     "frontend/src/pages/admin/AdminStudentStoryPage.tsx": 4,
