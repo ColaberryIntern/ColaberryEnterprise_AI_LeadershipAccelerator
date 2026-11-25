@@ -41,7 +41,7 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
   try {
     const body = req.body || {};
     // Field names only, never values: the payload carries the conversation.
-    console.log('[Synthflow Webhook] Payload fields:', [...Object.keys(body), ...Object.keys(body.call || {}).map((k) => `call.${k}`)].map((k) => k.replace(/[^\w.]/g, '').slice(0, 40)).slice(0, 60).join(', '));
+    console.log('[Synthflow Webhook] Payload fields:', redactForLogs([...Object.keys(body), ...Object.keys(body.call || {}).map((k) => `call.${k}`)].map((k) => k.replace(/[^\w.]/g, '').slice(0, 40)).slice(0, 60).join(', ')));
 
     // Synthflow V2 nests most data under body.call.*
     const call = body.call || {};
