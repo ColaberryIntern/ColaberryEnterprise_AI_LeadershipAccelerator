@@ -37,7 +37,7 @@ export function isTransferHandoff(raw: unknown): boolean {
 const xml = (s: string): string => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const HEAD = '<?xml version="1.0" encoding="UTF-8"?><Response>';
 
-export const FALLBACK_TWIML = `${HEAD}<Say>No teammate is free right now. Someone from Colaberry will call you back soon. Goodbye.</Say><Hangup/></Response>`;
+export const FALLBACK_TWIML = `${HEAD}<Say>No teammate is available right now. Someone from Colaberry will call you back soon. Goodbye.</Say><Hangup/></Response>`;
 export const END_TWIML = `${HEAD}<Hangup/></Response>`;
 
 export function dialTwiml(target: string, dialActionUrl: string): string {

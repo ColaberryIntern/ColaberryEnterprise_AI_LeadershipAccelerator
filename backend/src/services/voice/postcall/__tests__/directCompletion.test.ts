@@ -92,7 +92,7 @@ describe('processDirectCompletion (VS3.2 exactly once)', () => {
     expect(f.reviews).toEqual(['extraction_failed']);
     expect(await processDirectCompletion(CALL, f.d)).toMatchObject({ extraction: true, transcriptState: 'present' });
     expect(f.reviews).toEqual(['extraction_failed', 'cleared']);
-    expect((await processDirectCompletion(CALL, f.d)).extraction).toBe(false);
+    expect(await processDirectCompletion(CALL, f.d)).toMatchObject({ extraction: false });
   });
 
   it('an extraction that keeps failing stops after 3 attempts and stays pending review', async () => {

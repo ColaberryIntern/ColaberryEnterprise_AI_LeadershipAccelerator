@@ -34,12 +34,12 @@ export async function claimEffect(logId: string, effect: PostCallEffect, now: Da
         SET metadata = jsonb_set(COALESCE(metadata, '{}'::jsonb), '{postcall}',
               COALESCE(metadata->'postcall', '{}'::jsonb) || jsonb_build_object(CAST(:effect AS text), jsonb_build_object(
                 'state', 'claimed', 'at', CAST(:at AS text),
-                'attempts', COALESCE((metadata->'postcall'->:effect->>'attempts')::int, 0) + 1)))
+                'attempts', COALESCE((metadata #>> ARRAY['postcall', :effect, 'attempts'])::int, 0) + 1)))
       WHERE id = :id
-        AND COALESCE((metadata->'postcall'->:effect->>'attempts')::int, 0) < :max
-        AND (metadata->'postcall'->:effect IS NULL
-             OR metadata->'postcall'->:effect->>'state' = 'released'
-             OR (metadata->'postcall'->:effect->>'state' = 'claimed' AND metadata->'postcall'->:effect->>'at' < :staleBefore))
+        AND COALESCE((metadata #>> ARRAY['postcall', :effect, 'attempts'])::int, 0) < :max
+        AND (metadata #> ARRAY['postcall', :effect] IS NULL
+             OR metadata #>> ARRAY['postcall', :effect, 'state'] = 'released'
+             OR (metadata #>> ARRAY['postcall', :effect, 'state'] = 'claimed' AND metadata #>> ARRAY['postcall', :effect, 'at'] < :staleBefore))
       RETURNING id`,
     { replacements: { id: logId, effect, at: now.toISOString(), staleBefore, max: MAX_EFFECT_ATTEMPTS }, type: QueryTypes.SELECT });
   return rows.length === 1;
@@ -52,7 +52,7 @@ export async function markEffectDone(logId: string, effect: PostCallEffect, tran
         SET metadata = jsonb_set(COALESCE(metadata, '{}'::jsonb), '{postcall}',
               COALESCE(metadata->'postcall', '{}'::jsonb) || jsonb_build_object(CAST(:effect AS text), jsonb_build_object(
                 'state', 'done', 'at', CAST(:at AS text),
-                'attempts', COALESCE((metadata->'postcall'->:effect->>'attempts')::int, 1))))
+                'attempts', COALESCE((metadata #>> ARRAY['postcall', :effect, 'attempts'])::int, 1))))
       WHERE id = :id`,
     { replacements: { id: logId, effect, at: new Date().toISOString() }, type: QueryTypes.UPDATE, transaction });
 }
@@ -63,7 +63,7 @@ export async function releaseEffect(logId: string, effect: PostCallEffect): Prom
   await sequelize.query(
     `UPDATE communication_logs
         SET metadata = jsonb_set(metadata, ARRAY['postcall', CAST(:effect AS text), 'state'], '"released"'::jsonb)
-      WHERE id = :id AND metadata->'postcall'->:effect->>'state' = 'claimed'`,
+      WHERE id = :id AND metadata #>> ARRAY['postcall', :effect, 'state'] = 'claimed'`,
     { replacements: { id: logId, effect }, type: QueryTypes.UPDATE });
 }
 

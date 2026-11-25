@@ -179,7 +179,8 @@ const BASELINE = {
   'scripts/sendDecisionQueue.js': [1, 'INTERNAL: "gates free CCA-F access" in the decision queue to Ali'],
   'scripts/sendTwilioVerificationActionEmail.js': [10, 'IDIOM: "toll-free" - the telecom term, ten times in one Twilio status mail'],
   'scripts/setupStudentPlatformBacklog.js': [1, 'INTERNAL: "MCP-free" describing the advisor repo, in a backlog item'],
-  'controllers/synthflowWebhookController.ts': [1, 'IDIOM: "Feel free to reply here" - politeness, not a price claim'],
+  // Moved with the SMS helpers from controllers/synthflowWebhookController.ts (VS3.2, verbatim move).
+  'services/synthflowPostCallSms.ts': [1, 'IDIOM: "Feel free to reply here" - politeness, not a price claim'],
   'db/ensureBroadcastSchema.ts': [1, "INTERNAL: enum value 'free' in ACCESS_MODES - a broadcast access mode stored in a column, not an offer. Same pattern as GrowthJourneyContentRule below. Renaming it is a schema change, not a copy fix"],
   'db/ensureLandingPageSchema.ts': [1, 'INTERNAL: "free-text destinations" in a column comment'],
   'models/BroadcastOccurrence.ts': [1, "INTERNAL: enum value 'free' in BROADCAST_ACCESS_MODES - the four values the access_mode column stores, not an offer. Same pattern as ensureBroadcastSchema above, and deliberately ONE list rather than one per caller: every restatement of these literals would cost another entry here, in a baseline that is meant only to shrink. Renaming it is a schema change, not a copy fix"],
