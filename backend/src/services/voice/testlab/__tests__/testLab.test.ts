@@ -142,6 +142,13 @@ describe('Test Lab service (VS2.5)', () => {
     expect((await startLiveTest(body(), 'a', f.deps)).status).toBe(202);
   });
 
+  it('the kill switch flipped between authorize and dial is a 403 refusal, not a 502', async () => {
+    const f = fakeDeps({ dispatch: (async (auth: { dispatch: { callId: string } }) => ({ outcome: 'blocked', callId: auth.dispatch.callId, reason: 'kill_switch_active' })) as never });
+    const r = await startLiveTest(body(), 'a', f.deps);
+    expect(r.status).toBe(403);
+    expect(r.body).toMatchObject({ outcome: 'blocked' });
+  });
+
   it('a gateway refusal (e.g. kill switch, outside hours) returns 403 and never dials', async () => {
     const f = fakeDeps({ authorize: (async () => ({ outcome: 'blocked', reason: 'kill_switch_active' })) as never });
     expect(await startLiveTest(body(), 'a', f.deps)).toEqual({ status: 403, body: { error: 'TestRefused', reason: 'kill_switch_active' } });

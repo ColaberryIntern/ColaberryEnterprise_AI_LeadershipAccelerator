@@ -209,6 +209,56 @@ module.exports = {
       'URLs assembled at runtime are a documented limit of the static check; the import rule covers the likely path.',
     ],
   },
+  'VS2.5': {
+    code: 'VS2.5', short: 'The only way to place a live test call, and it can only ring your phone',
+    title: 'R02 Test Lab backend: allowlisted live test call, budget and attempt caps, voice:test:live, voice:grade skeleton',
+    docName: 'TEST_LAB', date: '2026-11-24', session: SESSION, status: 'PASS 11/12 (verifier attempt 1); closes at the Phase 2 deploy',
+    asked: 'Build the controlled way to place live test calls: an admin endpoint that never accepts a phone number, hard caps on attempts, time and spend, one call at a time, no automatic retry, never from CI, plus a command to run a test and a grader that scores the evidence.',
+    delivered: 'POST /api/admin/voice-studio/tests (admin only, absent unless test mode is on) takes a server-side destination id, never a number; the server resolves it to the authorized number in the prod settings. Every call still passes the gateway: kill switch, consent, calling hours, the atomic reservation and the 24-hour cap. Max 3 attempts per run, one call in flight, worst case about $1.04 per run, one dial per request. voice:test:live refuses in CI; voice:grade scores a run with visible math and fails it on any critical gate; voice:numbers:register registers the idle Twilio number we are reusing.',
+    takeaway: 'There is exactly one way to place a live test call, and the only phone it can ring is the one you authorized; a number typed into a request is rejected outright. The independent verifier probed every route a number could sneak through (request, command line, gateway, carrier) and found none.',
+    cards: [
+      { n: '1', k: 'phone it can ring: yours', color: '#2e7d32' },
+      { n: '3', k: 'attempts per run; the 4th is refused' },
+      { n: '$1.04', k: 'worst case of a full run (ceiling $5)' },
+      { n: '0', k: 'automatic retries', color: '#2e7d32' },
+      { n: '15 of 15', k: 'planted bugs caught (7 mine + 8 the verifier\'s)', color: '#2e7d32' },
+    ],
+    decision: 'Nothing new now. At the deploy: register the idle Twilio number (one command, $0) and turn test mode on.',
+    ladder: ['done', 'active', 'todo', 'todo', 'todo', 'todo'],
+    bars: { title: 'Every live test call passes these gates', max: 8, rows: [
+      { label: 'Test Lab checks', value: 5, color: '#2e7d32' },
+      { label: 'Gateway checks', value: 5, color: '#2e7d32' },
+    ] },
+    checks: [
+      ['The 4th attempt in a run is refused', true],
+      ['A request with a raw phone number is rejected (400)', true],
+      ['voice:grade on an empty manifest fails and lists every missing artifact', true],
+      ['voice:test:live refuses in CI', true],
+      ['A second concurrent test is refused; only one dials', true],
+    ],
+    diagramTitle: 'One live test call',
+    mermaid: `flowchart LR
+  A[Admin: run id + 'test-allowed'] --> P{Test Lab checks}
+  P -->|refuse| R[400 / 403 / 409 / 429]
+  P --> G{Gateway checks}
+  G -->|refuse| R
+  G --> C[Call row written]
+  C --> D[ONE dial via Twilio]
+  D --> Y[Your phone only]`,
+    evidenceLine: 'commits 4ef4b11ca, e054d4c41 and the dial-time 403 fix; verifier 11/12; testlab suites 34 passed; CI refusal exit 3.',
+    sections: [
+      { h: 'What testing caught', p: ['A run name containing a date (run-20261124) was being rejected as a phone number; the check now flags only values made entirely of phone characters. The verifier\'s one deduction: adminRoutes.ts was already over the 500-line limit and got a 2-line mount instead of being split first; that is recorded as a known deviation in the phase PR.'] },
+    ],
+    evidence: [
+      ['Tests', '34 Test Lab tests, including route tests through Express and the real request policy'],
+      ['Security', 'verifier probed body, CLI, gateway deps and provider: no path for a typed number to reach the carrier'],
+      ['Caps', '3 attempts, 180 s, $5 per run are schema ceilings; settings cannot raise them'],
+    ],
+    notEstablished: [
+      'No live call has been placed yet; that is LIVE-01/02, after the deploy and your two keys.',
+      'If the database fails between the reservation and the call row, that run refuses further attempts (fail closed) and one 24-hour test slot is used; not covered by a test.',
+    ],
+  },
   'VS2.4': {
     code: 'VS2.4', short: 'Engine B: OpenAI hears and speaks directly, and stops at the exact word you interrupted',
     title: 'R03 Engine B: Media Streams + OpenAI Realtime bridge (mu-law, marks, barge-in truncation)',

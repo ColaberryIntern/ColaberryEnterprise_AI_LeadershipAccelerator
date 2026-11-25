@@ -78,7 +78,8 @@ export async function startLiveTest(body: unknown, operatorId: string, d: TestLa
   await d.recordOutcome(callId, result.outcome, errorClass);
   d.log({ level: result.outcome === 'accepted' ? 'info' : 'warn', event: 'voice_test_dispatched', outcome: result.outcome, run_id: req.runId, attempt: locked.attempt, engine: req.engine, call_id: callId, operator: operatorId,
     error_class: errorClass });
-  const status = result.outcome === 'accepted' ? 202 : result.outcome === 'unknown' ? 202 : 502;
+  // blocked at dial time (kill switch flipped after authorize) is a refusal (403); refused by the carrier is upstream (502).
+  const status = result.outcome === 'accepted' || result.outcome === 'unknown' ? 202 : result.outcome === 'blocked' ? 403 : 502;
   return { status, body: { callId, attempt: locked.attempt, outcome: result.outcome, ...(result.outcome === 'unknown' ? { note: 'outcome unknown: reconcile before any retry; no automatic retry happens' } : {}) } };
 }
 
