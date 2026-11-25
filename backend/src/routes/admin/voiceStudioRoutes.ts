@@ -15,6 +15,7 @@ import { requireAdmin } from '../../middlewares/authMiddleware';
 import { sequelize } from '../../config/database';
 import { loadVoiceConfig } from '../../services/voice/voiceConfig';
 import { productionTestLabDeps, startLiveTest, TEST_TENANT_ID, type TestLabDeps } from '../../services/voice/testlab/testLabService';
+import { buildVoiceStudioConsoleRouter } from './voiceStudioConsoleRoutes';
 
 const CallIdSchema = z.string().uuid();
 
@@ -53,4 +54,11 @@ export function buildVoiceStudioRouter(deps: () => TestLabDeps = productionTestL
   return router;
 }
 
-export default buildVoiceStudioRouter();
+/**
+ * The one router adminRoutes.ts mounts for Voice Studio: the Test Lab (VS2.5) plus the console API
+ * (VS3.3). Composed here so the oversized adminRoutes.ts needs no new lines.
+ */
+const voiceStudioAdmin = Router();
+voiceStudioAdmin.use(buildVoiceStudioRouter());
+voiceStudioAdmin.use(buildVoiceStudioConsoleRouter());
+export default voiceStudioAdmin;

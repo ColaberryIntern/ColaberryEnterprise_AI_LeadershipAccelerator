@@ -1,6 +1,6 @@
 {
  "generatedFrom": "git ls-files",
- "total": 238,
+ "total": 240,
  "byRole": {
   "DISPATCH": 3,
   "INGEST": 3,
@@ -8,8 +8,8 @@
   "CALLER": 11,
   "CONFIG": 20,
   "UI": 22,
-  "CONSUMER": 54,
-  "MENTION": 119
+  "CONSUMER": 55,
+  "MENTION": 120
  },
  "rows": [
   {
@@ -312,6 +312,18 @@
    "role": "CONSUMER",
    "callTypes": [],
    "envVars": []
+  },
+  {
+   "path": "backend/src/routes/admin/voiceStudioConsoleRoutes.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_ENGINE_DEFAULT",
+    "VOICE_GATEWAY_LEGACY_ENABLED",
+    "VOICE_STUDIO_ENABLED",
+    "VOICE_STUDIO_UI_ENABLED",
+    "VOICE_TEST_ENABLED"
+   ]
   },
   {
    "path": "backend/src/routes/admin/voiceStudioRoutes.ts",
@@ -1339,6 +1351,12 @@
    "envVars": []
   },
   {
+   "path": "backend/src/services/voice/studio/studioQueries.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
    "path": "backend/src/services/voice/synthflowWebhookAuth.ts",
    "role": "GUARD",
    "callTypes": [],
@@ -1418,6 +1436,7 @@
     "VOICE_REALTIME_VOICE",
     "VOICE_RELAY_VOICE",
     "VOICE_STUDIO_ENABLED",
+    "VOICE_STUDIO_UI_ENABLED",
     "VOICE_TEST_ALLOWED_NUMBER",
     "VOICE_TEST_BUDGET_USD",
     "VOICE_TEST_ENABLED",

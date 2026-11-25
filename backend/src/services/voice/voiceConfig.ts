@@ -22,6 +22,8 @@ export const TEST_LIMITS = { maxAttempts: 3, maxDurationSeconds: 180, budgetUsd:
 
 const RawVoiceEnvSchema = z.object({
   VOICE_STUDIO_ENABLED: bool,
+  /** VS3.3: shows the /admin/voice-studio console and its admin APIs. Places no calls by itself; dialing stays behind VOICE_STUDIO_ENABLED / VOICE_TEST_ENABLED. */
+  VOICE_STUDIO_UI_ENABLED: bool,
   VOICE_GATEWAY_LEGACY_ENABLED: bool,
   VOICE_ENGINE_DEFAULT: z.enum(['synthflow_legacy', 'conversation_relay', 'openai_realtime']).default('synthflow_legacy'),
   VOICE_TEST_ENABLED: bool,
@@ -69,7 +71,7 @@ export function loadVoiceConfig(env: Record<string, string | undefined> = proces
 export function redactedVoiceConfig(c: VoiceConfig): Record<string, unknown> {
   return {
     valid: c.valid, issues: c.issues,
-    studioEnabled: c.VOICE_STUDIO_ENABLED, gatewayLegacyEnabled: c.VOICE_GATEWAY_LEGACY_ENABLED, engineDefault: c.VOICE_ENGINE_DEFAULT,
+    studioEnabled: c.VOICE_STUDIO_ENABLED, studioUiEnabled: c.VOICE_STUDIO_UI_ENABLED, gatewayLegacyEnabled: c.VOICE_GATEWAY_LEGACY_ENABLED, engineDefault: c.VOICE_ENGINE_DEFAULT,
     testEnabled: c.VOICE_TEST_ENABLED, testAllowedNumber: c.VOICE_TEST_ALLOWED_NUMBER ? 'set' : 'unset',
     testMaxAttempts: c.VOICE_TEST_MAX_ATTEMPTS, testMaxDurationSeconds: c.VOICE_TEST_MAX_DURATION_SECONDS, testBudgetUsd: c.VOICE_TEST_BUDGET_USD,
     publicBaseUrl: c.VOICE_PUBLIC_BASE_URL ? 'set' : 'unset', wsBaseUrl: c.VOICE_WS_BASE_URL ? 'set' : 'unset',
