@@ -19,6 +19,10 @@ const BASE: LibraryAsset = {
   originalFilename: null, altText: 'A description', tags: [], byteSize: null, width: null,
   height: null, durationMs: null, rightsHolder: null, rightsExpiresAt: null,
   rightsStatus: 'unknown', archivedAt: null, createdAt: null, url: null,
+  // Provenance and view counts are part of the contract now. This fixture is about
+  // the viewer, so it carries the 'never recorded' shape rather than a name.
+  uploadedBy: null, uploadedByLabel: 'Not recorded', uploadedBySource: 'none',
+  viewCount: null, likeCount: null, viewsCheckedAt: null,
 };
 
 const asset = (over: Partial<LibraryAsset>): LibraryAsset => ({ ...BASE, ...over });

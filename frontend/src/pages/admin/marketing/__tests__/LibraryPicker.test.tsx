@@ -52,6 +52,12 @@ const LINK_ASSET: LibraryAsset = {
   rightsHolder: null,
   rightsExpiresAt: null,
   rightsStatus: 'unknown',
+  uploadedBy: null,
+  uploadedByLabel: 'Not recorded',
+  uploadedBySource: 'none',
+  viewCount: null,
+  likeCount: null,
+  viewsCheckedAt: null,
   archivedAt: null,
   createdAt: '2026-11-01T00:00:00.000Z',
   // A link is never signed: its playable address is sourceUrl.
