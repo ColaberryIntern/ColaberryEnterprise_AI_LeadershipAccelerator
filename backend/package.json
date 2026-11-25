@@ -19,7 +19,8 @@
     "test": "jest",
     "voice:test:live": "ts-node src/scripts/voice/testLive.ts",
     "voice:grade": "ts-node src/scripts/voice/grade.ts",
-    "voice:numbers:register": "ts-node src/scripts/voice/registerNumber.ts"
+    "voice:numbers:register": "ts-node src/scripts/voice/registerNumber.ts",
+    "voice:profiles:seed-cory": "ts-node src/scripts/voice/seedCoryProfile.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.106.0",

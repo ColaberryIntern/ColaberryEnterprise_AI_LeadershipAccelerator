@@ -27,7 +27,20 @@ export const RELAY_PATH = '/api/voice-ws/relay';
 export const STREAM_PATH = '/api/voice-ws/stream';
 const MAX_PAYLOAD = 64 * 1024;
 
-export type UpgradeDecision = { accept: true } | { accept: false; status: 403 | 404; errorClass: string };
+export const VOICE_WS_PREFIX = '/api/voice-ws/';
+
+/**
+ * Which handler owns an upgrade. 'other' is left untouched for other upgrade listeners; an unknown
+ * path under the voice prefix is refused 404 here, because nobody else will answer it and an
+ * unanswered upgrade hangs until the client times out (seen in the VS2.6 production check).
+ */
+export function classifyUpgradePath(path: string): 'relay' | 'stream' | 'unknown_voice' | 'other' {
+  if (path === RELAY_PATH) return 'relay';
+  if (path === STREAM_PATH) return 'stream';
+  return path.startsWith(VOICE_WS_PREFIX) || path === VOICE_WS_PREFIX.slice(0, -1) ? 'unknown_voice' : 'other';
+}
+
+export type UpgradeDecision ={ accept: true } | { accept: false; status: 403 | 404; errorClass: string };
 
 /** Pure decision for one upgrade request. */
 export function decideUpgrade(req: Pick<IncomingMessage, 'url' | 'headers'>, env: Record<string, string | undefined> = process.env): UpgradeDecision {
@@ -62,7 +75,13 @@ export function attachVoiceWsServer(server: Server, deps: VoiceWsDeps, log: (lin
   const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_PAYLOAD });
   server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     const path = (req.url || '').split('?')[0];
-    if (path !== RELAY_PATH && path !== STREAM_PATH) return;
+    const kind = classifyUpgradePath(path);
+    if (kind === 'other') return;
+    if (kind === 'unknown_voice') {
+      log({ level: 'warn', service: 'voice-studio', event: 'voice_ws_upgrade_refused', outcome: 'failure', error_class: 'UnknownPath', status: 404 });
+      refuse(socket, 404);
+      return;
+    }
     const d = decideUpgrade(req);
     if (!d.accept) {
       log({ level: 'warn', service: 'voice-studio', event: 'voice_ws_upgrade_refused', outcome: 'failure', error_class: d.errorClass, status: d.status });

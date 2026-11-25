@@ -17,7 +17,7 @@ import type { VoiceToolDef } from './claudeVoiceLlm';
 
 export interface ToolOutcome { content: string; isError: boolean; committed: boolean; errorClass?: string }
 
-interface RegisteredTool {
+export interface RegisteredTool {
   def: VoiceToolDef;
   schema: z.ZodType<unknown>;
   readOnly: boolean;
@@ -95,7 +95,7 @@ export class ToolBroker {
       return { content, isError: false, committed: !tool.readOnly };
     } catch (e) {
       const errorClass = (e as { name?: string })?.name === 'TimeoutError' ? 'TimeoutError' : 'ToolFailed';
-      return { content: 'The calendar could not be checked right now. Offer to have a teammate follow up.', isError: true, committed: false, errorClass };
+      return { content: 'That could not be looked up right now. Offer to have a teammate follow up.', isError: true, committed: false, errorClass };
     }
   }
 }

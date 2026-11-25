@@ -40,7 +40,7 @@ module.exports = {
   B --> D[deploy-prod.sh backend, marker found]
   D --> V[Independent production verifier]
   V --> OK[PASS: digest match, 13 empty tables, switches OFF]`,
-    evidenceLine: 'merge 1b01fce0c; Build images success 19:16Z; deploy exit 0; production verifier PASS 19:20Z; container restarts 0.',
+    evidenceLine: 'merge 1b01fce0c; Build images success 1:16 PM CST; deploy exit 0; production verifier PASS 1:20 PM CST on 2026-11-24; container restarts 0.',
     sections: [
       { h: 'Rollback (corrected after verification)', p: ['Immediate: every switch is already off. Code rollback: revert the merge through a PR and deploy the new main tip, or, in an emergency, check out the previous main on the host and deploy with DEPLOY_MODE=build. Registry mode cannot redeploy an image that is not the current main tip; the first version of this note said otherwise and was corrected after the verifier flagged it.'] },
       { h: 'Health endpoint note', p: ['/api/health is not a real route; it returns the app\'s normal 401 catch-all. The real health checks /health and /health/full both return 200.'] },
@@ -54,6 +54,59 @@ module.exports = {
     notEstablished: [
       'Anything about real calls: Phase 1 places none. Live calls start in Phase 2 after M0.',
       'Behavior with VOICE_GATEWAY_LEGACY_ENABLED on in production: not turned on; a separate decision.',
+    ],
+  },
+  'VS2.6': {
+    code: 'VS2.6', short: 'Both voice engines are live in production, switched off, and safe',
+    title: 'Ship Phase 2: full quality gate, ONE PR, deploy, independent production verification',
+    docName: 'PHASE2_SHIP', date: '2026-11-24', session: SESSION, status: 'PASS: deployed a794153fd, production verifier PASS (cycle 3, doc-only fixes)',
+    asked: 'Ship Phase 2 (the Twilio carrier, the shared session engine, Engine A, Engine B and the Test Lab) as one PR and one deploy, then prove on the live system that it is wired correctly and still dormant.',
+    delivered: 'PR #4402 (10 CI jobs green, then green again after a merge-conflict fix in a generated file) merged by Ali at 20:32 CST. The image for that commit was cancelled by two later merges, so the deploy used the main tip a794153fd, which contains it, after its image built. Two non-secret URL settings were added to the server, deploy-prod.sh brought up backend and nginx, the idle Twilio number we already own was registered as the test line ($0), and an independent production verifier checked the live release.',
+    takeaway: 'Phase 2 is live and dormant: the new WebSocket path, the signed Twilio webhooks, 14 voice tables and the registered test line are all in production, and every voice switch is still off, so no caller is affected. The first real call needs only your two keys and a time window.',
+    cards: [
+      { n: '10/10', k: 'CI jobs green on the merged commit', color: '#2e7d32' },
+      { n: '14', k: 'voice tables live, 0 calls' },
+      { n: '1', k: 'test line registered (our own idle number)' },
+      { n: 'OFF', k: 'studio and test mode in production' },
+      { n: 'PASS', k: 'independent production verifier', color: '#2e7d32' },
+    ],
+    decision: 'Add ANTHROPIC_API_KEY and TWILIO_AUTH_TOKEN to the server settings and pick a 15-minute window for LIVE-01 and LIVE-02.',
+    ladder: ['done', 'done', 'active', 'todo', 'todo', 'todo'],
+    bars: { title: 'Phase 2 tickets by verifier score (out of 12)', max: 12, rows: [
+      { label: 'VS2.1 Twilio carrier', value: 12, color: '#2e7d32' }, { label: 'VS2.2 session engine', value: 12, color: '#2e7d32' },
+      { label: 'VS2.3 Engine A', value: 12, color: '#2e7d32' }, { label: 'VS2.4 Engine B', value: 12, color: '#2e7d32' },
+      { label: 'VS2.5 Test Lab', value: 11, color: '#2e7d32' },
+    ] },
+    checks: [
+      ['All CI checks green on the PR', true],
+      ['Ali merged it', true],
+      ['deploy-prod.sh exit 0 and prod HEAD contains the merge', true],
+      ['loop-production-verifier PASS against the live release', true],
+      ['WebSocket path reaches the backend through nginx over TLS', true],
+      ['Test mode on (deferred until your two keys are added)', false],
+    ],
+    diagramTitle: 'How Phase 2 shipped',
+    mermaid: `flowchart LR
+  P[PR 4402: 10 CI jobs green] --> M[Ali merged 20:32]
+  M --> B[Image built on main tip a794153fd]
+  B --> E[2 URL settings added]
+  E --> D[deploy-prod.sh backend + nginx]
+  D --> R[Test line registered, $0]
+  R --> V[Production verifier PASS]`,
+    evidenceLine: 'merge e68e787a2 inside main a794153fd; Build images success; deploy exit 0; running image digests equal the registry sha-a794153fd tags; verifier PASS 8:49 PM CST on 2026-11-24.',
+    sections: [
+      { h: 'What the verifier caught', p: ['Twice, my rollback notes were wrong and the live system was fine: first they named a registry redeploy that cannot work and no previous commit; then the emergency command lacked SKIP_PULL=1, without which the script would pull main and rebuild the current release. Both were corrected in the deploy log; no redeploy was needed.'] },
+      { h: 'Found and fixed for Phase 3', p: ['A WebSocket request to an unknown path under /api/voice-ws/ hung until the client gave up. It is now refused with 404 at once (with a real-socket test); this ships in the Phase 3 PR.'] },
+    ],
+    evidence: [
+      ['Release', 'host HEAD a794153fd; backend and nginx image digests equal the registry tags; 0 restarts'],
+      ['Schema', 'all 14 Voice Studio tables present including voice_token_uses; voice_calls = 0'],
+      ['Refusals', 'unsigned or forged webhooks 401, no TwiML served; WebSocket upgrades 404 (switches off)'],
+      ['Privacy', 'test number digits: 0 occurrences in backend logs'],
+    ],
+    notEstablished: [
+      'That Twilio itself completes the WebSocket handshake: proven by the first live call (LIVE-01).',
+      'Test mode on: deliberately left off until your two keys are in the server settings.',
     ],
   },
   'VS0.2': {
