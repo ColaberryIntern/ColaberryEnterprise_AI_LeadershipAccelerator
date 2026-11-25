@@ -88,7 +88,12 @@ export class RealtimeBridge {
     const m = p.msg;
     if (!this.handle) {
       if (m.event === 'start' && !this.settingUp) await this.start(m);
-      else if (m.event !== 'connected' && m.event !== 'start') this.shutdown('message_before_start', 1008);
+      else if (this.settingUp) {
+        // Twilio streams audio from the moment it connects, so frames arrive while the session reference
+        // is still being checked: keep them (VS4.1; they used to end the call).
+        if (m.event === 'media') this.callerAudio(m.media.payload);
+        else if (m.event === 'stop') this.teardown('twilio_stop');
+      } else if (m.event !== 'connected' && m.event !== 'start') this.shutdown('message_before_start', 1008);
       return;
     }
     switch (m.event) {
@@ -116,6 +121,7 @@ export class RealtimeBridge {
       this.log('error', 'voice_stream_setup_failed', { error_class: (e as { name?: string })?.name || 'DatabaseError' });
       return this.shutdown('setup_lookup_failed', 1011);
     }
+    if (this.closed) return; // the caller hung up while we were checking (VS4.1): open nothing, least of all a paid model connection
     const opened = this.d.worker.open(v.claims.callId, this.d.profile.versionId);
     if (!opened.ok) return this.shutdown(`session_refused_${opened.reason}`, 1013);
     this.callId = v.claims.callId;

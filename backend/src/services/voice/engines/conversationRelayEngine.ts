@@ -53,6 +53,8 @@ export const MAX_TRANSCRIPT_LINES = 400;
 export const MAX_TOOL_ROUNDS = 2;
 export const MAX_HISTORY = 24;
 export const MAX_MALFORMED = 10;
+/** Messages that arrive while the session reference is still being checked wait here (VS4.1). */
+export const MAX_EARLY_MESSAGES = 20;
 const SORRY = 'Sorry, I had trouble with that. Could you say it again?';
 const SAFE_DECLINE = "I can't help with that one, but a teammate can follow up.";
 
@@ -63,6 +65,7 @@ export class RelayConnection {
   private history: VoiceMessage[] = [];
   private malformed = 0;
   private settingUp = false;
+  private early: RelayInbound[] = [];
   private closed = false;
   private lang: string | null = null;
   private readonly transcript: string[] = [];
@@ -87,9 +90,15 @@ export class RelayConnection {
     const m = p.msg;
     if (!this.handle) {
       if (m.type === 'setup' && !this.settingUp) await this.setup(m);
+      else if (m.type !== 'setup' && this.settingUp) { if (this.early.length < MAX_EARLY_MESSAGES) this.early.push(m); }
       else if (m.type !== 'setup') this.shutdown('message_before_setup', 1008);
       return;
     }
+    await this.live(m);
+  }
+
+  private async live(m: RelayInbound): Promise<void> {
+    if (this.closed) return;
     switch (m.type) {
       case 'prompt':
         if (m.last && m.voicePrompt.trim()) {
@@ -147,6 +156,7 @@ export class RelayConnection {
       this.log('error', 'voice_relay_setup_failed', { error_class: (e as { name?: string })?.name || 'DatabaseError' });
       return this.shutdown('setup_lookup_failed', 1011);
     }
+    if (this.closed) return; // the caller hung up while we were checking (VS4.1): open nothing
     const opened = this.d.worker.open(v.claims.callId, this.d.profile.versionId);
     if (!opened.ok) return this.shutdown(`session_refused_${opened.reason}`, 1013);
     this.callId = v.claims.callId;
@@ -163,6 +173,8 @@ export class RelayConnection {
       this.log('info', 'voice_relay_end_sent', { reason });
     });
     this.log('info', 'voice_relay_session_started', { profile: this.d.profile.versionId });
+    // Started in arrival order, not awaited one by one: a later interrupt must be able to cut an earlier answer.
+    await Promise.all(this.early.splice(0).map((e) => this.live(e)));
   }
 
   private push(msg: VoiceMessage): void {
