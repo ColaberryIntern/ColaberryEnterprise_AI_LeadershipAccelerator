@@ -201,12 +201,21 @@ with `criteria_passed: null` and `criteria_total: null`, because the renderer tr
 
 ## Still open after this
 
-1. **The republish half, deliberately NOT ported.** Zero drift measured on 25 Nov (above), so
-   nothing is owed today. `republishDomainBuildPlans.js --domain=<key> --apply` stays a
-   hand-run job, executed by copying it into the container, and the sweep's drift line is what
-   says when it is owed again. Revisit the port only if drift reappears AND the
-   credited-removal gate can be satisfied without a person reading the evidence rows. A future
-   session reading the original wording would have started an 986-line port it did not need.
+1. **The republish half: NOT being ported. Ali's decision, 2026-11-25.** Put to him with the
+   zero-drift measurement and the cron-gate objection; he chose to drop it. So this is settled,
+   not merely unscheduled, and a future session should not reopen it on the strength of the
+   `dist` gap alone.
+
+   `republishDomainBuildPlans.js --domain=<key> --apply` stays a hand-run job, executed by
+   copying it and its three libraries into the container. The sweep's `plan_repo_sync_board_plan_drift`
+   line is what says when it is owed again. Two conditions would have to be met before the port
+   is worth raising a second time: drift actually reappears, AND the credited-removal gate can
+   be satisfied without a person reading `evidence_records`. The 13 Nov run checked 17 proposed
+   story removals by hand; until something can make that judgement, a cron must not.
+
+   Note what the original wording would have caused: a future session reading "cannot execute in
+   production at all" would have started an 986-line port of credit-bearing logic that has
+   nothing to fix, and would have been building toward an unattended destructive write.
 2. **Where the drift report lands.** Today it is a structured log line. Container logs on this
    box held 475 lines over 96 hours when this was investigated, so a log is a weak place for a
    finding that matters. Surfacing it on the operations health page is the natural follow-up,
