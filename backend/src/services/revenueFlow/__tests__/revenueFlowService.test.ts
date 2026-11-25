@@ -1,6 +1,7 @@
 const mem = { buildMembershipFlow: jest.fn() };
 const gov = { buildGovFlow: jest.fn() };
 const dem = { getMembershipDemandPath: jest.fn() };
+const dir = { getBrandDirectory: jest.fn() };
 
 jest.mock('../membershipFlow', () => ({
   buildMembershipFlow: (...a: unknown[]) => mem.buildMembershipFlow(...a),
@@ -16,6 +17,10 @@ jest.mock('../govBidFlow', () => ({
  */
 jest.mock('../demandPathService', () => ({
   getMembershipDemandPath: (...a: unknown[]) => dem.getMembershipDemandPath(...a),
+}));
+/** Mocked for the same reason: it reads the brands table. */
+jest.mock('../brandDirectoryService', () => ({
+  getBrandDirectory: (...a: unknown[]) => dir.getBrandDirectory(...a),
 }));
 
 import { getRevenueFlowBoard } from '../revenueFlowService';
@@ -118,11 +123,17 @@ beforeEach(() => {
   mem.buildMembershipFlow.mockReset();
   gov.buildGovFlow.mockReset();
   dem.getMembershipDemandPath.mockReset();
+  dir.getBrandDirectory.mockReset();
   mem.buildMembershipFlow.mockResolvedValue(membershipFlow());
   gov.buildGovFlow.mockResolvedValue(govFlow());
   // Undefined by default, which is the state of every stream but membership, so the existing
   // assertions in this file keep measuring what they were written to measure.
   dem.getMembershipDemandPath.mockResolvedValue(undefined);
+  dir.getBrandDirectory.mockResolvedValue([
+    { slug: 'colaberry-training', name: 'Colaberry Training', url: 'https://training.colaberry.com', status: 'active' },
+    { slug: 'colaberry-enterprise', name: 'Colaberry Enterprise', url: 'https://enterprise.colaberry.ai', status: 'active' },
+    { slug: 'refactored', name: 'Refactored.ai', url: 'https://refactored.ai', status: 'active' },
+  ]);
 });
 
 describe('the path in front of the membership number', () => {
@@ -432,5 +443,75 @@ describe('the timeline is ordered and the window is declared', () => {
     }));
     const board = await getRevenueFlowBoard(NOW);
     expect(board.caveats.filter((c) => c === 'Same sentence.')).toHaveLength(1);
+  });
+});
+
+
+describe('the board is broken down by brand', () => {
+  /**
+   * Ali, 2026-11-24: "Everything in the revenue tab should be broken down by brand."
+   *
+   * The assembly is the only place a brand is attached, by design: a builder returns a
+   * `BuiltStream` with no brand and cannot invent one. So this is where the attachment is
+   * proved, and where a stream reaching the page unbranded would be caught.
+   */
+  it('gives every stream a brand key', async () => {
+    const board = await getRevenueFlowBoard(NOW);
+    expect(board.streams.length).toBeGreaterThan(0);
+    for (const s of board.streams) {
+      expect(typeof s.brandKey).toBe('string');
+      expect(s.brandKey.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('groups the streams under headings with nothing empty', async () => {
+    const board = await getRevenueFlowBoard(NOW);
+    expect(board.brands[0].key).toBe('colaberry-training');
+    expect(board.brands.every((b) => b.streamKeys.length > 0)).toBe(true);
+  });
+
+  it('files membership under Colaberry Training and FDE hiring under Refactored', async () => {
+    const board = await getRevenueFlowBoard(NOW);
+    const brandOf = (k: string) => board.brands.find((b) => b.streamKeys.includes(k))?.key;
+    expect(brandOf('membership')).toBe('colaberry-training');
+    expect(brandOf('hire_fde')).toBe('refactored');
+    expect(brandOf('gov_pipeline')).toBe('colaberry-enterprise');
+  });
+
+  it('accounts for every stream exactly once across the headings', async () => {
+    const board = await getRevenueFlowBoard(NOW);
+    const grouped = board.brands.flatMap((b) => b.streamKeys).sort();
+    expect(grouped).toEqual(board.streams.map((s) => s.key).sort());
+  });
+
+  it('ships the basis for what a brand heading means', async () => {
+    const board = await getRevenueFlowBoard(NOW);
+    expect(board.brandBasis).toMatch(/property of the stream/i);
+  });
+
+  /**
+   * A brands-table failure must cost the WORDING, never the grouping. The map lives in code,
+   * so the page still groups correctly and each heading says its name may be stale.
+   */
+  it('still groups when the brands table cannot be read, and flags the names as fallbacks', async () => {
+    dir.getBrandDirectory.mockRejectedValue(new Error('connection refused'));
+    const board = await getRevenueFlowBoard(NOW);
+
+    expect(board.brands.length).toBeGreaterThan(0);
+    expect(board.brands.find((b) => b.key === 'colaberry-training')!.label)
+      .toBe('Colaberry Training');
+    expect(board.brands.filter((b) => b.isBrand).every((b) => b.resolved === false)).toBe(true);
+    expect(board.caveats.some((c) => /brands table could not be read/i.test(c))).toBe(true);
+  });
+
+  /** Positive control: with the directory present the same assertion flips. */
+  it('control: a working directory marks the headings resolved', async () => {
+    const board = await getRevenueFlowBoard(NOW);
+    expect(board.brands.filter((b) => b.isBrand).every((b) => b.resolved === true)).toBe(true);
+  });
+
+  it('puts no money on a brand heading', async () => {
+    const board = await getRevenueFlowBoard(NOW);
+    expect(JSON.stringify(board.brands)).not.toMatch(/cents/i);
   });
 });

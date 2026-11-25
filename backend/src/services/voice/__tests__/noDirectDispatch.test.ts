@@ -23,6 +23,7 @@ const REPO = path.resolve(SRC, '..', '..');
 export const ALLOWED_DISPATCH_FILES = new Set([
   'services/synthflowService.ts',                        // legacy dispatch (flag off) - the facade for every caller
   'services/voice/providers/synthflowLegacyProvider.ts', // legacy dispatch behind the gateway (flag on)
+  'services/voice/providers/twilioCarrier.ts',           // Voice Studio carrier (VS2.1), imported only by the gateway
 ]);
 
 // Other voice vendors proposed as Synthflow alternatives (Retell, ElevenLabs, Vapi, Bland): their call-creation endpoints too.

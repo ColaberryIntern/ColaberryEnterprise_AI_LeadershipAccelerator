@@ -5,6 +5,7 @@ import { mgmtSectionGate } from '../middlewares/mgmtSectionGate';
 import { caseStudySurfaceLabGate } from '../middlewares/caseStudySurfaceLabGate';
 import authRoutes from './admin/authRoutes';
 import hqPresenceRoutes from './admin/hqPresenceRoutes';
+import voiceStudioRoutes from './admin/voiceStudioRoutes';
 import cohortRoutes from './admin/cohortRoutes';
 import peopleRoutes from './admin/peopleRoutes';
 import personProfileRoutes from './admin/personProfileRoutes';
@@ -198,6 +199,7 @@ router.use(auditMiddleware);
 router.use(mgmtSectionGate);
 router.use(authRoutes);
 router.use(hqPresenceRoutes); // Campus HQ heartbeat: section-agnostic in mgmtSectionGate (the caller's own presence)
+router.use(voiceStudioRoutes); // Voice AI Studio Test Lab (VS2.5): absent unless VOICE_TEST_ENABLED; requireAdmin per route
 router.use(cohortRoutes);
 router.use(personProfileRoutes);
 router.use(peopleRoutes);
