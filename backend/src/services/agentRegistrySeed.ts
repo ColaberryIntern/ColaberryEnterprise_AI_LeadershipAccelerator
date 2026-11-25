@@ -12,6 +12,7 @@ import { repointCurriculumLegacyBehaviors } from './curriculum/repointLegacyBeha
 import { recordPersonaVersionChangeIfNeeded } from './agentPersonaVersionHistoryService';
 import { classifyNewAgentAutonomyLevel, maybeReclassifyAutonomyLevel } from './agentAutonomyReclassificationService';
 import { GROWTH_JOURNEY_AGENT_ENTRIES } from './agentRegistry/growthJourneyAgents';
+import { AGENT_DOMAIN_PLAN_SYNC_ENTRIES } from './agentRegistry/agentDomainPlanSyncAgents';
 import { DOMAIN_AGENT_ENTRIES } from './agentRegistry/domainAgents';
 import { mergePreservedTools, readToolsGranted } from './agentDomain/seedToolPreservation';
 
@@ -3069,6 +3070,10 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
   // acceptance 7 pins that group CONTIGUOUS - shadow, executor, digest, handoffs at
   // shadow+1..+3 - so ten entries inserted mid-run break it. The test is right.
   ...DOMAIN_AGENT_ENTRIES,
+  // Here for the same reason, and I learned it the same way: placed after
+  // GROWTH_JOURNEY_AGENT_ENTRIES this entry sat between the digest and
+  // GrowthJourneyHandoffs and broke acceptance 7 on the first CI run.
+  ...AGENT_DOMAIN_PLAN_SYNC_ENTRIES,
   {
     agent_name: 'workforce_intelligence_engine',
     agent_type: 'ticket_creator_identity',

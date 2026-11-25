@@ -509,3 +509,30 @@ OPENAI_API_KEY=… npx ts-node src/scripts/sbpCompareToPilot.ts <brief.txt> <doc
 clones, and opens every path the prompt cites — the only check that can prove the
 prompt's paths resolve. It deletes the repo unless `--keep`; note the `gh` token has
 historically lacked `delete_repo`, so check for orphaned `sbp-live-check-*` repos after.
+
+## The platform build (L13.1): the Command Center and Demo, built and hosted by us
+
+Behind `SBP_PLATFORM_BUILD` (default `off`). After publish, the platform (not the student's
+Claude Code, not their repo) builds the Command Center and Demo and serves them on our site.
+Runbook: `directives/enable-platform-build.md`.
+
+| Module | What it does | The failure it prevents |
+|---|---|---|
+| `renderProjectDocs` | gathers every render input once, for the repo sync and the platform build | the hosted Command Center and the repo copy rendering different files for one project |
+| `buildBriefText` | the decomposer's brief, split out of the over-ceiling orchestrator | none student-visible; a size split |
+| `platformBuild/queue` | publish's one call; never throws, never awaited | a slow GitHub dispatch holding up a student's publish |
+| `platformBuild/runStore` | the run state machine; one live run per project; stale runs failed after 120 min | a republish starting a second paid run; a lost dispatch blocking a project forever |
+| `platformBuild/dispatch` | starts the runner workflow; 3 attempts on 5xx/429/network, none on 4xx | retrying a bad token forever |
+| `platformBuild/runnerIdentity` | GitHub OIDC check: our repo, our workflow file, `main`, dispatch, GitHub-hosted | a fork, a branch edit or a self-hosted runner writing a student's Command Center |
+| `platformBuild/bundle` | the runner's workspace and briefs; the live `.colaberry/*.json` (30 s cache) | a hosted Command Center showing stale progress |
+| `platformBuild/prompts` | the unchanged STORY-000 / STORY-900 briefs behind an unattended-mode block | an unattended agent stopping to ask, pushing, or writing files nginx cannot route |
+| `platformBuild/uploadContract` | what the runner may hand back: paths, types, sizes, the demo spec's shape | a model writing outside the two folders, or an image nginx would 404 |
+| `platformBuild/artifactStore` | append-only versions, one active per kind, idempotent per run | a retried upload creating two versions; a lost previous version |
+| `platformBuild/viewToken` | signed 12-hour links bound to one project | a new-tab link that cannot carry the portal's Bearer header |
+| `platformBuild/serveMap` | the served layout, sandbox CSP, CORS for data, storage shim | model-written script reading a signed-in student's portal token |
+| `platformBuild/portalView` | `platform_build` on the project read, with fresh links | an expired link on a story page |
+
+**Where it is visible:** every story page (`ProjectWorkspacePage`) shows "Command Center" and
+"Demo" from `project.platformBuild`, falling back to the GitHub Pages `commandCenterUrl`.
+
+**Check a project:** `SELECT status, error_class, cost_usd FROM platform_build_runs WHERE project_id = '<id>' ORDER BY created_at DESC;`

@@ -47,6 +47,7 @@ import buildArtifactRoutes from './routes/buildArtifactRoutes';
 import buildLogDraftRoutes from './routes/buildLogDraftRoutes';
 import publicPortfolioRoutes from './routes/publicPortfolioRoutes';
 import demoRoutes from './routes/demoRoutes';
+import platformBuildRoutes from './routes/platformBuildRoutes';
 import publicCareerPortfolioRoutes from './routes/publicCareerPortfolioRoutes';
 import internVideoStreamRoutes from './routes/internVideoStreamRoutes';
 import publicHireTalentRoutes from './routes/publicHireTalentRoutes';
@@ -99,6 +100,7 @@ import { ensureContractTrackSchema } from './db/ensureContractTrackSchema';
 import { ensureProjectTenantSchema } from './db/ensureProjectTenantSchema';
 import { ensureProjectLifecycleSchema } from './db/ensureProjectLifecycleSchema';
 import { ensureConnectedDemoSchema } from './db/ensureConnectedDemoSchema';
+import { ensurePlatformBuildSchema } from './db/ensurePlatformBuildSchema';
 import { ensureGovQualificationSchema } from './db/ensureGovQualificationSchema';
 import { ensureGovOpportunityDismissalSchema } from './db/ensureGovOpportunityDismissalSchema';
 import { ensureGovSourceBundleSchema } from './db/ensureGovSourceBundleSchema';
@@ -137,6 +139,7 @@ import { ensureBroadcastClipMarkSchema } from './db/ensureBroadcastClipMarkSchem
 import { ensureBroadcastClipDecisionSchema } from './db/ensureBroadcastClipDecisionSchema';
 import { ensureStudioSetupSchema } from './db/ensureStudioSetupSchema';
 import { ensureWeeklyLiveRecapSchema } from './db/ensureWeeklyLiveRecapSchema';
+import { ensureWeeklyLiveSchema } from './db/ensureWeeklyLiveSchema';
 import weeklyLiveRecapRoutes from './routes/weeklyLiveRecapRoutes';
 import { ensureBroadcastReplayIndexSchema } from './db/ensureBroadcastReplayIndexSchema';
 import { ensureFactoryTaskSchema } from './db/ensureFactoryTaskSchema';
@@ -321,6 +324,8 @@ app.use(buildLogDraftRoutes);
 app.use(publicPortfolioRoutes);
 // The public Connected Demo. Unauthenticated, gated on demo_share_enabled, which defaults false.
 app.use(demoRoutes);
+// L13.1: the platform build runner's calls (GitHub OIDC) and the hosted Command Center / Demo (signed link).
+app.use(platformBuildRoutes);
 app.use(advisorRoutes);
 app.use(alumniReferralRoutes);
 app.use(qrRedirectRoutes);
@@ -3032,6 +3037,14 @@ async function start(): Promise<void> {
   } catch (err: any) {
     console.warn('[boot] connected demo schema unavailable:', err?.error_class || err?.message);
   }
+  // L13.1: the platform-built Command Center and Demo (platform_build_runs, platform_build_artifacts).
+  // Two NEW tables, nothing altered. Wrapped like the demo schema: the feature ships behind
+  // SBP_PLATFORM_BUILD (default off) and must never take the platform down.
+  try {
+    await ensurePlatformBuildSchema();
+  } catch (err: any) {
+    console.warn('[boot] platform build schema unavailable:', err?.error_class || err?.message);
+  }
   // AI Project Factory Phase 2: the Enterprise-owned gov qualification model (gov_qualifications,
   // build_authorizations, gov_opportunity_aliases). Additive NEW tables that FK to delivery_projects
   // (and the qualification table itself) — no existing table is altered; placed after the contract
@@ -3268,6 +3281,8 @@ async function start(): Promise<void> {
   await ensureStudioSetupSchema();
   // Weekly Live recap tables (WL1.1): after live_sessions and session_guests, which they reference.
   await ensureWeeklyLiveRecapSchema();
+  // Weekly Live Studio tables (WL2.1): plans, signals, demand, topics, content pieces, moments.
+  await ensureWeeklyLiveSchema();
   // L8.3 - the partial index the replay list reads through. The live ticker's index covers
   // backstage/live/reconnecting only, so replay_ready would otherwise scan the whole table.
   await ensureBroadcastReplayIndexSchema();

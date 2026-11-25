@@ -10,6 +10,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { GROWTH_JOURNEY_AGENT_ENTRIES } from '../../agentRegistry/growthJourneyAgents';
+import { AGENT_DOMAIN_PLAN_SYNC_ENTRIES } from '../../agentRegistry/agentDomainPlanSyncAgents';
 import {
   CronSites,
   RegistryRow,
@@ -114,7 +115,16 @@ export function readCronRegistryWorld(): CronRegistryWorld {
     triggerType: e.trigger_type,
     schedule: e.schedule,
   }));
-  const seedRows = [...parsedSeedRows, ...importedGrowthRows];
+  // Same arrangement for the agent-domain plan-to-repo sweep: its entries reach
+  // AGENT_REGISTRY through a spread, which the array-literal parse cannot see, so the real
+  // imported array is what the ratchet reconciles against. Without this the sweep would
+  // read as a registered name with no seed row, which is invariant (ii).
+  const importedPlanSyncRows: SeedRow[] = AGENT_DOMAIN_PLAN_SYNC_ENTRIES.map((e) => ({
+    agentName: e.agent_name,
+    triggerType: e.trigger_type,
+    schedule: e.schedule,
+  }));
+  const seedRows = [...parsedSeedRows, ...importedGrowthRows, ...importedPlanSyncRows];
 
   const sourceFiles = listSourceFiles(SRC_ROOT);
   const sources = sourceFiles.map((file) => ({ file, text: read(file) }));

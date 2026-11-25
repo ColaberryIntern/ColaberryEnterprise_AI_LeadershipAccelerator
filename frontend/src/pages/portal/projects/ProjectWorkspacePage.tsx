@@ -27,6 +27,7 @@ import { useIsExplorer } from '../useIsExplorer';
 import { useAgentAttachments } from '../../../components/portal/AgentAttachments';
 import MentorRail, { type MentorMsg, type MentorMode } from '../../../components/portal/workspace/MentorRail';
 import WorkspaceStuckHelp from './WorkspaceStuckHelp';
+import { usableLink } from './platformBuildLinks';
 import { useCampus } from '../../../components/campus/CampusContext';
 import WorkstationShell, { returnToOf, type WorkstationOrigin } from '../../../components/campus/workstation/WorkstationShell';
 import RepoTerminal from '../../../components/campus/workstation/RepoTerminal';
@@ -297,10 +298,32 @@ const ProjectWorkspacePage: React.FC = () => {
   // button faking navigation gives up all three. The URL is
   // https-validated server-side (projectTreeDto.commandCenterUrl), so
   // there is nothing left to check here. 
-  const commandCenter = project.commandCenterUrl ? (
-    <a className="rt-btn" href={project.commandCenterUrl} target="_blank" rel="noopener noreferrer" title="Open your Command Center in a new tab">
-      Command Center ↗
-    </a>
+  //
+  // L13.1: on every story, the Command Center and Demo the PLATFORM built and hosts come first,
+  // because they never depend on the student's repo. The GitHub Pages address is the fallback
+  // for builds that predate the platform build. A build still in progress says so instead of
+  // showing a link that would open a "not ready" page.
+  const pb = project.platformBuild ?? null;
+  const ccHref = usableLink(pb?.commandCenterUrl, pb?.expiresAt) ?? project.commandCenterUrl ?? null;
+  const demoHref = usableLink(pb?.demoUrl, pb?.expiresAt);
+  const commandCenter = (ccHref || demoHref || pb?.state === 'building') ? (
+    <span className="rt-links" style={{ display: 'inline-flex', gap: 8, flexWrap: 'wrap' }}>
+      {ccHref ? (
+        <a className="rt-btn" href={ccHref} target="_blank" rel="noopener noreferrer" title="Open your Command Center in a new tab">
+          Command Center ↗
+        </a>
+      ) : null}
+      {demoHref ? (
+        <a className="rt-btn" href={demoHref} target="_blank" rel="noopener noreferrer" title="Open your demo in a new tab">
+          Demo
+        </a>
+      ) : null}
+      {!ccHref && pb?.state === 'building' ? (
+        <span className="rt-pill" title="The platform is building your Command Center and demo. The links appear here when they are ready.">
+          Command Center and demo: being built
+        </span>
+      ) : null}
+    </span>
   ) : null;
   const pill = <span className={`rt-pill ${done ? 'done' : ''}`}>{done ? '✓ Completed' : blocked.blocked ? 'Waiting on another task' : 'In progress'}</span>;
 

@@ -170,11 +170,13 @@ export async function materializeGovBuildProject(input: MaterializeGovProjectInp
     throw err;
   }
 
-  // 4. Schedule + materialize (idempotent on (project_id, story_id); injects the STORY-000 Command Center).
+  // 4. Schedule + materialize (idempotent on (project_id, story_id); injects the STORY-000 Command Center
+  //    and, via connectedDemo, the STORY-900 Connected Demo blocked_by STORY-000 — so a gov project ships a
+  //    Command Center AND a connected demo as part of the build, exactly like the student path).
   //    Back-scheduled to finish the day before the deadline when one is known (owner's "day before" rule).
   const deadlineDate = input.deadline ? new Date(input.deadline) : null;
   const schedule = govSyntheticSchedule(plan, now, deadlineDate && !Number.isNaN(deadlineDate.getTime()) ? deadlineDate : null);
-  const mat = await materializePlanAsTasks(projectId, enrollmentId, plan, { schedule, now });
+  const mat = await materializePlanAsTasks(projectId, enrollmentId, plan, { schedule, now, connectedDemo: true });
 
   // 5. Persist the REAL plan to build_plans so the repo-sync document path renders IT — the real
   //    requirements (REQ-001..), project name, dates and r0..rN releases — instead of the lossy,

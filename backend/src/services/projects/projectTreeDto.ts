@@ -19,6 +19,7 @@ import {
 } from '../sbp/verification/verificationLatch';
 import { isProtectedProject } from './protectedProjects';
 import type { ProjectApprovalState } from '../../models/Project';
+import type { PlatformBuildView } from '../sbp/platformBuild/portalView';
 
 export type { VerificationLatch };
 
@@ -212,6 +213,13 @@ export interface ProjectTreeDto {
   approved_at: string | null;
   /** What the student said was wrong, when approval_state is 'changes_requested'. */
   approval_notes: string | null;
+  /**
+   * L13.1: the Command Center and Demo the PLATFORM built and hosts for this project, with
+   * signed links that expire in 12 hours (re-minted on every read). Absent when the project has
+   * no platform build. The portal prefers it over `command_center_url` (a GitHub Pages address),
+   * because it does not depend on the student's repository.
+   */
+  platform_build?: PlatformBuildView;
 }
 
 /**

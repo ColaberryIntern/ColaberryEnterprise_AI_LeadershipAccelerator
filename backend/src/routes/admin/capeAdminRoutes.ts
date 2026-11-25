@@ -14,23 +14,27 @@
  * PUT  /api/admin/cape/curriculum-skill-maps/card/:cardId    — create a card override (versioned)
  */
 import { Router } from 'express';
-import { requireAdmin } from '../../middlewares/authMiddleware';
+import { requireSection } from '../../middlewares/authMiddleware';
 import {
   handleListSkillDefinitions, handleGetSkillDefinitionHistory, handleUpdateSkillDefinition,
   handleGetEvidenceBandWeights, handleUpdateEvidenceBandWeights,
   handleGetCardSkillMapping, handleUpsertCardSkillMapping,
 } from '../../controllers/capeAdminController';
 
+// This router is mounted above adminRoutes, so mgmtSectionGate never runs for it and its '/api/admin/cape'
+// -> 'program' row has no effect here. The section is enforced on each route instead.
+const requireProgram = requireSection('program');
+
 const router = Router();
 
-router.get('/api/admin/cape/skill-definitions', requireAdmin, handleListSkillDefinitions);
-router.get('/api/admin/cape/skill-definitions/:skillId/history', requireAdmin, handleGetSkillDefinitionHistory);
-router.put('/api/admin/cape/skill-definitions/:skillId', requireAdmin, handleUpdateSkillDefinition);
+router.get('/api/admin/cape/skill-definitions', requireProgram, handleListSkillDefinitions);
+router.get('/api/admin/cape/skill-definitions/:skillId/history', requireProgram, handleGetSkillDefinitionHistory);
+router.put('/api/admin/cape/skill-definitions/:skillId', requireProgram, handleUpdateSkillDefinition);
 
-router.get('/api/admin/cape/evidence-band-weights', requireAdmin, handleGetEvidenceBandWeights);
-router.put('/api/admin/cape/evidence-band-weights', requireAdmin, handleUpdateEvidenceBandWeights);
+router.get('/api/admin/cape/evidence-band-weights', requireProgram, handleGetEvidenceBandWeights);
+router.put('/api/admin/cape/evidence-band-weights', requireProgram, handleUpdateEvidenceBandWeights);
 
-router.get('/api/admin/cape/curriculum-skill-maps/card/:cardId', requireAdmin, handleGetCardSkillMapping);
-router.put('/api/admin/cape/curriculum-skill-maps/card/:cardId', requireAdmin, handleUpsertCardSkillMapping);
+router.get('/api/admin/cape/curriculum-skill-maps/card/:cardId', requireProgram, handleGetCardSkillMapping);
+router.put('/api/admin/cape/curriculum-skill-maps/card/:cardId', requireProgram, handleUpsertCardSkillMapping);
 
 export default router;

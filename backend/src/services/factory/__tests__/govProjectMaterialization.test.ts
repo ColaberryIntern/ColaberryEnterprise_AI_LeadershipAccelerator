@@ -83,6 +83,24 @@ describe('govProjectMaterialization (core-table write — idempotent, typed erro
     expect(matArgs[3].schedule).toBeTruthy();                           // scheduled to real dates
   });
 
+  // M1-T1 (Gov Proposal Studio): a NEW gov project must materialize STORY-900 Connected Demo (blocked_by STORY-000
+  // Command Center), exactly as the student path. The spine injection lives in materializePlanAsTasks and fires only
+  // when ctx.connectedDemo === true, so the one observable contract at this layer is that the flag is passed through.
+  it('passes connectedDemo:true so gov projects materialize the Command Center + Connected Demo spine', async () => {
+    const project: any = { id: 'proj-1', project_variables: {}, save: jest.fn().mockResolvedValue(undefined) };
+    mock(createNewProjectForEnrollment).mockResolvedValue(project);
+    await materializeGovBuildProject(baseInput);
+    const matArgs = mock(materializePlanAsTasks).mock.calls[0];
+    expect(matArgs[3].connectedDemo).toBe(true);
+  });
+
+  it('passes connectedDemo:true on the REUSE path too, so a re-run still carries the demo spine', async () => {
+    mock(ContractTrack.findByPk).mockResolvedValue({ solution_student_project_id: 'proj-existing' });
+    await materializeGovBuildProject(baseInput);
+    const matArgs = mock(materializePlanAsTasks).mock.calls[0];
+    expect(matArgs[3].connectedDemo).toBe(true);
+  });
+
   it('idempotent: when the solution_build track already links a project, it REUSES it (no new project)', async () => {
     mock(ContractTrack.findByPk).mockResolvedValue({ solution_student_project_id: 'proj-existing' });
     const r = await materializeGovBuildProject(baseInput);

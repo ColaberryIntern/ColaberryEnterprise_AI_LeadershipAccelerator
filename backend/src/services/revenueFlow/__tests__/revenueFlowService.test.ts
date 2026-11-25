@@ -464,6 +464,38 @@ describe('the board is broken down by brand', () => {
     }
   });
 
+  /**
+   * R25 Phase 2. The strongest form of this check available: the figure keys are read off the
+   * headline the service ACTUALLY BUILT, so a figure added to the headline without a declared
+   * source fails here even though nothing else would notice.
+   *
+   * Why it matters: the frontend decides whether to show a top tile by asking which stream its
+   * figure came from. An undeclared figure matches no brand, so a real number would vanish
+   * from every brand-filtered view of the page with nothing logged anywhere.
+   */
+  it('declares the source stream of every figure it puts in the headline', async () => {
+    const board = await getRevenueFlowBoard(NOW);
+
+    const figures = Object.keys(board.headline)
+      // The sentence that explains the win rate, not a figure of its own.
+      .filter((k) => k !== 'winRateBasis')
+      .sort();
+    expect(figures.length).toBeGreaterThan(0);
+    expect(Object.keys(board.headlineFigureStreams).sort()).toEqual(figures);
+
+    // And each declared stream is one the board can actually group under a brand.
+    // Widened to a string lookup deliberately: `figures` is read off the headline at run time
+    // so that an undeclared figure is caught, which means it cannot be typed as the key union
+    // that is itself derived from the headline.
+    const declared: Record<string, string> = board.headlineFigureStreams;
+    const streamKeys = board.streams.map((s) => s.key);
+    for (const figure of figures) {
+      const stream = declared[figure];
+      expect(typeof stream).toBe('string');
+      expect(streamKeys).toContain(stream);
+    }
+  });
+
   it('groups the streams under headings with nothing empty', async () => {
     const board = await getRevenueFlowBoard(NOW);
     expect(board.brands[0].key).toBe('colaberry-training');

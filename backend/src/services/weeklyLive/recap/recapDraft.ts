@@ -1,6 +1,6 @@
 import { chatJson } from '../../runtime/runtimeAi';
 import { RecapSummary, RecapSummarySchema, deckText, defaultSummary } from './recapContent';
-import { lintObject, LintViolation } from './recapLint';
+import { lintRecapSummary, LintViolation } from './recapLint';
 import { SessionInfo } from './recapStore';
 
 /**
@@ -45,7 +45,7 @@ export async function draftSummary(session: SessionInfo, call: typeof chatJson =
       console.warn(JSON.stringify({ level: 'warn', service: 'backend', event: 'weekly_live.recap_draft', outcome: 'failure', error_class: 'ContractViolation', context: { session_id: session.id } }));
       return { summary: defaultSummary(session.title), source: 'default', violations: [], errorClass: 'ContractViolation' };
     }
-    return { summary: parsed.data, source: 'ai', violations: lintObject(parsed.data) };
+    return { summary: parsed.data, source: 'ai', violations: await lintRecapSummary(session.id, parsed.data) };
   } catch (e) {
     const errorClass = e instanceof Error && e.name === 'TimeoutError' ? 'TimeoutError' : 'UpstreamUnavailable';
     console.warn(JSON.stringify({ level: 'warn', service: 'backend', event: 'weekly_live.recap_draft', outcome: 'failure', error_class: errorClass, context: { session_id: session.id } }));

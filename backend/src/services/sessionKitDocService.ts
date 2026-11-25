@@ -152,7 +152,7 @@ export async function renderPresenterPage(sessionId: string): Promise<string | n
   if (!kit) return null;
 
   const base = (env.frontendUrl || 'https://enterprise.colaberry.ai').replace(/\/+$/, '');
-  const token = mintKitToken(sessionId);
+  const token = mintKitToken(sessionId, 'notes');
   const endpoint = `${base}/api/portal/sessions/${sessionId}/presenter-notes?t=${encodeURIComponent(token)}`;
 
   return `<!doctype html><html><head><meta charset="utf-8">
@@ -476,7 +476,7 @@ export async function getPresenterLink(sessionId: string): Promise<{ url: string
   const kit = await buildSessionKit(sessionId);
   if (!kit) return null;
   const base = (env.frontendUrl || 'https://enterprise.colaberry.ai').replace(/\/+$/, '');
-  const token = mintKitToken(sessionId);
+  const token = mintKitToken(sessionId, 'notes');
   const url = `${base}/api/portal/sessions/${sessionId}/presenter-page?t=${encodeURIComponent(token)}`;
   const qrSvg = await QRCode.toString(url, { type: 'svg', margin: 1, width: 240 });
   return { url, qrSvg };

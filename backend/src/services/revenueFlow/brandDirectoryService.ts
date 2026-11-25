@@ -24,11 +24,8 @@
  */
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../../config/database';
-import {
-  BRAND_BY_STREAM,
-  BrandDirectoryEntry,
-  UNASSIGNED_BRAND_KEY,
-} from './streamBrands';
+import { BRAND_BY_STREAM, UNASSIGNED_BRAND_KEY } from './streamBrands';
+import type { BrandDirectoryEntry, BrandKey } from './streamBrands';
 
 interface RawBrand {
   slug: string;
@@ -37,10 +34,17 @@ interface RawBrand {
   status: string | null;
 }
 
-/** Every brand slug this board files a stream under, de-duplicated, excluding the bucket. */
-export function brandSlugsInUse(): string[] {
+/**
+ * Every brand slug this board files a stream under, de-duplicated, excluding the bucket.
+ *
+ * The predicate narrows to `BrandKey`, not `string`. R25 Phase 2 gave `BRAND_BY_STREAM` a
+ * typed value so a mistyped slug would be a compile error, and this is where that type has to
+ * be acknowledged rather than widened back out: a `s is string` predicate over a union of
+ * literals is not assignable to its own parameter, which is what CI caught.
+ */
+export function brandSlugsInUse(): BrandKey[] {
   const slugs = Object.values(BRAND_BY_STREAM)
-    .filter((s): s is string => Boolean(s) && s !== UNASSIGNED_BRAND_KEY);
+    .filter((s): s is BrandKey => Boolean(s) && s !== UNASSIGNED_BRAND_KEY);
   return Array.from(new Set(slugs)).sort();
 }
 

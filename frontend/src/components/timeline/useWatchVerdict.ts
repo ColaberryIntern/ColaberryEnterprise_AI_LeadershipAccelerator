@@ -13,7 +13,19 @@
  */
 import { useEffect, useRef, useState } from 'react';
 
-export interface WatchVerdict { watched_pct: number; required_pct: number | null; met: boolean; }
+export interface WatchVerdict {
+  watched_pct: number;
+  required_pct: number | null;
+  met: boolean;
+  /** Furthest second this student reached, so the player can start there instead
+   *  of at zero. Optional: a response without one simply has no resume point,
+   *  and the player then behaves exactly as it always did. */
+  position_s?: number | null;
+  /** The clip's length as the SERVER knows it - used to tell "they left off in
+   *  the middle" from "they already finished it" when the player itself reports
+   *  no duration (every cross-origin iframe provider). */
+  duration_s?: number | null;
+}
 
 export const WATCH_FAIL_OPEN: WatchVerdict = { watched_pct: 0, required_pct: null, met: true };
 
