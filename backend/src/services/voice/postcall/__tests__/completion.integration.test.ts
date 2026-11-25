@@ -72,6 +72,14 @@ describeIfDb('call completion claim against Postgres', () => {
     expect((await read()).provider_response.transcript_state).toBe('pending_review');
   });
 
+  it('a pending-review mark from a failed extraction survives later deliveries', async () => {
+    await sequelize.query(`UPDATE communication_logs SET provider_response = provider_response || '{"transcript_state": "pending_review", "transcript_state_reason": "extraction_failed"}'::jsonb WHERE id = '${LOG}'`);
+    await C.claimCompletion(LOG, payload('completed'));
+    await C.claimCompletion(LOG, payload('canceled'));
+    const r = await read();
+    expect(r.provider_response).toMatchObject({ transcript_state: 'pending_review', transcript_state_reason: 'extraction_failed' });
+  });
+
   it('an unknown row claims nothing and does not throw', async () => {
     const r = await C.claimCompletion('98888888-8888-4888-8888-888888888888', payload('completed'));
     expect(r.firstDelivery).toBe(false);

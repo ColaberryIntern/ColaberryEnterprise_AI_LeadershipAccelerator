@@ -10,6 +10,7 @@ import { SessionWorker } from '../../../session/sessionWorker';
 import { correlationKey, mintToken } from '../../../twilio/correlationToken';
 import { transferToHumanTool } from '../../../transfer/transferTool';
 import { TRANSFER_REASON } from '../../../transfer/humanTransfer';
+import { relayBroker, slotTool } from '../../voiceRuntime';
 
 const ACCOUNT = 'AC' + 'c9'.repeat(16);
 const SID = 'CA' + 'd1'.repeat(16);
@@ -124,5 +125,12 @@ describe('human transfer', () => {
     await h.prompt('A person please');
     expect(seen).toContain('tool_result');
     expect(seen).not.toContain('"control"');
+  });
+});
+
+describe('live wiring', () => {
+  it('the Engine A live broker offers transfer_to_human; the Engine B one does not (it cannot act on the control yet)', () => {
+    expect(relayBroker().defs().map((d) => d.name).sort()).toEqual(['next_open_strategy_slots', 'transfer_to_human']);
+    expect(slotTool().defs().map((d) => d.name)).toEqual(['next_open_strategy_slots']);
   });
 });

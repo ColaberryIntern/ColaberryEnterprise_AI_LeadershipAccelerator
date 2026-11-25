@@ -60,17 +60,34 @@ describeIfDb('post-call effect claims against Postgres', () => {
     expect(await E.claimEffect(LOG, 'timeline', new Date(Date.now() + 10 * E.EFFECT_LEASE_MS))).toBe(false);
   });
 
-  it('effects are independent; release gives a claim back, but never undoes done', async () => {
+  it('effects are independent; release gives a claim back (counted), but never undoes done', async () => {
     expect(await E.claimEffect(LOG, 'extraction')).toBe(true);
     await E.releaseEffect(LOG, 'extraction');
-    expect(await state('extraction')).toBeNull();
+    expect(await state('extraction')).toBe('released');
     expect(await E.claimEffect(LOG, 'extraction')).toBe(true);
     await E.releaseEffect(LOG, 'timeline'); // done: untouched
     expect(await state('timeline')).toBe('done');
   });
 
-  it('markEffectDone inside a rolled-back transaction leaves the effect unmarked (atomic with its write)', async () => {
+  it('bounded retry: the third attempt is the last; a fourth claim is refused', async () => {
+    await E.releaseEffect(LOG, 'extraction'); // attempts = 2 so far
+    expect(await E.claimEffect(LOG, 'extraction')).toBe(true); // 3
     await E.releaseEffect(LOG, 'extraction');
+    expect(await E.claimEffect(LOG, 'extraction')).toBe(false);
+    const [[r]] = await sequelize.query(`SELECT metadata->'postcall'->'extraction'->>'attempts' AS a FROM communication_logs WHERE id = '${LOG}'`) as [Array<{ a: string }>, unknown];
+    expect(r.a).toBe('3');
+  });
+
+  it('markTranscriptReview / clearTranscriptReview set and clear the review state on the log', async () => {
+    await E.markTranscriptReview(LOG, 'extraction_failed');
+    const read = async () => (await sequelize.query(`SELECT provider_response->>'transcript_state' AS s, provider_response->>'transcript_state_reason' AS r FROM communication_logs WHERE id = '${LOG}'`) as [Array<{ s: string | null; r: string | null }>, unknown])[0][0];
+    expect(await read()).toEqual({ s: 'pending_review', r: 'extraction_failed' });
+    await E.clearTranscriptReview(LOG);
+    expect(await read()).toEqual({ s: 'present', r: null });
+  });
+
+  it('markEffectDone inside a rolled-back transaction leaves the effect unmarked (atomic with its write)', async () => {
+    await sequelize.query(`UPDATE communication_logs SET metadata = metadata #- '{postcall,extraction}' WHERE id = '${LOG}'`);
     const t = await sequelize.transaction();
     await E.markEffectDone(LOG, 'extraction', t);
     await t.rollback();

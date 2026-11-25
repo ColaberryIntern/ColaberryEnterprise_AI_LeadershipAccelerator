@@ -28,6 +28,7 @@ import { buildRelayTwiml } from './relayProtocol';
 import { nextOpenSlotsTool, ToolBroker } from './toolBroker';
 import { TEST_PROFILE } from './voiceProfiles';
 import { ACTION_TOKEN_TTL_SECONDS, CONNECT_ACTION_PATH } from '../transfer/humanTransfer';
+import { transferToHumanTool } from '../transfer/transferTool';
 import { completeDirectCall, reconcileDirectCompletions, rememberTranscript } from '../postcall/directCompletionRuntime';
 import { attachVoiceWsServer, RELAY_PATH, STREAM_PATH } from './voiceWsServer';
 import type { ModelHandlers, RealtimeDeps, SocketLike } from './realtime/openaiRealtimeEngine';
@@ -88,7 +89,7 @@ export function relayDeps(): RelayDeps {
   return {
     worker: getWorker(),
     llm: createClaudeVoiceLlm(c.VOICE_ENGINE_A_MODEL),
-    broker: slotTool,
+    broker: relayBroker,
     profile: TEST_PROFILE,
     accountSid: () => process.env.TWILIO_ACCOUNT_SID || undefined,
     consumeSessionRef: consumeToken,
@@ -100,7 +101,17 @@ export function relayDeps(): RelayDeps {
   };
 }
 
-const slotTool = () => new ToolBroker([nextOpenSlotsTool(() => getAvailableSlots(14, admissionsCalendar()))]);
+export const slotTool = () => new ToolBroker([nextOpenSlotsTool(() => getAvailableSlots(14, admissionsCalendar()))]);
+
+/**
+ * Engine A also gets transfer_to_human (VS3.2): it acts on the transfer control by ending the relay
+ * session with handoffData. Engine B does not handle that control yet, so it does NOT get the tool
+ * (it would announce a transfer that never happens). Unset VOICE_TRANSFER_NUMBER = a callback offer.
+ */
+export const relayBroker = () => new ToolBroker([
+  nextOpenSlotsTool(() => getAvailableSlots(14, admissionsCalendar())),
+  transferToHumanTool(() => loadVoiceConfig().VOICE_TRANSFER_NUMBER),
+]);
 
 /** Open the OpenAI Realtime WebSocket. The key never leaves the server and is never logged. */
 export function connectOpenAiRealtime(model: string, h: ModelHandlers): SocketLike {

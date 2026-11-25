@@ -17,6 +17,15 @@ import { redactForLogs } from '../utils/piiRedaction';
 import { sendPostCallSms, sendVoicemailFallbackSms } from '../services/synthflowPostCallSms';
 import { mirrorToGhlInBackground, resolveGhlContactId } from '../services/ghlMirrorService';
 import { claimCompletion, fromSynthflowPayload } from '../services/voice/postcall/completion';
+import { claimEffect, clearTranscriptReview, markEffectDone, markTranscriptReview, releaseEffect } from '../services/voice/postcall/effectClaims';
+
+/** A claim failure (DB down) skips the extraction this time and says so; it never throws into the webhook. */
+async function claimExtraction(logId: string): Promise<boolean> {
+  try { return await claimEffect(logId, 'extraction'); } catch (e) {
+    console.warn(JSON.stringify({ level: 'error', service: 'synthflow-webhook', event: 'synthflow_extraction_claim_failed', outcome: 'failure', error_class: (e as Error).name || 'Error' }));
+    return false;
+  }
+}
 
 /**
  * POST /api/webhook/synthflow/call-complete
@@ -302,9 +311,14 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
       });
     }
 
-    // Process transcript via AI to extract lead data
-    if (firstDelivery && transcript && commLog.lead_id) {
+    // Process transcript via AI to extract lead data. VS3.2: claimed per effect, not gated on the first
+    // delivery: it runs once, and if it FAILS the claim is released and the transcript is marked
+    // pending_review, so a vendor redelivery retries it (at most MAX_EFFECT_ATTEMPTS times) instead of
+    // the failure being lost.
+    if (transcript && commLog.lead_id && (await claimExtraction(commLog.id))) {
       processCallTranscript(commLog.lead_id, transcript, call_id).then(async () => {
+        await markEffectDone(commLog.id, 'extraction').catch((e: Error) => console.warn(JSON.stringify({ level: 'error', service: 'synthflow-webhook', event: 'synthflow_extraction_done_mark_failed', outcome: 'failure', error_class: e.name || 'Error' })));
+        await clearTranscriptReview(commLog.id).catch(() => { /* a stale review mark is safe: it only asks a person to look */ });
         // Update the voice call activity with AI-extracted call summary
         try {
           const updatedComm = await CommunicationLog.findByPk(commLog.id);
@@ -367,8 +381,10 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
             console.warn(`[Synthflow Webhook] Campaign transition failed: ${moveErr.message}`);
           }
         }
-      }).catch((err: any) => {
+      }).catch(async (err: any) => {
         console.warn('[Synthflow Webhook] Transcript processing failed:', err.message);
+        await markTranscriptReview(commLog!.id, 'extraction_failed').catch((e: Error) => console.warn(JSON.stringify({ level: 'error', service: 'synthflow-webhook', event: 'synthflow_review_mark_failed', outcome: 'failure', error_class: e.name || 'Error' })));
+        await releaseEffect(commLog!.id, 'extraction').catch((e: Error) => console.warn(JSON.stringify({ level: 'error', service: 'synthflow-webhook', event: 'synthflow_extraction_release_failed', outcome: 'failure', error_class: e.name || 'Error' })));
       });
     }
 

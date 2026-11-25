@@ -49,6 +49,12 @@ export interface DirectDeps {
   markEffectDone: (logId: string, effect: PostCallEffect) => Promise<void>;
   leadFirstName: (leadId: number) => Promise<string>;
   transcriptFor: (callId: string) => string;
+  /** The transcript already recorded on the log (survives a restart; used by retries and the sweep). */
+  storedTranscript: (logId: string) => Promise<string>;
+  /** Extraction failed: mark the transcript pending review on the log, with the reason. */
+  markTranscriptReview: (logId: string, reason: string) => Promise<void>;
+  /** Extraction succeeded after an earlier failure: clear the review mark. */
+  clearTranscriptReview: (logId: string) => Promise<void>;
   log: (line: Record<string, unknown>) => void;
 }
 
@@ -81,10 +87,10 @@ export async function processDirectCompletion(callId: string, d: DirectDeps, age
   if (!call) return { done: false, reason: 'unknown_call' };
   if (!TERMINAL_STATES.has(call.state)) return { done: false, reason: 'not_ended' };
   if (call.test_mode) return { done: false, reason: 'test_mode' };
-  const transcript = d.transcriptFor(callId);
-  const completion = toCompletion(call, transcript);
-  const state = transcriptState(completion);
   const logId = await d.ensureLog(call, logIdFor(callId));
+  const transcript = d.transcriptFor(callId) || (await d.storedTranscript(logId));
+  const completion = toCompletion(call, transcript);
+  let state: string = transcriptState(completion);
   const { firstDelivery } = await d.claimCompletion(logId, completion);
   let timeline = false;
   let extraction = false;
@@ -96,7 +102,7 @@ export async function processDirectCompletion(callId: string, d: DirectDeps, age
       await d.writeTimeline(logId, call.lead_id, subject, transcript.slice(0, 2000), { call_id: completion.providerCallId, voice_call_id: call.id, engine: call.engine, transcript_state: state });
       timeline = true;
     } catch (e) {
-      await d.releaseEffect(logId, 'timeline').catch(() => undefined);
+      await d.releaseEffect(logId, 'timeline').catch((err: Error) => d.log({ level: 'error', service: 'voice-postcall', event: 'voice_postcall_release_failed', outcome: 'failure', error_class: err.name || 'Error', call_id: callId }));
       d.log({ level: 'error', service: 'voice-postcall', event: 'voice_postcall_timeline_failed', outcome: 'failure', error_class: (e as Error).name || 'Error', call_id: callId });
     }
   }
@@ -105,9 +111,14 @@ export async function processDirectCompletion(callId: string, d: DirectDeps, age
     try {
       await d.extract(call.lead_id, transcript, completion.providerCallId);
       await d.markEffectDone(logId, 'extraction');
+      await d.clearTranscriptReview(logId);
       extraction = true;
     } catch (e) {
-      await d.releaseEffect(logId, 'extraction').catch(() => undefined);
+      // Never leave it reading "present": a person reviews it, and the claim is released so a later
+      // trigger or the sweep retries it (bounded by MAX_EFFECT_ATTEMPTS in effectClaims).
+      state = 'pending_review';
+      await d.markTranscriptReview(logId, 'extraction_failed').catch((err: Error) => d.log({ level: 'error', service: 'voice-postcall', event: 'voice_postcall_review_mark_failed', outcome: 'failure', error_class: err.name || 'Error', call_id: callId }));
+      await d.releaseEffect(logId, 'extraction').catch((err: Error) => d.log({ level: 'error', service: 'voice-postcall', event: 'voice_postcall_release_failed', outcome: 'failure', error_class: err.name || 'Error', call_id: callId }));
       d.log({ level: 'error', service: 'voice-postcall', event: 'voice_postcall_extraction_failed', outcome: 'failure', error_class: (e as Error).name || 'Error', call_id: callId });
     }
   }

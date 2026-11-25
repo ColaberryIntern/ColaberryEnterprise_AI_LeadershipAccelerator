@@ -11,12 +11,21 @@ function fakeDeps(over: Partial<DirectDeps> = {}, call: DirectCallRow | null = r
   const completions = new Set<string>();
   const timeline: string[] = [];
   const extractions: string[] = [];
+  const reviews: string[] = [];
+  const attempts = new Map<string, number>();
   const d: DirectDeps = {
     loadCall: async () => call,
     ensureLog: async (_c, id) => id,
     claimCompletion: async (logId, c) => { const k = `${logId}:${c.status}`; const first = !completions.has(k); completions.add(k); return { firstDelivery: first }; },
-    claimEffect: async (logId, e) => { const k = `${logId}:${e}`; if (claims.has(k)) return false; claims.set(k, 'claimed'); return true; },
+    claimEffect: async (logId, e) => {
+      const k = `${logId}:${e}`;
+      if (claims.has(k) || (attempts.get(k) ?? 0) >= 3) return false;
+      claims.set(k, 'claimed'); attempts.set(k, (attempts.get(k) ?? 0) + 1); return true;
+    },
     releaseEffect: async (logId, e) => { if (claims.get(`${logId}:${e}`) === 'claimed') claims.delete(`${logId}:${e}`); },
+    storedTranscript: async () => '',
+    markTranscriptReview: async (_l, reason) => { reviews.push(reason); },
+    clearTranscriptReview: async () => { reviews.push('cleared'); },
     writeTimeline: async (logId, _lead, subject) => { timeline.push(subject); claims.set(`${logId}:timeline`, 'done'); },
     extract: async () => { extractions.push('x'); },
     markEffectDone: async (logId, e) => { claims.set(`${logId}:${e}`, 'done'); },
@@ -25,7 +34,7 @@ function fakeDeps(over: Partial<DirectDeps> = {}, call: DirectCallRow | null = r
     log: () => undefined,
     ...over,
   };
-  return { d, timeline, extractions, claims };
+  return { d, timeline, extractions, claims, reviews };
 }
 
 describe('processDirectCompletion (VS3.2 exactly once)', () => {
@@ -76,12 +85,27 @@ describe('processDirectCompletion (VS3.2 exactly once)', () => {
     expect(f.timeline).toHaveLength(1);
   });
 
-  it('extraction failure releases its claim and is retried once later', async () => {
+  it('failed extraction leaves the transcript PENDING REVIEW, releases its claim, and a retry clears it once', async () => {
     let fail = true;
     const f = fakeDeps({ extract: async () => { if (fail) { fail = false; throw new Error('openai 503'); } } });
+    expect(await processDirectCompletion(CALL, f.d)).toMatchObject({ extraction: false, transcriptState: 'pending_review' });
+    expect(f.reviews).toEqual(['extraction_failed']);
+    expect(await processDirectCompletion(CALL, f.d)).toMatchObject({ extraction: true, transcriptState: 'present' });
+    expect(f.reviews).toEqual(['extraction_failed', 'cleared']);
     expect((await processDirectCompletion(CALL, f.d)).extraction).toBe(false);
-    expect((await processDirectCompletion(CALL, f.d)).extraction).toBe(true);
-    expect((await processDirectCompletion(CALL, f.d)).extraction).toBe(false);
+  });
+
+  it('an extraction that keeps failing stops after 3 attempts and stays pending review', async () => {
+    const f = fakeDeps({ extract: async () => { throw new Error('openai 503'); } });
+    for (let i = 0; i < 5; i++) await processDirectCompletion(CALL, f.d);
+    expect(f.reviews).toEqual(['extraction_failed', 'extraction_failed', 'extraction_failed']);
+  });
+
+  it('after a restart (no transcript in memory) a retry uses the transcript stored on the log', async () => {
+    const seen: string[] = [];
+    const f = fakeDeps({ storedTranscript: async () => TRANSCRIPT, extract: async (_l, t) => { seen.push(t); } }, row(), '');
+    expect(await processDirectCompletion(CALL, f.d)).toMatchObject({ extraction: true, transcriptState: 'present' });
+    expect(seen).toEqual([TRANSCRIPT]);
   });
 
   it('skips: unknown call, a call still in progress, a test-mode call', async () => {

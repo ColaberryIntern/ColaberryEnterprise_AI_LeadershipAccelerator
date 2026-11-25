@@ -14,7 +14,7 @@
  */
 import { QueryTypes } from 'sequelize';
 import { claimCompletion } from './completion';
-import { claimEffect, markEffectDone, releaseEffect } from './effectClaims';
+import { MAX_EFFECT_ATTEMPTS, claimEffect, clearTranscriptReview, markEffectDone, markTranscriptReview, releaseEffect } from './effectClaims';
 import { processDirectCompletion, type DirectCallRow, type DirectDeps } from './directCompletion';
 
 const TTL_MS = 30 * 60 * 1000;
@@ -80,6 +80,12 @@ export function productionDirectDeps(): DirectDeps {
       return String((lead as unknown as { name?: string } | null)?.name ?? 'Lead');
     },
     transcriptFor: (callId) => transcriptFor(callId),
+    storedTranscript: async (logId) => {
+      const s = await db();
+      const rows = await s.query<{ t: string | null }>("SELECT provider_response->>'transcript' AS t FROM communication_logs WHERE id = :logId", { replacements: { logId }, type: QueryTypes.SELECT });
+      return rows[0]?.t ?? '';
+    },
+    markTranscriptReview, clearTranscriptReview,
     log,
   };
 }
@@ -101,9 +107,12 @@ export async function reconcileDirectCompletions(limit = SWEEP_LIMIT): Promise<n
         AND c.state IN ('completed','busy','no_answer','failed','canceled')
         AND c.ended_at < NOW() - INTERVAL '2 minutes' AND c.ended_at > NOW() - INTERVAL '24 hours'
         AND (l.id IS NULL OR COALESCE(l.provider_response->>'completed_at', '') = ''
-             OR l.metadata->'postcall'->'timeline'->>'state' = 'claimed')
+             OR l.metadata->'postcall'->'timeline'->>'state' IN ('claimed', 'released')
+             -- a failed extraction (released, attempts left) is retried here, not lost
+             OR (l.metadata->'postcall'->'extraction'->>'state' IN ('claimed', 'released')
+                 AND COALESCE((l.metadata->'postcall'->'extraction'->>'attempts')::int, 0) < :maxAttempts))
       ORDER BY c.ended_at LIMIT :limit`,
-    { replacements: { limit }, type: QueryTypes.SELECT });
+    { replacements: { limit, maxAttempts: MAX_EFFECT_ATTEMPTS }, type: QueryTypes.SELECT });
   const deps = productionDirectDeps();
   let n = 0;
   for (const r of rows) {

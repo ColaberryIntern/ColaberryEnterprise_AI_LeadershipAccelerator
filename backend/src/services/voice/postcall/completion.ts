@@ -14,6 +14,9 @@
  *   the row back (first delivery, run the effects); the other gets nothing (replay, skip them).
  * A different status (e.g. "failed" after "completed") is a new fact and is claimable.
  *
+ * A transcript marked pending_review with a reason (a failed extraction, effectClaims.markTranscriptReview)
+ * keeps that mark through any later delivery: only a successful extraction clears it.
+ *
  * A null or very short transcript is never treated as a successful conversation: transcriptState
  * reports it as 'pending_review' so it is surfaced to a person instead of counted as done.
  */
@@ -87,7 +90,7 @@ export async function claimCompletion(logId: string, c: CallCompletion): Promise
   const claimed = await sequelize.query<{ id: string }>(
     `UPDATE communication_logs
         SET status = :status,
-            provider_response = COALESCE(provider_response, '{}'::jsonb) || CAST(:patch AS jsonb) || jsonb_build_object('completed_at', CAST(:completedAt AS text))
+            provider_response = COALESCE(provider_response, '{}'::jsonb) || (CAST(:patch AS jsonb) - CASE WHEN provider_response->>'transcript_state_reason' IS NOT NULL THEN 'transcript_state' ELSE '' END) || jsonb_build_object('completed_at', CAST(:completedAt AS text))
       WHERE id = :id
         AND NOT (COALESCE(provider_response->>'completed_at', '') <> '' AND COALESCE(provider_response->>'call_status', '') = :callStatus)
       RETURNING id`,
@@ -96,7 +99,7 @@ export async function claimCompletion(logId: string, c: CallCompletion): Promise
     { replacements: { id: logId, status, patch, callStatus: c.status, completedAt: new Date().toISOString() }, type: QueryTypes.SELECT });
   if (claimed.length) return { firstDelivery: true };
   await sequelize.query(
-    `UPDATE communication_logs SET provider_response = COALESCE(provider_response, '{}'::jsonb) || CAST(:patch AS jsonb) WHERE id = :id`,
+    `UPDATE communication_logs SET provider_response = COALESCE(provider_response, '{}'::jsonb) || (CAST(:patch AS jsonb) - CASE WHEN provider_response->>'transcript_state_reason' IS NOT NULL THEN 'transcript_state' ELSE '' END) WHERE id = :id`,
     { replacements: { id: logId, patch }, type: QueryTypes.UPDATE });
   return { firstDelivery: false };
 }
