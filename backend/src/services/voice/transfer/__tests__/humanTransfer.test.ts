@@ -58,7 +58,7 @@ describe('transfer webhooks (handlers, after the shared Twilio checks)', () => {
   function app(over: Partial<TransferDeps> = {}) {
     const d: TransferDeps = {
       target: () => '+15555550199', publicBaseUrl: () => 'https://enterprise.example', now: () => TUE_10_CT.getTime(),
-      recordFallback: jest.fn().mockResolvedValue(undefined), log: jest.fn(), ...over,
+      recordFallback: jest.fn().mockResolvedValue(undefined), closeInbound: jest.fn().mockResolvedValue(undefined), log: jest.fn(), ...over,
     };
     const h = makeTransferHandlers(d);
     const a = express();

@@ -26,6 +26,8 @@ export interface TransferDeps {
   publicBaseUrl: () => string | undefined;
   now: () => number;
   recordFallback: (callId: string) => Promise<void>;
+  /** VS3.6: an inbound call ended here (no status callback carries our ref for inbound). Never throws. */
+  closeInbound: (callId: string, body: Record<string, unknown>) => Promise<void>;
   log: (line: Record<string, unknown>) => void;
 }
 
@@ -38,8 +40,26 @@ export function defaultTransferDeps(): TransferDeps {
       const { sequelize } = await import('../config/database');
       await sequelize.query("UPDATE voice_calls SET state_reason = 'transfer_fallback', updated_at = NOW() WHERE id = :callId", { replacements: { callId } });
     },
+    closeInbound: closeInboundCall,
     log: (line) => (line.level === 'error' || line.level === 'warn' ? console.warn : console.log)(JSON.stringify({ service: 'voice-studio', ...line })),
   };
+}
+
+export async function closeInboundCall(callId: string, body: Record<string, unknown>): Promise<void> {
+  if (body.Direction !== 'inbound') return;
+  try {
+    const store = await import('../services/voice/twilio/voiceCallStore');
+    const { twilioStatusToEvents } = await import('../services/voice/twilio/twilioStatusMap');
+    const now = new Date();
+    const at = (status: string, ms: number) => twilioStatusToEvents(callId, { CallSid: body.CallSid, CallStatus: status }, new Date(now.getTime() + ms).toISOString());
+    const r = await store.appendCallEvents([...at('in-progress', -1), ...at('completed', 0)]);
+    if (r.inserted) {
+      await store.recomputeCall(callId);
+      (await import('../services/voice/postcall/directCompletionRuntime')).completeDirectCall(callId);
+    }
+  } catch (e) {
+    console.warn(JSON.stringify({ level: 'error', service: 'voice-studio', event: 'voice_inbound_close_failed', outcome: 'failure', error_class: (e as Error).name || 'DatabaseError', call_id: callId }));
+  }
 }
 
 const twiml = (res: Response, body: string): void => { res.status(200).type('text/xml').send(body); };
@@ -58,8 +78,9 @@ export function makeTransferHandlers(d: TransferDeps) {
     if (!v.ok) { d.log({ level: 'warn', event: 'voice_transfer_ref_invalid', outcome: 'failure', error_class: 'CorrelationTokenInvalid' }); return twiml(res, END_TWIML); }
     const callId = v.claims.callId;
     const decision = decideConnectAction((req.body as Record<string, unknown>)?.HandoffData, d.target(), new Date(d.now()));
-    if (decision === 'end') return twiml(res, END_TWIML);
+    if (decision === 'end') { await d.closeInbound(callId, (req.body ?? {}) as Record<string, unknown>); return twiml(res, END_TWIML); }
     const base = d.publicBaseUrl();
+    if (decision === 'fallback' || !base) await d.closeInbound(callId, (req.body ?? {}) as Record<string, unknown>);
     if (decision === 'fallback' || !base) return fallback(res, callId, decision === 'fallback' ? 'no_teammate_available' : 'config_missing');
     const dialAction = `${new URL(DIAL_ACTION_PATH, base).toString()}?ref=${encodeURIComponent(mintToken(callId, 'status', ACTION_TOKEN_TTL_SECONDS, d.now()))}`;
     d.log({ level: 'info', event: 'voice_transfer_dialing', outcome: 'success', call_id: callId });
@@ -70,6 +91,7 @@ export function makeTransferHandlers(d: TransferDeps) {
     const v = verifyToken(req.query.ref, 'status', d.now());
     if (!v.ok) { d.log({ level: 'warn', event: 'voice_transfer_ref_invalid', outcome: 'failure', error_class: 'CorrelationTokenInvalid' }); return twiml(res, END_TWIML); }
     const status = (req.body as Record<string, unknown>)?.DialCallStatus;
+    await d.closeInbound(v.claims.callId, (req.body ?? {}) as Record<string, unknown>);
     if (decideDialAction(status) === 'end') {
       d.log({ level: 'info', event: 'voice_transfer_connected', outcome: 'success', call_id: v.claims.callId });
       return twiml(res, END_TWIML);

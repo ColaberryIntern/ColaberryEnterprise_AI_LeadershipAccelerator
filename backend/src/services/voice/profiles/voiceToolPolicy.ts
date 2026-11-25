@@ -27,13 +27,18 @@ export const TOOL_BRANDS: Readonly<Record<string, readonly string[]>> = {
   admissions_knowledge: ['colaberry'],
 };
 
-export type ToolDenial = 'not_granted_or_switched_off' | 'not_in_version' | 'not_registered' | 'requires_human_approval' | 'brand_not_allowed';
+export type ToolDenial = 'not_granted_or_switched_off' | 'not_in_version' | 'not_registered' | 'requires_human_approval' | 'caller_not_verified' | 'brand_not_allowed';
 
 export interface ToolPolicyInput {
   agentKey: string;
   brandSlug: string;
   versionPermissions: readonly string[];
   registered: readonly RegisteredTool[];
+  /**
+   * Was the caller verified by a real check? Defaults to false. Caller ID never counts: it is trivially
+   * spoofed. No verification method exists yet, so sensitive tools are refused on every call.
+   */
+  callerVerified?: boolean;
 }
 
 export interface ToolPolicyResult {
@@ -60,6 +65,7 @@ export function effectiveVoiceTools(p: ToolPolicyInput): ToolPolicyResult {
     else if (!inVersion.has(name)) reason = 'not_in_version';
     else if (!tool) reason = 'not_registered';
     else if (!tool.readOnly) reason = 'requires_human_approval';
+    else if (tool.sensitive && p.callerVerified !== true) reason = 'caller_not_verified';
     else if (brands && !brands.includes(p.brandSlug)) reason = 'brand_not_allowed';
     if (reason) denied.push({ name, reason });
     else allowed.push(tool as RegisteredTool);

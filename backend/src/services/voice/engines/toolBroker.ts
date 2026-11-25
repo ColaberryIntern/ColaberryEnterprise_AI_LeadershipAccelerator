@@ -23,6 +23,8 @@ export interface RegisteredTool {
   def: VoiceToolDef;
   schema: z.ZodType<unknown>;
   readOnly: boolean;
+  /** Reads personal or account data: allowed only on a call whose caller was verified (VS3.6). */
+  sensitive?: boolean;
   /** A plain string, or text plus a control the engine acts on (never a world-changing write). */
   run: (input: unknown) => Promise<string | { content: string; control?: ToolControl }>;
 }

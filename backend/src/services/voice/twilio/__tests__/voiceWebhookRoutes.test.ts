@@ -36,6 +36,7 @@ function harness(over: Partial<VoiceWebhookDeps> = {}, env: Record<string, strin
     recomputeCall: async () => null,
     ownsNumber: async (n: string) => n === OURS,
     connectTwiml: async () => '<Response><Connect/></Response>',
+    inboundTwiml: async () => INBOUND_FALLBACK_TWIML,
     now: () => Date.now(),
     log: (l) => logs.push(l),
     ...over,
@@ -139,7 +140,8 @@ describe('voice webhooks: signature, account, token (VS2.1)', () => {
   it('inbound checks To (our number), not From; an inbound-direction status checks To as well', async () => {
     const { app } = harness();
     const base = { AccountSid: ACCOUNT, CallSid: SID };
-    expect((await signed(app, '/api/webhook/voice/twilio/inbound', { ...base, To: '+15555550177', From: OURS })).status).toBe(403);
+    const unknown = await signed(app, '/api/webhook/voice/twilio/inbound', { ...base, To: '+15555550177', From: OURS });
+    expect([unknown.status, unknown.text]).toEqual([200, INBOUND_FALLBACK_TWIML]); // VS3.6: a safe message, never an agent
     expect((await signed(app, '/api/webhook/voice/twilio/inbound', { ...base, To: OURS, From: '+15555550177' })).status).toBe(200);
     expect((await signed(app, statusPath(), status('ringing', '1', { Direction: 'inbound', To: OURS, From: '+15555550177' }))).status).toBe(204);
   });
@@ -236,10 +238,20 @@ describe('voice webhooks: answer TwiML and inbound (VS2.1)', () => {
     expect((await signed(app, path, { AccountSid: ACCOUNT, CallSid: SID, From: OURS })).text).toBe(HANGUP_TWIML);
   });
 
-  it('inbound gets the safe fallback until VS3.6 routing exists', async () => {
-    const { app } = harness();
+  it('VS3.6 inbound is answered from the CALLED number; the caller number is never passed on', async () => {
+    const inboundTwiml = jest.fn().mockResolvedValue('<Response><Connect/></Response>');
+    const { app } = harness({ inboundTwiml });
     const res = await signed(app, '/api/webhook/voice/twilio/inbound', { AccountSid: ACCOUNT, CallSid: SID, To: OURS, From: '+15555550100' });
-    expect(res.status).toBe(200);
-    expect(res.text).toBe(INBOUND_FALLBACK_TWIML);
+    expect([res.status, res.text]).toEqual([200, '<Response><Connect/></Response>']);
+    expect(inboundTwiml).toHaveBeenCalledWith({ calledNumber: OURS, callSid: SID });
+    const forged = await signed(app, '/api/webhook/voice/twilio/inbound', { AccountSid: ACCOUNT, CallSid: SID, To: '+15555550177', From: OURS });
+    expect(forged.text).toBe(INBOUND_FALLBACK_TWIML);
+    expect(inboundTwiml).toHaveBeenCalledTimes(1);
+  });
+
+  it('VS3.6 a failed ownership lookup on inbound is the safe message, not an error', async () => {
+    const { app } = harness({ ownsNumber: async () => { throw new Error('db'); } });
+    const res = await signed(app, '/api/webhook/voice/twilio/inbound', { AccountSid: ACCOUNT, CallSid: SID, To: OURS, From: '+15555550100' });
+    expect([res.status, res.text]).toEqual([200, INBOUND_FALLBACK_TWIML]);
   });
 });

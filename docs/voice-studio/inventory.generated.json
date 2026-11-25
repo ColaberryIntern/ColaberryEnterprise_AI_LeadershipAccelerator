@@ -1,6 +1,6 @@
 {
  "generatedFrom": "git ls-files",
- "total": 265,
+ "total": 266,
  "byRole": {
   "DISPATCH": 3,
   "INGEST": 3,
@@ -8,7 +8,7 @@
   "CALLER": 11,
   "CONFIG": 20,
   "UI": 33,
-  "CONSUMER": 63,
+  "CONSUMER": 64,
   "MENTION": 126
  },
  "rows": [
@@ -1344,6 +1344,18 @@
    "role": "CONSUMER",
    "callTypes": [],
    "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/inbound/inboundRuntime.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_PUBLIC_BASE_URL",
+    "VOICE_STUDIO_ENABLED",
+    "VOICE_TEST_ENABLED",
+    "VOICE_TRANSFER_NUMBER",
+    "VOICE_WS_BASE_URL"
+   ]
   },
   {
    "path": "backend/src/services/voice/postcall/completion.ts",
