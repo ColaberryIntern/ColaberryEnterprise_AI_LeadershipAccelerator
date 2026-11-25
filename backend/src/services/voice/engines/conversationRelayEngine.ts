@@ -55,6 +55,8 @@ export const MAX_HISTORY = 24;
 export const MAX_MALFORMED = 10;
 /** Messages that arrive while the session reference is still being checked wait here (VS4.1). */
 export const MAX_EARLY_MESSAGES = 20;
+/** After we end the session, how long Twilio has to close the socket before we do. */
+export const END_GRACE_MS = 10_000;
 const SORRY = 'Sorry, I had trouble with that. Could you say it again?';
 const SAFE_DECLINE = "I can't help with that one, but a teammate can follow up.";
 
@@ -77,6 +79,9 @@ export class RelayConnection {
   private turnSaid = '';
 
   constructor(private readonly t: RelayTransport, private readonly d: RelayDeps) {}
+
+  /** A verified call is attached (the single-use reference was accepted). */
+  get established(): boolean { return this.handle !== null; }
 
   /** Feed one raw frame. Never throws. */
   async onMessage(raw: string | Buffer): Promise<void> {
@@ -168,6 +173,7 @@ export class RelayConnection {
     this.line('Agent', this.d.profile.greeting);
     this.handle.onEnd((reason) => {
       this.emitTranscript();
+      if (!this.closed) setTimeout(() => { if (!this.closed) this.t.close(1000); }, END_GRACE_MS).unref();
       if (this.closed || this.handedOff) return; // a transfer already sent its own end
       this.t.send(endSession());
       this.log('info', 'voice_relay_end_sent', { reason });

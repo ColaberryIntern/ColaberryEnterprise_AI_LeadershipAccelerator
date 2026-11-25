@@ -83,6 +83,9 @@ export class RealtimeBridge {
 
   constructor(private readonly twilio: SocketLike, private readonly d: RealtimeDeps) {}
 
+  /** A verified call is attached (the single-use reference was accepted). */
+  get established(): boolean { return this.handle !== null; }
+
   // ---------------- Twilio side ----------------
   async onTwilio(raw: string | Buffer): Promise<void> {
     if (this.closed) return;
@@ -136,7 +139,7 @@ export class RealtimeBridge {
     this.handle = opened.handle;
     this.broker = this.d.broker();
     this.handle.onEnd((reason) => this.teardown(`session_${reason}`));
-    this.model = this.d.connectModel({ onMessage: (raw) => { void this.onModel(raw); }, onClose: (reason) => this.onModelClose(reason) });
+    this.model = this.d.connectModel({ onMessage: (raw) => { this.onModel(raw).catch((e: Error) => { this.log('error', 'voice_realtime_handler_failed', { error_class: e?.name || 'HandlerError' }); this.teardown('handler_failed'); }); }, onClose: (reason) => this.onModelClose(reason) });
     this.model.send(sessionUpdate({ instructions: this.d.profile.system, voice: this.d.voice, tools: this.broker.defs() }));
     this.log('info', 'voice_stream_session_started', { profile: this.d.profile.versionId });
   }
@@ -155,8 +158,9 @@ export class RealtimeBridge {
     if (sep < 0) return;
     const item = name.slice(0, sep);
     const ms = Number(name.slice(sep + 1));
-    if (!Number.isFinite(ms)) return;
-    this.playedMs.set(item, Math.max(this.playedMs.get(item) ?? 0, ms));
+    const sent = this.sentMs.get(item);
+    if (!Number.isFinite(ms) || sent === undefined) return; // only audio we sent can have been played
+    this.playedMs.set(item, Math.max(this.playedMs.get(item) ?? 0, Math.min(ms, sent)));
   }
 
   private keypad(digit: string): void {

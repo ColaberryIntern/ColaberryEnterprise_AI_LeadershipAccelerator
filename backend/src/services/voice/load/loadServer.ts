@@ -14,7 +14,7 @@ import type { LlmTurnResult, VoiceLlm } from '../engines/claudeVoiceLlm';
 import type { ModelHandlers, SocketLike } from '../engines/realtime/openaiRealtimeEngine';
 import { ToolBroker, nextOpenSlotsTool } from '../engines/toolBroker';
 import { TEST_PROFILE } from '../engines/voiceProfiles';
-import { attachVoiceWsServer } from '../engines/voiceWsServer';
+import { attachVoiceWsServer, DEFAULT_WS_LIMITS } from '../engines/voiceWsServer';
 import { SessionWorker, type WorkerConfig } from '../session/sessionWorker';
 
 export const LOAD_ACCOUNT = 'AC' + 'a1'.repeat(16);
@@ -167,7 +167,7 @@ export async function startLoadServer(cfg: WorkerConfig, f: Faults = {}): Promis
   const wss = attachVoiceWsServer(server, {
     relay: () => ({ ...shared, llm }),
     stream: () => ({ ...shared, connectModel: (h) => mockModel(h, f, () => { openModels++; modelsOpened++; }, () => { openModels--; }) }),
-  }, log);
+  }, log, { ...DEFAULT_WS_LIMITS, maxSockets: 1_000 }); // capacity is what is being measured
   await new Promise<void>((r) => { server.listen(0, '127.0.0.1', r); });
   return {
     url: `ws://127.0.0.1:${(server.address() as AddressInfo).port}`,
