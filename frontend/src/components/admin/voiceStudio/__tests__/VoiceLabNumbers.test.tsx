@@ -93,6 +93,14 @@ describe('Voice Lab tab', () => {
     await settle();
     expect(text('[data-testid="estimate"]')).toContain('$1.04');
     await click('Start live test call');
+    expect(mockApi.startTestCall).not.toHaveBeenCalled(); // VS3.7: nothing dials before the confirmation
+    expect(text('[data-testid="confirm-live"]')).toContain('at most $1.04');
+    await click('Cancel');
+    expect(container.querySelector('[data-testid="confirm-live"]')).toBeNull();
+    expect(mockApi.startTestCall).not.toHaveBeenCalled();
+    await click('Start live test call');
+    await click('Ring the test phone');
+    expect(mockApi.startTestCall).toHaveBeenCalledTimes(1);
     expect(mockApi.startTestCall).toHaveBeenCalledWith(expect.stringMatching(/^lab-/), 'openai_realtime');
     await click('Stop call');
     expect(mockApi.stopTestCall).toHaveBeenCalledWith('c1');

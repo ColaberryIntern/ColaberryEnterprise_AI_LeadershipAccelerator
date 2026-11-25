@@ -8,13 +8,13 @@ import { centralTime, useStudioLoad } from './studioLoad';
 export default function CostsTab(): React.ReactElement {
   const [days, setDays] = useState(30);
   const { data, blocked } = useStudioLoad(() => getCosts(days), [days], 'Costs could not be loaded.');
-  if (blocked || !data) return blocked as React.ReactElement;
   return (
     <>
       <div className="btn-group btn-group-sm mb-3" role="group" aria-label="Time window">
         {[7, 30, 90].map((d) => <button key={d} type="button" className={`btn ${days === d ? 'btn-primary' : 'btn-outline-secondary'}`} aria-pressed={days === d} onClick={() => setDays(d)}>Last {d} days</button>)}
       </div>
-      <div className="row g-3">
+      {blocked}
+      {data && <div className="row g-3">
         <div className="col-lg-6">
           <SectionCard title="Spend by provider" icon="money-dollar-circle-line">
             {data.byProvider.length === 0 ? <p className="text-muted small mb-0" data-testid="spend-empty">No usage recorded in this window.</p> : (
@@ -44,7 +44,7 @@ export default function CostsTab(): React.ReactElement {
             {data.deadLetters.length === 0 ? <p className="text-muted small mb-0">None in this window.</p> : <ul className="small mb-0" data-testid="dead">{data.deadLetters.map((d) => <li key={d.id}>{centralTime(d.created_at)}: {d.error_class ?? 'unknown cause'} ({d.id})</li>)}</ul>}
           </SectionCard>
         </div>
-      </div>
+      </div>}
     </>
   );
 }

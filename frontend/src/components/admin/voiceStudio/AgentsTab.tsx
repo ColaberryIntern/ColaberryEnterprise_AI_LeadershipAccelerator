@@ -72,15 +72,15 @@ export default function AgentsTab(): React.ReactElement {
       <div className="col-lg-4">
         <div className="d-grid gap-2" role="list" aria-label="Phone agents">
           {agents.map((a) => (
-            <button key={a.profile.id} type="button" role="listitem" aria-current={a.profile.id === selected}
-              className={`card border-0 shadow-sm text-start p-3 ${a.profile.id === selected ? 'border border-primary' : ''}`} onClick={() => setSelected(a.profile.id)}>
+            <div role="listitem" key={a.profile.id}><button type="button" aria-current={a.profile.id === selected}
+              className={`card w-100 border-0 shadow-sm text-start p-3 ${a.profile.id === selected ? 'border border-primary' : ''}`} onClick={() => setSelected(a.profile.id)}>
               <div className="d-flex justify-content-between align-items-start gap-2">
                 <span className="fw-semibold">{a.profile.name}</span>
                 <StatusBadge label={a.active ? `v${a.active.version} live` : 'Not published'} tone={a.active ? 'success' : 'neutral'} />
               </div>
               <div className="small text-muted mt-1">{a.profile.brand_slug}, {a.profile.direction}{a.active ? `, ${ENGINE_LABEL[a.active.engine] ?? a.active.engine}` : ''}</div>
               <div className="small text-muted">{a.versions.total} version{a.versions.total === 1 ? '' : 's'}, {a.versions.drafts} draft, {a.versions.approved} approved</div>
-            </button>
+            </button></div>
           ))}
         </div>
       </div>

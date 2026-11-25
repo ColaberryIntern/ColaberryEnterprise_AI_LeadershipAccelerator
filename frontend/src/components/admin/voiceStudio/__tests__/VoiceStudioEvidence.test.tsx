@@ -105,8 +105,11 @@ describe('Trust Center', () => {
     };
     await render(<TrustCenterTab />, '/?call=c1');
     expect(text('timeline')).toContain('FROM c1');
+    const picker = container.querySelector('#tc-call') as HTMLSelectElement;
+    picker.focus();
     await choose('c2');
     expect(container.textContent).not.toContain('FROM c1'); // loading c2 hides c1 at once
+    expect(document.activeElement).toBe(picker); // VS3.7: keyboard focus stays on the picker while it loads
     await act(async () => { waiting.c2(of('c2')); });
     await settle();
     expect(text('timeline')).toContain('FROM c2');
@@ -144,6 +147,10 @@ describe('Trust Center', () => {
     mockApi.exportTimeline.mockRejectedValue({ response: { status: 403 } });
     await click('Prepare audit export');
     expect(text('export-error')).toContain('approver role');
+    const sel = container.querySelector('#tc-call') as HTMLSelectElement;
+    await act(async () => { sel.value = ''; sel.dispatchEvent(new Event('change', { bubbles: true })); });
+    await settle();
+    expect(container.querySelector('[data-testid="export-error"]')).toBeNull(); // VS3.7: the error belonged to the other call
   });
 });
 

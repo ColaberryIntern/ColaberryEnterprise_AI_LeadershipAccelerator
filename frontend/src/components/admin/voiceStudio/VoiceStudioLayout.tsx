@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { PageHeader } from '../shell';
+import './voiceStudio.css';
 
 /**
  * Voice Studio shell (VS3.3): the header and the tabs as real routes (a refresh keeps the tab).

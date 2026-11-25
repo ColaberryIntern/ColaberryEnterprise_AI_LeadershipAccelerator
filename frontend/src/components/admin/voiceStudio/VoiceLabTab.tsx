@@ -24,6 +24,7 @@ export default function VoiceLabTab(): React.ReactElement {
   const [clips, setClips] = useState<{ X?: string; Y?: string }>({});
   const [msg, setMsg] = useState<{ tone: 'success' | 'danger' | 'info'; text: string } | null>(null);
   const [dry, setDry] = useState(true);
+  const [confirming, setConfirming] = useState(false);
   const [call, setCall] = useState<string | null>(null);
 
   useEffect(() => { getCatalog().then(setVoices).catch((e) => { if (statusOf(e) === 404) setOff(true); else setMsg({ tone: 'danger', text: studioErrorMessage(e, 'The catalog could not be loaded.') }); }); }, []);
@@ -33,9 +34,14 @@ export default function VoiceLabTab(): React.ReactElement {
   const startTrial = () => run(async () => { setClips({}); setTrial(await createTrial(voiceA, voiceB, text)); }, 'The comparison could not be started.');
   const loadClip = (label: 'X' | 'Y') => run(async () => { const url = await trialClip(trial!.trialId, label); setClips((c) => ({ ...c, [label]: url })); }, 'The clip could not be made.');
   const score = (p: 'X' | 'Y' | 'tie') => run(async () => { setTrial(await scoreTrial(trial!.trialId, p)); }, 'The score was not saved.');
+  // A live test dials a real phone, so it takes a second, explicit click. The dry run does not.
   const startCall = () => run(async () => {
     if (dry) { setMsg({ tone: 'info', text: 'Dry run: no phone was dialed and nothing was spent. A live test would use the Test Lab.' }); return; }
-    const r = await startTestCall(`lab-${Date.now().toString(36)}`, 'openai_realtime');
+    setConfirming(false);
+    const r = await startTestCall(`lab-${Date.now().toString(36)}`, 'openai_realtime').catch((e) => {
+      if (statusOf(e) === 404) return { callId: undefined, error: 'test calls are switched off on this server' };
+      throw e;
+    });
     if (r.callId) { setCall(r.callId); setMsg({ tone: 'info', text: 'Calling the authorized test phone now.' }); } else setMsg({ tone: 'danger', text: `The test call was not started: ${r.error ?? 'refused'}.` });
   }, 'The test call was refused. Test mode may be off, or the attempt limit reached.');
   const stop = () => run(async () => { await stopTestCall(call!); setCall(null); setMsg({ tone: 'success', text: 'The test call was ended.' }); }, 'The call could not be stopped. It ends on its own within 3 minutes.');
@@ -95,14 +101,23 @@ export default function VoiceLabTab(): React.ReactElement {
         <div className="mt-3">
           <SectionCard title="Test call" icon="phone-line" subtitle="Only the authorized test phone can ring. 3 attempts, 180 seconds and $5 per run are hard limits.">
             <div className="form-check form-switch mb-2">
-              <input className="form-check-input" type="checkbox" id="vs-dry" checked={dry} onChange={(e) => setDry(e.target.checked)} />
+              <input className="form-check-input" type="checkbox" id="vs-dry" checked={dry} onChange={(e) => { setDry(e.target.checked); setConfirming(false); }} />
               <label className="form-check-label small" htmlFor="vs-dry">Dry run (dials nothing)</label>
             </div>
             <p className="small text-muted mb-2" data-testid="estimate">Estimated spend: {dry ? '$0.00 (dry run)' : `at most $${TEST_RUN_ESTIMATE_USD.toFixed(2)} for a full run of 3 calls`}.</p>
             <div className="d-flex gap-2">
-              <button type="button" className={`btn btn-sm ${dry ? 'btn-outline-primary' : 'btn-danger'}`} disabled={!!call} onClick={() => { void startCall(); }}>{dry ? 'Dry run' : 'Start live test call'}</button>
+              <button type="button" className={`btn btn-sm ${dry ? 'btn-outline-primary' : 'btn-danger'}`} disabled={!!call || confirming} onClick={() => { if (dry) void startCall(); else { setMsg(null); setConfirming(true); } }}>{dry ? 'Dry run' : 'Start live test call'}</button>
               <button type="button" className="btn btn-sm btn-outline-danger" disabled={!call} onClick={() => { void stop(); }}>Stop call</button>
             </div>
+            {confirming && (
+              <div className="alert alert-warning small mt-2 mb-0" role="group" aria-label="Confirm the live test call" data-testid="confirm-live">
+                <p className="mb-2">This rings the authorized test phone now, for at most 180 seconds. Estimated spend for a full run of 3 calls: at most ${TEST_RUN_ESTIMATE_USD.toFixed(2)}.</p>
+                <div className="d-flex gap-2">
+                  <button type="button" className="btn btn-sm btn-danger" autoFocus onClick={() => { void startCall(); }}>Ring the test phone</button>
+                  <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setConfirming(false)}>Cancel</button>
+                </div>
+              </div>
+            )}
           </SectionCard>
         </div>
       </div>
