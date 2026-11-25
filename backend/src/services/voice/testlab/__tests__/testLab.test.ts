@@ -215,6 +215,14 @@ describe('voice:grade (VS2.5)', () => {
     expect(r.passed).toBe(false);
   });
 
+  it('a total of exactly 90 still FAILS when a critical gate failed (preflight not passed)', () => {
+    const perfect = { listenerScore: 10 };
+    const r = gradeManifest(full({ preflightPassed: false, calls: [call(perfect), call({ ...perfect, engine: 'openai_realtime' })] }));
+    expect(r.total).toBe(90);
+    expect(r.failedGates).toEqual(['preflight']);
+    expect(r.passed).toBe(false);
+  });
+
   it('a manifest with a phone number or unknown field is invalid (strict), never graded as passing', () => {
     const r = gradeManifest(full({ phone: '+15555550142' }));
     expect(r.passed).toBe(false);
