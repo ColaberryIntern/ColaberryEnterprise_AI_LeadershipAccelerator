@@ -3,7 +3,7 @@ import path from 'path';
 import os from 'os';
 import { assistantKey } from '../assistantInventory';
 import { exportHash, exportHistory, toCall, type HistoryCall } from '../historyExport';
-import { batchIdOf, importHistory, parseExport } from '../historyImport';
+import { batchIdOf, callHash, importHistory, parseExport } from '../historyImport';
 import { parseHistoryArgs } from '../../../../scripts/voice/history';
 
 const K = assistantKey('m1');
@@ -135,6 +135,18 @@ describe('reading an export back', () => {
     for (const retentionDays of [undefined, 0, -1, 1.5, NaN]) await expect(importHistory(s as never, parseExport(file([call])), { tenantId: 't', apply: true, retentionDays })).rejects.toMatchObject({ name: 'ValidationError' });
     expect(s.transaction).not.toHaveBeenCalled();
   });
+  it('a write that lands short is not ok, even with no conflict', async () => {
+    const x = parseExport(file([call, { ...call, id: 'call-00002' }]));
+    // the insert returns one id, and the read finds only that one: one call is unaccounted for
+    const s = { transaction: async (f: (t: unknown) => Promise<void>) => f({}), query: jest.fn(async (sql: string) => (sql.startsWith('INSERT') ? [{ provider_call_id: 'call-00001' }] : [{ provider_call_id: 'call-00001', row_hash: callHash(call) }])) };
+    expect(await importHistory(s as never, x, { tenantId: 't', apply: true, retentionDays: 90 })).toMatchObject({ inserted: 1, alreadyThere: 0, conflicts: [], ok: false });
+  });
+  it('an export with listed errors is not ok', async () => {
+    const x = parseExport(file([call], { errors: [{ assistant: K, from: null, to: null, errorClass: 'TotalMismatch' }] }));
+    const s = { transaction: async (f: (t: unknown) => Promise<void>) => f({}), query: jest.fn(async (sql: string) => (sql.startsWith('INSERT') ? [{ provider_call_id: call.id }] : [{ provider_call_id: call.id, row_hash: callHash(call) }])) };
+    expect(await importHistory(s as never, x, { tenantId: 't', apply: true, retentionDays: 90 })).toMatchObject({ inserted: 1, exportErrors: 1, ok: false });
+  });
+  it.each<[string, Partial<HistoryCall>]>([['the assistant', { assistant: 'sf-bbbbbbbb' }], ['the end reason', { endReason: 'voicemail' }], ['the transcript flag', { hasTranscript: true }], ['the recording flag', { hasRecording: true }], ['the duration', { durationSeconds: 2 }]])('a different %s is a different call', (_n, p) => expect(callHash({ ...call, ...p })).not.toBe(callHash(call)));
   it('the batch id is a UUID fixed by the content', () => {
     const h = createHash('sha256').update('x').digest('hex');
     expect(batchIdOf(h)).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-8[0-9a-f]{3}-[0-9a-f]{12}$/);

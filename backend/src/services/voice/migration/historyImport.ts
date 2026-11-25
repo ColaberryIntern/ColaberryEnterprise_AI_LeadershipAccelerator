@@ -8,9 +8,10 @@
  * Fails: a malformed export is refused before anything is written; a database error stops the import with
  * earlier chunks kept (each chunk is one transaction), and the same command finishes it. No retry here.
  */
+import { createHash } from 'crypto';
 import type { Sequelize } from 'sequelize';
 import { QueryTypes } from 'sequelize';
-import { compareHistory, historyHash, type HistoryReport, type HistoryRow } from '../rollout/reconcile';
+import { compareHistory, type HistoryReport, type HistoryRow } from '../rollout/reconcile';
 import { exportHash, type HistoryCall, type HistoryExport } from './historyExport';
 
 export const HISTORY_PROVIDER = 'synthflow';
@@ -39,6 +40,8 @@ export function parseExport(json: string): HistoryExport {
   return x;
 }
 
+/** Every field, in a fixed order: a call that differs in anything is a conflict. */
+export const callHash = (c: HistoryCall): string => createHash('sha256').update(JSON.stringify([c.id, c.assistant, new Date(c.startedAt).toISOString(), c.durationSeconds, c.outcome, c.endReason, c.hasTranscript, c.hasRecording])).digest('hex');
 const row = (c: HistoryCall): HistoryRow => ({ id: c.id, startedAt: c.startedAt, durationSeconds: c.durationSeconds, outcome: c.outcome });
 
 export interface ImportReport { applied: boolean; batchId: string; exported: number; exportErrors: number; inserted: number; alreadyThere: number; conflicts: string[]; ok: boolean }
@@ -56,7 +59,7 @@ export async function importHistory(s: Sequelize, x: HistoryExport, o: { tenantI
            SELECT CAST(:t AS uuid), :p, j.id, j.assistant, j."startedAt", j."durationSeconds", j.outcome, j."endReason", j."hasTranscript", j."hasRecording", j.hash, CAST(:b AS uuid), NOW() + make_interval(days => CAST(:days AS int))
            FROM jsonb_to_recordset(CAST(:rows AS jsonb)) AS j(id text, assistant text, "startedAt" timestamptz, "durationSeconds" int, outcome text, "endReason" text, "hasTranscript" boolean, "hasRecording" boolean, hash text)
            ON CONFLICT (tenant_id, provider, provider_call_id) DO NOTHING RETURNING provider_call_id`,
-          { replacements: { t: o.tenantId, p: HISTORY_PROVIDER, b: r.batchId, days: o.retentionDays, rows: JSON.stringify(part.map((c) => ({ ...c, hash: historyHash(row(c)) }))) }, type: QueryTypes.SELECT, transaction });
+          { replacements: { t: o.tenantId, p: HISTORY_PROVIDER, b: r.batchId, days: o.retentionDays, rows: JSON.stringify(part.map((c) => ({ ...c, hash: callHash(c) }))) }, type: QueryTypes.SELECT, transaction });
         fresh = new Set(made.map((m) => m.provider_call_id));
       }
       const have = await s.query<{ provider_call_id: string; row_hash: string }>('SELECT provider_call_id, row_hash FROM voice_call_history WHERE tenant_id = :t AND provider = :p AND provider_call_id IN (:ids)',
@@ -64,7 +67,7 @@ export async function importHistory(s: Sequelize, x: HistoryExport, o: { tenantI
       const hashes = new Map(have.map((h) => [h.provider_call_id, h.row_hash]));
       for (const c of part) {
         if (fresh.has(c.id)) r.inserted++;
-        else if (hashes.has(c.id)) { r.alreadyThere++; if (hashes.get(c.id) !== historyHash(row(c))) r.conflicts.push(c.id); }
+        else if (hashes.has(c.id)) { r.alreadyThere++; if (hashes.get(c.id) !== callHash(c)) r.conflicts.push(c.id); }
       }
     });
   }

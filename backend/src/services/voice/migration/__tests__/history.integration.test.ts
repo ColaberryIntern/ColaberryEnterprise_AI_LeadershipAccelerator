@@ -81,12 +81,28 @@ describeIfDb('history import against Postgres', () => {
     expect(await n()).toBe(2);
     expect(await M.rollbackBatch(sequelize, OTHER, a.batchId, false)).toBe(3);
   });
-  it('purge removes only rows past their deadline', async () => {
+  it('purge removes only rows past their deadline, in its own tenant', async () => {
     await apply(make(3));
+    await apply(make(2), OTHER);
+    await sequelize.query(`UPDATE voice_call_history SET retention_until = NOW() - INTERVAL '1 minute' WHERE tenant_id = '${OTHER}'`);
     await sequelize.query(`UPDATE voice_call_history SET retention_until = NOW() - INTERVAL '1 minute' WHERE tenant_id = '${T}' AND provider_call_id = 'call-000000'`);
     expect(await M.purgeExpired(sequelize, T, false)).toBe(1);
     expect(await M.purgeExpired(sequelize, T, true)).toBe(1);
     expect(await n()).toBe(2);
+    expect(await M.purgeExpired(sequelize, OTHER, false)).toBe(2);
+  });
+  it('verify looks only at its tenant, its assistants and its dates', async () => {
+    const x = make(3);
+    await apply(x);
+    await apply(make(2, {}, 'other'), OTHER);
+    await apply({ ...make(1, { assistant: 'sf-bbbbbbbb' }, 'elsewhere') });
+    await apply(make(1, { startedAt: '2026-11-25T00:00:00.000Z' }, 'after'));
+    await apply(make(1, { startedAt: '2025-12-31T23:59:59.000Z' }, 'before'));
+    expect(await M.verifyHistory(sequelize, x, T)).toMatchObject({ manifest: 3, imported: 3, unexpected: [], missing: [], ok: true });
+  });
+  it('another tenant holding the same calls does not count as already there', async () => {
+    await apply(make(3), OTHER);
+    expect(await apply(make(3))).toMatchObject({ inserted: 3, alreadyThere: 0, ok: true });
   });
   it('a provider id finds its call, in its tenant only', async () => {
     await apply(make(2));

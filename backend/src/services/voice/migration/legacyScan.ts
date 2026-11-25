@@ -9,7 +9,8 @@
  * Archival: a constant on a line whose real comment says why, such as
  *   const PROVIDER = 'synthflow'; // synthflow-archival: historical rows keep their provider name
  * A mark needs a reason of 10 characters, and never excuses a host, an environment variable, a config line,
- * an import or anything in a call.
+ * an import, anything in a call, or a use of a named value (only a declared name or a property name is
+ * excusable as an identifier, so a mark cannot hand a live object to an alias).
  *
  * Not seen, by nature: a name assembled at run time from variables, files git does not track, binaries.
  * Not read, by choice: documentation, tests and the ticket artifacts (they describe, they do not run).
@@ -17,7 +18,7 @@
  */
 import ts from 'typescript';
 
-export type Kind = 'host' | 'env' | 'dispatch' | 'identifier' | 'string' | 'config';
+export type Kind = 'host' | 'env' | 'dispatch' | 'reference' | 'identifier' | 'string' | 'config';
 export interface Hit { file: string; line: number; kind: Kind }
 export interface ScanReport { operational: Hit[]; tooling: Hit[]; archival: Hit[]; badMarks: Hit[]; filesScanned: number; byKind: Record<Kind, number>; clean: boolean }
 
@@ -41,6 +42,17 @@ export const isScanned = (path: string): boolean => !SKIP.test(path) && !BINARY.
 interface Found { hits: Hit[]; marks: Map<number, string> }
 const isCallLike = (n: ts.Node): boolean => ts.isCallExpression(n) || ts.isNewExpression(n) || ts.isTaggedTemplateExpression(n) || ts.isJsxOpeningLikeElement(n) || ts.isDecorator(n);
 const isImportLike = (n: ts.Node): boolean => ts.isImportDeclaration(n) || ts.isExportDeclaration(n) || ts.isImportEqualsDeclaration(n) || ts.isImportTypeNode(n);
+
+/** A name being declared or a property name: not a use of a value. */
+function isNameSlot(n: ts.Node): boolean {
+  const p = n.parent;
+  if (!p) return false;
+  if (ts.isPropertyAccessExpression(p) || ts.isQualifiedName(p)) return (ts.isPropertyAccessExpression(p) ? p.name : p.right) === n && !isValueChain(p);
+  const named = p as ts.Node & { name?: ts.Node };
+  return named.name === n && (ts.isVariableDeclaration(p) || ts.isPropertyAssignment(p) || ts.isPropertySignature(p) || ts.isPropertyDeclaration(p) || ts.isParameter(p) || ts.isEnumMember(p) || ts.isInterfaceDeclaration(p) || ts.isTypeAliasDeclaration(p) || ts.isBindingElement(p) || ts.isJsxAttribute(p));
+}
+/** obj.synthflowService.x: the property is itself a value being used. */
+const isValueChain = (p: ts.Node): boolean => ts.isPropertyAccessExpression(p.parent) || ts.isElementAccessExpression(p.parent);
 
 /** The constant value of an expression, or null. */
 function constant(n: ts.Node): string | null {
@@ -81,7 +93,7 @@ function codeHits(file: string, text: string): Found {
   const walk = (n: ts.Node, inUse: boolean): void => {
     // a call covers its callee and arguments, but not the body of a function passed to it
     const use = isCallLike(n) || isImportLike(n) || (inUse && !ts.isFunctionLike(n) && !ts.isBlock(n));
-    if (ts.isIdentifier(n) || ts.isPrivateIdentifier(n)) look(n, n.text, 'identifier', use);
+    if (ts.isIdentifier(n) || ts.isPrivateIdentifier(n)) look(n, n.text, isNameSlot(n) ? 'identifier' : 'reference', use);
     else if (ts.isStringLiteralLike(n) || ts.isTemplateHead(n) || ts.isTemplateMiddle(n) || ts.isTemplateTail(n) || ts.isJsxText(n) || ts.isRegularExpressionLiteral(n)) look(n, n.text, 'string', use);
     else if (ts.isBinaryExpression(n) || ts.isTemplateExpression(n)) {
       const v = constant(n);
@@ -102,6 +114,9 @@ function codeHits(file: string, text: string): Found {
 /** Real comments only: what TypeScript itself treats as trivia around tokens. */
 function comments(sf: ts.SourceFile, text: string): ts.CommentRange[] {
   const seen = new Map<number, ts.CommentRange>();
+  const jsx: Array<[number, number]> = [];
+  const findJsx = (n: ts.Node): void => { if (ts.isJsxText(n)) jsx.push([n.pos, n.end]); ts.forEachChild(n, findJsx); };
+  findJsx(sf);
   const visit = (n: ts.Node): void => {
     const children = n.getChildren(sf);
     if (!children.length && n.kind !== ts.SyntaxKind.JsxText) {
@@ -110,7 +125,8 @@ function comments(sf: ts.SourceFile, text: string): ts.CommentRange[] {
     children.forEach(visit);
   };
   visit(sf);
-  return [...seen.values()];
+  // text between JSX tags is shown to people, not a comment, even when it starts with //
+  return [...seen.values()].filter((c) => !jsx.some(([a, b]) => c.pos >= a && c.pos < b));
 }
 
 function textHits(file: string, text: string): Found {
@@ -141,7 +157,7 @@ export function scanFile(file: string, text: string): { operational: Hit[]; arch
 }
 
 export function scanAll(files: ReadonlyArray<{ path: string; text: string }>): ScanReport {
-  const r: ScanReport = { operational: [], tooling: [], archival: [], badMarks: [], filesScanned: 0, byKind: { host: 0, env: 0, dispatch: 0, identifier: 0, string: 0, config: 0 }, clean: false };
+  const r: ScanReport = { operational: [], tooling: [], archival: [], badMarks: [], filesScanned: 0, byKind: { host: 0, env: 0, dispatch: 0, reference: 0, identifier: 0, string: 0, config: 0 }, clean: false };
   for (const f of files) {
     const path = f.path.replace(/\\/g, '/');
     if (!isScanned(path)) continue;

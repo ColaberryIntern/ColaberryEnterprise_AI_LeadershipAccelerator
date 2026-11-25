@@ -12,6 +12,7 @@ describe('what counts as depending on Synthflow', () => {
     ['an environment variable', 'const k = process.env.SYNTHFLOW_API_KEY;', ['1:env']],
     ['one with a prefix or an underscore', "const k = ['MY_SYNTHFLOW_KEY', 'SYNTH_FLOW_API_KEY'];", ['1:env']],
     ['an identifier', 'const synthflowId = 1;', ['1:identifier']],
+    ['a use of a named value', 'const s = synthflowService;', ['1:reference']],
     ['a property', 'const x = a.synthflow_call_id;', ['1:identifier']],
     ['a call', 'callSynthflow();', ['1:dispatch']],
     ['a method on it', 'b.synthflowService.startCall(p);', ['1:dispatch']],
@@ -21,6 +22,7 @@ describe('what counts as depending on Synthflow', () => {
     ['a dynamic import', "const m = import('./synthflowService');", ['1:dispatch']],
     ['a string', "const p = 'synthflow';", ['1:string']],
     ['the misspelling', 'const syntheflowId = 1;', ['1:identifier']],
+    ['a property used as a value', 'const s = a.synthflowService.x;', ['1:reference']],
     ['a hyphen', "const p = 'synth-flow';", ['1:string']],
     ['inside a template', 'const t = `a ${b} synthflow`;', ['1:string']],
     ['inside a regular expression', 'const r = /synthflow/;', ['1:string']],
@@ -75,6 +77,11 @@ describe('archival marks', () => {
     ['a require', `const s = require('./synthflowService'); // ${WHY}`],
   ])('%s is not excused, and is reported', (_n, t) => { const [op, arch, bad] = run(t); expect([op > 0, arch, bad > 0]).toEqual([true, 0, true]); });
   it.each([`const p = '${WHY}';`, `const p = 'synthflow // ${WHY}';`, `const p = \`synthflow // ${WHY}\`;`, `const p = 'https://x/${WHY}';`])('a mark inside a string is not a mark: %s', (t) => expect(run(t)).toEqual([1, 0, 0]));
+  it.each([
+    ['an alias', 'const s = synthflowService;'], ['an export', 'module.exports = { synthflowService };'], ['a default export', 'export default synthflowRouter;'],
+    ['a base class', 'class A extends SynthflowBase {}'], ['a getter', 'const o = { get x() { return synthflowService; } };'], ['a method taken off it', 'const go = synthflowService.startCall;'],
+  ])('a mark cannot launder %s', (_n, t) => { const [op, arch, bad] = run(`${t} // ${WHY}`); expect([op > 0, arch, bad > 0]).toEqual([true, 0, true]); });
+  it('text between JSX tags is not a comment', () => expect(run(`export const A = () => <p>// ${WHY} Synthflow dials here</p>;`, 'A.tsx')).toEqual([1, 0, 0]));
   it('a config line cannot be excused', () => expect(run(`c: synthflow # ${WHY}`, 'a.yml')).toEqual([1, 0, 1]));
 });
 
@@ -82,7 +89,7 @@ describe('the verdict', () => {
   it('a planted reference anywhere fails it; none passes it', () => {
     const clean = [{ path: 'backend/src/a.ts', text: 'const a = 1; // synthflow' }];
     expect(scanAll(clean).clean).toBe(true);
-    expect(scanAll([...clean, { path: 'frontend/src/B.tsx', text: 'export const b = synthflowThing;' }])).toMatchObject({ clean: false, byKind: { identifier: 1 } });
+    expect(scanAll([...clean, { path: 'frontend/src/B.tsx', text: 'export const b = synthflowThing;' }])).toMatchObject({ clean: false, byKind: { reference: 1 } });
     expect(scanAll([{ path: 'backend\\src\\w.ts', text: "'synthflow'" }]).clean).toBe(false);
     expect(scanAll([{ path: 'backend/src/services/voice/migration/dispatch.ts', text: "fetch('https://api.synthflow.ai/v2/calls',{method:'POST'})" }])).toMatchObject({ clean: false, tooling: [] });
     for (const t of ["const a='\\x73\\x79\\x6e\\x74\\x68\\x66\\x6c\\x6f\\x77'", "const a='s'+'y'+'n'+'t'+'h'+'f'+'l'+'o'+'w'", "const a='syn'+'thf'+'low'"]) expect(scanAll([{ path: 'a.ts', text: t }]).clean).toBe(false);

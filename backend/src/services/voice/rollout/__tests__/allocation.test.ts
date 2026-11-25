@@ -90,3 +90,10 @@ describe('commands are dry by default and refuse what they do not know', () => {
     for (const bad of [[], ['--path', 'x'], ['--path', 'Bad Path', '--actor', 'admin-1'], ['--path', 'agent-tool']]) expect(parseRollbackArgs(bad).ok).toBe(false);
   });
 });
+
+describe('history against the database (VS5.3)', () => {
+  it('takes one export file, and nothing else', () => {
+    expect(parseReconcileArgs(['--history', '--dry-run', 'x.json'])).toEqual({ ok: true, mode: 'history-db', file: 'x.json' });
+    for (const a of [['--history', '--dry-run'], ['--history', '--dry-run', '--apply'], ['--history', '--dry-run', 'a', 'b']]) expect(parseReconcileArgs(a).ok).toBe(false);
+  });
+});

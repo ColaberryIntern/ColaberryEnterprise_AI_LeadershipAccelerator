@@ -35,6 +35,7 @@ function main(): number {
   else {
     for (const [f, n] of byFile(r.operational)) console.log(`${String(n).padStart(4)}  ${f}`);
     for (const [f, n] of byFile(r.tooling)) console.log(`${String(n).padStart(4)}  ${f} (migration tool)`);
+    for (const [f, n] of byFile(r.archival)) console.log(`${String(n).padStart(4)}  ${f} (archival)`);
     for (const h of r.badMarks) console.log(`BAD MARK ${h.file}:${h.line} (no reason given, or it cannot be excused)`);
     console.log(`scanned ${r.filesScanned} files: ${r.operational.length} operational (${Object.entries(r.byKind).map(([k, n]) => `${k} ${n}`).join(', ')}), ${r.tooling.length} in migration tools, ${r.archival.length} archival`);
     console.log(r.clean ? 'SYNTHFLOW: no operational reference' : 'SYNTHFLOW: still referenced');
