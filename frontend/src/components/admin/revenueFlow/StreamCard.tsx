@@ -4,6 +4,7 @@ import FlowSparkline from './FlowSparkline';
 import type { TimelineEvent } from './FlowTimeline';
 import DemandPath from './DemandPath';
 import PreProjectTierBlock from './PreProjectTierBlock';
+import StageRosterPanel from './StageRosterPanel';
 import StreamTimelinePanel from './StreamTimelinePanel';
 import { paintFor, streamPaint } from './flowTokens';
 import type { ClassMap, Stream } from './flowBoardTypes';
@@ -62,6 +63,15 @@ export default function StreamCard({
   const [openSourceKey, setOpenSourceKey] = useState<string | null>(null);
   const [timelineOpen, setTimelineOpen] = useState(false);
   const [focusEntityKey, setFocusEntityKey] = useState<string | null>(null);
+  /**
+   * Which stage's people are open. R26, from Taiwo's ask on 25 Nov 2026.
+   *
+   * Only the membership stream has a roster endpoint: the government and enterprise funnels
+   * are different shapes built from different tables. So the count is a button there and
+   * plain text everywhere else, rather than a control that looks alive and 404s.
+   */
+  const [openStageKey, setOpenStageKey] = useState<string | null>(null);
+  const rosterable = s.key === 'membership';
 
   return (
     <div className="card border-0 shadow-sm mb-4" data-testid={`stream-${s.key}`}>
@@ -126,7 +136,22 @@ export default function StreamCard({
                       <span aria-hidden="true">{classMap[stage.classification]?.glyph ?? '•'}</span>{' '}
                       {stage.label}
                     </td>
-                    <td className="text-end fw-bold">{stage.count}</td>
+                    <td className="text-end fw-bold">
+                      {rosterable ? (
+                        <button
+                          type="button"
+                          className="btn btn-link btn-sm p-0 fw-bold"
+                          onClick={() => setOpenStageKey(
+                            openStageKey === stage.key ? null : stage.key,
+                          )}
+                          data-testid={`stage-people-${s.key}-${stage.key}`}
+                          aria-expanded={openStageKey === stage.key}
+                          aria-label={`Show the ${stage.count} people at ${stage.label}`}
+                        >
+                          {stage.count}
+                        </button>
+                      ) : stage.count}
+                    </td>
                     <td className="text-end" style={{ whiteSpace: 'nowrap' }}>
                       {stage.value.cents === null
                         ? <span className="text-muted">{stage.value.display}</span>
@@ -139,6 +164,42 @@ export default function StreamCard({
             </tbody>
           </table>
         </div>
+
+        {/* ── THE PEOPLE BEHIND ONE COUNT (R26) ────────────────────────────────────────
+            Rendered under the whole table rather than inside the clicked row: a roster
+            nested in a <tr> would have to span the columns and would push the other stages
+            apart, which loses the shape of the funnel while someone is reading it. */}
+        {rosterable && openStageKey && (
+          <div className="rounded border p-3 mb-3" style={{ borderColor: 'var(--border-subtle)' }}>
+            <StageRosterPanel
+              stageKey={openStageKey}
+              label={s.funnel.find((f) => f.key === openStageKey)?.label ?? openStageKey}
+            />
+            <button
+              type="button"
+              className="btn btn-link btn-sm p-0"
+              onClick={() => setOpenStageKey(null)}
+              data-testid={`roster-close-${s.key}`}
+            >
+              Hide these people
+            </button>
+          </div>
+        )}
+
+        {/* ── WHY THESE NUMBERS DO NOT ADD UP (R26) ────────────────────────────────────
+            On the page, not only in the reply to the person who asked. The next reader will
+            not have the email, and summing this column is the single most likely way to
+            misread the card. */}
+        {rosterable && (
+          <div className="small text-muted mb-3" data-testid={`funnel-overlap-note-${s.key}`}>
+            These stages answer different questions and deliberately overlap, so the Count
+            column does not add up to the number signed up. A row whose payment failed is
+            counted under both &#8220;Payment failed&#8221; and &#8220;Never paid&#8221;.
+            &#8220;Term ran out&#8221; rows still read as active in the database, so any other
+            screen that counts active members will be higher than &#8220;Paying now&#8221;
+            here.
+          </div>
+        )}
 
         {/* ── AND ONLY THEN THE NUMBER ──────────────────────────────────────────────────── */}
         <div
