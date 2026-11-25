@@ -128,10 +128,30 @@ ABSENT in dist: domainStoryAcceptance
 /app/src present in the image? NO (dist-only image)
 ```
 
-So the republish logic **cannot execute in production at all**. That is the real reason it
-has only ever been a hand-run script, and it is why the 13 Nov note's "republish at the end
-of the reconciler" was never as small as it sounded. Porting credit-bearing logic to
-TypeScript belongs in its own diff, not bolted onto a new unattended writer.
+So nothing in the running application can call the republish logic.
+
+**Corrected 25 Nov.** An earlier draft of this note said the logic "cannot execute in
+production at all". That is too strong. A person with container access can still run it, by
+copying the script and its libraries into `/app`, which is exactly how the 13 Nov and 22 Nov
+runs happened. What is impossible is for the DEPLOYED APPLICATION to do it: no route, no
+cron, no service can reach code that is not in the image.
+
+That distinction decides whether the TypeScript port is worth doing, and on 25 Nov the
+measurement said no. The sweep's own drift query, run against production, returned **zero
+drift on all ten domains**: board and plan hold the same story ids everywhere, 598 stories in
+total, nothing on one side that the other has not heard of.
+
+```
+admissions 66/66   curriculum 53/53   executive 104/104   internship 50/50
+learner_success 52/52   marketing 79/79   platform 64/64   product_experience 40/40
+sales 47/47   website 43/43            DOMAINS WITH DRIFT: 0 of 10
+```
+
+The 22 Nov republish had already brought every plan into line with its board. **The plan was
+never the stale half; the repo was.** Porting 986 lines of credit-bearing logic would
+therefore automate an operation that currently has nothing to do, and it would put a
+destructive write on a timer: the 13 Nov run checked 17 proposed story removals against
+`evidence_records` by hand before applying, and a cron cannot make that judgment.
 
 Until then the sweep **reports** the debt: `plan_repo_sync_board_plan_drift` names the
 stories the board has that the published plan has never heard of, with the remedy command.
@@ -139,10 +159,12 @@ That is the signal whose absence let this run for 23 days in October and 11 days
 
 ## Still open after this
 
-1. **The republish half.** Port the three plan libraries to TypeScript so a republish can run
-   inside the container, then let the sweep republish before it pushes. Until that lands,
-   `republishDomainBuildPlans.js --domain=<key> --apply` is still a hand-run job, and the
-   sweep's drift line is what tells anyone it is owed.
+1. **The republish half, deliberately NOT ported.** Zero drift measured on 25 Nov (above), so
+   nothing is owed today. `republishDomainBuildPlans.js --domain=<key> --apply` stays a
+   hand-run job, executed by copying it into the container, and the sweep's drift line is what
+   says when it is owed again. Revisit the port only if drift reappears AND the
+   credited-removal gate can be satisfied without a person reading the evidence rows. A future
+   session reading the original wording would have started an 986-line port it did not need.
 2. **Where the drift report lands.** Today it is a structured log line. Container logs on this
    box held 475 lines over 96 hours when this was investigated, so a log is a weak place for a
    finding that matters. Surfacing it on the operations health page is the natural follow-up,
