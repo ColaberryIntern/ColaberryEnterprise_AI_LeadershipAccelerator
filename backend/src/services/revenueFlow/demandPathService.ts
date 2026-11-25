@@ -41,6 +41,7 @@ interface RawReach {
   sent: number | string | null;
   opened: number | string | null;
   replied: number | string | null;
+  clicked: number | string | null;
 }
 
 const int = (v: number | string | null): number => {
@@ -74,7 +75,13 @@ async function campaignReach(): Promise<CampaignReachRow[]> {
             (SELECT count(*)::int FROM interaction_outcomes io
               WHERE io.campaign_id = c.id AND io.outcome = 'opened')         AS opened,
             (SELECT count(*)::int FROM interaction_outcomes io
-              WHERE io.campaign_id = c.id AND io.outcome = 'replied')        AS replied
+              WHERE io.campaign_id = c.id AND io.outcome = 'replied')        AS replied,
+            -- R27. The click was always recorded and simply never read: interaction_outcomes
+            -- held 5,838 'clicked' rows on 2026-11-25, against 14,036 'opened'. Counted from
+            -- the same table and the same column as the two above, so a click rate rests on
+            -- exactly the instrument the read rate does.
+            (SELECT count(*)::int FROM interaction_outcomes io
+              WHERE io.campaign_id = c.id AND io.outcome = 'clicked')        AS clicked
        FROM campaigns c
       WHERE c.archived_at IS NULL
         AND (c.settings->>'campaign_key' IN (:keys) OR c.type IN (:types))`,
@@ -98,6 +105,7 @@ async function campaignReach(): Promise<CampaignReachRow[]> {
     sent: int(r.sent),
     opened: int(r.opened),
     replied: int(r.replied),
+    clicked: int(r.clicked),
   }));
 }
 
