@@ -253,7 +253,7 @@ export class RealtimeBridge {
     const out = await this.broker!.run(callId, name, input);
     const left = (this.toolsInFlight.get(key) ?? 1) - 1;
     if (left > 0) this.toolsInFlight.set(key, left); else this.toolsInFlight.delete(key);
-    h.toolFinished(callId, out.committed);
+    h.toolFinished(callId, out.committed, out.errorClass);
     if (out.errorClass) this.log('warn', 'voice_tool_failed', { tool: name, error_class: out.errorClass });
     if (this.closed || !this.model) return;
     this.model.send(functionOutput(callId, out.content)); // always: an unanswered call would corrupt the model's conversation

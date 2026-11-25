@@ -135,6 +135,7 @@ export const TIMER_SCAN: TimerScan = {
   { file: "backend/src/services/scheduling/growthJourneyCrons.ts", line: 92, kind: "cron", schedule: null, reportsAs: null },
   { file: "backend/src/services/scheduling/planRepoSyncCrons.ts", line: 42, kind: "cron", schedule: "41 */6 * * *", reportsAs: "AgentDomainPlanRepoSync" },
   { file: "backend/src/services/scheduling/visitorGeoCrons.ts", line: 170, kind: "cron", schedule: null, reportsAs: "VisitorGeoEnrichment" },
-  { file: "backend/src/services/voice/session/sessionWorker.ts", line: 151, kind: "interval", schedule: null, reportsAs: null },
+  { file: "backend/src/services/voice/engines/voiceRuntime.ts", line: 192, kind: "interval", schedule: null, reportsAs: null },
+  { file: "backend/src/services/voice/session/sessionWorker.ts", line: 152, kind: "interval", schedule: null, reportsAs: null },
   ],
 };

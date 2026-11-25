@@ -15,13 +15,18 @@
 import { z } from 'zod';
 import type { VoiceToolDef } from './claudeVoiceLlm';
 
-export interface ToolOutcome { content: string; isError: boolean; committed: boolean; errorClass?: string }
+/** control: a session action the ENGINE performs after the answer (VS3.2: hand the call to a person). */
+export type ToolControl = 'transfer';
+export interface ToolOutcome { content: string; isError: boolean; committed: boolean; errorClass?: string; control?: ToolControl }
 
-interface RegisteredTool {
+export interface RegisteredTool {
   def: VoiceToolDef;
   schema: z.ZodType<unknown>;
   readOnly: boolean;
-  run: (input: unknown) => Promise<string>;
+  /** Reads personal or account data: allowed only on a call whose caller was verified (VS3.6). */
+  sensitive?: boolean;
+  /** A plain string, or text plus a control the engine acts on (never a world-changing write). */
+  run: (input: unknown) => Promise<string | { content: string; control?: ToolControl }>;
 }
 
 export interface SlotDay { date: string; slots: Array<{ start: string; end: string }> }
@@ -62,13 +67,32 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   });
 }
 
+/**
+ * VS3.1: when set, every tool call (including a refused unknown tool) is recorded through the repo's
+ * agent tool recorder (agents/tools/toolInvocationRecorder.ts) under the agent's registry key, with
+ * the tools the agent holds so the recorder can flag a call outside its grants. Argument KEYS only.
+ */
+export interface ToolRecording { agentName: string; surface: string; held: readonly string[] }
+
+type Recorder = typeof import('../../agents/tools/toolInvocationRecorder');
+
 export class ToolBroker {
   private readonly tools = new Map<string, RegisteredTool>();
   private readonly done = new Map<string, Promise<ToolOutcome>>();
   private static readonly MAX_REMEMBERED = 100;
 
-  constructor(tools: RegisteredTool[], private readonly timeoutMs: number = TOOL_TIMEOUT_MS) {
+  constructor(tools: RegisteredTool[], private readonly timeoutMs: number = TOOL_TIMEOUT_MS, private readonly recording?: ToolRecording, private readonly callerVerified = false) {
     for (const t of tools) this.tools.set(t.def.name, t);
+  }
+
+  /** Record through the shared recorder; resolved per call so a partial mock elsewhere cannot break import. */
+  private record(name: string, input: unknown, run: () => Promise<ToolOutcome>): Promise<ToolOutcome> {
+    if (!this.recording) return run();
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const rec = require('../../agents/tools/toolInvocationRecorder') as Partial<Recorder>;
+    if (typeof rec.withToolRecording !== 'function') return run();
+    const args = input && typeof input === 'object' ? (input as Record<string, unknown>) : undefined;
+    return rec.withToolRecording({ agentName: this.recording.agentName, toolName: name, surface: this.recording.surface, args }, run, this.recording.held);
   }
 
   defs(): VoiceToolDef[] { return [...this.tools.values()].map((t) => t.def); }
@@ -80,7 +104,7 @@ export class ToolBroker {
     const prior = this.done.get(callId);
     if (prior) return prior;
     if (this.done.size >= ToolBroker.MAX_REMEMBERED) this.done.delete(this.done.keys().next().value as string);
-    const p = this.execute(name, input);
+    const p = this.record(name, input, () => this.execute(name, input));
     this.done.set(callId, p);
     return p;
   }
@@ -88,14 +112,16 @@ export class ToolBroker {
   private async execute(name: string, input: unknown): Promise<ToolOutcome> {
     const tool = this.tools.get(name);
     if (!tool) return { content: `Unknown tool ${name}.`, isError: true, committed: false, errorClass: 'UnknownTool' };
+    if (tool.sensitive && !this.callerVerified) return { content: 'That needs the caller to be verified first. Offer to have a teammate follow up.', isError: true, committed: false, errorClass: 'CallerNotVerified' };
     const parsed = tool.schema.safeParse(input ?? {});
     if (!parsed.success) return { content: 'The tool input was invalid.', isError: true, committed: false, errorClass: 'ValidationError' };
     try {
-      const content = await withTimeout(tool.run(parsed.data), this.timeoutMs);
-      return { content, isError: false, committed: !tool.readOnly };
+      const out = await withTimeout(tool.run(parsed.data), this.timeoutMs);
+      const r = typeof out === 'string' ? { content: out } : out;
+      return { content: r.content, isError: false, committed: !tool.readOnly, ...(r.control ? { control: r.control } : {}) };
     } catch (e) {
       const errorClass = (e as { name?: string })?.name === 'TimeoutError' ? 'TimeoutError' : 'ToolFailed';
-      return { content: 'The calendar could not be checked right now. Offer to have a teammate follow up.', isError: true, committed: false, errorClass };
+      return { content: 'That could not be looked up right now. Offer to have a teammate follow up.', isError: true, committed: false, errorClass };
     }
   }
 }

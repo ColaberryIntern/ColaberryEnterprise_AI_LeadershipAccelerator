@@ -34,7 +34,7 @@ export interface WorkerDeps {
    * that COMMITTED an action (booked a slot, wrote a row) is recorded even if the caller hung up or
    * interrupted before anyone spoke about it.
    */
-  recordTool: (callId: string, rec: { toolCallId: string; name: string; turnId: number; committed: boolean; afterClose: boolean }) => void;
+  recordTool: (callId: string, rec: { toolCallId: string; name: string; turnId: number; committed: boolean; afterClose: boolean; errorClass?: string }) => void;
 }
 
 export type OpenRefusal = 'draining' | 'capacity' | 'agent_concurrency' | 'duplicate';
@@ -53,7 +53,8 @@ export interface SessionHandle {
   enqueue(msg: unknown): boolean;
   takeQueued(): unknown[];
   toolStarted(toolCallId: string, name: string): void;
-  toolFinished(toolCallId: string, committed: boolean): void;
+  /** errorClass: why the broker refused or failed the call (VS3.5 Trust Center), absent on success. */
+  toolFinished(toolCallId: string, committed: boolean, errorClass?: string): void;
   close(reason: string): void;
   /**
    * Called once when the call starts ending (ending or closed), whoever caused it: the max-call
@@ -202,19 +203,20 @@ export class SessionWorker {
     }
   }
 
-  private finishTool(callId: string, toolCallId: string, committed: boolean): void {
+  private finishTool(callId: string, toolCallId: string, committed: boolean, errorClass?: string): void {
+    const failure = errorClass ? { errorClass } : {};
     const s = this.sessions.get(callId);
     const pending = s?.snap.pendingTools.get(toolCallId);
     if (s && pending) {
       s.snap = toolFinished(s.snap, toolCallId, committed, this.deps.now());
-      this.safeRecordTool(callId, { toolCallId, name: pending.name, turnId: pending.turnId, committed, afterClose: false });
+      this.safeRecordTool(callId, { toolCallId, name: pending.name, turnId: pending.turnId, committed, afterClose: false, ...failure });
       return;
     }
     const key = `${callId}:${toolCallId}`;
     const orphan = this.orphanTools.get(key);
     if (!orphan) return; // unknown or already recorded: idempotent
     this.orphanTools.delete(key);
-    this.safeRecordTool(callId, { toolCallId, name: orphan.name, turnId: orphan.turnId, committed, afterClose: true });
+    this.safeRecordTool(callId, { toolCallId, name: orphan.name, turnId: orphan.turnId, committed, afterClose: true, ...failure });
   }
 
   /** A failing record sink is logged, never thrown into the call (the call must not die because a log write did). */
@@ -241,7 +243,7 @@ export class SessionWorker {
       enqueue: (msg) => { const s = live(); if (!s || s.queue.length >= this.cfg.queueMax) return false; s.queue.push(msg); return true; },
       takeQueued: () => { const s = live(); if (!s) return []; const out = s.queue; s.queue = []; return out; },
       toolStarted: (id, name) => { const s = live(); if (s) s.snap = toolStarted(s.snap, id, name); },
-      toolFinished: (id, committed) => this.finishTool(callId, id, committed),
+      toolFinished: (id, committed, errorClass) => this.finishTool(callId, id, committed, errorClass),
       onEnd: (cb) => { const s = live(); if (!s || s.endNotified) cb(s?.snap.endReason ?? 'closed'); else s.endListeners.push(cb); },
       close: (reason) => {
         const s = live();

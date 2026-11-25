@@ -85,6 +85,8 @@ export interface RelayTwimlOptions {
   welcomeGreeting: string;
   language?: string;
   voice?: string;
+  /** VS3.2: signed https URL Twilio requests when the relay session ends (hand-off to a person). */
+  actionUrl?: string;
 }
 
 /** <Connect><ConversationRelay> TwiML. ElevenLabs is Twilio's default ttsProvider; set explicitly for clarity. */
@@ -100,6 +102,8 @@ export function buildRelayTwiml(o: RelayTwimlOptions): string {
     'interruptible="any"',
     'dtmfDetection="true"',
   ];
-  return `<?xml version="1.0" encoding="UTF-8"?><Response><Connect><ConversationRelay ${attrs.join(' ')}>`
+  if (o.actionUrl && !o.actionUrl.startsWith('https://')) throw new Error('Connect action must be https://');
+  const connect = o.actionUrl ? `<Connect action="${xmlAttr(o.actionUrl)}" method="POST">` : '<Connect>';
+  return `<?xml version="1.0" encoding="UTF-8"?><Response>${connect}<ConversationRelay ${attrs.join(' ')}>`
     + `<Parameter name="ref" value="${xmlAttr(o.sessionRef)}"/></ConversationRelay></Connect></Response>`;
 }
