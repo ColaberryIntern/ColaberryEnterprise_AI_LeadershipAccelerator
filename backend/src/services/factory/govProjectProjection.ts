@@ -211,6 +211,12 @@ export interface StudentGovProjectView {
    *  read-only "View as them" portal (getViewAsUrl keys on the enrollment id). Withheld from an intern. Optional. */
   ownerEnrollmentId?: string | null;
   ownerName?: string | null;
+  /** M1-T4 (Gov Proposal Studio): the connected demo's public URL (gov-build-demo store) and the Command Center's
+   *  GitHub Pages URL (project_variables.command_center_url), surfaced on the contract so the cockpit links both to
+   *  the bid without a second fetch. Both are a read join over already-persisted state — no new columns. Student-safe
+   *  (public page URLs, no token/identity). Optional + loader-filled; null until the Command Center goes live. */
+  demoUrl?: string | null;
+  commandCenterUrl?: string | null;
 }
 
 /** P4: a build-evidence screenshot projected student-safe (no identities; the artifact rows carry none). */
@@ -738,5 +744,20 @@ export async function getStudentGovProjectView(deliveryProjectId: string, viewer
     view.proposal = toSharedProposalView(slots, requirements, level);
     view.submissionChecklist = toStudentSubmissionChecklist(slots, requirements, view.proposal.canEdit);
   } catch { /* additive; the safe defaults set in the pure view remain */ }
+
+  // M1-T4 (Gov Proposal Studio): link the connected demo + Command Center to the contract. A pure read join over
+  // already-persisted state (no new columns): the demo URL from the gov-build-demo store (the SAME row the capture
+  // path and the admin build-demo route read/write), and the Command Center URL from project_variables, first written
+  // only when the intern's GitHub Pages site goes live (pagesUrlService). Both are public page URLs — no token or
+  // identity — so they ride the student-safe projection. Null until each is published. Additive + best-effort.
+  try {
+    const { getGovBuildDemo } = await import('./proposal/captureStoryArtifact');
+    const demo = await getGovBuildDemo(deliveryProjectId).catch(() => null);
+    view.demoUrl = demo?.demoUrl ?? null;
+    const vars = (project.project_variables || {}) as Record<string, unknown>;
+    const ccu = vars.command_center_url;
+    view.commandCenterUrl = typeof ccu === 'string' && ccu ? ccu : null;
+  } catch { /* additive; demoUrl/commandCenterUrl stay undefined */ }
+
   return view;
 }
