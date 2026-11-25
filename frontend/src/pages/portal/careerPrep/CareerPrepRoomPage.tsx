@@ -15,6 +15,7 @@ import { useSheet, type SheetApi } from '../../../components/careerPrep/useSheet
 import { PageSheet } from '../../../components/careerPrep/PageSheet';
 import { SheetBody } from '../../../components/careerPrep/SheetBodies';
 import { JumpBar } from '../../../components/careerPrep/JumpBar';
+import { FeedbackPanel } from '../../../components/careerPrep/FeedbackPanel';
 import { RoomRail } from '../../../components/careerPrep/RoomRail';
 import type { PrepInterview } from '../../../components/careerPrep/careerPrepApi';
 import type { JumpItem } from '../../../components/careerPrep/logic/sheets';
@@ -97,7 +98,12 @@ function Room({ tabs, onClose }: { tabs?: CareerPrepRoomPageProps['tabs']; onClo
         plan: tabs?.plan ?? <PlanView plan={room.plan?.plan ?? null} focusSkill={room.plan?.focusSkill} company={anchor?.company} skillLabels={Object.fromEntries((room.dashboard?.skills ?? []).map((s) => [s.key, s.label]))} onStart={() => setTab('session')} />,
         session: tabs?.session ?? <SessionRunner s={session} type={anchor?.type ?? 'recruiter'} questions={anchor?.questions} hasPlan={!!room.plan} onTab={setTab} initials={initials} />,
       }}
-      overlay={<RoomSheets sheets={sheets} prep={room.dashboard?.interviews ?? []} onTab={setTab} onStart={start} />}
+      overlay={(
+        <>
+          <RoomSheets sheets={sheets} prep={room.dashboard?.interviews ?? []} onTab={setTab} onStart={start} />
+          <FeedbackPanel tab={tab} sheet={sheets.sheet ?? undefined} interviewId={anchor?.id} />
+        </>
+      )}
     />
   );
 }
