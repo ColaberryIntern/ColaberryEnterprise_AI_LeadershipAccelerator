@@ -61,8 +61,20 @@ export function assertSandbox(engine) {
   if (ok.status !== 0 || ok.stdout.trim() !== 'ok') fail(`a command could not run and write in the workspace (exit ${ok.status}: ${String(ok.error?.code ?? ok.stderr ?? '').trim().slice(-300)})`);
 
   // Listening right now on this machine, so refusal means the sandbox blocked it.
-  const net = run('node -e \'const s=require("net").connect(+process.argv[1],"127.0.0.1");s.on("connect",()=>{console.log("OPEN");process.exit()});s.on("error",()=>{console.log("BLOCKED")});setTimeout(()=>{console.log("BLOCKED");process.exit()},5000)\' "$1"', String(engine.port));
-  if (net.status !== 0 || net.stdout.trim() !== 'BLOCKED') fail('network is reachable, or could not be tested');
+  // Blocked can look like a refusal, an unreachable network, or seccomp denying the socket itself.
+  const netProbe = `
+    const say = (v) => { console.log(v); process.exit(0); };
+    const blocked = (e) => say(/^(EPERM|EACCES|ECONNREFUSED|ENETUNREACH|EHOSTUNREACH|EAFNOSUPPORT)$/.test(e.code) ? "BLOCKED" : "UNKNOWN " + e.code);
+    try {
+      const s = require("net").connect(+process.argv[1], "127.0.0.1");
+      s.on("connect", () => say("OPEN"));
+      s.on("error", blocked);
+      setTimeout(() => say("BLOCKED"), 5000);
+    } catch (e) { blocked(e); }`;
+  const net = run('exec node -e "$1" "$2"', netProbe, String(engine.port));
+  if (net.status !== 0 || net.stdout.trim() !== 'BLOCKED') {
+    fail(`network is reachable, or could not be tested (exit ${net.status}, ${net.stdout.trim().slice(0, 40)}: ${net.stderr.trim().slice(-300)})`);
+  }
 
   const proc = run('if cat "/proc/$1/environ" >/dev/null 2>&1; then echo READABLE; else echo HIDDEN; fi', String(process.pid));
   if (proc.status !== 0 || proc.stdout.trim() !== 'HIDDEN') fail('the runner process environment is readable');
