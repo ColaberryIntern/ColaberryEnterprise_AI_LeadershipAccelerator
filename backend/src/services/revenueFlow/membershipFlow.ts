@@ -65,6 +65,8 @@ import { annualizedRevenueCents } from '../commercialization/commercializationBo
 import {
   FlowEvent, FunnelStage, Money, BuiltStream, money, noMoney, formatCents,
 } from './revenueFlowTypes';
+// R26: the stage rules live in one place, because the per-stage roster filters by them too.
+import { MembershipStageKey, stagesForSubscription } from './membershipStages';
 
 interface SubRow {
   id: string;
@@ -155,59 +157,45 @@ export async function buildMembershipFlow(windowStart: Date): Promise<Membership
     )
     : [];
 
-  // ── TALLIES ───────────────────────────────────────────────────────────────────────────
-  const add = (t: Tally, cents: number): Tally => ({ rows: t.rows + 1, cents: t.cents + cents });
+  // ── TALLIES ───────────────────────────────────────────────────────────
+  //
+  // R26: which stages a row belongs to is decided by `membershipStages`, not here. That
+  // module is also what the per-stage ROSTER filters by, so the list behind a count cannot
+  // disagree with the count. The rules themselves are unchanged and moved verbatim; their
+  // oddities, including a row landing in several stages, are documented there.
+  //
+  // The money stays here, because it is this file's business: every stage sums the priced
+  // amount of its rows, except `comped`, which sums zero because a comp seat is a seat and
+  // not revenue.
   const zero: Tally = { rows: 0, cents: 0 };
+  const tallies: Record<MembershipStageKey, Tally> = {
+    signed_up: zero, never_paid: zero, failed: zero, comped: zero,
+    paying: zero, lapsed: zero, renewal_due: zero, churned: zero, refunded: zero,
+  };
 
-  let signedUp = zero;
-  let neverPaid = zero;      // no payment id, ever. the gap.
-  let payingNow = zero;      // active AND has a payment id AND the paid period is running
-  let lapsed = zero;         // active AND has a payment id AND the paid period has ENDED
-  let comped = zero;         // active comp, $0
-  let churned = zero;        // canceled, having paid
-  let failed = zero;         // status failed
-
-  // "Today" as an ISO day, needed inside the tally loop below. ISO day strings sort
-  // lexicographically in date order, so comparison needs no Date parsing per row.
+  // "Today" as an ISO day, read ONCE. Two clock reads microseconds apart are harmless every
+  // day of the year except across midnight, where one row could be counted as both lapsed and
+  // renewal-ahead.
   const todayIso = day(new Date().toISOString()) as string;
 
   for (const s of subs) {
-    signedUp = add(signedUp, s.amount_cents);
-    const isComp = s.plan === 'comp' || s.amount_cents === 0;
-
-    if (s.status === 'active' && isComp) { comped = add(comped, 0); continue; }
-    if (s.status === 'active' && s.has_payment) {
-      // `status = 'active'` alone was read as "paying" until 2026-11-16, and on this
-      // database that was wrong for 9 of 29 monthly rows — one of them 79 days past its
-      // period end. Nothing in this system cancels a lapse: when a term runs out and no
-      // payment renews it, the row simply stays `active` and nobody is billed. Counting
-      // those as revenue overstated the annualized figure by $26,268 a year.
-      //
-      // They are not churn either — the member never said anything — so they get their
-      // own stage rather than being folded into either neighbour.
-      // A missing current_period_end lands here too. It is a different cause with the same
-      // consequence: no term can be shown to be running, so the row cannot be quoted as
-      // revenue. Zero such rows exist in production today, and the branch is written
-      // anyway so that the first one does not quietly become income.
-      const end = day(s.current_period_end);
-      if (end === null || end < todayIso) { lapsed = add(lapsed, s.amount_cents); continue; }
-      payingNow = add(payingNow, s.amount_cents);
-      continue;
+    for (const stage of stagesForSubscription(s, todayIso)) {
+      const t = tallies[stage];
+      tallies[stage] = {
+        rows: t.rows + 1,
+        cents: t.cents + (stage === 'comped' ? 0 : s.amount_cents),
+      };
     }
-    if (s.status === 'canceled') {
-      if (s.has_payment) churned = add(churned, s.amount_cents);
-      else neverPaid = add(neverPaid, s.amount_cents);
-      continue;
-    }
-    if (s.status === 'failed') {
-      failed = add(failed, s.amount_cents);
-      // A failed row also never paid. Counted in BOTH, deliberately: the funnel stage
-      // answers "what went wrong" and the gap answers "how much of the plan is fiction".
-      neverPaid = add(neverPaid, s.amount_cents);
-      continue;
-    }
-    if (!s.has_payment) neverPaid = add(neverPaid, s.amount_cents);
   }
+
+  const signedUp = tallies.signed_up;
+  const neverPaid = tallies.never_paid;   // no payment id, ever. the gap.
+  const payingNow = tallies.paying;       // active, paid, and the paid period is running
+  const lapsed = tallies.lapsed;          // active, paid, and the paid period has ENDED
+  const comped = tallies.comped;          // active comp, $0
+  const churned = tallies.churned;        // canceled, having paid
+  const failed = tallies.failed;          // status failed
+  const upcomingCount = tallies.renewal_due.rows;
 
   const settledRefunds = refunds.filter((r) => (r.status ?? 'succeeded') !== 'failed');
   const refundedCents = settledRefunds.reduce((a, r) => a + r.amount_cents, 0);
@@ -300,15 +288,18 @@ export async function buildMembershipFlow(windowStart: Date): Promise<Membership
   }
 
   // ── FUNNEL ────────────────────────────────────────────────────────────────────────────
-  // Renewals still ahead of today, using the SAME `todayIso` the paying/lapsed split above
-  // used. It was a second `new Date()` here until 2026-11-16: two clocks read microseconds
-  // apart, which is harmless every day of the year except across a midnight boundary, where
-  // one row could be counted as both lapsed and renewal-ahead. One read, one answer.
-  const upcoming = subs.filter((s) => {
-    if (s.status !== 'active' || !s.has_payment) return false;
-    const end = day(s.current_period_end);
-    return end !== null && end >= todayIso;
-  });
+  //
+  // Renewals still ahead of today come from the classifier above as `upcomingCount`. Until
+  // R26 this was a SECOND `.filter()` over the same rows, which is how it quietly came to
+  // disagree with its neighbours: that filter never excluded comps, while the tally loop
+  // caught them first and stopped, so a comp row carrying a payment id landed in both
+  // "Comped" and "Renewal ahead". The classifier reproduces that behaviour exactly rather
+  // than correcting it here, because correcting it moves a published number and belongs in
+  // its own ticket. What changed is that there is now one place it could be corrected.
+  //
+  // It also keeps the earlier fix: ONE `todayIso` read, shared with the paying/lapsed split.
+  // Two clock reads microseconds apart are harmless every day of the year except across a
+  // midnight boundary, where one row could be counted as both lapsed and renewal-ahead.
 
   const funnel: FunnelStage[] = [
     {
@@ -398,7 +389,7 @@ export async function buildMembershipFlow(windowStart: Date): Promise<Membership
     {
       key: 'renewal_due',
       label: 'Renewal ahead',
-      count: upcoming.length,
+      count: upcomingCount,
       value: noMoney(
         'Forward-looking',
         'The next billing boundary on paying subscriptions. Past renewals cannot be '

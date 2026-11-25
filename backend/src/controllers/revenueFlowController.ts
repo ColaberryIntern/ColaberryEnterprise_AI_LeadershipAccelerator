@@ -21,6 +21,7 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
 import { getRevenueFlowBoard, DEFAULT_WINDOW_DAYS } from '../services/revenueFlow/revenueFlowService';
+import { getMembershipStageRoster } from '../services/revenueFlow/membershipRoster';
 import {
   BidValueRejected,
   confirmBidValue,
@@ -351,6 +352,62 @@ export async function handleGetDealValueHistory(req: Request, res: Response): Pr
     res.status(500).json({
       success: false,
       error: 'Could not read the enterprise deal value history.',
+    });
+  }
+}
+
+/**
+ * R26 — the named people behind one membership funnel count.
+ *
+ * Taiwo Oludimimu, 25 Nov 2026: "can you make the data points clickable so they show a list
+ * of students or leads that fall within each category?"
+ *
+ * The stage key is validated against the service's own vocabulary rather than a copy of it
+ * here, so a stage renamed in one place cannot leave a route accepting the old name. An
+ * unknown key is a 404 and not an empty list: an empty list would say the stage exists and
+ * nobody is in it, which is a different and wrong answer.
+ */
+const StageParams = z.object({ stageKey: z.string().min(1).max(64) });
+
+export async function handleGetMembershipStageRoster(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  const params = StageParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({
+      success: false,
+      error: 'Validation failed',
+      error_class: 'ValidationError',
+      details: params.error.flatten(),
+    });
+    return;
+  }
+  try {
+    const data = await getMembershipStageRoster(params.data.stageKey);
+    if (!data) {
+      res.status(404).json({
+        success: false,
+        error: `No membership funnel stage is called "${params.data.stageKey}".`,
+        error_class: 'NotFoundError',
+      });
+      return;
+    }
+    res.json({ success: true, data });
+  } catch (error) {
+    const err = error as Error;
+    console.error(JSON.stringify({
+      level: 'error',
+      service: 'revenue-flow',
+      event: 'membership_stage_roster_failed',
+      error_class: err.name || 'UnknownError',
+      outcome: 'failure',
+      stage: params.data.stageKey,
+      message: err.message,
+    }));
+    res.status(500).json({
+      success: false,
+      error: 'Could not read the people in that stage.',
     });
   }
 }
