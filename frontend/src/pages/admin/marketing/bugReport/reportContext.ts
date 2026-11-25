@@ -71,7 +71,7 @@ function pushCapped<T extends { message?: string }>(list: T[], item: T, cap: num
  * The banner itself was fixed too (it stops asking after a 403). This is the half that
  * means the next endpoint to misbehave in a loop cannot do the same damage.
  */
-function recordFailedRequest(entry: CapturedRequest): void {
+export function recordFailedRequest(entry: CapturedRequest): void {
   const sameFailure = (r: CapturedRequest) =>
     r.method === entry.method && r.url === entry.url && r.status === entry.status;
 
