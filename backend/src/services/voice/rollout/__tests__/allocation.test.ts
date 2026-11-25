@@ -76,9 +76,9 @@ describe('commands are dry by default and refuse what they do not know', () => {
     expect(parseReconcileArgs(['--dry-run'])).toMatchObject({ apply: false });
     expect(parseReconcileArgs(['--apply'])).toMatchObject({ apply: true });
     for (const bad of [['--aply'], ['--apply', '--dry-run'], ['--history', 'a']]) expect(parseReconcileArgs(bad).ok).toBe(false);
-    const clean = { unreconciled: 0, ambiguousReservations: 0, canaryOutsideAudience: [], failed: [] };
+    const clean = { unreconciled: 0, ambiguousReservations: 0, strandedClaims: 0, canaryOutsideAudience: [], failed: [] };
     expect(exitFor(clean)).toBe(0);
-    for (const dirty of [{ unreconciled: 1 }, { ambiguousReservations: 1 }, { canaryOutsideAudience: ['c'] }, { failed: [{ callId: 'c', errorClass: 'x' }] }]) expect(exitFor({ ...clean, ...dirty })).toBe(1);
+    for (const dirty of [{ unreconciled: 1 }, { ambiguousReservations: 1 }, { strandedClaims: 1 }, { canaryOutsideAudience: ['c'] }, { failed: [{ callId: 'c', errorClass: 'x' }] }]) expect(exitFor({ ...clean, ...dirty })).toBe(1);
   });
   it('the drill runs only on a local database made for it', () => {
     expect(drillAllowed('postgres://u@127.0.0.1:5432/voice_drill')).toBe(true);

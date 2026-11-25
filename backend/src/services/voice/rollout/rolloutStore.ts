@@ -7,7 +7,7 @@
  * before the carrier is asked (confirmDirect): a claim the route no longer permits is not dialed.
  *
  * Claim states: claimed -> dispatching (dialing). abandoned = refused before anything was reserved, so the
- * key may be claimed afresh. closed = refused after its reservation existed: that key is finished, and
+ * key may be claimed afresh (under a new claim id, so a stale holder can change nothing). closed = refused after its reservation existed: that key is finished, and
  * nothing was dialed. A claim left in claimed or dispatching is never given out again: it may have dialed.
  *
  * No cache: every allocation reads the route row, so a rollback reaches the next call at once. If the
@@ -48,12 +48,13 @@ export async function allocateCall(s: Sequelize, r: RouteRequest, directReady: b
       if (decided.provider === 'none') return decided;
       const direct = decided.provider === 'direct' ? decided : null;
       const claimed = await s.query<{ id: string }>(
-        `INSERT INTO voice_allocations (tenant_id, idempotency_key, path_key, recipient_ref, provider, engine, route_id, version_id, reason)
-         VALUES (:t, :k, :p, :ref, :provider, :engine, :route, :version, :reason)
-         ON CONFLICT (tenant_id, idempotency_key) DO UPDATE SET path_key = EXCLUDED.path_key, recipient_ref = EXCLUDED.recipient_ref, provider = EXCLUDED.provider, engine = EXCLUDED.engine,
-           route_id = EXCLUDED.route_id, version_id = EXCLUDED.version_id, reason = EXCLUDED.reason, status = 'claimed', updated_at = NOW()
+        `INSERT INTO voice_allocations (tenant_id, idempotency_key, path_key, recipient_ref, provider, engine, route_id, version_id, brand_slug, test_mode, reason)
+         VALUES (:t, :k, :p, :ref, :provider, :engine, :route, :version, :brand, :test, :reason)
+         -- a NEW id: whoever held the abandoned claim can no longer confirm or release anything
+         ON CONFLICT (tenant_id, idempotency_key) DO UPDATE SET id = gen_random_uuid(), path_key = EXCLUDED.path_key, recipient_ref = EXCLUDED.recipient_ref, provider = EXCLUDED.provider, engine = EXCLUDED.engine,
+           route_id = EXCLUDED.route_id, version_id = EXCLUDED.version_id, brand_slug = EXCLUDED.brand_slug, test_mode = EXCLUDED.test_mode, reason = EXCLUDED.reason, status = 'claimed', updated_at = NOW()
          WHERE voice_allocations.status = 'abandoned' RETURNING id`,
-        { replacements: { t: r.tenantId, k: r.idempotencyKey, p: r.pathKey, ref: r.recipientRef, provider: decided.provider, engine: direct?.engine ?? null, route: route?.id ?? null, version: direct?.versionId ?? null, reason: decided.reason }, type: QueryTypes.SELECT, transaction });
+        { replacements: { t: r.tenantId, k: r.idempotencyKey, p: r.pathKey, ref: r.recipientRef, provider: decided.provider, engine: direct?.engine ?? null, route: route?.id ?? null, version: direct?.versionId ?? null, brand: r.brandSlug, test: r.testMode, reason: decided.reason }, type: QueryTypes.SELECT, transaction });
       if (!claimed[0]) return { provider: 'none', reason: 'already_claimed', bucket: decided.bucket };
       return { ...decided, claimId: claimed[0].id };
     });
@@ -65,14 +66,19 @@ export async function allocateCall(s: Sequelize, r: RouteRequest, directReady: b
   }
 }
 
-/** Right before the carrier is asked: does the route still permit this exact direct claim? Moves it to dispatching, once. */
-export async function confirmDirect(s: Sequelize, tenantId: string, claimId: string): Promise<boolean> {
+/**
+ * Right before the carrier is asked: would the same rule still choose this exact version for this person?
+ * The whole allocation rule runs again (mode, percentage, audience, brand, version), on the locked route.
+ * Moves the claim to dispatching, once.
+ */
+export async function confirmDirect(s: Sequelize, tenantId: string, claimId: string, directReady: boolean): Promise<boolean> {
   return s.transaction(async (transaction) => {
-    const [c] = await s.query<{ path_key: string; route_id: string; version_id: string }>("SELECT path_key, route_id, version_id FROM voice_allocations WHERE id = :id AND tenant_id = :t AND provider = 'direct' AND status = 'claimed' FOR UPDATE",
+    const [c] = await s.query<{ path_key: string; route_id: string; version_id: string; engine: string; recipient_ref: string; brand_slug: string; test_mode: boolean }>("SELECT path_key, route_id, version_id, engine, recipient_ref, brand_slug, test_mode FROM voice_allocations WHERE id = :id AND tenant_id = :t AND provider = 'direct' AND status = 'claimed' FOR UPDATE",
       { replacements: { id: claimId, t: tenantId }, type: QueryTypes.SELECT, transaction });
     if (!c) return false;
     const { route, version } = await readRoute(s, tenantId, c.path_key, transaction);
-    if (!route || route.id !== c.route_id || !['test', 'canary', 'live'].includes(route.mode) || version?.id !== c.version_id || version.status !== 'published') return false;
+    const again = allocate({ route, version, recipientRef: c.recipient_ref, brandSlug: c.brand_slug, testMode: c.test_mode, directReady, prior: null });
+    if (again.provider !== 'direct' || again.routeId !== c.route_id || again.versionId !== c.version_id || again.engine !== c.engine) return false;
     await s.query("UPDATE voice_allocations SET status = 'dispatching', updated_at = NOW() WHERE id = :id", { replacements: { id: claimId }, transaction });
     return true;
   });

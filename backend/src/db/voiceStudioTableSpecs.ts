@@ -197,7 +197,7 @@ export const VOICE_TABLE_SPECS: TableSpec[] = [
     table: 'voice_allocations', model: 'VoiceAllocation',
     columns: [id(), tenant(), c('idempotency_key', 'VARCHAR(200) NOT NULL', DataTypes.STRING(200)), c('path_key', 'VARCHAR(100) NOT NULL', DataTypes.STRING(100)),
       c('recipient_ref', 'VARCHAR(200) NOT NULL', DataTypes.STRING(200)), c('provider', 'VARCHAR(30) NOT NULL', DataTypes.STRING(30)), c('engine', 'VARCHAR(30)', DataTypes.STRING(30)),
-      c('route_id', 'UUID', DataTypes.UUID), c('version_id', 'UUID', DataTypes.UUID), c('reason', 'VARCHAR(100) NOT NULL', DataTypes.STRING(100)),
+      c('route_id', 'UUID', DataTypes.UUID), c('version_id', 'UUID', DataTypes.UUID), c('brand_slug', 'VARCHAR(100) NOT NULL', DataTypes.STRING(100)), c('test_mode', 'BOOLEAN NOT NULL', DataTypes.BOOLEAN), c('reason', 'VARCHAR(100) NOT NULL', DataTypes.STRING(100)),
       c('status', "VARCHAR(20) NOT NULL DEFAULT 'claimed'", DataTypes.STRING(20)), created(), updated()],
     constraints: ["CONSTRAINT voice_allocations_provider_chk CHECK (provider IN ('direct','synthflow_legacy'))", "CONSTRAINT voice_allocations_status_chk CHECK (status IN ('claimed','dispatching','abandoned','closed'))"],
     indexes: ['CREATE UNIQUE INDEX IF NOT EXISTS voice_allocations_idem_uq ON voice_allocations (tenant_id, idempotency_key)'],

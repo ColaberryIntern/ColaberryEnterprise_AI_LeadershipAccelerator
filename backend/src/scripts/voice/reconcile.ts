@@ -20,8 +20,8 @@ export function parseReconcileArgs(argv: string[]): ReconcileArgs {
   return { ok: true, mode: 'calls', apply: argv.includes('--apply') };
 }
 
-export const exitFor = (r: Pick<ReconcileReport, 'unreconciled' | 'ambiguousReservations' | 'canaryOutsideAudience' | 'failed'>): number =>
-  (r.unreconciled || r.ambiguousReservations || r.canaryOutsideAudience.length || r.failed.length ? 1 : 0);
+export const exitFor = (r: Pick<ReconcileReport, 'unreconciled' | 'ambiguousReservations' | 'strandedClaims' | 'canaryOutsideAudience' | 'failed'>): number =>
+  (r.unreconciled || r.ambiguousReservations || r.strandedClaims || r.canaryOutsideAudience.length || r.failed.length ? 1 : 0);
 
 async function main(): Promise<number> {
   const a = parseReconcileArgs(process.argv.slice(2));

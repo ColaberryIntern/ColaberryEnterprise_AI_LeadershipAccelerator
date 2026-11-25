@@ -121,7 +121,7 @@ describeIfDb('rollout against Postgres', () => {
       gateway: { mode: 'direct', now: () => new Date('2026-12-01T18:00:00Z'), killSwitch: async () => false, voiceEnabled: () => true, pathAllowed: () => true, resolveDestination: async () => ({ e164: '+15555550100', timezone: 'America/Chicago' }), exemptionFor: async () => null, consentFor: async () => 'granted', suppressedFor: async () => false,
         resolveRoute: async () => ({ routeId: null, profileVersionId: 'x', engine: 'conversation_relay', fromNumberRef: 'line-1', maxDurationSeconds: 60, caps: { perDestination24h: 1000, perRoutePerDay: null, perTenantPerDay: null } }), reserve: reserveDial, transition: transitionReservation, log: () => undefined },
       loadVersion: async () => ({ id: V, tenantId: T, profileId: P, brandSlug: 'colaberry', status: 'published', agentKey: 'edu-cory-outbound', content }), registeredTools: () => [], provider: () => provider, log: () => undefined,
-      confirm: (id: string) => R.confirmDirect(sequelize, T, id), releaseClaim: (id: string, reserved: boolean) => R.releaseClaim(sequelize, T, id, reserved),
+      confirm: (id: string) => R.confirmDirect(sequelize, T, id, true), releaseClaim: (id: string, reserved: boolean) => R.releaseClaim(sequelize, T, id, reserved),
       insertCall: async (c: { callId: string; routeId: string }) => { await q(`INSERT INTO voice_calls (id, tenant_id, route_id, engine, idempotency_key, recipient_ref, purpose, state) VALUES ('${c.callId}', '${T}', '${c.routeId}', 'conversation_relay', 'row-${c.callId}', 'lead:1', 't', 'dispatching')`); return true; },
       recordOutcome: async () => undefined, ...over,
     } as unknown as Parameters<typeof dispatchDirect>[1];
@@ -153,7 +153,7 @@ describeIfDb('rollout against Postgres', () => {
     const work = keys.flatMap((k) => [R.allocateCall(sequelize, req({ idempotencyKey: k }), true), R.allocateCall(sequelize, req({ idempotencyKey: k }), true)]);
     const [, ...rest] = await Promise.all([R.rollbackRoute(sequelize, T, 'pilot', 'admin-1', false), ...work]);
     keys.forEach((_, i) => expect([rest[2 * i], rest[2 * i + 1]].filter((a) => a.provider !== 'none')).toHaveLength(1));
-    for (const a of rest) if (a.provider === 'direct') expect(await R.confirmDirect(sequelize, T, a.claimId!)).toBe(false); // eslint-disable-line no-await-in-loop
+    for (const a of rest) if (a.provider === 'direct') expect(await R.confirmDirect(sequelize, T, a.claimId!, true)).toBe(false); // eslint-disable-line no-await-in-loop
   });
 
   it('(4) a call row that cannot be written leaves no held reservation, and the key in a defined state', async () => {
@@ -180,14 +180,65 @@ describeIfDb('rollout against Postgres', () => {
     await R.releaseClaim(sequelize, T, a.claimId!, false);
     await setRoute('legacy', 0);
     expect(await R.allocateCall(sequelize, req({ idempotencyKey: 'key-aban-1' }), true)).toMatchObject({ provider: 'synthflow_legacy' });
-    expect(await R.confirmDirect(sequelize, T, a.claimId!)).toBe(false); // the old direct allocation is dead
+    expect(await R.confirmDirect(sequelize, T, a.claimId!, true)).toBe(false); // the old direct allocation is dead
     await setRoute('live', 0);
     const b = await direct('key-aban-2');
-    expect(await R.confirmDirect(sequelize, T, b.claimId!)).toBe(true);
-    expect(await R.confirmDirect(sequelize, T, b.claimId!)).toBe(false); // once
+    expect(await R.confirmDirect(sequelize, T, b.claimId!, true)).toBe(true);
+    expect(await R.confirmDirect(sequelize, T, b.claimId!, true)).toBe(false); // once
     await R.releaseClaim(sequelize, T, b.claimId!, false);
     expect(await claimStatus('key-aban-2')).toEqual({ provider: 'direct', status: 'dispatching' });
-    expect(await R.confirmDirect(sequelize, '7a999999-9999-4999-8999-999999999999', b.claimId!)).toBe(false);
+    expect(await R.confirmDirect(sequelize, '7a999999-9999-4999-8999-999999999999', b.claimId!, true)).toBe(false);
+  });
+
+  it('(K) a stale holder of an abandoned claim can change nothing about the one that replaced it', async () => {
+    const stop = { confirm: async () => true };
+    const a = await direct('key-aba-1');
+    const { go, provider } = await dispatcher({ ...stop, loadVersion: async () => null });
+    expect(await go(a, 'key-aba-1')).toMatchObject({ outcome: 'refused' }); // refused before its reservation: abandoned
+    await setRoute('legacy', 0);
+    const b = await R.allocateCall(sequelize, req({ idempotencyKey: 'key-aba-1' }), true);
+    expect(b).toMatchObject({ provider: 'synthflow_legacy' });
+    expect((b as { claimId: string }).claimId).not.toBe(a.claimId);
+    await go(a, 'key-aba-1'); // the old message is delivered again
+    for (const reserved of [true, false]) await R.releaseClaim(sequelize, T, a.claimId!, reserved); // eslint-disable-line no-await-in-loop
+    expect(await claimStatus('key-aba-1')).toEqual({ provider: 'synthflow_legacy', status: 'claimed' });
+    await setRoute('live', 0);
+    expect(await R.allocateCall(sequelize, req({ idempotencyKey: 'key-aba-1' }), true)).toMatchObject({ provider: 'none', reason: 'already_claimed' });
+    expect(provider.dispatched).toHaveLength(0);
+  });
+
+  it.each<[string, string, () => Promise<unknown>]>([
+    ['live to test', 'live', () => setRoute('test', 0)],
+    ['live to shadow', 'live', () => setRoute('shadow', 0)],
+    ['audience emptied', 'canary', () => setRoute('canary', 100, [])],
+    ['this person removed from the audience', 'canary', () => setRoute('canary', 100, ['lead:2'])],
+    ['percentage to zero', 'canary', () => setRoute('canary', 0)],
+    ['brand changed', 'live', () => q(`UPDATE voice_routes SET brand_slug = 'other' WHERE id = '${RT}'`)],
+    ['version retired', 'live', () => q(`UPDATE voice_agent_versions SET status = 'retired' WHERE id = '${V}'`)],
+  ])('an operator stop between allocate and dispatch (%s): no dial, nothing held', async (name, mode, change) => {
+    await setRoute(mode, 100);
+    const key = `key-stop-${name.replace(/ /g, '-')}`;
+    const a = await direct(key);
+    await change();
+    const { go, provider } = await dispatcher();
+    expect(await go(a, key)).toMatchObject({ outcome: 'refused', reason: 'route_changed' });
+    expect(provider.dispatched).toHaveLength(0);
+    expect(await held()).toBe(0);
+    await q(`UPDATE voice_routes SET brand_slug = 'colaberry' WHERE id = '${RT}'; UPDATE voice_agent_versions SET status = 'published' WHERE id = '${V}'`);
+  });
+
+  it('engines switched off between allocate and dispatch: not confirmed', async () => {
+    const a = await direct('key-ready-1');
+    expect(await R.confirmDirect(sequelize, T, a.claimId!, false)).toBe(false);
+    expect(await R.confirmDirect(sequelize, T, a.claimId!, true)).toBe(true);
+  });
+
+  it('a direct claim stranded by a crash is reported, never reused', async () => {
+    await direct('key-strand-1');
+    expect((await C.runReconcile(sequelize, deps('completed'), { apply: false })).strandedClaims).toBe(0);
+    await q(`UPDATE voice_allocations SET updated_at = NOW() - INTERVAL '2 hours' WHERE idempotency_key = 'key-strand-1'`);
+    expect((await C.runReconcile(sequelize, deps('completed'), { apply: true })).strandedClaims).toBe(1);
+    expect(await R.allocateCall(sequelize, req({ idempotencyKey: 'key-strand-1' }), true)).toMatchObject({ provider: 'none' });
   });
 
   it('when the claim cannot be written nobody may dial', async () => {

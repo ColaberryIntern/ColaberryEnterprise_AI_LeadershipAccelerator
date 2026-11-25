@@ -24,6 +24,8 @@ export interface ReconcileReport {
   /** Reservations whose call has ended, whoever ended it (this command or the carrier's own webhook). */
   reservationsSettled: number;
   ambiguousReservations: number;
+  /** Claims untouched for an hour whose call never got a row: a crash may have stranded them. They are never reused. */
+  strandedClaims: number;
   canaryOutsideAudience: string[];
   unreconciled: number;
 }
@@ -51,7 +53,7 @@ export async function runReconcile(s: Sequelize, d: ReconcileDeps, o: { apply: b
     `SELECT c.id FROM voice_calls c JOIN voice_routes r ON r.id = c.route_id
       WHERE c.engine IN ('conversation_relay','openai_realtime') AND c.test_mode = FALSE AND r.mode = 'canary' AND c.created_at >= COALESCE(r.approved_at, r.created_at)
         AND NOT (COALESCE(r.fallback->'audience', '[]'::jsonb) @> to_jsonb(c.recipient_ref::text))`, { type: QueryTypes.SELECT });
-  const report: ReconcileReport = { applied: o.apply, unresolved, settled: [], needsPerson: unresolved.filter((c) => !c.provider_call_id).map((c) => c.id), failed: [], reservationsSettled: 0, ambiguousReservations: 0, canaryOutsideAudience: outside.map((r) => r.id), unreconciled: 0 };
+  const report: ReconcileReport = { applied: o.apply, unresolved, settled: [], needsPerson: unresolved.filter((c) => !c.provider_call_id).map((c) => c.id), failed: [], reservationsSettled: 0, ambiguousReservations: 0, strandedClaims: 0, canaryOutsideAudience: outside.map((r) => r.id), unreconciled: 0 };
   for (const c of unresolved) {
     if (!c.provider_call_id || !o.apply) continue;
     try {
@@ -74,6 +76,8 @@ export async function runReconcile(s: Sequelize, d: ReconcileDeps, o: { apply: b
   report.reservationsSettled = done.length;
   const [amb] = await s.query<{ n: number }>("SELECT COUNT(*)::int AS n FROM voice_dial_reservations WHERE status = 'ambiguous'", { type: QueryTypes.SELECT });
   report.ambiguousReservations = amb.n;
+  const [str] = await s.query<{ n: number }>("SELECT COUNT(*)::int AS n FROM voice_allocations a WHERE a.provider = 'direct' AND a.status IN ('claimed','dispatching') AND a.updated_at < NOW() - INTERVAL '1 hour' AND NOT EXISTS (SELECT 1 FROM voice_calls c WHERE c.tenant_id = a.tenant_id AND c.idempotency_key = a.idempotency_key)", { type: QueryTypes.SELECT });
+  report.strandedClaims = str.n;
   report.unreconciled = o.apply ? await countOpen() : totalOpen;
   return report;
 }

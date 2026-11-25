@@ -39,11 +39,11 @@ export interface DirectDispatchDeps {
   gateway: GatewayDeps; // its resolveRoute supplies only the from-number and the caps
   loadVersion: (versionId: string) => Promise<LoadedVersion | null>;
   registeredTools: () => readonly RegisteredTool[];
-  /** false = this logical call already has a row: stop. */
   /** VS4.5: right before dialing, does the route still permit this claim? Throws count as no. */
   confirm: (claimId: string) => Promise<boolean>;
   /** Nothing was dialed. reserved = the key's reservation exists, so the key is finished. */
   releaseClaim: (claimId: string, reserved: boolean) => Promise<void>;
+  /** false = this logical call already has a row: stop. */
   insertCall: (row: { callId: string; engine: string; routeId: string; versionId: string }) => Promise<boolean>;
   recordOutcome: (callId: string, outcome: string, errorClass: string | undefined) => Promise<void>;
   provider: (engine: 'conversation_relay' | 'openai_realtime') => VoiceProvider | { error: string };

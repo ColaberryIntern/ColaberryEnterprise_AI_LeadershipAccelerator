@@ -2,7 +2,7 @@ import { sequelize } from '../config/database';
 import { voiceStudioStatements, VOICE_TABLE_SPECS } from './voiceStudioTableSpecs';
 
 /**
- * Voice AI Studio schema (VS1.4): 13 new voice_* tables, idempotent raw DDL, same pattern as
+ * Voice AI Studio schema (VS1.4): 15 voice_* tables, idempotent raw DDL, same pattern as
  * ensureMultiTenantSchema.ts. The statements are generated from voiceStudioTableSpecs.ts, which also
  * defines the Sequelize models, so DDL columns and model columns cannot drift.
  *
