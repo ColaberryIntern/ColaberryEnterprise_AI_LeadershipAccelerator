@@ -62,19 +62,18 @@ export function assertSandbox(engine) {
 
   // Listening right now on this machine, so refusal means the sandbox blocked it.
   // Blocked can look like a refusal, an unreachable network, or seccomp denying the socket itself.
+  // Answers by exit code: node's stdout is lost here, because spawnSync's stdio are sockets and the
+  // sandbox denies socket calls. 42 blocked, 43 open, 44 anything else (so it fails closed).
   const netProbe = `
-    const say = (v) => { console.log(v); process.exit(0); };
-    const blocked = (e) => say(/^(EPERM|EACCES|ECONNREFUSED|ENETUNREACH|EHOSTUNREACH|EAFNOSUPPORT)$/.test(e.code) ? "BLOCKED" : "UNKNOWN " + e.code);
+    const blocked = (e) => process.exit(/^(EPERM|EACCES|ECONNREFUSED|ENETUNREACH|EHOSTUNREACH|EAFNOSUPPORT)$/.test(e.code) ? 42 : 44);
     try {
       const s = require("net").connect(+process.argv[1], "127.0.0.1");
-      s.on("connect", () => say("OPEN"));
+      s.on("connect", () => process.exit(43));
       s.on("error", blocked);
-      setTimeout(() => say("BLOCKED"), 5000);
+      setTimeout(() => process.exit(44), 5000);
     } catch (e) { blocked(e); }`;
   const net = run('exec node -e "$1" "$2"', netProbe, String(engine.port));
-  if (net.status !== 0 || net.stdout.trim() !== 'BLOCKED') {
-    fail(`network is reachable, or could not be tested (exit ${net.status}, ${net.stdout.trim().slice(0, 40)}: ${net.stderr.trim().slice(-300)})`);
-  }
+  if (net.status !== 42) fail(`network is ${net.status === 43 ? 'REACHABLE' : 'untestable'} (exit ${net.status}: ${net.stderr.trim().slice(-300)})`);
 
   const proc = run('if cat "/proc/$1/environ" >/dev/null 2>&1; then echo READABLE; else echo HIDDEN; fi', String(process.pid));
   if (proc.status !== 0 || proc.stdout.trim() !== 'HIDDEN') fail('the runner process environment is readable');
