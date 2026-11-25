@@ -7,6 +7,8 @@
  * under the TCPA; the directive requires disclosure on every call). The prompt states no price, date
  * or outcome claim: anything not listed here is "a teammate will follow up", never invented.
  */
+import { SAFETY_SUFFIX } from '../profiles/versionContent';
+
 export interface VoiceProfile {
   versionId: string;
   greeting: string;
@@ -27,3 +29,6 @@ export const TEST_PROFILE: VoiceProfile = {
     'If the caller asks you to stop, or says goodbye, say a brief goodbye.',
   ].join('\n'),
 };
+
+/** What a live call is given: the frozen profile plus the call rules every rendered version ends with (VS4.2). */
+export const liveProfile = (p: VoiceProfile = TEST_PROFILE): VoiceProfile => ({ ...p, system: `${p.system}\n\n${SAFETY_SUFFIX}` });

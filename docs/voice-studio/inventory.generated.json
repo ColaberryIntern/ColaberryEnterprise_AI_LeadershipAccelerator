@@ -1,6 +1,6 @@
 {
  "generatedFrom": "git ls-files",
- "total": 269,
+ "total": 270,
  "byRole": {
   "DISPATCH": 3,
   "INGEST": 3,
@@ -8,7 +8,7 @@
   "CALLER": 11,
   "CONFIG": 20,
   "UI": 33,
-  "CONSUMER": 66,
+  "CONSUMER": 67,
   "MENTION": 127
  },
  "rows": [
@@ -1367,6 +1367,12 @@
     "VOICE_TEST_ENABLED",
     "VOICE_WS_BASE_URL"
    ]
+  },
+  {
+   "path": "backend/src/services/voice/optout/optOut.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": []
   },
   {
    "path": "backend/src/services/voice/postcall/completion.ts",

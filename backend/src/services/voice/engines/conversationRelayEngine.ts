@@ -26,6 +26,7 @@ import { endSession, languageSwitch, parseRelayMessage, SUPPORTED_LANGUAGES, tex
 import type { ToolBroker } from './toolBroker';
 import type { VoiceProfile } from './voiceProfiles';
 import { TRANSFER_REASON } from '../transfer/humanTransfer';
+import { detectsOptOut } from '../optout/optOut';
 
 export interface RelayTransport { send(text: string): void; close(code?: number): void }
 
@@ -46,6 +47,8 @@ export interface RelayDeps {
    * communication log. Never logged.
    */
   onTranscript?: (callId: string, transcript: string) => void;
+  /** VS4.2: the caller asked not to be called. Called at most once per call; never awaited. */
+  onOptOut?: (callId: string) => void;
 }
 
 export const MAX_TRANSCRIPT_LINES = 400;
@@ -72,6 +75,7 @@ export class RelayConnection {
   private lang: string | null = null;
   private readonly transcript: string[] = [];
   private transcriptSent = false;
+  private optedOut = false;
   /** VS3.2: a transfer_to_human tool returned the transfer control in the current answer. */
   private pendingTransfer = false;
   private handedOff = false;
@@ -191,12 +195,21 @@ export class RelayConnection {
   }
 
   private async callerTurn(text: string): Promise<void> {
+    this.noticeOptOut(text); // before anything that can reject the turn
     const h = this.handle!;
     const r = h.dispatch({ type: 'caller_turn' });
     if (!r.ok) return;
     this.push({ role: 'user', content: text });
     this.line('Caller', text);
     await this.answer(h);
+  }
+
+  private noticeOptOut(text: string): void {
+    if (this.optedOut || !this.callId || !this.d.onOptOut || !detectsOptOut(text)) return;
+    this.optedOut = true;
+    try { this.d.onOptOut(this.callId); } catch (e) {
+      this.log('error', 'voice_opt_out_sink_failed', { error_class: (e as { name?: string })?.name || 'SinkError' });
+    }
   }
 
   /**

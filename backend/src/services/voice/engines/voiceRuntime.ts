@@ -26,7 +26,9 @@ import { createClaudeVoiceLlm } from './claudeVoiceLlm';
 import type { RelayDeps } from './conversationRelayEngine';
 import { buildRelayTwiml } from './relayProtocol';
 import { nextOpenSlotsTool, ToolBroker } from './toolBroker';
-import { TEST_PROFILE } from './voiceProfiles';
+import { liveProfile, TEST_PROFILE } from './voiceProfiles';
+import { toolsNotSwitchedOff } from '../profiles/voiceToolPolicy';
+import { productionOptOutDeps, reconcileOptOuts, recordOptOut } from '../optout/optOut';
 import { ACTION_TOKEN_TTL_SECONDS, CONNECT_ACTION_PATH } from '../transfer/humanTransfer';
 import { transferToHumanTool } from '../transfer/transferTool';
 import { completeDirectCall, reconcileDirectCompletions, rememberTranscript } from '../postcall/directCompletionRuntime';
@@ -100,7 +102,8 @@ export function relayDeps(): RelayDeps {
     worker: getWorker(),
     llm: createClaudeVoiceLlm(c.VOICE_ENGINE_A_MODEL),
     broker: relayBroker,
-    profile: TEST_PROFILE,
+    profile: liveProfile(),
+    onOptOut: (callId) => { void recordOptOut(callId, productionOptOutDeps()); }, // never throws
     accountSid: () => process.env.TWILIO_ACCOUNT_SID || undefined,
     consumeSessionRef: consumeToken,
     callMatches,
@@ -111,17 +114,17 @@ export function relayDeps(): RelayDeps {
   };
 }
 
-export const slotTool = () => new ToolBroker([nextOpenSlotsTool(() => getAvailableSlots(14, admissionsCalendar()))]);
+export const slotTool = () => new ToolBroker(toolsNotSwitchedOff([nextOpenSlotsTool(() => getAvailableSlots(14, admissionsCalendar()))]));
 
 /**
  * Engine A also gets transfer_to_human (VS3.2): it acts on the transfer control by ending the relay
  * session with handoffData. Engine B does not handle that control yet, so it does NOT get the tool
  * (it would announce a transfer that never happens). Unset VOICE_TRANSFER_NUMBER = a callback offer.
  */
-export const relayBroker = () => new ToolBroker([
+export const relayBroker = () => new ToolBroker(toolsNotSwitchedOff([
   nextOpenSlotsTool(() => getAvailableSlots(14, admissionsCalendar())),
   transferToHumanTool(() => loadVoiceConfig().VOICE_TRANSFER_NUMBER),
-]);
+]));
 
 /** Open the OpenAI Realtime WebSocket. The key never leaves the server and is never logged. */
 export function connectOpenAiRealtime(model: string, h: ModelHandlers): SocketLike {
@@ -146,7 +149,7 @@ export function realtimeDeps(): RealtimeDeps {
   return {
     worker: getWorker(),
     broker: slotTool,
-    profile: TEST_PROFILE,
+    profile: liveProfile(),
     voice: c.VOICE_REALTIME_VOICE,
     accountSid: () => process.env.TWILIO_ACCOUNT_SID || undefined,
     consumeSessionRef: consumeToken,
@@ -192,6 +195,7 @@ export function installVoiceRuntime(server: Server): void {
   const sweep = setInterval(() => {
     const c = loadVoiceConfig();
     if (!c.valid || !(c.VOICE_STUDIO_ENABLED || c.VOICE_TEST_ENABLED)) return;
+    reconcileOptOuts().catch((e: Error) => log({ level: 'error', event: 'voice_opt_out_sweep_failed', outcome: 'failure', error_class: e.name || 'Error' }));
     reconcileDirectCompletions().catch((e: Error) => log({ level: 'error', event: 'voice_postcall_sweep_failed', outcome: 'failure', error_class: e.name || 'Error' }));
   }, POSTCALL_SWEEP_MS);
   sweep.unref();

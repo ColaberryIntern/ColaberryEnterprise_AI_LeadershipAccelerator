@@ -92,7 +92,7 @@ export async function openInboundCall(c: CallSession): Promise<{ callId: string 
 export async function markInboundFallback(callId: string, reason: string, ended: boolean): Promise<void> {
   const s = await db();
   await s.query(
-    `UPDATE voice_calls SET state_reason = :reason, updated_at = NOW(),
+    `UPDATE voice_calls SET state_reason = CASE WHEN state_reason = 'caller_opt_out' THEN state_reason ELSE :reason END, updated_at = NOW(),
             state = CASE WHEN :ended THEN 'canceled' ELSE state END, ended_at = CASE WHEN :ended THEN NOW() ELSE ended_at END
       WHERE id = :callId AND direction = 'inbound'`,
     { replacements: { callId, reason, ended }, type: QueryTypes.UPDATE });

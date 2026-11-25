@@ -1,0 +1,99 @@
+/**
+ * Caller opt-out (VS4.2): "stop calling me" on a live call is kept, not just answered politely.
+ *
+ * Detection is deterministic (a phrase list over the caller's own words), so it does not depend on the
+ * model noticing. It errs toward honoring: a false positive costs a call, a false negative breaks a promise.
+ *
+ * Recording, in this order:
+ *   1. the call is marked (state_reason 'caller_opt_out'), which is what the console counts;
+ *   2. for a real call to a known lead, the repo's own opt-out path runs for the VOICE channel only
+ *      (unsubscribe event, consent revoked, pending actions canceled). That record outlives the call row;
+ *   3. the call gets an 'opt_out_recorded' event. Until it has one, the post-call sweep runs step 2 again,
+ *      so a failure is retried and never lost. At least once on purpose: a second event is harmless.
+ * A test call is only marked (its opt-out lives in the test run, never on a real person's record).
+ *
+ * Not covered: Engine B gives us no transcript yet, so it cannot detect this. An inbound caller has no
+ * lead, so only step 1 applies. The caller's words are never logged or stored here.
+ */
+import { QueryTypes } from 'sequelize';
+
+const PATTERNS: readonly RegExp[] = [
+  /\b(?:stop|quit)\s+(?:calling|phoning|contacting|bothering)\b/i,
+  /\b(?:do\s*n[o'’]?t|don\s*t|do\s+not|never)\s+(?:ever\s+)?(?:call|phone|contact)\s+(?:me|us|this|here|again|back|my)\b/i,
+  /\b(?:take|remove)\s+(?:me|us|my\s+(?:name|number)|this\s+number)\s+(?:off|from)\b/i,
+  /\b(?:take|remove)\s+(?:my|this)\s+number\b/i,
+  /\bdo\s+not\s+call\s+list\b/i,
+  /\bno\s+more\s+calls\b/i,
+  /\bopt\s*-?\s*(?:me\s+)?out\b/i,
+  /\bunsubscribe\b/i,
+  /\b(?:no|ya|dejen?\s+de)\s+(?:me\s+)?(?:llame[ns]?|llamar(?:me)?)\b/i,
+];
+
+export function detectsOptOut(text: string): boolean {
+  return PATTERNS.some((p) => p.test(text.slice(0, 4_000)));
+}
+
+export interface OptOutDeps {
+  mark: (callId: string) => Promise<{ leadId: number | null; testMode: boolean } | null>;
+  /** The repo's opt-out path for the voice channel. Throws on failure. */
+  suppress: (leadId: number) => Promise<void>;
+  markRecorded: (callId: string) => Promise<void>;
+  log: (line: Record<string, unknown>) => void;
+}
+
+export type OptOutResult = 'recorded' | 'marked' | 'unknown_call' | 'pending';
+
+/** Never throws: the call goes on. 'pending' = marked or not, the sweep will try again. */
+export async function recordOptOut(callId: string, d: OptOutDeps): Promise<OptOutResult> {
+  const line = (level: string, outcome: string, extra: Record<string, unknown> = {}) => d.log({ level, service: 'voice-studio', event: 'voice_caller_opt_out', outcome, call_id: callId, ...extra });
+  try {
+    const call = await d.mark(callId);
+    if (!call) { line('warn', 'skipped', { error_class: 'UnknownCall' }); return 'unknown_call'; }
+    if (call.testMode || call.leadId === null) { line('info', 'success', { scope: call.testMode ? 'test' : 'call_only' }); return 'marked'; }
+    await d.suppress(call.leadId);
+    await d.markRecorded(callId);
+    line('info', 'success', { scope: 'lead' });
+    return 'recorded';
+  } catch (e) {
+    line('error', 'failure', { error_class: (e as Error).name || 'DatabaseError' });
+    return 'pending';
+  }
+}
+
+async function db() { return (await import('../../../config/database')).sequelize; }
+
+export function productionOptOutDeps(): OptOutDeps {
+  return {
+    mark: async (callId) => {
+      const s = await db();
+      const rows = await s.query<{ leadId: number | null; testMode: boolean }>(
+        `UPDATE voice_calls SET state_reason = 'caller_opt_out', updated_at = NOW() WHERE id = :callId RETURNING lead_id AS "leadId", test_mode AS "testMode"`,
+        { replacements: { callId }, type: QueryTypes.SELECT });
+      return rows[0] ?? null;
+    },
+    suppress: async (leadId) => {
+      const { processOptOut } = await import('../../unsubscribeEnforcementService');
+      await processOptOut(leadId, 'voice', 'Asked on a call not to be called', 'voice-call');
+    },
+    markRecorded: async (callId) => {
+      const s = await db();
+      await s.query(
+        `INSERT INTO voice_call_events (tenant_id, call_id, event_key, source, state, occurred_at)
+         SELECT tenant_id, id, 'opt_out_recorded', 'studio', 'session_active', NOW() FROM voice_calls WHERE id = :callId
+         ON CONFLICT (call_id, event_key) DO NOTHING`, { replacements: { callId } });
+    },
+    log: (l) => (l.level === 'info' ? console.log : console.warn)(JSON.stringify({ timestamp: new Date().toISOString(), ...l })),
+  };
+}
+
+/** Finish opt-outs whose record never completed. Returns how many it tried. */
+export async function reconcileOptOuts(limit = 20, deps: OptOutDeps = productionOptOutDeps()): Promise<number> {
+  const s = await db();
+  const rows = await s.query<{ id: string }>(
+    `SELECT c.id FROM voice_calls c
+      WHERE c.state_reason = 'caller_opt_out' AND c.test_mode = FALSE AND c.lead_id IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM voice_call_events e WHERE e.call_id = c.id AND e.event_key = 'opt_out_recorded')
+      ORDER BY c.updated_at LIMIT :limit`, { replacements: { limit }, type: QueryTypes.SELECT });
+  for (const r of rows) await recordOptOut(r.id, deps); // eslint-disable-line no-await-in-loop -- bounded, in order
+  return rows.length;
+}

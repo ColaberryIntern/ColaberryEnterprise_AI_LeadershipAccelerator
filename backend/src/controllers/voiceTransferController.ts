@@ -41,7 +41,7 @@ export function defaultTransferDeps(): TransferDeps {
     now: () => Date.now(),
     recordFallback: async (callId) => {
       const { sequelize } = await import('../config/database');
-      await sequelize.query("UPDATE voice_calls SET state_reason = 'transfer_fallback', updated_at = NOW() WHERE id = :callId", { replacements: { callId } });
+      await sequelize.query("UPDATE voice_calls SET state_reason = 'transfer_fallback', updated_at = NOW() WHERE id = :callId AND state_reason IS DISTINCT FROM 'caller_opt_out'", { replacements: { callId } });
     },
     refuseDial: (callId, target) => refuseTransferDial(callId, target),
     closeInbound: closeInboundCall,

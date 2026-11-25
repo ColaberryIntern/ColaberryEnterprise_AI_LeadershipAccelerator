@@ -98,7 +98,12 @@ export function testGatewayDeps(req: LiveTestRequest, c: VoiceConfig): GatewayDe
     resolveDestination: async (ref) => ({ e164: ref === `approved-destination:${req.destinationId}` && req.destinationId === 'test-allowed' ? allowed : null, timezone: 'America/Chicago' }),
     exemptionFor: async (e164) => (allowed && e164 === allowed ? 'test' : null),
     consentFor: async () => 'granted', // the owner authorized this number for test calls (M0 Q4); no other destination resolves
-    suppressedFor: async () => false,
+    // An opt-out said on a test call stops that test run's remaining attempts, and nobody else's calls.
+    suppressedFor: async () => {
+      const [r] = await sequelize.query<{ n: number }>("SELECT COUNT(*)::int AS n FROM voice_calls WHERE tenant_id = :t AND test_mode = TRUE AND state_reason = 'caller_opt_out' AND idempotency_key LIKE :k",
+        { replacements: { t: TEST_TENANT_ID, k: `testlab:${req.runId}:%` }, type: QueryTypes.SELECT });
+      return (r?.n ?? 1) > 0;
+    },
     resolveRoute: async () => ({ routeId: null, profileVersionId: TEST_PROFILE.versionId, engine: req.engine, fromNumberRef: TEST_FROM_NUMBER_REF, maxDurationSeconds: c.VOICE_TEST_MAX_DURATION_SECONDS,
       caps: { perDestination24h: c.VOICE_TEST_MAX_ATTEMPTS, perRoutePerDay: null, perTenantPerDay: null } }),
     reserve: reserveDial,
