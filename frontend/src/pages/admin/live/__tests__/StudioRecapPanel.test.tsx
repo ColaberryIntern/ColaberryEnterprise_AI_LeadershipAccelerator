@@ -108,6 +108,14 @@ it('failed rows get a Retry button that goes through the same confirmation', asy
   expect(mockSend).not.toHaveBeenCalled();
 });
 
+it('rows stuck mid-send are shown with the recovery step', async () => {
+  mockGet.mockResolvedValue(state({ counts: { queued: 0, sending: 1, sent: 30, failed: 0, skipped: 1 } }));
+  act(() => { root.render(<StudioRecapPanel sessionId="s1" onClose={() => undefined} />); });
+  await flush();
+  expect(q('recap-limbo')?.textContent).toContain('1 stuck mid-send');
+  expect(q('recap-limbo')?.textContent).toContain('Mandrill');
+});
+
 it('a load failure shows the error and a way out', async () => {
   mockGet.mockRejectedValue({ response: { data: { error: 'Class not found' } } });
   act(() => { root.render(<StudioRecapPanel sessionId="s1" onClose={() => undefined} />); });

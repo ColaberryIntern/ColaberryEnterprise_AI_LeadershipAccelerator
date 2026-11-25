@@ -83,6 +83,12 @@ export default function StudioRecapPanel({ sessionId, onClose }: { sessionId: st
           {state.dry.checkedIn} checked in · {state.dry.toSend} will get the recap · {state.counts.sent} already sent
           {skippedText ? ` · skipped: ${skippedText}` : ''}{state.counts.failed ? ` · ${state.counts.failed} failed (Send again retries them)` : ''}
         </p>
+        {state.counts.sending > 0 && (
+          <p className="cls-note cls-note-warn" role="status" data-testid="recap-limbo">
+            {state.counts.sending} stuck mid-send. They are never resent automatically, so nobody gets two copies.
+            Check the Mandrill activity log for those addresses; anyone it shows as not delivered can be sent by hand.
+          </p>
+        )}
 
         <label className="cls-label" htmlFor="rcp-url">Eventbrite link for the next class</label>
         <input id="rcp-url" className="cls-input" value={url} onChange={(e) => { setUrl(e.target.value); setDirty(true); }} placeholder="https://www.eventbrite.com/e/..." data-testid="recap-url" />
