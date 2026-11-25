@@ -12,7 +12,7 @@
  *     delivered: [ "..." ],                         // what was delivered
  *     flow: [ { label, sub } ],                     // 3 to 6 boxes for the visual's picture
  *     chart: { title, max, rows: [ { label, value, display, color } ] },  // optional bar chart
- *     checks: [ { name, status, evidence } ],       // status: pass | fail | n/a
+ *     checks: [ { name, status, evidence } ],       // status: pass | partial | fail | n/a
  *     verifier: { score, of, verdict, notes },      // loop-task-verifier result
  *     pr, deploy,                                   // strings, "none" when not applicable
  *     notEstablished: [ "..." ],                    // what this does NOT prove
@@ -22,7 +22,7 @@
 const { esc, baseCss, barChart } = require('../artifactTheme');
 const { htmlDoc } = require('../renderArtifactPdf');
 
-const STATUS = { pass: ['#2f7d32', 'PASS'], fail: ['#b3261e', 'FAIL'], 'n/a': ['#718096', 'N/A'] };
+const STATUS = { pass: ['#2f7d32', 'PASS'], partial: ['#b26a00', 'PARTIAL'], fail: ['#b3261e', 'FAIL'], 'n/a': ['#718096', 'N/A'] };
 
 function chip(status) {
   const [c, t] = STATUS[status] || STATUS['n/a'];
