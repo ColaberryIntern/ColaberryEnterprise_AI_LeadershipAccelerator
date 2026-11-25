@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import type { CampusAudience } from '../campusMap';
 import type { Hq } from './hqModel';
 import { START_PREP, takeHqIntent } from './hqIntent';
-import { isCareerPrepFloor, type CareerPrepFloorState } from './careerPrepDoors';
+import { isCareerPrepFloor, isPrepAudience, type CareerPrepFloorState } from './careerPrepDoors';
 
 /**
  * Campus HQ: take the pending ride request (hqIntent) as the HQ opens. A floor number rides there at once. Career
@@ -22,7 +22,7 @@ export function useHqStartIntent(active: boolean, hq: Hq, audience: CampusAudien
     else if (f) rideRef.current(f);
   }, [active]);
   useEffect(() => {
-    if (!active || !startPrep.current || (audience === 'member' && careerPrep === undefined)) return;
+    if (!active || !startPrep.current || (isPrepAudience(audience) && careerPrep === undefined)) return;
     startPrep.current = false;
     const prep = hq.floors.find(isCareerPrepFloor);
     if (prep && prep.access !== 'none') rideRef.current(prep.num); else lobbyRef.current();
