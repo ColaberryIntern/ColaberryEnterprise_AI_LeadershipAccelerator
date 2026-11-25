@@ -3,8 +3,8 @@ import { WeeklyLiveSignal } from '../../../../models/WeeklyLive';
 import { readPage, toYmd } from '../pageDate';
 import { fetchPage } from '../pageFetch';
 import { parseCandidates, searchCost, SEARCH_RESERVE_USD, type Candidate } from '../signalSearch';
-import { runSignals, sameStory, selectSignals, vet, shiftDays, MAX_SIGNALS, type SignalRow } from '../signalsJob';
-import { BudgetExceeded, reserve, withBudget } from '../researchBudget';
+import { runSignals, sameStory, selectSignals, vet, namesAStory, shiftDays, urlKey, windowStart, MAX_SIGNALS, type SignalRow } from '../signalsJob';
+import { BudgetExceeded, capFrom, reserve, withBudget } from '../researchBudget';
 
 /** WL3.1: dates come from the page, failed pages are dropped with a reason, reruns replace, the cap holds. */
 const cand = (over: Partial<Candidate> = {}): Candidate => ({ headline: 'Search headline here', publisher: 'P', url: 'https://a.com/x', alternate_url: null, factors: [1, 5], fits_weeks: [3], idea: 'A plain hook', ...over });
@@ -16,7 +16,7 @@ afterEach(() => jest.restoreAllMocks());
 
 describe('page dates', () => {
   it('reads JSON-LD, meta, time and byline, in that order', () => {
-    expect(readPage(ld('2026-11-18T23:30:00-05:00'))).toEqual({ title: 'Page title', date: '2026-11-18', dateSource: 'json-ld' });
+    expect(readPage(ld('2026-11-18T23:30:00-05:00'))).toEqual({ title: 'Page title', site: null, date: '2026-11-18', dateSource: 'json-ld' });
     expect(readPage('<meta property="article:published_time" content="2026-11-12T01:00:00Z">').dateSource).toBe('meta');
     expect(readPage('<article><time datetime="2026-11-09">x</time></article>').date).toBe('2026-11-09');
     expect(readPage('<div class="byline">By Ana, Nov. 4, 2026</div>')).toMatchObject({ date: '2026-11-04', dateSource: 'byline' });
@@ -33,11 +33,15 @@ describe('vet', () => {
     expect(await vet(cand(), FROM, TODAY, page(ld('2026-11-18')))).toMatchObject({ headline: 'Page title', published_at: '2026-11-18', date_confirmed: true, fetched_ok: true, dropped_reason: null });
   });
   it('no date on the page is kept as date unconfirmed', async () => {
-    expect(await vet(cand(), FROM, TODAY, page('<title>T</title>'))).toMatchObject({ published_at: null, date_confirmed: false, fetched_ok: true, dropped_reason: null });
+    expect(await vet(cand({ url: 'https://a.com/canva-cuts-staff' }), FROM, TODAY, page('<title>T</title>'))).toMatchObject({ published_at: null, date_confirmed: false, fetched_ok: true, dropped_reason: null });
+  });
+  it('a home or index page with no date is dropped', async () => {
+    expect((await vet(cand({ url: 'https://a.com/' }), FROM, TODAY, page('<title>Front Page</title>'))).dropped_reason).toContain('index page');
+    expect([namesAStory('https://a.com/en/news/'), namesAStory('https://a.com/n/ai-jobs-report'), namesAStory('https://a.com/article/4120784')]).toEqual([false, true, true]);
   });
   it('403 then the alternate outlet', async () => {
     const f = jest.fn().mockResolvedValueOnce({ ok: false, url: '', reason: 'HTTP 403' }).mockResolvedValueOnce({ ok: true, url: 'https://b.com/y', html: ld('2026-11-18') });
-    expect(await vet(cand({ alternate_url: 'https://b.com/y' }), FROM, TODAY, f)).toMatchObject({ url: 'https://b.com/y', fetched_ok: true });
+    expect(await vet(cand({ alternate_url: 'https://b.com/y' }), FROM, TODAY, f)).toMatchObject({ url: 'https://b.com/y', publisher: 'b.com', fetched_ok: true });
     expect(f).toHaveBeenCalledTimes(2);
   });
   it('both outlets failing is dropped with both reasons', async () => {
@@ -48,6 +52,16 @@ describe('vet', () => {
     expect((await vet(cand(), FROM, TODAY, page(ld('2026-05-14')))).dropped_reason).toContain('before 2026-11-10');
     expect((await vet(cand({ factors: [8] }), FROM, TODAY, page(ld('2026-05-14')))).dropped_reason).toBeNull();
     expect((await vet(cand(), FROM, TODAY, page(ld('2026-12-25')))).dropped_reason).toContain('future');
+    expect((await vet(cand({ factors: [4] }), FROM, TODAY, page(ld('2024-01-01')))).dropped_reason).toContain('published 2024-01-01');
+  });
+  it('names the outlet the page says it is', async () => {
+    const html = `<meta property="og:site_name" content="CNBC">${ld('2026-11-18')}`;
+    expect((await vet(cand({ publisher: 'Reuters' }), FROM, TODAY, page(html))).publisher).toBe('CNBC');
+  });
+  it('a UTC evening stamp is the Central day, a bare midnight keeps its day', async () => {
+    expect(toYmd('2026-11-25T01:00:00Z')).toBe('2026-11-24');
+    expect(toYmd('2026-11-18T00:00:00Z')).toBe('2026-11-18');
+    expect((await vet(cand(), FROM, TODAY, page(ld('2026-11-25T01:00:00Z')))).dropped_reason).toBeNull();
   });
   it('a hook idea that breaks a content rule is removed, the signal stays', async () => {
     expect(await vet(cand({ idea: 'Get it at no cost' }), FROM, TODAY, page(ld('2026-11-18')))).toMatchObject({ idea: null, dropped_reason: null });
@@ -65,7 +79,7 @@ const row = (headline: string, url: string): SignalRow => ({ headline, url, publ
 it('the same story from two outlets is kept once, and the same page is one row', () => {
   expect(sameStory('Canva cuts 22% of staff in restructure', 'Canva restructure cuts 22% of its staff')).toBe(true);
   expect(sameStory('Canva cuts staff', 'Disney opens Hexed')).toBe(false);
-  const out = selectSignals([row('Canva cuts 22% of staff in restructure', 'https://a.com/1'), row('Canva restructure cuts 22% of its staff', 'https://b.com/2'), row('Other', 'https://www.a.com/1/?utm=1')]);
+  const out = selectSignals([row('Canva cuts 22% of staff in restructure', 'https://a.com/1'), row('Canva restructure cuts 22% of its staff', 'https://b.com/2'), row('Other', 'https://www.a.com/1/?utm_source=1')]);
   expect(out).toHaveLength(2);
   expect(out[1].dropped_reason).toContain('same story');
 });
@@ -91,7 +105,7 @@ describe('runSignals', () => {
     expect(destroy).toHaveBeenCalledWith({ where: { plan_id: 'p1' }, transaction: 'tx' });
     expect(create.mock.calls[0][1]).toEqual({ transaction: 'tx' });
     expect(destroy.mock.invocationCallOrder[0]).toBeLessThan(create.mock.invocationCallOrder[0]);
-    expect(search.mock.calls[0][1]).toMatchObject({ from: FROM, to: TODAY });
+    expect(search.mock.calls[0][1]).toMatchObject({ from: '2026-11-16', to: TODAY });
   });
   it('stops at the cost cap and replaces nothing', async () => {
     const search = jest.fn().mockRejectedValue(new BudgetExceeded(49.9, 0.25, 50));
@@ -144,3 +158,16 @@ it('parseCandidates keeps valid items only and survives a malformed answer', () 
 });
 
 it('shiftDays crosses months', () => { expect(shiftDays('2026-11-05', -14)).toBe('2026-10-22'); });
+
+it('the window starts 14 days before the air date, and always covers at least a week', () => {
+  expect(windowStart('2026-11-30', '2026-11-24')).toBe('2026-11-16');
+  expect(windowStart('2026-11-23', '2026-11-24')).toBe('2026-11-09');
+  expect(windowStart('2027-02-01', '2026-11-24')).toBe('2026-11-17');
+});
+
+it('a query string that names the page is a different page; tracking is ignored', () => {
+  expect(urlKey('https://a.com/item?id=1')).not.toBe(urlKey('https://a.com/item?id=2'));
+  expect(urlKey('https://www.a.com/x/?utm_source=q&fbclid=1#top')).toBe(urlKey('https://a.com/x'));
+});
+
+it.each([['fifty', 50], ['', 50], [undefined, 50], ['-5', 50], ['Infinity', 50], ['0', 0], ['20', 20]])('cap setting %s is %s', (raw, n) => { expect(capFrom(raw as string | undefined)).toBe(n); });

@@ -1,17 +1,23 @@
 import * as cheerio from 'cheerio';
+import { centralDate } from '../curriculumMap';
 
 /**
  * The publish date and title of a news page, read from the page itself (WL3.1: never from a search
  * snippet). Order: JSON-LD datePublished, publish meta tags, <time datetime>, then a written date in
  * a byline. No date on the page is null, and the signal is stored as "date unconfirmed": never guessed.
  */
-export interface PageFacts { title: string | null; date: string | null; dateSource: 'json-ld' | 'meta' | 'time' | 'byline' | null; }
+export interface PageFacts { title: string | null; site: string | null; date: string | null; dateSource: 'json-ld' | 'meta' | 'time' | 'byline' | null; }
 
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 
-/** A date string as YYYY-MM-DD, taking the calendar day the publisher wrote, or null. */
+/** A date string as YYYY-MM-DD, taking the calendar day the publisher wrote, or null. A UTC moment is read in Central time. */
 export function toYmd(raw: unknown): string | null {
   const s = String(raw ?? '').trim();
+  // Midnight UTC is how a date with no time is written, so that one keeps its day.
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}.*(Z|\+00:?00)$/.test(s) && !/T00:00(:00(\.0+)?)?(Z|\+00:?00)$/.test(s)) {
+    const at = new Date(s);
+    if (!Number.isNaN(at.getTime())) return centralDate(at);
+  }
   const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})(?!\d)/);
   const words = s.match(/\b([A-Za-z]{3})[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})\b/);
   const day = s.match(/\b(\d{1,2})\s+([A-Za-z]{3})[a-z]*\.?,?\s+(\d{4})\b/);
@@ -38,15 +44,16 @@ const META = ['meta[property="article:published_time"]', 'meta[name="article:pub
 export function readPage(html: string): PageFacts {
   const $ = cheerio.load(html);
   const title = ($('meta[property="og:title"]').attr('content') || $('title').first().text() || '').replace(/\s+/g, ' ').trim().slice(0, 300) || null;
+  const site = ($('meta[property="og:site_name"]').attr('content') || '').replace(/\s+/g, ' ').trim().slice(0, 200) || null;
   for (const el of $('script[type="application/ld+json"]').toArray()) {
     try {
       const d = jsonLdDate(JSON.parse($(el).text()));
-      if (d) return { title, date: d, dateSource: 'json-ld' };
+      if (d) return { title, site, date: d, dateSource: 'json-ld' };
     } catch { /* a malformed JSON-LD block is common on real pages; the next source is tried */ }
   }
-  for (const sel of META) { const d = toYmd($(sel).first().attr('content')); if (d) return { title, date: d, dateSource: 'meta' }; }
+  for (const sel of META) { const d = toYmd($(sel).first().attr('content')); if (d) return { title, site, date: d, dateSource: 'meta' }; }
   const t = toYmd($('article time[datetime], header time[datetime], time[pubdate]').first().attr('datetime'));
-  if (t) return { title, date: t, dateSource: 'time' };
+  if (t) return { title, site, date: t, dateSource: 'time' };
   const by = toYmd($('[class*="byline"], [class*="publish"], [class*="dateline"], [rel="author"]').first().text());
-  return by ? { title, date: by, dateSource: 'byline' } : { title, date: null, dateSource: null };
+  return by ? { title, site, date: by, dateSource: 'byline' } : { title, site, date: null, dateSource: null };
 }

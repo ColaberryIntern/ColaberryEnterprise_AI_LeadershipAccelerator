@@ -9,7 +9,13 @@ import { sequelize } from '../../../config/database';
  * Failure modes: over the cap throws BudgetExceeded (the job stops, nothing is retried). A database
  * error propagates, which also stops the job: if the cap cannot be read, the call does not happen.
  */
-export const MONTHLY_CAP_USD = Number(process.env.WEEKLY_LIVE_RESEARCH_CAP_USD || 50);
+const DEFAULT_CAP_USD = 50;
+/** A setting that is not a number 0 or above falls back to the default: comparing against NaN would lift the cap. */
+export function capFrom(raw: string | undefined): number {
+  const n = raw === undefined || raw.trim() === '' ? DEFAULT_CAP_USD : Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : DEFAULT_CAP_USD;
+}
+export const MONTHLY_CAP_USD = capFrom(process.env.WEEKLY_LIVE_RESEARCH_CAP_USD);
 const LOCK_KEY = 4406001; // serializes reservations, so two runs cannot both take the last dollar
 
 export class BudgetExceeded extends Error {

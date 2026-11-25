@@ -18872,3 +18872,16 @@ Branch `workstream/career-prep-r2r3`, one PR (https://github.com/ColaberryIntern
   - What changed: services/weeklyLive/demand/youtubeApi.ts replaces the page scraper; youtubeGet added to composer/youtubeClient.ts
   - Verification: jest 233 passed (weeklyLive + composer); live from the production host 8 of 12 reference weeks within 1%
   - Notes: title patterns for weeks 1, 2, 6, 10 were tightened after the first run; a full run uses about 2,500 of 10,000 shared daily API units
+
+- [ ] Weekly Live Studio WL3.1: grader attempt 1 defects fixed (regrade pending)
+  - Date: 2026-11-25
+  - Session: CC-20261124-iwlu
+  - What changed: window is air date minus 14 (at least 7 days); event pages capped at 210 days; publisher read from the fetched page; a bad cap setting falls back to $50; the search call is redacted, logged to ai_events and never retried; UTC stamps read in Central; query strings kept; index pages dropped
+  - Verification: jest signals suites pass; cap SQL on dev1 rolled back; one live search group, 6 candidates, $0.06
+  - Notes: deviation from spec: a far-out air date still searches 7 days
+- [ ] Weekly Live Studio WL3.2: clean run on committed code (regrade pending)
+  - Date: 2026-11-25
+  - Session: CC-20261124-iwlu
+  - What changed: YouTube Data API replies validated with Zod
+  - Verification: one 12-week run on 992dd74ff, 8 of 12 within 10% (raw rows in wl3.2-clean-run.txt); run one day after the reference
+  - Notes: supersedes the two-run 8 of 12 claim

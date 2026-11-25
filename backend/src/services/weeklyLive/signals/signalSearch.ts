@@ -1,5 +1,9 @@
 import { z } from 'zod';
 import { getInstrumentedOpenAI } from '../../openaiInstrumented';
+import { emitAiEvent } from '../../aiEventService';
+import { redactSensitive } from '../../../utils/piiRedaction';
+import { ensureTraceId } from '../../../utils/requestContext';
+import { classifyError } from '../../../utils/errorClassifier';
 import { MODEL_PRICING } from '../../components/costEstimationService';
 import { allWeeks } from '../../../data/canonicalCourse';
 import { VIRAL_FACTORS } from '../scoring';
@@ -8,13 +12,16 @@ import { withBudget } from './researchBudget';
 /**
  * Find candidate news items with OpenAI's web search tool (M0: the production OpenAI key). The answer
  * is only a list of CANDIDATES: nothing here is stored until signalsJob has fetched the page and read
- * the date off it. One call per group of factors, 90 s each, one SDK retry, each call under the cap.
+ * the date off it. One call per group of factors, 90 s each, no SDK retry (a retry could bill
+ * twice against one reservation), each call under the cap. The instrumented client wraps only chat
+ * completions, so this redacts the prompt and records the ai_event itself.
  */
 export const SEARCH_MODEL = process.env.WEEKLY_LIVE_SEARCH_MODEL || 'gpt-4o';
 const WEB_SEARCH_CALL_USD = 0.01;
 /** Worst case reserved per call: about 60k input and 3k output tokens on gpt-4o, plus 6 searches. */
 export const SEARCH_RESERVE_USD = 0.25;
 const TIMEOUT_MS = 90_000;
+const WORKFLOW = 'weekly_live_signals';
 
 export const FACTOR_GROUPS: readonly (readonly number[])[] = [[1, 6], [2, 7], [3, 4], [5, 10], [8, 9]];
 
@@ -65,11 +72,21 @@ export function searchCost(model: string, usage: SearchUsage | undefined, search
 
 export async function searchGroup(group: readonly number[], s: SearchInput): Promise<Candidate[]> {
   return withBudget(s.planId, `signals:${group.join('+')}`, SEARCH_RESERVE_USD, async () => {
-    const client = getInstrumentedOpenAI({ workflow_id: 'weekly_live_signals' }, { timeout: TIMEOUT_MS, maxRetries: 1 });
-    const res = await client.responses.create({
-      model: SEARCH_MODEL, tools: [{ type: 'web_search', search_context_size: 'low' }], input: prompt(group, s), max_output_tokens: 3000,
-    });
-    const searches = res.output.filter((o) => o.type === 'web_search_call').length;
-    return { value: parseCandidates(res.output_text || ''), costUsd: searchCost(SEARCH_MODEL, res.usage, searches) };
+    const client = getInstrumentedOpenAI({ workflow_id: WORKFLOW }, { timeout: TIMEOUT_MS, maxRetries: 0 });
+    const t0 = Date.now();
+    const event = { event_type: 'llm.call' as const, external_system: 'openai', workflow_id: WORKFLOW, trace_id: ensureTraceId(), model: SEARCH_MODEL, cache_hit: false };
+    try {
+      const res = await client.responses.create({
+        model: SEARCH_MODEL, tools: [{ type: 'web_search', search_context_size: 'low' }], input: redactSensitive(prompt(group, s)), max_output_tokens: 3000,
+      });
+      const searches = res.output.filter((o) => o.type === 'web_search_call').length;
+      const costUsd = searchCost(SEARCH_MODEL, res.usage, searches);
+      emitAiEvent({ ...event, outcome: 'success', prompt_tokens: res.usage?.input_tokens ?? null, completion_tokens: res.usage?.output_tokens ?? null,
+        total_tokens: res.usage?.total_tokens ?? null, cost_usd: costUsd, duration_ms: Date.now() - t0 }).catch(() => undefined); // telemetry never fails the search
+      return { value: parseCandidates(res.output_text || ''), costUsd };
+    } catch (e) {
+      emitAiEvent({ ...event, outcome: 'failure', error_class: classifyError(e), duration_ms: Date.now() - t0 }).catch(() => undefined);
+      throw e;
+    }
   });
 }

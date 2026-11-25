@@ -16,8 +16,8 @@ import { FACTOR_GROUPS, searchGroup as realSearch, type Candidate, type SearchIn
  * transaction, so a rerun never duplicates and a failed rerun leaves the old rows in place.
  *
  * Failure modes: over the cost cap stops the job (BudgetExceeded, nothing replaced). One search group
- * failing is logged and reported in `failedGroups`; all groups failing throws. No retry beyond the
- * SDK's one; rerunning the plan is the recovery path.
+ * failing is logged and reported in `failedGroups`; all groups failing throws. No automatic retry
+ * (one reservation pays for one call); rerunning the plan is the recovery path.
  */
 export const MAX_SIGNALS = 18;
 export const MIN_SIGNALS = 12;
@@ -25,6 +25,10 @@ const WINDOW_DAYS = 14;
 const FETCH_CONCURRENCY = 4;
 /** Trends, entertainment and seasonal events are about the air week, so an older page is still current. */
 const EVENT_FACTORS = new Set([4, 8, 9]);
+/** ...but not any age: a season schedule is published months ahead, an old page is not about this week. */
+const EVENT_MAX_AGE_DAYS = 210;
+/** When the air date is far out, [air date - 14, today] is too short or empty, so search at least this many days. */
+const MIN_WINDOW_DAYS = 7;
 
 export interface SignalRow {
   headline: string; publisher: string | null; url: string; factors: number[]; fits_weeks: number[]; idea: string | null;
@@ -37,9 +41,16 @@ export function shiftDays(ymd: string, days: number): string {
   return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
 }
 
-/** Same page, ignoring www, trailing slash, query and fragment. */
+/** The search window's first day: air date - 14, but never less than 7 days before today. */
+export function windowStart(airDate: string, today: string): string {
+  const spec = shiftDays(airDate, -WINDOW_DAYS); const latest = shiftDays(today, -MIN_WINDOW_DAYS);
+  return spec < latest ? spec : latest;
+}
+
+const TRACKING = /^(utm_|fbclid$|gclid$|mc_|ref$|src$|cmpid$)/i;
+/** Same page, ignoring www, trailing slash, fragment and tracking parameters. Other parameters can name the page. */
 export function urlKey(raw: string): string {
-  try { const u = new URL(raw); return `${u.hostname.replace(/^www\./, '')}${u.pathname.replace(/\/+$/, '')}`.toLowerCase(); } catch { return raw; }
+  try { const u = new URL(raw); const q = [...u.searchParams].filter(([k]) => !TRACKING.test(k)).map(([k, v]) => `${k}=${v}`).sort().join('&'); return `${u.hostname.replace(/^www\./, '')}${u.pathname.replace(/\/+$/, '')}`.toLowerCase() + (q && `?${q}`); } catch { return raw; }
 }
 
 const STOP = new Set(['the', 'and', 'for', 'with', 'from', 'that', 'this', 'its', 'are', 'says', 'new', 'how', 'why']);
@@ -52,22 +63,33 @@ export function sameStory(a: string, b: string): boolean {
   return shared / Math.min(x.size, y.size) > 0.6 && shared >= 3;
 }
 
+/** An undated page whose address does not name a story (a home page, /news/) is an index, not a signal. */
+export function namesAStory(url: string): boolean {
+  const last = new URL(url).pathname.split('/').filter(Boolean).pop() || '';
+  return /[-_][^-_]+[-_]/.test(last) || /\d{5,}/.test(last);
+}
+
 export async function vet(c: Candidate, from: string, today: string, fetchPage: FetchPage): Promise<SignalRow> {
   const base = { headline: c.headline, publisher: c.publisher || null, factors: normalizeFactors(c.factors), fits_weeks: [...new Set(c.fits_weeks)].sort((a, b) => a - b), idea: c.idea || null };
   const drop = (url: string, reason: string, fetched = false): SignalRow => ({ ...base, url: url.slice(0, 1000), published_at: null, date_confirmed: false, fetched_ok: fetched, dropped_reason: reason.slice(0, 200) });
-  let page = await fetchPage(c.url);
+  let page = await fetchPage(c.url); let alternate = false;
   if (!page.ok && c.alternate_url && urlKey(c.alternate_url) !== urlKey(c.url)) {
     const first = page.reason;
-    page = await fetchPage(c.alternate_url);
+    page = await fetchPage(c.alternate_url); alternate = true;
     if (!page.ok) return drop(c.url, `${first}; alternate ${page.reason}`);
   }
   if (!page.ok) return drop(c.url, page.reason);
   const facts = readPage(page.html);
   // The page's own title wins: the search answer's headline may be paraphrased or invented.
   const headline = (facts.title || c.headline).slice(0, 500);
+  // The outlet whose page was read: the named publisher belongs to the first URL only.
+  if (facts.site) base.publisher = facts.site;
+  else if (alternate) base.publisher = new URL(page.url).hostname.replace(/^www\./, '');
   if (facts.date && facts.date > today) return { ...drop(page.url, `page date ${facts.date} is in the future`, true), headline };
-  if (facts.date && facts.date < from && !base.factors.some((f) => EVENT_FACTORS.has(f))) {
-    return { ...drop(page.url, `published ${facts.date}, before ${from}`, true), headline };
+  if (!facts.date && !namesAStory(page.url)) return { ...drop(page.url, 'a home or index page, not one story', true), headline };
+  const oldest = base.factors.some((f) => EVENT_FACTORS.has(f)) ? shiftDays(today, -EVENT_MAX_AGE_DAYS) : from;
+  if (facts.date && facts.date < oldest) {
+    return { ...drop(page.url, `published ${facts.date}, before ${oldest}`, true), headline };
   }
   const idea = base.idea && lintField({ path: 'idea', kind: 'voiceover', text: base.idea }).length ? null : base.idea;
   return { ...base, idea, headline, url: page.url.slice(0, 1000), published_at: facts.date, date_confirmed: facts.date !== null, fetched_ok: true, dropped_reason: null };
@@ -94,7 +116,7 @@ export interface SignalsDeps { search?: typeof realSearch; fetchPage?: FetchPage
 
 export async function runSignals(input: { planId: string; airDate: string; forceNews?: string; avoid?: string }, deps: SignalsDeps = {}): Promise<SignalsResult> {
   const { search = realSearch, fetchPage = realFetch, today = centralDate() } = deps;
-  const s: SearchInput = { ...input, from: shiftDays(input.airDate < today ? input.airDate : today, -WINDOW_DAYS), to: today };
+  const s: SearchInput = { ...input, from: windowStart(input.airDate, today), to: today };
   const candidates: Candidate[] = []; const failedGroups: string[] = [];
   for (const group of FACTOR_GROUPS) {
     try { candidates.push(...await search(group, s)); } catch (e) {

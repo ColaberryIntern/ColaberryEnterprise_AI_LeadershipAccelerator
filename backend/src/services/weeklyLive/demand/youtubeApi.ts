@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { iso8601ToSeconds, youtubeGet } from '../../composer/youtubeClient';
 
 /**
@@ -14,13 +15,18 @@ const DAY_MS = 86_400_000;
 /** Shorts run up to 3 minutes and earn views differently, so they are never compared with full videos. */
 const SHORT_MAX_SECONDS = 180;
 
-interface VideoItem { id: string; snippet: { title: string; channelTitle: string; channelId: string; publishedAt: string }; statistics?: { viewCount?: string }; contentDetails?: { duration?: string }; }
+const VideoItem = z.object({
+  id: z.string(), snippet: z.object({ title: z.string(), channelTitle: z.string(), channelId: z.string(), publishedAt: z.string() }),
+  statistics: z.object({ viewCount: z.string().regex(/^\d+$/).optional() }).optional(), contentDetails: z.object({ duration: z.string().optional() }).optional(),
+});
+const SearchItem = z.object({ id: z.object({ videoId: z.string().optional() }) });
+const UploadItem = z.object({ contentDetails: z.object({ videoId: z.string() }) });
 
-/** The list in a response. Throws when there is none, so a changed shape is a failure and not "no videos". */
-function items<T>(body: unknown): T[] {
-  const list = (body as { items?: T[] } | null)?.items;
-  if (!Array.isArray(list)) throw Object.assign(new Error('YouTube API reply had no items list'), { name: 'ContractViolation' });
-  return list;
+/** The validated list in a reply. A changed shape throws, so it is a failure and not "no videos". */
+function items<T extends z.ZodType>(body: unknown, item: T): z.infer<T>[] {
+  const p = z.object({ items: z.array(item) }).safeParse(body);
+  if (!p.success) throw Object.assign(new Error('YouTube API reply had an unexpected shape'), { name: 'ContractViolation' });
+  return p.data.items as z.infer<T>[];
 }
 
 export function median(xs: (number | null)[]): number | null {
@@ -34,7 +40,7 @@ export function median(xs: (number | null)[]): number | null {
 export async function videosById(ids: string[], get: ApiGet, now: number): Promise<Video[]> {
   const out: Video[] = [];
   for (let i = 0; i < ids.length; i += 50) {
-    for (const v of items<VideoItem>(await get('videos', { part: 'snippet,statistics,contentDetails', id: ids.slice(i, i + 50).join(','), maxResults: '50' }))) {
+    for (const v of items(await get('videos', { part: 'snippet,statistics,contentDetails', id: ids.slice(i, i + 50).join(','), maxResults: '50' }), VideoItem)) {
       const seconds = iso8601ToSeconds(v.contentDetails?.duration || '');
       if (seconds <= SHORT_MAX_SECONDS) continue;
       out.push({ id: v.id, title: v.snippet.title, channel: v.snippet.channelTitle, channelId: v.snippet.channelId, seconds,
@@ -49,9 +55,9 @@ export async function videosById(ids: string[], get: ApiGet, now: number): Promi
 export async function searchIds(queries: readonly string[], days: number, get: ApiGet, now: number): Promise<string[]> {
   const ids = new Set<string>();
   for (const q of queries) {
-    const found = items<{ id?: { videoId?: string } }>(await get('search', { part: 'id', type: 'video', q, order: 'relevance', relevanceLanguage: 'en',
-      publishedAfter: new Date(now - days * DAY_MS).toISOString(), maxResults: '50' }));
-    found.forEach((f) => { if (f.id?.videoId) ids.add(f.id.videoId); });
+    const found = items(await get('search', { part: 'id', type: 'video', q, order: 'relevance', relevanceLanguage: 'en',
+      publishedAfter: new Date(now - days * DAY_MS).toISOString(), maxResults: '50' }), SearchItem);
+    found.forEach((f) => { if (f.id.videoId) ids.add(f.id.videoId); });
   }
   return [...ids];
 }
@@ -59,6 +65,6 @@ export async function searchIds(queries: readonly string[], days: number, get: A
 /** A channel's latest full-length uploads, newest first. */
 export async function channelUploads(channelId: string, get: ApiGet, now: number): Promise<Video[]> {
   // A channel's uploads playlist is its id with UU in place of UC.
-  const list = items<{ contentDetails: { videoId: string } }>(await get('playlistItems', { part: 'contentDetails', playlistId: `UU${channelId.slice(2)}`, maxResults: '50' }));
+  const list = items(await get('playlistItems', { part: 'contentDetails', playlistId: `UU${channelId.slice(2)}`, maxResults: '50' }), UploadItem);
   return (await videosById(list.map((x) => x.contentDetails.videoId), get, now)).sort((a, b) => a.ageDays - b.ageDays);
 }
