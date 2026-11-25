@@ -16,7 +16,10 @@
     "voice:preflight": "ts-node src/scripts/voice/preflight.ts",
     "voice:test:mock": "ts-node src/scripts/voice/testMock.ts",
     "lint": "eslint src --ext .ts",
-    "test": "jest"
+    "test": "jest",
+    "voice:test:live": "ts-node src/scripts/voice/testLive.ts",
+    "voice:grade": "ts-node src/scripts/voice/grade.ts",
+    "voice:numbers:register": "ts-node src/scripts/voice/registerNumber.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.106.0",

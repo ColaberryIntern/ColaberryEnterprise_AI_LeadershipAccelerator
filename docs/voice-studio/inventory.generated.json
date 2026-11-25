@@ -1,6 +1,6 @@
 {
  "generatedFrom": "git ls-files",
- "total": 229,
+ "total": 234,
  "byRole": {
   "DISPATCH": 3,
   "INGEST": 3,
@@ -8,8 +8,8 @@
   "CALLER": 11,
   "CONFIG": 20,
   "UI": 22,
-  "CONSUMER": 51,
-  "MENTION": 113
+  "CONSUMER": 54,
+  "MENTION": 115
  },
  "rows": [
   {
@@ -312,6 +312,22 @@
    "role": "CONSUMER",
    "callTypes": [],
    "envVars": []
+  },
+  {
+   "path": "backend/src/routes/admin/voiceStudioRoutes.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_TEST_ENABLED"
+   ]
+  },
+  {
+   "path": "backend/src/routes/adminRoutes.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_TEST_ENABLED"
+   ]
   },
   {
    "path": "backend/src/routes/v1Routes.ts",
@@ -1231,6 +1247,15 @@
    ]
   },
   {
+   "path": "backend/src/services/voice/gateway/directEngineProvider.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_PUBLIC_BASE_URL",
+    "VOICE_TEST_MAX_DURATION_SECONDS"
+   ]
+  },
+  {
    "path": "backend/src/services/voice/gateway/legacyFacade.ts",
    "role": "CONSUMER",
    "callTypes": [],
@@ -1290,6 +1315,29 @@
    "callTypes": [],
    "envVars": [
     "SYNTHFLOW_WEBHOOK_TOKEN"
+   ]
+  },
+  {
+   "path": "backend/src/services/voice/testlab/testLabPolicy.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_TEST_ALLOWED_NUMBER",
+    "VOICE_TEST_BUDGET_USD",
+    "VOICE_TEST_ENABLED",
+    "VOICE_TEST_MAX_ATTEMPTS",
+    "VOICE_TEST_MAX_DURATION_SECONDS"
+   ]
+  },
+  {
+   "path": "backend/src/services/voice/testlab/testLabService.ts",
+   "role": "CONSUMER",
+   "callTypes": [],
+   "envVars": [
+    "VOICE_TEST_ALLOWED_NUMBER",
+    "VOICE_TEST_ENABLED",
+    "VOICE_TEST_MAX_ATTEMPTS",
+    "VOICE_TEST_MAX_DURATION_SECONDS"
    ]
   },
   {
