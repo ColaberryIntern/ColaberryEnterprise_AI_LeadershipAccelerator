@@ -1,6 +1,6 @@
 {
  "generatedFrom": "git ls-files",
- "total": 278,
+ "total": 279,
  "byRole": {
   "DISPATCH": 3,
   "INGEST": 3,
@@ -9,7 +9,7 @@
   "CONFIG": 20,
   "UI": 33,
   "CONSUMER": 72,
-  "MENTION": 130
+  "MENTION": 131
  },
  "rows": [
   {
@@ -1370,6 +1370,12 @@
   },
   {
    "path": "backend/src/services/voice/migration/assistantInventory.ts",
+   "role": "MENTION",
+   "callTypes": [],
+   "envVars": []
+  },
+  {
+   "path": "backend/src/services/voice/migration/legacyScan.ts",
    "role": "MENTION",
    "callTypes": [],
    "envVars": []
