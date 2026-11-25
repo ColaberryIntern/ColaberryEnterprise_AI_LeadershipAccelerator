@@ -21,7 +21,7 @@ Return JSON only, with this shape:
  "steps": ["what was built, one short step each"] (3 to 6 items, empty if nothing was built),
  "quote": "one memorable line from the class, max 20 words",
  "homework": "one small task for this week, one sentence"}
-Rules: never say anything is free or costs nothing; never mention partnerships; no statistics; no em dashes; American spelling.`;
+Rules: never mention any price, cost or offer; never mention partnerships; no statistics; no em dashes; American spelling.`;
 
 export interface DraftResult { summary: RecapSummary; source: 'ai' | 'default'; violations: LintViolation[]; errorClass?: string }
 
