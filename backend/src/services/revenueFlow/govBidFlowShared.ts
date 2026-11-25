@@ -39,6 +39,8 @@ export interface SubmissionRow {
   externally_submitted_at: string | null;
   acknowledged_at: string | null;
   outcome_recorded_at: string | null;
+  /** M5: the solicitation close date carried onto the submitted bid (nullable); so a potential-win shows when it closes. */
+  close_date: string | null;
 }
 
 export interface DocRow {

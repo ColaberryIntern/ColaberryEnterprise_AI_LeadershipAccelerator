@@ -89,7 +89,8 @@ export async function buildGovFlow(windowStart: Date): Promise<GovFlow> {
     ? await sequelize.query<SubmissionRow>(
       `SELECT delivery_project_id, status, outcome,
               exported_at::text, externally_submitted_at::text,
-              acknowledged_at::text, outcome_recorded_at::text
+              acknowledged_at::text, outcome_recorded_at::text,
+              close_date::text
          FROM gov_submission`,
       { type: QueryTypes.SELECT },
     )
@@ -300,6 +301,9 @@ export async function buildGovFlow(windowStart: Date): Promise<GovFlow> {
         // exists at all: nothing has been decided, which is different from a decision of
         // "unknown".
         outcome: sub?.outcome ?? 'pending',
+        // M5: the solicitation close date, once the bid is submitted. Null until submitted (or when the
+        // solicitation recorded none) - a potential-win shows WHEN it closes alongside its priced-or-pending value.
+        closeDate: sub?.close_date ? String(sub.close_date).slice(0, 10) : null,
       };
     })
     .sort((a, b) => {
