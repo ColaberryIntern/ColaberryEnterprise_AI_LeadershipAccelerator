@@ -272,12 +272,16 @@ export const env = {
   // services/sbp/connectedDemoFlag.ts for why a read path that consulted this variable instead
   // of the board would orphan a story the student had already been asked to build.
   sbpConnectedDemo: (process.env.SBP_CONNECTED_DEMO ?? 'off').trim(),
-  // L13.1: does the PLATFORM build this project's Command Center and Demo right after publish?
-  // 'off' (default), 'all', or a comma-separated list of enrollment ids. When on, publish queues
-  // one run on the GitHub-hosted runner (.github/workflows/platform-build-runner.yml); the result
-  // is stored and served by the platform, never by the student's repo. Each run spends model
-  // budget, which is why this defaults off and is enabled per enrollment first.
+  // L13.7: the MASTER SWITCH for platform-built Command Centers and demos: 'on', or anything else
+  // for off. It does not choose projects. Each build says for itself whether the platform makes these
+  // pages (`setupMode: 'platform'`, client demos only) or the student does (the default), because each
+  // platform build costs about $2. The older 'all' and enrollment-id values mean off.
   sbpPlatformBuild: (process.env.SBP_PLATFORM_BUILD ?? 'off').trim(),
+  // The most platform builds that may start in any 24 hours, all projects together. The client intake
+  // is a public form, so this is what bounds the bill.
+  platformBuildDailyMax: Math.max(0, parseInt(process.env.PLATFORM_BUILD_DAILY_MAX ?? '5', 10) || 0),
+  // The one enrollment every client demo project is held under. Empty means client demos are refused.
+  platformBuildClientEnrollment: (process.env.PLATFORM_BUILD_CLIENT_ENROLLMENT ?? '').trim(),
   // The repository whose workflow builds it. Our own repo: the runner must never be the
   // student's, or the platform would be "held hostage" by a repo it does not control.
   platformBuildRepo: (process.env.PLATFORM_BUILD_REPO

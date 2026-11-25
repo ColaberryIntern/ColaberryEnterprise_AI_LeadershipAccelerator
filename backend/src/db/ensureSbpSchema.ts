@@ -122,6 +122,10 @@ export async function ensureSbpSchema(): Promise<void> {
     // resumed 03:06:54, `sbp_autopublished` at 03:07:37 on a build started with
     // holdForReview: true. A safety property that evaporates on restart is not one.
     `ALTER TABLE build_intake ADD COLUMN IF NOT EXISTS hold_for_review BOOLEAN NOT NULL DEFAULT FALSE`,
+    // L13.7. Who makes the Command Center and demo: 'student' (STORY-000 / STORY-900 are tasks) or
+    // 'platform' (we build them, about $2). Stored for the reason the hold above is: a restart must
+    // not change the answer.
+    `ALTER TABLE build_intake ADD COLUMN IF NOT EXISTS setup_mode TEXT NOT NULL DEFAULT 'student'`,
     `CREATE UNIQUE INDEX IF NOT EXISTS build_intake_unique_project ON build_intake (project_id)`,
     `CREATE INDEX IF NOT EXISTS idx_build_intake_enrollment ON build_intake (enrollment_id)`,
     `CREATE INDEX IF NOT EXISTS idx_build_intake_status ON build_intake (status)`,

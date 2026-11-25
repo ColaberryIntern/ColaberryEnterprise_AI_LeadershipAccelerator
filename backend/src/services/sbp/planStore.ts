@@ -325,7 +325,11 @@ export interface BuildIntake {
    * is a hold that a deploy silently removes.
    */
   hold_for_review?: boolean | null;
+  /** Who makes the Command Center and demo. Absent means 'student'. Persisted like the hold. */
+  setup_mode?: SetupMode | null;
 }
+
+export type SetupMode = 'student' | 'platform';
 
 export interface BuildIntakeError {
   error_class: string;
@@ -342,15 +346,15 @@ export interface BuildIntakeError {
 export async function saveIntake(intake: BuildIntake): Promise<{ project_id: string; status: string }> {
   const rows = await sequelize.query<{ project_id: string; status: string }>(
     `INSERT INTO build_intake
-       (project_id, enrollment_id, idea, name, size, users, data_sources, done_definition, target_weeks, correlation_id, status, answers, last_error, hold_for_review)
-     VALUES (:project_id, :enrollment_id, :idea, :name, :size, :users, :data_sources, :done_definition, :target_weeks, :correlation_id, :status, CAST(:answers AS JSONB), CAST(:last_error AS JSONB), :hold_for_review)
+       (project_id, enrollment_id, idea, name, size, users, data_sources, done_definition, target_weeks, correlation_id, status, answers, last_error, hold_for_review, setup_mode)
+     VALUES (:project_id, :enrollment_id, :idea, :name, :size, :users, :data_sources, :done_definition, :target_weeks, :correlation_id, :status, CAST(:answers AS JSONB), CAST(:last_error AS JSONB), :hold_for_review, :setup_mode)
      ON CONFLICT (project_id) DO UPDATE SET
        idea = EXCLUDED.idea, name = EXCLUDED.name, size = EXCLUDED.size,
        users = EXCLUDED.users, data_sources = EXCLUDED.data_sources,
        done_definition = EXCLUDED.done_definition, target_weeks = EXCLUDED.target_weeks,
        correlation_id = EXCLUDED.correlation_id, status = EXCLUDED.status,
        answers = COALESCE(EXCLUDED.answers, build_intake.answers),
-       last_error = EXCLUDED.last_error, hold_for_review = EXCLUDED.hold_for_review, updated_at = NOW()
+       last_error = EXCLUDED.last_error, hold_for_review = EXCLUDED.hold_for_review, setup_mode = EXCLUDED.setup_mode, updated_at = NOW()
      RETURNING project_id, status`,
     {
       type: QueryTypes.SELECT,
@@ -369,6 +373,7 @@ export async function saveIntake(intake: BuildIntake): Promise<{ project_id: str
         status: intake.status ?? 'captured',
         last_error: intake.last_error ? JSON.stringify(intake.last_error) : null,
         hold_for_review: intake.hold_for_review === true,
+        setup_mode: intake.setup_mode === 'platform' ? 'platform' : 'student',
       },
     },
   );

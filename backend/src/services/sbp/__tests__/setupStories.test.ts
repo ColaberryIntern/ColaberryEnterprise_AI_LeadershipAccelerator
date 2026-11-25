@@ -12,10 +12,11 @@ jest.mock('../connectedDemoFlag', () => ({
   connectedDemoMaterializedFor: (...a: unknown[]) => mockDemoRow(...a),
 }));
 
-jest.mock('../planStore', () => ({ getPublishedPlan: jest.fn() }));
+const mockIntake = jest.fn();
+jest.mock('../planStore', () => ({ getPublishedPlan: jest.fn(), getIntake: (...a: unknown[]) => mockIntake(...a) }));
 jest.mock('../../progression/pointsConfigService', () => ({ getBudgetPerUnitXp: jest.fn() }));
 
-import { setupForPublish, setupStoriesRetiredFor } from '../setupStories';
+import { setupForPublish, setupModeFor, setupStoriesRetiredFor } from '../setupStories';
 import { planStorySpecs } from '../verification/storyPoints';
 import { renderDocs } from '../renderDocs';
 import { buildStoryPrompt } from '../buildStoryPrompt';
@@ -69,9 +70,9 @@ describe('setupStoriesRetiredFor (read)', () => {
 });
 
 describe('setupForPublish (write)', () => {
-  const settings = { platformBuild: E, connectedDemo: 'all' };
+  const settings = { platformBuild: true, connectedDemo: 'all' };
 
-  it('retires both stories for a covered new project, even when the demo flag is on', async () => {
+  it('retires both stories for a new project in platform mode, even when the demo flag is on', async () => {
     facts(false, false);
     expect(await setupForPublish(P, E, settings)).toEqual({ setupRetired: true, connectedDemo: false });
     expect(mockDemoPublish).not.toHaveBeenCalled();
@@ -82,19 +83,32 @@ describe('setupForPublish (write)', () => {
     expect(await setupForPublish(P, E, settings)).toEqual({ setupRetired: false, connectedDemo: true });
   });
 
-  it('changes nothing for an enrollment the flag does not cover', async () => {
+  it('gives a student build both stories', async () => {
     facts(false, false);
-    expect((await setupForPublish(P, 'someone-else', settings)).setupRetired).toBe(false);
+    expect(await setupForPublish(P, E, { ...settings, platformBuild: false })).toEqual({ setupRetired: false, connectedDemo: true });
   });
 
-  it('stays retired on a republish after the flag is turned off', async () => {
+  it('stays retired on a republish after the mode is turned off', async () => {
     facts(false, true);
-    expect((await setupForPublish(P, E, { ...settings, platformBuild: 'off' })).setupRetired).toBe(true);
+    expect((await setupForPublish(P, E, { ...settings, platformBuild: false })).setupRetired).toBe(true);
   });
 
   it('publishes as today when the lookup fails', async () => {
     mockQuery.mockRejectedValue(new Error('db down'));
     expect((await setupForPublish(P, E, settings)).setupRetired).toBe(false);
+  });
+});
+
+describe('setupModeFor', () => {
+  it('is platform only when the intake says exactly that, and student on anything else', async () => {
+    mockIntake.mockResolvedValue({ setup_mode: 'platform' });
+    expect(await setupModeFor(P)).toBe('platform');
+    for (const row of [{ setup_mode: 'student' }, {}, null]) {
+      mockIntake.mockResolvedValue(row);
+      expect(await setupModeFor(P)).toBe('student');
+    }
+    mockIntake.mockRejectedValue(new Error('db down'));
+    expect(await setupModeFor(P)).toBe('student');
   });
 });
 
@@ -123,5 +137,6 @@ describe('what a retired project is judged on and shown', () => {
     expect(platformCommandCenterPrompt(plan, null, { setupRetired: true })).toContain('no STORY-000 and no STORY-900');
     expect(platformDemoPrompt(plan, { setupRetired: true })).toContain('no STORY-000 and no STORY-900');
     expect(platformCommandCenterPrompt(plan, null)).not.toContain('no STORY-000 and no STORY-900');
+    expect(platformCommandCenterPrompt(plan, null, { setupRetired: true })).toContain('CLIENT on a first sales call');
   });
 });

@@ -42,6 +42,7 @@
 import ProjectUnderstandingRecord from '../../models/ProjectUnderstandingRecord';
 import { resolveProjectForNewBuild } from '../projectService';
 import { startBuild } from '../sbp/sbpOrchestrator';
+import type { SetupMode } from '../sbp/planStore';
 import { toBuildIntake, type BuildIntake } from './buildIntakeAdapter';
 import type { ProjectUnderstanding } from './projectUnderstanding';
 
@@ -99,6 +100,8 @@ export async function startBuildFromUnderstanding(params: {
    * Defaults OFF, so the public door keeps behaving exactly as it did.
    */
   holdForReview?: boolean;
+  /** Who makes the Command Center and demo. Default 'student'. Only clientDemo.ts passes 'platform'. */
+  setupMode?: SetupMode;
 }): Promise<BuildFromUnderstandingResult> {
   const record: any = await ProjectUnderstandingRecord.findByPk(params.recordId);
   if (!record) return { ok: false, reason: 'not_found', error: `no understanding ${params.recordId}` };
@@ -155,6 +158,7 @@ export async function startBuildFromUnderstanding(params: {
       targetWeeks: intake.targetWeeks,
       answers: intake.answers,
       holdForReview: params.holdForReview,
+      setupMode: params.setupMode,
     });
 
     const handoff: BuildHandoffRecord = {

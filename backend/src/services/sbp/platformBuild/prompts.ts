@@ -55,6 +55,9 @@ const RETIRED_RULES: readonly string[] = [
     + '`docs/stories/` or `progress.json` and the totals count only the plan\'s own stories. Skip '
     + 'every instruction to read, tick, seed or commit them, and never show them, or a count '
     + '"including this Command Center", on a page.',
+  '- The reader is a CLIENT on a first sales call, not a student. Show no points, cohort, term, week, '
+    + 'demo-day or coursework wording anywhere, and no calendar dates: present releases as an ordered '
+    + 'sequence. Where the brief asks for points or demo day, leave that element out.',
 ];
 
 /** Brief 1: the Command Center. Writes `index.html` and `command-center/**` only. */
