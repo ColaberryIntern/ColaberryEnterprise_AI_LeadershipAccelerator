@@ -9,6 +9,8 @@
  *   - Shadow is evaluation only: it allocates legacy and never causes a second call.
  *   - A logical call that was already dispatched keeps its provider, whatever the route says now; one whose
  *     outcome is unknown is never dialed again by anyone.
+ *   - The decision is CLAIMED per (tenant, idempotency key) before anyone dials (rolloutStore): a second
+ *     allocation of that key, whatever the route says by then, is refused, for either provider.
  *   - Engine B has no transcript yet, so it cannot hear an opt-out: test calls only.
  */
 import { createHash } from 'crypto';
@@ -39,8 +41,8 @@ export interface AllocationInput {
 }
 
 export type Allocation =
-  | { provider: 'direct'; engine: DirectEngine; routeId: string; versionId: string; reason: string; bucket: number }
-  | { provider: 'synthflow_legacy'; reason: string; bucket: number | null }
+  | { provider: 'direct'; engine: DirectEngine; routeId: string; versionId: string; reason: string; bucket: number; claimId?: string }
+  | { provider: 'synthflow_legacy'; reason: string; bucket: number | null; claimId?: string }
   | { provider: 'none'; reason: string; bucket: number | null };
 
 export function bucketOf(routeId: string, recipientRef: string): number {

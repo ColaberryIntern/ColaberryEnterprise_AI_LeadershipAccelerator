@@ -6,6 +6,8 @@
  * details: it is never written to the database or a log. If it is gone (restart between dial and answer,
  * or expired) the call is hung up; it never falls back to another agent's words.
  *
+ * Dropped when the live session has taken it, and after ten minutes in any case.
+ *
  * Test calls have no pinned session: they always speak the frozen test profile.
  */
 import type { RegisteredTool } from '../engines/toolBroker';
@@ -21,6 +23,7 @@ export function pinSession(callId: string, spec: CallSessionSpec, now = Date.now
   for (const [k, v] of pinned) if (now - v.at > TTL_MS) pinned.delete(k);
   if (!pinned.has(callId) && pinned.size >= MAX) throw Object.assign(new Error('too many pinned calls'), { name: 'SessionStoreFull' });
   pinned.set(callId, { spec, at: now });
+  setTimeout(() => { if (pinned.get(callId)?.at === now) pinned.delete(callId); }, TTL_MS).unref();
 }
 
 export function unpinSession(callId: string): void { pinned.delete(callId); }

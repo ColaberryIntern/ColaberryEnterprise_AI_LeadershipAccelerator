@@ -12,6 +12,7 @@
 import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
+import { subjectRefFrom } from '../../services/identity/identifierPrecedence';
 
 export function drillAllowed(url: string | undefined): boolean {
   try {
@@ -33,7 +34,7 @@ async function main(): Promise<number> {
   const { LEGACY_TENANT_ID: T } = await import('../../services/voice/gateway/legacyFacade');
   await ensureVoiceStudioSchema();
   await sequelize.query('CREATE TABLE IF NOT EXISTS audit_logs (id UUID PRIMARY KEY, admin_user_id UUID, action VARCHAR(50), entity_type VARCHAR(100), entity_id UUID, old_values JSONB, new_values JSONB, created_at TIMESTAMPTZ)');
-  await sequelize.query(`DELETE FROM voice_calls WHERE tenant_id = '${T}'; DELETE FROM voice_routes WHERE tenant_id = '${T}'; DELETE FROM voice_agent_versions WHERE tenant_id = '${T}'; DELETE FROM voice_agent_profiles WHERE tenant_id = '${T}'; DELETE FROM audit_logs`);
+  await sequelize.query(`DELETE FROM voice_calls WHERE tenant_id = '${T}'; DELETE FROM voice_allocations WHERE tenant_id = '${T}'; DELETE FROM voice_routes WHERE tenant_id = '${T}'; DELETE FROM voice_agent_versions WHERE tenant_id = '${T}'; DELETE FROM voice_agent_profiles WHERE tenant_id = '${T}'; DELETE FROM audit_logs`);
   const one = async (sql: string) => ((await sequelize.query(sql)) as [Array<{ id: string }>, unknown])[0][0].id;
   const p = await one(`INSERT INTO voice_agent_profiles (tenant_id, brand_slug, agent_key, name, direction, status) VALUES ('${T}', 'colaberry', 'edu-cory-outbound', 'drill', 'outbound', 'active') RETURNING id`);
   const v = await one(`INSERT INTO voice_agent_versions (tenant_id, profile_id, version, content_hash, prompt, disclosure, engine, author, status) VALUES ('${T}', '${p}', 1, 'drill', 'p', 'd', 'conversation_relay', 'drill', 'published') RETURNING id`);
@@ -47,7 +48,7 @@ async function main(): Promise<number> {
   const timer = setInterval(() => {
     const at = Date.now();
     const k = ++n;
-    allocateCall(sequelize, { tenantId: T, pathKey: PATH, brandSlug: 'colaberry', recipientRef: `lead:${k}`, idempotencyKey: `drill-${k}`, testMode: false }, true)
+    allocateCall(sequelize, { tenantId: T, pathKey: PATH, brandSlug: 'colaberry', recipientRef: subjectRefFrom({ leadId: k }) as string, idempotencyKey: `drill-${k}`, testMode: false }, true)
       .then((a) => { calls.push({ at, provider: a.provider }); }, () => { calls.push({ at, provider: 'error' }); });
   }, 50);
   const wait = (ms: number) => new Promise((res) => { setTimeout(res, ms); });

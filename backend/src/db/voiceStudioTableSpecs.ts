@@ -192,6 +192,17 @@ export const VOICE_TABLE_SPECS: TableSpec[] = [
       'CREATE INDEX IF NOT EXISTS voice_usage_tenant_time_idx ON voice_usage (tenant_id, created_at)'],
   },
   {
+    // VS4.5: which ONE provider owns a logical call, claimed before anything is dialed. Covers the legacy
+    // provider too. claimed -> dispatching; abandoned (nothing reserved, may be claimed again) or closed.
+    table: 'voice_allocations', model: 'VoiceAllocation',
+    columns: [id(), tenant(), c('idempotency_key', 'VARCHAR(200) NOT NULL', DataTypes.STRING(200)), c('path_key', 'VARCHAR(100) NOT NULL', DataTypes.STRING(100)),
+      c('recipient_ref', 'VARCHAR(200) NOT NULL', DataTypes.STRING(200)), c('provider', 'VARCHAR(30) NOT NULL', DataTypes.STRING(30)), c('engine', 'VARCHAR(30)', DataTypes.STRING(30)),
+      c('route_id', 'UUID', DataTypes.UUID), c('version_id', 'UUID', DataTypes.UUID), c('reason', 'VARCHAR(100) NOT NULL', DataTypes.STRING(100)),
+      c('status', "VARCHAR(20) NOT NULL DEFAULT 'claimed'", DataTypes.STRING(20)), created(), updated()],
+    constraints: ["CONSTRAINT voice_allocations_provider_chk CHECK (provider IN ('direct','synthflow_legacy'))", "CONSTRAINT voice_allocations_status_chk CHECK (status IN ('claimed','dispatching','abandoned','closed'))"],
+    indexes: ['CREATE UNIQUE INDEX IF NOT EXISTS voice_allocations_idem_uq ON voice_allocations (tenant_id, idempotency_key)'],
+  },
+  {
     // VS2.1: single-use enforcement for signed correlation tokens (TwiML fetch, WebSocket session).
     // A replayed token hits the unique nonce and is refused. Holds no phone number and no secret.
     table: 'voice_token_uses', model: 'VoiceTokenUse',

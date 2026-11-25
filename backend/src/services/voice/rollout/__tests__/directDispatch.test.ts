@@ -18,7 +18,7 @@ const content = (over: object = {}) => ({
 const tool = (name: string, readOnly = true): RegisteredTool => ({ def: { name, description: '', input_schema: { type: 'object' } }, readOnly, schema: {}, run: async () => '' } as unknown as RegisteredTool);
 let n = 0;
 const req = (over: Partial<DirectCallRequest> = {}): DirectCallRequest => ({
-  allocation: { provider: 'direct', engine: 'conversation_relay', routeId: R, versionId: V, reason: 'canary', bucket: 3 }, tenantId: 't', brandSlug: 'colaberry', pathKey: 'pilot', callType: 'callback', purpose: 'follow up',
+  allocation: { provider: 'direct', engine: 'conversation_relay', routeId: R, versionId: V, reason: 'canary', bucket: 3, claimId: 'claim-1' }, tenantId: 't', brandSlug: 'colaberry', pathKey: 'pilot', callType: 'callback', purpose: 'follow up',
   leadId: 42, recipientRef: 'lead:42', idempotencyKey: `pilot-key-${++n}`, prompt: 'Ask Pat about the class.', ...over,
 });
 function deps(script: MockOutcome[] = ['accepted'], over: Partial<DirectDispatchDeps> = {}, gate: object = {}) {
@@ -29,13 +29,14 @@ function deps(script: MockOutcome[] = ['accepted'], over: Partial<DirectDispatch
   const d: DirectDispatchDeps = {
     gateway: { mode: 'legacy', now: () => new Date('2026-12-01T18:00:00Z'), killSwitch: async () => false, voiceEnabled: () => true, pathAllowed: () => true, resolveDestination: async () => ({ e164: '+15555550100', timezone: 'America/Chicago' }), exemptionFor: async () => null,
       consentFor: async () => 'granted', suppressedFor: async () => false, resolveRoute: async () => ({ routeId: null, profileVersionId: 'x', engine: 'conversation_relay', fromNumberRef: 'line-1', maxDurationSeconds: 9999 }), reserve, transition, log: () => undefined, ...gate } as DirectDispatchDeps['gateway'],
-    loadVersion: async () => ({ id: V, profileId: 'p1', brandSlug: 'colaberry', status: 'published', agentKey: 'edu-cory-outbound', content: content() }),
+    loadVersion: async () => ({ id: V, tenantId: 't', profileId: 'p1', brandSlug: 'colaberry', status: 'published', agentKey: 'edu-cory-outbound', content: content() }),
+    confirm: jest.fn().mockResolvedValue(true), releaseClaim: jest.fn().mockResolvedValue(undefined),
     registeredTools: () => [tool('next_open_strategy_slots'), tool('book_meeting', false)],
     insertCall: jest.fn(async (r: unknown) => { rows.push(r); return true; }), recordOutcome: jest.fn().mockResolvedValue(undefined), provider: () => provider, log: jest.fn(), ...over,
   };
   return { d, provider, rows, transition, reserve };
 }
-const version = (over: object, c: object = {}) => ({ loadVersion: async () => ({ id: V, profileId: 'p1', brandSlug: 'colaberry', status: 'published', agentKey: 'edu-cory-outbound', content: content(c), ...over }) });
+const version = (over: object, c: object = {}) => ({ loadVersion: async () => ({ id: V, tenantId: 't', profileId: 'p1', brandSlug: 'colaberry', status: 'published', agentKey: 'edu-cory-outbound', content: content(c), ...over }) });
 
 describe('dispatchDirect', () => {
   it('places one call, pinned to its version, with the real route, version and duration on the dispatch', async () => {
@@ -70,11 +71,55 @@ describe('dispatchDirect', () => {
     ['unknown time zone', {}, {}, { resolveDestination: async () => ({ e164: '+15555550100', timezone: null }) }, 'recipient_timezone_unknown'],
     ['over a cap', {}, {}, { reserve: async () => ({ outcome: 'denied', reason: 'route_cap' }) }, 'route_cap'],
     ['a key already reserved', {}, {}, { reserve: async () => ({ outcome: 'reserved', reservationId: 'r', replay: true }) }, 'already_dispatched'],
-    ['a key that already has a call', {}, { insertCall: async () => false }, {}, 'already_dispatched'],
+    ['a key that already has a call', {}, { insertCall: async () => false }, {}, 'call_row_exists'],
+    ['a call row that cannot be written', {}, { insertCall: async () => { throw new Error('db'); } }, {}, 'call_row_failed'],
+    ['a claim the route no longer permits', {}, { confirm: async () => false }, {}, 'route_changed'],
+    ['a claim that cannot be checked', {}, { confirm: async () => { throw new Error('db'); } }, {}, 'route_changed'],
+    ['an allocation that was never claimed', { allocation: { ...req().allocation, claimId: undefined } }, {}, {}, 'not_claimed'],
+    ['a version of another tenant', {}, version({ tenantId: 'other' }), {}, 'version_not_published'],
+    ['facts that cannot be read', {}, { loadVersion: async () => { throw new Error('db'); } }, {}, 'fact_unavailable'],
+    ['a request the gateway rejects', { purpose: '' }, {}, {}, 'not_authorized'],
   ])('refuses %s, and nothing is dialed', async (_n, rq, over, gate, reason) => {
     const { d, provider } = deps(['accepted'], over, gate);
     expect(await dispatchDirect(req(rq), d)).toMatchObject({ outcome: 'refused', reason });
     expect(provider.dispatched).toHaveLength(0);
+  });
+
+  it.each<[string, Partial<DirectDispatchDeps>, object, boolean]>([
+    ['before anything was reserved', {}, { killSwitch: async () => true }, false],
+    ['claim no longer permitted', { confirm: async () => false }, {}, true],
+    ['call row exists', { insertCall: async () => false }, {}, true],
+    ['call row throws', { insertCall: async () => { throw new Error('db'); } }, {}, true],
+  ])('every exit that dialed nothing gives back what it holds: %s', async (_n, over, gate, reserved) => {
+    const { d, transition } = deps(['accepted'], over, gate);
+    await dispatchDirect(req(), d);
+    expect(d.releaseClaim).toHaveBeenCalledWith('claim-1', reserved);
+    if (reserved) expect(transition).toHaveBeenCalledWith('r1', 'expire');
+    else expect(transition).not.toHaveBeenCalled();
+  });
+
+  it('a replay never gives back the claim the first attempt is using', async () => {
+    const { d } = deps(['accepted'], {}, { reserve: async () => ({ outcome: 'reserved', reservationId: 'r', replay: true }) });
+    await dispatchDirect(req(), d);
+    expect(d.releaseClaim).not.toHaveBeenCalled();
+  });
+
+  it('a failure to give back is logged, not thrown', async () => {
+    const { d } = deps(['accepted'], { confirm: async () => false, releaseClaim: async () => { throw new Error('db'); } });
+    expect(await dispatchDirect(req(), d)).toMatchObject({ reason: 'route_changed' });
+    expect(d.log).toHaveBeenCalledWith(expect.objectContaining({ event: 'voice_direct_release_failed' }));
+  });
+
+  it('once the phone may ring nothing throws: a record that cannot be written is accepted if the carrier said so, otherwise unknown', async () => {
+    const fail = { recordOutcome: async () => { throw new Error('db'); } };
+    for (const [script, outcome] of [['accepted', 'accepted'], ['unknown', 'unknown'], ['refused', 'unknown']] as const) {
+      const { d, provider } = deps([script], fail);
+      expect(await dispatchDirect(req(), d)).toMatchObject({ outcome }); // eslint-disable-line no-await-in-loop
+      expect(provider.dispatched).toHaveLength(1);
+    }
+    const { d, provider } = deps(['accepted'], {}, { transition: jest.fn().mockResolvedValueOnce(true).mockRejectedValue(new Error('db')) });
+    expect(await dispatchDirect(req(), d)).toMatchObject({ outcome: 'unknown' });
+    expect(provider.dispatched).toHaveLength(1);
   });
 
   it('a carrier refusal releases the reservation and forgets the session', async () => {

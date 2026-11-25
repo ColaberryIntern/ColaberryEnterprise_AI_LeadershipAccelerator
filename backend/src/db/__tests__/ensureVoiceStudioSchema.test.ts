@@ -10,10 +10,10 @@ import { activeBootCall } from './helpers/bootCalls';
 const SQL = voiceStudioStatements().join('\n');
 
 describe('Voice Studio schema: additive and scoped', () => {
-  it('creates exactly the 14 voice_* tables and nothing else', () => {
+  it('creates exactly the 15 voice_* tables and nothing else', () => {
     const created = (SQL.match(/CREATE TABLE IF NOT EXISTS (\w+)/g) || []).map((s) => s.replace('CREATE TABLE IF NOT EXISTS ', ''));
     expect(created).toEqual([...VOICE_STUDIO_TABLES]);
-    expect(created).toHaveLength(14);
+    expect(created).toHaveLength(15);
     for (const t of created) expect(t).toMatch(/^voice_/);
   });
 

@@ -41,7 +41,7 @@ import { RelayConnection } from '../../engines/conversationRelayEngine';
 import { ToolBroker } from '../../engines/toolBroker';
 import { SessionWorker } from '../../session/sessionWorker';
 import { correlationKey, mintToken } from '../../twilio/correlationToken';
-import { pinSession, unpinSession } from '../../rollout/callSessions';
+import { pinSession } from '../../rollout/callSessions';
 import { OpsMetrics, voiceOps } from '../opsMetrics';
 import { guardLlm, guardRealtime, REALTIME_SLOW_MS, realtimeAvailable } from '../providerGuards';
 
@@ -127,7 +127,8 @@ describe('VS4.5: what a live call is given in production', () => {
     expect(await relayDeps().sessionFor!('c-3')).toBeNull();
     query.mockResolvedValue([]);
     expect(await relayDeps().sessionFor!('c-2')).toBeNull(); // no such call
-    unpinSession('c-2');
+    await recordSessionStarted('c-2');
+    expect(await relayDeps().sessionFor!('c-2')).toBeNull(); // taken once: the prompt does not linger in memory
   });
 });
 

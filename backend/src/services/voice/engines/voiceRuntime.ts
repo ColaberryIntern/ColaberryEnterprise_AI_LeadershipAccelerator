@@ -28,7 +28,7 @@ import type { RelayDeps } from './conversationRelayEngine';
 import { buildRelayTwiml } from './relayProtocol';
 import { nextOpenSlotsTool, ToolBroker } from './toolBroker';
 import { liveProfile, type VoiceProfile } from './voiceProfiles';
-import { resolveSession } from '../rollout/callSessions';
+import { resolveSession, unpinSession } from '../rollout/callSessions';
 import { tapVoiceLog, voiceOps } from '../ops/opsMetrics';
 import { guardLlm, guardRealtime, realtimeAvailable } from '../ops/providerGuards';
 import { runOpsSweep } from '../ops/opsSweep';
@@ -59,6 +59,7 @@ export function toolVerdict(rec: { committed: boolean; errorClass?: string }): {
 
 /** Write that the AI session is up (the evidence silent-audio alerts and success rates rest on). Never throws. */
 export async function recordSessionStarted(callId: string): Promise<void> {
+  unpinSession(callId); // the live session holds its own copy now
   try {
     await appendCallEvents([{ contractVersion: CONTRACT_VERSION, eventKey: 'session:started', callId, source: 'session', state: 'session_active', occurredAt: new Date().toISOString() }]);
     await recomputeCall(callId);
