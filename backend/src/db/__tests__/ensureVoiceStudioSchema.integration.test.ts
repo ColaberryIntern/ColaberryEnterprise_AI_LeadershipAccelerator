@@ -50,10 +50,10 @@ describeIfDb('voice studio schema against Postgres', () => {
     expect(await columns()).toEqual(cols);
   });
 
-  it('creates all 15 tables in public (ensure swallows statement errors, so prove none was skipped)', async () => {
+  it('creates all 16 tables in public (ensure swallows statement errors, so prove none was skipped)', async () => {
     const list = schema.VOICE_STUDIO_TABLES.map((t) => `'${t}'`).join(',');
     const n = await one<{ n: number }>(`SELECT COUNT(*)::int AS n FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN (${list})`);
-    expect(n.n).toBe(15);
+    expect(n.n).toBe(16);
   });
 
   it('rejects a duplicate call idempotency key within a tenant', async () => {

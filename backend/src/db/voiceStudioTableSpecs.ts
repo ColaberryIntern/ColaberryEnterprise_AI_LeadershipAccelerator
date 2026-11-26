@@ -203,6 +203,21 @@ export const VOICE_TABLE_SPECS: TableSpec[] = [
     indexes: ['CREATE UNIQUE INDEX IF NOT EXISTS voice_allocations_idem_uq ON voice_allocations (tenant_id, idempotency_key)'],
   },
   {
+    // VS5.3: what the previous vendor's calls were, metadata only. Separate from voice_calls on purpose: those
+    // rows drive caps, reports and cost, and history must not move any of them. No number, name or transcript.
+    table: 'voice_call_history', model: 'VoiceCallHistory',
+    columns: [id(), tenant(), c('provider', 'VARCHAR(30) NOT NULL', DataTypes.STRING(30)), c('provider_call_id', 'VARCHAR(100) NOT NULL', DataTypes.STRING(100)),
+      c('assistant_key', 'VARCHAR(20) NOT NULL', DataTypes.STRING(20)), c('started_at', 'TIMESTAMPTZ NOT NULL', DataTypes.DATE), c('duration_seconds', 'INTEGER', DataTypes.INTEGER),
+      c('outcome', 'VARCHAR(60) NOT NULL', DataTypes.STRING(60)), c('end_reason', 'VARCHAR(60)', DataTypes.STRING(60)),
+      c('has_transcript', 'BOOLEAN NOT NULL', DataTypes.BOOLEAN), c('has_recording', 'BOOLEAN NOT NULL', DataTypes.BOOLEAN),
+      c('row_hash', 'VARCHAR(64) NOT NULL', DataTypes.STRING(64)), c('batch_id', 'UUID NOT NULL', DataTypes.UUID), c('retention_until', 'TIMESTAMPTZ NOT NULL', DataTypes.DATE), created()],
+    constraints: ['CONSTRAINT voice_call_history_duration_chk CHECK (duration_seconds IS NULL OR duration_seconds >= 0)'],
+    indexes: ['CREATE UNIQUE INDEX IF NOT EXISTS voice_call_history_provider_uq ON voice_call_history (tenant_id, provider, provider_call_id)',
+      'CREATE INDEX IF NOT EXISTS voice_call_history_batch_idx ON voice_call_history (tenant_id, batch_id)',
+      'CREATE INDEX IF NOT EXISTS voice_call_history_time_idx ON voice_call_history (tenant_id, assistant_key, started_at)',
+      'CREATE INDEX IF NOT EXISTS voice_call_history_retention_idx ON voice_call_history (retention_until)'],
+  },
+  {
     // VS2.1: single-use enforcement for signed correlation tokens (TwiML fetch, WebSocket session).
     // A replayed token hits the unique nonce and is refused. Holds no phone number and no secret.
     table: 'voice_token_uses', model: 'VoiceTokenUse',

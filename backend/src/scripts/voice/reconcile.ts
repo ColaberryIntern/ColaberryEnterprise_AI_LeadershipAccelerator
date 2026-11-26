@@ -4,6 +4,7 @@
  *   npm run voice:reconcile                                  report only
  *   npm run voice:reconcile -- --apply                       settle what the carrier can answer for
  *   npm run voice:reconcile -- --history manifest.json imported.json
+ *   npm run voice:reconcile -- --history --dry-run <export.json>     the export against voice_call_history (reads only)
  *
  * Rules: services/voice/rollout/reconcile.ts. It never dials. Exit: 0 nothing unreconciled, 1 something is
  * (or an audience breach, or a history difference), 2 refused.
@@ -11,9 +12,10 @@
 import fs from 'fs';
 import { compareHistory, type HistoryRow, type ReconcileReport } from '../../services/voice/rollout/reconcile';
 
-export type ReconcileArgs = { ok: true; mode: 'calls'; apply: boolean } | { ok: true; mode: 'history'; manifest: string; imported: string } | { ok: false; reason: string };
+export type ReconcileArgs = { ok: true; mode: 'calls'; apply: boolean } | { ok: true; mode: 'history'; manifest: string; imported: string } | { ok: true; mode: 'history-db'; file: string } | { ok: false; reason: string };
 
 export function parseReconcileArgs(argv: string[]): ReconcileArgs {
+  if (argv[0] === '--history' && argv[1] === '--dry-run') return argv.length === 3 && !argv[2].startsWith('--') ? { ok: true, mode: 'history-db', file: argv[2] } : { ok: false, reason: 'usage: --history --dry-run <export.json>' };
   if (argv[0] === '--history') return argv.length === 3 ? { ok: true, mode: 'history', manifest: argv[1], imported: argv[2] } : { ok: false, reason: 'usage: --history <manifest.json> <imported.json>' };
   if (argv.some((a) => a !== '--apply' && a !== '--dry-run')) return { ok: false, reason: `unknown argument ${argv.find((a) => a !== '--apply' && a !== '--dry-run')}` };
   if (argv.includes('--apply') && argv.includes('--dry-run')) return { ok: false, reason: '--apply and --dry-run cannot be combined' };
@@ -31,6 +33,16 @@ async function main(): Promise<number> {
     const r = compareHistory(read(a.manifest), read(a.imported));
     console.log(JSON.stringify({ event: 'voice_reconcile_history', outcome: r.ok ? 'success' : 'failure', ...r }));
     return r.ok ? 0 : 1;
+  }
+  if (a.mode === 'history-db') {
+    const M = await import('../../services/voice/migration/historyImport');
+    const { sequelize: s } = await import('../../config/database');
+    const { LEGACY_TENANT_ID } = await import('../../services/voice/gateway/legacyFacade');
+    try {
+      const r = await M.verifyHistory(s, M.parseExport(fs.readFileSync(a.file, 'utf8')), LEGACY_TENANT_ID);
+      console.log(JSON.stringify({ event: 'voice_reconcile_history', outcome: r.ok ? 'success' : 'failure', dry_run: true, manifest: r.manifest, imported: r.imported, missing: r.missing.length, unexpected: r.unexpected.length, different: r.different.length, duplicates: r.duplicates.length }));
+      return r.ok ? 0 : 1;
+    } finally { await s.close(); }
   }
   const { sequelize } = await import('../../config/database');
   const { runReconcile } = await import('../../services/voice/rollout/reconcile');
