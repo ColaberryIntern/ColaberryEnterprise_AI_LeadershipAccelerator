@@ -101,3 +101,56 @@ describe('WEEK_BLUEPRINTS ↔ Anthropic course mapping', () => {
     expect(all).toEqual(WEEK_BLUEPRINTS.map((w) => w.week));
   });
 });
+
+// ─── course lengths, measured rather than estimated ──────────────────────────
+
+/**
+ * These numbers drive card minutes (services/composer/blueprintRollup.ts), so a
+ * stale one tells a student a nine-hour course takes eight.
+ *
+ * Measured by a read-only GET of all seven public Claude Academy course pages on
+ * 2026-11-25, replacing figures taken from Skilljar on 2026-07-18. Three were
+ * wrong: week 2 was a lesson-count estimate (Skilljar published no hours;
+ * Academy does), week 3's course was restructured from 75 lessons to 67 and grew
+ * to 9 hr, and week 6 was 66 against a published 1.5 hr - where the week 6 CARD
+ * already said 90, so the card was right and this file was wrong.
+ */
+describe('WEEK_BLUEPRINTS course lengths match what Claude Academy publishes', () => {
+  it('carries the published duration for every course that has one', () => {
+    const published: ReadonlyArray<[number, number]> = [
+      [1, 90],   // 12 lessons, 1.5 hr
+      [2, 60],   // 6 lessons, 1 hr
+      [3, 540],  // 67 lessons, 9 hr
+      [5, 60],   // 10 lessons, 1 hr
+      [6, 90],   // 11 lessons, 1.5 hr
+      [8, 60],   // 9 lessons, 1 hr
+    ];
+    const wrong = published
+      .map(([week, minutes]) => {
+        const got = weekBlueprint(week)?.anthropic_course_minutes;
+        return got === minutes ? null : `week ${week}: ${got} should be ${minutes}`;
+      })
+      .filter(Boolean);
+    expect(wrong).toEqual([]);
+  });
+
+  it('leaves week 7 an explicit estimate, because Academy publishes no duration for it', () => {
+    // The one of the seven with nothing to measure against. Pinned so that a
+    // future pass does not quietly "correct" an honest estimate into a guess
+    // dressed up as a measurement.
+    expect(weekBlueprint(7)?.anthropic_course_minutes).toBe(35);
+  });
+
+  it('keeps the week 3 and 4 split summing to the whole course', () => {
+    // The invariant that breaks silently. The split is one course across two
+    // weeks, so if someone updates the total and not the parts, the two cards
+    // together promise less time than the course actually takes - and nothing
+    // before this test would have said so. 227 + 259 summed to the old 486;
+    // 252 + 288 sums to the measured 540.
+    const total = weekBlueprint(3)?.anthropic_course_minutes;
+    const part1 = weekBlueprint(3)?.anthropic_course_card?.minutes;
+    const part2 = weekBlueprint(4)?.anthropic_course_card?.minutes;
+    expect(total).toBe(540);
+    expect((part1 ?? 0) + (part2 ?? 0)).toBe(total);
+  });
+});
