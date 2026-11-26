@@ -129,6 +129,16 @@ describe('a test row is flagged, not counted and not dropped', () => {
     expect(suspectReasons(row({ name: 'Ernest Contreras', company: 'Latest Ventures' })))
       .toEqual([]);
   });
+
+  /**
+   * Testa is a real surname, and "Testa" is where a substring match on the NAME survives a
+   * fixture built from "Ernest": neither "Ernest" nor "Contreras" contains the four letters.
+   * A mutation check found that gap, so the case is a real person rather than a word game.
+   */
+  it('does not flag a lead whose surname merely begins with those letters', () => {
+    expect(suspectReasons(row({ name: 'Maria Testa', company: 'Testament Health' })))
+      .toEqual([]);
+  });
 });
 
 describe('a meeting HELD is never reported as zero', () => {
