@@ -176,6 +176,26 @@ describe('now: plan, book, then the interview', () => {
     expect(container.textContent).toContain('We could not load the calendar');
     expect(buttons().some((b) => b.textContent === 'Try again')).toBe(true);
   });
+
+  it('can skip booking, even when the calendar fails, and goes straight to the interview', async () => {
+    slotsMock.mockRejectedValue(new Error('503'));
+    statusMock.mockResolvedValue({ ...STATUS, interviewMode: 'now' });
+    await mount();
+    await press('Skip for now, start my interview');
+    expect(bookMock).not.toHaveBeenCalled();
+    expect(q('[data-testid="interview-runner"]')).not.toBeNull();
+  });
+
+  it('offers booking again after an interview done without one', () => {
+    expect(resumeStage({ ...STATUS, interviewMode: 'now', interviewed: true } as never)).toBe('meeting');
+  });
+
+  it('does not offer the skip when the interview is scheduled for later', async () => {
+    statusMock.mockResolvedValue({ ...STATUS, interviewMode: 'later', interviewScheduledFor: '2026-11-22T16:00:00.000Z' });
+    await mount();
+    expect(q('[data-testid="meeting-picker"]')).not.toBeNull();
+    expect(q('[data-testid="meeting-skip"]')).toBeNull();
+  });
 });
 
 describe('later: pick a time, book, done', () => {
