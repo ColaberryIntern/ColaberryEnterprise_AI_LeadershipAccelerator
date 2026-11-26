@@ -1,6 +1,13 @@
 /**
  * certificateService — verify an uploaded Anthropic Skills Course completion
- * certificate is REAL (not a random screenshot) before it counts as completion.
+ * credential is REAL (not a random screenshot) before it counts as completion.
+ *
+ * "Credential", not "certificate": Claude Academy issues a COMPLETION BADGE.
+ * Measured on all seven mapped course pages on 2026-11-25, the word
+ * "certificate" appears nowhere on any of them. The older Skilljar-issued
+ * certificates are still valid proof, so both are accepted - but a verifier
+ * that insists on the word "certificate" rejects the only artifact a student
+ * can produce today, which is why the prompts below name the badge first.
  *
  * Images are checked with OpenAI vision. PDFs are rasterized (page 1, via
  * poppler's pdftoppm) and checked the same way, since a real certificate PDF
@@ -28,7 +35,19 @@ import { normalizeImageForVision as normalizeImage, rasterizePdfFirstPage } from
 const VERIFY_MODEL = 'gpt-4o-mini'; // supports vision + cheap
 const IMAGE_MIME_BY_EXT: Record<string, string> = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' };
 
-export interface CertVerifyResult { valid: boolean; is_certificate: boolean; matches: boolean; reason: string }
+export interface CertVerifyResult {
+  valid: boolean;
+  /**
+   * True for ANY genuine completion credential - a Claude Academy completion
+   * badge, a badge/credential page, or an older Skilljar certificate. The field
+   * name predates the badge and is kept because the admin API and the portal
+   * response shape both carry it; renaming it is a contract change, not a copy
+   * change.
+   */
+  is_certificate: boolean;
+  matches: boolean;
+  reason: string;
+}
 
 /**
  * PURE — the course name to hand the vision model as "the expected course."
@@ -88,21 +107,26 @@ async function extractPdfText(buf: Buffer): Promise<string> {
  * extraction.
  */
 
-const SYSTEM = 'You verify whether an uploaded file is a genuine course/exam COMPLETION or ACHIEVEMENT certificate issued to a person. Be strict about it actually being a certificate; do not accept random screenshots, photos, invoices, or unrelated documents. Return STRICT json.';
+const SYSTEM = 'You verify whether an uploaded file is genuine proof that a person COMPLETED a course or exam. Valid proof includes a completion certificate, a completion or achievement BADGE, and a course or credential page showing the completion badge awarded to that person. Be strict about it being real completion proof for a course; do not accept random screenshots, photos, invoices, or unrelated documents. Do NOT reject genuine proof merely because it is called a badge rather than a certificate. Return STRICT json.';
 
 function userText(className?: string | null): string {
-  return `Is this a real completion/achievement CERTIFICATE (issued to a person for finishing a course or exam)?` +
-    `${className ? ` The expected course is "${className}" (an Anthropic / SkillsJar course). ` +
+  return `Is this real proof that a person COMPLETED a course or exam - a completion certificate, a completion BADGE, or a course/credential page showing a completion badge awarded to them?` +
+    `${className ? ` The expected course is "${className}" (a Claude Academy course, at academy.claude.com). ` +
+      `IMPORTANT: Claude Academy awards a "Completion badge", NOT a certificate, and the word "certificate" ` +
+      `may appear nowhere on it. A badge image, a badge or credential page, or a course page showing the ` +
+      `course finished with the learner's name is all valid completion proof - do not reject any of them for ` +
+      `not being called a certificate. These courses used to be hosted on Skilljar, so an older ` +
+      `Skilljar-issued certificate is equally valid. ` +
       `Note: this app sometimes gives a course its own internal display name, or splits one external ` +
-      `SkillsJar course into multiple internal parts/weeks (e.g. "Part 1" / "Part 2") — the certificate ` +
-      `itself is issued by Anthropic/SkillsJar for the external course and will very likely use different, ` +
+      `course into multiple internal parts/weeks (e.g. "Part 1" / "Part 2") — the credential ` +
+      `itself is issued by Anthropic for the whole external course and will very likely use different, ` +
       `official wording than this internal title (e.g. an internal title "Building with the Claude API · Part 2" ` +
-      `may correspond to a real certificate titled "Claude with the Anthropic API"). Do NOT require the ` +
-      `certificate's title to textually match the expected course name — set matches_course true whenever the ` +
-      `certificate is clearly an Anthropic/Claude/SkillsJar course certificate on a plausibly related topic; ` +
-      `only set it false if the certificate is obviously for a wholly unrelated subject or platform (e.g. an ` +
+      `may correspond to one badge for the whole course "Building with the Claude API"). Do NOT require the ` +
+      `credential's title to textually match the expected course name — set matches_course true whenever the ` +
+      `credential is clearly an Anthropic / Claude / Claude Academy course credential on a plausibly related ` +
+      `topic; only set it false if it is obviously for a wholly unrelated subject or platform (e.g. an ` +
       `Excel or PMP certification when a Claude course was expected).` : ''}\n` +
-    `Return json { "is_certificate": boolean, "matches_course": boolean (see guidance above — if no course was specified, set true), "recipient": string (name on it, or ""), "reason": string (one short sentence for the student explaining the decision) }.`;
+    `Return json { "is_certificate": boolean (true for ANY genuine completion credential, a badge included), "matches_course": boolean (see guidance above — if no course was specified, set true), "recipient": string (name on it, or ""), "reason": string (one short sentence for the student explaining the decision) }.`;
 }
 
 async function classify(messages: any[]): Promise<CertVerifyResult> {
@@ -116,7 +140,7 @@ async function classify(messages: any[]): Promise<CertVerifyResult> {
   const matches = p.matches_course !== false; // default lenient
   const reason = typeof p.reason === 'string' && p.reason.trim()
     ? p.reason.trim()
-    : (is_certificate ? 'Certificate verified.' : 'This does not look like a completion certificate.');
+    : (is_certificate ? 'Completion verified.' : 'That does not look like a completion badge or certificate for this course.');
   return { valid: is_certificate && matches, is_certificate, matches, reason };
 }
 
@@ -163,14 +187,15 @@ export async function verifyCertificate(filePath: string, mime: string, classNam
 /* ------------------------------------------------------------------ */
 /*  Progress-screenshot verification (for a course split across weeks)  */
 /*  When a card's completion mode is 'progress' (e.g. the first part of  */
-/*  a multi-week course, before the whole-course certificate exists) the */
-/*  student uploads a Skilljar PROGRESS screenshot instead. Lighter check.*/
+/*  a multi-week course, before the whole-course badge exists) the        */
+/*  student uploads a Claude Academy PROGRESS screenshot instead.         */
+/*  Lighter check: a lesson list or a progress bar, not a credential.     */
 /* ------------------------------------------------------------------ */
 
 const PROGRESS_SYSTEM = 'You verify whether an uploaded image is a genuine screenshot of an online-course PROGRESS or COMPLETION view — e.g. a course page showing "X of N lessons completed", a curriculum list with completed/checkmarked lessons, or a progress bar. Be reasonably lenient for a real course-progress screenshot; reject unrelated photos, invoices, memes, or blank images. Return STRICT json.';
 
 function progressUserText(className?: string | null): string {
-  return `Is this a screenshot showing progress or completion in an online course${className ? ` (expected: "${className}" on Anthropic / SkillsJar)` : ''}? ` +
+  return `Is this a screenshot showing progress or completion in an online course${className ? ` (expected: "${className}" on Anthropic's Claude Academy)` : ''}? ` +
     `Return json { "is_progress": boolean, "reason": string (one short sentence for the student explaining the decision) }.`;
 }
 

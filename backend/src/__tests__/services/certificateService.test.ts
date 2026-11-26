@@ -295,3 +295,133 @@ describe('resolveCertClassName', () => {
     expect(resolveCertClassName({})).toBeNull();
   });
 });
+
+// ─── Claude Academy awards a BADGE, not a certificate ────────────────────────
+
+/**
+ * Measured on the live site on 2026-11-25: all seven mapped Claude Academy
+ * course pages say "Completion badge", and the word "certificate" appears ZERO
+ * times on any of them. The system prompt used to say "Be strict about it
+ * actually being a certificate", so as written it rejected the only artifact a
+ * student can now produce.
+ *
+ * This is the same class of bug as the Farhat Beig rejection documented above -
+ * a genuine credential refused over wording - and it would have hit every
+ * student at once rather than one.
+ */
+describe('verifyCertificate accepts a Claude Academy completion badge', () => {
+  async function tinyPng(tag: string): Promise<string> {
+    const p = path.join(os.tmpdir(), `cert-test-${tag}-${Date.now()}-${Math.random().toString(36).slice(2)}.png`);
+    await fs.writeFile(p, await sharp({ create: { width: 20, height: 20, channels: 3, background: { r: 4, g: 5, b: 6 } } }).png().toBuffer());
+    return p;
+  }
+
+  function accept() {
+    mockChatCreate.mockResolvedValue({
+      choices: [{ message: { content: JSON.stringify({ is_certificate: true, matches_course: true, reason: 'Badge verified.' }) } }],
+    });
+  }
+
+  function promptSent(): { system: string; user: string } {
+    const call = mockChatCreate.mock.calls[0][0];
+    const content = call.messages[1].content;
+    const user = Array.isArray(content)
+      ? (content.find((c: any) => c.type === 'text').text as string)
+      : (content as string);
+    return { system: call.messages[0].content as string, user };
+  }
+
+  it('tells the classifier a badge is valid proof and must not be rejected for the word', async () => {
+    accept();
+    const img = await tinyPng('badge-system');
+    try {
+      await verifyCertificate(img, 'image/png', 'Claude Code 101');
+      const { system, user } = promptSent();
+      expect(system).toMatch(/badge/i);
+      expect(system).toMatch(/not reject.*badge rather than a certificate/i);
+      expect(user).toMatch(/Completion badge/i);
+      expect(user).toMatch(/do not reject/i);
+    } finally {
+      await fs.unlink(img).catch(() => {});
+    }
+  });
+
+  it('names Claude Academy as the platform, not Skilljar', async () => {
+    accept();
+    const img = await tinyPng('badge-platform');
+    try {
+      await verifyCertificate(img, 'image/png', 'Claude Code 101');
+      const { user } = promptSent();
+      expect(user).toContain('Claude Academy');
+      expect(user).toContain('academy.claude.com');
+      // A badge that says "Claude Academy" could otherwise read as a different
+      // platform and fail the course-match check.
+      expect(user).not.toMatch(/SkillsJar/);
+    } finally {
+      await fs.unlink(img).catch(() => {});
+    }
+  });
+
+  it('still accepts an older Skilljar-issued certificate, because the move is not a cutoff', async () => {
+    // Students who finished before November 2026 hold a Skilljar certificate and
+    // must not be asked to re-earn a badge for a course they already completed.
+    accept();
+    const img = await tinyPng('badge-legacy');
+    try {
+      await verifyCertificate(img, 'image/png', 'Claude Code 101');
+      const { user } = promptSent();
+      expect(user).toMatch(/Skilljar-issued certificate is equally valid/i);
+    } finally {
+      await fs.unlink(img).catch(() => {});
+    }
+  });
+
+  it('no longer anchors the classifier on week 3\u2019s dead course title', async () => {
+    // The worked example used to be a certificate titled "Claude with the
+    // Anthropic API". That course was renamed; the old slug 404s on Academy and
+    // no current credential carries that wording, so instructing the model to
+    // expect it was instructing it toward a name that no longer exists.
+    accept();
+    const img = await tinyPng('badge-deadtitle');
+    try {
+      await verifyCertificate(img, 'image/png', 'Building with the Claude API \u00b7 Part 2 (Prompt, Retrieval & Integration)');
+      const { user } = promptSent();
+      expect(user).not.toContain('Claude with the Anthropic API');
+      expect(user).toContain('Building with the Claude API');
+    } finally {
+      await fs.unlink(img).catch(() => {});
+    }
+  });
+
+  it('passes a badge verdict through as valid completion', async () => {
+    // The control: the instructions above are worth nothing if the plumbing
+    // drops an accepting verdict.
+    accept();
+    const img = await tinyPng('badge-verdict');
+    try {
+      const result = await verifyCertificate(img, 'image/png', 'Claude Code 101');
+      expect(result.valid).toBe(true);
+      expect(result.is_certificate).toBe(true);
+      expect(result.reason).toBe('Badge verified.');
+    } finally {
+      await fs.unlink(img).catch(() => {});
+    }
+  });
+
+  it('tells a declined student about the badge, not only a certificate', async () => {
+    // What the student reads when it fails. Telling someone to upload a
+    // certificate for a course that never issues one is how a correct student
+    // gets stuck, which is the whole shape of this bug.
+    mockChatCreate.mockResolvedValue({
+      choices: [{ message: { content: JSON.stringify({ is_certificate: false, matches_course: true }) } }],
+    });
+    const img = await tinyPng('badge-declined');
+    try {
+      const result = await verifyCertificate(img, 'image/png', 'Claude Code 101');
+      expect(result.valid).toBe(false);
+      expect(result.reason).toMatch(/badge/i);
+    } finally {
+      await fs.unlink(img).catch(() => {});
+    }
+  });
+});

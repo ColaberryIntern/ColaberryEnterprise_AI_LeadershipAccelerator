@@ -159,12 +159,42 @@ describe('now: plan, book, then the interview', () => {
     expect(buttons().map((b) => b.textContent)).toEqual(expect.arrayContaining(['Call me now', 'Type it instead']));
   });
 
+  it('booking with no time chosen says what is needed, and choosing one clears it', async () => {
+    statusMock.mockResolvedValue({ ...STATUS, interviewMode: 'now' });
+    await mount();
+    await press('Book this meeting');
+    expect(bookMock).not.toHaveBeenCalled();
+    expect(q('[role="alert"]')?.textContent).toBe('Choose one of the times above first.');
+    await act(async () => (container.querySelector('[role="radio"]') as HTMLButtonElement).click());
+    expect(q('[role="alert"]')).toBeNull();
+  });
+
   it('a calendar failure says so and offers a retry', async () => {
     slotsMock.mockRejectedValue(new Error('503'));
     statusMock.mockResolvedValue({ ...STATUS, interviewMode: 'now' });
     await mount();
     expect(container.textContent).toContain('We could not load the calendar');
     expect(buttons().some((b) => b.textContent === 'Try again')).toBe(true);
+  });
+
+  it('can skip booking, even when the calendar fails, and goes straight to the interview', async () => {
+    slotsMock.mockRejectedValue(new Error('503'));
+    statusMock.mockResolvedValue({ ...STATUS, interviewMode: 'now' });
+    await mount();
+    await press('Skip for now, start my interview');
+    expect(bookMock).not.toHaveBeenCalled();
+    expect(q('[data-testid="interview-runner"]')).not.toBeNull();
+  });
+
+  it('offers booking again after an interview done without one', () => {
+    expect(resumeStage({ ...STATUS, interviewMode: 'now', interviewed: true } as never)).toBe('meeting');
+  });
+
+  it('does not offer the skip when the interview is scheduled for later', async () => {
+    statusMock.mockResolvedValue({ ...STATUS, interviewMode: 'later', interviewScheduledFor: '2026-11-22T16:00:00.000Z' });
+    await mount();
+    expect(q('[data-testid="meeting-picker"]')).not.toBeNull();
+    expect(q('[data-testid="meeting-skip"]')).toBeNull();
   });
 });
 

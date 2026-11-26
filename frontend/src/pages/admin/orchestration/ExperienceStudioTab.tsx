@@ -275,7 +275,7 @@ const ExperienceStudioTab: React.FC<{ initialSlug?: string | null }> = ({ initia
       if (g.video && g.video_verified === false) setNotice('Could not verify the video plays — check it in the preview or paste your own URL.');
     } catch (e: any) { setError(e?.response?.data?.error || 'Generate failed'); } finally { setVBusy(''); }
   };
-  // Skills Course — the SAME one-click as the Timeline editor: from the SkillsJar
+  // Skills Course — the SAME one-click as the Timeline editor: from the Claude Academy
   // link, fill class name + everything; steps 3-4 render the student card.
   const runCourseFlow = async () => {
     if (!sel || !courseUrl.trim()) return;
@@ -470,11 +470,11 @@ const ExperienceStudioTab: React.FC<{ initialSlug?: string | null }> = ({ initia
                   <p className="es-help">Follow <b>one example</b> all the way through. {isVideo ? <>These are the <b>same fields as the Timeline card editor</b> — add a <b>Title</b> and press <b>✦ Generate content</b> to find a matching video and fill the rest. Steps 3 and 4 come from that run, so they always match.</> : <>Set the inputs, see the <b>Generation</b> prompt that turns them into content, then watch <b>that exact content</b> become the card a student sees. Press <b>▶ Run the whole flow</b> and steps 3 and 4 come from the same run — so they always match.</>}</p>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '0 0 16px', flexWrap: 'wrap' }}>
                     {isSkillsJar
-                      ? <button className="es-btn pri" disabled={!!vBusy || !courseUrl.trim()} title={!courseUrl.trim() ? 'Paste the SkillsJar course link first' : 'Fill everything from the SkillsJar link'} onClick={runCourseFlow}>{vBusy ? '✦ Working…' : preview ? '↻ Regenerate' : '✦ Generate content'}</button>
+                      ? <button className="es-btn pri" disabled={!!vBusy || !courseUrl.trim()} title={!courseUrl.trim() ? 'Paste the Claude Academy course link first' : 'Fill everything from the Claude Academy link'} onClick={runCourseFlow}>{vBusy ? '✦ Working…' : preview ? '↻ Regenerate' : '✦ Generate content'}</button>
                       : isVideo
                       ? <button className="es-btn pri" disabled={!!vBusy || (!title && !videoUrl.trim())} title={(!title && !videoUrl.trim()) ? 'Add a title (or paste a video URL) first' : 'Fill everything from your Title — or from your Video URL if you only pasted a link'} onClick={() => runVideoFlow(title ? 'title' : 'video')}>{vBusy ? '✦ Working…' : preview ? '↻ Regenerate' : '✦ Generate content'}</button>
                       : <button className="es-btn pri" disabled={busy === 'preview' || !sel.generation_prompt} onClick={runPreview}>{busy === 'preview' ? 'Running…' : preview ? '↻ Run the whole flow again' : '▶ Run the whole flow'}</button>}
-                    {isSkillsJar ? <span className="es-muted">Paste the SkillsJar link and press ✦ — it fills the class name and everything.</span> : isVideo ? <span className="es-muted">Add a Title and press the ✦ next to it — or paste a Video URL and press the ✦ next to it.</span> : !sel.generation_prompt && <span className="es-muted">Write the Generation prompt in step 2 first.</span>}
+                    {isSkillsJar ? <span className="es-muted">Paste the Claude Academy link and press ✦ — it fills the class name and everything.</span> : isVideo ? <span className="es-muted">Add a Title and press the ✦ next to it — or paste a Video URL and press the ✦ next to it.</span> : !sel.generation_prompt && <span className="es-muted">Write the Generation prompt in step 2 first.</span>}
                     {preview && !isVideo && !isSkillsJar && <span className="es-muted">{usd(preview.cost_usd)} · {preview.runtime_ms}ms</span>}
                   </div>
 
@@ -505,7 +505,7 @@ const ExperienceStudioTab: React.FC<{ initialSlug?: string | null }> = ({ initia
                         <div style={{ display: 'grid', gap: 10 }}>
                           <div><div className="es-sublab">Class link</div>
                             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                              <input className="es-in" style={{ flex: 1, minWidth: 0 }} placeholder="The SkillsJar course URL (https://anthropic.skilljar.com/…)" value={courseUrl} onChange={(e) => setCourseUrl(e.target.value)} />
+                              <input className="es-in" style={{ flex: 1, minWidth: 0 }} placeholder="The Claude Academy course URL (https://academy.claude.com/courses/…)" value={courseUrl} onChange={(e) => setCourseUrl(e.target.value)} />
                               <AutofillButton onClick={runCourseFlow} busy={vBusy === 'course'} disabled={!courseUrl.trim() || !!vBusy}
                                 title="✦ Fill everything from this course link — class name, description, XP, minutes, and overview" />
                             </div></div>

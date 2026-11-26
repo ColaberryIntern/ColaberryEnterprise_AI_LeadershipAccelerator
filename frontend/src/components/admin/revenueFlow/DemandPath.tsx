@@ -1,6 +1,7 @@
 import React from 'react';
 import { paintFor } from './flowTokens';
 import DemandSourceDetail from './DemandSourceDetail';
+import { fmtCountOr } from './fmtCount';
 import type { DemandBand } from './flowBoardTypes';
 
 /**
@@ -88,8 +89,52 @@ export default function DemandPath({
                       {paint.name}
                     </div>
                     <div style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.25 }}>{src.label}</div>
-                    <div style={{ fontSize: 18, fontWeight: 700 }}>{src.count}</div>
+                    <div style={{ fontSize: 18, fontWeight: 700 }}>{fmtCountOr(src.count, 'Not recorded')}</div>
                     <div className="text-muted" style={{ fontSize: 11 }}>{src.countLabel}</div>
+
+                    {/* ── THE TWO SUB-KPIs, BOTTOM LEFT AND BOTTOM RIGHT (R27) ───────────
+                        Ali, 25 Nov: "show bottom left and right sub kpi's showing the read
+                        and click rates".
+
+                        Each prints its own numerator and denominator under the percentage.
+                        A rate without its basis is the easiest number on this page to
+                        misuse: 14% over 8,518 emails and 14% over 7 are the same figure and
+                        not the same fact. */}
+                    {src.rates && src.rates.length > 0 && (
+                      <div
+                        className="d-flex justify-content-between mt-2 pt-2"
+                        style={{ borderTop: '1px solid var(--border-subtle, #e2e8f0)', gap: 8 }}
+                        data-testid={`demand-rates-${streamKey}-${src.key}`}
+                      >
+                        {src.rates.map((rate, i) => (
+                          <div
+                            key={rate.key}
+                            style={{ textAlign: i === 0 ? 'left' : 'right', minWidth: 0 }}
+                            data-testid={`demand-rate-${streamKey}-${src.key}-${rate.key}`}
+                          >
+                            <div
+                              style={{
+                                fontSize: 13,
+                                fontWeight: 700,
+                                // Words rather than a percentage when the denominator is zero,
+                                // so an undefined rate never wears the colour of a measured one.
+                                color: rate.defined ? 'var(--text-primary)' : 'var(--text-muted)',
+                              }}
+                            >
+                              {rate.display}
+                            </div>
+                            <div className="text-muted" style={{ fontSize: 10 }}>{rate.label}</div>
+                            {rate.defined && (
+                              <div className="text-muted" style={{ fontSize: 9 }}>
+                                {fmtCountOr(rate.numerator, '0')}
+                                {' of '}
+                                {fmtCountOr(rate.denominator, '0')}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </button>
                 );
               })}

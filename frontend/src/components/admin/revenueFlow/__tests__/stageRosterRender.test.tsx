@@ -3,124 +3,232 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { StaticRouter } from 'react-router-dom/server';
 import StreamCard from '../StreamCard';
 import { StageRosterView } from '../StageRosterPanel';
-import type { StageRoster } from '../StageRosterPanel';
+import type { RosterPerson, StageRoster } from '../StageRosterPanel';
+import { fmtCount, fmtCountOr } from '../fmtCount';
 import type { ClassMap, Stream } from '../flowBoardTypes';
 
 jest.mock('../../../../utils/api', () => ({ __esModule: true, default: { get: jest.fn() } }));
 
 /**
- * R26 — the people behind a Revenue Room funnel count, as the page renders them.
+ * R26, extended by R27 — the people behind a Revenue Room funnel count.
  *
- * Taiwo Oludimimu, 25 Nov 2026: "can you make the data points clickable so they show a list
- * of students or leads that fall within each category?"
+ * Taiwo asked to click a number and see who is in it. Ali, on testing it: group the repeats,
+ * link each name to the 360, give every row a way to send email, and format the numbers.
  *
- * These cover the ways the list could quietly stop being trustworthy:
+ * These cover the ways the list stops being trustworthy:
  *
- *   - a list that is shorter than the count above it, rendered as if it agreed
- *   - a row with no name dropped, instead of shown with its absence stated
- *   - a name invented to fill a gap
- *   - a count made clickable on a stream that has no roster behind it, so it 404s
- *   - the overlap warning missing, which is the single most likely way to misread the card
+ *   - a list that no longer accounts for every row, rendered as if it did
+ *   - a name invented to fill a gap, or a link that 404s because the row has nothing to link on
+ *   - repeats deduped away, which deletes the fact that somebody tried four times
+ *   - a count made clickable on a stream that has no roster behind it
+ *   - a rate printed as 0% when nothing was sent to be read
  */
+const person = (over: Partial<RosterPerson> = {}): RosterPerson => ({
+  personKey: 'adeola@example.com',
+  name: 'Adeola Bello',
+  email: 'adeola@example.com',
+  enrollmentId: 'enr-1',
+  rowCount: 1,
+  rows: [{ rowId: 'sub-1', detail: 'monthly plan, $199. Term runs to 2026-12-25.' }],
+  summary: null,
+  unresolvedReason: null,
+  ...over,
+});
+
 const ROSTER: StageRoster = {
   stageKey: 'paying',
   label: 'Paying now',
-  count: 2,
+  subscriptionCount: 2,
+  personCount: 2,
   people: [
-    {
-      rowId: 'sub-1',
-      name: 'Adeola Bello',
-      email: 'adeola@example.com',
-      detail: 'monthly plan, $199. Term runs to 2026-12-25.',
-      unresolvedReason: null,
-    },
-    {
-      rowId: 'sub-2',
+    person(),
+    person({
+      personKey: 'zara@example.com',
       name: 'Zara Idris',
       email: 'zara@example.com',
-      detail: 'annual plan, $1,788. Term runs to 2027-06-01.',
-      unresolvedReason: null,
-    },
+      enrollmentId: 'enr-2',
+      rows: [{ rowId: 'sub-2', detail: 'annual plan, $1,788. Term runs to 2027-06-01.' }],
+    }),
   ],
   emptyNote: null,
   provenance: 'subscriptions, classified by the same rules that produce the count above.',
 };
 
 const view = (over: Partial<StageRoster> = {}) =>
-  renderToStaticMarkup(<StageRosterView roster={{ ...ROSTER, ...over }} />);
+  renderToStaticMarkup(
+    <StaticRouter location="/admin/revenue-room">
+      <StageRosterView roster={{ ...ROSTER, ...over }} />
+    </StaticRouter>,
+  );
 
 describe('the list shows who is in the stage', () => {
-  it('prints each person with their name, email and what the row is', () => {
+  it('prints each person with their email and what their rows are', () => {
     const html = view();
     expect(html).toContain('Adeola Bello');
-    expect(html).toContain('mailto:adeola@example.com');
+    expect(html).toContain('adeola@example.com');
     expect(html).toContain('Term runs to 2026-12-25');
     expect(html).toContain('data-testid="roster-row-sub-1"');
   });
 
-  it('reads correctly for one person', () => {
-    const html = view({ count: 1, people: [ROSTER.people[0]] });
-    expect(html).toContain('1 person');
+  it('reads correctly for one subscription held by one person', () => {
+    const html = view({ subscriptionCount: 1, personCount: 1, people: [person()] });
+    expect(html).toContain('1 subscription, held by 1 person');
+    expect(html).not.toContain('1 subscriptions');
     expect(html).not.toContain('1 people');
   });
 });
 
-describe('the count and the list are shown to agree, or shown not to', () => {
-  it('states the number when they agree', () => {
-    expect(view()).toContain('2 people');
+describe('both counts are shown, and each says what it counts', () => {
+  /**
+   * Grouping broke R26's "the count equals the rows listed" invariant, because 296
+   * subscription rows belong to 115 people. Printing both is the honest fix; quietly
+   * reporting a different number under the same name is not.
+   */
+  it('names the subscriptions and the people separately', () => {
+    const html = view({
+      subscriptionCount: 8,
+      personCount: 2,
+      people: [
+        person({ rowCount: 7, rows: Array.from({ length: 7 }, (_, i) => ({ rowId: `r${i}`, detail: 'row' })) }),
+        person({ personKey: 'z@x.com', name: 'Zara', email: 'z@x.com', rowCount: 1 }),
+      ],
+    });
+    expect(html).toContain('8 subscriptions, held by 2 people');
   });
 
-  /**
-   * The failure this whole feature is built around. A count of 27 above a list of 32 does not
-   * read as a bug in one of them; it reads as a reason to stop trusting the page. So a
-   * disagreement is printed rather than smoothed over by showing whichever number is to hand.
-   */
-  it('says so plainly when they disagree, instead of printing one of them', () => {
-    const html = view({ count: 27 });
+  it('says so plainly when the rows listed do not account for the count', () => {
+    // A list quietly shorter than its own count is the failure this feature guards.
+    const html = view({ subscriptionCount: 27 });
     expect(html).toContain('Count says 27, this list holds 2');
-    expect(html).not.toContain('27 people');
+    expect(html).not.toContain('27 subscriptions, held by');
   });
 });
 
-describe('a row with no name is listed, never dropped and never invented', () => {
-  const unnamed: StageRoster = {
-    ...ROSTER,
-    count: 1,
-    people: [{
-      rowId: 'sub-9',
-      name: null,
-      email: null,
-      detail: 'monthly plan, $199. Started 2026-10-01.',
-      unresolvedReason: 'This subscription does not resolve to an enrollment, so no name is recorded for it.',
-    }],
-  };
-
-  it('renders the row and says why it has no name', () => {
-    const html = renderToStaticMarkup(<StageRosterView roster={unnamed} />);
-    expect(html).toContain('data-testid="roster-row-sub-9"');
-    expect(html).toContain('No name recorded');
-    expect(html).toContain('does not resolve to an enrollment');
+describe('repeats are grouped, and the repeat count is kept', () => {
+  const repeat = person({
+    rowCount: 4,
+    summary: '4 subscription rows for this person in this stage.',
+    rows: [
+      { rowId: 'a', detail: 'attempt one' },
+      { rowId: 'b', detail: 'attempt two' },
+      { rowId: 'c', detail: 'attempt three' },
+      { rowId: 'd', detail: 'attempt four' },
+    ],
   });
 
-  it('invents nothing to fill the gap', () => {
-    const html = renderToStaticMarkup(<StageRosterView roster={unnamed} />);
+  it('shows the person once with the number of rows behind them', () => {
+    const html = view({ subscriptionCount: 4, personCount: 1, people: [repeat] });
+    expect(html).toContain('data-testid="roster-rows-adeola@example.com"');
+    expect(html).toContain('>4<');
+    // Once, not four times.
+    expect(html.match(/Adeola Bello/g)).toHaveLength(1);
+  });
+
+  it('keeps every row visible, because the repeats are the finding', () => {
+    const html = view({ subscriptionCount: 4, personCount: 1, people: [repeat] });
+    for (const id of ['a', 'b', 'c', 'd']) {
+      expect(html).toContain(`data-testid="roster-row-${id}"`);
+    }
+    expect(html).toContain('4 subscription rows for this person');
+  });
+
+  it('says nothing about repeats for somebody holding one row', () => {
+    // The control: the explanation follows the data rather than being boilerplate.
+    expect(view()).not.toContain('data-testid="roster-summary-adeola@example.com"');
+  });
+});
+
+describe('the name opens the 360, or is plain text', () => {
+  it('links the name to the person profile, on the billing tab', () => {
+    // A reader who clicked a payment stage wants the payments, not the timeline.
+    const html = view();
+    expect(html).toContain('/admin/people/adeola%40example.com?tab=billing');
+    expect(html).toContain('data-testid="roster-name-adeola@example.com"');
+  });
+
+  it('falls back to the enrolment when there is no email', () => {
+    const html = view({
+      people: [person({ personKey: 'enr-9', name: 'No Email', email: null, enrollmentId: 'a1b2c3d4-0000-4000-8000-000000000000' })],
+    });
+    expect(html).toContain('enrollment%3Aa1b2c3d4-0000-4000-8000-000000000000');
+  });
+
+  it('renders plain text rather than a link that would 404', () => {
+    const html = view({
+      people: [person({ personKey: 'row:x', name: null, email: null, enrollmentId: null })],
+    });
+    expect(html).toContain('data-testid="roster-name-row:x"');
+    expect(html).toContain('No name recorded');
+    expect(html).not.toContain('/admin/people/');
+
+    /*
+      Asserted as "not an anchor", because the two checks above do not distinguish it. A
+      <Link to={null}> carries the same test id and does not contain /admin/people/ either,
+      so both would pass while the page rendered a dead link. The mutation check found this
+      by removing the guard and watching the test stay green.
+    */
+    const cell = html.slice(html.indexOf('data-testid="roster-name-row:x"') - 60);
+    expect(cell.slice(0, 120)).not.toContain('<a ');
+    expect(cell.slice(0, 120)).toContain('<span');
+  });
+
+  it('invents nothing to fill a missing name', () => {
+    const html = view({
+      people: [person({ personKey: 'row:x', name: null, email: null, enrollmentId: null })],
+    });
     expect(html).not.toContain('Unknown');
     expect(html).not.toContain('Anonymous');
-    // Not the row id dressed up as a person either: it appears only as the test id.
-    expect(html).not.toContain('>sub-9<');
+  });
+});
+
+describe('every row offers a way to send email', () => {
+  it('offers a mailto for a person with an address', () => {
+    const html = view();
+    expect(html).toContain('data-testid="roster-email-adeola@example.com"');
+    expect(html).toContain('mailto:adeola@example.com');
+    expect(html).toContain('Send email');
+  });
+
+  it('offers nothing when there is no address, rather than a dead button', () => {
+    const html = view({ people: [person({ personKey: 'row:x', email: null })] });
+    expect(html).not.toContain('data-testid="roster-email-row:x"');
+    expect(html).toContain('None recorded');
   });
 });
 
 describe('an empty stage says which kind of empty it is', () => {
   it('prints the note and no table', () => {
     const html = view({
-      count: 0,
+      subscriptionCount: 0,
+      personCount: 0,
       people: [],
       emptyNote: 'Nobody is at "Paying now" right now. That is a measured zero.',
     });
     expect(html).toContain('data-testid="roster-empty-paying"');
     expect(html).toContain('measured zero');
     expect(html).not.toContain('<tbody>');
+  });
+});
+
+// ── NUMBER FORMATTING ────────────────────────────────────────────────────────────────────
+
+describe('counts read as quantities', () => {
+  it('separates thousands', () => {
+    expect(fmtCount(10343)).toBe('10,343');
+    expect(fmtCount(8518)).toBe('8,518');
+    expect(fmtCount(3)).toBe('3');
+  });
+
+  it('refuses to invent a digit for a count nobody recorded', () => {
+    // null means not recorded, which this page never renders as zero.
+    expect(fmtCount(null)).toBeNull();
+    expect(fmtCount(undefined)).toBeNull();
+    expect(fmtCountOr(null, 'Not recorded')).toBe('Not recorded');
+  });
+
+  it('does not render a broken number as a figure', () => {
+    expect(fmtCount(NaN)).toBeNull();
+    expect(fmtCountOr(NaN, 'Not recorded')).toBe('Not recorded');
   });
 });
 
@@ -163,15 +271,11 @@ describe('the count is a control only where there is a roster behind it', () => 
     expect(html).toContain('aria-label="Show the 27 people at Paying now"');
   });
 
-  /**
-   * The government and enterprise funnels are different shapes from different tables and have
-   * no roster endpoint. A count that looked clickable there would 404, which is worse than a
-   * count that plainly is not a control.
-   */
   it('leaves the government count as plain text', () => {
+    // That funnel is a different shape from different tables and has no roster endpoint, so a
+    // clickable count there would 404.
     const html = card(stream({ key: 'gov_pipeline', label: 'Government bids' }));
     expect(html).not.toContain('data-testid="stage-people-gov_pipeline-paying"');
-    // The control: the row and its number did render.
     expect(html).toContain('data-testid="stage-gov_pipeline-paying"');
     expect(html).toContain('27');
   });
@@ -179,16 +283,13 @@ describe('the count is a control only where there is a roster behind it', () => 
 
 describe('the card warns that the column does not add up', () => {
   it('says so on the membership card, not only in an email', () => {
-    // The person who asked got the explanation by reply; the next reader will not have it.
     const html = card(stream());
     expect(html).toContain('data-testid="funnel-overlap-note-membership"');
     expect(html).toContain('does not add up');
     expect(html).toContain('counted under both');
-    expect(html).toContain('still read as active in the database');
   });
 
   it('does not claim it about a funnel whose stages do not overlap that way', () => {
-    const html = card(stream({ key: 'gov_pipeline' }));
-    expect(html).not.toContain('data-testid="funnel-overlap-note-gov_pipeline"');
+    expect(card(stream({ key: 'gov_pipeline' }))).not.toContain('data-testid="funnel-overlap-note-gov_pipeline"');
   });
 });

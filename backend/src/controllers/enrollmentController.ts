@@ -14,6 +14,7 @@ import {
   SIGNUP_CONSENT_TEXT,
 } from '../services/consent/captureSignupConsent';
 import { capturePhoneConsent } from '../services/consent/capturePhoneConsent';
+import { OPEN_HOUSE_DOOR_SOURCE_SLUG } from '../services/leads/doorSlugs';
 
 export async function handleListOpenCohorts(
   _req: Request,
@@ -174,6 +175,11 @@ export async function handleCreateFreeAccount(
       utm_medium: typeof req.body.utm_medium === 'string' ? req.body.utm_medium : undefined,
       utm_campaign: typeof req.body.utm_campaign === 'string' ? req.body.utm_campaign : undefined,
       page_url: typeof req.body.page_url === 'string' ? req.body.page_url : undefined,
+      // The DOOR's claim about itself, so this lead is attributable to a brand.
+      // Taken from the constant and NEVER from the body: a public endpoint that
+      // let a visitor name their own source would let anyone write themselves
+      // into any brand's attribution.
+      sourceSlug: OPEN_HOUSE_DOOR_SOURCE_SLUG,
     });
 
     // Capture marketing consent if they ticked the box. AWAITED but never

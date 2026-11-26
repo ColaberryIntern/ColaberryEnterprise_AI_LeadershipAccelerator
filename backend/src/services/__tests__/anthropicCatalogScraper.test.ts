@@ -55,6 +55,37 @@ const TRACKED_ROWS = [
   { provider: 'skilljar', course_title: 'Claude Code in Action', course_url: 'https://anthropic.skilljar.com/claude-code-in-action' },
 ];
 
+/**
+ * A page that fetches and parses fine but matches none of the outline selectors:
+ * no `main`/`article` headings, no `[class*="outline"] li`. This is what a
+ * redesign or a platform migration looks like from inside the extractor - and
+ * until `outlines_missing` existed it was indistinguishable from "unchanged".
+ */
+const COURSE_HTML_NO_OUTLINE = `
+<html><body>
+  <div class="shell"><p>Sign in to view this course.</p></div>
+</body></html>
+`;
+
+/** An existing registry row with good stored content, which must never be clobbered. */
+function existingRowWithContent() {
+  return {
+    title: 'Claude Code 101',
+    outline: 'Getting Started\nCore Concepts\nHands-on Labs',
+    content_hash: 'a'.repeat(64),
+    update: jest.fn().mockResolvedValue({}),
+  };
+}
+
+/** n tracked rows with distinct URLs, so per-URL fetch behaviour can be mixed. */
+function trackedRows(n: number) {
+  return Array.from({ length: n }, (_i, idx) => ({
+    provider: 'skilljar',
+    course_title: `Course ${idx + 1}`,
+    course_url: `https://academy.claude.com/courses/course-${idx + 1}`,
+  }));
+}
+
 // ─── normalizeCourseUrl ───────────────────────────────────────────────────────
 
 describe('normalizeCourseUrl', () => {
@@ -272,5 +303,151 @@ describe('runCatalogScraper', () => {
       expect(course.title).toBeTruthy();
       expect(course.outline.length).toBeGreaterThan(10);
     }
+  });
+});
+
+// ─── fail loudly ──────────────────────────────────────────────────────────────
+
+/**
+ * The failure this block exists for: `errors` counts only DatabaseError, so a
+ * 404 on every course, a timeout, or an Anthropic markup change all produced an
+ * empty outline, landed as `unchanged`, bumped `last_checked` so nothing looked
+ * stale, and made the run report `outcome: 'success'` with `errors: 0`.
+ *
+ * A monitor in that state is worse than no monitor: it answers the question
+ * "are we detecting curriculum changes?" with a green check, forever. It is also
+ * the single most likely consequence of moving platforms, which is what prompted
+ * this - if a slug in the November 2026 Claude Academy migration had been wrong,
+ * this scraper would have reported a clean run every week.
+ */
+describe('runCatalogScraper refuses to call an unproven run clean', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('is UNHEALTHY when every course page matches no outline selector', async () => {
+    (CurriculumCourseLink.findAll as jest.Mock).mockResolvedValue(TRACKED_ROWS);
+    mockFetch.mockResolvedValue(mockResponse(COURSE_HTML_NO_OUTLINE));
+    (AnthropicContentRegistry.findOne as jest.Mock).mockImplementation(async () => existingRowWithContent());
+
+    const result = await runCatalogScraper();
+
+    expect(result.healthy).toBe(false);
+    expect(result.outlines_missing).toBe(2);
+    // Deliberately NOT folded into `errors`: other callers already depend on that
+    // meaning "the database write failed".
+    expect(result.errors).toBe(0);
+    expect(result.results.map((r) => r.error_class)).toEqual(['SelectorMiss', 'SelectorMiss']);
+  });
+
+  it('is UNHEALTHY when every course page 404s, rather than reporting them unchanged', async () => {
+    (CurriculumCourseLink.findAll as jest.Mock).mockResolvedValue(TRACKED_ROWS);
+    mockFetch.mockResolvedValue(mockResponse('', 404));
+    (AnthropicContentRegistry.findOne as jest.Mock).mockImplementation(async () => existingRowWithContent());
+
+    const result = await runCatalogScraper();
+
+    expect(result.healthy).toBe(false);
+    expect(result.outlines_missing).toBe(2);
+    expect(result.results.map((r) => r.error_class)).toEqual([
+      'UpstreamUnavailable',
+      'UpstreamUnavailable',
+    ]);
+  });
+
+  it('distinguishes a timeout from a selector miss', async () => {
+    (CurriculumCourseLink.findAll as jest.Mock).mockResolvedValue([TRACKED_ROWS[0]]);
+    const abort = Object.assign(new Error('aborted'), { name: 'AbortError' });
+    mockFetch.mockRejectedValue(abort);
+    (AnthropicContentRegistry.findOne as jest.Mock).mockImplementation(async () => existingRowWithContent());
+
+    const result = await runCatalogScraper();
+
+    expect(result.healthy).toBe(false);
+    expect(result.results[0].error_class).toBe('TimeoutError');
+  });
+
+  it('still leaves a good stored outline alone when extraction fails', async () => {
+    // The DB behaviour that must NOT change. Overwriting a good outline with
+    // empty, or flagging a change off it, would fire the false curriculum-change
+    // alert this monitor exists to prevent. Only the REPORTING changed.
+    (CurriculumCourseLink.findAll as jest.Mock).mockResolvedValue([TRACKED_ROWS[0]]);
+    mockFetch.mockResolvedValue(mockResponse(COURSE_HTML_NO_OUTLINE));
+    const row = existingRowWithContent();
+    (AnthropicContentRegistry.findOne as jest.Mock).mockResolvedValue(row);
+
+    const result = await runCatalogScraper();
+
+    expect(row.update).toHaveBeenCalledWith({ last_checked: expect.any(Date) });
+    expect(row.update).toHaveBeenCalledTimes(1);
+    expect(result.unchanged).toBe(1);
+    expect(result.updated).toBe(0);
+  });
+
+  it('treats ONE dark course among four as a per-course alert, not a broken monitor', async () => {
+    // A course can legitimately go away: Anthropic retires it, or renames it and
+    // our link 404s. That is one alert, not evidence the extractor is broken, and
+    // calling the whole run unhealthy for it would train everyone to ignore the
+    // flag - the same way the daily points alert stopped being read.
+    const rows = trackedRows(4);
+    (CurriculumCourseLink.findAll as jest.Mock).mockResolvedValue(rows);
+    mockFetch.mockImplementation(async (url: string) =>
+      url.endsWith('course-4')
+        ? mockResponse(COURSE_HTML_NO_OUTLINE)
+        : mockResponse(COURSE_HTML_WITH_OUTLINE),
+    );
+    (AnthropicContentRegistry.findOne as jest.Mock).mockImplementation(async () => existingRowWithContent());
+
+    const result = await runCatalogScraper();
+
+    expect(result.courses_found).toBe(4);
+    expect(result.outlines_missing).toBe(1);
+    expect(result.healthy).toBe(true);
+  });
+
+  it('treats HALF the catalog going dark as the extractor breaking', async () => {
+    const rows = trackedRows(4);
+    (CurriculumCourseLink.findAll as jest.Mock).mockResolvedValue(rows);
+    mockFetch.mockImplementation(async (url: string) =>
+      url.endsWith('course-3') || url.endsWith('course-4')
+        ? mockResponse(COURSE_HTML_NO_OUTLINE)
+        : mockResponse(COURSE_HTML_WITH_OUTLINE),
+    );
+    (AnthropicContentRegistry.findOne as jest.Mock).mockImplementation(async () => existingRowWithContent());
+
+    const result = await runCatalogScraper();
+
+    expect(result.outlines_missing).toBe(2);
+    expect(result.healthy).toBe(false);
+  });
+
+  it('records the reason on a NEW course that scraped nothing', async () => {
+    (CurriculumCourseLink.findAll as jest.Mock).mockResolvedValue([TRACKED_ROWS[0]]);
+    mockFetch.mockResolvedValue(mockResponse(COURSE_HTML_NO_OUTLINE));
+    (AnthropicContentRegistry.findOne as jest.Mock).mockResolvedValue(null);
+    (AnthropicContentRegistry.create as jest.Mock).mockResolvedValue({});
+
+    const result = await runCatalogScraper();
+
+    // Still created quietly - flagging change_detected off an empty outline would
+    // be a low-quality alert - but no longer created SILENTLY.
+    expect(AnthropicContentRegistry.create).toHaveBeenCalledWith(
+      expect.objectContaining({ change_detected: false }),
+    );
+    expect(result.results[0].error_class).toBe('SelectorMiss');
+    expect(result.healthy).toBe(false);
+  });
+
+  it('calls a run that actually read every course healthy, with nothing missing', async () => {
+    // The control. Without this, every assertion above would also pass if
+    // `healthy` were hardcoded to false.
+    (CurriculumCourseLink.findAll as jest.Mock).mockResolvedValue(TRACKED_ROWS);
+    mockFetch.mockResolvedValue(mockResponse(COURSE_HTML_WITH_OUTLINE));
+    (AnthropicContentRegistry.findOne as jest.Mock).mockResolvedValue(null);
+    (AnthropicContentRegistry.create as jest.Mock).mockResolvedValue({});
+
+    const result = await runCatalogScraper();
+
+    expect(result.healthy).toBe(true);
+    expect(result.outlines_missing).toBe(0);
+    expect(result.created).toBe(2);
   });
 });

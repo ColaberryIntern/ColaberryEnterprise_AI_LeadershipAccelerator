@@ -250,7 +250,9 @@ describe('a measure nobody records is not zero', () => {
   });
 
   it('shows the recorded measures as numbers', () => {
-    expect(detail).toContain('1200');
+    // Comma separated since R27, on Ali's instruction: 1200 reads as a part number and
+    // 1,200 reads as a quantity. The figure is unchanged; only its formatting is.
+    expect(detail).toContain('1,200');
     expect(detail).toContain('201');
   });
 
@@ -376,5 +378,107 @@ describe('a cut-off timeline says it is cut off', () => {
       <FlowTimeline events={manyDays} classifications={CLASSES} maxDays={6} />,
     );
     expect(html).not.toContain('cut off');
+  });
+});
+
+/**
+ * R27 — the two sub-KPIs on a campaign tile.
+ *
+ * Ali, 25 Nov 2026: "show bottom left and right sub kpi's showing the read and click rates and
+ * format the numbers with commas."
+ *
+ * The click was recorded all along and simply never read. These cover the ways a rate on a
+ * card becomes a lie: a zero denominator printed as 0%, a rate shown without the numbers that
+ * made it, and a rate appearing on a channel, which sends nothing.
+ */
+const RATES = [
+  {
+    key: 'read_rate',
+    label: 'read rate',
+    numerator: 1191,
+    denominator: 8518,
+    display: '14.0%',
+    basis: 'opened over emails sent',
+    defined: true,
+  },
+  {
+    key: 'click_rate',
+    label: 'click rate',
+    numerator: 420,
+    denominator: 8518,
+    display: '4.9%',
+    basis: 'clicked over emails sent',
+    defined: true,
+  },
+];
+
+const campaignBand = (rates: DemandSource['rates']): DemandBand[] => [{
+  key: 'asked',
+  label: 'Who we asked',
+  definition: 'Campaigns that went out.',
+  attributionBreak: null,
+  sources: [{
+    key: 'alumni_champion',
+    label: 'Colaberry Alumni AI Champion Campaign',
+    count: 10343,
+    countLabel: 'people asked',
+    measures: [{ label: 'emails sent', count: 8518, note: 'Emails, not people.' }],
+    rates,
+    status: 'live',
+    attributable: false,
+    note: 'Reach only.',
+    tone: 'info',
+  }],
+}];
+
+describe('a campaign tile carries its read and click rates', () => {
+  it('puts the read rate first and the click rate second', () => {
+    const html = path(campaignBand(RATES));
+    expect(html).toContain('data-testid="demand-rates-membership-alumni_champion"');
+    const read = html.indexOf('demand-rate-membership-alumni_champion-read_rate');
+    const click = html.indexOf('demand-rate-membership-alumni_champion-click_rate');
+    expect(read).toBeGreaterThan(-1);
+    expect(click).toBeGreaterThan(read);
+    expect(html).toContain('14.0%');
+    expect(html).toContain('4.9%');
+  });
+
+  /**
+   * A rate without its basis is the easiest number on this page to misuse: 14% over 8,518
+   * emails and 14% over 7 are the same figure and not the same fact.
+   */
+  it('shows the numerator and denominator under each rate, with commas', () => {
+    const html = path(campaignBand(RATES));
+    expect(html).toContain('1,191');
+    expect(html).toContain('8,518');
+    expect(html).toContain('420');
+  });
+
+  it('prints words, not 0 percent, when nothing has been sent', () => {
+    const undefinedRates = RATES.map((r) => ({
+      ...r, numerator: 0, denominator: 0, display: 'No emails sent yet', defined: false,
+    }));
+    const html = path(campaignBand(undefinedRates));
+    expect(html).toContain('No emails sent yet');
+    expect(html).not.toContain('0.0%');
+    // And no basis line, because there is no basis to show.
+    expect(html).not.toContain('0 of 0');
+  });
+
+  it('draws no rate row on a source that has none', () => {
+    // A channel sends nothing, so it has no denominator and a read rate there would be a
+    // number about something that did not happen.
+    const html = path(campaignBand(undefined));
+    expect(html).not.toContain('data-testid="demand-rates-membership-alumni_champion"');
+    // The control: the tile itself rendered.
+    expect(html).toContain('data-testid="demand-source-membership-alumni_champion"');
+  });
+});
+
+describe('counts on the demand path read as quantities', () => {
+  it('separates thousands on the headline count', () => {
+    const html = path(campaignBand(RATES));
+    expect(html).toContain('10,343');
+    expect(html).not.toContain('>10343<');
   });
 });

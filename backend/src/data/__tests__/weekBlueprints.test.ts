@@ -66,12 +66,18 @@ describe('WEEK_BLUEPRINTS depth (the "detailed enough" contract)', () => {
   });
 });
 
-describe('WEEK_BLUEPRINTS ↔ Anthropic Skilljar mapping', () => {
-  it('Skilljar weeks carry a skilljar course link', () => {
+describe('WEEK_BLUEPRINTS ↔ Anthropic course mapping', () => {
+  it('Anthropic-course weeks carry a Claude Academy course link', () => {
     for (const week of SKILLJAR_WEEKS) {
       const w = weekBlueprint(week)!;
+      // `kind` deliberately stays the string 'skilljar'. It is a CourseKind
+      // discriminator that other modules switch on, so renaming it is a change of
+      // its own with a migration attached - not part of moving the host. The URL is
+      // what a student actually follows, and that had to move: Skilljar retires in
+      // early December 2026.
       expect(w.anthropic.kind).toBe('skilljar');
-      expect(w.anthropic.url).toMatch(/^https:\/\/anthropic\.skilljar\.com\//);
+      expect(w.anthropic.url).toMatch(/^https:\/\/academy\.claude\.com\/courses\//);
+      expect(w.anthropic.url).not.toContain('skilljar.com');
       expect(w.anthropic.title && w.anthropic.title.length).toBeTruthy();
     }
   });

@@ -119,7 +119,8 @@ export function DemoPilotIntake({ token, phone }: DemoPilotIntakeProps): React.R
       {stage === 'plan' ? <InterviewPlan token={token} callAvailable={status.callAvailable} onPlanned={() => void refresh('meeting')} /> : null}
 
       {stage === 'meeting' ? (
-        <MeetingPicker token={token} anchorKey={`${status.interviewMode}-${status.interviewScheduledFor || ''}-${status.interviewed}`} onBooked={onBooked} />
+        <MeetingPicker token={token} anchorKey={`${status.interviewMode}-${status.interviewScheduledFor || ''}-${status.interviewed}`} onBooked={onBooked}
+          onSkip={status.interviewMode === 'now' && !status.interviewed ? () => setStage('interview') : undefined} />
       ) : null}
 
       {stage === 'interview' ? <InterviewRunner token={token} status={status} phone={phone} onDone={interviewDone} /> : null}

@@ -1,8 +1,8 @@
 import { computeMaterialsUpdate, CourseMaterial } from '../lib/anthropicCourseMaterials';
 
 const COURSES: CourseMaterial[] = [
-  { title: 'Claude Code 101 (Anthropic Skilljar)', type: 'reading', url: 'https://anthropic.skilljar.com/claude-code-101' },
-  { title: 'Claude Code in Action (Anthropic Skilljar)', type: 'reading', url: 'https://anthropic.skilljar.com/claude-code-in-action' },
+  { title: 'Claude Code 101 (Anthropic Academy)', type: 'reading', url: 'https://academy.claude.com/courses/claude-code-101' },
+  { title: 'Claude Code in Action (Anthropic Academy)', type: 'reading', url: 'https://academy.claude.com/courses/claude-code-in-action' },
 ];
 
 describe('computeMaterialsUpdate', () => {
