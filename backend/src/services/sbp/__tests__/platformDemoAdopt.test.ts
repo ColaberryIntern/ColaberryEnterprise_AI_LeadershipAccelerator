@@ -136,10 +136,19 @@ describe('adoptPlatformConnectedDemo: a demo that exists but cannot be used REFU
    * model; "a demo we stored and cannot read" must not, because then a student with no
    * repository would be asked for a file that does not exist, to fix a bug of ours.
    */
-  it('throws when the artifact row carries no spec file', async () => {
+  it('throws when the artifact row carries no spec file, and SAYS the file is missing', async () => {
+    /*
+     * The message is asserted, not just the class, and that is what makes the explicit guard
+     * worth having. Without it `JSON.parse(undefined)` throws too and lands in the same catch
+     * with the same error_class, so an assertion on the class alone passes whether the guard is
+     * there or not - verified by mutation: disabling the guard left this file green until this
+     * assertion existed. "We stored no spec file" and "the spec will not parse" are different
+     * bugs to go and look at.
+     */
     activeArtifact.mockResolvedValue(artifact({ 'demo/other.json': '{}' }));
     await expect(adoptPlatformConnectedDemo(PROJECT)).rejects.toMatchObject({
       error_class: 'ConnectedDemoSpecInvalid',
+      message: expect.stringContaining(`has no ${DEMO_SPEC_ARTIFACT_PATH}`),
     });
     expect(persistConnectedDemoSpec).not.toHaveBeenCalled();
   });
@@ -165,6 +174,8 @@ describe('adoptPlatformConnectedDemo: a demo that exists but cannot be used REFU
       activeArtifact.mockResolvedValue(artifact({ [DEMO_SPEC_ARTIFACT_PATH]: body }));
       await expect(adoptPlatformConnectedDemo(PROJECT)).rejects.toMatchObject({
         error_class: 'ConnectedDemoSpecInvalid',
+        // An empty file is a missing spec, not a parse failure. Same reason as above.
+        message: expect.stringContaining(`has no ${DEMO_SPEC_ARTIFACT_PATH}`),
       });
     }
     expect(persistConnectedDemoSpec).not.toHaveBeenCalled();
