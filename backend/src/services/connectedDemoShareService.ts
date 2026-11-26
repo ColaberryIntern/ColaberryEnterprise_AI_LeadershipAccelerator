@@ -50,6 +50,15 @@ import { publicDemoUrl } from '../routes/demoRoutes';
  * It is therefore UNTRUSTED input, which is exactly why `connectedDemoSpec` validates the shape
  * and `demoSpec/contentPolicy` checks the generated spec against this project's own restricted
  * values before anything is written.
+ *
+ * ## Two sources, one publish
+ *
+ * The paragraph above describes a student-built project. A PLATFORM-built one has no repository
+ * for anybody to take that file out of, and it does not need one: its build already produced and
+ * stored a demo spec. Publishing therefore adopts the stored spec
+ * (`sbp/platformDemoAdopt.ts`) and asks for nothing. The data model is required only when both
+ * are absent, and `can_publish_without_data_model` on the read tells the panel which case it is
+ * looking at so it does not ask for a file that cannot exist.
  */
 
 export const SetConnectedDemoShareSchema = z.object({
@@ -61,7 +70,7 @@ export const SetConnectedDemoShareSchema = z.object({
   enabled: z.boolean(),
   /**
    * The student's `command-center/data-model.json`. Required only when enabling a demo that has
-   * no spec yet; ignored when revoking.
+   * no spec yet AND no platform-built demo to adopt; ignored when revoking.
    */
   data_model: z.unknown().optional(),
 });
@@ -89,6 +98,18 @@ export interface ConnectedDemoShareState {
   url: string | null;
   has_spec: boolean;
   event_count: number;
+  /**
+   * Can this project be published WITHOUT the caller sending a data model?
+   *
+   * True when a spec already exists, and true when the platform built this project's demo
+   * itself, because then the spec is already stored and gets adopted. The panel reads this to
+   * decide whether to ask for `command-center/data-model.json` at all: on a platform-built
+   * project there is no student repository to take that file out of, so asking would be asking
+   * for something that does not exist.
+   */
+  can_publish_without_data_model: boolean;
+  /** The platform-built demo's version, when there is one. Null otherwise. */
+  platform_demo_version: number | null;
 }
 
 export type ConnectedDemoShareErrorClass =
@@ -126,7 +147,7 @@ async function authorizeProject(enrollmentId: string, projectId: string): Promis
   return project;
 }
 
-function stateOf(project: Project): ConnectedDemoShareState {
+function stateOf(project: Project, platformDemoVersion: number | null): ConnectedDemoShareState {
   // Read straight off the model. The three columns are declared at `models/Project.ts:141-143`,
   // so a cast here would only be hiding the model from itself - and the model IS the contract.
   const spec: unknown = project.demo_spec;
@@ -141,7 +162,24 @@ function stateOf(project: Project): ConnectedDemoShareState {
     url: enabled && token ? publicDemoUrl(token) : null,
     has_spec: spec != null,
     event_count: events,
+    // The OR matters in both directions. A spec already here needs no data model; a platform
+    // demo needs none either, because publishing adopts it. Only a student-built project with
+    // nothing stored yet has to send the file.
+    can_publish_without_data_model: spec != null || platformDemoVersion != null,
+    platform_demo_version: platformDemoVersion,
   };
+}
+
+/**
+ * `stateOf` plus the one read it cannot do for itself.
+ *
+ * Separated so the pure projection stays pure and testable without a database, which is the same
+ * split this file's header describes for the rest of the module.
+ */
+async function stateFor(project: Project): Promise<ConnectedDemoShareState> {
+  const { platformDemoAvailability } = await import('./sbp/platformDemoAdopt');
+  const platform = await platformDemoAvailability(project.id);
+  return stateOf(project, platform.version);
 }
 
 /** Read the current state. Authorizes the same way the write does. */
@@ -149,7 +187,7 @@ export async function getConnectedDemoShare(
   enrollmentId: string,
   projectId: string,
 ): Promise<ConnectedDemoShareState> {
-  return stateOf(await authorizeProject(enrollmentId, projectId));
+  return stateFor(await authorizeProject(enrollmentId, projectId));
 }
 
 /**
@@ -171,11 +209,30 @@ export async function setConnectedDemoShare(
     // reload in this file is the one after `generateConnectedDemo`, because that write goes
     // through raw SQL and genuinely does not reach this object.
     await project.update({ demo_share_enabled: false });
-    return stateOf(project);
+    return stateFor(project);
   }
 
   const existingSpec: unknown = project.demo_spec;
   if (existingSpec == null) {
+    /*
+     * A platform-built project's spec is already built and stored, so adopt it rather than
+     * demanding a file the student has no repository to take it from. Tried BEFORE the data
+     * model is required, and deliberately not after: reaching the refusal first would mean a
+     * platform-built project could only ever be published by sending it something irrelevant.
+     *
+     * Returns null when this project has no platform demo, which is how a student-built project
+     * falls through to the requirement below.
+     */
+    const { adoptPlatformConnectedDemo } = await import('./sbp/platformDemoAdopt');
+    const adopted = await adoptPlatformConnectedDemo(input.project_id);
+    if (adopted) {
+      // Same reason the generated path reloads: `persistConnectedDemoSpec` writes through raw
+      // SQL, so this instance has not seen the spec or the token yet.
+      await project.reload();
+      await project.update({ demo_share_enabled: true });
+      return stateFor(project);
+    }
+
     if (input.data_model === undefined) {
       throw new ConnectedDemoShareError(
         'DataModelRequired',
@@ -219,5 +276,5 @@ export async function setConnectedDemoShare(
   // Enable only after a spec exists. The reverse order would leave a window in which the row is
   // published and the public route refuses it, which is a shared link that does not work.
   await project.update({ demo_share_enabled: true });
-  return stateOf(project);
+  return stateFor(project);
 }

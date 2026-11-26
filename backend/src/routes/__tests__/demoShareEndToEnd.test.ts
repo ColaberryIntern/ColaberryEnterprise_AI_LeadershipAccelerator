@@ -117,6 +117,18 @@ jest.mock('../../services/sbp/connectedDemoStore', () => ({
   generateConnectedDemo: (...a: unknown[]) => generateConnectedDemo(...(a as [])),
 }));
 
+/*
+ * No platform-built demo, which is what makes this a STUDENT-built project end to end: the
+ * publish below has to go through the data model, exactly as it does in production for a project
+ * the platform did not build. Stubbed rather than left real because the real module reads the
+ * artifact store over sequelize, and this file has no database.
+ */
+jest.mock('../../services/sbp/platformDemoAdopt', () => ({
+  __esModule: true,
+  adoptPlatformConnectedDemo: async () => null,
+  platformDemoAvailability: async () => ({ version: null, built_at: null }),
+}));
+
 jest.mock('../../services/sbp/planStore', () => ({
   __esModule: true,
   getPublishedPlan: async () => ({

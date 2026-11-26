@@ -6,9 +6,10 @@
  * `ProjectInterior.tsx` with `<span />`: the panel's 14 tests, the page's 19, the admin page's 15
  * and both `tsc --noEmit` gates all stayed green while the feature was gone from the product.
  *
- * That is the whole deliverable of this task, so it gets its own assertions, in all three
- * directions: present for a build that carries STORY-900, absent for one that does not, absent
- * for the seeded sample.
+ * That is the whole deliverable of this task, so it gets its own assertions, in every direction:
+ * present for a build that carries STORY-900, present for a platform-built one that carries no
+ * such row but does have a demo, absent when there is nothing to publish, and absent for the
+ * seeded sample and for a local build regardless of what the server says.
  */
 import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -97,10 +98,26 @@ describe('the publish control is on the page, for the builds that have the story
     expect(hrefs).toContain('/api/public/demo/tok-abc');
   });
 
-  it('does NOT render for a build with no STORY-900 row, and asks the server nothing', async () => {
+  it('renders with NO STORY-900 row when the server says this project has a demo', async () => {
+    /*
+     * The platform-built shape, and the reason the page no longer decides this alone. L13.4
+     * retires STORY-900 on projects the platform builds, and those projects have a demo in the
+     * artifact store. Gating on the board would mean the projects the platform builds are
+     * exactly the projects that can never get a permanent public link.
+     */
+    await mount(project());
+    expect(panel()).not.toBeNull();
+    expect(container.textContent).toContain('Your demo link');
+  });
+
+  it('does NOT render for a build with no story AND nothing the server can publish', async () => {
+    // The negative still has teeth: it is the ANSWER that withholds the card now, not the prop.
+    mockGetShare.mockResolvedValue({
+      project_id: 'p1', enabled: false, url: null, has_spec: false, event_count: 0,
+      can_publish_without_data_model: false, platform_demo_version: null,
+    });
     await mount(project());
     expect(panel()).toBeNull();
-    expect(mockGetShare).not.toHaveBeenCalled();
   });
 
   it('does NOT render on the seeded sample build, which has no real project to publish', async () => {

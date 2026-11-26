@@ -16,6 +16,16 @@ import {
  * page works, and no screen in the portal can turn it on. An outward-facing link that only an
  * engineer with a bearer token can create is not a feature anybody has.
  *
+ * ## Two kinds of project, and only one of them has a file to pick
+ *
+ * A PLATFORM-built project's demo was built and stored by the platform, so publishing adopts the
+ * stored spec and asks for nothing. Those projects also have no STORY-900 row at all, so the gate
+ * here is "is there anything to offer" rather than "is the story on the board". The portal can
+ * already show that demo, but only through a 12-hour signed link it mints on load; this panel is
+ * the only way to get an address that keeps working.
+ *
+ * The rest of this applies to a STUDENT-built project.
+ *
  * ## Why the student picks the file
  *
  * Generating the demo needs `command-center/data-model.json`, which STORY-000 wrote into their
@@ -40,7 +50,11 @@ import {
 
 interface Props {
   projectId: string;
-  /** Only rendered when the build actually carries STORY-900. */
+  /**
+   * Does the board carry STORY-900? One of four reasons this panel renders, not the only one any
+   * more: a platform-built project has no such row and still has a demo to publish. See
+   * `offerable` in the body.
+   */
   hasConnectedDemoStory: boolean;
 }
 
@@ -76,9 +90,21 @@ export default function ConnectedDemoSharePanel({ projectId, hasConnectedDemoSto
     }
   }, [projectId]);
 
-  useEffect(() => { if (hasConnectedDemoStory) load(); }, [hasConnectedDemoStory, load]);
-
-  if (!hasConnectedDemoStory) return null;
+  /*
+   * Loaded for every project this is mounted on, which is a change from "only when the board
+   * carries STORY-900".
+   *
+   * A platform-built project has no STORY-900 row (L13.4 retires it, because the platform builds
+   * those pages itself) and yet it does have a demo worth publishing. The page cannot tell: the
+   * projects payload carries the board, not the artifact store. The server can, so it is asked,
+   * rather than teaching the projects DTO a second version of "does this project have a demo"
+   * that could disagree with the first.
+   *
+   * It costs one authenticated read on a project page, behind the caller's existing gate of a
+   * real pipeline build that is not the sample. Nothing renders until the answer arrives, so a
+   * project with no demo and no story never shows a card at all - see `offerable` below.
+   */
+  useEffect(() => { load(); }, [load]);
 
   const pickFile = (e: React.ChangeEvent<HTMLInputElement>): void => {
     const file = e.target.files?.[0];
@@ -117,9 +143,11 @@ export default function ConnectedDemoSharePanel({ projectId, hasConnectedDemoSto
     setMessage(null);
     setCopied(false);
     try {
-      // The data model travels only when there is no demo yet. Sending it on every publish would
-      // regenerate a demo the student has already checked.
-      const needsModel = enabled && !state?.has_spec;
+      // The data model travels only when there is no demo yet AND none can be adopted. Sending it
+      // on every publish would regenerate a demo the student has already checked.
+      const needsModel = enabled
+        && !state?.has_spec
+        && state?.can_publish_without_data_model !== true;
       const next = await setConnectedDemoShare(projectId, enabled, needsModel ? dataModel : undefined);
       setState(next);
       if (needsModel) {
@@ -147,6 +175,19 @@ export default function ConnectedDemoSharePanel({ projectId, hasConnectedDemoSto
 
   const published = !!state?.enabled && !!state?.url;
   const generated = !!state?.has_spec && !published;
+  /** The platform built this project's demo, so publishing adopts it and needs no file. */
+  const adoptable = !published && !generated && state?.can_publish_without_data_model === true;
+
+  /*
+   * Render nothing at all unless there is something to offer.
+   *
+   * Four ways to qualify: the board asks for a demo (STORY-900), one is already published, one is
+   * built and private, or the platform built one that can be adopted. A project with none of
+   * those gets no card, which is also what the pre-load state looks like, so there is no flash of
+   * an empty panel on the projects that will never show it.
+   */
+  const offerable = hasConnectedDemoStory || published || generated || adoptable;
+  if (!offerable) return null;
 
   return (
     <section className="card border-0 shadow-sm mb-3" data-testid="connected-demo-share">
@@ -187,7 +228,19 @@ export default function ConnectedDemoSharePanel({ projectId, hasConnectedDemoSto
           </>
         )}
 
-        {!loading && !published && !generated && (
+        {!loading && adoptable && (
+          <>
+            <p className="small mb-2">
+              Your demo is built and private. Publishing gives it a link anybody can open, with no
+              login and no expiry.
+            </p>
+            <button type="button" className="btn btn-sm btn-primary" disabled={busy} onClick={() => run(true)}>
+              {busy ? 'Publishing...' : 'Publish my demo'}
+            </button>
+          </>
+        )}
+
+        {!loading && !published && !generated && !adoptable && (
           <>
             <p className="small mb-2">
               No demo yet. Pick the <code>command-center/data-model.json</code> that STORY-000 wrote
