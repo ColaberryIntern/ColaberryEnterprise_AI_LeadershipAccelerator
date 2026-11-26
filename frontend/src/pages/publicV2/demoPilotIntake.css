@@ -416,6 +416,12 @@
   color: var(--text-on-accent);
 }
 
+/* A button that cannot be used must not look like one that can. */
+.cbv2-shell .cbv2-dpi .cbv2-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 /* Files and the summary. */
 .cbv2-shell .cbv2-dpi__files,
 .cbv2-shell .cbv2-dpi__summary {

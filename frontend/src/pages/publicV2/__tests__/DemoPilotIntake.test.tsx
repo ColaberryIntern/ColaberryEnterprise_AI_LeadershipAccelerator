@@ -159,6 +159,16 @@ describe('now: plan, book, then the interview', () => {
     expect(buttons().map((b) => b.textContent)).toEqual(expect.arrayContaining(['Call me now', 'Type it instead']));
   });
 
+  it('booking with no time chosen says what is needed, and choosing one clears it', async () => {
+    statusMock.mockResolvedValue({ ...STATUS, interviewMode: 'now' });
+    await mount();
+    await press('Book this meeting');
+    expect(bookMock).not.toHaveBeenCalled();
+    expect(q('[role="alert"]')?.textContent).toBe('Choose one of the times above first.');
+    await act(async () => (container.querySelector('[role="radio"]') as HTMLButtonElement).click());
+    expect(q('[role="alert"]')).toBeNull();
+  });
+
   it('a calendar failure says so and offers a retry', async () => {
     slotsMock.mockRejectedValue(new Error('503'));
     statusMock.mockResolvedValue({ ...STATUS, interviewMode: 'now' });
