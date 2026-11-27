@@ -2,6 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import api from '../../utils/api';
 import { PageHeader, SectionCard } from '../../components/admin/shell';
+// R7. The conversations card lives in its own component so its rules can be rendered
+// against fixtures: renderToStaticMarkup never runs effects, so this page's fetch cannot.
+import ConversationsPanel, { ConversationsView }
+  from '../../components/admin/revenueRoom/ConversationsPanel';
 
 /**
  * R4 — the page behind a Revenue Room card (/admin/revenue-room/:cardKey).
@@ -66,6 +70,11 @@ interface Drilldown {
   owner: string;
   timeline: Timeline | null;
   roster: RosterEntry[] | null;
+  /**
+   * R7. Null when `interaction_outcomes` is absent, and the card is then omitted rather than
+   * drawn empty: a missing instrument is not a quiet quarter.
+   */
+  conversations: ConversationsView | null;
   spine: SpineState;
   note: string | null;
 }
@@ -296,6 +305,23 @@ export default function AdminRevenueRoomDrilldownPage() {
               {data.timeline
                 ? <TimelineView timeline={data.timeline} />
                 : <p className="mb-0 text-muted">No timeline was returned.</p>}
+            </SectionCard>
+          )}
+
+          {/*
+            R7. Shown on BOTH shapes, under the timeline rather than inside it. The spine's
+            rule is that anything in that timeline earned its place by being linked, and an
+            interaction outcome is linked to nothing, so folding it in would break the one
+            property that makes the timeline trustworthy.
+          */}
+          {data.conversations && (
+            <SectionCard title="Conversations in progress">
+              <p className="small mb-3" style={{ color: 'var(--text-muted)' }}>
+                Meetings booked, calls answered and replies, read straight from the interaction
+                record rather than from the evidence spine. A booked meeting and a meeting held
+                are not the same thing, and only one of them is written down.
+              </p>
+              <ConversationsPanel view={data.conversations} />
             </SectionCard>
           )}
 

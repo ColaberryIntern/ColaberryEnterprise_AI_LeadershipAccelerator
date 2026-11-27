@@ -43,6 +43,9 @@ import {
   getEvidenceCounts,
   getEvidenceTimeline,
 } from './evidenceLinkService';
+// R7 - conversations in progress. Read beside the spine, never folded into it.
+import { getConversations } from './conversationsService';
+import type { ConversationsView } from './conversations';
 
 /** A card either resolves to one initiative, or to a list of them. */
 export type DrilldownShape = 'single' | 'roster';
@@ -68,6 +71,18 @@ export interface Drilldown {
   timeline: EvidenceTimeline | null;
   /** Present on a `roster` drill-down, ordered by evidence then recency. */
   roster: RosterEntry[] | null;
+  /**
+   * Conversations in progress: meetings booked, calls answered, replies. R7.
+   *
+   * Carried ALONGSIDE the evidence timeline rather than inside it, deliberately. The spine's
+   * rule is that anything appearing in that timeline earns its place by being linked, and an
+   * interaction outcome is not linked to anything — folding it in would quietly break the one
+   * property that makes the timeline trustworthy.
+   *
+   * Null when `interaction_outcomes` is absent, so the card is omitted rather than rendered
+   * empty: a missing instrument is not a quiet quarter.
+   */
+  conversations: ConversationsView | null;
   /** Whether the spine could be read at all. Mirrors the service's own distinction. */
   spine: SpineState;
   /** Why a view is empty, when it is. Null when there is nothing to explain. */
@@ -196,6 +211,11 @@ export async function getDrilldown(cardKey: string, bidKey?: string): Promise<Dr
     timeline: null, roster: null, note: null,
   };
 
+  // R7. Read ONCE here, above every return, so no drill-down path can ship without it.
+  // Guarded: a failure costs the conversations card and not the drill-down, which is the rule
+  // the Room has followed since R1.
+  const conversations = await getConversations().catch(() => null);
+
   // One bid inside the aggregate: a single view, keyed on the project rather than the card.
   if (bidKey) {
     if (def.kind !== 'gov_pipeline') {
@@ -203,7 +223,7 @@ export async function getDrilldown(cardKey: string, bidKey?: string): Promise<Dr
     }
     const timeline = await getEvidenceTimeline('gov_bid', bidKey);
     return {
-      ...base, shape: 'single', timeline, spine: timeline.state,
+      ...base, shape: 'single', timeline, conversations, spine: timeline.state,
       label: `${def.label} — ${bidKey}`, note: timeline.note,
     };
   }
@@ -212,6 +232,7 @@ export async function getDrilldown(cardKey: string, bidKey?: string): Promise<Dr
     const { state, entries } = await govRoster();
     return {
       ...base,
+      conversations,
       shape: 'roster',
       roster: entries,
       spine: state,
@@ -226,5 +247,7 @@ export async function getDrilldown(cardKey: string, bidKey?: string): Promise<Dr
   }
 
   const timeline = await getEvidenceTimeline(spineTypeFor(def), def.key);
-  return { ...base, shape: 'single', timeline, spine: timeline.state, note: timeline.note };
+  return {
+    ...base, shape: 'single', timeline, conversations, spine: timeline.state, note: timeline.note,
+  };
 }
