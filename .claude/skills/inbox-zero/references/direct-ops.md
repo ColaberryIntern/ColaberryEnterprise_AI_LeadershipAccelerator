@@ -33,8 +33,8 @@ September 2026 sessions. Every rule in quotes is Ali's, verbatim.
 (for instance filed to a named folder after its content is captured in Basecamp) and then it, too,
 leaves the inbox. If a mailbox cannot be read (dead token), say it is unreadable; never report it as
 checked. The personal Gmail token is re-authorized with `scripts/inbox-auth-helper.js` from an
-off-OneDrive checkout with the prod OAuth client; the recipe is in memory
-(`feedback_inbox_zero_central_time_and_live_inbox_only`).
+off-OneDrive checkout with the prod OAuth client; the recipe is under "Re-authorizing the personal
+Gmail token" below.
 
 **Only what needs tackling stays.** After every item is handled, the inbox holds exactly the things
 Ali still has to act on. Cleared on sight, with verification: acknowledgements and FYIs
@@ -120,6 +120,82 @@ shell heredoc will mangle backslashes and apostrophes.
 Idempotency: every Basecamp write carries a `MARK` token (`[decision-YYYY-MM-DD-slug]`) and the
 script checks for it before posting; every archive and restore re-fetches and reports the live
 label state; every send returns the SMTP receipt and the recipients as sent.
+
+## Later rules, and what they mean
+
+These were given after the September sessions. Until 27 Nov 2026 they lived only in one machine's
+Claude memory, so a session on any other computer never saw them. They live here now so every
+checkout gets them with `git pull`.
+
+**Handled means all three, or it stays.** (Ali, 2026-10-23: "When you do take care of an email, can
+you remove it from my inbox so I can know it's been taken care of.") An email leaves only when it
+is (1) filed, with a record outside the mailbox such as a Basecamp comment, (2) replied to, with
+the reply recorded, and (3) owed nothing further. Mail that is filed but unanswered stays: archiving
+it hides an open request. Drive any batch archive from an explicit list of message ids, never a
+filter, because a filter can sweep up something still open.
+
+**"Delete it from my inbox" means archive.** (Ali, 2026-11-01: "when you take care of an email,
+delete the original from my inbox so I know it's been taken care of.") Remove the INBOX label and
+keep the message in All Mail. Trash is the only irreversible option, so use it only when Ali names
+it. A modify that silently does nothing still returns 200, so re-fetch and confirm INBOX is gone
+before saying "out of your inbox".
+
+**Work done in Basecamp clears its emails too.** (2026-09-18 miss, Ali: "why are the emails still in
+my inbox if you addressed them".) When a Basecamp thread is answered straight through the API, search
+the inbox for its notification emails (`in:inbox "(<project name>)"`, or the to-do title) and archive
+them in the same step as the reply.
+
+**A bare "proceed" points at the inbox.** When Ali says only "proceed", "go ahead" or "continue" and
+names no task, check recent unanswered mail to `ali@colaberry.com` (`newer_than:3d`) before resuming
+anything from PROGRESS.md or the last commit. If nothing obvious is there, ask which task he means.
+
+**No Gmail connector is not the same as no mailbox.** The claude.ai Gmail and Microsoft 365
+connectors are often missing or signed out in a session. Use the scripts in this skill instead; they
+run in the prod container, where the mail credentials live. Do not read `inbox_emails` as the live
+inbox: that table is APPEND-ONLY and has no label column, so a row means a message arrived, never
+that it is still there. It is the right place to recover a message Ali says he never saw, and when
+the email itself is the deliverable, read `body_text` whole (a 6,000-character cap once cut a
+45-item list off at item 20 without any error). The sanctioned single-message archive in code is
+`archiveEmail` in `backend/src/services/inbox/autoArchiveService.ts`.
+
+**"I never got that email" is usually gate 1.** Before blaming Gmail or Hotmail, ask the Inbox COS
+audit log which rule archived it. Run in the prod database (`accelerator_prod`, user `accelerator`;
+there is no `postgres` user), and base64 the SQL across ssh so the quotes survive:
+
+```sql
+SELECT to_char(e.received_at AT TIME ZONE 'America/Chicago','MM-DD HH24:MI') AS ct,
+       left(e.from_address,38), left(e.subject,44),
+       c.state::text, c.classified_by, left(coalesce(c.reasoning,''),54)
+FROM inbox_emails e LEFT JOIN inbox_classifications c ON c.email_id = e.id
+WHERE e.from_address ILIKE '%<domain>%' ORDER BY e.received_at DESC LIMIT 20;
+```
+
+The repeat offender is `backend/src/services/inbox/hardRuleEngine.ts`: wanted mail falls past the
+early INBOX rules and is archived by the List-Unsubscribe or noreply checks. Count with `count(*)`
+before quoting a number; a `LIMIT` once made 103 look like 25. A fix needs a prod deploy and only
+changes mail classified after it.
+
+**Emailing Ali something he must see.** Self-sent mail from `ali@colaberry.com` is normally
+archived by gate 1. It is kept when the subject starts `Ali, here's ` (rule 0a in
+`hardRuleEngine.ts`). Send with the headers `X-MC-Track: none` (otherwise Mandrill wraps every link
+in a click tracker) and `X-MC-AutoText: false`. Hotmail then auto-files mail from
+`ali@colaberry.com` into its Colaberry folder, so find it with a Graph search across folders and move
+it to the Inbox. A send with an HTML attachment can take about three minutes to appear in Hotmail
+while Microsoft scans it; wait at least four minutes before concluding it did not arrive.
+
+**Re-authorizing the personal Gmail token** (`alimuwwakkil@gmail.com`, when reads fail with
+`invalid_grant`). Last done 2026-09-16. Never print a secret at any step.
+
+1. Copy `GMAIL_PERSONAL_CLIENT_ID` and `GMAIL_PERSONAL_CLIENT_SECRET` from the prod container's
+   environment into a scratch env file.
+2. From a checkout outside OneDrive that has `node_modules`, run `node scripts/inbox-auth-helper.js`
+   with those exported as `GMAIL_CLIENT_ID` and `GMAIL_CLIENT_SECRET`, sending stdout to a scratch log.
+3. Open `http://localhost:9876/`; Ali clicks "Authorize Personal Gmail". The token prints only to the log.
+4. Copy the token to the host, back up `/opt/colaberry-accelerator/.env`, and replace its
+   `GMAIL_PERSONAL_REFRESH_TOKEN=` line.
+5. Restart the backend with `docker compose -f docker-compose.production.yml up -d backend` (no
+   `--build`), then confirm with `getPersonalGmailClient().users.getProfile`.
+6. Delete the log, the env file and the token copy, and stop the helper.
 
 ## Things that looked like inbox work and were not
 
