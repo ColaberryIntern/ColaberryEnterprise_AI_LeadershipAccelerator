@@ -11739,10 +11739,22 @@ router.get('/api/portal/project/tasks', requireParticipant, async (req: Request,
     const StudentTask = (models as any).StudentTask;
     if (!StudentTaskList || !StudentTask) { res.json({ taskLists: [] }); return; }
 
+    // The tasks' ordering has to be a TOP-LEVEL entry naming the association. Sequelize ignores
+    // `order` written inside a non-separate `include`: `Model._findSeparate` omits `order`
+    // outright for a non-separate include and the query generator never reads it. So the previous
+    // form declared an intent that never ran, and a builder's board came back in whatever order
+    // Postgres happened to yield from the join.
+    //
+    // AF10.9 lifts the capability ladder to the top of every agent-domain board by `position`,
+    // and all ten of those boards are reached through this route. The data change is inert here
+    // unless this clause actually takes effect, so the ordering is fixed with it.
     const lists = await StudentTaskList.findAll({
       where: { project_id: (project as any).id },
-      order: [['position', 'ASC']],
-      include: [{ model: StudentTask, as: 'tasks', order: [['position', 'ASC']] }],
+      order: [
+        ['position', 'ASC'],
+        [{ model: StudentTask, as: 'tasks' }, 'position', 'ASC'],
+      ],
+      include: [{ model: StudentTask, as: 'tasks' }],
     });
 
     res.json({ taskLists: lists });
