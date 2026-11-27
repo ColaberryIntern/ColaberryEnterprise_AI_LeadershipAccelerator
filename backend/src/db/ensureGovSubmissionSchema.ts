@@ -4,8 +4,8 @@ import { sequelize } from '../config/database';
 // outcome, and PRIVATE reusable candidates) — ensured via idempotent raw SQL, same pattern as the other gov
 // ensure-schema files. Each statement is CREATE ... IF NOT EXISTS in its own try/catch.
 //
-// Additive only: creates 1 new table, never alters or drops anything existing. Columns must match
-// backend/src/models/GovSubmission.ts EXACTLY.
+// Additive only: creates 1 new table and adds nullable columns via ADD COLUMN IF NOT EXISTS; never drops or
+// narrows anything existing. Columns must match backend/src/models/GovSubmission.ts EXACTLY.
 //
 // UNIQUE delivery_project_id: one submission record per project (upsert). `status` defaults 'preparing';
 // `outcome` defaults 'pending'. The candidates are JSONB and born private — this table never writes to the
@@ -31,6 +31,11 @@ export async function ensureGovSubmissionSchema(): Promise<void> {
        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
      )`,
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_gov_submission_project ON gov_submission (delivery_project_id)`,
+    // M5 (additive, nullable): the solicitation close/due date for the bid, so a submitted potential-win carries a
+    // close date in the Revenue Room whether or not it has been priced. Sourced only from the solicitation; never
+    // fabricated. Lives here (not on gov_bid_values, whose proposal_value_cents is NOT NULL) so a value-pending win
+    // can still carry a close date. ADD COLUMN IF NOT EXISTS matches the house additive idiom; no default.
+    `ALTER TABLE gov_submission ADD COLUMN IF NOT EXISTS close_date DATE`,
   ];
 
   for (const sql of statements) {

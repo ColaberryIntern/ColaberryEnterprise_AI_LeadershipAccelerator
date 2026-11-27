@@ -14,6 +14,7 @@
  */
 import GovSubmission, { type GovSubmissionAttributes, type SubmissionStatus, type SubmissionOutcome } from '../../models/GovSubmission';
 import { evaluateSubmissionReadiness, buildSubmissionManifest, buildOutcomeCandidates } from './proposal/submissionPackage';
+import { resolveSolicitationCloseDate } from './proposal/solicitationCloseDate';
 import type { ResponseSlot } from './proposal/responseSlots';
 
 export interface SubmissionView {
@@ -27,6 +28,8 @@ export interface SubmissionView {
   acknowledgedAt: string | null;
   outcomeNote: string | null;
   outcomeRecordedAt: string | null;
+  /** The solicitation close/due date (YYYY-MM-DD) carried onto the submitted bid (M5); null when none is recorded. */
+  closeDate: string | null;
   caseStudyCandidate: any | null;
   serviceCapabilityCandidate: any | null;
 }
@@ -38,7 +41,7 @@ export class SubmissionError extends Error {
 const DEFAULT_VIEW: SubmissionView = {
   status: 'preparing', outcome: 'pending', exportManifest: null, exportedAt: null, externalRef: null,
   externallySubmittedAt: null, acknowledgedRef: null, acknowledgedAt: null, outcomeNote: null,
-  outcomeRecordedAt: null, caseStudyCandidate: null, serviceCapabilityCandidate: null,
+  outcomeRecordedAt: null, closeDate: null, caseStudyCandidate: null, serviceCapabilityCandidate: null,
 };
 
 const iso = (d: Date | null | undefined): string | null => (d ? new Date(d).toISOString() : null);
@@ -55,6 +58,7 @@ function toView(row: GovSubmissionAttributes): SubmissionView {
     acknowledgedAt: iso(row.acknowledged_at),
     outcomeNote: row.outcome_note ?? null,
     outcomeRecordedAt: iso(row.outcome_recorded_at),
+    closeDate: row.close_date ?? null,
     caseStudyCandidate: row.case_study_candidate ?? null,
     serviceCapabilityCandidate: row.service_capability_candidate ?? null,
   };
@@ -115,7 +119,13 @@ export async function recordSubmissionReceipt(deliveryProjectId: string, externa
   const row = await findRow(deliveryProjectId);
   const status: SubmissionStatus = row ? (row.get({ plain: true }) as GovSubmissionAttributes).status : 'preparing';
   if (status !== 'exported') throw new SubmissionError('Export the package before recording an external submission.', 'not_exported');
-  return upsertView(deliveryProjectId, { status: 'externally_submitted', external_ref: ref, externally_submitted_at: new Date() });
+  // M5: the moment a bid is externally submitted it becomes a potential-win in the Revenue Room, which needs a
+  // close date. Source it from the solicitation (never fabricated); stamp it ONLY when a date is actually known,
+  // so a transient resolve failure never nulls out a close date recorded on an earlier run (idempotent + safe).
+  const patch: Partial<GovSubmissionAttributes> = { status: 'externally_submitted', external_ref: ref, externally_submitted_at: new Date() };
+  const closeDate = await resolveSolicitationCloseDate(deliveryProjectId).catch(() => null);
+  if (closeDate) patch.close_date = closeDate;
+  return upsertView(deliveryProjectId, patch);
 }
 
 /** Record the agency's acknowledgement. Refuses unless an external submission was recorded first. */

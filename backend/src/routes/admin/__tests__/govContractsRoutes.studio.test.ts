@@ -10,6 +10,7 @@ let adminObj: any = { email: 'ali@colaberry.com' };
 jest.mock('../../../middlewares/authMiddleware', () => ({
   requireSection: () => (req: any, res: any, next: any) => { if (sectionAllows) { req.admin = adminObj; next(); } else { res.status(403).json({ error: 'Forbidden' }); } },
   adminAllowedSections: () => ['gov_contracts'],
+  requireFullAdmin: (_req: any, _res: any, next: any) => next(),
 }));
 jest.mock('../../../middlewares/govProjectAccess', () => ({ resolveGovProjectActor: async () => ({ platformIdentityId: 'admin-1', email: 'ali@colaberry.com' }) }));
 const getStudentGovProjectView = jest.fn();
