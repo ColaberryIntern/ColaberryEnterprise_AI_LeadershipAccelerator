@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Idea to Build</title>
+<style>
+:root{--ink:#14213d;--muted:#5b6475;--line:#d9dee7;--bg:#f6f7f9;--card:#fff;--navy:#1f3a64;--blue:#2f6fd6;--green:#1f8a4c;--amber:#b7791f;--red:#c0392b;--purple:#6b46c1;--ali:#fff4e0;--claude:#eaf1fd}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "Segoe UI",system-ui,-apple-system,sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 20px 60px}
+.hero{background:var(--navy);color:#fff;border-radius:12px;padding:26px 28px}
+.hero h1{margin:0 0 6px;font-size:28px}
+.hero p{margin:0;color:#d6e0f0;max-width:900px}
+.answer{margin-top:16px;background:rgba(255,255,255,.1);border-left:4px solid #8fb6ff;padding:12px 16px;border-radius:6px;font-size:16px}
+.answer b{color:#fff}
+.stats{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+.stats div{background:rgba(255,255,255,.12);border-radius:8px;padding:8px 14px;font-size:13px;color:#d6e0f0}
+.stats b{display:block;font-size:20px;color:#fff}
+h2{font-size:19px;margin:34px 0 12px}
+.sub{color:var(--muted);margin:-6px 0 14px}
+.flow{display:grid;grid-template-columns:repeat(7,1fr);gap:10px;align-items:stretch}
+.step{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;position:relative;display:flex;flex-direction:column}
+.step .n{font-size:12px;font-weight:700;color:var(--muted)}
+.step .t{font-weight:700;font-size:15px;margin:2px 0 6px}
+.step .d{font-size:13px;color:var(--muted);flex:1}
+.step .sk{margin-top:8px;font:12px Consolas,monospace;color:var(--navy);background:#eef1f6;border-radius:4px;padding:2px 6px;align-self:flex-start}
+.who{display:inline-block;margin-top:6px;font-size:11px;font-weight:700;padding:2px 7px;border-radius:10px;align-self:flex-start}
+.who.a{background:var(--ali);color:#8a5a00}.who.c{background:var(--claude);color:var(--blue)}
+.step.gate{border:2px solid var(--amber)}.step.loop{border:2px solid var(--blue)}
+.tag{position:absolute;top:-9px;right:10px;font-size:10px;font-weight:700;padding:1px 7px;border-radius:9px;color:#fff}
+.tag.gate{background:var(--amber)}.tag.loop{background:var(--blue)}
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:13px;color:var(--muted)}
+.box{margin-top:14px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px}
+.box.blue{border:2px solid var(--blue)}
+.box h3{margin:0 0 10px;font-size:16px}
+.ring{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.ring span{background:var(--claude);border-radius:8px;padding:8px 10px;font-size:13px;font-weight:600}
+.ring i{color:var(--muted);font-style:normal}
+.ring .ms{background:#efe7fb;color:var(--purple)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px}
+.card h3{margin:0 0 8px;font-size:15px}
+table{width:100%;border-collapse:collapse;font-size:14px;background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{background:#eef1f6;font-size:12px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)}
+.ok{color:var(--green);font-weight:700}.gap{color:var(--red);font-weight:700}.part{color:var(--amber);font-weight:700}
+ul{margin:6px 0 0;padding-left:20px}li{margin:3px 0}
+.rules{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.rule{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--navy);border-radius:8px;padding:10px 12px;font-size:13px}
+.rule b{display:block;font-size:14px;margin-bottom:3px}
+.rule q{display:block;margin-top:5px;color:var(--muted);font-style:italic}
+.q{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:10px}
+.q.done{border-left:4px solid var(--green)}
+.q .h{font-weight:700}
+.opt{display:flex;gap:8px;margin-top:6px;font-size:14px}
+.opt .l{flex:none;width:22px;height:22px;border-radius:50%;background:#eef1f6;text-align:center;font-weight:700;font-size:12px;line-height:22px}
+.opt.rec .l{background:var(--green);color:#fff}
+.opt.rec{font-weight:600}
+.btnmock{display:flex;gap:8px;justify-content:flex-end;background:#1e1e1e;padding:12px;border-radius:8px;font:13px "Segoe UI",sans-serif}
+.btnmock span{color:#4fc1ff;padding:4px 10px}
+.btnmock .new{background:#0e639c;color:#fff;border-radius:3px}
+code{font:13px Consolas,monospace;background:#eef1f6;padding:1px 5px;border-radius:3px}
+.foot{margin-top:34px;color:var(--muted);font-size:13px}
+@media(max-width:900px){.flow{grid-template-columns:1fr 1fr}.grid2,.rules{grid-template-columns:1fr}}
+</style>
+</head>
+<body><div class="wrap">
+
+<div class="hero">
+  <h1>Idea to Build</h1>
+  <p>The process you run every time an idea becomes a build. Draft 3, hardened against what you actually did: 19 tabs and about 30 kickoffs since 20 October, your last 10 Ali Personal lists, and the public Colaberry Live project.</p>
+  <div class="answer"><b>Is it one skill?</b> Almost. <b>kit-to-ladder</b> (made in your Career Prep tab on 16 Nov) already turns a kit into the Basecamp list, and <b>loop-architect</b> works it. What is still by hand: getting the kit to the right tab, making the 2 PDFs per ticket, and keeping the loop going ticket after ticket. Those three are where the runs drifted. The plan: harden kit-to-ladder into the one engine, then the button starts it.</div>
+  <div class="stats"><div><b>19</b>tabs ran it</div><div><b>~30</b>kickoffs</div><div><b>5</b>of 10 lists share one shape</div><div><b>~10</b>times you said "1 PR 1 deploy"</div><div><b>3</b>gaps left</div></div>
+</div>
+
+<h2>The flow</h2>
+<p class="sub">Seven stages. You act at three points. The skill doing each stage is shown on the card.</p>
+<div class="flow">
+  <div class="step"><div class="n">1</div><div class="t">Design</div><div class="d">You shape the idea in ChatGPT or Claude.ai. Output: a kit, usually a zip with a build prompt or spec plus design HTML and screenshots. A single .md or a pasted spec also works.</div><span class="who a">You</span></div>
+  <div class="step"><div class="n">2</div><div class="t">Intake</div><div class="d">Unzip into scratch (never the repo). Read the spec and design HTML. Check every path the kit names against the live code; mismatches become "Corrections to the kit".</div><span class="sk">kit-to-ladder</span><span class="who c">Claude</span></div>
+  <div class="step gate"><span class="tag gate">ONE STOP</span><div class="n">3</div><div class="t">Questions up front</div><div class="d">Every question on the first milestone ticket, lettered, recommended option first, with a default that applies if you do not answer. You reply in one line.</div><span class="sk">kit-to-ladder</span><span class="who a">You answer</span></div>
+  <div class="step"><div class="n">4</div><div class="t">Plan</div><div class="d">The kit's work grouped into 2 to 4 releases at real product milestones. Tickets on working days, never before what they depend on.</div><span class="sk">kit-to-ladder</span><span class="who c">Claude</span></div>
+  <div class="step"><div class="n">5</div><div class="t">Load Basecamp</div><div class="d">Kit uploaded to Docs &amp; Files, a Build Contract document, the list, groups and tickets with links. Run twice: the second run must create nothing.</div><span class="sk">publish_ladder.js</span><span class="who c">Claude</span></div>
+  <div class="step gate"><span class="tag gate">GO</span><div class="n">6</div><div class="t">Kickoff</div><div class="d">The plan is graded by an independent auditor (pass 18 of 20). The kickoff visual opens in your browser. You say go once.</div><span class="sk">loop-architect</span><span class="who a">You approve</span></div>
+  <div class="step loop"><span class="tag loop">LOOP</span><div class="n">7</div><div class="t">Build to done</div><div class="d">One ticket at a time, in date order, until every ticket is closed. Briefs only at milestones.</div><span class="sk">loop-architect</span><span class="who c">Claude</span></div>
+</div>
+<div class="legend"><span>Orange border = a stop for you</span><span>Blue border = runs without stopping</span></div>
+
+<div class="box blue">
+  <h3 style="color:var(--blue)">Stage 7, ticket by ticket and release by release</h3>
+  <div class="ring">
+    <span>Next ticket by due date</span><i>&rarr;</i>
+    <span>Build in a worktree</span><i>&rarr;</i>
+    <span>Independent check (11 of 12)</span><i>&rarr;</i>
+    <span>Visual PDF + document PDF in the comments</span><i>&rarr;</i>
+    <span>TAKEAWAY comment</span><i>&rarr;</i>
+    <span>Close through the close hook</span><i>&#8635;</i>
+  </div>
+  <div class="ring" style="margin-top:10px">
+    <span>Mid-release: checkpoint ticket (full quality gate, no PR)</span><i>&rarr;</i>
+    <span class="ms">End of release: 1 PR, you merge, 1 deploy, live check, milestone visual opens, short brief</span><i>&rarr;</i>
+    <span>Next release starts on its own</span>
+  </div>
+</div>
+
+<h2>Your rules, in your words</h2>
+<p class="sub">Each of these came from a correction you made in a past run. The engine enforces them so you never say them again.</p>
+<div class="rules">
+  <div class="rule"><b>Questions first, then no stops</b>Only milestones come to you.<q>"you have to answer any questions up front"</q><q>"Stop asking me to do things. You do it. You are only supposed to come to me at milestones"</q></div>
+  <div class="rule"><b>1 PR, 1 deploy per milestone</b>2 to 4 releases per build, never per ticket.<q>"don't stop until you reach a milestone 1 pr 1 deploy for each milestone"</q></div>
+  <div class="rule"><b>2 visual PDFs to close</b>A visual PDF and a document PDF, made from HTML. Once per ticket, at most 3 times per list. Enforced by your close hook.<q>"The same visual pdf can be used max 3 times across one list and max one time per tasks."</q></div>
+  <div class="rule"><b>Pictures, not walls of text</b><q>"I can't see what's going on in these tickets without reading a bunch of text. I want the visuals."</q><q>"i need visual options so I can see - otherwise i don't know what I'm approving"</q></div>
+  <div class="rule"><b>Basecamp alone is enough</b>Files uploaded and linked in every ticket.<q>"Any claude code should be able to work from the list and tasks with no other information"</q></div>
+  <div class="rule"><b>Match the pattern</b>New lists copy the shape of the recent ones.<q>"Use the last 10 list in that project to catch the pattern"</q></div>
+  <div class="rule"><b>Keep going</b>The session's job is closing tickets until none are left. Past runs stopped mid-loop and needed "keep building" nudges.</div>
+  <div class="rule"><b>No PDFs as .md, HTML goes up too</b><q>"Artifacts should not be .md files. They should be pdfs"</q><q>"I noticed you didn't add the html to the ticket. Please do that along with the pdf's"</q></div>
+  <div class="rule"><b>Ali Personal stays yours</b>A build that others work on goes in its own project.<q>"Kes should not be accessing tickets in Ali Personal"</q></div>
+</div>
+
+<h2>The Basecamp shape (from your last five builds)</h2>
+<div class="grid2">
+  <div class="card">
+    <h3>Where it lands: one setting</h3>
+    <ul>
+      <li><b>Default:</b> a new list in Ali Personal.</li>
+      <li><b>When you say so:</b> its own project (public like Colaberry Live, or with a team like MAPLOCA or Comms Hub). Same build, same shape.</li>
+      <li><b>Or</b> a new group added to an existing list, for a new round of the same product (as Campus did).</li>
+      <li>Docs &amp; Files: a folder per build with "01 - Build kit" and "02 - Screenshots", plus the Build Contract. A project also gets READ FIRST and MASTER INDEX documents.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3>The list</h3>
+    <ul>
+      <li><b>Groups:</b> XX0 Control (stage the kit, contract and plan audit, standing log), then the releases, then MILESTONE APPROVALS (Ali).</li>
+      <li><b>Tickets:</b> <code>VS1.3 🤖 [AI] outcome</code> or <code>🧑 [Human]</code>. Every one dated and assigned.</li>
+      <li><b>🤖 ticket sections:</b> run line, What, Why, Inputs, Repository facts, In scope, Out of scope, Acceptance, Tests (happy, failure, boundary, repeat), Verification commands, shared contract, Close-out.</li>
+      <li><b>🧑 milestone tickets:</b> lettered questions, a default for each, only you tick them.</li>
+    </ul>
+  </div>
+</div>
+
+<h2>What exists and what is left</h2>
+<table>
+  <tr><th style="width:22%">Stage</th><th>Today</th><th style="width:12%">Status</th></tr>
+  <tr><td>1 Design</td><td>You, in ChatGPT or Claude.ai</td><td class="ok">Works</td></tr>
+  <tr><td>2-5 Intake to Basecamp</td><td>kit-to-ladder: verified paths, questions with defaults, 2 to 4 releases, publisher that refuses to duplicate</td><td class="ok">Works</td></tr>
+  <tr><td>Starting it</td><td>You say "my skill" or "story-build", and kit-to-ladder is not on every branch, so some tabs cannot see it. That is why runs used three different generators.</td><td class="gap">Gap 1</td></tr>
+  <tr><td>Own project / existing list</td><td>kit-to-ladder defaults to Ali Personal; projects and added groups were done by hand</td><td class="part">Partial</td></tr>
+  <tr><td>6 Kickoff</td><td>loop-architect's plan audit and kickoff visual</td><td class="ok">Works</td></tr>
+  <tr><td>Close-out PDFs</td><td>Made per ticket with one-off scripts (scripts/artifacts/build*Artifacts.js). The rule moved from 1 PDF to 2 over the month.</td><td class="gap">Gap 2</td></tr>
+  <tr><td>7 Build to done</td><td>loop-architect stops after a while and needs "keep building"; nothing carries it to the next ticket by itself</td><td class="gap">Gap 3</td></tr>
+  <tr><td>Close rule</td><td>Global close hook, fails closed</td><td class="ok">Enforced</td></tr>
+</table>
+
+<h2>How the three gaps close</h2>
+<div class="grid2">
+  <div class="card"><h3>Gap 1: one name, on every tab</h3><ul><li>kit-to-ladder becomes the one engine, with a <b>target</b> setting: Ali Personal list (default), own project, or a group on an existing list.</li><li>It is installed where every tab can see it, not only on the main branch.</li><li>The button starts it, so nobody has to remember its name.</li></ul></div>
+  <div class="card"><h3>Gap 2 and 3: close-out and keep going</h3><ul><li>One shared close-out step: build the visual and document HTML, turn both into PDFs, post them with the HTML and a TAKEAWAY comment, close through the hook.</li><li>The loop picks the next ticket by date on its own after each close, and after each release, until the list is empty or a real blocker appears.</li></ul></div>
+</div>
+
+<h2>The button</h2>
+<div class="grid2">
+  <div class="card"><h3>Where it goes</h3><p style="margin:0 0 10px">Claude tabs page, left of "Reload and continue".</p><div class="btnmock"><span class="new">&#10022; New build from idea</span><span>Reload and continue</span></div></div>
+  <div class="card"><h3>What it does</h3><ul><li>Lets you pick the kit (zip, .md, or folder) and where it goes (Ali Personal by default).</li><li>Opens a new Claude tab running the engine on it.</li><li>That tab shows on the board: waiting on your questions, then moving, then at each milestone.</li></ul></div>
+</div>
+
+<h2>Decisions</h2>
+<div class="q done"><div class="h">1. Where does a build go? <span class="ok">Decided by you</span></div><div class="opt rec"><span class="l">&#10003;</span>A new list in Ali Personal, unless you say it should be its own project. Same engine.</div></div>
+<div class="q done"><div class="h">2. Who writes the plan? <span class="ok">Settled by your history</span></div><div class="opt rec"><span class="l">&#10003;</span>kit-to-ladder, straight from your kit. Not story-build (that is the intern pipeline).</div></div>
+<div class="q done"><div class="h">3. The two PDFs? <span class="ok">Settled by your history</span></div><div class="opt rec"><span class="l">&#10003;</span>A visual PDF and a document PDF per ticket, each made from HTML, the HTML posted too.</div></div>
+<div class="q"><div class="h">4. Make the engine visible to every tab?</div>
+  <div class="opt rec"><span class="l">A</span>Yes: install it as a personal skill so every tab and branch has it, kept in step with the repo copy (recommended)</div>
+  <div class="opt"><span class="l">B</span>No: keep it repo-only; the button always opens its tab on the main branch</div></div>
+
+<p class="foot">Draft 3, 27 Nov 2026. Sources: 19 past tabs (read only), the 10 newest Ali Personal lists, project 49210714, the kit-to-ladder, story-build and loop-architect skills, your global close hook. Next after you agree: harden kit-to-ladder (target setting, close-out step, keep-going loop), prove it on one real kit, then add the button.</p>
+</div></body></html>

@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 /**
- * kit-to-ladder publisher: one ladder spec (a .js module or .json) -> one Basecamp build list in
- * Ali Personal, in the Loop Architect format (see ../SKILL.md).
+ * kit-to-ladder publisher: one ladder spec (a .js module or .json) -> one Basecamp build list, in the
+ * Loop Architect format (see ../SKILL.md). WHERE it lands is one setting, not a different process:
+ *   default            a new list in Ali Personal (bucket 7463955)
+ *   --bucket <id>      a new list in another project (a public or team project Ali created)
+ *   --into-list <id>   new groups added to an existing list (a new round of the same product)
+ * The list description is never rewritten in --into-list mode: that list already belongs to someone.
  *
  * Creates, in order, each only if it does not already exist (idempotent by name/title, so a re-run
  * after a failure finishes the job and creates nothing twice):
@@ -13,7 +17,7 @@
  * Safety: refuses to write unless the token is Ali's (17454835). --dry prints the plan, writes nothing.
  * Every call has a 30 s timeout; 429/5xx retry 3 times with backoff (2 s, 6 s, 18 s), then fail loud.
  *
- * Usage: node publish_ladder.js <spec.js|spec.json> --token-file <path> [--dry] [--update]
+ * Usage: node publish_ladder.js <spec.js|spec.json> --token-file <path> [--bucket <id>] [--into-list <id>] [--dry] [--update]
  */
 const fs = require('fs');
 const path = require('path');
@@ -25,12 +29,15 @@ const args = process.argv.slice(2);
 const flag = (f) => args.includes(f);
 const opt = (f) => { const i = args.indexOf(f); return i >= 0 ? args[i + 1] : null; };
 
-const specPath = args.find((a) => !a.startsWith('--') && a !== opt('--token-file'));
+const valued = new Set(['--token-file', '--bucket', '--into-list'].map(opt));
+const specPath = args.find((a) => !a.startsWith('--') && !valued.has(a));
 if (!specPath || !opt('--token-file')) {
   console.error('usage: node publish_ladder.js <spec> --token-file <path> [--dry] [--update]');
   process.exit(2);
 }
 const spec = require(path.resolve(specPath));
+const { target } = require('./target');
+Object.assign(spec, target(spec, { bucket: opt('--bucket'), intoList: opt('--into-list') }));
 const TOKEN = fs.readFileSync(opt('--token-file'), 'utf8').trim();
 const DRY = flag('--dry');
 const UPDATE = flag('--update');
@@ -117,11 +124,12 @@ async function main() {
   // 3. The list, its groups and tickets.
   const todoset = await dockId('todoset');
   const lists = await all(`${B}/todosets/${todoset}/todolists.json`);
-  let list = lists.find((l) => l.name === spec.list.name);
+  let list = spec.intoList ? lists.find((l) => String(l.id) === String(spec.intoList)) : lists.find((l) => l.name === spec.list.name);
+  if (spec.intoList && !list) throw new Error(`list ${spec.intoList} is not in project ${spec.bucket}: nothing written`);
   if (!list) {
     say('create list', spec.list.name);
     list = DRY ? { id: 'dry-list' } : await call('POST', `${B}/todosets/${todoset}/todolists.json`, { name: spec.list.name, description: listHtml(spec, links) });
-  } else if (UPDATE && !DRY) {
+  } else if (UPDATE && !DRY && !spec.intoList) {
     await call('PUT', `${B}/todolists/${list.id}.json`, { name: spec.list.name, description: listHtml(spec, links) });
   }
   const groups = String(list.id).startsWith('dry-') ? [] : await all(`${B}/todolists/${list.id}/groups.json`);
