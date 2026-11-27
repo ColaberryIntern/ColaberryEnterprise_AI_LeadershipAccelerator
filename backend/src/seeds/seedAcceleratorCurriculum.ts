@@ -299,7 +299,7 @@ async function run(): Promise<void> {
   console.log(`Login as ${KES_EMAIL}:`);
   console.log(loginUrl);
   console.log('\nExpect: 12 weeks in left sidebar, correct CTAs per week:');
-  console.log('  W1–W3, W5–W8: "Open course on Skilljar"');
+  console.log('  W1–W3, W5–W8: "Open course in Claude Academy"');
   console.log('  W4, W9–W11:   "Colaberry-original module"');
   console.log('  W12:           "Go to CCA-F exam" (green)');
 

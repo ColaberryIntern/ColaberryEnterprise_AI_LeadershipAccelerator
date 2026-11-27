@@ -126,7 +126,7 @@ function CourseLinkCard({ courseLink, weekNumber }: {
               <p className="small text-muted mb-2">Colaberry-authored content for this week. Reading list below.</p>
             ) : (
               <p className="small text-muted mb-2">
-                Opens in a new tab on Claude Academy. No separate login expected for enrolled students.
+                Opens in a new tab on Claude Academy. You sign in there with your own Claude account, which is separate from this portal.
                 Completion is confirmed by your post-quiz.
               </p>
             )}

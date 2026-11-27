@@ -41,7 +41,7 @@ const contentSchema = z.object({
   questions: z.array(z.string()).optional(),
   reflection: z.string().optional(),
 }).nullable().optional();
-// Anthropic Skills Course (skills_jar) — class name + SkillsJar link.
+// Anthropic Skills Course (skills_jar) — class name + Claude Academy link.
 const courseSchema = z.object({
   name: z.string().max(300).nullable().optional(),
   url: z.string().max(2000).nullable().optional(),
@@ -145,7 +145,7 @@ const videoDraftSchema = z.object({
   video: videoSchema,
   anchor: z.enum(['title', 'video']).optional(),
 });
-// One-click for a Skills Course: from just the SkillsJar link, fill everything.
+// One-click for a Skills Course: from just the Claude Academy link, fill everything.
 const courseDraftSchema = z.object({
   type: z.string().min(1),
   url: z.string().min(1).max(2000),
@@ -226,7 +226,7 @@ export async function handleGenerateVideoDraft(req: Request, res: Response, next
   } catch (err) { fail(res, err, next); }
 }
 
-// One-click for the Anthropic Skills Course: from just the SkillsJar link, fill
+// One-click for the Anthropic Skills Course: from just the Claude Academy link, fill
 // the class name, description, XP, minutes, and lesson content. Returns a draft.
 export async function handleGenerateCourseDraft(req: Request, res: Response, next: NextFunction) {
   try {
