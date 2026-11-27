@@ -25,11 +25,17 @@ export interface PlanInputs {
   notes?: string;
 }
 
-const id = { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true };
+/*
+ * Every column definition is a FUNCTION that returns a fresh object. Sequelize writes into the object it
+ * is given, so one object shared by several columns keeps only the first: on 2026-11-27 the topic save
+ * sent `teach` but not `viral`, `convert` or `topic_score` and Postgres refused the row, and every signal
+ * lost `fits_weeks` without any error. models/__tests__/weeklyLiveModels.test.ts checks each column.
+ */
+const id = () => ({ type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true });
 const uuid = (allowNull = true) => ({ type: DataTypes.UUID, allowNull });
 const json = (fallback: unknown) => ({ type: DataTypes.JSONB, allowNull: false, defaultValue: fallback });
-const ints = { type: DataTypes.ARRAY(DataTypes.INTEGER), allowNull: false, defaultValue: [] };
-const score = { type: DataTypes.DECIMAL(5, 1), allowNull: false };
+const ints = () => ({ type: DataTypes.ARRAY(DataTypes.INTEGER), allowNull: false, defaultValue: [] });
+const score = () => ({ type: DataTypes.DECIMAL(5, 1), allowNull: false });
 const opts = (tableName: string) => ({ sequelize, tableName, timestamps: false, underscored: true });
 
 export class WeeklyLivePlan extends Model {
@@ -44,7 +50,7 @@ export class WeeklyLivePlan extends Model {
   declare created_by: string | null;
 }
 WeeklyLivePlan.init({
-  id,
+  id: id(),
   air_date: { type: DataTypes.DATEONLY, allowNull: false },
   cohort_id: uuid(),
   live_session_id: uuid(),
@@ -70,15 +76,15 @@ export class WeeklyLiveSignal extends Model {
   declare dropped_reason: string | null;
 }
 WeeklyLiveSignal.init({
-  id,
+  id: id(),
   plan_id: uuid(false),
   published_at: { type: DataTypes.DATEONLY, allowNull: true },
   date_confirmed: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
-  factors: ints,
+  factors: ints(),
   headline: { type: DataTypes.STRING(500), allowNull: false },
   publisher: { type: DataTypes.STRING(200), allowNull: true },
   url: { type: DataTypes.STRING(1000), allowNull: false },
-  fits_weeks: ints,
+  fits_weeks: ints(),
   idea: { type: DataTypes.TEXT, allowNull: true },
   fetched_ok: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
   dropped_reason: { type: DataTypes.STRING(200), allowNull: true },
@@ -99,7 +105,7 @@ export class WeeklyLiveDemand extends Model {
   declare measured_at: string;
 }
 WeeklyLiveDemand.init({
-  id,
+  id: id(),
   week: { type: DataTypes.INTEGER, allowNull: false },
   video_url: { type: DataTypes.STRING(500), allowNull: true },
   video_title: { type: DataTypes.STRING(500), allowNull: true },
@@ -137,7 +143,7 @@ export class WeeklyLiveTopic extends Model {
   declare warnings: TopicWarning[];
 }
 WeeklyLiveTopic.init({
-  id,
+  id: id(),
   plan_id: uuid(false),
   rank: { type: DataTypes.INTEGER, allowNull: false },
   week: { type: DataTypes.INTEGER, allowNull: false },
@@ -149,11 +155,11 @@ WeeklyLiveTopic.init({
   marketing: json({}),
   signals_used: { type: DataTypes.ARRAY(DataTypes.UUID), allowNull: false, defaultValue: [] },
   teach_lines: json({}),
-  teach: score,
-  viral: score,
-  convert: score,
-  topic_score: score,
-  factors: ints,
+  teach: score(),
+  viral: score(),
+  convert: score(),
+  topic_score: score(),
+  factors: ints(),
   warnings: json([]),
 }, opts('weekly_live_topics'));
 
@@ -167,7 +173,7 @@ export class WeeklyLiveContentPiece extends Model {
   declare basecamp_todo_id: string | null;
 }
 WeeklyLiveContentPiece.init({
-  id,
+  id: id(),
   session_id: uuid(false),
   piece_key: { type: DataTypes.STRING(64), allowNull: false },
   kind: { type: DataTypes.STRING(32), allowNull: false },
@@ -186,7 +192,7 @@ export class WeeklyLiveMoment extends Model {
   declare created_by: string | null;
 }
 WeeklyLiveMoment.init({
-  id,
+  id: id(),
   session_id: uuid(false),
   at: { type: DataTypes.DATE, allowNull: false },
   kind: { type: DataTypes.STRING(16), allowNull: false, defaultValue: 'clip' },
