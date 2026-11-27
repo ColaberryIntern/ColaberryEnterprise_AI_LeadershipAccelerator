@@ -21,6 +21,22 @@ jest.mock('../sbp/connectedDemoStore', () => ({
   generateConnectedDemo: (...a: unknown[]) => generateConnectedDemo(...a),
 }));
 
+/*
+ * The platform demo source, stubbed to "this project has none" in `beforeEach`.
+ *
+ * Everything in this file below was written about a STUDENT-built project, and "no platform
+ * demo" is what makes those assertions mean what they say. Leaving it real would also reach
+ * `platformBuild/artifactStore` and its sequelize query, so a file about authorization would
+ * need a database. The suite at the bottom flips it on deliberately.
+ */
+const adoptPlatformConnectedDemo = jest.fn();
+const platformDemoAvailability = jest.fn();
+jest.mock('../sbp/platformDemoAdopt', () => ({
+  __esModule: true,
+  adoptPlatformConnectedDemo: (...a: unknown[]) => adoptPlatformConnectedDemo(...a),
+  platformDemoAvailability: (...a: unknown[]) => platformDemoAvailability(...a),
+}));
+
 const getPublishedPlan = jest.fn();
 jest.mock('../sbp/planStore', () => ({
   __esModule: true,
@@ -108,6 +124,11 @@ beforeEach(() => {
   generateConnectedDemo.mockReset();
   getPublishedPlan.mockReset();
   findByPk.mockReset();
+  adoptPlatformConnectedDemo.mockReset();
+  platformDemoAvailability.mockReset();
+  // The default every existing assertion assumes: a student-built project with no platform demo.
+  adoptPlatformConnectedDemo.mockResolvedValue(null);
+  platformDemoAvailability.mockResolvedValue({ version: null, built_at: null });
   getPublishedPlan.mockResolvedValue({
     plan: { project_name: 'p', descriptor: 'd', requirements: [], releases: [], stories: [] },
     plan_sha256: 'abc123def456',
@@ -396,5 +417,133 @@ describe('input validation', () => {
     for (const cls of ['NotFoundError', 'ForbiddenError', 'DataModelRequired'] as const) {
       expect(new ConnectedDemoShareError(cls, 'x').error_class).toBe(cls);
     }
+  });
+});
+
+/**
+ * A PLATFORM-built project: the case that had no way to publish at all.
+ *
+ * Such a project has no repository, so it has no `command-center/data-model.json`, so the
+ * refusal asserted above ("REFUSES to enable a specless project with no data model") used to be
+ * the only answer it could ever get. Its demo spec exists; it is in the artifact store. These
+ * tests assert that publishing reaches it, and that doing so did not weaken the student-built
+ * path by turning the data model into something optional for everybody.
+ */
+describe('a platform-built project publishes with no data model', () => {
+  it('ADOPTS the stored demo and enables, without a data model', async () => {
+    const project = fakeProject();
+    findByPk.mockResolvedValue(project);
+    adoptPlatformConnectedDemo.mockImplementation(async () => {
+      // What the real one does: writes the spec through raw SQL, out of the instance's sight.
+      producerPersists(project);
+      return { projectId: PROJECT_A, shareToken: 'tok-a', shareEnabled: false, spec: SPEC, eventCount: 2 };
+    });
+    platformDemoAvailability.mockResolvedValue({ version: 4, built_at: new Date() });
+
+    const state = await setConnectedDemoShare(OWNER, { project_id: PROJECT_A, enabled: true });
+
+    expect(adoptPlatformConnectedDemo).toHaveBeenCalledWith(PROJECT_A);
+    // It must NOT have gone down the generate path: no data model was sent and none was needed.
+    expect(generateConnectedDemo).not.toHaveBeenCalled();
+    expect(state.enabled).toBe(true);
+    expect(state.url).not.toBeNull();
+    // Only a reload can see a raw write, so this also proves the reload is still there.
+    expect(state.has_spec).toBe(true);
+    expect(state.event_count).toBe(2);
+  });
+
+  it('tries to adopt BEFORE refusing for a missing data model, not after', async () => {
+    // Ordering is the whole fix. Reaching the refusal first would mean a platform-built project
+    // could only be published by sending it a file that cannot exist.
+    const project = fakeProject();
+    findByPk.mockResolvedValue(project);
+    adoptPlatformConnectedDemo.mockImplementation(async () => {
+      producerPersists(project);
+      return { projectId: PROJECT_A, shareToken: 'tok-a', shareEnabled: false, spec: SPEC, eventCount: 2 };
+    });
+
+    await expect(setConnectedDemoShare(OWNER, { project_id: PROJECT_A, enabled: true }))
+      .resolves.toMatchObject({ enabled: true });
+  });
+
+  it('still REFUSES a student-built project with no data model, so nothing was loosened', async () => {
+    const project = fakeProject();
+    findByPk.mockResolvedValue(project);
+    adoptPlatformConnectedDemo.mockResolvedValue(null); // no platform demo to adopt
+
+    await expect(setConnectedDemoShare(OWNER, { project_id: PROJECT_A, enabled: true }))
+      .rejects.toMatchObject({ error_class: 'DataModelRequired' });
+    expect((project.__db as Loose).demo_share_enabled).toBe(false);
+  });
+
+  it('a refusal from the adopt path does NOT leave the project enabled', async () => {
+    const project = fakeProject();
+    findByPk.mockResolvedValue(project);
+    adoptPlatformConnectedDemo.mockRejectedValue(
+      Object.assign(new Error('stored demo unreadable'), { error_class: 'ConnectedDemoSpecInvalid' }),
+    );
+
+    await expect(setConnectedDemoShare(OWNER, { project_id: PROJECT_A, enabled: true }))
+      .rejects.toMatchObject({ error_class: 'ConnectedDemoSpecInvalid' });
+    expect((project.__db as Loose).demo_share_enabled).toBe(false);
+    expect(project.update).not.toHaveBeenCalledWith({ demo_share_enabled: true });
+  });
+
+  it('does not adopt when a spec already exists, so a republish cannot swap the demo', async () => {
+    // A student's published demo must not be replaced by a later platform build behind their
+    // back: same reason the generate path does not regenerate over an existing spec.
+    const project = fakeProject({ demo_spec: SPEC });
+    findByPk.mockResolvedValue(project);
+    platformDemoAvailability.mockResolvedValue({ version: 4, built_at: new Date() });
+
+    await setConnectedDemoShare(OWNER, { project_id: PROJECT_A, enabled: true });
+
+    expect(adoptPlatformConnectedDemo).not.toHaveBeenCalled();
+    expect(generateConnectedDemo).not.toHaveBeenCalled();
+  });
+
+  it('IDEMPOTENT: publishing twice adopts once', async () => {
+    const project = fakeProject();
+    findByPk.mockResolvedValue(project);
+    adoptPlatformConnectedDemo.mockImplementation(async () => {
+      producerPersists(project);
+      return { projectId: PROJECT_A, shareToken: 'tok-a', shareEnabled: false, spec: SPEC, eventCount: 2 };
+    });
+
+    await setConnectedDemoShare(OWNER, { project_id: PROJECT_A, enabled: true });
+    const second = await setConnectedDemoShare(OWNER, { project_id: PROJECT_A, enabled: true });
+
+    expect(adoptPlatformConnectedDemo).toHaveBeenCalledTimes(1);
+    expect(second.enabled).toBe(true);
+    expect(second.url).not.toBeNull();
+  });
+});
+
+describe('can_publish_without_data_model: the field the panel reads', () => {
+  it('is TRUE when the platform built a demo, even with nothing stored on the project yet', async () => {
+    findByPk.mockResolvedValue(fakeProject());
+    platformDemoAvailability.mockResolvedValue({ version: 4, built_at: new Date() });
+    const state = await getConnectedDemoShare(OWNER, PROJECT_A);
+    expect(state.can_publish_without_data_model).toBe(true);
+    expect(state.platform_demo_version).toBe(4);
+    expect(state.has_spec).toBe(false);
+  });
+
+  it('is TRUE when a spec already exists, platform demo or not', async () => {
+    findByPk.mockResolvedValue(fakeProject({ demo_spec: SPEC }));
+    platformDemoAvailability.mockResolvedValue({ version: null, built_at: null });
+    const state = await getConnectedDemoShare(OWNER, PROJECT_A);
+    expect(state.can_publish_without_data_model).toBe(true);
+    expect(state.platform_demo_version).toBeNull();
+  });
+
+  it('is FALSE for a student-built project with nothing generated: the one case that needs the file', async () => {
+    // The direction that matters. A field stuck on true would have the panel offer a publish
+    // button that can only refuse.
+    findByPk.mockResolvedValue(fakeProject());
+    platformDemoAvailability.mockResolvedValue({ version: null, built_at: null });
+    const state = await getConnectedDemoShare(OWNER, PROJECT_A);
+    expect(state.can_publish_without_data_model).toBe(false);
+    expect(state.platform_demo_version).toBeNull();
   });
 });

@@ -360,10 +360,10 @@ const ProjectInterior: React.FC<{
 
           {/* The outward-facing demo link, beside the preview address for the same reason: both
               are this project's public face. Gated on the same two conditions as the card above
-              (a real pipeline build, never the sample) and additionally on the build actually
-              carrying STORY-900, so a project without the Connected Demo story shows nothing
-              rather than a control for a story it does not have. The panel itself returns null
-              on that last condition, which is asserted in its test. */}
+              (a real pipeline build, never the sample). STORY-900 on the board is passed down as
+              ONE of the reasons to render, not the condition: a platform-built project has no
+              such row and still has a demo to publish, and only the server knows that. The panel
+              returns null when it has nothing to offer, which is asserted in its test. */}
           {!project.sample && project.origin === 'pipeline' && (
             <ConnectedDemoSharePanel
               projectId={project.pipelineProjectId || project.id}

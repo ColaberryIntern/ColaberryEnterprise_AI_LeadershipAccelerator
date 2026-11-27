@@ -3,7 +3,7 @@ import { sequelize } from '../../config/database';
 import { QueryTypes } from 'sequelize';
 import type { BuildPlan } from './planContract';
 import { buildConnectedDemoSpec, ConnectedDemoDataModelMissing } from './connectedDemoSpec';
-import { validateDemoSpecShape, type DemoSpec } from './demoSpec/contract';
+import { DemoSpecSchema, validateDemoSpecShape, type DemoSpec } from './demoSpec/contract';
 import {
   checkDemoSpecContent,
   RESTRICTED_PROJECT_FIELDS,
@@ -163,23 +163,61 @@ export async function generateConnectedDemo(
     throw err;
   }
 
-  // Belt and braces. `buildConnectedDemoSpec` already parses, so this can only fire if a future
-  // caller hands a spec in by another path; it costs nothing and it is the assertion that makes
-  // "an invalid spec is never persisted" true of the MODULE rather than of one call site.
+  // The spec is built; everything from here is the same for any source of one. Passing the
+  // restricted values we already read avoids a second query for the same row.
+  return persistConnectedDemoSpec(input.projectId, spec, restricted);
+}
+
+/**
+ * Validate one spec and persist it. The ONLY path by which `projects.demo_spec` is written.
+ *
+ * ## Why this is its own exported function
+ *
+ * There are now two sources of a demo spec. `generateConnectedDemo` above builds one from a
+ * student's plan and data model. `adoptPlatformConnectedDemo` takes the one a platform build
+ * already produced and stored. Both must clear the same two gates and land through the same
+ * statement, or "an invalid spec is never persisted" and "a token is never rotated" become
+ * properties of one call site rather than of this module. The comment that used to sit on the
+ * shape check said exactly this ("true of the MODULE rather than of one call site") while the
+ * code made it true of one function; this makes the code match.
+ *
+ * `restrictedValues` is an optimization only. Omitted, it is read here, and that read doubles as
+ * the proof the project exists.
+ */
+export async function persistConnectedDemoSpec(
+  projectId: string,
+  /*
+   * `unknown`, not `DemoSpec`, and that is the point rather than laziness. An adopted spec comes
+   * out of a JSONB column as a parsed value with no type behind it. Taking `unknown` and narrowing
+   * HERE means the one validation in this module is also the one place the type is established,
+   * so no caller can obtain a `DemoSpec` without having passed the gate.
+   */
+  spec: unknown,
+  restrictedValues?: Record<string, string[]>,
+): Promise<GenerateConnectedDemoResult> {
+  const restricted = restrictedValues ?? (await restrictedValuesFor(projectId));
+
+  // Belt and braces for a generated spec, load bearing for an adopted one: a spec stored by a
+  // platform build passed the contract AS IT STOOD AT UPLOAD, which may predate a contract
+  // change by weeks. Checked again here, where it is about to be served to strangers.
   const shapeProblems = validateDemoSpecShape(spec);
   if (shapeProblems.length) {
     throw new ConnectedDemoStoreError(
       'ConnectedDemoSpecInvalid',
-      `generated spec failed its own contract: ${shapeProblems.map((p) => p.path).join(', ')}`,
+      `spec failed its own contract: ${shapeProblems.map((p) => p.path).join(', ')}`,
       shapeProblems,
     );
   }
 
-  const contentProblems: ContentProblem[] = checkDemoSpecContent(spec, restricted);
+  // Parse, not cast: the check above proves the shape, and this is what turns that proof into a
+  // type. Everything below reads `parsed`, so an unvalidated value cannot reach the statement.
+  const parsed = DemoSpecSchema.parse(spec);
+
+  const contentProblems: ContentProblem[] = checkDemoSpecContent(parsed, restricted);
   if (contentProblems.length) {
     throw new ConnectedDemoStoreError(
       'ConnectedDemoContentRefused',
-      `generated spec carries restricted project data: ${contentProblems.map((p) => p.path).join(', ')}`,
+      `spec carries restricted project data: ${contentProblems.map((p) => p.path).join(', ')}`,
       contentProblems,
     );
   }
@@ -200,9 +238,9 @@ export async function generateConnectedDemo(
       RETURNING demo_share_token, demo_share_enabled`,
     {
       replacements: {
-        spec: JSON.stringify(spec),
+        spec: JSON.stringify(parsed),
         newToken: mintShareToken(),
-        projectId: input.projectId,
+        projectId,
       },
       type: QueryTypes.SELECT,
     },
@@ -212,15 +250,15 @@ export async function generateConnectedDemo(
   if (!row) {
     throw new ConnectedDemoStoreError(
       'ConnectedDemoProjectMissing',
-      `project ${input.projectId} disappeared between the read and the write`,
+      `project ${projectId} disappeared between the read and the write`,
     );
   }
 
   return {
-    projectId: input.projectId,
+    projectId,
     shareToken: row.demo_share_token,
     shareEnabled: row.demo_share_enabled,
-    spec,
-    eventCount: spec.events.length,
+    spec: parsed,
+    eventCount: parsed.events.length,
   };
 }
