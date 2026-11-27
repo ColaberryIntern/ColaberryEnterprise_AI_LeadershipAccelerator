@@ -12,9 +12,14 @@ import {
  * surface."* And the warning that shapes every test below: *"Expect this surface to be sparse
  * and do not let sparse render as healthy."*
  *
- * Measured 2026-11-25, the surface is not sparse but DORMANT: the last booked meeting was
- * 2026-04-28, seven months ago, and nothing of any kind falls inside the board's 180-day
- * window. Three of the nine booked meetings are test rows.
+ * Measured 2026-11-27, the surface is thin but NOT dormant: the last booked meeting was
+ * 2026-04-28 and the last answered call 2026-04-13, both far outside the 180-day window,
+ * yet six replies land inside it, so `dormant` is false against production. Three of the
+ * nine booked meetings are test rows.
+ *
+ * The dormant fixtures below are deliberately narrower than production: REAL_NINE holds
+ * only the nine booked meetings, so nothing in it falls inside the window. That is what
+ * makes it a test of the dormant path rather than a description of the live board.
  *
  * So these cover the ways this card could tell a comfortable lie:
  *

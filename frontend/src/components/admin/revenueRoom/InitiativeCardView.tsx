@@ -165,9 +165,9 @@ export function InitiativeCardView({
           <span className="small" style={{ color: 'var(--text-muted)' }}>
             {KIND_LABEL[card.kind]}
             {/*
-              The brand reads beside the kind rather than as a coloured chip. The page already
-              spends colour on status and verdict, which answer "can I trust this number" and
-              "is this bet alive"; a third colour would compete with both and brand is not a
+              The brand reads beside the kind rather than as a colored chip. The page already
+              spends color on status and verdict, which answer "can I trust this number" and
+              "is this bet alive"; a third color would compete with both and brand is not a
               health signal.
             */}
             {brandLabel && (

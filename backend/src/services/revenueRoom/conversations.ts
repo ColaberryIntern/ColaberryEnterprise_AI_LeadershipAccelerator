@@ -1,14 +1,14 @@
 /**
- * R7 — conversations in progress, and the reason there are none.
+ * R7 — conversations in progress, and how thin they are.
  *
  * Ali's ask, as the ticket records it: *"try to map in current events like meetings and in
  * talks with. A deal in conversation is the most current signal there is and today it is
  * invisible to every surface."*
  *
- * ── WHAT THE MEASUREMENT FOUND, 2026-11-25 ───────────────────────────────────────────────
+ * ── WHAT THE MEASUREMENT FOUND, 2026-11-27 ───────────────────────────────────────
  *
  * The ticket warned: "Expect this surface to be sparse and do not let sparse render as
- * healthy." Twenty-two days later it is not sparse, it is DORMANT:
+ * healthy." What production actually holds:
  *
  *   booked_meeting   9 rows, last 2026-04-28,  0 inside the board's 180-day window
  *   answered        22 rows, last 2026-04-13,  0 inside the window
@@ -16,9 +16,20 @@
  *   appointments     0 rows, the table has never been written to
  *   strategy_calls  10 rows: 7 no-show, 2 cancelled, 1 completed, nothing since 2026-04-28
  *
- * So the honest headline is not "9 meetings booked". It is that nobody has booked a meeting
- * in seven months. A card that opened with the nine would read as a pipeline with activity in
- * it, which is the exact failure the ticket named.
+ * Read that bottom-up rather than top-down. The MEETING pipeline is dead: nobody has
+ * booked one or answered a call in over seven months. The REPLY channel is not dead: six
+ * people wrote back inside the window. So `dormant` computes as FALSE against this data,
+ * and the live card says "6 conversations inside the last 180 days".
+ *
+ * An earlier version of this comment called the whole surface DORMANT. It is not, and the
+ * distinction is the useful half of the finding: people still write back, and nobody is
+ * turning that into a meeting. The dormancy path below is real and tested; production
+ * simply does not trigger it today, and will the moment the replies stop too.
+ *
+ * What the card must still refuse is the comfortable reading of the same rows. "9 meetings
+ * booked" is true and would be heard as a pipeline with activity in it, which is the exact
+ * failure the ticket named. Hence a headline built from what falls inside the window,
+ * never from the lifetime totals.
  *
  * ── AND A THIRD OF THE HISTORY IS TEST DATA ──────────────────────────────────────────────
  *

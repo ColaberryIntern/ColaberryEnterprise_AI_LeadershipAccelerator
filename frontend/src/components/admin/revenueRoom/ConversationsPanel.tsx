@@ -10,16 +10,21 @@ import { fmtCount } from '../revenueFlow/fmtCount';
  * in conversation is the most current signal there is and today it is invisible to every
  * surface."
  *
- * THE DORMANCY IS THE HEADLINE, AND THAT IS THE WHOLE DESIGN
+ * WHAT THE HEADLINE IS BUILT FROM, AND WHY IT IS NOT THE LIFETIME TOTAL
  *
- * The ticket's warning is the thing this component exists to obey: "Expect this surface to be
- * sparse and do not let sparse render as healthy." Measured on production, the last
- * conversation of any kind was 2026-04-28 and nothing falls inside the board's 180-day window.
+ * The ticket's warning is the thing this component exists to obey: "Expect this surface to
+ * be sparse and do not let sparse render as healthy." Measured on production 2026-11-27,
+ * the meeting pipeline is dead (nothing booked since 2026-04-28, nothing answered since
+ * 2026-04-13) while six replies still land inside the 180-day window.
  *
- * So the sentence at the top is "nothing in 180 days", not "9 meetings booked". Both are true
- * of the same rows, and the second reads as a pipeline with activity in it. The dormant banner
- * is drawn in the warning tone for the same reason: a live colour on dead data is the lie this
- * card is built to avoid.
+ * So the headline is built from what falls INSIDE the window, never from the lifetime
+ * totals: "6 conversations inside the last 180 days", not "9 meetings booked". Both
+ * describe the same rows, and the second is heard as a pipeline with activity in it.
+ *
+ * The warning tone is reserved for the genuinely dormant case, where nothing at all falls
+ * inside the window. Production does not trigger it today. An earlier version of this
+ * comment claimed it did; drawing a live color on dead data, or an alarm color on data
+ * that is merely thin, are the two lies this card is built to avoid.
  *
  * A TEST ROW IS SHOWN, FLAGGED
  *
