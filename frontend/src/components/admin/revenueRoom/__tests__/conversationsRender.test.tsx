@@ -9,9 +9,11 @@ jest.mock('../../../../utils/api', () => ({ __esModule: true, default: { get: je
 /**
  * R7: the conversations card on the drill-down.
  *
- * The ticket's warning is the thing being tested: "Expect this surface to be sparse and do not
- * let sparse render as healthy." Measured on production, the last conversation of any kind was
- * 2026-04-28 and three of the nine booked meetings are test rows.
+ * The ticket's warning is the thing being tested: "Expect this surface to be sparse and do
+ * not let sparse render as healthy." Measured on production 2026-11-27, nothing has been
+ * booked or answered since April, six replies land inside the window, and three of the
+ * nine booked meetings are test rows. The dormant fixture below is therefore a constructed
+ * case, not a snapshot of the live board.
  *
  * So these cover the ways the card could tell a comfortable lie:
  *
