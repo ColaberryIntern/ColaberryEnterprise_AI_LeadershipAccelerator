@@ -5,7 +5,7 @@ import { WeeklyLiveContentPiece, WeeklyLiveDemand, WeeklyLiveMoment, WeeklyLiveP
  * kept only the first, so a topic save left out viral, convert and topic_score, and signals lost
  * fits_weeks). This runs without a database: it checks what Sequelize would put in an INSERT.
  */
-type Attrs = Record<string, { fieldName?: string }>;
+type Attrs = Readonly<Record<string, object>>;
 /** Each model's attributes, read once per model so the union of model types never reaches getAttributes. */
 const MODELS: Record<string, () => Attrs> = {
   WeeklyLivePlan: () => WeeklyLivePlan.getAttributes(), WeeklyLiveSignal: () => WeeklyLiveSignal.getAttributes(), WeeklyLiveDemand: () => WeeklyLiveDemand.getAttributes(),
@@ -14,7 +14,7 @@ const MODELS: Record<string, () => Attrs> = {
 
 it.each(Object.entries(MODELS))('%s: every attribute is its own column with its own name', (_name, read) => {
   const attrs = read();
-  for (const [key, a] of Object.entries(attrs)) expect([key, a.fieldName]).toEqual([key, key]);
+  for (const [key, a] of Object.entries(attrs)) expect([key, (a as { fieldName?: string }).fieldName]).toEqual([key, key]);
   const objects = Object.values(attrs);
   expect(new Set(objects).size).toBe(objects.length);
 });
