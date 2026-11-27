@@ -39,7 +39,7 @@ const MAX_AGE_DAYS = 90;
  * Entertainment, not a lesson (2026-11-27: week 10 picked "Human in the Loop - Claude Opus 5.5 Music Video").
  * Lesson words are NOT required: half the owner's reference picks have none ("Stop Prompting Claude...").
  */
-const NOT_A_LESSON = /\b(music video|official (music )?video|official audio|lyrics?|song|full album|trailer|reaction|reacts?|live ?stream|podcast|ep(isode)?\.? ?\d+|news recap|meme|parody|funny|comedy|prank|asmr)\b/i;
+const NOT_A_LESSON = /\b(music video|official (music )?video|official audio|lyrics?|song|full album|trailer|(my |our |live )reaction|reacts to|podcast|news recap|meme|parody|funny|comedy|prank|asmr)\b/i;
 export const isLesson = (title: string): boolean => !NOT_A_LESSON.test(title);
 const MIN_UPLOAD_AGE_DAYS = 14;
 const UPLOADS = 10;
