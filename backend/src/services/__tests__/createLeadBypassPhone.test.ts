@@ -39,11 +39,20 @@ jest.mock('../../models', () => ({
 jest.mock('../sequenceService', () => ({ enrollLeadInSequence: jest.fn() }));
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { createLead } = require('../leadService');
+const { createLead, getTestBypassPhones } = require('../leadService');
 
-const BYPASS_PHONE = '6825975784';
+// Reserved fictional number. The live bypass list comes from LEAD_TEST_BYPASS_PHONES.
+const BYPASS_PHONE = '2025550123';
+const ORIGINAL_BYPASS_ENV = process.env.LEAD_TEST_BYPASS_PHONES;
+
+afterAll(() => {
+  if (ORIGINAL_BYPASS_ENV === undefined) delete process.env.LEAD_TEST_BYPASS_PHONES;
+  else process.env.LEAD_TEST_BYPASS_PHONES = ORIGINAL_BYPASS_ENV;
+});
 
 beforeEach(() => {
+  // Formatted on purpose: entries are normalized the same way the incoming phone is.
+  process.env.LEAD_TEST_BYPASS_PHONES = ' +1 (202) 555-0123 , 202-555-0199';
   jest.clearAllMocks();
   mockFindAll.mockResolvedValue([]);
   mockCreate.mockImplementation(async (values: any) => ({ id: 999, ...values, update: jest.fn() }));
@@ -108,5 +117,36 @@ describe('createLead — bypass phone vs the email unique index', () => {
     expect(mockCreate).not.toHaveBeenCalled();
     expect(result.lead).toBe(phoneOwner);
     expect(result.isDuplicate).toBe(true);
+  });
+});
+
+describe('LEAD_TEST_BYPASS_PHONES', () => {
+  it('normalizes every comma-separated entry to 10 digits', () => {
+    expect(getTestBypassPhones()).toEqual(['2025550123', '2025550199']);
+  });
+
+  it('bypasses nothing when unset', async () => {
+    delete process.env.LEAD_TEST_BYPASS_PHONES;
+    expect(getTestBypassPhones()).toEqual([]);
+
+    mockFindOne.mockResolvedValue(null);
+    const phoneOwner = { id: 24115, phone: BYPASS_PHONE, email: 'ali+11@colaberry.com' };
+    mockFindAll.mockResolvedValue([phoneOwner]);
+
+    const result = await createLead({
+      name: 'Ali Muwwakkil',
+      email: 'fresh@example.com',
+      phone: BYPASS_PHONE,
+    } as any);
+
+    // Without the env var the formerly-bypassed phone is deduped like any other.
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(result.lead).toBe(phoneOwner);
+    expect(result.isDuplicate).toBe(true);
+  });
+
+  it('bypasses nothing when set to an empty string', () => {
+    process.env.LEAD_TEST_BYPASS_PHONES = '';
+    expect(getTestBypassPhones()).toEqual([]);
   });
 });

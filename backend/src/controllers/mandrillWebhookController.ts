@@ -562,14 +562,25 @@ export async function handleMandrillInbound(req: Request, res: Response): Promis
         const aliOutreach = await CommunicationLog.findOne({
           where: { lead_id: lead.id, metadata: { trigger: 'ali_personal_outreach' } } as any,
         });
-        if (aliOutreach) {
+        if (aliOutreach && !env.adminAlertPhone) {
+          // No hard-coded fallback: the owner's number lives only in ADMIN_ALERT_PHONE.
+          console.warn(JSON.stringify({
+            timestamp: new Date().toISOString(),
+            level: 'warn',
+            service: 'backend',
+            event: 'owner_reply_alert_call_skipped',
+            outcome: 'failure',
+            error_class: 'ConfigMissing',
+            context: { lead_id: lead.id, missing_env: 'ADMIN_ALERT_PHONE' },
+          }));
+        } else if (aliOutreach) {
           const { triggerVoiceCall } = require('../services/synthflowService');
           const leadName = (lead as any).name || 'a lead';
           const leadCompany = (lead as any).company || '';
           const replyPreview = body.substring(0, 150).replace(/\n/g, ' ');
           await triggerVoiceCall({
             name: 'Ali',
-            phone: env.adminAlertPhone || '+16825975784',
+            phone: env.adminAlertPhone,
             callType: 'interest',
             prompt: [
               'You are Cory, Ali\'s AI operations manager. You are calling Ali with urgent good news.',
