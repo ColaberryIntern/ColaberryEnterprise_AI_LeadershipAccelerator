@@ -107,7 +107,7 @@ async function extractPdfText(buf: Buffer): Promise<string> {
  * extraction.
  */
 
-const SYSTEM = 'You verify whether an uploaded file is genuine proof that a person COMPLETED a course or exam. Valid proof includes a completion certificate, a completion or achievement BADGE, and a course or credential page showing the completion badge awarded to that person. Be strict about it being real completion proof for a course; do not accept random screenshots, photos, invoices, or unrelated documents. Do NOT reject genuine proof merely because it is called a badge rather than a certificate. Return STRICT json.';
+const SYSTEM = 'You verify whether an uploaded file is genuine proof that a person COMPLETED a course or exam. Valid proof includes a completion certificate, a completion or achievement BADGE, a course or credential page showing the completion badge awarded to that person, and - for a course that awards no badge at all - a screenshot of its "Course complete" page. Be strict about it being real completion proof for a course; do not accept random screenshots, photos, invoices, or unrelated documents. Do NOT reject genuine proof merely because it is called a badge rather than a certificate, nor because no badge appears on it when the course does not award one. Return STRICT json.';
 
 function userText(className?: string | null): string {
   return `Is this real proof that a person COMPLETED a course or exam - a completion certificate, a completion BADGE, or a course/credential page showing a completion badge awarded to them?` +
@@ -117,6 +117,12 @@ function userText(className?: string | null): string {
       `course finished with the learner's name is all valid completion proof - do not reject any of them for ` +
       `not being called a certificate. These courses used to be hosted on Skilljar, so an older ` +
       `Skilljar-issued certificate is equally valid. ` +
+      `IMPORTANT: some Claude Academy courses award NO completion badge at all. "Introduction to Agent Skills" ` +
+      `and "Introduction to Subagents" both state "This course doesn't award a completion badge." For a course ` +
+      `like that the only proof the student can produce is a screenshot of the Claude Academy "Course complete" ` +
+      `page showing the course name, and that IS valid completion proof - accept it and set is_certificate true. ` +
+      `A student who finished the same course on Skilljar earlier and imported it may hold a real badge instead, ` +
+      `which is equally valid. ` +
       `Note: this app sometimes gives a course its own internal display name, or splits one external ` +
       `course into multiple internal parts/weeks (e.g. "Part 1" / "Part 2") — the credential ` +
       `itself is issued by Anthropic for the whole external course and will very likely use different, ` +

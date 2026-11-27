@@ -12,7 +12,7 @@
  * Rendering note: this body goes through `lessonDoc()` in an iframe sandboxed
  * `allow-same-origin` with NO `allow-popups`, so an <a href> here would be silently
  * swallowed. Deliberately link-free — the SkillsJarPanel renders its own real
- * "Open in SkillsJar" button outside the iframe, which is what actually opens the course.
+ * "Open in Claude Academy" button outside the iframe, which is what actually opens the course.
  */
 export const CLAUDE_CODE_101_CARD = {
   /** Merged into the card's top-level metadata (SkillsJarPanel reads `card.course`). */
@@ -28,7 +28,7 @@ export const CLAUDE_CODE_101_CARD = {
     body_html: `
 <h2>What this course is</h2>
 <p>Claude Code 101 is Anthropic's free introduction to <strong>Claude Code</strong> - the tool that runs in your terminal, reads the files in your project, and makes changes with your approval. That is a different thing from the Claude chat assistant you may have used in a browser, and it is the one this program is built around.</p>
-<p>It is taught on Anthropic's SkillsJar platform. Use the <strong>Open in SkillsJar</strong> button on this card to take it, then come back and upload your certificate to mark this complete.</p>
+<p>It is taught on Anthropic's Claude Academy. Use the <strong>Open in Claude Academy</strong> button on this card to take it, then come back and upload your completion badge to mark this complete.</p>
 
 <h2>Why it is worth your hour</h2>
 <p>The course covers the same ground as this week's Self Study reading, but on video and from the people who built the tool. If you learn better by watching someone do a thing before you try it, take this first and read second. If you would rather read and try, do the reverse. Either order works.</p>

@@ -1,6 +1,6 @@
 /**
  * courseDraftService — build a complete Anthropic Skills Course (skills_jar)
- * card from just its SkillsJar link. The one input is the URL; Generate fills
+ * card from just its Claude Academy link. The one input is the URL; Generate fills
  * everything else (class name, description, XP, minutes, lesson content).
  *
  * It reads the course page's Open-Graph metadata (title/description/image) for
@@ -75,9 +75,9 @@ export async function generateCourseDraft(input: CourseDraftInput, model = DEFAU
   const res = await client.chat.completions.create({
     model, temperature: 0.5, max_tokens: 1400, response_format: { type: 'json_object' },
     messages: [
-      { role: 'system', content: `${bp ? bp.prompt_text + '\n\n' : ''}You set up an external "Anthropic Skills Course" (delivered on SkillsJar) card for a Forward Deployed AI Engineer student, from the course link and its page metadata. Return STRICT json.` },
+      { role: 'system', content: `${bp ? bp.prompt_text + '\n\n' : ''}You set up an external "Anthropic Skills Course" (delivered on Claude Academy) card for a Forward Deployed AI Engineer student, from the course link and its page metadata. Return STRICT json.` },
       { role: 'user', content: `Course URL: ${url}\n${og.title ? `Page title: "${og.title}"\n` : ''}${og.description ? `Page description: "${og.description}"\n` : ''}` +
-        `Return json with keys: class_name (string — the clean course name, e.g. "Introduction to MCP"), subtitle (string, short), description (string, 1-2 sentences telling the student to complete this course on SkillsJar then upload their completion certificate here to earn credit), estimated_time (integer minutes — best estimate), points (object { "learning": int, "builder": int, "community": int } — XP, learning-heavy for a course), summary (string), body_html (clean self-contained HTML overview of what the course covers + why it matters, no scripts), questions (string[]), reflection (string).` },
+        `Return json with keys: class_name (string — the clean course name, e.g. "Introduction to MCP"), subtitle (string, short), description (string, 1-2 sentences telling the student to complete this course on Claude Academy then upload their completion badge here to earn credit), estimated_time (integer minutes — best estimate), points (object { "learning": int, "builder": int, "community": int } — XP, learning-heavy for a course), summary (string), body_html (clean self-contained HTML overview of what the course covers + why it matters, no scripts), questions (string[]), reflection (string).` },
     ],
   });
   let p: any = {};

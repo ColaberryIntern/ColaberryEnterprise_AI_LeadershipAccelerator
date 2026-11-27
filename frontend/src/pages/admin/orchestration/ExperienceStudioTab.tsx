@@ -228,6 +228,16 @@ const ExperienceStudioTab: React.FC<{ initialSlug?: string | null }> = ({ initia
   // Video-type components play an actual video in-app (like the student Classroom), not just generated notes.
   const isVideo = !!sel && (['media', 'live_class', 'video_feedback'].includes(String(sel.render_band || '')) || (sel.capabilities || []).includes('video'));
   const isSkillsJar = !!sel && String(sel.render_band || '') === 'skills_jar';
+  // The render band is a DB-constrained enum, so humanizing it by swapping
+  // underscores for spaces prints the stored value 'skills_jar' at an admin as
+  // "skills jar". The band is not renamable without a migration, so the DISPLAY
+  // label is kept separate from the stored value. This is the one occurrence of
+  // the old platform name that no grep and no copy lint can find, because the
+  // string does not exist in the source - it is computed at render time.
+  const bandLabel = (b: unknown): string => {
+    const raw = String(b || 'activity');
+    return raw === 'skills_jar' ? 'Claude Academy course' : raw.replace(/_/g, ' ');
+  };
   const videoSource = useMemo(() => parseVideoUrl(videoUrl), [videoUrl]);
   const stageField = (k: StageKey) => STAGES.find((s) => s.key === k)!.field;
   const setStagePrompt = (val: string) => { if (!sel) return; setSel({ ...sel, [stageField(stage)]: val }); setDirty(true); };
@@ -591,7 +601,7 @@ const ExperienceStudioTab: React.FC<{ initialSlug?: string | null }> = ({ initia
                   <div className="es-flowstepbox">
                     <div className="es-flownum">4</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div className="es-lab" style={{ marginTop: 0 }}>What the student sees · the real {(sel.render_band || 'activity').replace(/_/g, ' ')} experience</div>
+                      <div className="es-lab" style={{ marginTop: 0 }}>What the student sees · the real {bandLabel(sel.render_band)} experience</div>
                       {!preview && !(isVideo && videoSource) && !(isSkillsJar && courseUrl.trim())
                         ? <div className="es-empty"><div style={{ fontSize: 24 }}>🎓</div><span className="es-muted">Run the flow to render the student experience.</span></div>
                         : (
