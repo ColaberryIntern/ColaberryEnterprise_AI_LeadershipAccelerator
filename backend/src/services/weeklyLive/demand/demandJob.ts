@@ -35,6 +35,12 @@ export const ANGLES: Readonly<Record<number, Angle>> = {
 };
 export const CACHE_DAYS = 7;
 const MAX_AGE_DAYS = 90;
+/**
+ * Entertainment, not a lesson (2026-11-27: week 10 picked "Human in the Loop - Claude Opus 5.5 Music Video").
+ * Lesson words are NOT required: half the owner's reference picks have none ("Stop Prompting Claude...").
+ */
+const NOT_A_LESSON = /\b(music video|official (music )?video|official audio|lyrics?|song|full album|trailer|reaction|reacts?|live ?stream|podcast|ep(isode)?\.? ?\d+|news recap|meme|parody|funny|comedy|prank|asmr)\b/i;
+export const isLesson = (title: string): boolean => !NOT_A_LESSON.test(title);
 const MIN_UPLOAD_AGE_DAYS = 14;
 const UPLOADS = 10;
 const TOP = 3;
@@ -60,7 +66,7 @@ export function channelMedian(uploads: Video[]): { value: number | null; thin: b
 export async function measureWeek(week: number, get: ApiGet, now = Date.now(), taken: ReadonlySet<string> = new Set()): Promise<DemandRow> {
   const angle = ANGLES[week];
   const ids = await searchIds(angle.queries, MAX_AGE_DAYS, get, now);
-  const recent = (ids.length ? await videosById(ids, get, now) : []).filter((v) => v.ageDays <= MAX_AGE_DAYS && v.views !== null && v.english && !taken.has(v.id))
+  const recent = (ids.length ? await videosById(ids, get, now) : []).filter((v) => v.ageDays <= MAX_AGE_DAYS && v.views !== null && v.english && isLesson(v.title) && !taken.has(v.id))
     .sort((a, b) => (b.views || 0) - (a.views || 0));
   // The week's own angle comes first: a bigger video about something else is not demand for this week.
   const exact = recent.filter((v) => angle.exact.test(v.title));
