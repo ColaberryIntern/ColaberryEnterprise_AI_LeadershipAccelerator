@@ -49,7 +49,7 @@ The only outbound calls so far are Test Lab calls (`test_mode`). `call_failures`
 
 ## Provider 429 or 5xx (`provider_circuit_open`)
 
-- **Detection:** A circuit (twilio, anthropic, openai_realtime) is not closed: half or more of at least five recent calls to it failed. Waiting too long for an answer counts as a failure; a caller hanging up or interrupting does not.
+- **Detection:** A circuit (twilio, anthropic, openai, openai_realtime) is not closed: half or more of at least five recent calls to it failed. Waiting too long for an answer counts as a failure; a caller hanging up or interrupting does not.
 - **Containment:** Automatic: Engine A apologizes at once, Engine B and dials are refused. It re-tests itself after 60 seconds.
 - **Diagnostics:** voice_circuit_changed lines; provider status page; quota and key validity (AuthError).
 - **Remediation:** Nothing if it closes by itself. Quota or key: owner action. A restart re-tests at once.
@@ -131,7 +131,7 @@ The only outbound calls so far are Test Lab calls (`test_mode`). `call_failures`
 
 - **Detection:** 95th percentile time to first audio over 2.5 seconds across at least ten turns.
 - **Containment:** Switch the route to the faster engine.
-- **Diagnostics:** anthropic.turn latency in voice_ops_metrics; tool time in the Trust Center timeline.
+- **Diagnostics:** engine_a.turn latency in voice_ops_metrics (Engine A's model: VOICE_ENGINE_A_PROVIDER, OpenAI by default); tool time in the Trust Center timeline.
 - **Remediation:** Smaller model or shorter prompt is an owner decision.
 - **Evidence:** call ids, the alert, the log lines and the test call that proved the fix, in the ticket.
 

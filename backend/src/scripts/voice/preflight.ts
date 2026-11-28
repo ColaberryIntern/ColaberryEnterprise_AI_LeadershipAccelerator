@@ -10,11 +10,11 @@
  * Run: npm run voice:preflight -- --mode test --redacted
  * Exit: 0 report printed (READY or NOT READY is in the output) · 2 the config itself is invalid
  */
-import { loadVoiceConfig, redactedVoiceConfig, TEST_LIMITS } from '../../services/voice/voiceConfig';
+import { engineAKeyName, loadVoiceConfig, redactedVoiceConfig, TEST_LIMITS } from '../../services/voice/voiceConfig';
 
-/** Engine A high-end cost per connected minute (docs/voice-studio/COST_MODEL.md). */
+/** Per-minute rate used to size a test run: Twilio and the voice at the top of COST_MODEL.md's range. Engine A's model share is UNMEASURED until LIVE-01; the hard $5 run cap (TEST_LIMITS) holds regardless. */
 export const WORST_CASE_USD_PER_MIN = 0.115;
-const CREDENTIAL_NAMES = ['TWILIO_ACCOUNT_SID', 'TWILIO_API_KEY_SID', 'TWILIO_API_KEY_SECRET', 'OPENAI_API_KEY', 'ELEVENLABS_API_KEY', 'ANTHROPIC_API_KEY'];
+const CREDENTIAL_NAMES = ['TWILIO_ACCOUNT_SID', 'TWILIO_API_KEY_SID', 'TWILIO_API_KEY_SECRET', 'TWILIO_AUTH_TOKEN', 'OPENAI_API_KEY', 'ELEVENLABS_API_KEY', 'ANTHROPIC_API_KEY'];
 
 export function buildPreflight(env: Record<string, string | undefined>, mode: 'test' | 'check') {
   const config = loadVoiceConfig(env);
@@ -26,6 +26,10 @@ export function buildPreflight(env: Record<string, string | undefined>, mode: 't
     if (!config.VOICE_TEST_ALLOWED_NUMBER) blockers.push('VOICE_TEST_ALLOWED_NUMBER is not set');
     if (!env.TWILIO_ACCOUNT_SID || !env.TWILIO_API_KEY_SID || !env.TWILIO_API_KEY_SECRET) blockers.push('Twilio credentials missing');
     if (config.VOICE_ENGINE_DEFAULT === 'openai_realtime' && !env.OPENAI_API_KEY) blockers.push('OPENAI_API_KEY missing for Engine B');
+    // LIVE-01 calls Engine A directly, whatever the default route is
+    if (!env[engineAKeyName(config.VOICE_ENGINE_A_PROVIDER)]) blockers.push(`${engineAKeyName(config.VOICE_ENGINE_A_PROVIDER)} missing for Engine A`);
+    // Twilio signs every request with the account Auth Token; without it every webhook and socket is refused.
+    if (!env.TWILIO_AUTH_TOKEN) blockers.push('TWILIO_AUTH_TOKEN missing: Twilio requests cannot be verified');
     if (worstCaseUsd > config.VOICE_TEST_BUDGET_USD) blockers.push(`worst case ${worstCaseUsd} USD exceeds the ${config.VOICE_TEST_BUDGET_USD} USD budget`);
   }
   return {

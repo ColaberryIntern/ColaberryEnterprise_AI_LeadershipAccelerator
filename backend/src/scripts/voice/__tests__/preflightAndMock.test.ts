@@ -2,13 +2,23 @@ import { buildPreflight } from '../preflight';
 import { runAllMockScenarios } from '../testMock';
 
 describe('voice:preflight', () => {
-  const ready = { VOICE_TEST_ENABLED: 'true', VOICE_TEST_ALLOWED_NUMBER: '+15555550100', TWILIO_ACCOUNT_SID: 'AC_x', TWILIO_API_KEY_SID: 'SK_x', TWILIO_API_KEY_SECRET: 's' };
+  const ready = { VOICE_TEST_ENABLED: 'true', VOICE_TEST_ALLOWED_NUMBER: '+15555550100', TWILIO_ACCOUNT_SID: 'AC_x', TWILIO_API_KEY_SID: 'SK_x', TWILIO_API_KEY_SECRET: 's', TWILIO_AUTH_TOKEN: 'x'.repeat(32), OPENAI_API_KEY: 'k' };
 
   it('READY when the test switch, destination and Twilio credentials are present; never dials', () => {
     const r = buildPreflight(ready, 'test');
     expect(r.verdict).toBe('READY');
     expect(r.dialsPlaced).toBe(0);
     expect(r.worstCaseUsd).toBeLessThanOrEqual(5);
+  });
+
+  it.each([['TWILIO_AUTH_TOKEN', 'TWILIO_AUTH_TOKEN missing: Twilio requests cannot be verified'], ['OPENAI_API_KEY', 'OPENAI_API_KEY missing for Engine A']])('NOT READY without %s', (name, blocker) => {
+    const r = buildPreflight({ ...ready, [name]: '' }, 'test');
+    expect(r.verdict).toBe('NOT READY');
+    expect(r.blockers).toContain(blocker);
+  });
+  it('Engine A on Claude needs the Anthropic key instead', () => {
+    expect(buildPreflight({ ...ready, VOICE_ENGINE_A_PROVIDER: 'anthropic' }, 'test').blockers).toContain('ANTHROPIC_API_KEY missing for Engine A');
+    expect(buildPreflight({ ...ready, VOICE_ENGINE_A_PROVIDER: 'anthropic', ANTHROPIC_API_KEY: 'k' }, 'test').verdict).toBe('READY');
   });
 
   it('NOT READY names every blocker in test mode', () => {
@@ -18,7 +28,7 @@ describe('voice:preflight', () => {
   });
 
   it('Engine B without an OpenAI key is a blocker', () => {
-    const r = buildPreflight({ ...ready, VOICE_ENGINE_DEFAULT: 'openai_realtime' }, 'test');
+    const r = buildPreflight({ ...ready, VOICE_ENGINE_DEFAULT: 'openai_realtime', OPENAI_API_KEY: '' }, 'test');
     expect(r.blockers).toContain('OPENAI_API_KEY missing for Engine B');
   });
 

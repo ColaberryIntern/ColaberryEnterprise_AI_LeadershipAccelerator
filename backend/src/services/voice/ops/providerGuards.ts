@@ -19,8 +19,9 @@ export const REALTIME_SLOW_MS = 8_000;
 const UNWELL: ReadonlySet<string> = new Set(['RateLimitError', 'TimeoutError', 'UpstreamUnavailable', 'AuthError', 'LlmStreamError', 'ContractViolation']);
 export const outcomeOf = (errorClass: string): Outcome => (UNWELL.has(errorClass) ? 'failure' : 'neutral');
 
-export function guardLlm(llm: VoiceLlm, ops: OpsMetrics = voiceOps, now: () => number = Date.now): VoiceLlm {
-  const b = ops.breakers.anthropic;
+/** Engine A behind its provider's circuit. Measured as engine_a.* whichever provider answers. */
+export function guardLlm(llm: VoiceLlm, provider: 'anthropic' | 'openai', ops: OpsMetrics = voiceOps, now: () => number = Date.now): VoiceLlm {
+  const b = ops.breakers[provider];
   return {
     async streamTurn(a): Promise<LlmTurnResult> {
       if (!b.allow()) return { ok: false, errorClass: 'CircuitOpen', aborted: false };
@@ -29,12 +30,12 @@ export function guardLlm(llm: VoiceLlm, ops: OpsMetrics = voiceOps, now: () => n
       try {
         let first = true;
         const waitedOut = () => first && a.signal.reason === GENERATION_TIMEOUT; // no word before we gave up
-        const r = await llm.streamTurn({ ...a, onText: (d) => { if (first) { first = false; ops.operation('anthropic.first_text', 'success', now() - t0); } a.onText(d); } });
+        const r = await llm.streamTurn({ ...a, onText: (d) => { if (first) { first = false; ops.operation('engine_a.first_text', 'success', now() - t0); } a.onText(d); } });
         outcome = r.ok ? 'success' : r.aborted ? (waitedOut() ? 'failure' : 'neutral') : outcomeOf(r.errorClass);
         return r;
       } finally {
         b.record(outcome);
-        ops.operation('anthropic.turn', outcome, now() - t0);
+        ops.operation('engine_a.turn', outcome, now() - t0);
       }
     },
   };

@@ -18,7 +18,7 @@ import type { VoiceConfig } from '../voiceConfig';
 
 export const APPROVED_DESTINATIONS = ['test-allowed'] as const;
 export const TEST_SCRIPTS = ['live-01', 'live-02', 'smoke'] as const;
-/** Worst published per-minute rate across both engines (COST_MODEL.md, Engine A upper bound). */
+/** Per-minute rate used to size a test run: Twilio and the voice at the top of COST_MODEL.md's range. Engine A's model share is UNMEASURED until LIVE-01; the hard $5 run cap (TEST_LIMITS) holds regardless. */
 export const WORST_CASE_USD_PER_MIN = 0.115;
 
 /**

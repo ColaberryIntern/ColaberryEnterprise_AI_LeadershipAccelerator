@@ -109,7 +109,7 @@ export function productionInboundDeps(): InboundDeps {
       return {
         testTenantId: (require('../testlab/testLabService') as typeof import('../testlab/testLabService')).TEST_TENANT_ID,
         studioEnabled: c.VOICE_STUDIO_ENABLED, testEnabled: c.VOICE_TEST_ENABLED,
-        engineReady: Boolean(c.VOICE_WS_BASE_URL && process.env.ANTHROPIC_API_KEY), transferTarget: c.VOICE_TRANSFER_NUMBER, now: new Date(),
+        engineReady: Boolean(c.VOICE_WS_BASE_URL && process.env[(require('../voiceConfig') as typeof import('../voiceConfig')).engineAKeyName(c.VOICE_ENGINE_A_PROVIDER)]), transferTarget: c.VOICE_TRANSFER_NUMBER, now: new Date(),
       };
     },
     stopped: () => (require('../transfer/transferGuard') as typeof import('../transfer/transferGuard')).emergencyStopped(),

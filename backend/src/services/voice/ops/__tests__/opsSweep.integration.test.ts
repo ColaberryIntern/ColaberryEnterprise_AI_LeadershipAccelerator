@@ -82,7 +82,7 @@ describeIfDb('operations facts against Postgres', () => {
 
   it('with no recorded turns, the measured time to first word is used', async () => {
     const m = new M.OpsMetrics(() => 1);
-    for (let i = 0; i < 12; i++) m.operation('anthropic.first_text', 'success', 3000);
+    for (let i = 0; i < 12; i++) m.operation('engine_a.first_text', 'success', 3000);
     expect(await S.readFacts(sequelize, m)).toMatchObject({ turnLatencyP95Ms: 3000, turnLatencySamples: 12 });
   });
 

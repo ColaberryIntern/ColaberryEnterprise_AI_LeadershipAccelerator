@@ -57,7 +57,7 @@ export async function readFacts(s: Sequelize, ops: OpsMetrics = voiceOps, spendA
               AND COALESCE((SELECT e.ingested_at FROM voice_call_events e WHERE e.call_id = c.id AND e.event_key = 'opt_out_heard'), c.created_at) < NOW() - INTERVAL '15 minutes'
               AND NOT EXISTS (SELECT 1 FROM voice_call_events e WHERE e.call_id = c.id AND e.event_key = 'opt_out_recorded')) AS opt_pending`,
   { replacements: { rate: WORST_CASE_USD_PER_MIN }, type: QueryTypes.SELECT });
-  const firstText = ops.snapshot().find((o) => o.operation === 'anthropic.first_text');
+  const firstText = ops.snapshot().find((o) => o.operation === 'engine_a.first_text');
   return {
     ended: r.ended, failed: r.failed, busyOrNoAnswer: r.no_answer, acceptedNeverRang: r.never_rang, dispatchUnknown24h: r.unknown24, orphaned: r.orphaned, stalled: r.stalled, queueStuck: r.stuck,
     policyDenied: r.denied, silentAnswered: r.silent, wrongVersion: r.wrong_version, duplicateDials: r.duplicates, spend24hUsd: Number(r.spend ?? 0), spendAlertUsd, 
@@ -65,7 +65,7 @@ export async function readFacts(s: Sequelize, ops: OpsMetrics = voiceOps, spendA
     turnLatencyP95Ms: r.turns ? r.p95 : firstText?.latency_ms.p95 ?? null, turnLatencySamples: r.turns || (firstText?.volume ?? 0), optOutsPending: r.opt_pending,
     webhookSignatureFailures: ops.count('voice_webhook_refused:TwilioSignatureInvalid') + ops.count('voice_ws_upgrade_refused:TwilioSignatureInvalid'),
     transitionsRejected: ops.count('voice_session_transition_rejected'), handlerFailures: ops.count('voice_ws_handler_failed') + ops.count('voice_realtime_handler_failed'),
-    breakers: { twilio: ops.breakers.twilio.current, anthropic: ops.breakers.anthropic.current, openai_realtime: ops.breakers.openai_realtime.current },
+    breakers: { twilio: ops.breakers.twilio.current, anthropic: ops.breakers.anthropic.current, openai: ops.breakers.openai.current, openai_realtime: ops.breakers.openai_realtime.current },
   };
 }
 

@@ -30,11 +30,11 @@ Source of truth: [MASTER_BUILD_PROMPT.md](MASTER_BUILD_PROMPT.md). The directive
 
 | Engine | Component | USD per min | Basis |
 |---|---|---|---|
-| A (Relay + ElevenLabs + Claude) | Twilio outbound voice | 0.0140 | published |
+| A (Relay + ElevenLabs + OpenAI chat) | Twilio outbound voice | 0.0140 | published |
 | A | ConversationRelay | 0.0700 | published ("starting at") |
-| A | Claude Haiku 5.5 streaming replies | 0.0013 | **estimate**: 10,000 input + 600 output tokens per connected minute |
+| A | OpenAI chat (gpt-4o) streaming replies | **UNMEASURED** | Engine A moved from Claude on 2026-11-28; measured from LIVE-01 usage, and priced here only with a dated official source |
 | A | ElevenLabs TTS, only if billed separately | 0.0300 | **estimate**: 750 spoken characters per minute at the Flash rate; neither vendor states whether Relay includes it |
-| **A total** | | **0.085 to 0.115** | lower bound if Relay includes the voice, upper if billed separately |
+| **A total** | | **0.084 to 0.114 plus the model** | Twilio and the voice only; the model's share comes from LIVE-01 |
 | B (Media Streams + OpenAI Realtime) | Twilio outbound voice + Media Streams | 0.0184 | published |
 | B | OpenAI Realtime audio tokens | **UNMEASURED** | measured from LIVE-02 session usage; no per-minute price is published |
 
