@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ShiftFill Coverage Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: an operations console read top to bottom as an analysis: status, where the time went, what needs a person, then the evidence. */
+:root{
+  --bg:#f2f5f4; --surface:#ffffff; --sunk:#e9eeec; --ink:#14201d; --muted:#5a6a65; --line:#dbe3e0;
+  --accent:#0f6b5c; --accent-soft:#dff0eb; --on-accent:#ffffff;
+  --good:#0aac23; --good-ink:#006c10; --good-soft:#e3f5e6;
+  --warn:#fbb315; --warn-ink:#7a5200; --warn-soft:#fdf1d3;
+  --crit:#dc3c3d; --crit-ink:#a82224; --crit-soft:#fbe4e4;
+  --s1:#257de0; --s1-light:#9dc8f7;
+  --t0:#84b9f3; --t1:#338ced; --t2:#1b64be; --t3:#0e3d7e;
+  --display:"Bricolage Grotesque","Segoe UI",system-ui,sans-serif;
+  --body:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#101614; --surface:#182220; --sunk:#131b19; --ink:#e8efec; --muted:#9aaaa5; --line:#2a3734;
+    --accent:#56c7b1; --accent-soft:#1b3731; --on-accent:#06231d;
+    --good:#0aac23; --good-ink:#5fd873; --good-soft:#143220;
+    --warn:#fbb315; --warn-ink:#fbc54e; --warn-soft:#3a2f12;
+    --crit:#eb6263; --crit-ink:#f39293; --crit-soft:#3d1c1d;
+    --s1:#338ced; --s1-light:#1b64be;
+    --t0:#9dc8f7; --t1:#519ced; --t2:#257de0; --t3:#1757ac;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#101614; --surface:#182220; --sunk:#131b19; --ink:#e8efec; --muted:#9aaaa5; --line:#2a3734;
+  --accent:#56c7b1; --accent-soft:#1b3731; --on-accent:#06231d;
+  --good:#0aac23; --good-ink:#5fd873; --good-soft:#143220;
+  --warn:#fbb315; --warn-ink:#fbc54e; --warn-soft:#3a2f12;
+  --crit:#eb6263; --crit-ink:#f39293; --crit-soft:#3d1c1d;
+  --s1:#338ced; --s1-light:#1b64be;
+  --t0:#9dc8f7; --t1:#519ced; --t2:#257de0; --t3:#1757ac;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--body);-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;cursor:pointer}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0;letter-spacing:-.01em}
+h1{font-size:30px;line-height:1.15;font-weight:700}
+h2{font-size:19px;font-weight:700}
+h3{font-size:15px;font-weight:700;font-family:var(--body)}
+p{margin:0}
+.num{font-variant-numeric:tabular-nums}
+.mono{font-family:var(--mono);font-size:12.5px}
+.muted{color:var(--muted)}
+.demo{background:var(--ink);color:var(--bg);font-size:13px;padding:7px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.demo b{letter-spacing:.08em}
+.demo .sp{flex:1}
+.demo button{background:transparent;border:1px solid currentColor;border-radius:6px;padding:2px 10px;color:inherit;font-size:12.5px}
+header.top{background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20}
+.top-in{max-width:1200px;margin:0 auto;padding:10px 16px 0;display:flex;flex-direction:column;gap:8px}
+.brand{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.logo{width:30px;height:30px;border-radius:8px;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;font:700 16px var(--display)}
+.brand strong{font:700 18px var(--display)}
+.brand .asof{margin-left:auto;font-size:13px;color:var(--muted)}
+nav.tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
+nav.tabs a{padding:8px 12px;text-decoration:none;color:var(--muted);font-weight:500;white-space:nowrap;border-bottom:3px solid transparent;display:flex;gap:6px;align-items:center}
+nav.tabs a[aria-current="page"]{color:var(--ink);border-bottom-color:var(--accent)}
+nav.tabs a:hover{color:var(--ink)}
+.badge{background:var(--warn-soft);color:var(--warn-ink);border-radius:10px;padding:0 7px;font-size:12px;font-weight:600}
+main{max-width:1200px;margin:0 auto;padding:22px 16px 64px;display:flex;flex-direction:column;gap:18px}
+.lede{color:var(--muted);max-width:65ch;margin-top:4px}
+.grid{display:grid;gap:14px}
+.tiles{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+.two{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr)}
+@media (max-width:860px){.two{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;min-width:0}
+.card > header{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.card > header .sub{color:var(--muted);font-size:13px}
+.card > header .more{margin-left:auto;font-size:13px}
+.tile{display:block;text-decoration:none;color:inherit;background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--line);border-radius:10px;padding:12px 14px}
+.tile:hover{border-color:var(--muted)}
+.tile.warn{border-left-color:var(--warn)} .tile.good{border-left-color:var(--good)} .tile.crit{border-left-color:var(--crit)}
+.tile .v{font:700 30px/1 var(--display);font-variant-numeric:tabular-nums}
+.tile .v small{font:500 13px var(--body);color:var(--muted);margin-left:4px}
+.tile .l{font-weight:600;margin-top:6px}
+.tile .h{font-size:13px;color:var(--muted)}
+.pill{display:inline-flex;align-items:center;gap:5px;border-radius:20px;padding:1px 9px;font-size:12.5px;font-weight:600;white-space:nowrap;background:var(--sunk);color:var(--muted)}
+.pill.good{background:var(--good-soft);color:var(--good-ink)}
+.pill.warn{background:var(--warn-soft);color:var(--warn-ink)}
+.pill.crit{background:var(--crit-soft);color:var(--crit-ink)}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:7px 13px;font-weight:600}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:18px;padding:4px 12px;font-size:13px;font-weight:500}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.scroll{overflow-x:auto}
+/* timeline */
+.tl svg{display:block;min-width:760px;width:100%;height:auto}
+.tl text{font-family:var(--body);fill:var(--muted);font-size:12px}
+.tl .rowt{fill:var(--ink);font-weight:600;font-size:13px}
+.tl .hit{cursor:pointer}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin-top:8px}
+.legend i{display:inline-block;vertical-align:middle;margin-right:5px}
+/* stepper */
+.steps{display:flex;gap:0;overflow-x:auto;padding:4px 0 2px}
+.step{flex:1 0 118px;position:relative;padding:22px 8px 0 0;font-size:13px}
+.step::before{content:"";position:absolute;top:7px;left:0;right:0;height:2px;background:var(--line)}
+.step:last-child::before{display:none}
+.step::after{content:"";position:absolute;top:1px;left:0;width:14px;height:14px;border-radius:50%;background:var(--surface);border:2px solid var(--muted)}
+.step.done::after{background:var(--accent);border-color:var(--accent)}
+.step.done::before{background:var(--accent)}
+.step.current::after{border-color:var(--warn);background:var(--warn);box-shadow:0 0 0 4px var(--warn-soft)}
+.step.failed::after{border-color:var(--crit);background:var(--crit)}
+.step.pending{color:var(--muted)}
+.step .gapt{position:absolute;top:-9px;left:22px;font-size:11.5px;color:var(--muted);background:var(--surface);padding:0 4px}
+.step b{display:block;font-weight:600}
+/* bars */
+.rows{display:flex;flex-direction:column;gap:8px}
+.brow{display:grid;grid-template-columns:150px minmax(0,1fr) 150px;gap:10px;align-items:center;font-size:13.5px}
+@media (max-width:640px){.brow{grid-template-columns:minmax(0,1fr)}}
+.track{position:relative;height:18px;background:var(--sunk);border-radius:4px}
+.seg{position:absolute;top:0;bottom:0;border-radius:0 4px 4px 0}
+.seg.base{background:var(--s1);border-radius:4px 0 0 4px}
+.seg.add{background:var(--s1-light);border-left:2px solid var(--surface)}
+.seg.add.over{background:repeating-linear-gradient(135deg,var(--crit) 0 4px,transparent 4px 7px);outline:1px solid var(--crit);outline-offset:-1px}
+.lim{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--ink)}
+.fun{display:grid;grid-template-columns:86px minmax(0,1fr);gap:4px 10px;align-items:center;font-size:13px}
+.fun .fb{height:16px;border-radius:0 4px 4px 0;background:var(--s1);min-width:2px}
+.fun .fr{display:flex;align-items:center;gap:8px}
+.meter{display:flex;align-items:center;gap:8px;font-size:13px}
+.meter .track{flex:1;height:8px;min-width:70px}
+.meter .fill{position:absolute;inset:0 auto 0 0;border-radius:4px;background:var(--s1)}
+.meter .fill.over{background:var(--crit)}
+/* decision cards */
+.dec{border:1px solid var(--line);border-left:4px solid var(--warn);border-radius:10px;padding:14px;background:var(--surface);display:flex;flex-direction:column;gap:10px}
+.dec.closed{border-left-color:var(--line)}
+.dec .hd{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.dec .hd h3{margin-right:auto}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px 14px;font-size:13px}
+.facts dt{color:var(--muted);font-size:12px}
+.facts dd{margin:0;font-weight:500}
+.msg{background:var(--sunk);border-radius:8px;padding:10px 12px;font-size:13.5px;border-left:3px solid var(--muted)}
+.acts{display:flex;gap:8px;flex-wrap:wrap}
+/* feed */
+.feed{display:flex;flex-direction:column}
+.ev{display:grid;grid-template-columns:64px 14px minmax(0,1fr);gap:0 10px;padding:0 0 14px;position:relative}
+.ev .t{font-family:var(--mono);font-size:12px;color:var(--muted);padding-top:2px;text-align:right}
+.ev .dot{width:10px;height:10px;border-radius:50%;border:2px solid var(--muted);background:var(--surface);margin-top:5px;z-index:1}
+.ev.human .dot{background:var(--accent);border-color:var(--accent)}
+.ev.failed .dot{border-color:var(--crit);background:var(--crit)}
+.ev.hold .dot{border-color:var(--warn);background:var(--warn)}
+.ev::before{content:"";position:absolute;left:78px;top:14px;bottom:-4px;width:2px;background:var(--line)}
+.ev:last-child::before{display:none}
+.ev .a{font-weight:500}
+.ev .r{font-size:13px;color:var(--muted);max-width:70ch}
+.ev .m{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;font-size:12px;color:var(--muted);align-items:center}
+.tag{border:1px solid var(--line);border-radius:5px;padding:0 6px;font-size:11.5px;color:var(--muted);white-space:nowrap}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th{text-align:left;font-weight:600;color:var(--muted);font-size:12px;padding:6px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:0}
+tr.link{cursor:pointer} tr.link:hover td{background:var(--sunk)}
+.stack{display:flex;height:26px;border-radius:5px;overflow:hidden;gap:2px;background:var(--surface)}
+.stack span{display:grid;place-items:center;color:#fff;font-size:12px;font-weight:600;min-width:26px}
+#tip{position:fixed;z-index:50;pointer-events:none;background:var(--ink);color:var(--bg);border-radius:8px;padding:8px 10px;font-size:12.5px;max-width:320px;display:none;line-height:1.4}
+#tip b{display:block}
+#toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-weight:500;max-width:min(520px,calc(100% - 32px));display:none;z-index:60}
+.note{font-size:13px;color:var(--muted);border-left:3px solid var(--line);padding-left:10px;max-width:75ch}
+.back{font-size:13px;text-decoration:none}
+@media (prefers-reduced-motion:no-preference){.tile,.btn,.chip{transition:border-color .15s}}
+</style>
+</head>
+<body>
+<div class="demo"><b>DEMO</b><span>Simulated, not live. Sample data only. Nothing here was produced by the real system.</span><span class="sp"></span><span class="mono">plan v1 · ee3ebe1</span><button id="reset" type="button">Reset demo</button></div>
+<header class="top"><div class="top-in">
+  <div class="brand"><span class="logo">S</span><strong>ShiftFill</strong><span class="muted">Hygienist shift coverage</span><span class="asof">Dana · Operations manager · as of <span class="num">7:34 AM CST</span>, Nov 25, 2026</span></div>
+  <nav class="tabs" id="tabs" aria-label="Sections"></nav>
+</div></header>
+<main id="app"></main>
+<div id="tip" role="tooltip"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<script>
+(function(){
+"use strict";
+var NOW="7:34";
+function tm(s){var p=s.split(":");return (+p[0])*60+(+p[1]);}
+function ft(s){var m=typeof s==="number"?s:tm(s),h=Math.floor(m/60),mm=m%60,ap=h>=12?"PM":"AM",hh=h%12||12;return hh+":"+(mm<10?"0":"")+mm+" "+ap;}
+function esc(v){return String(v==null?"":v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+
+var GAPS={
+ moss:{id:"moss",name:"Mosswick Dental",start:"8:30",end:"14:30",hrs:6,recv:"6:09",src:"call-out email",status:"escalated",cov:"No internal acceptance · Dana paged",elapsed:85,dana:2,intake:"INTAKE-MOSS"},
+ lark:{id:"lark",name:"Larkspur Hollow Dental",start:"12:30",end:"18:30",hrs:6,recv:"7:31",src:"call-out text",status:"offered",cov:"Text replies due at 7:42 AM CST",elapsed:3,dana:0,intake:"INTAKE-LARK"},
+ bramble:{id:"bramble",name:"Brambleglass Dental",start:"8:00",end:"12:00",hrs:4,recv:"6:58",src:"call-out text",status:"filled",cov:"Rosalie Quill confirmed by text",elapsed:29,dana:0,intake:"INTAKE-BRAMBLE"}
+};
+var GAP_ORDER=["moss","lark","bramble"];
+var GSTAT={open:["Open","warn"],offered:["Waiting for replies","warn"],filled:["Filled","good"],escalated:["Escalated to Dana","crit"],closed:["Closed",""]};
+var HYG={
+ rose:{name:"Rosalie Quill",hrs:28,avail:"available"},ian:{name:"Ianto Merritt",hrs:24,avail:"available"},
+ sela:{name:"Sela Fenwick",hrs:18,avail:"available"},nika:{name:"Nika Vale",hrs:29,avail:"available"},
+ milo:{name:"Milo Talven",hrs:22,avail:"available"},ines:{name:"Ines Alder",hrs:26,avail:"available"},
+ dev:{name:"Dev Ashcombe",hrs:36,avail:"available"},tess:{name:"Tessa Wrenlow",hrs:20,avail:"leave"},
+ astrid:{name:"Astrid Moorwill",hrs:34,avail:"available"}
+};
+var HYG_ORDER=["rose","ian","sela","nika","milo","ines","dev","tess","astrid"];
+var OSTAT={draft:["Draft · no text sent","warn"],waiting:["Waiting for YES","warn"],accepted:["Accepted by SMS","good"],declined:["Declined by SMS",""],expired:["Reply window ended",""],canceled:["Canceled",""]};
+function cands(){return [
+ {id:"mossnika",gap:"moss",h:"nika",rank:1,proj:35,commute:8,status:"declined",wave:1,sent:"6:16",due:"6:26"},
+ {id:"mossmilo",gap:"moss",h:"milo",rank:2,proj:28,commute:14,status:"expired",wave:1,sent:"6:16",due:"6:26"},
+ {id:"mossines",gap:"moss",h:"ines",rank:3,proj:32,commute:19,status:"expired",wave:1,sent:"6:16",due:"6:26"},
+ {id:"bramblerose",gap:"bramble",h:"rose",rank:1,proj:32,commute:9,status:"accepted",wave:1,sent:"7:23",due:"7:33"},
+ {id:"brambleian",gap:"bramble",h:"ian",rank:2,proj:28,commute:16,status:"canceled",wave:1,sent:"7:23",due:"7:33"},
+ {id:"bramblesela",gap:"bramble",h:"sela",rank:3,proj:22,commute:23,status:"canceled",wave:1,sent:"7:23",due:"7:33"},
+ {id:"larkian",gap:"lark",h:"ian",rank:1,proj:30,commute:12,status:"waiting",wave:1,sent:"7:32",due:"7:42"},
+ {id:"larksela",gap:"lark",h:"sela",rank:2,proj:24,commute:18,status:"waiting",wave:1,sent:"7:32",due:"7:42"},
+ {id:"larkrose",gap:"lark",h:"rose",rank:3,proj:38,commute:8,status:"waiting",wave:1,sent:"7:32",due:"7:42"},
+ {id:"larkdev",gap:"lark",h:"dev",rank:4,proj:42,commute:24,status:"draft",wave:2,overtime:true,release:"Held · Dana’s approval needed"},
+ {id:"larkastrid",gap:"lark",h:"astrid",rank:5,proj:40,commute:30,status:"draft",wave:2,release:"Held · full-shift availability unconfirmed",check:"Provisional · full-shift availability unconfirmed"}
+];}
+var AGENCY_BODY="Good morning. Mosswick Dental needs a licensed hygienist today, Nov 25, 2026, from 8:30 AM CST to 2:30 PM CST. Please reply with availability and your rate. We’ll confirm any assignment separately. Thank you, Dana.";
+function decisions(){return [
+ {id:"fable",kind:"agency",gap:"moss",subject:"Agency message · Fable Orchard Staffing",note:"The staff text window closed without a YES. Review the version below before release.",by:"Temp Agency Coordinator",version:"v1",body:AGENCY_BODY,status:"pending",
+  yes:{label:"Approve agency message",toast:"This version is ready for the send queue. Mosswick still needs coverage.",log:"Approved v1 of the email to Fable Orchard Staffing. The draft is ready to send.",result:"Approved · ready to send"},
+  no:{label:"Decline agency message",toast:"The message was canceled before sending.",log:"Declined the email to Fable Orchard Staffing. The draft was canceled before sending.",result:"Canceled before sending"}},
+ {id:"juniper",kind:"agency",gap:"moss",subject:"Agency message · Juniper Thread Dental Temps",note:"The staff text window closed without a YES. Review the version below before release.",by:"Temp Agency Coordinator",version:"v1",body:AGENCY_BODY,status:"pending",
+  yes:{label:"Approve agency message",toast:"This version is ready for the send queue. Mosswick still needs coverage.",log:"Approved v1 of the email to Juniper Thread Dental Temps. The draft is ready to send.",result:"Approved · ready to send"},
+  no:{label:"Decline agency message",toast:"The message was canceled before sending.",log:"Declined the email to Juniper Thread Dental Temps. The draft was canceled before sending.",result:"Canceled before sending"}},
+ {id:"overtimedev",kind:"overtime",gap:"lark",subject:"Overtime backup · Dev Ashcombe",note:"This shift would bring Dev’s week to 42 hours. Approval makes the text available for a later wave if nobody replies by 7:42 AM CST.",by:"Shift Offer Manager",version:"Larkspur backup v1",cand:"larkdev",status:"pending",
+  yes:{label:"Approve overtime",toast:"Dev’s offer is available for a later wave. No text has been sent.",log:"Approved overtime for Dev Ashcombe. The backup text is available for a later wave.",result:"Approved",release:"Approved · eligible for the next wave"},
+  no:{label:"Decline overtime",toast:"Dev’s draft was canceled. The first wave is still open.",log:"Declined overtime for Dev Ashcombe. The backup text was canceled.",result:"Declined",release:"Declined · no text sent",cancel:true}},
+ {id:"larkflag",kind:"exception",gap:"lark",subject:"Confirm availability · Astrid Moorwill",note:"Astrid’s availability entry has no end time. Keep the backup text on hold while Dana checks the schedule.",by:"Uncertainty Flag",version:"Astrid Moorwill · wave 2",cand:"larkastrid",status:"pending",
+  yes:{label:"Confirm full-shift availability",toast:"Astrid’s draft is available for a later wave. No text has been sent.",log:"Confirmed Astrid Moorwill’s full-shift availability against the schedule. Her backup draft remains unsent.",result:"Cleared by Dana",release:"Availability confirmed · eligible for the next wave",check:"Dana confirmed the full shift"},
+  no:{label:"Keep offer on hold",toast:"Astrid’s draft was canceled. No text was sent.",log:"Closed Astrid Moorwill’s review and canceled the backup draft because her availability is still unconfirmed.",result:"Kept on hold",release:"Availability unconfirmed · no text sent",cancel:true}}
+];}
+var KIND={agency:"Agency message",overtime:"Overtime backup",exception:"Availability flag"};
+/* id,time,gap,agent,agentId,tier,risk,status,hold,action,reason,sideEffect,reqs */
+var EV=[
+ ["larkwaiting","7:34","lark","Shift Offer Manager","AGENT-004","A3","low","executing",0,"Listening for Larkspur Hollow text replies.","The first wave is still open and closes at 7:42 AM CST.","",[2,3,8]],
+ ["reportsnext","7:34","","Decision Summarizer","AGENT-008","A1","low","queued",0,"Queued the next decision summary for the end of the day.","The daily explanation and weekly coverage report use completed reporting periods.","",[11]],
+ ["brambleslack","7:33","bramble","Front Desk Notifier","AGENT-009","A3","low","succeeded",0,"Delivered the Brambleglass front desk notice on retry.","Slack recovered and the notice included the confirmed schedule assignment.","Slack front desk notice",[6]],
+ ["mossjuniper","7:33","moss","Temp Agency Coordinator","AGENT-011","A2","medium","queued",1,"Prepared a Mosswick email for Juniper Thread Dental Temps.","The staff reply window closed without a YES. This draft is held for Dana’s review.","",[19,20]],
+ ["larkovertime","7:33","lark","Shift Offer Manager","AGENT-004","A2","high","queued",1,"Held Dev Ashcombe’s backup text at 42 projected hours.","The overtime check requires Dana’s approval before the backup text can be sent.","",[2,3,8]],
+ ["larkexception","7:33","lark","Uncertainty Flag","AGENT-010","A1","medium","proposed",1,"Asked Dana to confirm Astrid Moorwill’s full-shift availability.","Astrid’s availability entry is missing its end time. The backup text remains a draft.","Slack alert to Dana",[17]],
+ ["larkleave","7:32","lark","Hygienist Filter","AGENT-002","A3","low","succeeded",0,"Excluded Tessa Wrenlow from the Larkspur Hollow text list.","Tessa’s approved leave covers the full shift. She was excluded before dispatch.","",[9]],
+ ["larkfair","7:32","lark","Fairness Tracker","AGENT-012","A3","low","succeeded",0,"Moved Ianto and Sela ahead of Rosalie for Larkspur Hollow.","Rosalie accepted more coverage in the lookback period. All three stayed in the first wave. Her Brambleglass assignment ends before Larkspur starts.","",[21]],
+ ["larktexts","7:32","lark","Shift Offer Manager","AGENT-004","A3","low","succeeded",0,"Texted Ianto, Sela, and Rosalie about Larkspur Hollow.","The first wave used the ranked candidates who cleared leave, availability, and hours checks.","Twilio SMS",[2,3,8]],
+ ["mossfable","7:32","moss","Temp Agency Coordinator","AGENT-011","A2","medium","queued",1,"Prepared a Mosswick email for Fable Orchard Staffing.","The staff reply window closed without a YES. This draft is held for Dana’s review.","",[19,20]],
+ ["mosschecked","7:31","moss","Dana","dana","A0","low","succeeded",0,"Reviewed the Mosswick page and offer responses.","Mosswick still needs coverage after the internal reply window closed.","",[7]],
+ ["larkopen","7:31","lark","Gap Opener","AGENT-001","A3","low","succeeded",0,"Opened the Larkspur Hollow Dental afternoon gap from a call-out text.","The office, date, and full shift window were available at intake.","",[1]],
+ ["mosspaged","7:30","moss","Dana Pager","AGENT-007","A3","low","succeeded",0,"Paged Dana at 7:30 AM CST for the uncovered Mosswick shift.","No one accepted. The page included the shift hours and the names of the hygienists asked.","Slack page",[7]],
+ ["bramblesheet","7:28","bramble","Schedule Updater","AGENT-006","A3","low","succeeded",0,"Updated the Brambleglass assignment in Google Sheets.","The winning SMS reply supplied the confirmed hygienist.","Google Sheets",[5]],
+ ["brambleslackfailed","7:28","bramble","Front Desk Notifier","AGENT-009","A3","low","failed",0,"First Slack delivery to the Brambleglass front desk failed.","Slack was temporarily unavailable. A retry was queued for five minutes later.","",[6]],
+ ["bramblefill","7:27","bramble","Shift Offer Manager","AGENT-004","A3","low","succeeded",0,"Recorded Rosalie’s YES. Brambleglass filled in 29 minutes with 0 minutes of Dana’s time.","Rosalie sent the first valid reply within the offer window.","",[13,14,15]],
+ ["bramblethanks","7:27","bramble","Thank You Sender","AGENT-005","A3","low","succeeded",0,"Texted Ianto and Sela that the Brambleglass shift was filled.","They had received the original offers and their reply windows closed when Rosalie accepted.","Twilio SMS",[4]],
+ ["brambletext","7:23","bramble","Shift Offer Manager","AGENT-004","A3","low","succeeded",0,"Sent Brambleglass offers by SMS. Hygienists could reply YES in the same thread.","Rosalie Quill, Ianto Merritt, and Sela Fenwick passed eligibility checks. The text contained the shift and reply deadline.","Twilio SMS",[18]],
+ ["brambleopen","6:58","bramble","Gap Opener","AGENT-001","A3","low","succeeded",0,"Opened the Brambleglass Dental gap from a call-out text.","The office, date, and hours were available at intake.","",[1]],
+ ["mossreply","6:26","moss","Shift Offer Manager","AGENT-004","A3","low","succeeded",0,"Closed Mosswick’s text window without an acceptance.","Nika declined by SMS. Milo and Ines did not reply.","",[2,3,8]],
+ ["mosscontact","6:16","moss","Shift Offer Manager","AGENT-004","A3","low","succeeded",0,"Texted Nika Vale, Milo Talven, and Ines Alder for Mosswick.","All three passed the office, availability, hours, and leave checks. Each had ten minutes to reply.","Twilio SMS",[2,3,8]],
+ ["mossopen","6:09","moss","Gap Opener","AGENT-001","A3","low","succeeded",0,"Opened the Mosswick Dental gap from a call-out email.","The office, shift date, and hours were present.","",[1]],
+ ["mossredact","6:09","moss","Privacy Protector","AGENT-003","A3","low","succeeded",0,"Kept only Mosswick’s office, date, and shift hours.","The reason was removed at intake. Only shift details went forward.","",[10]]
+].map(function(e){return {id:e[0],t:e[1],gap:e[2],agent:e[3],aid:e[4],tier:e[5],risk:e[6],status:e[7],hold:!!e[8],action:e[9],reason:e[10],side:e[11],reqs:e[12],human:e[4]==="dana"};});
+var STEPS={
+ moss:[["Call-out received","6:09","done"],["Wave 1 texted","6:16","done"],["Window closed, no YES","6:26","done"],["Dana paged","7:30","done"],["Agency drafts held","7:32","current"],["Coverage confirmed","","pending"]],
+ lark:[["Call-out received","7:31","done"],["Screened and ranked","7:32","done"],["Wave 1 texted","7:32","done"],["Replies due","7:42","current"],["Wave 2 held for Dana","","pending"],["Coverage confirmed","","pending"]],
+ bramble:[["Call-out received","6:58","done"],["Wave 1 texted","7:23","done"],["Rosalie replied YES","7:27","done"],["Schedule updated","7:28","done"],["Front desk notified","7:33","done"]]
+};
+var ELIG={rose:[["bramble",9],["lark",8]],ian:[["bramble",16],["lark",12]],sela:[["bramble",23],["lark",18]],nika:[["moss",8]],milo:[["moss",14]],ines:[["moss",19]],dev:[["lark",24]],tess:[["lark",6]],astrid:[["lark",30]]};
+var MSGS={
+ moss:[["6:16 AM","Twilio SMS","Offers to Nika Vale, Milo Talven, Ines Alder","ShiftFill: Mosswick Dental needs a hygienist today, 8:30 AM CST–2:30 PM CST. Reply YES by 6:26 AM CST to accept, or NO to pass."],["7:30 AM","Slack","Page to Dana","Mosswick Dental · 8:30 AM CST–2:30 PM CST is still uncovered. Nika Vale declined. Milo Talven and Ines Alder did not reply."]],
+ lark:[["7:32 AM","Twilio SMS","Offers to Ianto Merritt, Sela Fenwick, Rosalie Quill","ShiftFill: Larkspur Hollow Dental needs a hygienist today, 12:30 PM CST–6:30 PM CST. Reply YES by 7:42 AM CST to accept, or NO to pass."],["7:33 AM","Slack","Availability check flagged for Dana","Astrid’s availability entry has no end time. Keep the backup text on hold while Dana checks the schedule."]],
+ bramble:[["7:23 AM","Twilio SMS","Offers to Rosalie Quill, Ianto Merritt, Sela Fenwick","ShiftFill: Brambleglass Dental needs a hygienist today, 8:00 AM CST–12:00 PM CST. Reply YES by 7:33 AM CST to accept, or NO to pass."],["7:27 AM","Twilio SMS","Thank-you to Ianto Merritt, Sela Fenwick","The Brambleglass Dental shift is filled. Thank you for being available."],["7:33 AM","Slack","Brambleglass front desk notified","Brambleglass coverage confirmed: Rosalie Quill, 8:00 AM CST–12:00 PM CST. The shared schedule is updated."]]
+};
+
+var S;
+function reset(){S={cands:cands(),decs:decisions(),extra:[],decFilter:"all",actGap:"all",actWho:"all"};}
+reset();
+function events(){return S.extra.concat(EV);}
+function pending(kind){return S.decs.filter(function(d){return d.status==="pending"&&(!kind||(kind==="approval"?d.kind!=="exception":d.kind===kind));});}
+function win(g){return ft(g.start)+"–"+ft(g.end)+" CST";}
+function pill(label,tone){var ic={good:"✓",warn:"●",crit:"▲"}[tone]||"–";return '<span class="pill '+(tone||"")+'"><span aria-hidden="true">'+ic+"</span>"+esc(label)+"</span>";}
+function gpill(g){var s=GSTAT[g.status];return pill(s[0],s[1]);}
+
+/* ---------- timeline ---------- */
+function timeline(){
+ var W=1000,L=34,R=24,T0=360,T1=525,H=292,rowY=[92,172,252];
+ function x(m){return L+(m-T0)/(T1-T0)*(W-L-R);}
+ var o='<svg viewBox="0 0 '+W+" "+H+'" role="img" aria-label="Timeline of the three shift gaps from 6:00 to 8:45 AM. The activity log lists every event.">';
+ for(var m=T0;m<=T1;m+=15){var major=m%30===0;o+='<line x1="'+x(m)+'" x2="'+x(m)+'" y1="34" y2="'+(H-8)+'" stroke="var(--line)" stroke-width="1"'+(major?"":' stroke-dasharray="2 5"')+"/>";if(major)o+='<text x="'+x(m)+'" y="24" text-anchor="middle">'+ft(m)+"</text>";}
+ var nx=x(tm(NOW));
+ GAP_ORDER.forEach(function(id,i){
+  var g=GAPS[id],y=rowY[i],tone=GSTAT[g.status][1],col=tone==="good"?"var(--good)":tone==="crit"?"var(--crit)":"var(--warn)";
+  var endM=g.status==="filled"?tm(g.recv)+g.elapsed:tm(NOW);
+  o+='<text class="rowt" x="'+L+'" y="'+(y-22)+'">'+esc(g.name)+'<tspan style="font-weight:400;fill:var(--muted)">  ·  shift '+esc(ft(g.start)+"–"+ft(g.end))+"</tspan></text>";
+  o+='<text x="'+(W-R)+'" y="'+(y-22)+'" text-anchor="end">'+esc(GSTAT[g.status][0])+" · "+g.elapsed+" min "+(g.status==="filled"?"to fill":"open")+"</text>";
+  o+='<rect x="'+x(tm(g.recv))+'" y="'+(y-5)+'" width="'+(x(endM)-x(tm(g.recv)))+'" height="10" rx="5" fill="'+col+'" opacity=".35"/>';
+  o+='<rect x="'+x(tm(g.recv))+'" y="'+(y-5)+'" width="'+(x(endM)-x(tm(g.recv)))+'" height="10" rx="5" fill="none" stroke="'+col+'" stroke-width="1.5"/>';
+  var c=S.cands.filter(function(k){return k.gap===id&&k.sent;})[0];
+  if(c){var a=x(tm(c.sent)),b=x(Math.min(tm(c.due),id==="bramble"?tm("7:27"):tm(c.due)));
+   var solidEnd=Math.min(b,nx);
+   o+='<line x1="'+a+'" x2="'+solidEnd+'" y1="'+(y+14)+'" y2="'+(y+14)+'" stroke="var(--muted)" stroke-width="4" stroke-linecap="round"/>';
+   if(b>nx)o+='<line x1="'+nx+'" x2="'+b+'" y1="'+(y+14)+'" y2="'+(y+14)+'" stroke="var(--muted)" stroke-width="4" stroke-dasharray="2 6" stroke-linecap="round"/><text x="'+(b+8)+'" y="'+(y+18)+'">replies due '+ft(c.due)+"</text>";
+  }
+  var sm=tm(g.start);
+  if(sm<=T1){o+='<line x1="'+x(sm)+'" x2="'+x(sm)+'" y1="'+(y-12)+'" y2="'+(y+12)+'" stroke="var(--ink)" stroke-width="2"/><path d="M'+x(sm)+" "+(y-12)+"l10 4l-10 4z"+'" fill="var(--ink)"/><text x="'+x(sm)+'" y="'+(y+30)+'" text-anchor="middle">shift starts '+ft(g.start)+"</text>";}
+  else o+='<text x="'+(W-R)+'" y="'+(y+30)+'" text-anchor="end">shift starts '+ft(g.start)+" →</text>";
+  var evs=events().filter(function(e){return e.gap===id;}).sort(function(a,b){return tm(a.t)-tm(b.t);}),cl=[];
+  evs.forEach(function(e){var px=x(tm(e.t)),last=cl[cl.length-1];if(last&&px-last.x1<20){last.items.push(e);last.x1=px;}else cl.push({x0:px,x1:px,items:[e]});});
+  cl.forEach(function(k){var cx=(k.x0+k.x1)/2,n=k.items.length,r=n>1?7+Math.min(n,8)*0.8:6;
+   var bad=k.items.some(function(e){return e.status==="failed";}),hum=k.items.some(function(e){return e.human;});
+   var tip="<b>"+esc(g.name)+" · "+ft(k.items[0].t)+(n>1&&k.items[n-1].t!==k.items[0].t?"–"+ft(k.items[n-1].t):"")+"</b>"+k.items.map(function(e){return esc(e.action)+' <span style="opacity:.7">('+esc(e.agent)+")</span>";}).join("<br>");
+   o+='<g class="hit" tabindex="0" role="link" aria-label="'+n+" event"+(n>1?"s":"")+" for "+esc(g.name)+'" data-go="gap-'+id+'" data-tip="'+esc(tip)+'"><circle cx="'+cx+'" cy="'+y+'" r="16" fill="transparent"/><circle cx="'+cx+'" cy="'+y+'" r="'+r+'" fill="'+(hum?"var(--accent)":"var(--surface)")+'" stroke="'+(bad?"var(--crit)":hum?"var(--surface)":"var(--ink)")+'" stroke-width="2"/>'+(n>1?'<text x="'+cx+'" y="'+(y+4)+'" text-anchor="middle" style="fill:'+(hum?"var(--on-accent)":"var(--ink)")+';font-weight:600;font-size:11px">'+n+"</text>":"")+"</g>";
+  });
+ });
+ o+='<line x1="'+nx+'" x2="'+nx+'" y1="34" y2="'+(H-8)+'" stroke="var(--accent)" stroke-width="2"/><text x="'+(nx+6)+'" y="46" style="fill:var(--accent);font-weight:600">now '+ft(NOW)+"</text></svg>";
+ return '<div class="tl"><div class="scroll">'+o+'</div><div class="legend"><span><i style="width:22px;height:8px;border-radius:4px;border:1.5px solid var(--muted)"></i>gap open</span><span><i style="width:22px;height:4px;border-radius:2px;background:var(--muted)"></i>10-minute reply window</span><span><i style="width:12px;height:12px;border-radius:50%;border:2px solid var(--ink)"></i>agent actions (number when several)</span><span><i style="width:12px;height:12px;border-radius:50%;background:var(--accent)"></i>includes a step by Dana</span><span><i style="width:12px;height:12px;border-radius:50%;border:2px solid var(--crit)"></i>includes a failed delivery</span></div></div>';
+}
+/* ---------- shared pieces ---------- */
+function funnel(id){
+ var c=S.cands.filter(function(k){return k.gap===id;});
+ var rows=[["Ranked",c.length],["Texted",c.filter(function(k){return k.sent;}).length],["Replied",c.filter(function(k){return k.status==="accepted"||k.status==="declined";}).length],["Accepted",c.filter(function(k){return k.status==="accepted";}).length]];
+ return '<div class="fun">'+rows.map(function(r){return "<span>"+r[0]+'</span><span class="fr"><span class="fb" style="width:'+(r[1]/5*78)+'%"></span><b class="num">'+r[1]+"</b></span>";}).join("")+"</div>";
+}
+function funnelNote(id){
+ if(id==="moss")return "Nika declined. Milo and Ines did not reply.";
+ if(id==="bramble")return "Rosalie sent the first valid YES after 4 minutes.";
+ var held=S.cands.filter(function(k){return k.gap==="lark"&&k.status==="draft";}).length;
+ return "Replies due 7:42 AM. "+held+" backup "+(held===1?"draft":"drafts")+" held in wave 2. Tessa excluded for leave.";
+}
+function steps(id){
+ var st=STEPS[id],prev=null;
+ return '<div class="steps">'+st.map(function(s){var d="";if(prev&&s[1]){var diff=tm(s[1])-tm(prev);d='<span class="gapt num">+'+diff+" min</span>";}if(s[1])prev=s[1];
+  return '<div class="step '+s[2]+'">'+d+"<b>"+esc(s[0])+'</b><span class="mono muted">'+(s[1]?ft(s[1]):"not yet")+"</span></div>";}).join("")+"</div>";
+}
+function meter(v,max,unit,label){var p=Math.min(v/max,1)*100;return '<div class="meter" title="'+esc(label)+'"><div class="track"><div class="fill'+(v>max?" over":"")+'" style="width:'+p+'%"></div></div><span class="num"><b>'+v+"</b> / "+max+" "+unit+"</span></div>";}
+function decCard(d){
+ var g=GAPS[d.gap],open=d.status==="pending";
+ var h='<article class="dec'+(open?"":" closed")+'"><div class="hd"><h3>'+esc(d.subject)+"</h3>"+'<span class="tag">'+KIND[d.kind]+"</span>"+(open?pill("Waiting on Dana","warn"):pill(d.result,d.status==="approved"?"good":""))+"</div><p>"+esc(d.note)+"</p>";
+ h+='<dl class="facts"><div><dt>Shift gap</dt><dd><a href="#gap-'+d.gap+'">'+esc(g.name)+"</a> · "+esc(win(g))+"</dd></div><div><dt>Prepared by</dt><dd>"+esc(d.by)+"</dd></div><div><dt>"+(d.kind==="exception"?"Related text offer":"Version under review")+"</dt><dd>"+esc(d.version)+"</dd></div>";
+ if(d.cand){var c=S.cands.filter(function(k){return k.id===d.cand;})[0];h+="<div><dt>Projected hours</dt><dd>"+esc(HYG[c.h].name)+" · "+c.proj+" hr with this shift</dd></div>";}
+ h+="</dl>";
+ if(d.body)h+='<div class="msg"><div class="muted" style="font-size:12px;margin-bottom:4px">Draft to review · '+esc(d.version)+"</div>"+esc(d.body)+"</div>";
+ if(open)h+='<div class="acts"><button class="btn primary" data-dec="'+d.id+'" data-ans="yes">'+esc(d.yes.label)+'</button><button class="btn" data-dec="'+d.id+'" data-ans="no">'+esc(d.no.label)+"</button></div>";
+ else h+='<p class="muted" style="font-size:13px">Decided by Dana at 7:34 AM CST.</p>';
+ return h+"</article>";
+}
+function evRow(e){
+ var cls="ev"+(e.human?" human":"")+(e.status==="failed"?" failed":"")+(e.hold?" hold":"");
+ var g=e.gap?GAPS[e.gap]:null;
+ return '<div class="'+cls+'"><span class="t">'+ft(e.t)+'</span><span class="dot"></span><div><div class="a">'+esc(e.action)+'</div><div class="r">'+esc(e.reason)+'</div><div class="m"><b style="color:var(--ink)">'+esc(e.agent)+"</b>"+'<span class="tag">'+(e.human?"Person":"Agent")+"</span>"+'<span class="tag">'+e.tier+"</span>"+(e.risk!=="low"?'<span class="tag">'+e.risk+" risk</span>":"")+(e.status==="failed"?pill("Failed","crit"):"")+(e.hold?pill("Held for Dana","warn"):"")+(e.side?'<span class="tag">'+esc(e.side)+" (simulated)</span>":"")+(g?'<a href="#gap-'+e.gap+'">'+esc(g.name)+"</a>":"")+"</div></div></div>";
+}
+/* ---------- views ---------- */
+function vToday(){
+ var pa=pending("approval").length,pe=pending("exception").length;
+ var unc=GAP_ORDER.filter(function(i){return GAPS[i].status!=="filled";}).length,fil=3-unc;
+ var h='<div><h1>Good morning, Dana</h1><p class="lede">Check Mosswick’s agency outreach and keep an eye on Larkspur Hollow’s text replies.</p></div>';
+ h+='<div class="grid tiles">'+
+  '<a class="tile '+(pa?"warn":"")+'" href="#decisions"><div class="v">'+pa+'</div><div class="l">Approvals waiting</div><div class="h">Agency drafts and overtime</div></a>'+
+  '<a class="tile '+(pe?"warn":"")+'" href="#decisions"><div class="v">'+pe+'</div><div class="l">Exceptions flagged</div><div class="h">Availability check for Astrid</div></a>'+
+  '<a class="tile crit" href="#gaps"><div class="v">'+unc+'</div><div class="l">Gaps still uncovered</div><div class="h">Open, awaiting replies, or escalated</div></a>'+
+  '<a class="tile good" href="#gaps"><div class="v">'+fil+'</div><div class="l">Gaps filled</div><div class="h">Confirmed by text</div></a>'+
+  '<a class="tile" href="#gap-bramble"><div class="v">29<small>min</small></div><div class="l">Brambleglass fill time</div><div class="h">Target: 30 min</div></a>'+
+  '<a class="tile" href="#gap-moss"><div class="v">2<small>min</small></div><div class="l">Dana’s active time</div><div class="h">Target: under 10 min per gap</div></a></div>';
+ h+='<section class="card"><header><h2>This morning, gap by gap</h2><span class="sub">Select a gap’s events to open its full trace</span></header>'+timeline()+"</section>";
+ h+='<div class="grid two"><section class="card"><header><h2>Needs your decision</h2><span class="sub">'+(pa+pe)+' waiting</span><a class="more" href="#decisions">All decisions</a></header><div class="rows" style="gap:12px">'+(pending().length?pending().slice(0,2).map(decCard).join(""):'<p class="muted">Nothing is waiting on you.</p>')+"</div></section>";
+ h+='<section class="card"><header><h2>Offer funnel</h2><span class="sub">Hygienists per stage</span><a class="more" href="#gaps">All gaps</a></header><div class="rows" style="gap:16px">'+GAP_ORDER.map(function(id){var g=GAPS[id];return '<div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px"><a href="#gap-'+id+'" style="font-weight:600;color:var(--ink)">'+esc(g.name)+"</a>"+gpill(g)+"</div>"+funnel(id)+'<p class="muted" style="font-size:12.5px;margin-top:4px">'+esc(funnelNote(id))+"</p></div>";}).join("")+"</div></section></div>";
+ h+='<section class="card"><header><h2>Latest activity</h2><a class="more" href="#activity">Full log</a></header><div class="feed">'+events().slice(0,7).map(evRow).join("")+"</div></section>";
+ return h;
+}
+function vGaps(){
+ var h='<div><h1>Gap management</h1><p class="lede">Check which shifts still need coverage and how much time each gap has taken.</p></div>';
+ h+='<section class="card"><div class="scroll"><table><thead><tr><th>Shift gap</th><th>Coverage status</th><th>Latest update</th><th>Coverage time (target 30 min)</th><th>Dana’s active time (target 10 min)</th></tr></thead><tbody>'+GAP_ORDER.map(function(id){var g=GAPS[id];return '<tr class="link" data-go="gap-'+id+'"><td><a href="#gap-'+id+'" style="font-weight:600">'+esc(g.name)+'</a><div class="muted" style="font-size:12.5px">'+esc(win(g))+"</div></td><td>"+gpill(g)+"</td><td>"+esc(g.cov)+'</td><td style="min-width:190px">'+meter(g.elapsed,30,"min","Coverage time")+'</td><td style="min-width:170px">'+meter(g.dana,10,"min","Dana’s active time")+"</td></tr>";}).join("")+"</tbody></table></div></section>";
+ h+='<p class="note">Coverage time stops at the winning reply. The targets are 30 minutes to fill on nine mornings out of ten and under 10 minutes of Dana’s active time per gap.</p>';
+ h+=GAP_ORDER.map(function(id){var g=GAPS[id];return '<section class="card"><header><h2><a href="#gap-'+id+'" style="color:inherit;text-decoration:none">'+esc(g.name)+"</a></h2>"+gpill(g)+'<a class="more" href="#gap-'+id+'">Open trace</a></header>'+steps(id)+"</section>";}).join("");
+ return h;
+}
+function candChart(id){
+ var g=GAPS[id],MAX=48,c=S.cands.filter(function(k){return k.gap===id;});
+ var h='<div class="rows">'+c.map(function(k){var base=k.proj-g.hrs,over=k.proj>40,st=OSTAT[k.status];
+  return '<div class="brow"><div><span class="mono muted">#'+k.rank+"</span> <b>"+esc(HYG[k.h].name)+'</b><div class="muted" style="font-size:12px">'+k.commute+" min commute · wave "+k.wave+'</div></div><div class="track" data-tip="'+esc("<b>"+HYG[k.h].name+"</b>"+base+" hr before this shift + "+g.hrs+" hr shift = "+k.proj+" hr"+(over?"<br>Over 40 hr: overtime approval required":""))+'"><span class="seg base" style="left:0;width:'+(base/MAX*100)+'%"></span><span class="seg add'+(over?" over":"")+'" style="left:'+(base/MAX*100)+"%;width:"+(g.hrs/MAX*100)+'%"></span><span class="lim" style="left:'+(40/MAX*100)+'%"></span></div><div><span class="num"><b>'+k.proj+" hr</b></span> "+pill(st[0],st[1])+(k.release?'<div class="muted" style="font-size:12px">'+esc(k.release)+"</div>":"")+"</div></div>";}).join("")+"</div>";
+ h+='<div class="legend"><span><i style="width:14px;height:10px;background:var(--s1);border-radius:2px"></i>hours before this shift</span><span><i style="width:14px;height:10px;background:var(--s1-light);border-radius:2px"></i>this shift ('+g.hrs+' hr)</span><span><i style="width:14px;height:10px;outline:1px solid var(--crit);background:repeating-linear-gradient(135deg,var(--crit) 0 3px,transparent 3px 6px)"></i>takes the week past 40 hr</span><span><i style="width:2px;height:14px;background:var(--ink)"></i>40 hr</span></div>';
+ return h;
+}
+function vGap(id){
+ var g=GAPS[id];
+ var h='<div><a class="back" href="#gaps">← All gaps</a><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px"><h1>'+esc(g.name)+"</h1>"+gpill(g)+'</div><p class="lede">'+esc(win(g))+" on Nov 25, 2026 · "+esc(g.cov)+"</p></div>";
+ h+='<section class="card"><dl class="facts"><div><dt>Call-out received</dt><dd>'+ft(g.recv)+" CST by "+esc(g.src.replace("call-out ",""))+"</dd></div><div><dt>Intake reference</dt><dd class=\"mono\">"+g.intake+'</dd></div><div><dt>Call-out reason</dt><dd>Removed on intake · never stored or shared</dd></div><div><dt>Coverage time</dt><dd>'+meter(g.elapsed,30,"min","Coverage time")+"</dd></div><div><dt>Dana’s active time</dt><dd>"+meter(g.dana,10,"min","Dana’s active time")+"</dd></div></dl></section>";
+ h+='<section class="card"><header><h2>Path so far</h2><span class="sub">Minutes between steps</span></header>'+steps(id)+"</section>";
+ var mine=S.decs.filter(function(d){return d.gap===id;});
+ if(mine.length)h+='<section class="card"><header><h2>Decisions on this gap</h2></header><div class="rows" style="gap:12px">'+mine.map(decCard).join("")+"</div></section>";
+ h+='<div class="grid two"><section class="card"><header><h2>Ranked candidates</h2><span class="sub">Weekly hours if they take this shift</span></header>'+candChart(id)+(id==="lark"?'<p class="note" style="margin-top:12px">Fairness: Rosalie accepted coverage more often in the preceding four weeks (Oct 28 to Nov 25), so Ianto and Sela moved ahead of her. All three received the same first wave. Tessa Wrenlow was excluded before dispatch because her approved leave covers the full shift.</p>':"")+"</section>";
+ h+='<section class="card"><header><h2>Offer funnel</h2></header>'+funnel(id)+'<p class="muted" style="font-size:13px;margin:6px 0 14px">'+esc(funnelNote(id))+'</p><h3 style="margin-bottom:8px">Messages sent</h3><div class="rows">'+MSGS[id].map(function(m){return '<div><div style="font-size:13px"><span class="mono muted">'+m[0]+"</span> · <b>"+esc(m[2])+'</b> <span class="tag">'+m[1]+'</span></div><div class="msg" style="margin-top:4px;font-size:13px">'+esc(m[3])+"</div></div>";}).join("")+"</div></section></div>";
+ var evs=events().filter(function(e){return e.gap===id;});
+ h+='<section class="card"><header><h2>Decision trace</h2><span class="sub">'+evs.length+" entries, newest first</span></header><div class=\"feed\">"+evs.map(evRow).join("")+"</div></section>";
+ return h;
+}
+function vDecisions(){
+ var f=S.decFilter,list=S.decs.filter(function(d){return f==="all"||d.kind===f;});
+ var h='<div><h1>Decisions</h1><p class="lede">Review overtime, agency drafts and availability flags before the agents can release them. Approval makes a reviewed draft ready to send. The gap stays uncovered until someone accepts.</p></div>';
+ h+='<div class="chips" role="group" aria-label="Filter decisions">'+[["all","All"],["agency","Agency messages"],["overtime","Overtime"],["exception","Exceptions"]].map(function(c){var n=S.decs.filter(function(d){return (c[0]==="all"||d.kind===c[0])&&d.status==="pending";}).length;return '<button class="chip" aria-pressed="'+(f===c[0])+'" data-decf="'+c[0]+'">'+c[1]+" · "+n+" waiting</button>";}).join("")+"</div>";
+ h+='<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,430px),1fr))">'+list.map(decCard).join("")+"</div>";
+ return h;
+}
+function vHyg(){
+ var MAX=48;
+ var h='<div><h1>Hygienists</h1><p class="lede">See approved leave, current hours, and office eligibility. Hours are for the week of Nov 23, 2026.</p></div>';
+ h+='<section class="card"><header><h2>Hours already worked this week</h2><span class="sub">Line marks 40 hr</span></header><div class="rows">'+HYG_ORDER.map(function(id){var p=HYG[id],offers=S.cands.filter(function(k){return k.h===id;});
+  return '<div class="brow"><div><b>'+esc(p.name)+"</b><div>"+(p.avail==="leave"?pill("On approved leave","warn"):pill("Available for offers","good"))+'</div></div><div class="track" data-tip="'+esc("<b>"+p.name+"</b>"+p.hrs+" hr worked, week of Nov 23")+'"><span class="seg base" style="left:0;width:'+(p.hrs/MAX*100)+'%;border-radius:4px"></span><span class="lim" style="left:'+(40/MAX*100)+'%"></span></div><div class="num"><b>'+p.hrs+' hr</b><div class="muted" style="font-size:12px">'+(offers.length?offers.map(function(k){return GAPS[k.gap].name.split(" ")[0]+": "+OSTAT[k.status][0].toLowerCase();}).join(" · "):id==="tess"?"Leave Nov 25, 12:00 AM to Nov 26, 12:00 AM":"No offers today")+"</div></div></div>";}).join("")+"</div></section>";
+ h+='<section class="card"><header><h2>Office eligibility</h2><span class="sub">Estimated commute in minutes · all licenses valid through Jun 30, 2027</span></header><div class="scroll"><table><thead><tr><th>Hygienist</th>'+["bramble","moss","lark"].map(function(o){return "<th>"+esc(GAPS[o].name)+"</th>";}).join("")+"</tr></thead><tbody>"+HYG_ORDER.map(function(id){var m={};ELIG[id].forEach(function(e){m[e[0]]=e[1];});return "<tr><td><b>"+esc(HYG[id].name)+"</b></td>"+["bramble","moss","lark"].map(function(o){return '<td class="num">'+(m[o]!=null?m[o]+" min"+(id==="astrid"?'<div class="muted" style="font-size:12px">'+esc((S.cands.filter(function(k){return k.id==="larkastrid";})[0].check||"").replace("Provisional · ","")||"")+"</div>":""):'<span class="muted">–</span>')+"</td>";}).join("")+"</tr>";}).join("")+"</tbody></table></div></section>";
+ return h;
+}
+function vActivity(){
+ var all=events(),list=all.filter(function(e){return (S.actGap==="all"||e.gap===S.actGap)&&(S.actWho==="all"||(S.actWho==="human"?e.human:S.actWho==="hold"?e.hold:!e.human));});
+ var h='<div><h1>Activity log</h1><p class="lede">Follow the decisions behind each shift. Open a linked gap to see its texts, replies, and updates.</p></div>';
+ h+='<div class="chips" role="group" aria-label="Filter by gap">'+[["all","All gaps"]].concat(GAP_ORDER.map(function(i){return [i,GAPS[i].name];})).map(function(c){return '<button class="chip" aria-pressed="'+(S.actGap===c[0])+'" data-actg="'+c[0]+'">'+esc(c[1])+"</button>";}).join("")+'<span style="width:10px"></span>'+[["all","Everyone"],["agent","Agents"],["human","Dana"],["hold","Held for Dana"]].map(function(c){return '<button class="chip" aria-pressed="'+(S.actWho===c[0])+'" data-actw="'+c[0]+'">'+c[1]+"</button>";}).join("")+"</div>";
+ h+='<section class="card"><header><span class="sub">'+list.length+" of "+all.length+" entries, newest first</span></header><div class=\"feed\">"+(list.map(evRow).join("")||'<p class="muted">No entries match these filters.</p>')+"</div></section>";
+ return h;
+}
+function vWho(){
+ var all=events(),agents={},tiers={A0:0,A1:0,A2:0,A3:0},reqs={},sides={};
+ all.forEach(function(e){tiers[e.tier]++;(e.reqs||[]).forEach(function(r){reqs[r]=(reqs[r]||0)+1;});if(e.side)sides[e.side.replace(/ (page|alert to Dana|front desk notice)$/,"")]=1;if(e.human)return;var a=agents[e.aid]||(agents[e.aid]={id:e.aid,name:e.agent,n:0,hold:0,tiers:{},gaps:{},last:e.action,fail:0});a.n++;if(e.hold)a.hold++;if(e.status==="failed")a.fail++;a.tiers[e.tier]=1;if(e.gap)a.gaps[e.gap]=1;});
+ var list=Object.keys(agents).sort().map(function(k){return agents[k];});
+ var nh=all.filter(function(e){return e.human;}).length,tc={A0:"var(--t0)",A1:"var(--t1)",A2:"var(--t2)",A3:"var(--t3)"};
+ var h='<div><h1>Who does what</h1><p class="lede">See which tasks the agents handle and where a person decides. Built from the '+all.length+" entries in the activity log.</p></div>";
+ h+='<div class="grid tiles"><div class="tile"><div class="v">'+list.length+'</div><div class="l">Agents active</div><div class="h">'+(all.length-nh)+' logged actions</div></div><div class="tile"><div class="v">'+nh+'</div><div class="l">Actions by Dana</div><div class="h">2 min of active time before 7:34</div></div><div class="tile warn"><div class="v">'+pending().length+'</div><div class="l">Held for a person</div><div class="h">Agents cannot release these</div></div><div class="tile crit"><div class="v">1</div><div class="l">Failed delivery</div><div class="h">Slack notice, delivered on retry</div></div></div>';
+ h+='<section class="card"><header><h2>Actions by autonomy tier</h2><span class="sub">Tier labels as recorded on each log entry</span></header><div class="stack" role="img" aria-label="Actions by autonomy tier">'+["A0","A1","A2","A3"].map(function(t){return tiers[t]?'<span style="flex:'+tiers[t]+";background:"+tc[t]+(t==="A0"?";color:#0e2540":"")+'" data-tip="<b>'+t+"</b>"+tiers[t]+' actions">'+tiers[t]+"</span>":"";}).join("")+'</div><div class="legend">'+["A0","A1","A2","A3"].map(function(t){return '<span><i style="width:12px;height:12px;border-radius:3px;background:'+tc[t]+'"></i>'+t+" · "+tiers[t]+(t==="A0"?" (Dana)":t==="A2"?" (each held for approval)":"")+"</span>";}).join("")+"</div></section>";
+ h+='<div class="grid two"><section class="card"><header><h2>Done by agents</h2></header><div class="scroll"><table><thead><tr><th>Agent</th><th>Actions</th><th>Tier</th><th>Gaps</th><th>Most recent</th></tr></thead><tbody>'+list.map(function(a){return "<tr><td><b>"+esc(a.name)+'</b><div class="mono muted">'+a.id+'</div></td><td class="num">'+a.n+(a.hold?"<div>"+pill(a.hold+" held","warn")+"</div>":"")+(a.fail?"<div>"+pill(a.fail+" failed","crit")+"</div>":"")+"</td><td>"+Object.keys(a.tiers).sort().join(", ")+"</td><td>"+(Object.keys(a.gaps).map(function(g){return GAPS[g].name.split(" ")[0];}).join(", ")||"–")+'</td><td style="min-width:220px">'+esc(a.last)+"</td></tr>";}).join("")+"</tbody></table></div></section>";
+ h+='<section class="card"><header><h2>Decided by people</h2></header><div class="rows">'+S.decs.map(function(d){return '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><a href="#decisions" style="font-weight:500;margin-right:auto">'+esc(d.subject)+"</a>"+(d.status==="pending"?pill("Waiting on Dana","warn"):pill(d.result,d.status==="approved"?"good":""))+"</div>";}).join("")+'</div><h3 style="margin:18px 0 8px">Connections used</h3><div class="chips">'+Object.keys(sides).concat(["Agency email (drafts only)"]).map(function(s){return '<span class="tag" style="font-size:12.5px;padding:2px 8px">'+esc(s)+" · simulated</span>";}).join("")+'</div><h3 style="margin:18px 0 8px">Requirements cited in the log</h3><div class="chips">'+Object.keys(reqs).map(Number).sort(function(a,b){return a-b;}).map(function(r){return '<span class="tag num" style="font-size:12px;padding:2px 7px">REQ-'+("00"+r).slice(-3)+" × "+reqs[r]+"</span>";}).join("")+'</div><h3 style="margin:18px 0 8px">About this demo</h3><p class="muted" style="font-size:13px">Every person, time and number on these screens is made up. Project ShiftFill · plan version 1 · ee3ebe18fdb2 · sample seed 3997089304 · built 2026-11-25.</p></section></div>';
+ return h;
+}
+/* ---------- shell ---------- */
+var TABS=[["today","Today"],["gaps","Gaps"],["decisions","Decisions"],["hygienists","Hygienists"],["activity","Activity log"],["who-does-what","Who does what"]];
+function route(){var h=(location.hash||"#today").slice(1);if(h.indexOf("gap-")===0&&GAPS[h.slice(4)])return {tab:"gaps",gap:h.slice(4)};for(var i=0;i<TABS.length;i++)if(TABS[i][0]===h)return {tab:h};return {tab:"today"};}
+function render(keep){
+ var r=route(),n=pending().length;
+ document.getElementById("tabs").innerHTML=TABS.map(function(t){return '<a href="#'+t[0]+'"'+(r.tab===t[0]?' aria-current="page"':"")+">"+t[1]+(t[0]==="decisions"&&n?'<span class="badge">'+n+"</span>":"")+"</a>";}).join("");
+ var v=r.gap?vGap(r.gap):{today:vToday,gaps:vGaps,decisions:vDecisions,hygienists:vHyg,activity:vActivity,"who-does-what":vWho}[r.tab]();
+ document.getElementById("app").innerHTML=v;
+ if(!keep)window.scrollTo(0,0);
+}
+var toastT;
+function toast(msg){var t=document.getElementById("toast");t.textContent=msg;t.style.display="block";clearTimeout(toastT);toastT=setTimeout(function(){t.style.display="none";},4200);}
+function decide(id,ans){
+ var d=S.decs.filter(function(x){return x.id===id;})[0];if(!d||d.status!=="pending")return;
+ var a=d[ans];d.status=ans==="yes"?"approved":"declined";d.result=a.result;
+ if(d.cand){var c=S.cands.filter(function(k){return k.id===d.cand;})[0];if(a.release)c.release=a.release;if(a.cancel)c.status="canceled";if(a.check)c.check=a.check;}
+ S.extra.unshift({id:"dana-"+id,t:NOW,gap:d.gap,agent:"Dana",aid:"dana",tier:"A0",risk:"low",status:"succeeded",hold:false,action:a.log,reason:"Decision recorded in this demo session.",side:"",reqs:[],human:true});
+ EV.forEach(function(e){if((id==="fable"&&e.id==="mossfable")||(id==="juniper"&&e.id==="mossjuniper")||(id==="overtimedev"&&e.id==="larkovertime")||(id==="larkflag"&&e.id==="larkexception"))e._held=e.hold,e.hold=false;});
+ render(true);toast(a.toast);
+}
+document.addEventListener("click",function(ev){
+ var t=ev.target.closest("[data-dec],[data-decf],[data-actg],[data-actw],[data-go],#reset");if(!t)return;
+ if(t.id==="reset"){EV.forEach(function(e){if(e._held){e.hold=true;delete e._held;}});reset();render(true);toast("Demo reset to 7:34 AM.");return;}
+ if(t.dataset.dec)return decide(t.dataset.dec,t.dataset.ans);
+ if(t.dataset.decf){S.decFilter=t.dataset.decf;return render(true);}
+ if(t.dataset.actg){S.actGap=t.dataset.actg;return render(true);}
+ if(t.dataset.actw){S.actWho=t.dataset.actw;return render(true);}
+ if(t.dataset.go&&!ev.target.closest("a"))location.hash=t.dataset.go;
+});
+document.addEventListener("keydown",function(ev){if(ev.key==="Enter"&&ev.target.dataset&&ev.target.dataset.go)location.hash=ev.target.dataset.go;});
+var tip=document.getElementById("tip");
+function showTip(el,xx,yy){tip.innerHTML=el.getAttribute("data-tip");tip.style.display="block";var w=tip.offsetWidth,hh=tip.offsetHeight;tip.style.left=Math.max(8,Math.min(xx+14,window.innerWidth-w-8))+"px";tip.style.top=(yy+hh+24>window.innerHeight?yy-hh-12:yy+16)+"px";}
+document.addEventListener("mousemove",function(ev){var el=ev.target.closest&&ev.target.closest("[data-tip]");if(el)showTip(el,ev.clientX,ev.clientY);else tip.style.display="none";});
+document.addEventListener("focusin",function(ev){var el=ev.target.closest&&ev.target.closest("[data-tip]");if(el){var b=el.getBoundingClientRect();showTip(el,b.left,b.bottom);}});
+document.addEventListener("focusout",function(){tip.style.display="none";});
+window.addEventListener("hashchange",function(){render();});
+render();
+})();
+</script>
+</body>
+</html>
