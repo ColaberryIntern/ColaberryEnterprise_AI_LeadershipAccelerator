@@ -29,6 +29,7 @@ export const WEEKLY_LIVE_TABLES = [
   'weekly_live_spend',
   'weekly_live_plan_runs',
   'weekly_live_blueprints',
+  'weekly_live_briefs',
 ] as const;
 
 export const PLAN_STATUSES = ['draft', 'researching', 'ready', 'chosen', 'failed'] as const;
@@ -171,6 +172,27 @@ export const WEEKLY_LIVE_DDL: readonly string[] = [
      heartbeat_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
      created_at TIMESTAMPTZ DEFAULT NOW(),
      UNIQUE (plan_id, topic_id)
+   )`,
+  // WL4.4: Jackie's event brief, one per plan. The copy is written in the background (claimed like the
+  // blueprint); approving sends one Basecamp to-do, claimed by send_attempt and recorded by its id.
+  `CREATE TABLE IF NOT EXISTS weekly_live_briefs (
+     plan_id UUID PRIMARY KEY REFERENCES weekly_live_plans(id) ON DELETE CASCADE,
+     topic_id UUID NOT NULL,
+     status VARCHAR(16) NOT NULL DEFAULT 'writing' CHECK (status IN ('writing', 'ready', 'failed')),
+     copy JSONB,
+     problems JSONB NOT NULL DEFAULT '[]'::jsonb,
+     error VARCHAR(400),
+     attempts INTEGER NOT NULL DEFAULT 0,
+     written_on DATE,
+     heartbeat_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     approved_at TIMESTAMPTZ,
+     approved_by VARCHAR(254),
+     send_attempt INTEGER NOT NULL DEFAULT 0,
+     sending_at TIMESTAMPTZ,
+     send_error VARCHAR(400),
+     bc_todo_id BIGINT,
+     bc_todo_url VARCHAR(400),
+     created_at TIMESTAMPTZ DEFAULT NOW()
    )`,
 ];
 
