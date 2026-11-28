@@ -222,6 +222,7 @@ import { ensureMarketingAttributionSchema } from './db/ensureMarketingAttributio
 import { ensureBrandGovernanceSchema } from './db/ensureBrandGovernanceSchema';
 import { ensureChannelAccountSchema } from './db/ensureChannelAccountSchema';
 import { ensureCommsHubSchema } from './db/ensureCommsHubSchema';
+import { startAdmissionsOps } from './boot/admissionsOpsBoot';
 import { ensureLandingPageSchema } from './db/ensureLandingPageSchema';
 import { ensureOpenHouseRegistrationSchema } from './db/ensureOpenHouseRegistrationSchema';
 import { ensureOpenHouseReminderSchema } from './db/ensureOpenHouseReminderSchema';
@@ -2892,6 +2893,7 @@ async function start(): Promise<void> {
   await ensureChannelAccountSchema();
   // Communications Hub (CH2.1): after community_events exists, because it adds hub_event_id to it.
   await ensureCommsHubSchema();
+  await startAdmissionsOps(); // Admissions & Ops: its tables (additive, idempotent), all in boot/admissionsOpsBoot.ts
   await ensureLandingPageSchema();
   // AFTER landing_pages exists: this adds content_items.landing_page_id and its foreign key, so
   // the composer can persist the page an operator picked. The column is also in the content_items

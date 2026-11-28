@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Setup</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0;font-family:Roboto,system-ui,sans-serif;font-size:14px;line-height:1.45;color:#2B2B2B;background:#F8F8F7}
+a{color:#2E6A86;text-decoration:none}a:hover{color:#1A3947;text-decoration:underline}
+button{font-family:inherit;cursor:pointer}
+h2{margin:0;font-size:17px;font-weight:700;color:#1A1A1A}
+.rail a{color:#D8D8D8;display:block;padding:9px 16px;border-radius:6px;font-weight:500}
+.rail a:hover{color:#FFFFFF;background:#2B2B2B;text-decoration:none}
+.hub a{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 9px;border-radius:6px;font-weight:500;color:#2B2B2B;box-sizing:border-box}
+.hub a:hover{background:#F1F1F0;text-decoration:none;color:#1A1A1A}
+.btn{display:inline-block;padding:10px 14px;border-radius:6px;font-weight:500;font-size:14px;min-height:44px;box-sizing:border-box;line-height:22px}
+a.btn:hover{text-decoration:none}
+.dock a{color:#FFFFFF;display:inline-flex;align-items:center;min-height:44px;padding:0 12px;border:1px solid #8C8C8C;border-radius:999px;font-size:13px;font-weight:500;box-sizing:border-box}
+.dock a:hover{background:#2B2B2B;color:#FFFFFF;text-decoration:none}
+.card{background:#FFFFFF;border:1px solid #E4E4E3;border-radius:10px;box-sizing:border-box}
+.src{font-size:12px;color:#6B6B6B}
+.tag{display:inline-block;font-size:12px;font-weight:700;border-radius:4px;padding:2px 8px;white-space:nowrap}
+.scroll{overflow-x:auto}
+.t{width:100%;border-collapse:collapse;min-width:760px}
+.t th{text-align:left;font-size:12px;color:#6B6B6B;font-weight:700;letter-spacing:.04em;padding:10px 16px;border-top:1px solid #E4E4E3;border-bottom:1px solid #E4E4E3;white-space:nowrap;background:#F8F8F7}
+.t td{padding:12px 16px;border-bottom:1px solid #F1F1F0;vertical-align:top}
+.t a{font-weight:500}
+</style>
+</helmet>
+<div id="top" style="display: flex; flex-wrap: wrap; min-height: 100vh; align-items: stretch">
+<nav class="rail" aria-label="Admin" style="flex: 1 1 224px; max-width: 100%; background: #1A1A1A; padding: 18px 10px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px"><div style="color: #FFFFFF; font-weight: 700; font-size: 16px; padding: 4px 16px 16px">Colaberry Admin</div><a href="index.html">Dashboard</a><a href="index.html">War Room</a><a href="index.html">Trust Center</a><a href="index.html" aria-current="page" style="background: #7A1016; color: #FFFFFF">Admissions &amp; Ops</a><a href="index.html">Portfolio Review</a><div style="color: #B4B4B4; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; padding: 18px 16px 6px">REVENUE</div><a href="index.html">Revenue</a><a href="index.html">Revenue Room</a><a href="index.html">Enterprise Clients</a><a href="index.html">Business Accounts</a><div style="color: #B4B4B4; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; padding: 18px 16px 6px">MARKETING</div><a href="index.html">Marketing</a><div style="color: #B4B4B4; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; padding: 18px 16px 6px">PROGRAM</div><a href="index.html">Accelerator</a><a href="index.html">Agents</a></nav>
+<main style="flex: 999 1 560px; min-width: 0; padding: 20px 28px 40px; box-sizing: border-box; display: flex; flex-direction: column; gap: 18px">
+<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center"><div style="color: #6B6B6B; flex: 0 0 auto">Admin / <a href="index.html">Admissions &amp; Ops</a> / Setup</div><div style="flex: 1 1 360px; min-width: 0; display: flex; align-items: center; gap: 8px; background: #FFFFFF; border: 1px solid #B4B4B4; border-radius: 8px; padding: 0 12px"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6B6B6B" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg><label for="find" style="position: absolute; left: -9999px">Find a student</label><input id="find" type="search" placeholder="Find anyone: name, email, phone, student ID, GHL contact or TFC contract" style="flex: 1; min-width: 0; border: 0; outline: 0; height: 44px; font: inherit; background: transparent"></div><a href="Students.html" style="font-weight: 500; padding: 12px 0">All students</a><span style="font-size: 12px; font-weight: 500; color: #4A4A4A; background: #E4E4E3; border-radius: 999px; padding: 4px 10px">Sample data</span></div>
+<nav class="hub card" aria-label="Admissions and Ops sections" style="display: flex; flex-wrap: wrap; gap: 4px 8px; justify-content: space-between; padding: 6px">
+<div style="display: flex; flex-wrap: wrap; gap: 2px"><a href="index.html">Today</a><a href="Admissions.html">Admissions</a><a href="Students.html">Students</a><a href="Academics.html">Academics</a><a href="Payments.html">Payments</a><a href="Support.html">Support</a><a href="Communications.html">Communications</a><a href="Compliance.html">Compliance</a><a href="Reports.html">Reports</a></div>
+<div style="display: flex; flex-wrap: wrap; gap: 2px"><a href="Agent.html">Ask AURA</a><a href="Approvals.html">Approvals <span style="font-size: 11px; font-weight: 700; background: #C20E1E; color: #FFFFFF; border-radius: 999px; padding: 1px 7px">10</span></a><a href="Knowledge.html">Knowledge</a><a href="Setup.html" aria-current="page" style="background: #1A3947; color: #FFFFFF">Setup</a></div></nav>
+<section class="dock" aria-label="AURA, the built-in agent" style="background: #1A1A1A; color: #FFFFFF; border-radius: 10px; padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center">
+<div style="display: flex; align-items: center; gap: 8px"><span aria-hidden="true" style="width: 10px; height: 10px; border-radius: 999px; background: #8AC759"></span><span style="font-weight: 700; letter-spacing: 0.04em">AURA</span><span style="font-size: 12px; color: #D8D8D8">Guide mode · sees this screen</span></div><label for="aura" style="position: absolute; left: -9999px">Tell AURA what to do</label><input id="aura" type="text" placeholder="Tell AURA what to do or where to take you" style="flex: 1 1 260px; min-width: 0; height: 44px; border: 1px solid #8C8C8C; border-radius: 6px; padding: 0 12px; font: inherit; background: #2B2B2B; color: #FFFFFF; box-sizing: border-box">
+<div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center"><a href="Agent.html">Test every connection</a><a href="index.html">Show what fired today</a><a href="Agent.html">Review what I may do</a><a href="Agent.html" style="border-color: #1A1A1A; text-decoration: underline">Open AURA</a></div></section>
+<div style="display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: flex-end; justify-content: space-between"><div style="min-width: 0"><h1 style="margin: 0; font-size: 28px; font-weight: 700; color: #1A1A1A; letter-spacing: -0.01em">Setup</h1><div style="color: #4A4A4A; margin-top: 2px; max-width: 60em">What is connected, which system owns each fact, when alerts fire and who may do what. Thresholds here are starting points to adjust.</div></div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px"><a class="btn" href="#top" style="background: #FFFFFF; color: #1A1A1A; border: 1px solid #8C8C8C">Add a connection</a><a class="btn" href="#top" style="background: #FFFFFF; color: #1A1A1A; border: 1px solid #8C8C8C">Download audit log</a></div></div>
+<section class="card" style="min-width: 0">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: baseline; padding: 16px 20px 12px"><div><h2>Connected systems</h2><div class="src" style="margin-top: 2px">Each system stays the record for its own data. Enterprise reads from them and never overwrites silently. Connection methods still need technical validation.</div></div></div><div class="scroll">
+<table class="t" style="min-width: 1100px">
+<thead>
+<tr><th scope="col">System</th><th scope="col">Source of truth for</th><th scope="col">How it connects</th><th scope="col">AURA can read</th><th scope="col">AURA can change, with approval</th><th scope="col">Last sync</th></tr></thead>
+<tbody>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">GHL</span></td><td>Lead and opportunity status</td><td>API</td><td>Contacts, pipeline, tags, campaigns, messages, tasks</td><td>Statuses, notes, follow-up tasks</td><td><span class="tag" style="background: #DEF0CC; color: #2A521E">4 min ago</span></td></tr>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">app.colaberry</span></td><td>Academic progress</td><td>Shared database</td><td>Registrations, cohorts, modules, attendance, certificates</td><td>Approvals, cohort assignment, re-enrollment</td><td><span class="tag" style="background: #DEF0CC; color: #2A521E">2 min ago</span></td></tr>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">PaySimple</span></td><td>Transactions</td><td>API</td><td>Payments, schedules, failures, receipts, refunds</td><td>Nothing without a person. No card data is ever shown</td><td><span class="tag" style="background: #DEF0CC; color: #2A521E">9 min ago</span></td></tr>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">TFC portal</span></td><td>Contract status</td><td>Daily export</td><td>Contracts, schedules, balances, statuses</td><td>Nothing. Read only</td><td><span class="tag" style="background: #FCF1DD; color: #5C3A00">6:00 AM CT</span></td></tr>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">Zendesk</span></td><td>Support tickets</td><td>API</td><td>Tickets, history, agents, response times</td><td>Create tickets, draft replies, assign</td><td><span class="tag" style="background: #DEF0CC; color: #2A521E">4 min ago</span></td></tr>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">Gmail</span></td><td>Email</td><td>Company-managed connector</td><td>Threads, attachments, unanswered mail</td><td>Drafts only. You send</td><td><span class="tag" style="background: #DEF0CC; color: #2A521E">Live</span></td></tr>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">Retool</span></td><td>Internal administration</td><td>Shared database</td><td>Student records, internal tools, placement</td><td>Approved notes</td><td><span class="tag" style="background: #DEF0CC; color: #2A521E">2 min ago</span></td></tr>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">Google Sheets</span></td><td>Supplementary tracking</td><td>API</td><td>Trackers, registers, audit records</td><td>Approved updates and report output</td><td><span class="tag" style="background: #DEF0CC; color: #2A521E">15 min ago</span></td></tr></tbody></table></div></section>
+<section class="card" style="min-width: 0">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: baseline; padding: 16px 20px 12px"><div><h2>What the agent can control</h2><div class="src" style="margin-top: 2px">Every screen publishes its actions, so the agent navigates and works through the same doors a person does. Every call lands in the audit log.</div></div><div><a href="Agent.html" style="font-weight: 500">Set the agent mode</a></div></div><div class="scroll">
+<table class="t" style="min-width: 900px">
+<thead>
+<tr><th scope="col">Screen</th><th scope="col">AURA can go there</th><th scope="col">Actions it can call</th><th scope="col">Stops for a person at</th></tr></thead>
+<tbody>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">Today</span></td><td>Yes</td><td>Read the queue, filter by section, open any item</td><td>Nothing to approve here</td></tr>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">Students and Student 360</span></td><td>Yes</td><td>Search, filter, open a profile, summarize, add a note, draft a message</td><td>Sending anything</td></tr>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">Admissions</span></td><td>Yes</td><td>List follow-ups, draft outreach, create tasks</td><td>Bulk sends, enrollment decisions</td></tr>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">Academics</span></td><td>Yes</td><td>List at-risk students, draft check-ins</td><td>Bulk sends, suspensions</td></tr>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">Payments and TFC audit</span></td><td>Yes</td><td>Run reconciliation, classify accounts, export</td><td>Refunds, recalls, adjustments, forgiveness</td></tr>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">Support</span></td><td>Yes</td><td>Find tickets, check records, draft replies, route</td><td>Sending replies, escalations</td></tr>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">Communications</span></td><td>Yes</td><td>Search threads, summarize, draft, schedule</td><td>Every send</td></tr>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">Compliance</span></td><td>Yes</td><td>Find requests, build letters from records</td><td>Every letter and agency reply</td></tr>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">Reports</span></td><td>Yes</td><td>Build, compare, schedule</td><td>Distribution to leadership</td></tr>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">Approvals</span></td><td>Yes, read only</td><td>List and explain items</td><td>Everything. Only a person approves</td></tr>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">Setup</span></td><td>Yes, read only</td><td>Report connection health</td><td>Any change to permissions or thresholds</td></tr></tbody></table></div></section>
+<div style="display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start"><div style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 18px">
+<section class="card" style="min-width: 0">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: baseline; padding: 16px 20px 12px"><div><h2>Alerts</h2><div class="src" style="margin-top: 2px">Every threshold is editable</div></div></div><div class="scroll">
+<table class="t" style="min-width: 700px">
+<thead>
+<tr><th scope="col">Alert</th><th scope="col">Fires when</th><th scope="col">Shows up in</th></tr></thead>
+<tbody>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">Paid but not activated</span></td><td>Payment cleared and no access after 24 hours</td><td><a href="Admissions.html">Admissions</a></td></tr>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">Registered but unpaid</span></td><td>No plan chosen 3 days after registering</td><td><a href="Admissions.html">Admissions</a></td></tr>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">Recurring payment failure</span></td><td>Any failed attempt</td><td><a href="Payments.html">Payments</a></td></tr>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">Student inactivity</span></td><td>No module activity for 7 days</td><td><a href="Academics.html">Academics</a></td></tr>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">Cancelled contract, active student</span></td><td>Contract and academic status disagree</td><td><a href="TFCAudit.html">TFC audit</a></td></tr>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">Formal dispute</span></td><td>Dispute or complaint language in any channel</td><td><a href="Approvals.html">Approvals</a></td></tr>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">Overdue support ticket</span></td><td>Open more than 3 days</td><td><a href="Support.html">Support</a></td></tr>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">Upcoming renewal</span></td><td>30 days before the anniversary</td><td><a href="Payments.html">Payments</a></td></tr>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">Unanswered important email</span></td><td>No reply after 48 hours</td><td><a href="Communications.html">Communications</a></td></tr>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">Workforce deadline</span></td><td>7 days before it is due</td><td><a href="Compliance.html">Compliance</a></td></tr>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">Target behind schedule</span></td><td>Pace falls below the daily requirement</td><td><a href="Reports.html">Reports</a></td></tr>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">CRM revenue mismatch</span></td><td>Won in GHL with no matching payment</td><td><a href="Payments.html">Payments</a></td></tr></tbody></table></div></section></div><div style="flex: 1 1 340px; min-width: 0; display: flex; flex-direction: column; gap: 18px">
+<section class="card" style="min-width: 0">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: baseline; padding: 16px 20px 12px"><div><h2>Roles</h2></div></div><div style="padding: 0 20px 18px">
+<div style="display: flex; flex-direction: column"><div style="padding: 10px 0; border-top: 1px solid #F1F1F0"><div style="font-weight: 500; color: #1A1A1A">Admissions and Academic Operations</div><div class="src">Taiwo · full workspace, approves drafts and routine actions</div></div><div style="padding: 10px 0; border-top: 1px solid #F1F1F0"><div style="font-weight: 500; color: #1A1A1A">Leadership</div><div class="src">Approves refunds, recalls, adjustments and forgiveness</div></div><div style="padding: 10px 0; border-top: 1px solid #F1F1F0"><div style="font-weight: 500; color: #1A1A1A">Support</div><div class="src">Tickets and student profiles, read only on payments</div></div><div style="padding: 10px 0; border-top: 1px solid #F1F1F0"><div style="font-weight: 500; color: #1A1A1A">Compliance documents</div><div class="src">Restricted to named staff</div></div></div><div class="src" style="margin-top: 6px">One Enterprise login. Access follows role, least privilege first.</div></div></section>
+<section class="card" style="min-width: 0">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: baseline; padding: 16px 20px 12px"><div><h2>Audit log</h2></div></div><div style="padding: 0 20px 18px">
+<div style="display: flex; flex-direction: column"><div style="padding: 10px 0; border-top: 1px solid #F1F1F0"><div style="font-weight: 500; color: #1A1A1A">7:06 AM CT · AURA prepared 10 items for approval</div><div class="src">No external change</div></div><div style="padding: 10px 0; border-top: 1px solid #F1F1F0"><div style="font-weight: 500; color: #1A1A1A">7:05 AM CT · AURA added notes to 3 TFC accounts</div><div class="src">Google Sheets · authorized routine action</div></div><div style="padding: 10px 0; border-top: 1px solid #F1F1F0"><div style="font-weight: 500; color: #1A1A1A">7:04 AM CT · AURA created 6 follow-up tasks</div><div class="src">GHL · authorized routine action</div></div><div style="padding: 10px 0; border-top: 1px solid #F1F1F0"><div style="font-weight: 500; color: #1A1A1A">Yesterday, 4:12 PM CT · Taiwo approved 1 email</div><div class="src">Gmail · sent to 1 student</div></div></div><div class="src" style="margin-top: 6px">Every action keeps the records it was based on.</div></div></section>
+<section class="card" style="min-width: 0">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: baseline; padding: 16px 20px 12px"><div><h2>Morning briefing</h2></div></div><div style="padding: 0 20px 18px">
+<div style="display: flex; flex-direction: column"><div style="padding: 10px 0; border-top: 1px solid #F1F1F0"><div style="font-weight: 500; color: #1A1A1A">Delivered</div><div class="src">Weekdays, 7:00 AM CT, here and by email</div></div><div style="padding: 10px 0; border-top: 1px solid #F1F1F0"><div style="font-weight: 500; color: #1A1A1A">Covers</div><div class="src">Leads, follow-ups, unpaid, inactive, tickets, email, audit, deadlines</div></div></div></div></section></div></div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":2673}}'>
+class Component extends DCLogic {
+renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

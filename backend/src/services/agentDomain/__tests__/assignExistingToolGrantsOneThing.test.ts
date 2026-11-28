@@ -32,7 +32,8 @@ const ROUTES = path.join(BACKEND_SRC, 'routes', 'admin', 'assignExistingToolRout
 const SCHEMA = path.join(BACKEND_SRC, 'schemas', 'assignExistingToolSchema.ts');
 const DECISION_ROUTES = path.join(BACKEND_SRC, 'routes', 'admin', 'toolRequestDecisionRoutes.ts');
 const ADMIN_ROUTES = path.join(BACKEND_SRC, 'routes', 'adminRoutes.ts');
-const SECTION_GATE = path.join(BACKEND_SRC, 'middlewares', 'mgmtSectionGate.ts');
+// The PATH_SECTION table moved out of mgmtSectionGate.ts into mgmtSectionPaths.ts (AO1.2, 2026-11-28).
+const SECTION_GATE = path.join(BACKEND_SRC, 'middlewares', 'mgmtSectionPaths.ts');
 
 const ALL_FILES = [CONTRACT, SERVICE, CONTROLLER, ROUTES, SCHEMA];
 

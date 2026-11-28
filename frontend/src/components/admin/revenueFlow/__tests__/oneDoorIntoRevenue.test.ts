@@ -57,7 +57,8 @@ describe('the Revenue Room renders the Flow dashboard', () => {
 });
 
 describe('there is exactly one revenue entry in the sidebar', () => {
-  const nav = read('components/Layout/adminNav.ts');
+  // Three groups moved to adminNavProgramGroups.ts (AO1.2); read both so the guard still covers every group.
+  const nav = read('components/Layout/adminNav.ts') + read('components/Layout/adminNavProgramGroups.ts');
 
   it('keeps the Revenue Room', () => {
     expect(nav).toContain("path: '/admin/revenue-room'");

@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Academics</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0;font-family:Roboto,system-ui,sans-serif;font-size:14px;line-height:1.45;color:#2B2B2B;background:#F8F8F7}
+a{color:#2E6A86;text-decoration:none}a:hover{color:#1A3947;text-decoration:underline}
+button{font-family:inherit;cursor:pointer}
+h2{margin:0;font-size:17px;font-weight:700;color:#1A1A1A}
+.rail a{color:#D8D8D8;display:block;padding:9px 16px;border-radius:6px;font-weight:500}
+.rail a:hover{color:#FFFFFF;background:#2B2B2B;text-decoration:none}
+.hub a{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 9px;border-radius:6px;font-weight:500;color:#2B2B2B;box-sizing:border-box}
+.hub a:hover{background:#F1F1F0;text-decoration:none;color:#1A1A1A}
+.btn{display:inline-block;padding:10px 14px;border-radius:6px;font-weight:500;font-size:14px;min-height:44px;box-sizing:border-box;line-height:22px}
+a.btn:hover{text-decoration:none}
+.dock a{color:#FFFFFF;display:inline-flex;align-items:center;min-height:44px;padding:0 12px;border:1px solid #8C8C8C;border-radius:999px;font-size:13px;font-weight:500;box-sizing:border-box}
+.dock a:hover{background:#2B2B2B;color:#FFFFFF;text-decoration:none}
+.card{background:#FFFFFF;border:1px solid #E4E4E3;border-radius:10px;box-sizing:border-box}
+.src{font-size:12px;color:#6B6B6B}
+.tag{display:inline-block;font-size:12px;font-weight:700;border-radius:4px;padding:2px 8px;white-space:nowrap}
+.scroll{overflow-x:auto}
+.t{width:100%;border-collapse:collapse;min-width:760px}
+.t th{text-align:left;font-size:12px;color:#6B6B6B;font-weight:700;letter-spacing:.04em;padding:10px 16px;border-top:1px solid #E4E4E3;border-bottom:1px solid #E4E4E3;white-space:nowrap;background:#F8F8F7}
+.t td{padding:12px 16px;border-bottom:1px solid #F1F1F0;vertical-align:top}
+.t a{font-weight:500}
+</style>
+</helmet>
+<div id="top" style="display: flex; flex-wrap: wrap; min-height: 100vh; align-items: stretch">
+<nav class="rail" aria-label="Admin" style="flex: 1 1 224px; max-width: 100%; background: #1A1A1A; padding: 18px 10px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px"><div style="color: #FFFFFF; font-weight: 700; font-size: 16px; padding: 4px 16px 16px">Colaberry Admin</div><a href="index.html">Dashboard</a><a href="index.html">War Room</a><a href="index.html">Trust Center</a><a href="index.html" aria-current="page" style="background: #7A1016; color: #FFFFFF">Admissions &amp; Ops</a><a href="index.html">Portfolio Review</a><div style="color: #B4B4B4; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; padding: 18px 16px 6px">REVENUE</div><a href="index.html">Revenue</a><a href="index.html">Revenue Room</a><a href="index.html">Enterprise Clients</a><a href="index.html">Business Accounts</a><div style="color: #B4B4B4; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; padding: 18px 16px 6px">MARKETING</div><a href="index.html">Marketing</a><div style="color: #B4B4B4; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; padding: 18px 16px 6px">PROGRAM</div><a href="index.html">Accelerator</a><a href="index.html">Agents</a></nav>
+<main style="flex: 999 1 560px; min-width: 0; padding: 20px 28px 40px; box-sizing: border-box; display: flex; flex-direction: column; gap: 18px">
+<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center"><div style="color: #6B6B6B; flex: 0 0 auto">Admin / <a href="index.html">Admissions &amp; Ops</a> / Academics</div><div style="flex: 1 1 360px; min-width: 0; display: flex; align-items: center; gap: 8px; background: #FFFFFF; border: 1px solid #B4B4B4; border-radius: 8px; padding: 0 12px"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6B6B6B" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg><label for="find" style="position: absolute; left: -9999px">Find a student</label><input id="find" type="search" placeholder="Find anyone: name, email, phone, student ID, GHL contact or TFC contract" style="flex: 1; min-width: 0; border: 0; outline: 0; height: 44px; font: inherit; background: transparent"></div><a href="Students.html" style="font-weight: 500; padding: 12px 0">All students</a><span style="font-size: 12px; font-weight: 500; color: #4A4A4A; background: #E4E4E3; border-radius: 999px; padding: 4px 10px">Sample data</span></div>
+<nav class="hub card" aria-label="Admissions and Ops sections" style="display: flex; flex-wrap: wrap; gap: 4px 8px; justify-content: space-between; padding: 6px">
+<div style="display: flex; flex-wrap: wrap; gap: 2px"><a href="index.html">Today</a><a href="Admissions.html">Admissions</a><a href="Students.html">Students</a><a href="Academics.html" aria-current="page" style="background: #1A3947; color: #FFFFFF">Academics</a><a href="Payments.html">Payments</a><a href="Support.html">Support</a><a href="Communications.html">Communications</a><a href="Compliance.html">Compliance</a><a href="Reports.html">Reports</a></div>
+<div style="display: flex; flex-wrap: wrap; gap: 2px"><a href="Agent.html">Ask AURA</a><a href="Approvals.html">Approvals <span style="font-size: 11px; font-weight: 700; background: #C20E1E; color: #FFFFFF; border-radius: 999px; padding: 1px 7px">10</span></a><a href="Knowledge.html">Knowledge</a><a href="Setup.html">Setup</a></div></nav>
+<section class="dock" aria-label="AURA, the built-in agent" style="background: #1A1A1A; color: #FFFFFF; border-radius: 10px; padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center">
+<div style="display: flex; align-items: center; gap: 8px"><span aria-hidden="true" style="width: 10px; height: 10px; border-radius: 999px; background: #8AC759"></span><span style="font-weight: 700; letter-spacing: 0.04em">AURA</span><span style="font-size: 12px; color: #D8D8D8">Guide mode · sees this screen</span></div><label for="aura" style="position: absolute; left: -9999px">Tell AURA what to do</label><input id="aura" type="text" placeholder="Tell AURA what to do or where to take you" style="flex: 1 1 260px; min-width: 0; height: 44px; border: 1px solid #8C8C8C; border-radius: 6px; padding: 0 12px; font: inherit; background: #2B2B2B; color: #FFFFFF; box-sizing: border-box">
+<div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center"><a href="Approvals.html">Draft check-ins for the 6 who have not started</a><a href="Student360.html">Open Priya Nair</a><a href="Communications.html">Announce to the November cohort</a><a href="Agent.html" style="border-color: #1A1A1A; text-decoration: underline">Open AURA</a></div></section>
+<div style="display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: flex-end; justify-content: space-between"><div style="min-width: 0"><h1 style="margin: 0; font-size: 28px; font-weight: 700; color: #1A1A1A; letter-spacing: -0.01em">Academics</h1><div style="color: #4A4A4A; margin-top: 2px; max-width: 60em">Cohorts, progress and the students who are slipping, across the AI Systems Architect Accelerator, legacy Data Analytics and IPBC.</div></div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px"><a class="btn" href="Reports.html" style="background: #FFFFFF; color: #1A1A1A; border: 1px solid #8C8C8C">Cohort report</a><a class="btn" href="Communications.html" style="background: #FFFFFF; color: #1A1A1A; border: 1px solid #8C8C8C">Draft a cohort announcement</a></div></div>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px"><div class="card" style="padding: 16px 18px"><div style="font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: #6B6B6B">ACTIVE COHORTS</div><div style="font-size: 26px; font-weight: 700; color: #1A1A1A; margin-top: 4px; line-height: 1.15">4</div><div style="margin-top: 4px">98 active students</div></div><div class="card" style="padding: 16px 18px"><div style="font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: #6B6B6B">NOT STARTED</div><div style="font-size: 26px; font-weight: 700; color: #1A1A1A; margin-top: 4px; line-height: 1.15">7</div><div style="margin-top: 4px">6 are in the November cohort</div></div><div class="card" style="padding: 16px 18px"><div style="font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: #6B6B6B">AT RISK</div><div style="font-size: 26px; font-weight: 700; color: #1A1A1A; margin-top: 4px; line-height: 1.15">14</div><div style="margin-top: 4px">Inactive, behind or disputed</div></div><div class="card" style="padding: 16px 18px"><div style="font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: #6B6B6B">CERTIFICATES TO ISSUE</div><div style="font-size: 26px; font-weight: 700; color: #1A1A1A; margin-top: 4px; line-height: 1.15">2</div><div style="margin-top: 4px">Completion verified</div></div></div>
+<section class="card" style="min-width: 0">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: baseline; padding: 16px 20px 12px"><div><h2>Cohorts</h2><div class="src" style="margin-top: 2px">Progress and attendance come from app.colaberry, synced 2 min ago</div></div></div><div class="scroll">
+<table class="t" style="min-width: 820px">
+<thead>
+<tr><th scope="col">Cohort</th><th scope="col">Program</th><th scope="col">Students</th><th scope="col">Average completion</th><th scope="col">Attendance</th><th scope="col">Not started</th><th scope="col">At risk</th></tr></thead>
+<tbody>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">November 2026</span><div class="src" style="margin-top: 6px">Welcome session Nov 16</div></td><td>AI Systems Architect</td><td>18</td><td>9%</td><td>83%</td><td><span class="tag" style="background: #FFDBDD; color: #7A1016">6</span></td><td>2</td></tr>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">October 2026</span></td><td>AI Systems Architect</td><td>22</td><td>41%</td><td>78%</td><td>1</td><td><span class="tag" style="background: #FCF1DD; color: #5C3A00">4</span></td></tr>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">DA Cohort 41</span><div class="src" style="margin-top: 6px">Legacy</div></td><td>Data Analytics</td><td>27</td><td>68%</td><td>74%</td><td>0</td><td><span class="tag" style="background: #FCF1DD; color: #5C3A00">5</span></td></tr>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">IPBC, current</span><div class="src" style="margin-top: 6px">Job Readiness</div></td><td>IPBC and CAP</td><td>31</td><td>52%</td><td>81%</td><td>0</td><td><span class="tag" style="background: #FFDBDD; color: #7A1016">3</span><div class="src" style="margin-top: 6px">Cancelled contracts</div></td></tr></tbody></table></div></section>
+<div style="display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start"><div style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 18px">
+<section class="card" style="min-width: 0">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: baseline; padding: 16px 20px 12px"><div><h2>Students who need a nudge</h2><div class="src" style="margin-top: 2px">AURA explains what changed and suggests one step</div></div></div><div class="scroll">
+<table class="t" style="min-width: 860px">
+<thead>
+<tr><th scope="col">Student</th><th scope="col">What changed</th><th scope="col">Last activity</th><th scope="col">Suggested next step</th><th scope="col"></th></tr></thead>
+<tbody>
+<tr><td><a href="Student360.html">Priya Nair</a></td><td>Has not opened module 1 since her welcome session</td><td>Nov 16</td><td>Personal check-in, offer an AI help session</td><td><a href="Approvals.html">Review draft</a></td></tr>
+<tr><td><a href="Student360.html">Luis Ortega</a></td><td>Two modules behind his cohort pace</td><td>Nov 21</td><td>Call. He prefers phone over email</td><td><a href="Communications.html">Call notes</a></td></tr>
+<tr><td><a href="Student360.html">Dana Whitfield</a></td><td>Activity dropped after her payment failed</td><td>Nov 18</td><td>Resolve payment first, then re-engage</td><td><a href="Payments.html">See payment</a></td></tr>
+<tr><td><a href="Student360.html">Renee Okafor</a></td><td>Attending IPBC on a cancelled contract</td><td>Nov 25</td><td>Leadership decision on attendance</td><td><a href="TFCAudit.html">See audit</a></td></tr></tbody></table></div></section>
+<section class="card" style="min-width: 0">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: baseline; padding: 16px 20px 12px"><div><h2>Completion, re-enrollment and transitions</h2></div></div><div style="padding: 0 20px 18px">
+<div style="display: flex; flex-direction: column"><div style="padding: 10px 0; border-top: 1px solid #F1F1F0"><div style="font-weight: 500; color: #1A1A1A">Certificate eligibility</div><div class="src">5 students finished all modules · 2 certificates not yet issued</div></div><div style="padding: 10px 0; border-top: 1px solid #F1F1F0"><div style="font-weight: 500; color: #1A1A1A">Re-enrollment requests</div><div class="src">2 returning Data Analytics students asked about the AI program</div></div><div style="padding: 10px 0; border-top: 1px solid #F1F1F0"><div style="font-weight: 500; color: #1A1A1A">Legacy transitions</div><div class="src">8 DA and IPBC students eligible to move under the approved policy · <a href="Knowledge.html">read the policy</a></div></div><div style="padding: 10px 0; border-top: 1px solid #F1F1F0"><div style="font-weight: 500; color: #1A1A1A">Unplaced graduates</div><div class="src">12 completed IPBC and are not yet placed · placement drives their payment terms</div></div></div></div></section></div><div style="flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 18px">
+<section class="card" style="min-width: 0">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: baseline; padding: 16px 20px 12px"><div><h2>Student status</h2><div class="src" style="margin-top: 2px">214 students on record</div></div></div><div style="padding: 0 20px 18px">
+<div style="display: flex; flex-direction: column; gap: 10px"><div>
+<div style="display: flex; justify-content: space-between; gap: 8px"><span style="font-weight: 500; color: #1A1A1A">Active</span><span>98 · 45.8%</span></div><div role="img" aria-label="Active: 98 of 214" style="height: 10px; background: #E4E4E3; border-radius: 999px; margin-top: 4px"><div style="width: 45.8%; height: 10px; background: #1A3947; border-radius: 999px"></div></div></div><div>
+<div style="display: flex; justify-content: space-between; gap: 8px"><span style="font-weight: 500; color: #1A1A1A">Completed</span><span>61 · 28.5%</span></div><div role="img" aria-label="Completed: 61 of 214" style="height: 10px; background: #E4E4E3; border-radius: 999px; margin-top: 4px"><div style="width: 28.5%; height: 10px; background: #2E6A86; border-radius: 999px"></div></div></div><div>
+<div style="display: flex; justify-content: space-between; gap: 8px"><span style="font-weight: 500; color: #1A1A1A">Withdrawn</span><span>31 · 14.5%</span></div><div role="img" aria-label="Withdrawn: 31 of 214" style="height: 10px; background: #E4E4E3; border-radius: 999px; margin-top: 4px"><div style="width: 14.5%; height: 10px; background: #6F9DB6; border-radius: 999px"></div></div></div><div>
+<div style="display: flex; justify-content: space-between; gap: 8px"><span style="font-weight: 500; color: #1A1A1A">Suspended</span><span>14 · 6.5%</span></div><div role="img" aria-label="Suspended: 14 of 214" style="height: 10px; background: #E4E4E3; border-radius: 999px; margin-top: 4px"><div style="width: 6.5%; height: 10px; background: #8C8C8C; border-radius: 999px"></div></div></div><div>
+<div style="display: flex; justify-content: space-between; gap: 8px"><span style="font-weight: 500; color: #1A1A1A">Re-enrolling</span><span>10 · 4.7%</span></div><div role="img" aria-label="Re-enrolling: 10 of 214" style="height: 10px; background: #E4E4E3; border-radius: 999px; margin-top: 4px"><div style="width: 4.7%; height: 10px; background: #B4B4B4; border-radius: 999px"></div></div></div></div></div></section>
+<section class="card" style="min-width: 0">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: baseline; padding: 16px 20px 12px"><div><h2>AI membership</h2><div class="src" style="margin-top: 2px">Monthly cohorts and individual anniversaries</div></div></div><div style="padding: 0 20px 18px">
+<div style="display: flex; flex-direction: column"><div style="padding: 10px 0; border-top: 1px solid #F1F1F0"><div style="font-weight: 500; color: #1A1A1A">Welcome and community</div><div class="src">18 welcome videos sent · 15 WhatsApp invitations accepted, 3 pending</div></div><div style="padding: 10px 0; border-top: 1px solid #F1F1F0"><div style="font-weight: 500; color: #1A1A1A">AI help sessions</div><div class="src">Tuesdays and Thursdays, 6:00 PM CT · next one December 1</div></div><div style="padding: 10px 0; border-top: 1px solid #F1F1F0"><div style="font-weight: 500; color: #1A1A1A">Billing anniversaries this month</div><div class="src">7 members · tracked from each conversion date, not the cohort date</div></div><div style="padding: 10px 0; border-top: 1px solid #F1F1F0"><div style="font-weight: 500; color: #1A1A1A">Renewals in the next 30 days</div><div class="src">4 annual, 11 monthly · <a href="Payments.html">see Payments</a></div></div></div></div></section></div></div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1712}}'>
+class Component extends DCLogic {
+renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

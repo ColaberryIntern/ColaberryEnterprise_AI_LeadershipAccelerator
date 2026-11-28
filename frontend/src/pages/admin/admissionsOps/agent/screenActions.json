@@ -1,0 +1,224 @@
+{
+  "today": {
+    "description": "The morning briefing, the enrollment target and one queue of everything that needs attention.",
+    "actions": [
+      { "id": "today.open", "label": "Open Today", "level": 1, "kind": "navigate", "available": true, "params": [] },
+      { "id": "today.readQueue", "label": "Read the needs-attention queue", "level": 1, "kind": "view", "available": true, "params": [] },
+      { "id": "today.filter", "label": "Filter the queue by section", "level": 1, "kind": "navigate", "available": true, "params": [{ "name": "section", "type": "string", "required": true }] },
+      { "id": "today.openItem", "label": "Open a queue item", "level": 1, "kind": "navigate", "available": true, "params": [{ "name": "itemId", "type": "string", "required": true }] },
+      { "id": "today.explainItem", "label": "Explain a queue item", "level": 2, "kind": "view", "available": false, "params": [{ "name": "itemId", "type": "string", "required": true }] }
+    ],
+    "suggestions": [
+      { "label": "Take me to the TFC exceptions", "action": "tfcAudit.open" },
+      { "label": "Walk me through today's approvals", "action": "approvals.open" },
+      { "label": "Show the weekly report", "action": "weeklyReport.open" }
+    ]
+  },
+  "admissions": {
+    "description": "Opportunity counts, the lifecycle, exceptions, follow-ups due and Open House tracks.",
+    "actions": [
+      { "id": "admissions.open", "label": "Open Admissions", "level": 1, "kind": "navigate", "available": true, "params": [] },
+      { "id": "admissions.listFollowUps", "label": "List follow-ups due", "level": 1, "kind": "view", "available": false, "params": [] },
+      { "id": "admissions.draftOutreach", "label": "Draft outreach to a prospect", "level": 3, "kind": "prepare", "available": false, "params": [{ "name": "subjectRef", "type": "string", "required": true }] },
+      { "id": "admissions.createFollowUpTask", "label": "Create a follow-up task", "level": 4, "kind": "execute", "available": false, "params": [{ "name": "subjectRef", "type": "string", "required": true }, { "name": "dueOn", "type": "date", "required": true }] },
+      { "id": "admissions.buildOpportunityReport", "label": "Build the opportunity report", "level": 4, "kind": "execute", "available": false, "params": [] }
+    ],
+    "suggestions": [
+      { "label": "Show the weekly opportunity report", "action": "weeklyReport.open" },
+      { "label": "Take me to Students", "action": "students.open" },
+      { "label": "Open Approvals", "action": "approvals.open" }
+    ]
+  },
+  "students": {
+    "description": "Universal search and one row per person, with the four statuses in separate columns.",
+    "actions": [
+      { "id": "students.open", "label": "Open Students", "level": 1, "kind": "navigate", "available": true, "params": [] },
+      { "id": "students.search", "label": "Search for a student", "level": 1, "kind": "view", "available": false, "params": [{ "name": "query", "type": "string", "required": true }] },
+      { "id": "students.filter", "label": "Filter the student list", "level": 1, "kind": "navigate", "available": false, "params": [{ "name": "status", "type": "string", "required": false }] },
+      { "id": "students.openProfile", "label": "Open a Student 360", "level": 1, "kind": "navigate", "available": false, "params": [{ "name": "ref", "type": "string", "required": true }] }
+    ],
+    "suggestions": [
+      { "label": "Back to Today", "action": "today.open" },
+      { "label": "Show the TFC audit", "action": "tfcAudit.open" },
+      { "label": "Open Approvals", "action": "approvals.open" }
+    ]
+  },
+  "student360": {
+    "description": "One student across every system: the match, four status cards, one history and what is not known yet.",
+    "actions": [
+      { "id": "student360.open", "label": "Open Student 360", "level": 1, "kind": "navigate", "available": true, "params": [{ "name": "ref", "type": "string", "required": true }] },
+      { "id": "student360.summarize", "label": "Summarize this student", "level": 2, "kind": "view", "available": false, "params": [{ "name": "ref", "type": "string", "required": true }] },
+      { "id": "student360.showHistory", "label": "Show the history", "level": 1, "kind": "view", "available": false, "params": [{ "name": "ref", "type": "string", "required": true }, { "name": "source", "type": "string", "required": false }] },
+      { "id": "student360.addNote", "label": "Add an internal note", "level": 4, "kind": "execute", "available": false, "params": [{ "name": "ref", "type": "string", "required": true }, { "name": "body", "type": "string", "required": true }] },
+      { "id": "student360.draftMessage", "label": "Draft a message", "level": 3, "kind": "prepare", "available": false, "params": [{ "name": "ref", "type": "string", "required": true }, { "name": "channel", "type": "string", "required": true }] }
+    ],
+    "suggestions": [
+      { "label": "Back to Students", "action": "students.open" },
+      { "label": "Show the TFC audit", "action": "tfcAudit.open" },
+      { "label": "Open Approvals", "action": "approvals.open" }
+    ]
+  },
+  "academics": {
+    "description": "Cohorts, students who need a nudge, the status mix, membership anniversaries and completion.",
+    "actions": [
+      { "id": "academics.open", "label": "Open Academics", "level": 1, "kind": "navigate", "available": true, "params": [] },
+      { "id": "academics.listAtRisk", "label": "List at-risk students", "level": 1, "kind": "view", "available": false, "params": [] },
+      { "id": "academics.draftCheckIn", "label": "Draft a check-in", "level": 3, "kind": "prepare", "available": false, "params": [{ "name": "ref", "type": "string", "required": true }] },
+      { "id": "academics.draftCohortAnnouncement", "label": "Draft a cohort announcement", "level": 5, "kind": "prepare", "available": false, "params": [{ "name": "cohortRef", "type": "string", "required": true }] }
+    ],
+    "suggestions": [
+      { "label": "Back to Today", "action": "today.open" },
+      { "label": "Take me to Students", "action": "students.open" },
+      { "label": "Show the TFC audit", "action": "tfcAudit.open" }
+    ]
+  },
+  "payments": {
+    "description": "Reconciliation checks between two systems, failed recurring payments and the plan mix.",
+    "actions": [
+      { "id": "payments.open", "label": "Open Payments", "level": 1, "kind": "navigate", "available": true, "params": [] },
+      { "id": "payments.runReconciliation", "label": "Run a reconciliation check", "level": 2, "kind": "view", "available": false, "params": [{ "name": "check", "type": "string", "required": true }] },
+      { "id": "payments.listFailures", "label": "List failed recurring payments", "level": 1, "kind": "view", "available": false, "params": [] },
+      { "id": "payments.draftPaymentAssistance", "label": "Draft a payment-assistance message", "level": 3, "kind": "prepare", "available": false, "params": [{ "name": "ref", "type": "string", "required": true }] },
+      { "id": "payments.requestRefund", "label": "Request a refund", "level": 5, "kind": "execute", "available": false, "params": [{ "name": "ref", "type": "string", "required": true }, { "name": "reason", "type": "string", "required": true }] }
+    ],
+    "suggestions": [
+      { "label": "Show the TFC exceptions", "action": "tfcAudit.open" },
+      { "label": "Open Approvals", "action": "approvals.open" },
+      { "label": "Back to Today", "action": "today.open" }
+    ]
+  },
+  "tfcAudit": {
+    "description": "TFC accounts by category with contract, academic and payment status kept apart.",
+    "actions": [
+      { "id": "tfcAudit.open", "label": "Open the TFC audit", "level": 1, "kind": "navigate", "available": true, "params": [] },
+      { "id": "tfcAudit.classifyAccounts", "label": "Classify the accounts", "level": 2, "kind": "view", "available": false, "params": [] },
+      { "id": "tfcAudit.export", "label": "Export the audit", "level": 4, "kind": "execute", "available": false, "params": [] },
+      { "id": "tfcAudit.draftInquiry", "label": "Draft the inquiry to TFC", "level": 3, "kind": "prepare", "available": false, "params": [] },
+      { "id": "tfcAudit.requestContractRecall", "label": "Request a contract recall", "level": 5, "kind": "execute", "available": false, "params": [{ "name": "ref", "type": "string", "required": true }] }
+    ],
+    "suggestions": [
+      { "label": "Back to Payments", "action": "payments.open" },
+      { "label": "Put this in the weekly report", "action": "weeklyReport.open" },
+      { "label": "Open Approvals", "action": "approvals.open" }
+    ]
+  },
+  "support": {
+    "description": "Open tickets with what was checked, and the paid-without-access check.",
+    "actions": [
+      { "id": "support.open", "label": "Open Support", "level": 1, "kind": "navigate", "available": true, "params": [] },
+      { "id": "support.findTickets", "label": "Find tickets", "level": 1, "kind": "view", "available": false, "params": [{ "name": "query", "type": "string", "required": false }] },
+      { "id": "support.checkRecords", "label": "Check payment, enrollment and activation", "level": 2, "kind": "view", "available": false, "params": [{ "name": "ref", "type": "string", "required": true }] },
+      { "id": "support.draftReply", "label": "Draft a reply", "level": 3, "kind": "prepare", "available": false, "params": [{ "name": "ticketRef", "type": "string", "required": true }] }
+    ],
+    "suggestions": [
+      { "label": "Back to Today", "action": "today.open" },
+      { "label": "Take me to Students", "action": "students.open" },
+      { "label": "Open Approvals", "action": "approvals.open" }
+    ]
+  },
+  "communications": {
+    "description": "One inbox across connected channels and a before-you-send panel. Nothing is sent from here.",
+    "actions": [
+      { "id": "communications.open", "label": "Open Communications", "level": 1, "kind": "navigate", "available": true, "params": [] },
+      { "id": "communications.searchThreads", "label": "Search threads", "level": 1, "kind": "view", "available": false, "params": [{ "name": "query", "type": "string", "required": true }] },
+      { "id": "communications.summarize", "label": "Summarize a thread", "level": 2, "kind": "view", "available": false, "params": [{ "name": "threadRef", "type": "string", "required": true }] },
+      { "id": "communications.draftMessage", "label": "Draft an email, text or call script", "level": 3, "kind": "prepare", "available": false, "params": [{ "name": "threadRef", "type": "string", "required": true }] },
+      { "id": "communications.sendBulk", "label": "Send to more than one person", "level": 5, "kind": "execute", "available": false, "params": [{ "name": "draftRef", "type": "string", "required": true }] }
+    ],
+    "suggestions": [
+      { "label": "Open Approvals", "action": "approvals.open" },
+      { "label": "Show the TFC audit", "action": "tfcAudit.open" },
+      { "label": "Back to Today", "action": "today.open" }
+    ]
+  },
+  "compliance": {
+    "description": "Agency requests, workforce invoices, missing documents and verification letters built from records.",
+    "actions": [
+      { "id": "compliance.open", "label": "Open Compliance", "level": 1, "kind": "navigate", "available": true, "params": [] },
+      { "id": "compliance.findRequests", "label": "Find agency requests", "level": 1, "kind": "view", "available": false, "params": [] },
+      { "id": "compliance.buildLetter", "label": "Build a verification letter from records", "level": 3, "kind": "prepare", "available": false, "params": [{ "name": "ref", "type": "string", "required": true }] },
+      { "id": "compliance.draftInvoiceReminder", "label": "Draft an invoice reminder", "level": 3, "kind": "prepare", "available": false, "params": [{ "name": "invoiceRef", "type": "string", "required": true }] }
+    ],
+    "suggestions": [
+      { "label": "Back to Today", "action": "today.open" },
+      { "label": "Take me to Students", "action": "students.open" },
+      { "label": "Open Approvals", "action": "approvals.open" }
+    ]
+  },
+  "reports": {
+    "description": "The reports that build themselves, each figure with its source, and the enrollment target tracker.",
+    "actions": [
+      { "id": "reports.open", "label": "Open Reports", "level": 1, "kind": "navigate", "available": true, "params": [] },
+      { "id": "reports.buildReport", "label": "Build a report", "level": 4, "kind": "execute", "available": false, "params": [{ "name": "report", "type": "string", "required": true }] },
+      { "id": "reports.comparePeriods", "label": "Compare two periods", "level": 2, "kind": "view", "available": false, "params": [{ "name": "report", "type": "string", "required": true }] },
+      { "id": "reports.schedule", "label": "Schedule a report", "level": 3, "kind": "prepare", "available": false, "params": [{ "name": "report", "type": "string", "required": true }] }
+    ],
+    "suggestions": [
+      { "label": "Show the weekly report", "action": "weeklyReport.open" },
+      { "label": "Show the TFC audit", "action": "tfcAudit.open" },
+      { "label": "Back to Today", "action": "today.open" }
+    ]
+  },
+  "weeklyReport": {
+    "description": "The weekly report as leadership receives it. Sending it is an approval.",
+    "actions": [
+      { "id": "weeklyReport.open", "label": "Open the weekly report", "level": 1, "kind": "navigate", "available": true, "params": [] },
+      { "id": "weeklyReport.build", "label": "Build this week's report", "level": 4, "kind": "execute", "available": false, "params": [] },
+      { "id": "weeklyReport.sendToLeadership", "label": "Send to leadership", "level": 5, "kind": "execute", "available": false, "params": [] }
+    ],
+    "suggestions": [
+      { "label": "Back to Reports", "action": "reports.open" },
+      { "label": "Show the TFC audit", "action": "tfcAudit.open" },
+      { "label": "Open Approvals", "action": "approvals.open" }
+    ]
+  },
+  "agent": {
+    "description": "The full agent workspace: requests by area, a visible investigation, the mode and the permission levels.",
+    "actions": [
+      { "id": "agent.open", "label": "Open the agent workspace", "level": 1, "kind": "navigate", "available": true, "params": [] }
+    ],
+    "suggestions": [
+      { "label": "Back to Today", "action": "today.open" },
+      { "label": "Open Approvals", "action": "approvals.open" },
+      { "label": "Open Knowledge", "action": "knowledge.open" }
+    ]
+  },
+  "approvals": {
+    "description": "Everything the agent prepared and will not do alone. A person approves or holds.",
+    "actions": [
+      { "id": "approvals.open", "label": "Open Approvals", "level": 1, "kind": "navigate", "available": true, "params": [] },
+      { "id": "approvals.list", "label": "List what is waiting", "level": 1, "kind": "view", "available": false, "params": [] }
+    ],
+    "suggestions": [
+      { "label": "Back to Today", "action": "today.open" },
+      { "label": "Take me to Students", "action": "students.open" },
+      { "label": "Open Knowledge", "action": "knowledge.open" }
+    ]
+  },
+  "knowledge": {
+    "description": "Versioned policies with effective dates, approved templates and saved findings.",
+    "actions": [
+      { "id": "knowledge.open", "label": "Open Knowledge", "level": 1, "kind": "navigate", "available": true, "params": [] },
+      { "id": "knowledge.searchPolicies", "label": "Search approved policies", "level": 1, "kind": "view", "available": false, "params": [{ "name": "query", "type": "string", "required": true }] },
+      { "id": "knowledge.saveFinding", "label": "Save a finding to a student", "level": 4, "kind": "execute", "available": false, "params": [{ "name": "ref", "type": "string", "required": true }, { "name": "conclusion", "type": "string", "required": true }] }
+    ],
+    "suggestions": [
+      { "label": "Back to Today", "action": "today.open" },
+      { "label": "Show the TFC audit", "action": "tfcAudit.open" },
+      { "label": "Open Approvals", "action": "approvals.open" }
+    ]
+  },
+  "setup": {
+    "description": "Connected systems and their freshness, what the agent may do per screen, alert thresholds and the audit log.",
+    "actions": [
+      { "id": "setup.open", "label": "Open Setup", "level": 1, "kind": "navigate", "available": true, "params": [] },
+      { "id": "setup.viewConnections", "label": "Show connected systems", "level": 1, "kind": "view", "available": false, "params": [] },
+      { "id": "setup.viewAuditLog", "label": "Show the audit log", "level": 1, "kind": "view", "available": false, "params": [] }
+    ],
+    "suggestions": [
+      { "label": "Back to Today", "action": "today.open" },
+      { "label": "Show the TFC audit", "action": "tfcAudit.open" },
+      { "label": "Open Knowledge", "action": "knowledge.open" }
+    ]
+  }
+}

@@ -64,6 +64,13 @@ export const SECTION_KEYS = [
   // `/api/admin/communications` (the lead-messaging log) stays 'campaigns'. owner and admin derive it from ALL_SECTIONS;
   // community_organizer is granted it below; anyone else (Taiwo) gets it per member through extra sections.
   'comms_hub',
+  // Admissions & Ops Command Center (AO1.3, kit SPEC section 3): Taiwo's workspace shows payment history, contract
+  // status and workforce compliance documents together, a wider grant than 'students', 'leads' or 'revenue' alone, so
+  // it is its own key (the 'internship' reasoning above). owner and admin derive it from ALL_SECTIONS. The 'admissions'
+  // role (Dhee: dashboard, lead_ingestion, internship) deliberately does NOT get it (M0 Q2 default); Taiwo gets it as
+  // an extra section (scripts/grantAdmissionsOpsAccess.ts). API prefix /api/admin/admissions-ops, never
+  // /api/admin/admissions/ops, which would fall under the lead_ingestion row.
+  'admissions_ops',
   // Orchestration health, read-only (Ali 2026-11-24, option A). Three GET endpoints: the health
   // report, the latest health snapshot, and the monitoring agent list.
   //

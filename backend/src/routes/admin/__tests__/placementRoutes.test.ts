@@ -98,7 +98,7 @@ describe('GET /api/admin/placement/students (the Student prep list)', () => {
 describe('mgmtSectionGate classifies the prefix (deny-by-default)', () => {
   it('maps /api/admin/placement to the placement section', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const src = require('fs').readFileSync(require('path').join(__dirname, '..', '..', '..', 'middlewares', 'mgmtSectionGate.ts'), 'utf8') as string;
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', '..', '..', 'middlewares', 'mgmtSectionPaths.ts'), 'utf8') as string; // PATH_SECTION moved here (AO1.2)
     expect(src).toContain("['/api/admin/placement', 'placement']");
   });
 });

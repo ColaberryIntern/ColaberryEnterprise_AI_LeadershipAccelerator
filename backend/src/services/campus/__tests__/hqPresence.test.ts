@@ -19,7 +19,9 @@ beforeEach(() => jest.clearAllMocks());
 describe('HQ_PATH: sidebar paths only', () => {
   it('accepts every internal path in the real admin sidebar (frontend adminNav.ts)', () => {
     const src = fs.readFileSync(path.join(__dirname, '../../../../../frontend/src/components/Layout/adminNav.ts'), 'utf8');
-    const head = src.slice(0, src.indexOf('export const ALL_LINKS'));
+    // The Program, Intelligence and System groups moved to adminNavProgramGroups.ts (AO1.2); read both files.
+    const groups = fs.readFileSync(path.join(__dirname, '../../../../../frontend/src/components/Layout/adminNavProgramGroups.ts'), 'utf8');
+    const head = src.slice(0, src.indexOf('export const ALL_LINKS')) + groups;
     const paths = [...head.matchAll(/path: '(\/admin\/[^']+)'/g)].map((m) => m[1]);
     expect(paths.length).toBeGreaterThan(40);
     expect(paths.filter((p) => !HQ_PATH.test(p))).toEqual([]);

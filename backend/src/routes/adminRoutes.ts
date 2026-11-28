@@ -30,39 +30,6 @@ import explorerKnowledgeReviewRoutes from './admin/explorerKnowledgeReviewRoutes
 import growthJourneyStatusRoutes from './admin/growthJourneyStatusRoutes';
 import growthJourneyReadRoutes from './admin/growthJourneyReadRoutes';
 import growthJourneyRoutes from './admin/growthJourneyRoutes';
-import campaignRoutes from './admin/campaignRoutes';
-import insightRoutes from './admin/insightRoutes';
-import settingsRoutes from './admin/settingsRoutes';
-import acceleratorRoutes from './admin/acceleratorRoutes';
-import flotationIntakeRoutes from './admin/flotationIntakeRoutes';
-import enterpriseClientsRoutes from './admin/enterpriseClientsRoutes';
-import kbRoutes from './admin/kbRoutes';
-import orchestrationRoutes from './admin/orchestrationRoutes';
-import timelineAdminRoutes from './admin/timelineAdminRoutes';
-import componentRoutes from './admin/componentRoutes';
-import presentationStudioRoutes from './admin/presentationStudioRoutes';
-import composerRoutes from './admin/composerRoutes';
-import feedControlRoutes from './admin/feedControlRoutes';
-import intelRoutes from './admin/intelRoutes';
-import opsCenterRoutes from './admin/opsCenterRoutes';
-import workforceRoutes from './admin/workforceRoutes';
-import agentEffectiveAccessRoutes from './admin/agentEffectiveAccessRoutes';
-import enterpriseIntelligenceRoutes from './admin/enterpriseIntelligenceRoutes';
-import aiOpsRoutes from './admin/aiOpsRoutes';
-import intelligenceRoutes from './admin/intelligenceRoutes';
-import campaignTestRoutes from './admin/campaignTestRoutes';
-import campaignSimulationRoutes from './admin/campaignSimulationRoutes';
-import marketingRoutes from './admin/marketingRoutes';
-import governanceRoutes from './admin/governanceRoutes';
-import campaignIntelligenceRoutes from './admin/campaignIntelligenceRoutes';
-import alumniRoutes from './admin/alumniRoutes';
-import autonomyRoutes from './admin/autonomyRoutes';
-import companyRoutes from './admin/companyRoutes';
-import automationRoutes from './admin/automationRoutes';
-import platformOperationsRoutes from './admin/platformOperationsRoutes';
-import coryRoutes from './admin/coryRoutes';
-import departmentIntelligenceRoutes from './admin/departmentIntelligenceRoutes';
-import websiteIntelligenceRoutes from './admin/websiteIntelligenceRoutes';
 import admissionsRoutes from './admin/admissionsRoutes';
 import mayaCapabilityRoutes from './admin/mayaCapabilityRoutes';
 import mayaOutboundRoutes from './admin/mayaOutboundRoutes';
@@ -183,12 +150,14 @@ import govContractsRoutes from './admin/govContractsRoutes';
 import placementRoutes from './admin/placementRoutes';
 import careerDeskRoutes from './admin/careerDeskRoutes';
 import commsHubRoutes from './admin/commsHubRoutes';
+import admissionsOpsRoutes from './admin/admissionsOpsRoutes';
 import govProposalSourceRoutes from './admin/govProposalSourceRoutes';
 import govCompanyDossierRoutes from './admin/govCompanyDossierRoutes';
 import agentFactoryRoutes from './admin/agentFactoryRoutes';
 import certPrepAdminRoutes from './admin/certPrepAdminRoutes';
 import certificationAdminRoutes from './admin/certificationAdminRoutes';
 import checklistRoutes from './admin/checklistRoutes';
+import adminIntelligenceMounts from './adminIntelligenceMounts';
 
 const router = Router();
 
@@ -294,42 +263,9 @@ router.use(growthJourneyStatusRoutes);
 // sit here so the three journey routers read in one place: status (always), performance, queues.
 router.use(growthJourneyReadRoutes);
 router.use(growthJourneyRoutes);
-router.use(campaignRoutes);
-router.use(insightRoutes);
-router.use(settingsRoutes);
-router.use(acceleratorRoutes);
-router.use(flotationIntakeRoutes);
-// W32: Enterprise clients, from Book a demo pilot to signed.
-router.use(enterpriseClientsRoutes);
-router.use(kbRoutes);
-router.use(orchestrationRoutes);
-router.use(timelineAdminRoutes);
-router.use(componentRoutes);
-// Presentation Studio instructor controls. Behind PRESENTATION_STUDIO_ENABLED, so with
-// the flag off these 404 exactly as if they did not exist.
-router.use(presentationStudioRoutes);
-router.use(composerRoutes);
-router.use(feedControlRoutes);
-router.use(intelRoutes);
-router.use(opsCenterRoutes);
-router.use(workforceRoutes);
-router.use(agentEffectiveAccessRoutes);
-router.use(enterpriseIntelligenceRoutes);
-router.use(aiOpsRoutes);
-router.use(intelligenceRoutes);
-router.use(campaignTestRoutes);
-router.use(campaignSimulationRoutes);
-router.use(marketingRoutes);
-router.use(governanceRoutes);
-router.use(campaignIntelligenceRoutes);
-router.use(alumniRoutes);
-router.use(autonomyRoutes);
-router.use(companyRoutes);
-router.use(automationRoutes);
-router.use(platformOperationsRoutes);
-router.use(coryRoutes);
-router.use(departmentIntelligenceRoutes);
-router.use(websiteIntelligenceRoutes);
+// 33 intelligence, campaign and program routers, moved verbatim and in order into their own module (AO2.1)
+// so this file stays under the 500-line ceiling. Same mount position, below mgmtSectionGate.
+router.use(adminIntelligenceMounts);
 router.use(admissionsRoutes);
 router.use(mayaCapabilityRoutes); // M37: Maya shadow-to-live switch
 // The review queue where every message Maya composes for a real person waits for Ali's decision,
@@ -517,6 +453,9 @@ router.use(careerDeskRoutes); // Career Prep v27 (CP11.1): the staff interview d
 // Communications Hub (CH1.3): events, thumbnails, going live, member announcements. Gated 'comms_hub' per route;
 // mgmtSectionGate maps /api/admin/comms-hub.
 router.use(commsHubRoutes);
+// Admissions & Ops Command Center (AO2.1): Taiwo's workspace. Gated 'admissions_ops' per route; mgmtSectionGate maps
+// /api/admin/admissions-ops.
+router.use(admissionsOpsRoutes);
 router.use(govProposalSourceRoutes);
 // Gov Company Dossier (Dossier Phase 2a): tenant-wide library portal under /api/admin/factory/dossier/*, which
 // mgmtSectionGate already maps to 'program' (its routes also self-declare requireSection('program')).
