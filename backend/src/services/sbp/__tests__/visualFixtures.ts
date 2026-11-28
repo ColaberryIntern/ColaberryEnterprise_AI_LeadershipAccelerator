@@ -308,6 +308,46 @@ export const overCapSpec: DemoSpec = spec({
   nav: navFor([['board', 'All cases', 'home'], ['cases', 'Cases', 'list']]),
 });
 
+/* ------------------------------------------------------------------ 7. display-string times */
+
+/**
+ * The shape every REAL generated spec has, and the one no fixture had.
+ *
+ * `date`, `time` and `datetime` hold DISPLAY strings by contract, so a work item can declare four
+ * time fields and still give a timeline nothing to place. The first real spec this ran against in
+ * production did exactly that, the rules chose a timeline from the rows, and the engine drew no
+ * lanes. The timeline must come from the EVENTS here, whose `occurred_at` is an instant.
+ */
+export const displayTimes: DemoSpec = spec({
+  app: { name: 'Front desk', descriptor: 'same shape as a generated spec', persona: { name: 'Kit Alvarez', role: 'Coordinator' } },
+  events: [
+    ev({ event_id: 'f1', work_id: 'job1', occurred_at: '2026-11-25T07:34:00-06:00' }),
+    ev({ event_id: 'f2', work_id: 'job1', parent_event_id: 'f1', occurred_at: '2026-11-25T08:02:00-06:00' }),
+    ev({ event_id: 'f3', work_id: 'job2', occurred_at: '2026-11-25T09:10:00-06:00', status: 'failed' }),
+    ev({ event_id: 'f4', work_id: 'job3', occurred_at: '2026-11-25T10:45:00-06:00', autonomy_tier: 'A3' }),
+  ],
+  entities: {
+    job: {
+      label: 'Job', plural: 'Jobs', status: 'state', title: '{room} · {state}',
+      fields: [
+        { key: 'room', type: 'text' },
+        // Display strings, exactly as the contract and the scaffold produce them.
+        { key: 'shift_date', type: 'date' },
+        { key: 'starts_at', type: 'time' },
+        { key: 'ends_at', type: 'time' },
+        { key: 'state', type: 'enum', labels: { open: 'Open', done: 'Done' } },
+      ],
+      rows: [
+        { id: 'job1', room: 'North room', shift_date: 'Nov 25, 2026', starts_at: '8:30 AM CST', ends_at: '2:30 PM CST', state: 'open' },
+        { id: 'job2', room: 'South room', shift_date: 'Nov 25, 2026', starts_at: '12:30 PM CST', ends_at: '6:30 PM CST', state: 'open' },
+        { id: 'job3', room: 'East room', shift_date: 'Nov 25, 2026', starts_at: '8:00 AM CST', ends_at: '12:00 PM CST', state: 'done' },
+      ],
+    },
+  },
+  screens: { today: { type: 'home', title: 'Front desk', entity: 'job' }, jobs: { type: 'list', entity: 'job' } },
+  nav: navFor([['today', 'Today', 'home'], ['jobs', 'Jobs', 'list']]),
+});
+
 export const ALL_FIXTURES: ReadonlyArray<{ name: string; spec: DemoSpec }> = [
   { name: 'shiftCoverage', spec: shiftCoverage },
   { name: 'salesPipeline', spec: salesPipeline },
@@ -315,4 +355,5 @@ export const ALL_FIXTURES: ReadonlyArray<{ name: string; spec: DemoSpec }> = [
   { name: 'documentReview', spec: documentReview },
   { name: 'thinSpec', spec: thinSpec },
   { name: 'overCapSpec', spec: overCapSpec },
+  { name: 'displayTimes', spec: displayTimes },
 ];

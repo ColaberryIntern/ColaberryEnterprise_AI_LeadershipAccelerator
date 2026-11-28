@@ -647,6 +647,11 @@ dl.facts dd { margin: 0; min-width: 0; }
     return '<p class="cap-note">Showing ' + b.capped.shown + ' of ' + b.capped.total +
       (href ? '. <a href="#' + esc(href) + '">See all</a>' : '.') + '</p>';
   }
+  /** Shorten to fit the label gutter, then escape: cutting escaped text can split an entity. */
+  function clip(v, n) {
+    var t = String(v === null || v === undefined ? '' : v);
+    return esc(t.length > n ? t.slice(0, n - 1).replace(/[\s·-]+$/, '') + '…' : t);
+  }
   function chartHead(t, takeaway) {
     // Composed titles start from a field key or an entity label, which are lower case in most
     // specs, so the heading read "hours by person". Sentence case is applied here rather than in
@@ -709,11 +714,39 @@ dl.facts dd { margin: 0; min-width: 0; }
         var evs = (SPEC.events || []).filter(function (e) { return e.work_id === work; });
         var times = evs.map(function (e) { return msOf(e.occurred_at); }).filter(function (t) { return t !== null; });
         if (!times.length) return;
-        var row = b.entity ? find(b.entity, work) : null;
+        /*
+         * A work id names a row somewhere, but not always in the primary entity: real specs mix
+         * ids from several entities and the scaffold uses the STORY id for work it generated. So
+         * the lookup walks the entities and only falls back to the raw id when nothing claims it,
+         * which is honest rather than pretty.
+         */
+        var row = b.entity ? find(b.entity, work) : null, rowKey = b.entity;
+        if (!row) {
+          Object.keys(SPEC.entities || {}).some(function (k) {
+            var hit = find(k, work); if (hit) { row = hit; rowKey = k; } return !!hit;
+          });
+        }
+        /*
+         * Generated specs name work as `<entity>-<row id>` ("gap-lark") while the row itself is
+         * `lark`, so nothing matched and every lane was labelled with a raw id. Split on the
+         * FIRST hyphen and only when the prefix is a real entity key, then look the remainder up
+         * in that entity: it either finds the row or it does not, so nothing is invented. The
+         * generator should stop doing this; until it does, the lanes say what they are.
+         */
+        if (!row) {
+          var cut = work.indexOf('-');
+          if (cut > 0) {
+            var pre = work.slice(0, cut), rest = work.slice(cut + 1);
+            if (SPEC.entities && SPEC.entities[pre]) {
+              var hit2 = find(pre, rest);
+              if (hit2) { row = hit2; rowKey = pre; }
+            }
+          }
+        }
         lanes.push({
-          id: work, label: row ? title(b.entity, row) : work,
+          id: work, label: row ? title(rowKey, row) : work,
           a: Math.min.apply(null, times), z: Math.max.apply(null, times),
-          href: row ? routeOf(b.entity, row) : ''
+          href: row ? routeOf(rowKey, row) : ''
         });
       });
     }
@@ -744,7 +777,7 @@ dl.facts dd { margin: 0; min-width: 0; }
       });
       var bad = evs.some(function (e) { return e.status === 'failed'; });
       marks += '<g class="lane' + (bad ? ' bad' : '') + '">' +
-        '<text class="lane-label" x="0" y="' + (y + 4) + '">' + esc(l.label).slice(0, 30) + '</text>' +
+        '<text class="lane-label" x="0" y="' + (y + 4) + '">' + esc(clip(l.label, 32)) + '</text>' +
         '<line class="bar" x1="' + x(l.a).toFixed(1) + '" y1="' + y + '" x2="' + x(l.z).toFixed(1) + '" y2="' + y + '"/>' +
         groups.map(function (g) {
           return '<g class="mk' + (g.bad ? ' bad' : '') + '"><circle cx="' + x(g.t).toFixed(1) + '" cy="' + y + '" r="6"/>' +
@@ -900,7 +933,7 @@ dl.facts dd { margin: 0; min-width: 0; }
 
   var RENDER = {
     home: function (s, sid) {
-      var wide = '', narrow = '', top = '';
+      var wide = '', narrow = '', top = '', lead = '';
       (s.blocks || []).forEach(function (b) {
         if (b.type === 'counts') {
           top += '<div class="tiles">' + b.items.map(function (it) {
@@ -925,13 +958,16 @@ dl.facts dd { margin: 0; min-width: 0; }
       var sp = planFor(sid);
       if (sp) {
         if (!top) top = vStatusTiles(blockOf(sp, 'status_pills'));
-        var pic = vTimeline(blockOf(sp, 'timeline'), sid);
+        // The picture of the whole goes ABOVE the columns, full width. Inside `wide` it was
+        // squeezed into two thirds of the page beside the activity feed, which is the one place
+        // a timeline cannot afford to lose.
+        lead = vTimeline(blockOf(sp, 'timeline'), sid);
         var dec = wide ? '' : vDecisions(blockOf(sp, 'decision_cards'));
         var fun = sp.blocks.filter(function (b) { return b.kind === 'funnel'; })
           .map(function (b) { return vFunnel(b); }).join('');
-        wide = pic + wide + dec + fun;
+        wide = wide + dec + fun;
       }
-      return head(s, s.clock === false ? '' : '<span class="pill">' + esc(SPEC.app.clock || '') + '</span>') + top + '<div class="cols"><div class="wide">' + wide + '</div>' + (narrow ? '<div class="narrow">' + narrow + '</div>' : '') + '</div>';
+      return head(s, s.clock === false ? '' : '<span class="pill">' + esc(SPEC.app.clock || '') + '</span>') + top + lead + '<div class="cols"><div class="wide">' + wide + '</div>' + (narrow ? '<div class="narrow">' + narrow + '</div>' : '') + '</div>';
     },
     list: function (s, sid) {
       var rows = pick(s.entity, s.where), chips = '';
