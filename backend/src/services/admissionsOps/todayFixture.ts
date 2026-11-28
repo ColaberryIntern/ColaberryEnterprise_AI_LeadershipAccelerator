@@ -49,7 +49,7 @@ const ROWS: Row[] = [
   { id: 'q-crm', section: 'payments', when: 'today', trigger: 'CRM revenue mismatch', subject: { kind: 'group', label: '3 Won opportunities, $1,250 revenue in GHL', ref: null },
     why: 'None of the three Won opportunities has a matching payment yet. Verify before the weekly report goes out.',
     systems_checked: ['ghl', 'paysimple'], next_step: 'Reconcile', approval: 'read_only' },
-  { id: 'q-unpaid', section: 'admissions', when: 'today', trigger: 'Registered but unpaid', subject: { kind: 'group', label: '14 free AI registrants have not picked a plan', ref: null },
+  { id: 'q-unpaid', section: 'admissions', when: 'today', trigger: 'Registered but unpaid', subject: { kind: 'group', label: '14 AI registrants have not picked a paid plan', ref: null },
     why: 'One personal follow-up drafted for each, based on their last conversation.',
     systems_checked: ['app_colaberry', 'ghl', 'gmail'], next_step: 'Review 14 drafts', approval: 'bulk_needs_approval' },
   { id: 'q-ticket', section: 'students', when: 'today', trigger: 'Overdue support ticket', subject: { kind: 'group', label: 'Access issue open 5 days in Zendesk', ref: null },
