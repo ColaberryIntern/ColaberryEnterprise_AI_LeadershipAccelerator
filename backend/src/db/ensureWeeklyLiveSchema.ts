@@ -28,6 +28,7 @@ export const WEEKLY_LIVE_TABLES = [
   'weekly_live_session_weeks',
   'weekly_live_spend',
   'weekly_live_plan_runs',
+  'weekly_live_blueprints',
 ] as const;
 
 export const PLAN_STATUSES = ['draft', 'researching', 'ready', 'chosen', 'failed'] as const;
@@ -155,6 +156,22 @@ export const WEEKLY_LIVE_DDL: readonly string[] = [
   // WL4.1: how the plan's session came to be. 'created' = Studio made the row and may retitle it on a
   // re-choose; 'adopted' = a class already sat on that date and Studio only links it, never edits it.
   `ALTER TABLE weekly_live_plans ADD COLUMN IF NOT EXISTS session_origin VARCHAR(16) CHECK (session_origin IN ('created', 'adopted'))`,
+  // WL4.2: the session blueprint the deck is built from, one per plan and topic. Kept so a rebuild is
+  // free and byte-identical; status/heartbeat make the background writer claimable exactly once.
+  `CREATE TABLE IF NOT EXISTS weekly_live_blueprints (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     plan_id UUID NOT NULL REFERENCES weekly_live_plans(id) ON DELETE CASCADE,
+     topic_id UUID NOT NULL,
+     status VARCHAR(16) NOT NULL DEFAULT 'writing' CHECK (status IN ('writing', 'ready', 'failed')),
+     blueprint JSONB,
+     problems JSONB NOT NULL DEFAULT '[]'::jsonb,
+     error VARCHAR(400),
+     model VARCHAR(64),
+     attempts INTEGER NOT NULL DEFAULT 0,
+     heartbeat_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     created_at TIMESTAMPTZ DEFAULT NOW(),
+     UNIQUE (plan_id, topic_id)
+   )`,
 ];
 
 /** Run every statement in order. Throws on the first failure: a half-made schema must not boot quietly. */

@@ -27,7 +27,7 @@ it.each([
   expect(ok).toBe(false);
 });
 
-it('creates each of the nine tables exactly once', () => {
+it('creates each of the ten tables exactly once', () => {
   for (const t of WEEKLY_LIVE_TABLES) {
     expect(WEEKLY_LIVE_DDL.filter((d) => d.startsWith(`CREATE TABLE IF NOT EXISTS ${t} (`))).toHaveLength(1);
   }
