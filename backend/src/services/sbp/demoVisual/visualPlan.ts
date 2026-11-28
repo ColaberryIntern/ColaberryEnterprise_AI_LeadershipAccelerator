@@ -6,7 +6,7 @@ import {
   type Fallback, type SkipReason, type VisualKind,
 } from './visualRules';
 import {
-  distinctValues, enumFields, entitiesOf, measuredFields, plainNumberFields,
+  distinctValues, enumFields, entitiesOf, instantOf, measuredFields, plainNumberFields,
   refFields, rowsWithNumber, screensOf, timeFields,
   type EntityView,
 } from './specReaders';
@@ -139,14 +139,24 @@ function planTimeline(
   if (entity) {
     const times = timeFields(entity);
     if (times.length >= 2) {
+      /*
+       * Counted on values that are USABLE as instants, not on values that are merely present.
+       * `date`, `time` and `datetime` hold display strings by contract ("8:30 AM CST"), so a row
+       * can declare four time fields and still give a timeline nothing to place. Requiring the
+       * value to parse is what lets this fall through to the events route, which is the one that
+       * works on real specs.
+       */
       const lanes = entity.rows.filter(
-        (r) => times.filter((f) => typeof r[f.key] === 'string' && r[f.key] !== '').length >= 2,
+        (r) => times.filter((f) => instantOf(r[f.key]) !== null).length >= 2,
       );
       if (lanes.length >= MIN_TIMELINE_LANES) {
+        // Only the fields that actually parse, and only the first two: the engine reads
+        // fields[0] and fields[1] as the start and the end of a lane.
+        const usable = times.filter((f) => lanes.some((r) => instantOf(r[f.key]) !== null));
         const { items, capped } = cap(lanes.map((r) => String(r.id)), MAX_TIMELINE_LANES);
         return {
           kind: 'timeline', entity: entity.key,
-          fields: times.map((f) => f.key), items, capped,
+          fields: usable.slice(0, 2).map((f) => f.key), items, capped,
         };
       }
     }

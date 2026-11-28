@@ -150,6 +150,25 @@ export function screensOf(spec: DemoSpec): ScreenView[] {
   return out.sort((a, b) => a.id.localeCompare(b.id));
 }
 
+/**
+ * A value as a moment in time, or null when it cannot be one.
+ *
+ * The contract says date and time fields hold DISPLAY strings, and real generated specs do
+ * exactly that: `"8:30 AM CST"`, `"Nov 25, 2026"`. A field's TYPE therefore says what it means,
+ * never that anything can be computed from it, and a timeline needs instants to place a mark.
+ *
+ * Found in production: the first real spec this ran against had three `datetime` fields, all of
+ * them display strings, so the rules chose a timeline from the rows and the engine then drew no
+ * lanes at all. Nothing was wrong with the engine; the plan had committed to a route the data
+ * could not support and so never fell through to the events, whose `occurred_at` IS an instant by
+ * contract.
+ */
+export function instantOf(value: unknown): number | null {
+  if (typeof value !== 'string' || value.trim() === '') return null;
+  const ms = Date.parse(value);
+  return Number.isNaN(ms) ? null : ms;
+}
+
 /** A field a number can be measured against: a meter, or a number with a stated ceiling. */
 export function measuredFields(entity: EntityView): FieldView[] {
   return entity.fields.filter(

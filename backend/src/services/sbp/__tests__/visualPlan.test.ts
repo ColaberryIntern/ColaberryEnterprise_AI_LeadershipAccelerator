@@ -22,7 +22,8 @@ import {
   MAX_BAR_ROWS, MAX_FUNNEL_STAGES, MAX_TIMELINE_LANES, MIN_BAR_ROWS, MIN_TIMELINE_LANES,
 } from '../demoVisual/visualRules';
 import {
-  ALL_FIXTURES, documentReview, maintenanceQueue, overCapSpec, salesPipeline, shiftCoverage, thinSpec,
+  ALL_FIXTURES, displayTimes, documentReview, maintenanceQueue, overCapSpec, salesPipeline,
+  shiftCoverage, thinSpec,
 } from './visualFixtures';
 
 const kinds = (plan: VisualPlanResult, screen: string): string[] =>
@@ -96,6 +97,27 @@ describe('timeline: two routes to the same picture', () => {
     expect(block).toBeDefined();
     expect(block!.fields).toEqual(['work_id', 'occurred_at']);
     expect(block!.items).toEqual(['deal1', 'deal2', 'deal3']);
+  });
+
+  it('falls back to the EVENTS when the rows\' times are display strings', () => {
+    /*
+     * The production miss. `date`, `time` and `datetime` hold display strings by contract, so a
+     * work item can declare four time fields and give a timeline nothing to place. Choosing the
+     * rows route on the strength of the field TYPE drew an empty chart on the first real spec
+     * this ran against, and never fell through to the events, which carry real instants.
+     */
+    const plan = visualPlan(displayTimes);
+    const block = plan.screens.find((s) => s.screen === 'today')?.blocks.find((b) => b.kind === 'timeline');
+    expect(block).toBeDefined();
+    expect(block!.fields).toEqual(['work_id', 'occurred_at']);
+    expect(block!.items).toEqual(['job1', 'job2', 'job3']);
+  });
+
+  it('still uses the rows when their times really are instants, so the fix did not disable route 1', () => {
+    // Both directions. A fix that simply stopped using the rows would pass the test above.
+    const block = visualPlan(shiftCoverage).screens
+      .find((s) => s.screen === 'today')?.blocks.find((b) => b.kind === 'timeline');
+    expect(block!.fields).toEqual(['opens_at', 'closes_at']);
   });
 
   it('refuses a timeline the data has not earned, and says why', () => {
