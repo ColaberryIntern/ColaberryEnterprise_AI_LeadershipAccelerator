@@ -12,7 +12,7 @@
  */
 import { engineAKeyName, loadVoiceConfig, redactedVoiceConfig, TEST_LIMITS } from '../../services/voice/voiceConfig';
 
-/** Engine A high-end cost per connected minute (docs/voice-studio/COST_MODEL.md). */
+/** Per-minute rate used to size a test run: Twilio and the voice at the top of COST_MODEL.md's range. Engine A's model share is UNMEASURED until LIVE-01; the hard $5 run cap (TEST_LIMITS) holds regardless. */
 export const WORST_CASE_USD_PER_MIN = 0.115;
 const CREDENTIAL_NAMES = ['TWILIO_ACCOUNT_SID', 'TWILIO_API_KEY_SID', 'TWILIO_API_KEY_SECRET', 'TWILIO_AUTH_TOKEN', 'OPENAI_API_KEY', 'ELEVENLABS_API_KEY', 'ANTHROPIC_API_KEY'];
 
