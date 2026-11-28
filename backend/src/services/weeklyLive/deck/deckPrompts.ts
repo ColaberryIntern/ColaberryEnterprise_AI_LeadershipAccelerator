@@ -1,4 +1,4 @@
-import { CLASS_MINUTES, MAX_SLIDE_MINUTES } from './validateBlueprint';
+import { CLASS_MINUTES, HEADLINE_WORDS, HIGHLIGHT_WORDS, MAX_SLIDE_MINUTES, TITLE_HEADLINE_WORDS } from './validateBlueprint';
 
 /**
  * The session writer's prompts (WL4.2). The writer turns the chosen topic into a slide-by-slide class:
@@ -25,6 +25,8 @@ Slides, in order:
 
 Every slide: title (short, for the presenter), min (whole minutes; all slides add up to exactly ${CLASS_MINUTES}; none over ${MAX_SLIDE_MINUTES}), do (what Ali does with his hands, for him only), say (1 to 4 short lines he says, in his voice), read (a passage he reads out loud, or empty), clip (one sentence he says to camera that works as a standalone Short, or empty; at least 3 slides have one), follow (the card on every attendee screen: heading = what is happening now in plain words, body = what to do, bullets optional, icon = one emoji, step = a short position label such as "Hands-on 2 of 4" or empty).
 Fields that do not apply: empty string, empty list, or null (prompt, poll and pair are null except on the slides above).
+Headlines are projected in very large type: the title slide's headline is at most ${TITLE_HEADLINE_WORDS} words, every other headline at most ${HEADLINE_WORDS} words, and a highlight at most ${HIGHLIGHT_WORDS} words.
+Length limits in characters (an answer over a limit is rejected): title 90, kicker 80, headline 140, highlight 80, body 400, each bullet 140, do 500, each say line 300, read 900, clip 200, follow.heading 140, follow.body 600, each follow bullet 220, follow.step 40, prompt.label 80, prompt.text 2000, prompt.expect 200, poll.q 200, each option 90, poll.reveal 300, pair.no 160, pair.yes 200, step label 40, step text 120, promise 160, sound bite 200. Keep everything short; these are ceilings, not targets.
 soundBites: 10 to 14 lines Ali could say that work on their own, each 8 to 25 words, never starting with And, So, It or This, each with the index of the slide it belongs to (0 is the first slide).
 
 Content rules, on everything:

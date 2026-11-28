@@ -2,7 +2,7 @@ import { allWeeks } from '../../../data/canonicalCourse';
 import { WeeklyLiveSignal, WeeklyLiveTopic, type PlanInputs } from '../../../models/WeeklyLive';
 import { askAi, type AskAi } from '../aiCall';
 import { reserveFor } from '../modelPrices';
-import { BLUEPRINT_JSON_SCHEMA, parseBlueprint, type SessionBlueprint } from './deckBlueprint';
+import { BLUEPRINT_JSON_SCHEMA, blueprintIssues, parseBlueprint, type SessionBlueprint } from './deckBlueprint';
 import { DECK_WRITER_SYSTEM, deckWriterPrompt, type DeckWriterInput } from './deckPrompts';
 import { validateBlueprint } from './validateBlueprint';
 
@@ -46,11 +46,9 @@ export async function writeBlueprint(planId: string, input: DeckWriterInput, ask
       planId, purpose: 'deck_write', model: DECK_MODEL, system: DECK_WRITER_SYSTEM, user: deckWriterPrompt(input, problems),
       schema: BLUEPRINT_JSON_SCHEMA, maxTokens: MAX_TOKENS, reserveUsd: reserveFor(DECK_MODEL, MAX_TOKENS, MAX_TOKENS),
     });
-    let bp: SessionBlueprint;
-    try { bp = parseBlueprint(raw); } catch (e) {
-      problems = [e instanceof Error ? e.message : 'The session plan came back malformed.'];
-      continue;
-    }
+    const malformed = blueprintIssues(raw);
+    if (malformed.length) { problems = malformed; continue; }
+    const bp: SessionBlueprint = parseBlueprint(raw);
     problems = validateBlueprint(bp);
     if (!problems.length) return bp;
   }

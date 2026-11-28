@@ -12,6 +12,9 @@ import type { SessionBlueprint } from './deckBlueprint';
  */
 export const CLASS_MINUTES = 60;
 export const MAX_SLIDE_MINUTES = 10;
+export const TITLE_HEADLINE_WORDS = 7;
+export const HEADLINE_WORDS = 12;
+export const HIGHLIGHT_WORDS = 6;
 const BAD_START = /^(and|so|it|this)\b/i;
 const words = (s: string) => s.trim().split(/\s+/).filter(Boolean).length;
 
@@ -49,6 +52,11 @@ export function validateBlueprint(bp: SessionBlueprint, ctx: LintContext = {}): 
 
   s.forEach((x, k) => {
     if (x.min > MAX_SLIDE_MINUTES) bad.push(`${at(k)}: ${x.min} minutes, at most ${MAX_SLIDE_MINUTES}`);
+    // Headlines are projected in very large type: past these they overflow the slide (seen on a live run).
+    const hw = words(x.headline); const lw = x.highlight ? words(x.highlight) : 0;
+    const maxH = x.kind === 'title' ? TITLE_HEADLINE_WORDS : HEADLINE_WORDS;
+    if (hw > maxH) bad.push(`${at(k)}: headline is ${hw} words, at most ${maxH}`);
+    if (lw > HIGHLIGHT_WORDS) bad.push(`${at(k)}: highlight is ${lw} words, at most ${HIGHLIGHT_WORDS}`);
     if ((x.kind === 'handson' || x.kind === 'hotseat') && !x.prompt) bad.push(`${at(k)}: needs a prompt to run`);
     if (x.kind !== 'handson' && x.kind !== 'hotseat' && x.prompt) bad.push(`${at(k)}: only hands-on and hot seat slides carry a prompt`);
     if ((x.kind === 'poll') !== Boolean(x.poll)) bad.push(`${at(k)}: ${x.kind === 'poll' ? 'a poll slide needs its poll' : 'only a poll slide carries a poll'}`);

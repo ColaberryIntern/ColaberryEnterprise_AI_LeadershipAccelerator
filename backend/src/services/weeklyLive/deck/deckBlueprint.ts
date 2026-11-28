@@ -36,9 +36,9 @@ export const SlideSchema = z.object({
   highlight: text(80),
   body: text(400),
   bullets: z.array(line(140)).max(6),
-  do: text(300),
-  say: z.array(line(240)).min(1).max(6),
-  read: text(600),
+  do: text(500),
+  say: z.array(line(300)).min(1).max(6),
+  read: text(900),
   clip: text(200),
   follow: FollowSchema,
   prompt: PromptSchema.nullable(),
@@ -78,6 +78,14 @@ export const BLUEPRINT_JSON_SCHEMA: Json = obj({
   soundBites: arr(obj({ text: str, slide: int })),
   nextWeek: obj({ question: str, promise: str }),
 });
+
+/** Every field problem in a malformed answer, as sentences the writer can fix in one go (at most 20). */
+export function blueprintIssues(raw: unknown): string[] {
+  const p = BlueprintSchema.safeParse(raw);
+  if (p.success) return [];
+  if (raw === null || typeof raw !== 'object') return ['The answer was cut off or was not a JSON object.'];
+  return p.error.issues.slice(0, 20).map((i) => `malformed at ${i.path.join('.')}: ${i.message}`);
+}
 
 /** Parse the writer's answer. Throws a ContractViolation naming the first bad field. */
 export function parseBlueprint(raw: unknown): SessionBlueprint {

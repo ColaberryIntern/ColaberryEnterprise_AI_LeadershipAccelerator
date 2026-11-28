@@ -42,6 +42,10 @@ describe('the rules', () => {
     ['the word free', (b) => { b.slides[8].pair!.yes = 'It is free to check.'; }, /zero_price/],
     ['a partnership claim', (b) => { b.slides[4].body = 'Built in partnership with Anthropic.'; }, /partnership/],
     ['a guarantee', (b) => { b.slides[3].say = ['This is guaranteed to work.']; }, /guarantee/],
+    // From the first live run (2026-11-28): this title overflowed the slide.
+    ['a title too long to fit', (b) => { b.slides[0].headline = 'Get a morning handoff draft without starting the work at night.'; }, /slide 1 .*headline is 11 words, at most 7/],
+    ['a highlight too long to fit', (b) => { b.slides[4].highlight = 'It shows up without you every single night.'; }, /highlight is 8 words, at most 6/],
+    ['a headline too long to fit', (b) => { b.slides[4].headline = 'A scheduled job is a promise that the work will show up when you are not there.'; }, /headline is 17 words, at most 12/],
   ])('refuses %s', (_n, breakIt, problem) => {
     const b = sampleBlueprint(); breakIt(b);
     expect(validateBlueprint(b).join('\n')).toMatch(problem);
@@ -163,7 +167,14 @@ describe('the writer', () => {
   it('a cut-off answer is repaired, not guessed', async () => {
     const ask = jest.fn().mockResolvedValueOnce(null).mockResolvedValueOnce(sampleBlueprint());
     await expect(writeBlueprint('p1', input, ask)).resolves.toBeTruthy();
-    expect(ask.mock.calls[1][0].user).toMatch(/malformed/);
+    expect(ask.mock.calls[1][0].user).toMatch(/cut off/);
+  });
+
+  it('lists every malformed field for the repair, not just the first', async () => {
+    const raw = JSON.parse(JSON.stringify(sampleBlueprint())); raw.slides[1].do = 'x'.repeat(501); raw.slides[2].title = '';
+    const ask = jest.fn().mockResolvedValueOnce(raw).mockResolvedValueOnce(sampleBlueprint());
+    await writeBlueprint('p1', input, ask);
+    expect(ask.mock.calls[1][0].user).toMatch(/slides\.1\.do[\s\S]*slides\.2\.title/);
   });
 
   it('the prompt marks news as information and asks for next week', () => {
