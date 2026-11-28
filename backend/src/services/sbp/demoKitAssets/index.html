@@ -211,14 +211,18 @@ dl.facts dd { margin: 0; min-width: 0; }
   .navbox > .navlist { gap: 6px; padding-top: 6px; }
   /* Phone: each row is a card of label and value, so nothing scrolls sideways. */
   .scroll { overflow-x: visible; }
-  table { min-width: 0; }
+  /* Blocks, not table layout: a table sizes itself to its widest cell and pushes past the screen. */
+  table, tbody { display: block; width: 100%; min-width: 0; }
   thead { display: none; }
   tbody tr { display: block; padding: 10px 0; border-top: 1px solid var(--line); }
   tbody tr:first-child { border-top: 0; }
   td { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 5px 16px; border-top: 0; text-align: right; overflow-wrap: anywhere; }
-  td::before { content: attr(data-label); flex: none; max-width: 45%; color: var(--muted); font-size: 12px; font-weight: 600; text-align: left; }
-  td.title { display: block; text-align: left; font-weight: 600; }
+  td::before { content: attr(data-label); flex: 0 1 auto; max-width: 45%; color: var(--muted); font-size: 12px; font-weight: 600; text-align: left; }
+  td.title { display: block; text-align: left; font-weight: 600; white-space: normal; }
   td.title::before { content: none; }
+  /* Phone: a fact's label sits above its value, so a long label cannot push the value off screen. */
+  dl.facts { grid-template-columns: minmax(0, 1fr); gap: 2px 0; }
+  dl.facts dd { margin-bottom: 10px; overflow-wrap: anywhere; }
 }
 @media (prefers-reduced-motion: no-preference) { .tile, .nav a, .btn { transition: background-color .12s, border-color .12s; } }
 </style>

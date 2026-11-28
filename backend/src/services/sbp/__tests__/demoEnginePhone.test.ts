@@ -96,7 +96,7 @@ describe('the demo on a phone', () => {
   it('the phone rules exist and stay inside the phone breakpoint', () => {
     const phoneBlock = ENGINE.slice(ENGINE.indexOf('@media (max-width: 640px)'));
     const block = phoneBlock.slice(0, phoneBlock.indexOf('\n}') + 2);
-    for (const rule of ['.navbox > summary { display: flex', 'thead { display: none; }', 'td::before { content: attr(data-label)', 'table { min-width: 0; }']) {
+    for (const rule of ['.navbox > summary { display: flex', 'thead { display: none; }', 'td::before { content: attr(data-label)', 'table, tbody { display: block;', 'td.title { display: block; text-align: left; font-weight: 600; white-space: normal;', 'dl.facts { grid-template-columns: minmax(0, 1fr);']) {
       expect(block).toContain(rule);
     }
     // Outside the breakpoint the summary is hidden and tables keep their desktop width.
