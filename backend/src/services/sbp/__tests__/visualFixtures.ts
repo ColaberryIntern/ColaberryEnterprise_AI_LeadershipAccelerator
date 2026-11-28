@@ -48,6 +48,17 @@ export function ev(over: Partial<DemoEvent> & Pick<DemoEvent, 'event_id' | 'work
   };
 }
 
+/**
+ * One nav group per fixture.
+ *
+ * The engine refuses a spec with no `nav` ("demo-spec.json has no screens or nav"), so without
+ * this the fixtures could be planned against but never rendered, and phase 2's screenshots would
+ * have had nothing to photograph. Kept minimal: nav is not what any of these fixtures is testing.
+ */
+function navFor(items: Array<[string, string, string]>): unknown[] {
+  return [{ group: 'Demo', items: items.map(([screen, label, icon]) => ({ screen, label, icon })) }];
+}
+
 function spec(over: Partial<DemoSpec> & { app: DemoSpec['app'] }): DemoSpec {
   return {
     schema_version: 2,
@@ -70,7 +81,7 @@ export const shiftCoverage: DemoSpec = spec({
   ],
   entities: {
     gap: {
-      label: 'Gap', plural: 'Gaps', status: 'state',
+      label: 'Gap', plural: 'Gaps', status: 'state', title: '{site} · {state}',
       columns: ['opens_at', 'state', 'fill_minutes'],
       fields: [
         { key: 'opens_at', type: 'datetime' },
@@ -99,17 +110,20 @@ export const shiftCoverage: DemoSpec = spec({
       ],
     },
     person: {
-      label: 'Person', plural: 'People',
+      label: 'Person', plural: 'People', title: 'name',
       fields: [
+        { key: 'name', type: 'text' },
         { key: 'hours', type: 'number', unit: 'h' },
         { key: 'site', type: 'ref', ref: 'site' },
       ],
       rows: [
-        { id: 'p1', hours: 38, site: 's1' }, { id: 'p2', hours: 41, site: 's1' },
-        { id: 'p3', hours: 22, site: 's2' }, { id: 'p4', hours: 36, site: 's2' },
+        { id: 'p1', name: 'Avery Stone', hours: 38, site: 's1' },
+        { id: 'p2', name: 'Jordan Mbeki', hours: 41, site: 's1' },
+        { id: 'p3', name: 'Rae Okonkwo', hours: 22, site: 's2' },
+        { id: 'p4', name: 'Sam Delacroix', hours: 36, site: 's2' },
       ],
     },
-    site: { label: 'Site', plural: 'Sites', fields: [{ key: 'name', type: 'text' }], rows: [{ id: 's1', name: 'North' }, { id: 's2', name: 'South' }] },
+    site: { label: 'Site', plural: 'Sites', title: 'name', fields: [{ key: 'name', type: 'text' }], rows: [{ id: 's1', name: 'North' }, { id: 's2', name: 'South' }] },
   },
   screens: {
     today: { type: 'home', title: 'Good morning', entity: 'gap' },
@@ -118,6 +132,7 @@ export const shiftCoverage: DemoSpec = spec({
     decide: { type: 'queue', entity: 'gap' },
     who: { type: 'roster' },
   },
+  nav: navFor([['today', 'Today', 'home'], ['gaps', 'Gaps', 'list'], ['people', 'People', 'people'], ['decide', 'Decisions', 'check'], ['who', 'Who does what', 'shield']]),
 });
 
 /* ------------------------------------------------------------------ 2. sales pipeline */
@@ -133,7 +148,7 @@ export const salesPipeline: DemoSpec = spec({
   ],
   entities: {
     deal: {
-      label: 'Deal', plural: 'Deals', status: 'stage',
+      label: 'Deal', plural: 'Deals', status: 'stage', title: '{stage} · {amount}',
       fields: [
         { key: 'opened_on', type: 'date' },
         { key: 'stage', type: 'enum', labels: { new: 'New', working: 'Working', won: 'Won' } },
@@ -163,6 +178,7 @@ export const salesPipeline: DemoSpec = spec({
     board: { type: 'home', title: 'Pipeline', entity: 'deal' },
     deals: { type: 'list', entity: 'deal' },
   },
+  nav: navFor([['board', 'Board', 'home'], ['deals', 'Deals', 'list']]),
 });
 
 /* ------------------------------------------------------------------ 3. maintenance queue */
@@ -179,7 +195,7 @@ export const maintenanceQueue: DemoSpec = spec({
   ],
   entities: {
     work_order: {
-      label: 'Work order', plural: 'Work orders', status: 'state',
+      label: 'Work order', plural: 'Work orders', status: 'state', title: '{state} · {response_minutes}',
       fields: [
         { key: 'raised_at', type: 'datetime' },
         { key: 'due_at', type: 'datetime' },
@@ -206,13 +222,14 @@ export const maintenanceQueue: DemoSpec = spec({
         { id: 'a3', work_order: 'wo3', crew: 'c1', hours: 2 },
       ],
     },
-    crew: { label: 'Crew', plural: 'Crews', fields: [{ key: 'name', type: 'text' }], rows: [{ id: 'c1', name: 'Blue' }, { id: 'c2', name: 'Green' }] },
+    crew: { label: 'Crew', plural: 'Crews', title: 'name', fields: [{ key: 'name', type: 'text' }], rows: [{ id: 'c1', name: 'Blue' }, { id: 'c2', name: 'Green' }] },
   },
   screens: {
     desk: { type: 'home', title: 'Open work', entity: 'work_order' },
     orders: { type: 'list', entity: 'work_order' },
     crews: { type: 'list', entity: 'assignment' },
   },
+  nav: navFor([['desk', 'Open work', 'home'], ['orders', 'Work orders', 'list'], ['crews', 'Assignments', 'grid']]),
 });
 
 /* ------------------------------------------------------------------ 4. document review */
@@ -239,6 +256,7 @@ export const documentReview: DemoSpec = spec({
     },
   },
   screens: { desk: { type: 'home', title: 'To review', entity: 'doc' }, docs: { type: 'list', entity: 'doc' } },
+  nav: navFor([['desk', 'To review', 'home'], ['docs', 'Documents', 'list']]),
 });
 
 /* ------------------------------------------------------------------ 5. thin */
@@ -255,6 +273,7 @@ export const thinSpec: DemoSpec = spec({
     },
   },
   screens: { home: { type: 'home', title: 'Start', entity: 'item' }, items: { type: 'list', entity: 'item' } },
+  nav: navFor([['home', 'Start', 'home'], ['items', 'Items', 'list']]),
 });
 
 /* ------------------------------------------------------------------ 6. over cap */
@@ -275,7 +294,7 @@ export const overCapSpec: DemoSpec = spec({
   })),
   entities: {
     kase: {
-      label: 'Case', plural: 'Cases', status: 'state',
+      label: 'Case', plural: 'Cases', status: 'state', title: '{state}',
       fields: [
         { key: 'starts_at', type: 'datetime' },
         { key: 'ends_at', type: 'datetime' },
@@ -286,6 +305,7 @@ export const overCapSpec: DemoSpec = spec({
     },
   },
   screens: { board: { type: 'home', title: 'All cases', entity: 'kase' }, cases: { type: 'list', entity: 'kase' } },
+  nav: navFor([['board', 'All cases', 'home'], ['cases', 'Cases', 'list']]),
 });
 
 export const ALL_FIXTURES: ReadonlyArray<{ name: string; spec: DemoSpec }> = [
