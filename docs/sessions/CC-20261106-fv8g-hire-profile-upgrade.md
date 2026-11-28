@@ -388,3 +388,14 @@ with these.
   - Verification: new test 3/3; with the old header restored it fails 2/3.
   - Notes: found from Ali's screenshot of the live studio; jsdom has no Permissions-Policy, so no
     unit test could see it. Uploading a file was never affected.
+
+- [x] Camera fix deployed; Phase 8 production-verified
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: #4063 merged as 5169de3e1; `./scripts/deploy-prod.sh nginx` on main b783638bb
+    (includes it). Live header on enterprise.colaberry.ai and hire.refactored.ai:
+    `camera=(self), microphone=(self), geolocation=(self)`.
+  - Verification: Ali recorded a take in the live studio ("works well"). Read-only check of
+    hire_profile_intro for his enrollment: video_coaching version 2, 55 s, 69 wpm, 2 fillers,
+    5 timed events, content review present, voice present (pitch variation 3.4 semitones).
+  - Notes: Phase 8 ladder complete: built, tested, merged, deployed, production-verified.
