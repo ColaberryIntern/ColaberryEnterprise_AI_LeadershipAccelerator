@@ -34,7 +34,7 @@
  *              on a misreading.
  */
 import { QueryTypes } from 'sequelize';
-import sequelize from '../../../config/database';
+import { sequelize } from '../../../config/database';
 import { SUPPRESSED_LEAD_STATUSES } from '../explorerContactabilityService';
 import { getOutreach } from '../explorerCampusService';
 import { JourneyEvent, JourneySummaryInput } from './journeySummaryTypes';

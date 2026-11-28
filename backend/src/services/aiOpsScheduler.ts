@@ -619,6 +619,40 @@ const DYNAMIC_SCHEDULE_REGISTRY: DynamicScheduleEntry[] = [
     },
     label: 'Marketing publishing queue tick (every minute)',
   },
+  {
+    // T208. Refreshes the `ent_lead_journey_summary` field on each Explorer's
+    // GHL contact, which Rose and Taiwo read before they call.
+    //
+    // 06:25 Central, deliberately: Kes needs it current before about 06:37,
+    // when the Explorer call queue is built. This path passes
+    // `timezone: 'America/Chicago'`, so the expression is Central and does not
+    // drift across DST. It sits between the 06:20 YouTube refresh and the 06:30
+    // director job. The overnight Explorer sequence that produces the scores and
+    // decisions this reads starts around 21:20 Central the night before, so this
+    // runs well after it, and the card states the date it was built rather than
+    // implying freshness it cannot vouch for.
+    //
+    // SHIPS DARK, like CommercializationWeeklyReport above: the body no-ops
+    // unless EXPLORER_JOURNEY_SUMMARY_ENABLED=true, so merging this writes
+    // nothing to anyone's CRM. Kes has told Rose and Taiwo the field is empty
+    // until she says otherwise, and a job that started filling it on merge would
+    // have taken that timing decision away from her.
+    //
+    // Whoever enables it: this estate runs THREE scheduler instances. Set the
+    // flag on ONE. Three passes would be idempotent in end state, since each
+    // writes the whole card rather than appending, but they would triple the
+    // GHL calls and race each other for the same contacts.
+    agentName: 'ExplorerJourneySummarySync',
+    hardcodedSchedule: '25 6 * * *',
+    dynamicImport: async () => {
+      if (process.env.EXPLORER_JOURNEY_SUMMARY_ENABLED !== 'true') return;
+      const { runJourneySummarySync } = await import(
+        './explorerGrowth/journeySummary/runJourneySummarySync'
+      );
+      await runJourneySummarySync();
+    },
+    label: 'Explorer journey summary into GHL (daily, 06:25 Central)',
+  },
 ];
 
 /** Create + register the cron task for a standard registry entry. */
