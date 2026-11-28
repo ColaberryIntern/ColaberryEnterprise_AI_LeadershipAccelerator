@@ -1361,7 +1361,16 @@ dl.facts dd { margin: 0; min-width: 0; }
     if (now !== null) { lo = Math.min(lo, now); hi = Math.max(hi, now); }
     if (hi <= lo) hi = lo + 1;
     var pad = (hi - lo) * 0.06; lo -= pad; hi += pad;
-    var W = 760, L = 150, R = 16, H = lanes.length * 34 + 60;
+    /*
+     * The label gutter is sized to the labels, not fixed at 150. A real spec's work items are
+     * named "Mosswick Dental · 8:30 AM CST-2:30 PM CST", which ran straight through the gutter
+     * and collided with its own event marks. Clipped to 28 characters, then the gutter takes
+     * whatever that needs within bounds, so a domain with short names still gets a wide plot.
+     */
+    lanes.forEach(function (l) { l.label = clip(l.label, 28); });
+    var longest = lanes.reduce(function (m, l) { return Math.max(m, l.label.length); }, 0);
+    var W = 760, L = Math.min(230, Math.max(110, Math.round(longest * 5.9))), R = 16;
+    var H = lanes.length * 34 + 60;
     var x = function (t) { return L + ((t - lo) / (hi - lo)) * (W - L - R); };
 
     var marks = '';
@@ -1381,7 +1390,7 @@ dl.facts dd { margin: 0; min-width: 0; }
       });
       var bad = evs.some(function (e) { return e.status === 'failed'; });
       marks += '<g class="lane' + (bad ? ' bad' : '') + '">' +
-        '<text class="lane-label" x="0" y="' + (y + 4) + '">' + esc(clip(l.label, 32)) + '</text>' +
+        '<text class="lane-label" x="0" y="' + (y + 4) + '">' + l.label + '</text>' +
         '<line class="bar" x1="' + x(l.a).toFixed(1) + '" y1="' + y + '" x2="' + x(l.z).toFixed(1) + '" y2="' + y + '"/>' +
         groups.map(function (g) {
           return '<g class="mk' + (g.bad ? ' bad' : '') + '"><circle cx="' + x(g.t).toFixed(1) + '" cy="' + y + '" r="6"/>' +
