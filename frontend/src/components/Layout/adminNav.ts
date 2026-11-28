@@ -44,6 +44,9 @@ export const PINNED_LINKS: NavLink[] = [
   // domains hang off.
   { path: '/admin/war-room', label: 'War Room', icon: 'radar-line', section: 'war_room' },
   { path: '/admin/trust', label: 'Trust Center', icon: 'shield-check-line', section: 'trust' },
+  // Admissions & Ops Command Center (AO1.3): Taiwo's workspace. One entry; its 16 screens are reached from the
+  // page's own section bar (the Marketing consolidation pattern), so the child paths resolve here by prefix.
+  { path: '/admin/admissions-ops', label: 'Admissions & Ops', icon: 'graduation-cap-line', section: 'admissions_ops' },
   // Support role's sole surface (also visible to owner/admin who hold 'students').
   { path: '/admin/students', label: 'Student Story', icon: 'file-user-line', section: 'students' },
   // Portfolio review. Its own section so a Mentor can be granted THIS and nothing

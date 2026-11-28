@@ -7,6 +7,7 @@ const CareerReviewPage = lazy(() => import('../pages/admin/CareerReviewPage'));
 const PlacementStudentsPage = lazy(() => import('../pages/admin/PlacementStudentsPage'));
 const CareerDeskPage = lazy(() => import('../pages/admin/careerDesk/CareerDeskPage'));
 const CommsHubLayout = lazy(() => import('../components/admin/commsHub/CommsHubLayout'));
+const AdmissionsOpsLayout = lazy(() => import('../pages/admin/admissionsOps/AdmissionsOpsLayout'));
 // Voice AI Studio console (VS3.3). Route only, no nav entry yet: the API answers 404 until VOICE_STUDIO_UI_ENABLED.
 const VoiceStudioLayout = lazy(() => import('../components/admin/voiceStudio/VoiceStudioLayout'));
 const VoiceStudioOverviewTab = lazy(() => import('../components/admin/voiceStudio/OverviewTab'));
@@ -152,6 +153,7 @@ const AdminFunnelPage = lazy(() => import('../pages/admin/AdminFunnelPage'));
 const CbSystemCommand = lazy(() => import('../pages/admin/CbSystemCommand'));
 const AdminTrustCenterPage = lazy(() => import('../pages/admin/AdminTrustCenterPage'));
 import lifecycleRoutes from './lifecycleRoutes';
+import { admissionsOpsChildRoutes } from '../pages/admin/admissionsOps/admissionsOpsRoutes';
 const AdminPortalEnterPage = lazy(() => import('../pages/admin/AdminPortalEnterPage'));
 // D4 (P4-01) Colaberry Live. Both render outside AdminLayout; see the routes below.
 const StudioIndexPage = lazy(() => import('../pages/admin/live/StudioIndexPage'));
@@ -244,6 +246,8 @@ const adminRoutes = (
         <Route path="/admin/system/operations" element={<PlatformOperationsLayout />}>
           <Route index element={<OperationsFleetTab />} />
         </Route>
+        {/* Admissions & Ops (AO1.4): one layout route; the 16 screens are child routes from their own module. */}
+        <Route path="/admin/admissions-ops" element={<AdmissionsOpsLayout />}>{admissionsOpsChildRoutes()}</Route>
         {/* Communications Hub (CH1.3): one route, four tabs as child routes so a refresh keeps the tab. */}
         <Route path="/admin/comms-hub" element={<CommsHubLayout />}>
           <Route index element={<CommsHubTodayTab />} />

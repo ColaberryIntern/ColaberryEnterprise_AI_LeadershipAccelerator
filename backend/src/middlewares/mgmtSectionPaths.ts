@@ -116,6 +116,9 @@ export const PATH_SECTION: Array<[string, SectionKey]> = [
   // so no role loses anything, which is the condition `brandPaths.test.ts` names for adding a
   // classification safely.
   ['/api/admin/admissions', 'lead_ingestion'],
+  // Admissions & Ops Command Center (AO1.3): Taiwo's workspace, its own section. A sibling prefix, not a child of the
+  // row above: matching is `/`-delimited, so /api/admin/admissions-ops never falls under '/api/admin/admissions'.
+  ['/api/admin/admissions-ops', 'admissions_ops'],
   ['/api/admin/inbox', 'inbox_content'], ['/api/admin/content-queue', 'inbox_content'],
   // ORDER IS LOAD-BEARING. These three sit ahead of the broad `/api/admin/orchestration` row on
   // the next line because `pathToSection` returns the FIRST match, not the longest. Move them

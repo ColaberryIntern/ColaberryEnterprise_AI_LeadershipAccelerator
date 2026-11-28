@@ -1,0 +1,35 @@
+/*
+ * Admissions & Ops Command Center (AO1.4). Tokens only (src/colaberry/tokens); no hex values.
+ * The section bar wraps instead of scrolling sideways, so nothing overflows at 390px.
+ */
+.admissions-ops { min-width: 0; }
+
+.ops-section-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  padding: 0.375rem;
+  border: 1px solid var(--neutral-200);
+  border-radius: var(--radius-lg);
+  background: var(--neutral-0);
+}
+.ops-section-group { flex-wrap: wrap; gap: 0.125rem; }
+/* Tools stay on the right, as in the demo, including when the bar wraps onto a second line. */
+.ops-section-tools { margin-left: auto; justify-content: flex-end; }
+.ops-section-link {
+  color: var(--neutral-800);
+  font-weight: 500;
+  border-radius: var(--radius-md);
+  padding: 0.5rem 0.75rem;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+.ops-section-link:hover,
+.ops-section-link:focus-visible { background: var(--neutral-100); color: var(--neutral-950); }
+.ops-section-link.active { background: var(--neutral-950); color: var(--neutral-0); }
+
+.ops-placeholder-links { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; }
+.ops-placeholder-links .btn { min-height: 44px; display: inline-flex; align-items: center; }
+.ops-placeholder-meta { color: var(--neutral-600); font-size: 0.875rem; }
