@@ -8,8 +8,9 @@ export const WINDOW_MS = 60 * 60_000;
 const MAX_PER_KEY = 2_000;
 const MAX_KEYS = 300;
 
-export type Provider = 'twilio' | 'anthropic' | 'openai_realtime';
-export const PROVIDERS: readonly Provider[] = ['twilio', 'anthropic', 'openai_realtime'];
+export type Provider = 'twilio' | 'anthropic' | 'openai' | 'openai_realtime';
+/** 'openai' is Engine A on OpenAI chat; 'openai_realtime' is Engine B. Separate circuits: one failing must not stop the other. */
+export const PROVIDERS: readonly Provider[] = ['twilio', 'anthropic', 'openai', 'openai_realtime'];
 
 export interface OpMetrics { operation: string; volume: number; success_rate: number | null; failure_rate: number | null; retry_count: number; latency_ms: { p50: number | null; p95: number | null; p99: number | null } }
 

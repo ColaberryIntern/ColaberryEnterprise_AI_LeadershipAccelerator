@@ -36,8 +36,10 @@ const RawVoiceEnvSchema = z.object({
   VOICE_DESTINATION_HASH_KEY: z.string().min(16).optional(),
   /** VS3.2: the teammate line a call is handed to (server env only; never logged or returned). Unset = no transfers, callers get the safe fallback. */
   VOICE_TRANSFER_NUMBER: e164.optional(),
-  /** Engine A's Claude model (VS2.3). Default per the Claude API guidance; a faster model is an owner decision. */
-  VOICE_ENGINE_A_MODEL: z.string().regex(/^claude-[a-z0-9.-]+$/).default('claude-opus-5-5'),
+  /** Engine A's model provider. OpenAI by owner decision 2026-11-28 (one key for both engines); 'anthropic' keeps the Claude path. */
+  VOICE_ENGINE_A_PROVIDER: z.enum(['openai', 'anthropic']).default('openai'),
+  /** Engine A's model. Unset = the provider default (ENGINE_A_DEFAULT_MODEL). Must belong to the provider. */
+  VOICE_ENGINE_A_MODEL: z.string().regex(/^(claude|gpt|o\d)[a-z0-9.-]*$/).optional(),
   /** ElevenLabs voice for ConversationRelay ([VoiceID] or [VoiceID]-[model]...). Unset = Twilio's documented default for the language. */
   VOICE_RELAY_VOICE: z.string().regex(/^[A-Za-z0-9]{10,40}(-[A-Za-z0-9_.]+)*$/).optional(),
   /** Engine B's OpenAI Realtime model (VS2.4), per the Realtime guide read 2026-11-24. */
@@ -45,6 +47,9 @@ const RawVoiceEnvSchema = z.object({
   /** Engine B's built-in voice name (alloy, marin, cedar, ...). Unset = the API default. */
   VOICE_REALTIME_VOICE: z.string().regex(/^[a-z]{2,20}$/).optional(),
 }).superRefine((v, ctx) => {
+  if (v.VOICE_ENGINE_A_MODEL && v.VOICE_ENGINE_A_MODEL.startsWith('claude') !== (v.VOICE_ENGINE_A_PROVIDER === 'anthropic')) {
+    ctx.addIssue({ code: 'custom', path: ['VOICE_ENGINE_A_MODEL'], message: `not a ${v.VOICE_ENGINE_A_PROVIDER} model` });
+  }
   if (v.VOICE_TEST_ENABLED && !v.VOICE_TEST_ALLOWED_NUMBER) {
     ctx.addIssue({ code: 'custom', path: ['VOICE_TEST_ALLOWED_NUMBER'], message: 'required when VOICE_TEST_ENABLED=true' });
   }
@@ -79,7 +84,7 @@ export function redactedVoiceConfig(c: VoiceConfig): Record<string, unknown> {
     publicBaseUrl: c.VOICE_PUBLIC_BASE_URL ? 'set' : 'unset', wsBaseUrl: c.VOICE_WS_BASE_URL ? 'set' : 'unset',
     destinationHashKey: c.VOICE_DESTINATION_HASH_KEY ? 'set' : 'unset (derived from JWT_SECRET)',
     transferNumber: c.VOICE_TRANSFER_NUMBER ? 'set' : 'unset',
-    engineAModel: c.VOICE_ENGINE_A_MODEL, relayVoice: c.VOICE_RELAY_VOICE ? 'set' : 'default',
+    engineAProvider: c.VOICE_ENGINE_A_PROVIDER, engineAModel: engineAModel(c), relayVoice: c.VOICE_RELAY_VOICE ? 'set' : 'default',
     engineBModel: c.VOICE_ENGINE_B_MODEL, realtimeVoice: c.VOICE_REALTIME_VOICE ?? 'default',
   };
 }
@@ -93,3 +98,9 @@ export function logVoiceConfigAtBoot(env: Record<string, string | undefined> = p
   (c.valid ? console.log : console.warn)(JSON.stringify(line));
   return c;
 }
+
+/** Engine A's model when none is set: the repository's established OpenAI chat model, or the Claude default. */
+export const ENGINE_A_DEFAULT_MODEL = { openai: 'gpt-4o', anthropic: 'claude-opus-5-5' } as const;
+export const engineAModel = (c: { VOICE_ENGINE_A_PROVIDER: 'openai' | 'anthropic'; VOICE_ENGINE_A_MODEL?: string }): string => c.VOICE_ENGINE_A_MODEL ?? ENGINE_A_DEFAULT_MODEL[c.VOICE_ENGINE_A_PROVIDER];
+/** The key Engine A needs for its provider. */
+export const engineAKeyName = (provider: 'openai' | 'anthropic'): 'OPENAI_API_KEY' | 'ANTHROPIC_API_KEY' => (provider === 'openai' ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY');

@@ -1,4 +1,4 @@
-import { loadVoiceConfig, redactedVoiceConfig, logVoiceConfigAtBoot, TEST_LIMITS } from '../voiceConfig';
+import { loadVoiceConfig, redactedVoiceConfig, logVoiceConfigAtBoot, TEST_LIMITS, engineAModel, engineAKeyName } from '../voiceConfig';
 
 const FICTION = '+15555550100';
 
@@ -59,5 +59,20 @@ describe('voiceConfig: validated, never throws, fails SAFE', () => {
 
   it('is deterministic for the same env (idempotent)', () => {
     expect(loadVoiceConfig({ VOICE_TEST_MAX_ATTEMPTS: '2' })).toEqual(loadVoiceConfig({ VOICE_TEST_MAX_ATTEMPTS: '2' }));
+  });
+});
+
+describe('Engine A provider (owner decision 2026-11-28: OpenAI)', () => {
+  it('defaults to OpenAI with the repository chat model, and its key', () => {
+    const c = loadVoiceConfig({});
+    expect([c.VOICE_ENGINE_A_PROVIDER, engineAModel(c), engineAKeyName(c.VOICE_ENGINE_A_PROVIDER)]).toEqual(['openai', 'gpt-4o', 'OPENAI_API_KEY']);
+  });
+  it('Claude stays available as a setting', () => {
+    const c = loadVoiceConfig({ VOICE_ENGINE_A_PROVIDER: 'anthropic' });
+    expect([engineAModel(c), engineAKeyName('anthropic')]).toEqual(['claude-opus-5-5', 'ANTHROPIC_API_KEY']);
+    expect(engineAModel(loadVoiceConfig({ VOICE_ENGINE_A_MODEL: 'gpt-4o-mini' }))).toBe('gpt-4o-mini');
+  });
+  it.each([[{ VOICE_ENGINE_A_MODEL: 'claude-opus-5-5' }], [{ VOICE_ENGINE_A_PROVIDER: 'anthropic', VOICE_ENGINE_A_MODEL: 'gpt-4o' }], [{ VOICE_ENGINE_A_PROVIDER: 'gemini' }], [{ VOICE_ENGINE_A_MODEL: 'gpt 4o' }]])('a model that is not the provider\'s is an issue: %j', (env) => {
+    expect(loadVoiceConfig(env).issues.length).toBeGreaterThan(0);
   });
 });

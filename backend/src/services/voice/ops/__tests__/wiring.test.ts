@@ -4,6 +4,7 @@
  */
 const streamTurn = jest.fn();
 jest.mock('../../engines/claudeVoiceLlm', () => ({ ...jest.requireActual('../../engines/claudeVoiceLlm'), createClaudeVoiceLlm: () => ({ streamTurn: (...a: unknown[]) => streamTurn(...a) }) }));
+jest.mock('../../engines/openaiVoiceLlm', () => ({ ...jest.requireActual('../../engines/openaiVoiceLlm'), createOpenAiVoiceLlm: () => ({ streamTurn: (...a: unknown[]) => streamTurn(...a) }) }));
 const sockets: Array<{ handlers: Record<string, (...a: unknown[]) => void>; fire(e: string, ...a: unknown[]): void }> = [];
 const socketThrows = { on: false };
 jest.mock('ws', () => {
@@ -55,12 +56,12 @@ afterEach(() => { jest.restoreAllMocks(); jest.useRealTimers(); });
 afterAll(() => { process.env = was; });
 
 describe('production wiring', () => {
-  it('Engine A runs behind the Claude circuit', async () => {
+  it('Engine A runs behind the OpenAI chat circuit by default', async () => {
     streamTurn.mockResolvedValue({ ok: false, errorClass: 'UpstreamUnavailable', aborted: false });
     const { llm } = relayDeps();
     for (let i = 0; i < 5; i++) await llm.streamTurn(turn); // eslint-disable-line no-await-in-loop
     expect(await llm.streamTurn(turn)).toMatchObject({ errorClass: 'CircuitOpen' });
-    expect(voiceOps.breakers.anthropic.current).toBe('OPEN');
+    expect(voiceOps.breakers.openai.current).toBe('OPEN');
   });
 
   it('Engine B connects behind the OpenAI circuit, and an open circuit says the model is unavailable', () => {
@@ -173,7 +174,7 @@ describe('DRILL: a provider that hangs', () => {
   function relayCall(llm: Parameters<typeof guardLlm>[0], ops: OpsMetrics) {
     let t = 0;
     const worker = new SessionWorker({ now: () => t, log: () => undefined, reconcile: async () => undefined, recordTool: () => undefined });
-    const c = new RelayConnection({ send: () => undefined, close: () => undefined }, { worker, llm: guardLlm(llm, ops), broker: () => new ToolBroker([]), profile: { versionId: 'v', greeting: 'g', system: 's', language: 'en-US' }, accountSid: () => ACCOUNT,
+    const c = new RelayConnection({ send: () => undefined, close: () => undefined }, { worker, llm: guardLlm(llm, 'openai', ops), broker: () => new ToolBroker([]), profile: { versionId: 'v', greeting: 'g', system: 's', language: 'en-US' }, accountSid: () => ACCOUNT,
       consumeSessionRef: async () => 'consumed', callMatches: async () => true, now: () => Date.now(), log: () => undefined });
     const say = (m: object) => c.onMessage(JSON.stringify(m));
     const begin = async () => { await say({ type: 'setup', sessionId: 's', callSid: SID, accountSid: ACCOUNT, customParameters: { ref: mintToken('0b1c2d3e-4f50-4617-8899-aabbccddeeff', 'session', 120, Date.now(), correlationKey()) } }); };
@@ -191,7 +192,7 @@ describe('DRILL: a provider that hangs', () => {
       await p; // eslint-disable-line no-await-in-loop
       x.c.onClose();
     }
-    expect(ops.breakers.anthropic.current).toBe('OPEN');
+    expect(ops.breakers.openai.current).toBe('OPEN');
   });
   it.each(['interrupt', 'hang up'])('CONTROL: callers who %s never open it', async (how) => {
     const ops = new OpsMetrics(() => 1);
@@ -204,7 +205,7 @@ describe('DRILL: a provider that hangs', () => {
       await p; // eslint-disable-line no-await-in-loop
       x.c.onClose();
     }
-    expect(ops.breakers.anthropic.current).toBe('CLOSED');
+    expect(ops.breakers.openai.current).toBe('CLOSED');
   });
   it('OpenAI opening a socket and never accepting the session opens the circuit; a quick hang-up does not', () => {
     for (const [wait, open] of [[REALTIME_SLOW_MS, false], [REALTIME_SLOW_MS - 1, true]] as const) {

@@ -14,6 +14,7 @@ Source of truth: [MASTER_BUILD_PROMPT.md](MASTER_BUILD_PROMPT.md) (authorized te
   - Q3 A: reuse one idle Twilio number we already own ($0, no purchase). The number is chosen in VS2.1 from the 9 idle numbers and held in env, never in git.
   - Q4 A: done 2026-11-24. Claude set VOICE_TEST_ALLOWED_NUMBER in the prod host .env (backup .env.bak-20261124-voicetestnumber). It loads at the next backend recreate; VOICE_TEST_ENABLED stays false until VS2.6.
   - Q5 A: one small separate PR moves the 2 live values to env vars and the fixtures to reserved 555 numbers. Historical PROGRESS.md and session-log lines are left as written.
+- 2026-11-28: DECIDED (Ali): keep Twilio as the carrier (the 69 owned numbers stay; only TWILIO_AUTH_TOKEN is missing in production, and Twilio signs every request with it). Engine A's model moves from Claude to OpenAI on the existing OPENAI_API_KEY: VOICE_ENGINE_A_PROVIDER=openai (the default), model gpt-4o (the repository's established OpenAI chat model) unless VOICE_ENGINE_A_MODEL says otherwise. Claude stays available as VOICE_ENGINE_A_PROVIDER=anthropic. No Anthropic key is needed.
 
 ## Vendor facts
 

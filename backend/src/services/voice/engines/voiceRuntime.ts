@@ -24,6 +24,8 @@ import { mintToken } from '../twilio/correlationToken';
 import { appendCallEvents, consumeToken, recomputeCall } from '../twilio/voiceCallStore';
 import { CONTRACT_VERSION } from '../contracts/schemas';
 import { createClaudeVoiceLlm } from './claudeVoiceLlm';
+import { createOpenAiVoiceLlm } from './openaiVoiceLlm';
+import { engineAModel } from '../voiceConfig';
 import type { RelayDeps } from './conversationRelayEngine';
 import { buildRelayTwiml } from './relayProtocol';
 import { nextOpenSlotsTool, ToolBroker } from './toolBroker';
@@ -127,7 +129,7 @@ export function relayDeps(): RelayDeps {
   const c = loadVoiceConfig();
   return {
     worker: getWorker(),
-    llm: guardLlm(createClaudeVoiceLlm(c.VOICE_ENGINE_A_MODEL)),
+    llm: guardLlm(c.VOICE_ENGINE_A_PROVIDER === 'openai' ? createOpenAiVoiceLlm(engineAModel(c)) : createClaudeVoiceLlm(engineAModel(c)), c.VOICE_ENGINE_A_PROVIDER),
     broker: relayBroker,
     profile: liveProfile(),
     sessionFor: (callId) => sessionFor(callId, relayTools),

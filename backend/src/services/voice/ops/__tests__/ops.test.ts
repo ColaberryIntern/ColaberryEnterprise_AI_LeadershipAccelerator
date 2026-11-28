@@ -9,7 +9,7 @@ import type { CarrierAdapter } from '../../contracts/providers';
 
 const HEALTHY: OpsFacts = {
   ended: 20, failed: 1, busyOrNoAnswer: 5, acceptedNeverRang: 0, dispatchUnknown24h: 0, orphaned: 0, stalled: 0, queueStuck: 0, policyDenied: 2, webhookSignatureFailures: 1, silentAnswered: 0, transitionsRejected: 3,
-  wrongVersion: 0, duplicateDials: 0, spend24hUsd: 3, spendAlertUsd: 25, turnLatencyP95Ms: 900, turnLatencySamples: 40, optOutsPending: 0, handlerFailures: 0, breakers: { twilio: 'CLOSED', anthropic: 'CLOSED', openai_realtime: 'CLOSED' },
+  wrongVersion: 0, duplicateDials: 0, spend24hUsd: 3, spendAlertUsd: 25, turnLatencyP95Ms: 900, turnLatencySamples: 40, optOutsPending: 0, handlerFailures: 0, breakers: { twilio: 'CLOSED', anthropic: 'CLOSED', openai: 'CLOSED', openai_realtime: 'CLOSED' },
 };
 /** The drill for each runbook incident: the smallest change from healthy that must raise it, and only it. */
 const DRILLS: Record<AlertKey, Partial<OpsFacts>> = {
@@ -81,7 +81,7 @@ describe('provider guards', () => {
   it.each(['RateLimitError', 'UpstreamUnavailable', 'TimeoutError', 'AuthError'])('Claude failing with %s opens the circuit; then it answers at once without calling', async (errorClass) => {
     const m = new OpsMetrics(() => 1);
     const streamTurn = jest.fn().mockResolvedValue({ ok: false, errorClass, aborted: false });
-    const g = guardLlm({ streamTurn }, m);
+    const g = guardLlm({ streamTurn }, 'anthropic', m);
     for (let i = 0; i < 5; i++) await g.streamTurn(turn); // eslint-disable-line no-await-in-loop
     expect(await g.streamTurn(turn)).toEqual({ ok: false, errorClass: 'CircuitOpen', aborted: false });
     expect(streamTurn).toHaveBeenCalledTimes(5);
@@ -89,28 +89,29 @@ describe('provider guards', () => {
   it('a hang-up or a wrong request never opens it; a throw does', async () => {
     const m = new OpsMetrics(() => 1);
     for (const r of [{ ok: false as const, errorClass: 'Aborted', aborted: true }, { ok: false as const, errorClass: 'LlmRequestRejected', aborted: false }]) {
-      const g = guardLlm({ streamTurn: async () => r }, m);
+      const g = guardLlm({ streamTurn: async () => r }, 'anthropic', m);
       for (let i = 0; i < 20; i++) await g.streamTurn(turn); // eslint-disable-line no-await-in-loop
     }
     expect(m.breakers.anthropic.current).toBe('CLOSED');
-    const g = guardLlm({ streamTurn: async () => { throw new Error('x'); } }, m);
+    const g = guardLlm({ streamTurn: async () => { throw new Error('x'); } }, 'anthropic', m);
     for (let i = 0; i < 5; i++) await expect(g.streamTurn(turn)).rejects.toThrow('x'); // eslint-disable-line no-await-in-loop
     expect(m.breakers.anthropic.current).toBe('OPEN');
+    expect(m.breakers.openai.current).toBe('CLOSED'); // each provider has its own circuit
     expect(m.breakers.twilio.current).toBe('CLOSED');
   });
   it('time to the first word is measured once per turn, and every word is still delivered', async () => {
     const m = new OpsMetrics(() => 1);
     let t = 0;
     const heard: string[] = [];
-    await guardLlm({ streamTurn: async (a) => { t = 300; a.onText('a'); t = 900; a.onText('b'); return ok; } }, m, () => t).streamTurn({ ...turn, onText: (d) => heard.push(d) });
+    await guardLlm({ streamTurn: async (a) => { t = 300; a.onText('a'); t = 900; a.onText('b'); return ok; } }, 'anthropic', m, () => t).streamTurn({ ...turn, onText: (d) => heard.push(d) });
     expect(heard).toEqual(['a', 'b']);
-    expect(m.snapshot().find((o) => o.operation === 'anthropic.first_text')).toMatchObject({ volume: 1, latency_ms: { p95: 300 } });
+    expect(m.snapshot().find((o) => o.operation === 'engine_a.first_text')).toMatchObject({ volume: 1, latency_ms: { p95: 300 } });
   });
   it('a working provider is measured', async () => {
     const m = new OpsMetrics(() => 1);
     let t = 0;
-    await guardLlm({ streamTurn: async () => { t = 40; return ok; } }, m, () => t).streamTurn(turn);
-    expect(m.snapshot().find((o) => o.operation === 'anthropic.turn')).toMatchObject({ operation: 'anthropic.turn', volume: 1, success_rate: 1, latency_ms: { p50: 40 } });
+    await guardLlm({ streamTurn: async () => { t = 40; return ok; } }, 'anthropic', m, () => t).streamTurn(turn);
+    expect(m.snapshot().find((o) => o.operation === 'engine_a.turn')).toMatchObject({ operation: 'engine_a.turn', volume: 1, success_rate: 1, latency_ms: { p50: 40 } });
   });
 
   const handlers: ModelHandlers = { onMessage: () => undefined, onClose: () => undefined };
