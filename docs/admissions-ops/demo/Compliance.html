@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Compliance</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0;font-family:Roboto,system-ui,sans-serif;font-size:14px;line-height:1.45;color:#2B2B2B;background:#F8F8F7}
+a{color:#2E6A86;text-decoration:none}a:hover{color:#1A3947;text-decoration:underline}
+button{font-family:inherit;cursor:pointer}
+h2{margin:0;font-size:17px;font-weight:700;color:#1A1A1A}
+.rail a{color:#D8D8D8;display:block;padding:9px 16px;border-radius:6px;font-weight:500}
+.rail a:hover{color:#FFFFFF;background:#2B2B2B;text-decoration:none}
+.hub a{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 9px;border-radius:6px;font-weight:500;color:#2B2B2B;box-sizing:border-box}
+.hub a:hover{background:#F1F1F0;text-decoration:none;color:#1A1A1A}
+.btn{display:inline-block;padding:10px 14px;border-radius:6px;font-weight:500;font-size:14px;min-height:44px;box-sizing:border-box;line-height:22px}
+a.btn:hover{text-decoration:none}
+.dock a{color:#FFFFFF;display:inline-flex;align-items:center;min-height:44px;padding:0 12px;border:1px solid #8C8C8C;border-radius:999px;font-size:13px;font-weight:500;box-sizing:border-box}
+.dock a:hover{background:#2B2B2B;color:#FFFFFF;text-decoration:none}
+.card{background:#FFFFFF;border:1px solid #E4E4E3;border-radius:10px;box-sizing:border-box}
+.src{font-size:12px;color:#6B6B6B}
+.tag{display:inline-block;font-size:12px;font-weight:700;border-radius:4px;padding:2px 8px;white-space:nowrap}
+.scroll{overflow-x:auto}
+.t{width:100%;border-collapse:collapse;min-width:760px}
+.t th{text-align:left;font-size:12px;color:#6B6B6B;font-weight:700;letter-spacing:.04em;padding:10px 16px;border-top:1px solid #E4E4E3;border-bottom:1px solid #E4E4E3;white-space:nowrap;background:#F8F8F7}
+.t td{padding:12px 16px;border-bottom:1px solid #F1F1F0;vertical-align:top}
+.t a{font-weight:500}
+</style>
+</helmet>
+<div id="top" style="display: flex; flex-wrap: wrap; min-height: 100vh; align-items: stretch">
+<nav class="rail" aria-label="Admin" style="flex: 1 1 224px; max-width: 100%; background: #1A1A1A; padding: 18px 10px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px"><div style="color: #FFFFFF; font-weight: 700; font-size: 16px; padding: 4px 16px 16px">Colaberry Admin</div><a href="index.html">Dashboard</a><a href="index.html">War Room</a><a href="index.html">Trust Center</a><a href="index.html" aria-current="page" style="background: #7A1016; color: #FFFFFF">Admissions &amp; Ops</a><a href="index.html">Portfolio Review</a><div style="color: #B4B4B4; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; padding: 18px 16px 6px">REVENUE</div><a href="index.html">Revenue</a><a href="index.html">Revenue Room</a><a href="index.html">Enterprise Clients</a><a href="index.html">Business Accounts</a><div style="color: #B4B4B4; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; padding: 18px 16px 6px">MARKETING</div><a href="index.html">Marketing</a><div style="color: #B4B4B4; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; padding: 18px 16px 6px">PROGRAM</div><a href="index.html">Accelerator</a><a href="index.html">Agents</a></nav>
+<main style="flex: 999 1 560px; min-width: 0; padding: 20px 28px 40px; box-sizing: border-box; display: flex; flex-direction: column; gap: 18px">
+<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center"><div style="color: #6B6B6B; flex: 0 0 auto">Admin / <a href="index.html">Admissions &amp; Ops</a> / Compliance</div><div style="flex: 1 1 360px; min-width: 0; display: flex; align-items: center; gap: 8px; background: #FFFFFF; border: 1px solid #B4B4B4; border-radius: 8px; padding: 0 12px"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6B6B6B" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg><label for="find" style="position: absolute; left: -9999px">Find a student</label><input id="find" type="search" placeholder="Find anyone: name, email, phone, student ID, GHL contact or TFC contract" style="flex: 1; min-width: 0; border: 0; outline: 0; height: 44px; font: inherit; background: transparent"></div><a href="Students.html" style="font-weight: 500; padding: 12px 0">All students</a><span style="font-size: 12px; font-weight: 500; color: #4A4A4A; background: #E4E4E3; border-radius: 999px; padding: 4px 10px">Sample data</span></div>
+<nav class="hub card" aria-label="Admissions and Ops sections" style="display: flex; flex-wrap: wrap; gap: 4px 8px; justify-content: space-between; padding: 6px">
+<div style="display: flex; flex-wrap: wrap; gap: 2px"><a href="index.html">Today</a><a href="Admissions.html">Admissions</a><a href="Students.html">Students</a><a href="Academics.html">Academics</a><a href="Payments.html">Payments</a><a href="Support.html">Support</a><a href="Communications.html">Communications</a><a href="Compliance.html" aria-current="page" style="background: #1A3947; color: #FFFFFF">Compliance</a><a href="Reports.html">Reports</a></div>
+<div style="display: flex; flex-wrap: wrap; gap: 2px"><a href="Agent.html">Ask AURA</a><a href="Approvals.html">Approvals <span style="font-size: 11px; font-weight: 700; background: #C20E1E; color: #FFFFFF; border-radius: 999px; padding: 1px 7px">10</span></a><a href="Knowledge.html">Knowledge</a><a href="Setup.html">Setup</a></div></nav>
+<section class="dock" aria-label="AURA, the built-in agent" style="background: #1A1A1A; color: #FFFFFF; border-radius: 10px; padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center">
+<div style="display: flex; align-items: center; gap: 8px"><span aria-hidden="true" style="width: 10px; height: 10px; border-radius: 999px; background: #8AC759"></span><span style="font-weight: 700; letter-spacing: 0.04em">AURA</span><span style="font-size: 12px; color: #D8D8D8">Guide mode · sees this screen</span></div><label for="aura" style="position: absolute; left: -9999px">Tell AURA what to do</label><input id="aura" type="text" placeholder="Tell AURA what to do or where to take you" style="flex: 1 1 260px; min-width: 0; height: 44px; border: 1px solid #8C8C8C; border-radius: 6px; padding: 0 12px; font: inherit; background: #2B2B2B; color: #FFFFFF; box-sizing: border-box">
+<div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center"><a href="Approvals.html">Finish Kevin's letter</a><a href="Student360.html">Open Kevin's attendance</a><a href="Payments.html">Reconcile the invoices</a><a href="Agent.html" style="border-color: #1A1A1A; text-decoration: underline">Open AURA</a></div></section>
+<div style="display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: flex-end; justify-content: space-between"><div style="min-width: 0"><h1 style="margin: 0; font-size: 28px; font-weight: 700; color: #1A1A1A; letter-spacing: -0.01em">Compliance</h1><div style="color: #4A4A4A; margin-top: 2px; max-width: 60em">TWC, WIOA and workforce requests with their deadlines, the documents behind them and the invoices still unpaid.</div></div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px"><a class="btn" href="Reports.html" style="background: #FFFFFF; color: #1A1A1A; border: 1px solid #8C8C8C">TWC and WIOA reports</a><a class="btn" href="Knowledge.html" style="background: #FFFFFF; color: #1A1A1A; border: 1px solid #8C8C8C">Agency contacts</a><a class="btn" href="Agent.html" style="background: #1A3947; color: #FFFFFF">Ask AURA</a></div></div>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px"><div class="card" style="padding: 16px 18px"><div style="font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: #6B6B6B">AGENCY REQUESTS OPEN</div><div style="font-size: 26px; font-weight: 700; color: #1A1A1A; margin-top: 4px; line-height: 1.15">3</div><div style="margin-top: 4px">1 due within 4 days</div></div><div class="card" style="padding: 16px 18px"><div style="font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: #6B6B6B">DEADLINES, NEXT 14 DAYS</div><div style="font-size: 26px; font-weight: 700; color: #1A1A1A; margin-top: 4px; line-height: 1.15">3</div><div style="margin-top: 4px">Dec 1, Dec 4, Dec 10</div></div><div class="card" style="padding: 16px 18px"><div style="font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: #6B6B6B">MISSING DOCUMENTS</div><div style="font-size: 26px; font-weight: 700; color: #1A1A1A; margin-top: 4px; line-height: 1.15">3</div><div style="margin-top: 4px">Across 2 students</div></div><div class="card" style="padding: 16px 18px"><div style="font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: #6B6B6B">WORKFORCE INVOICES UNPAID</div><div style="font-size: 26px; font-weight: 700; color: #1A1A1A; margin-top: 4px; line-height: 1.15">4</div><div style="margin-top: 4px">Oldest is 56 days</div></div></div>
+<section class="card" style="min-width: 0">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: baseline; padding: 16px 20px 12px"><div><h2>Agency requests</h2><div class="src" style="margin-top: 2px">Found in Gmail and matched to student records</div></div></div><div class="scroll">
+<table class="t" style="min-width: 900px">
+<thead>
+<tr><th scope="col">Agency</th><th scope="col">Student</th><th scope="col">What they asked for</th><th scope="col">Received</th><th scope="col">Due</th><th scope="col">Status</th><th scope="col"></th></tr></thead>
+<tbody>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">Workforce Solutions</span><div class="src" style="margin-top: 6px">WIOA counselor</div></td><td><a href="Student360.html">Kevin Zhou</a></td><td>Attendance dates and completed modules</td><td>Nov 25</td><td><span class="tag" style="background: #FFDBDD; color: #7A1016">Dec 1</span></td><td>Letter drafted from verified records</td><td><a href="Approvals.html">Review letter</a></td></tr>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">TWC</span></td><td><a href="Student360.html">Maya Johnson</a></td><td>Enrollment verification</td><td>Nov 20</td><td>Dec 4</td><td>Waiting on signed enrollment form</td><td><a href="Communications.html">Request from student</a></td></tr>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">Workforce Solutions</span><div class="src" style="margin-top: 6px">Invoicing</div></td><td>4 students</td><td>Status of outstanding invoices</td><td>Nov 18</td><td>Dec 10</td><td>Reconciled, summary ready</td><td><a href="#invoices">See invoices</a></td></tr></tbody></table></div></section>
+<div style="display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start"><div style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 18px"><div id="invoices">
+<section class="card" style="min-width: 0">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: baseline; padding: 16px 20px 12px"><div><h2>Workforce invoices</h2><div class="src" style="margin-top: 2px">Compared against PaySimple and finance records</div></div></div><div class="scroll">
+<table class="t" style="min-width: 860px">
+<thead>
+<tr><th scope="col">Invoice</th><th scope="col">Student</th><th scope="col">Agency</th><th scope="col">Sent</th><th scope="col">Age</th><th scope="col">Payment found</th><th scope="col"></th></tr></thead>
+<tbody>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">October training</span></td><td><a href="Student360.html">Kevin Zhou</a></td><td>Workforce Solutions</td><td>Nov 3</td><td>24 days</td><td>No</td><td><a href="Approvals.html">Draft reminder</a></td></tr>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">October training</span></td><td><a href="Student360.html">Maya Johnson</a></td><td>TWC</td><td>Nov 3</td><td>24 days</td><td>No</td><td><a href="Approvals.html">Draft reminder</a></td></tr>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">September training</span></td><td><a href="Student360.html">Elijah Ford</a></td><td>Workforce Solutions</td><td>Oct 2</td><td><span class="tag" style="background: #FFDBDD; color: #7A1016">56 days</span></td><td>No</td><td><a href="Approvals.html">Escalate</a></td></tr>
+<tr><td><span style="font-weight: 500; color: #1A1A1A">September training</span></td><td><a href="Student360.html">Rosa Alvarez</a></td><td>Workforce Solutions</td><td>Oct 2</td><td>56 days</td><td>Partial</td><td><a href="Payments.html">Reconcile</a></td></tr></tbody></table></div></section></div>
+<section class="card" style="min-width: 0">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: baseline; padding: 16px 20px 12px"><div><h2>Missing documents</h2></div></div><div style="padding: 0 20px 18px">
+<div style="display: flex; flex-direction: column"><div style="padding: 10px 0; border-top: 1px solid #F1F1F0"><div style="font-weight: 500; color: #1A1A1A">Signed enrollment form: <a href="Student360.html">Maya Johnson</a></div><div class="src">Requested Nov 21 · reminder drafted</div></div><div style="padding: 10px 0; border-top: 1px solid #F1F1F0"><div style="font-weight: 500; color: #1A1A1A">Eligibility letter: <a href="Student360.html">Elijah Ford</a></div><div class="src">Agency has not sent it · follow-up due Dec 2</div></div><div style="padding: 10px 0; border-top: 1px solid #F1F1F0"><div style="font-weight: 500; color: #1A1A1A">Attendance sign-off, October: <a href="Student360.html">Elijah Ford</a></div><div class="src">Instructor signature missing</div></div></div><div class="src" style="margin-top: 6px">Sensitive documents open only for staff with compliance access.</div></div></section></div><div style="flex: 1 1 340px; min-width: 0; display: flex; flex-direction: column; gap: 18px">
+<section class="card" style="min-width: 0">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: baseline; padding: 16px 20px 12px"><div><h2>Verification letter</h2><div class="src" style="margin-top: 2px">Kevin Zhou, due December 1</div></div></div><div style="padding: 0 20px 18px"><div style="background: #F8F8F7; border: 1px solid #E4E4E3; border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 8px"><div>To the Workforce Solutions counselor for Kevin Zhou:</div><div>Kevin is enrolled in the Data Analytics program at Colaberry. He attended [N] of [N] sessions between [START DATE] and November 25 and has completed 72% of the program modules.</div><div>Outstanding coursework: [MODULES].</div><div>Taiwo, Admissions and Academic Operations</div></div><div class="src" style="margin-top: 6px">Bracketed fields fill from app.colaberry attendance records when you open the draft. Nothing is typed from memory.</div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px"><a class="btn" href="Approvals.html" style="background: #C20E1E; color: #FFFFFF">Review and approve</a><a class="btn" href="Student360.html" style="background: #FFFFFF; color: #1A1A1A; border: 1px solid #8C8C8C">See attendance record</a></div></div></section>
+<section class="card" style="min-width: 0">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: baseline; padding: 16px 20px 12px"><div><h2>Workforce funded students</h2></div></div><div style="padding: 0 20px 18px"><div style="font-size: 22px; font-weight: 700; color: #1A1A1A">9 students</div><div>6 WIOA, 3 TWC. All attendance verified through November 25.</div><div style="margin-top: 8px"><a href="Students.html" style="font-weight: 500">See them in Students</a></div></div></section></div></div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1596}}'>
+class Component extends DCLogic {
+renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

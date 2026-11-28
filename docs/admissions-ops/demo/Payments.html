@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Payments</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0;font-family:Roboto,system-ui,sans-serif;font-size:14px;line-height:1.45;color:#2B2B2B;background:#F8F8F7}
+a{color:#2E6A86;text-decoration:none}a:hover{color:#1A3947;text-decoration:underline}
+button{font-family:inherit;cursor:pointer}
+h2{margin:0;font-size:17px;font-weight:700;color:#1A1A1A}
+.rail a{color:#D8D8D8;display:block;padding:9px 16px;border-radius:6px;font-weight:500}
+.rail a:hover{color:#FFFFFF;background:#2B2B2B;text-decoration:none}
+.hub a{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 9px;border-radius:6px;font-weight:500;color:#2B2B2B;box-sizing:border-box}
+.hub a:hover{background:#F1F1F0;text-decoration:none;color:#1A1A1A}
+.btn{display:inline-block;padding:10px 14px;border-radius:6px;font-weight:500;font-size:14px;min-height:44px;box-sizing:border-box;line-height:22px}
+a.btn:hover{text-decoration:none}
+.dock a{color:#FFFFFF;display:inline-flex;align-items:center;min-height:44px;padding:0 12px;border:1px solid #8C8C8C;border-radius:999px;font-size:13px;font-weight:500;box-sizing:border-box}
+.dock a:hover{background:#2B2B2B;color:#FFFFFF;text-decoration:none}
+.card{background:#FFFFFF;border:1px solid #E4E4E3;border-radius:10px;box-sizing:border-box}
+.src{font-size:12px;color:#6B6B6B}
+.tag{display:inline-block;font-size:12px;font-weight:700;border-radius:4px;padding:2px 8px;white-space:nowrap}
+.scroll{overflow-x:auto}
+.t{width:100%;border-collapse:collapse;min-width:760px}
+.t th{text-align:left;font-size:12px;color:#6B6B6B;font-weight:700;letter-spacing:.04em;padding:10px 16px;border-top:1px solid #E4E4E3;border-bottom:1px solid #E4E4E3;white-space:nowrap;background:#F8F8F7}
+.t td{padding:12px 16px;border-bottom:1px solid #F1F1F0;vertical-align:top}
+.t a{font-weight:500}
+</style>
+</helmet>
+<div id="top" style="display: flex; flex-wrap: wrap; min-height: 100vh; align-items: stretch">
+<nav class="rail" aria-label="Admin" style="flex: 1 1 224px; max-width: 100%; background: #1A1A1A; padding: 18px 10px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px"><div style="color: #FFFFFF; font-weight: 700; font-size: 16px; padding: 4px 16px 16px">Colaberry Admin</div><a href="index.html">Dashboard</a><a href="index.html">War Room</a><a href="index.html">Trust Center</a><a href="index.html" aria-current="page" style="background: #7A1016; color: #FFFFFF">Admissions &amp; Ops</a><a href="index.html">Portfolio Review</a><div style="color: #B4B4B4; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; padding: 18px 16px 6px">REVENUE</div><a href="index.html">Revenue</a><a href="index.html">Revenue Room</a><a href="index.html">Enterprise Clients</a><a href="index.html">Business Accounts</a><div style="color: #B4B4B4; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; padding: 18px 16px 6px">MARKETING</div><a href="index.html">Marketing</a><div style="color: #B4B4B4; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; padding: 18px 16px 6px">PROGRAM</div><a href="index.html">Accelerator</a><a href="index.html">Agents</a></nav>
+<main style="flex: 999 1 560px; min-width: 0; padding: 20px 28px 40px; box-sizing: border-box; display: flex; flex-direction: column; gap: 18px">
+<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center"><div style="color: #6B6B6B; flex: 0 0 auto">Admin / <a href="index.html">Admissions &amp; Ops</a> / Payments</div><div style="flex: 1 1 360px; min-width: 0; display: flex; align-items: center; gap: 8px; background: #FFFFFF; border: 1px solid #B4B4B4; border-radius: 8px; padding: 0 12px"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6B6B6B" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg><label for="find" style="position: absolute; left: -9999px">Find a student</label><input id="find" type="search" placeholder="Find anyone: name, email, phone, student ID, GHL contact or TFC contract" style="flex: 1; min-width: 0; border: 0; outline: 0; height: 44px; font: inherit; background: transparent"></div><a href="Students.html" style="font-weight: 500; padding: 12px 0">All students</a><span style="font-size: 12px; font-weight: 500; color: #4A4A4A; background: #E4E4E3; border-radius: 999px; padding: 4px 10px">Sample data</span></div>
+<nav class="hub card" aria-label="Admissions and Ops sections" style="display: flex; flex-wrap: wrap; gap: 4px 8px; justify-content: space-between; padding: 6px">
+<div style="display: flex; flex-wrap: wrap; gap: 2px"><a href="index.html">Today</a><a href="Admissions.html">Admissions</a><a href="Students.html">Students</a><a href="Academics.html">Academics</a><a href="Payments.html" aria-current="page" style="background: #1A3947; color: #FFFFFF">Payments</a><a href="Support.html">Support</a><a href="Communications.html">Communications</a><a href="Compliance.html">Compliance</a><a href="Reports.html">Reports</a></div>
+<div style="display: flex; flex-wrap: wrap; gap: 2px"><a href="Agent.html">Ask AURA</a><a href="Approvals.html">Approvals <span style="font-size: 11px; font-weight: 700; background: #C20E1E; color: #FFFFFF; border-radius: 999px; padding: 1px 7px">10</span></a><a href="Knowledge.html">Knowledge</a><a href="Setup.html">Setup</a></div></nav>
+<section class="dock" aria-label="AURA, the built-in agent" style="background: #1A1A1A; color: #FFFFFF; border-radius: 10px; padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center">
+<div style="display: flex; align-items: center; gap: 8px"><span aria-hidden="true" style="width: 10px; height: 10px; border-radius: 999px; background: #8AC759"></span><span style="font-weight: 700; letter-spacing: 0.04em">AURA</span><span style="font-size: 12px; color: #D8D8D8">Guide mode · sees this screen</span></div><label for="aura" style="position: absolute; left: -9999px">Tell AURA what to do</label><input id="aura" type="text" placeholder="Tell AURA what to do or where to take you" style="flex: 1 1 260px; min-width: 0; height: 44px; border: 1px solid #8C8C8C; border-radius: 6px; padding: 0 12px; font: inherit; background: #2B2B2B; color: #FFFFFF; box-sizing: border-box">
+<div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center"><a href="TFCAudit.html">Run the TFC audit</a><a href="Approvals.html">Draft payment help for Dana</a><a href="Compliance.html">Check workforce invoices</a><a href="Agent.html" style="border-color: #1A1A1A; text-decoration: underline">Open AURA</a></div></section>
+<div style="display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: flex-end; justify-content: space-between"><div style="min-width: 0"><h1 style="margin: 0; font-size: 28px; font-weight: 700; color: #1A1A1A; letter-spacing: -0.01em">Payments</h1><div style="color: #4A4A4A; margin-top: 2px; max-width: 60em">Memberships, legacy contracts and direct arrangements in one view. AURA can see transactions and statuses. It never sees card numbers.</div></div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px"><a class="btn" href="TFCAudit.html" style="background: #FFFFFF; color: #1A1A1A; border: 1px solid #8C8C8C">TFC audit</a><a class="btn" href="Reports.html" style="background: #FFFFFF; color: #1A1A1A; border: 1px solid #8C8C8C">Payment reports</a><a class="btn" href="Agent.html" style="background: #1A3947; color: #FFFFFF">Ask AURA to reconcile</a></div></div>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px"><div class="card" style="padding: 16px 18px"><div style="font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: #6B6B6B">FAILED PAYMENTS</div><div style="font-size: 26px; font-weight: 700; color: #1A1A1A; margin-top: 4px; line-height: 1.15">3</div><div style="margin-top: 4px">Recurring, last 7 days</div></div><div class="card" style="padding: 16px 18px"><div style="font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: #6B6B6B">OUTSTANDING BALANCES</div><div style="font-size: 26px; font-weight: 700; color: #1A1A1A; margin-top: 4px; line-height: 1.15">12</div><div style="margin-top: 4px">Accounts past due</div></div><div class="card" style="padding: 16px 18px"><div style="font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: #6B6B6B">RENEWALS, NEXT 30 DAYS</div><div style="font-size: 26px; font-weight: 700; color: #1A1A1A; margin-top: 4px; line-height: 1.15">15</div><div style="margin-top: 4px">4 annual, 11 monthly</div></div><div class="card" style="padding: 16px 18px"><div style="font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: #6B6B6B">WAITING ON APPROVAL</div><div style="font-size: 26px; font-weight: 700; color: #1A1A1A; margin-top: 4px; line-height: 1.15">3</div><div style="margin-top: 4px">Refund, recall, extension</div><div style="margin-top: 8px"><a href="Approvals.html" style="font-weight: 500">Open Approvals</a></div></div></div>
+<section class="card" style="min-width: 0">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: baseline; padding: 16px 20px 12px"><div><h2>Reconciliation</h2><div class="src" style="margin-top: 2px">Each system stays the record for its own field. This compares them.</div></div></div><div class="scroll">
+<table class="t" style="min-width: 760px">
+<thead>
+<tr><th scope="col">Check</th><th scope="col">What the systems say</th><th scope="col">Result</th><th scope="col"></th></tr></thead>
+<tbody>
+<tr><td>GHL Won against PaySimple</td><td>3 Won opportunities, $1,250 revenue in GHL</td><td><span class="tag" style="background: #FFDBDD; color: #7A1016">Mismatch</span></td><td><a href="Admissions.html">See Admissions</a></td></tr>
+<tr><td>TFC contracts against academic status</td><td>15 cancelled, 3 students still active in IPBC</td><td><span class="tag" style="background: #FFDBDD; color: #7A1016">3 exceptions</span></td><td><a href="TFCAudit.html">Open TFC audit</a></td></tr>
+<tr><td>Paid against activated</td><td>1 payment with no access granted</td><td><span class="tag" style="background: #FFDBDD; color: #7A1016">1 exception</span></td><td><a href="Student360.html">Marcus Bell</a></td></tr>
+<tr><td>Workforce invoices against payments</td><td>4 invoices sent, not yet paid</td><td><span class="tag" style="background: #FCF1DD; color: #5C3A00">Outstanding</span></td><td><a href="Compliance.html">See Compliance</a></td></tr>
+<tr><td>PaySimple recurring against memberships</td><td>37 schedules, 37 active memberships</td><td><span class="tag" style="background: #DEF0CC; color: #2A521E">Matches</span></td><td></td></tr></tbody></table></div></section>
+<div style="display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start"><div style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 18px">
+<section class="card" style="min-width: 0">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: baseline; padding: 16px 20px 12px"><div><h2>Failed recurring payments</h2><div class="src" style="margin-top: 2px">From PaySimple, 9 min ago</div></div></div><div class="scroll">
+<table class="t" style="min-width: 860px">
+<thead>
+<tr><th scope="col">Student</th><th scope="col">Plan</th><th scope="col">What happened</th><th scope="col">Last attempt</th><th scope="col">Suggested next step</th><th scope="col"></th></tr></thead>
+<tbody>
+<tr><td><a href="Student360.html">Dana Whitfield</a></td><td>AI monthly</td><td>Card declined twice</td><td>Nov 24</td><td>Payment-assistance email, offer a new date</td><td><a href="Approvals.html">Review draft</a></td></tr>
+<tr><td><a href="Student360.html">Owen Brooks</a></td><td>Subscription, legacy</td><td>Card expired</td><td>Nov 22</td><td>Update-card link by text</td><td><a href="Approvals.html">Review draft</a></td></tr>
+<tr><td><a href="Student360.html">Lena Fischer</a></td><td>AI monthly</td><td>Bank reversed the payment</td><td>Nov 21</td><td>Call. Possible dispute</td><td><a href="Support.html">Escalate</a></td></tr></tbody></table></div></section>
+<section class="card" style="min-width: 0">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: baseline; padding: 16px 20px 12px"><div><h2>Needs a decision before anything moves</h2></div><div><a href="Approvals.html" style="font-weight: 500">Open Approvals</a></div></div><div style="padding: 0 20px 18px">
+<div style="display: flex; flex-direction: column"><div style="padding: 10px 0; border-top: 1px solid #F1F1F0"><div style="font-weight: 500; color: #1A1A1A">Refund request: <a href="Student360.html">Hannah Cole</a></div><div class="src">Requested Nov 23 · documentation attached · leadership approval required</div></div><div style="padding: 10px 0; border-top: 1px solid #F1F1F0"><div style="font-weight: 500; color: #1A1A1A">Contract recall: <a href="Student360.html">Tobias Grant</a></div><div class="src">Student-requested, TFC · needs authorization before anything is sent</div></div><div style="padding: 10px 0; border-top: 1px solid #F1F1F0"><div style="font-weight: 500; color: #1A1A1A">Payment extension: <a href="Student360.html">Owen Brooks</a></div><div class="src">Second request · policy allows one without approval</div></div></div><div class="src" style="margin-top: 6px">Refunds, recalls, adjustments, suspensions and forgiveness always wait for a person.</div></div></section></div><div style="flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 18px">
+<section class="card" style="min-width: 0">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: baseline; padding: 16px 20px 12px"><div><h2>Who is on which plan</h2><div class="src" style="margin-top: 2px">93 paying accounts</div></div></div><div style="padding: 0 20px 18px">
+<div style="display: flex; flex-direction: column; gap: 10px"><div>
+<div style="display: flex; justify-content: space-between; gap: 8px"><span style="font-weight: 500; color: #1A1A1A">AI monthly</span><span>26 · 28.0%</span></div><div role="img" aria-label="AI monthly: 26 of 93" style="height: 10px; background: #E4E4E3; border-radius: 999px; margin-top: 4px"><div style="width: 28.0%; height: 10px; background: #1A3947; border-radius: 999px"></div></div></div><div>
+<div style="display: flex; justify-content: space-between; gap: 8px"><span style="font-weight: 500; color: #1A1A1A">AI annual</span><span>11 · 11.8%</span></div><div role="img" aria-label="AI annual: 11 of 93" style="height: 10px; background: #E4E4E3; border-radius: 999px; margin-top: 4px"><div style="width: 11.8%; height: 10px; background: #2E6A86; border-radius: 999px"></div></div></div><div>
+<div style="display: flex; justify-content: space-between; gap: 8px"><span style="font-weight: 500; color: #1A1A1A">Flex through TFC</span><span>28 · 30.1%</span></div><div role="img" aria-label="Flex through TFC: 28 of 93" style="height: 10px; background: #E4E4E3; border-radius: 999px; margin-top: 4px"><div style="width: 30.1%; height: 10px; background: #6F9DB6; border-radius: 999px"></div></div></div><div>
+<div style="display: flex; justify-content: space-between; gap: 8px"><span style="font-weight: 500; color: #1A1A1A">Subscription, legacy</span><span>22 · 23.7%</span></div><div role="img" aria-label="Subscription, legacy: 22 of 93" style="height: 10px; background: #E4E4E3; border-radius: 999px; margin-top: 4px"><div style="width: 23.7%; height: 10px; background: #8C8C8C; border-radius: 999px"></div></div></div><div>
+<div style="display: flex; justify-content: space-between; gap: 8px"><span style="font-weight: 500; color: #1A1A1A">Direct arrangement</span><span>6 · 6.5%</span></div><div role="img" aria-label="Direct arrangement: 6 of 93" style="height: 10px; background: #E4E4E3; border-radius: 999px; margin-top: 4px"><div style="width: 6.5%; height: 10px; background: #B4B4B4; border-radius: 999px"></div></div></div></div></div></section>
+<section class="card" style="min-width: 0">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: baseline; padding: 16px 20px 12px"><div><h2>Extensions and special cases</h2></div></div><div style="padding: 0 20px 18px">
+<div style="display: flex; flex-direction: column"><div style="padding: 10px 0; border-top: 1px solid #F1F1F0"><div style="font-weight: 500; color: #1A1A1A">Previously extended</div><div class="src">5 TFC accounts, all in the current audit</div></div><div style="padding: 10px 0; border-top: 1px solid #F1F1F0"><div style="font-weight: 500; color: #1A1A1A">Paid in full</div><div class="src">22 accounts</div></div><div style="padding: 10px 0; border-top: 1px solid #F1F1F0"><div style="font-weight: 500; color: #1A1A1A">Prorated settlements</div><div class="src">2 direct arrangements</div></div><div style="padding: 10px 0; border-top: 1px solid #F1F1F0"><div style="font-weight: 500; color: #1A1A1A">Unplaced graduates</div><div class="src">12, payment tied to placement</div></div></div></div></section></div></div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1616}}'>
+class Component extends DCLogic {
+renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

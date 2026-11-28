@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Student 360</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0;font-family:Roboto,system-ui,sans-serif;font-size:14px;line-height:1.45;color:#2B2B2B;background:#F8F8F7}
+a{color:#2E6A86;text-decoration:none}a:hover{color:#1A3947;text-decoration:underline}
+button{font-family:inherit;cursor:pointer}
+h2{margin:0;font-size:17px;font-weight:700;color:#1A1A1A}
+.rail a{color:#D8D8D8;display:block;padding:9px 16px;border-radius:6px;font-weight:500}
+.rail a:hover{color:#FFFFFF;background:#2B2B2B;text-decoration:none}
+.hub a{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 9px;border-radius:6px;font-weight:500;color:#2B2B2B;box-sizing:border-box}
+.hub a:hover{background:#F1F1F0;text-decoration:none;color:#1A1A1A}
+.btn{display:inline-block;padding:10px 14px;border-radius:6px;font-weight:500;font-size:14px;min-height:44px;box-sizing:border-box;line-height:22px}
+a.btn:hover{text-decoration:none}
+.dock a{color:#FFFFFF;display:inline-flex;align-items:center;min-height:44px;padding:0 12px;border:1px solid #8C8C8C;border-radius:999px;font-size:13px;font-weight:500;box-sizing:border-box}
+.dock a:hover{background:#2B2B2B;color:#FFFFFF;text-decoration:none}
+.card{background:#FFFFFF;border:1px solid #E4E4E3;border-radius:10px;box-sizing:border-box}
+.src{font-size:12px;color:#6B6B6B}
+.tag{display:inline-block;font-size:12px;font-weight:700;border-radius:4px;padding:2px 8px;white-space:nowrap}
+.scroll{overflow-x:auto}
+.t{width:100%;border-collapse:collapse;min-width:760px}
+.t th{text-align:left;font-size:12px;color:#6B6B6B;font-weight:700;letter-spacing:.04em;padding:10px 16px;border-top:1px solid #E4E4E3;border-bottom:1px solid #E4E4E3;white-space:nowrap;background:#F8F8F7}
+.t td{padding:12px 16px;border-bottom:1px solid #F1F1F0;vertical-align:top}
+.t a{font-weight:500}
+</style>
+</helmet>
+<div id="top" style="display: flex; flex-wrap: wrap; min-height: 100vh; align-items: stretch">
+<nav class="rail" aria-label="Admin" style="flex: 1 1 224px; max-width: 100%; background: #1A1A1A; padding: 18px 10px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px"><div style="color: #FFFFFF; font-weight: 700; font-size: 16px; padding: 4px 16px 16px">Colaberry Admin</div><a href="index.html">Dashboard</a><a href="index.html">War Room</a><a href="index.html">Trust Center</a><a href="index.html" aria-current="page" style="background: #7A1016; color: #FFFFFF">Admissions &amp; Ops</a><a href="index.html">Portfolio Review</a><div style="color: #B4B4B4; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; padding: 18px 16px 6px">REVENUE</div><a href="index.html">Revenue</a><a href="index.html">Revenue Room</a><a href="index.html">Enterprise Clients</a><a href="index.html">Business Accounts</a><div style="color: #B4B4B4; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; padding: 18px 16px 6px">MARKETING</div><a href="index.html">Marketing</a><div style="color: #B4B4B4; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; padding: 18px 16px 6px">PROGRAM</div><a href="index.html">Accelerator</a><a href="index.html">Agents</a></nav>
+<main style="flex: 999 1 560px; min-width: 0; padding: 20px 28px 40px; box-sizing: border-box; display: flex; flex-direction: column; gap: 18px">
+<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center"><div style="color: #6B6B6B; flex: 0 0 auto">Admin / <a href="index.html">Admissions &amp; Ops</a> / <a href="Students.html">Students</a> / Renee Okafor</div><div style="flex: 1 1 360px; min-width: 0; display: flex; align-items: center; gap: 8px; background: #FFFFFF; border: 1px solid #B4B4B4; border-radius: 8px; padding: 0 12px"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6B6B6B" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg><label for="find" style="position: absolute; left: -9999px">Find a student</label><input id="find" type="search" placeholder="Find anyone: name, email, phone, student ID, GHL contact or TFC contract" style="flex: 1; min-width: 0; border: 0; outline: 0; height: 44px; font: inherit; background: transparent"></div><a href="Students.html" style="font-weight: 500; padding: 12px 0">All students</a><span style="font-size: 12px; font-weight: 500; color: #4A4A4A; background: #E4E4E3; border-radius: 999px; padding: 4px 10px">Sample data</span></div>
+<nav class="hub card" aria-label="Admissions and Ops sections" style="display: flex; flex-wrap: wrap; gap: 4px 8px; justify-content: space-between; padding: 6px">
+<div style="display: flex; flex-wrap: wrap; gap: 2px"><a href="index.html">Today</a><a href="Admissions.html">Admissions</a><a href="Students.html" aria-current="page" style="background: #1A3947; color: #FFFFFF">Students</a><a href="Academics.html">Academics</a><a href="Payments.html">Payments</a><a href="Support.html">Support</a><a href="Communications.html">Communications</a><a href="Compliance.html">Compliance</a><a href="Reports.html">Reports</a></div>
+<div style="display: flex; flex-wrap: wrap; gap: 2px"><a href="Agent.html">Ask AURA</a><a href="Approvals.html">Approvals <span style="font-size: 11px; font-weight: 700; background: #C20E1E; color: #FFFFFF; border-radius: 999px; padding: 1px 7px">10</span></a><a href="Knowledge.html">Knowledge</a><a href="Setup.html">Setup</a></div></nav>
+<section class="dock" aria-label="AURA, the built-in agent" style="background: #1A1A1A; color: #FFFFFF; border-radius: 10px; padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center">
+<div style="display: flex; align-items: center; gap: 8px"><span aria-hidden="true" style="width: 10px; height: 10px; border-radius: 999px; background: #8AC759"></span><span style="font-weight: 700; letter-spacing: 0.04em">AURA</span><span style="font-size: 12px; color: #D8D8D8">Guide mode · sees this screen</span></div><label for="aura" style="position: absolute; left: -9999px">Tell AURA what to do</label><input id="aura" type="text" placeholder="Tell AURA what to do or where to take you" style="flex: 1 1 260px; min-width: 0; height: 44px; border: 1px solid #8C8C8C; border-radius: 6px; padding: 0 12px; font: inherit; background: #2B2B2B; color: #FFFFFF; box-sizing: border-box">
+<div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center"><a href="TFCAudit.html">Show her row in the audit</a><a href="Support.html">Open her ticket</a><a href="Approvals.html">Send the reply for approval</a><a href="Agent.html" style="border-color: #1A1A1A; text-decoration: underline">Open AURA</a></div></section>
+<div style="display: flex; flex-wrap: wrap; gap: 14px 24px; justify-content: space-between; align-items: flex-end">
+<div style="min-width: 0">
+<h1 style="margin: 0; font-size: 28px; font-weight: 700; color: #1A1A1A; letter-spacing: -0.01em">Renee Okafor</h1>
+<div style="margin-top: 4px">Data Analytics graduate, now in Job Readiness (IPBC) · Flex plan through TFC</div>
+<div class="src" style="margin-top: 6px">Student ID CB-20418 · GHL contact · TFC contract · Zendesk requester. Matched on email and phone, not on name.</div>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<a class="btn" href="Communications.html" style="background: #FFFFFF; color: #1A1A1A; border: 1px solid #8C8C8C">Email</a>
+<a class="btn" href="Communications.html" style="background: #FFFFFF; color: #1A1A1A; border: 1px solid #8C8C8C">Text</a>
+<button class="btn" type="button" style="background: #FFFFFF; color: #1A1A1A; border: 1px solid #8C8C8C">Add note</button>
+</div>
+</div>
+<section>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px">
+<div class="card" style="padding: 16px 18px"><div style="font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: #6B6B6B">ACADEMIC</div><div style="font-size: 20px; font-weight: 700; color: #1A1A1A; margin-top: 4px">Active in IPBC</div><div style="margin-top: 4px">Week 6 of 12. Last attended November 25.</div><div class="src" style="margin-top: 8px">app.colaberry · 2 min ago</div></div>
+<div class="card" style="padding: 16px 18px; border: 2px solid #C20E1E"><div style="font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: #6B6B6B">CONTRACT</div><div style="font-size: 20px; font-weight: 700; color: #9B0E18; margin-top: 4px">Cancelled</div><div style="margin-top: 4px">By TFC on October 30, for nonpayment.</div><div class="src" style="margin-top: 8px">TFC portal · export 6:00 AM CT</div></div>
+<div class="card" style="padding: 16px 18px"><div style="font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: #6B6B6B">FINANCIAL</div><div style="font-size: 20px; font-weight: 700; color: #1A1A1A; margin-top: 4px">Pending verification</div><div style="margin-top: 4px">Charge-off not confirmed. No direct payments on file.</div><div class="src" style="margin-top: 8px">TFC portal, PaySimple · 9 min ago</div></div>
+<div class="card" style="padding: 16px 18px"><div style="font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: #6B6B6B">PLACEMENT</div><div style="font-size: 20px; font-weight: 700; color: #1A1A1A; margin-top: 4px">Not placed</div><div style="margin-top: 4px">In CAP. No placement-based payment is owed yet.</div><div class="src" style="margin-top: 8px">Retool · 2 min ago</div></div>
+</div>
+<div class="src" style="margin-top: 8px">These four are tracked separately. A cancelled contract is not an academic withdrawal, and a settled balance is not a completion.</div>
+</section>
+<div style="display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start">
+<div style="flex: 999 1 520px; min-width: 0; display: flex; flex-direction: column; gap: 18px">
+<section style="background: #1A3947; color: #FFFFFF; border-radius: 10px; padding: 22px 24px">
+<div style="font-size: 12px; font-weight: 700; letter-spacing: 0.08em; color: #CFE0E9">AURA'S READ ON THIS ACCOUNT</div>
+<p style="margin: 8px 0 0; font-size: 18px; line-height: 1.45; font-weight: 500; max-width: 46em">Renee is attending IPBC on a contract TFC cancelled four weeks ago. The academic and contract records disagree, and her November 12 email asking about it was never answered.</p>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px 28px; margin-top: 16px">
+<div>
+<div style="font-weight: 700">Verified</div>
+<ul style="margin: 6px 0 0; padding-left: 18px; color: #EAF2F6; display: flex; flex-direction: column; gap: 4px">
+<li>Contract cancelled by TFC, not withdrawn by Colaberry (TFC portal)</li>
+<li>Payment extension approved August 15 (TFC portal)</li>
+<li>No withdrawal request in Gmail or GHL</li>
+<li>Open Zendesk ticket about TFC notices, 9 days old</li>
+</ul>
+</div>
+<div>
+<div style="font-weight: 700">Not known yet</div>
+<ul style="margin: 6px 0 0; padding-left: 18px; color: #EAF2F6; display: flex; flex-direction: column; gap: 4px">
+<li>Whether TFC has charged off the balance</li>
+<li>Whether anyone approved continued attendance</li>
+<li>Whether Colaberry carries any liability</li>
+</ul>
+</div>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px">
+<a class="btn" href="#draft" style="background: #FFFFFF; color: #1A3947">Review reply to Renee</a>
+<a class="btn" href="TFCAudit.html" style="border: 1px solid #A6C5D5; color: #FFFFFF">See her row in the TFC audit</a>
+<a class="btn" href="Agent.html" style="border: 1px solid #A6C5D5; color: #FFFFFF">See the full investigation</a>
+</div>
+</section>
+<section class="card">
+<div style="padding: 16px 20px 12px">
+<h2 style="margin: 0; font-size: 17px; font-weight: 700; color: #1A1A1A">One history, every system</h2>
+<div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px">
+<sc-for list="{{chips}}" as="c" hint-placeholder-count="6">
+<button type="button" aria-pressed="{{c.on}}" onClick="{{c.pick}}" style="min-height: 44px; padding: 0 14px; border-radius: 999px; font-size: 13px; font-weight: 500; border: 1px solid {{c.border}}; background: {{c.bg}}; color: {{c.fg}}">{{c.label}}</button>
+</sc-for>
+</div>
+</div>
+<sc-for list="{{events}}" as="e" hint-placeholder-count="6">
+<div style="display: flex; flex-wrap: wrap; gap: 4px 18px; padding: 14px 20px; border-top: 1px solid #E4E4E3">
+<div style="flex: 0 0 132px"><div style="font-weight: 700; color: #1A1A1A">{{e.date}}</div><div class="src">{{e.source}}</div></div>
+<div style="flex: 999 1 300px; min-width: 0"><div style="font-weight: 500; color: #1A1A1A">{{e.title}}</div><div>{{e.text}}</div></div>
+</div>
+</sc-for>
+</section>
+</div>
+
+<div style="flex: 1 1 340px; min-width: 0; display: flex; flex-direction: column; gap: 18px">
+<section id="draft" class="card" style="padding: 18px 20px">
+<div style="display: flex; justify-content: space-between; gap: 8px; align-items: baseline">
+<h2 style="margin: 0; font-size: 17px; font-weight: 700; color: #1A1A1A">Reply to Renee</h2>
+<span class="src">{{draftState}}</span>
+</div>
+<div class="src" style="margin-top: 2px">Email from your Gmail, on her November 12 thread</div>
+<div style="background: #F8F8F7; border: 1px solid #E4E4E3; border-radius: 8px; padding: 14px; margin-top: 12px; display: flex; flex-direction: column; gap: 10px">
+<div>Hi Renee,</div>
+<div>Thanks for your patience, and I'm sorry your note from the 12th sat without an answer.</div>
+<div>I can see you're still attending IPBC and that TFC cancelled your contract on October 30. I'm confirming with TFC and our team what that means for your payments and your place in the program.</div>
+<div>I'll come back to you by Wednesday with clear options.</div>
+<div>Taiwo</div>
+</div>
+<div class="src" style="margin-top: 10px">Makes no promise about refunds, forgiveness or attendance. Those need a leadership decision first.</div>
+<sc-if value="{{notSent}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px">
+<button class="btn" type="button" onClick="{{send}}" style="background: #C20E1E; color: #FFFFFF; border: 0">Approve and send</button>
+<button class="btn" type="button" style="background: #FFFFFF; color: #1A1A1A; border: 1px solid #8C8C8C">Edit</button>
+<button class="btn" type="button" style="background: #FFFFFF; color: #1A1A1A; border: 1px solid #8C8C8C">Discard</button>
+</div>
+</sc-if>
+<sc-if value="{{sent}}" hint-placeholder-val="{{false}}">
+<div aria-live="polite" style="margin-top: 12px; background: #DEF0CC; color: #2A521E; border-radius: 8px; padding: 12px 14px; font-weight: 500">Sent from Gmail. Logged to her history and the Zendesk ticket, with a follow-up task for Wednesday.</div>
+</sc-if>
+</section>
+<section class="card" style="padding: 18px 20px">
+<h2 style="margin: 0; font-size: 15px; font-weight: 700; color: #1A1A1A">Open on this account</h2>
+<div style="display: flex; flex-direction: column; margin-top: 6px">
+<div style="padding: 10px 0; border-top: 1px solid #F1F1F0"><div style="font-weight: 500"><a href="Support.html">Zendesk ticket: TFC notices</a></div><div class="src">Open 9 days · assigned to Support · no reply sent</div></div>
+<div style="padding: 10px 0; border-top: 1px solid #F1F1F0"><div style="font-weight: 500"><a href="TFCAudit.html">TFC charge-off confirmation</a></div><div class="src">Missing · on the audit sheet as 1 of 3 active IPBC students</div></div>
+<div style="padding: 10px 0; border-top: 1px solid #F1F1F0"><div style="font-weight: 500; color: #1A1A1A">Certificate eligibility</div><div class="src">Data Analytics complete · certificate issued July 8</div></div>
+</div>
+</section>
+<section class="card" style="padding: 18px 20px">
+<h2 style="margin: 0; font-size: 15px; font-weight: 700; color: #1A1A1A">Compliance and notes</h2>
+<div style="margin-top: 8px">No workforce funding on file. No TWC or WIOA documents required.</div>
+<div style="margin-top: 10px; background: #F8F8F7; border-radius: 8px; padding: 12px 14px"><div class="src">Internal note · Taiwo · September 22</div><div style="margin-top: 2px">Said she would restart payments after her next paycheck. Follow up if TFC sends another notice.</div></div>
+</section>
+</div>
+</div>
+
+
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1638}}'>
+class Component extends DCLogic {
+constructor(props) { super(props); this.state = { src: 'All', sent: false }; }
+renderVals() {
+const all = [
+['Nov 25', 'app.colaberry', 'Attended IPBC session', 'Week 6 live session, full attendance.'],
+['Nov 18', 'Zendesk', 'Ticket opened: TFC notices', 'Asked why she is still getting notices from TFC. No reply sent.'],
+['Nov 12', 'Gmail', 'Email from Renee, unanswered', 'Asked whether she can keep attending while she sorts out payments.'],
+['Oct 30', 'TFC', 'Contract cancelled by TFC', 'Reason on record: nonpayment. Charge-off status not provided.'],
+['Sep 22', 'GHL', 'Text exchange about payments', 'Reminder sent. She replied that she would pay after her next paycheck.'],
+['Aug 15', 'TFC', 'Payment extension approved', 'One of 5 audited accounts with a prior extension.'],
+['Jul 8', 'app.colaberry', 'Completed Data Analytics', 'All modules complete. Moved into Job Readiness (IPBC).']
+].map((e) => ({ date: e[0], source: e[1], title: e[2], text: e[3] }));
+const cur = this.state.src;
+const chips = ['All', 'Gmail', 'GHL', 'Zendesk', 'TFC', 'app.colaberry'].map((l) => { const on = l === cur; return { label: l, on: on, pick: () => this.setState({ src: l }), bg: on ? '#1A3947' : '#FFFFFF', fg: on ? '#FFFFFF' : '#1A1A1A', border: on ? '#1A3947' : '#8C8C8C' }; });
+const sent = this.state.sent;
+return { chips: chips, events: cur === 'All' ? all : all.filter((e) => e.source === cur), sent: sent, notSent: !sent,
+draftState: sent ? 'Sent' : 'Waiting for your approval', send: () => this.setState({ sent: true }) };
+}
+}
+</script>
+</body>
+</html>
