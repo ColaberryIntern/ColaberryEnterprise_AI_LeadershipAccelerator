@@ -9,12 +9,16 @@ import { admissionsOpsChildRoutes } from '../admissionsOpsRoutes';
 import { SCREENS, screenHref, WORK_SECTIONS, TOOL_SECTIONS, OPS_BASE, type ScreenId } from '../screens';
 import { currentScreen } from '../currentScreen';
 import { TODAY_SAMPLE } from '../today/todaySample.fixture';
-import { getToday } from '../../../../services/admissionsOpsApi';
+import { getApprovalCount, getToday, postIntent } from '../../../../services/admissionsOpsApi';
 
-// Today is a real screen (AO2.1); its data call is answered with the frontend sample. CRA resets mock
-// implementations before each test, so the answer is set in beforeEach rather than in the factory.
-jest.mock('../../../../services/admissionsOpsApi', () => ({ getToday: jest.fn() }));
-beforeEach(() => { (getToday as jest.Mock).mockResolvedValue(TODAY_SAMPLE); });
+// Today is a real screen (AO2.1) and the layout reads the approval count (AO2.3); their calls are answered here. CRA
+// resets mock implementations before each test, so the answers are set in beforeEach rather than in the factory.
+jest.mock('../../../../services/admissionsOpsApi', () => ({ getToday: jest.fn(), getApprovalCount: jest.fn(), postIntent: jest.fn(), newRequestId: () => 'req-test-0001' }));
+beforeEach(() => {
+  (getToday as jest.Mock).mockResolvedValue(TODAY_SAMPLE);
+  (getApprovalCount as jest.Mock).mockResolvedValue(0);
+  (postIntent as jest.Mock).mockResolvedValue({ outcome: 'done' });
+});
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

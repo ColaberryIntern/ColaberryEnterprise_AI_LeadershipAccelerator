@@ -4,6 +4,7 @@ import { buildTodaySample } from '../../services/admissionsOps/todayFixture';
 import { TodayPayload } from '../../services/admissionsOps/todaySchema';
 import { buildManifest, ManifestResponse } from '../../services/admissionsOps/agentManifest';
 import { logFailure, sendValidated } from '../campusRoutes';
+import agentRoutes from './admissionsOpsAgentRoutes';
 
 /**
  * Admissions & Ops Command Center admin API (AO2.1 onward). Every route sits under /api/admin/admissions-ops, which
@@ -36,5 +37,7 @@ export function getManifest(_req: Request, res: Response): void {
 const router = Router();
 router.get('/api/admin/admissions-ops/today', requireSection('admissions_ops'), getToday);
 router.get('/api/admin/admissions-ops/agent/manifest', requireSection('admissions_ops'), getManifest);
+// AO2.3: intents, the person's decision on what was prepared, and the open-approval count (own file, own guards).
+router.use(agentRoutes);
 
 export default router;

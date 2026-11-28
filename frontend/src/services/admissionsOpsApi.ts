@@ -46,3 +46,29 @@ export async function getToday(): Promise<TodayPayload> {
   const { data } = await api.get<TodayPayload>('/api/admin/admissions-ops/today');
   return data;
 }
+
+/** AO2.3: one request to the agent control surface. Mirrors backend routes/admin/admissionsOpsAgentRoutes.ts. */
+export interface IntentRequest {
+  request_id: string;
+  type: 'navigate' | 'invoke' | 'annotate';
+  screen: string;
+  action?: string;
+  params?: Record<string, string>;
+}
+export interface IntentResult { request_id: string; outcome: 'done' | 'drafted' | 'sent_to_approval' | 'refused'; reason: string | null; approval_id: string | null; replayed: boolean }
+
+export async function postIntent(body: IntentRequest): Promise<IntentResult> {
+  const { data } = await api.post<IntentResult>('/api/admin/admissions-ops/agent/intents', body);
+  return data;
+}
+
+export async function getApprovalCount(): Promise<number> {
+  const { data } = await api.get<{ open: number }>('/api/admin/admissions-ops/approvals/count');
+  return data.open;
+}
+
+/** A request id that is unique per click, so a retried POST is recorded once. */
+export function newRequestId(): string {
+  const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
+  return c?.randomUUID ? c.randomUUID() : `r-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
