@@ -1,0 +1,130 @@
+[
+ {
+  "label": "Revenue",
+  "section": "revenue",
+  "paths": [
+   "/admin/revenue",
+   "/admin/revenue-room",
+   "/admin/refunds",
+   "/admin/leads",
+   "/admin/pipeline",
+   "/admin/enterprise-clients",
+   "/admin/business-accounts",
+   "/admin/opportunities",
+   "/admin/funnel"
+  ]
+ },
+ {
+  "label": "Marketing",
+  "section": "campaigns",
+  "paths": [
+   "/admin/marketing"
+  ]
+ },
+ {
+  "label": "Brands",
+  "section": "brands",
+  "paths": [
+   "/admin/marketing/brands"
+  ]
+ },
+ {
+  "label": "Campaigns",
+  "section": "campaigns",
+  "paths": [
+   "/admin/campaigns",
+   "/admin/communications",
+   "/admin/visitors",
+   "/admin/explorer-growth",
+   "/admin/growth-journey"
+  ]
+ },
+ {
+  "label": "Lead Ingestion",
+  "section": "lead_ingestion",
+  "paths": [
+   "/admin/sources",
+   "/admin/ingest-logs",
+   "/admin/routing-rules",
+   "/admin/autonomous"
+  ]
+ },
+ {
+  "label": "Interns",
+  "section": "internship",
+  "paths": [
+   "/admin/internship"
+  ]
+ },
+ {
+  "label": "Gov Contracts",
+  "section": "program",
+  "paths": [
+   "/admin/gov-opportunities"
+  ]
+ },
+ {
+  "label": "Communications Hub",
+  "section": "comms_hub",
+  "paths": [
+   "/admin/comms-hub"
+  ]
+ },
+ {
+  "label": "Placement",
+  "section": "placement",
+  "paths": [
+   "/admin/placement/students",
+   "/admin/placement/queue",
+   "/admin/placement/inboxes",
+   "/admin/placement/bookings",
+   "/admin/placement/fees"
+  ]
+ },
+ {
+  "label": "Inbox & Content",
+  "section": "inbox_content",
+  "paths": [
+   "/admin/inbox",
+   "/admin/missed-opportunities",
+   "/admin/content-queue"
+  ]
+ },
+ {
+  "label": "Program",
+  "section": "program",
+  "paths": [
+   "/admin/accelerator",
+   "/admin/live/studio",
+   "/admin/orchestration",
+   "/admin/workforce",
+   "/admin/agent-dashboard",
+   "/admin/tools",
+   "/admin/factory"
+  ]
+ },
+ {
+  "label": "Intelligence",
+  "section": "intelligence",
+  "paths": [
+   "/admin/ceo",
+   "/admin/cb-system",
+   "/admin/intelligence",
+   "/admin/brain",
+   "/admin/insights",
+   "/admin/governance",
+   "/admin/governance-policy"
+  ]
+ },
+ {
+  "label": "System",
+  "section": "system",
+  "paths": [
+   "/admin/system/operations",
+   "/admin/orchestration-health",
+   "/admin/tickets",
+   "/admin/reports",
+   "/admin/settings"
+  ]
+ }
+]

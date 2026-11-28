@@ -1,0 +1,408 @@
+/**
+ * The API path prefix to management section table used by mgmtSectionGate.ts, split out of that file so
+ * it stays under the 500-line ceiling (CLAUDE.md Modular Composition Rule). ORDER IS LOAD-BEARING:
+ * pathToSection returns the FIRST matching prefix, not the longest. Content and order are unchanged by the
+ * move; mgmtSectionPaths.order.test.ts pins both.
+ */
+import type { SectionKey } from '../services/access/mgmtRoles';
+
+export const PATH_SECTION: Array<[string, SectionKey]> = [
+  ['/api/admin/dashboard', 'dashboard'],
+  ['/api/admin/trust', 'trust'],
+  ['/api/admin/war-room', 'war_room'],
+  ['/api/admin/revenue', 'revenue'], ['/api/admin/refunds', 'revenue'], ['/api/admin/pipeline', 'revenue'],
+  ['/api/admin/opportunities', 'revenue'], ['/api/admin/leads', 'revenue'], ['/api/admin/funnel', 'revenue'],
+  // Commercialization Command Center (C8.2). Classified in the same change that mounts
+  // the router, because this gate is deny-by-default: an unmapped prefix 403s a scoped
+  // revenue identity with nothing in the response explaining why.
+  ['/api/admin/commercialization', 'revenue'],
+  // W32: Enterprise clients (Book a demo pilot to signed). Revenue, with the pipeline it feeds.
+  ['/api/admin/enterprise-clients', 'revenue'],
+  ['/api/admin/campaigns', 'campaigns'], ['/api/admin/communications', 'campaigns'],
+  // CH1.1: the Communications Hub. A distinct prefix: matchesPrefix is '/'-boundary, so neither '/api/admin/communications'
+  // nor '/api/admin/community' can capture it, and it cannot capture them.
+  ['/api/admin/comms-hub', 'comms_hub'],
+  // BEFORE the broad marketing row below, deliberately: pathToSection returns the FIRST
+  // match in array order, not the longest prefix, so a narrower path placed after it is
+  // never reached. This one is the catalog of connectors a brand can post through, which
+  // is brand configuration rather than campaign tooling.
+  ['/api/admin/marketing/connectors', 'brands'],
+  ['/api/admin/marketing', 'campaigns'], ['/api/admin/visitors', 'campaigns'],
+  // Brand administration (brands, their domains, sender profiles, send readiness).
+  //
+  // Classified the day the routes landed, not later, because THIS GATE IS
+  // DENY-BY-DEFAULT for a scoped role: an unmapped path reaches the final
+  // `res.status(403)` below with no row explaining why. Brand admin governs the
+  // sending identity behind campaigns and communications, both already 'campaigns',
+  // so it belongs to the same section rather than a new key.
+  // Brand administration moved OUT of 'campaigns' into its own key on 2026-10-16 (Ali, option 2).
+  // A brand here is a website the platform publishes to, and the product-experience intern's job
+  // is checking those websites — so it gained a reader with no business in campaign tooling.
+  //
+  // `brandPaths.test.ts` argued against this and named the condition that makes it safe: every
+  // role that legitimately reaches campaign tooling must be edited IN THE SAME CHANGE, or it
+  // silently loses the surface. `owner` and `admin` are derived from ALL_SECTIONS and pick the
+  // key up automatically; `marketing` now lists 'brands' explicitly. Nobody loses brands.
+  ['/api/admin/brands', 'brands'],
+  // The accounts a brand posts AS. Unmapped until 19 Oct, and because this gate is
+  // deny-by-default that meant the Channels tab answered 'You do not have access to this
+  // section' for EVERY scoped role, not just one: only legacy full admins, who skip the
+  // gate entirely, could ever load it. Found live in an intern session.
+  //
+  // Filed under 'brands' because that is what these are: the destinations a brand
+  // publishes to, configured on the brand setup page. The prefix also covers
+  // /status, /:id and /:id/select.
+  //
+  // NOT widened here: /api/admin/marketing/connect/* and /marketing/linkedin/*, which
+  // run the OAuth handshake that mints a real publishing credential. Reading a brand's
+  // configuration and granting it the right to post are different decisions.
+  ['/api/admin/channel-accounts', 'brands'],
+  // Marketing content composer (drafts, variants, validation). Same section as the campaigns
+  // and brands it publishes for. Mapped the day the routes landed, for the reason the brands
+  // row above gives. NOTE the prefix matcher is boundary-aware, so this does not swallow
+  // /api/admin/content-queue, which stays inbox_content.
+  ['/api/admin/content', 'campaigns'],
+  // Publishing queue and receipts (T026): the same surface the composer submits into.
+  ['/api/admin/publishing', 'campaigns'],
+  // Landing page authoring (brief -> draft -> preview -> publish at /p/:brand/:slug). Mapped the
+  // day the routes landed, for the reason the brands row above gives: these are the destinations
+  // campaigns point at, so they belong to the same section rather than a new key.
+  ['/api/admin/landing-pages', 'campaigns'],
+  // Explorer Growth OS Command Center (spec §27; §1381 assigns it
+  // `section: 'campaigns'` explicitly, so no new section key is needed).
+  //
+  // This row grants nobody new access, and that is not a reason to omit it. No
+  // scoped role holds 'campaigns' — the surface is owner + admin with or
+  // without this line. It earns its place because an UNMAPPED path is a latent
+  // 403: the day 'campaigns' is granted to a scoped role, an unclassified path
+  // would deny them with an error message nothing in the code explains.
+  // Classified paths fail predictably. The case-studies row below is the
+  // receipt for learning that the expensive way.
+  ['/api/admin/explorer-growth', 'campaigns'],
+  // Growth Journey OS (Phase 6, T604): the multi-brand framework Explorer Growth became the
+  // first programme on, so it is the same section for the same reason - it governs who may be
+  // contacted on behalf of which brand, which is campaigns work. DEFENSIVE in the same way as
+  // the row above: no scoped role holds 'campaigns' today, so this admits nobody new, and the
+  // day one does, a classified path fails predictably rather than 403ing for a reason nothing
+  // in the code explains. It covers `/status` too (the matcher is '/'-delimited), which is
+  // deliberate - an always-readable registry is still campaigns data.
+  ['/api/admin/growth-journey', 'campaigns'],
+  // Campus v20 (C134): the Colaberry TV playlist on Colaberry Now. Marketing content, so campaigns.
+  ['/api/admin/sources', 'lead_ingestion'], ['/api/admin/ingest-logs', 'lead_ingestion'],
+  ['/api/admin/routing-rules', 'lead_ingestion'], ['/api/admin/autonomous', 'lead_ingestion'],
+  // The admissions operating surface: stats, conversations, the knowledge base, operations,
+  // callbacks, the call log and documents. NINE routes, and every one of them was unmapped
+  // until 2026-11-12 — so for any scoped token this whole surface was the latent 403 the rows
+  // above keep warning about.
+  //
+  // It was invisible to BOTH standing guards, and that is the part worth recording.
+  // `guardedPathsAreClassified.test.ts` walks back from each `requireSection` call to its
+  // router, and these nine carry only `requireAdmin`, so there was no `requireSection` to walk
+  // back from. `unlistedPaths.test.ts` checks a fixed list of surfaces someone had already
+  // noticed. A route guarded by `requireAdmin` alone looks deliberate and complete in its own
+  // file, and the asymmetry that makes it a bug lives here instead: an unmapped path PASSES for
+  // a legacy admin (who skips this gate entirely) and for `mgmt_role === 'admin'` (whose branch
+  // denies only mapped-and-forbidden paths), and is REFUSED for every scoped role. So it works
+  // for everyone wide enough to miss it.
+  //
+  // Found while unblocking the admissions domain's own manager, whose `manager_blocker` named
+  // exactly this: "no /api/admin/admissions prefix is mapped in mgmtSectionGate PATH_SECTION,
+  // which is deny-by-default for scoped roles -- so granting a scoped login alone would still
+  // 403 him on all nine of his own routes." That half of the note was correct.
+  //
+  // `lead_ingestion`, because that is what this surface IS: the intake funnel the `admissions`
+  // and `lead_intake` roles already own, alongside sources, ingest logs and routing rules above.
+  // Purely additive — before this row these paths were deny-by-default for EVERY scoped role,
+  // so no role loses anything, which is the condition `brandPaths.test.ts` names for adding a
+  // classification safely.
+  ['/api/admin/admissions', 'lead_ingestion'],
+  ['/api/admin/inbox', 'inbox_content'], ['/api/admin/content-queue', 'inbox_content'],
+  // ORDER IS LOAD-BEARING. These three sit ahead of the broad `/api/admin/orchestration` row on
+  // the next line because `pathToSection` returns the FIRST match, not the longest. Move them
+  // below it and they stop doing anything, silently: the broad row answers 'program' first and
+  // the holder of `orchestration_health` gets a 403 with no clue why.
+  //
+  // They are the complete read set behind the Curriculum Health tab, and nothing else:
+  // HealthDashboardTab.tsx calls exactly these three and no more.
+  //
+  // `/monitoring/agents` is spelled out rather than `/monitoring`, because the `/`-delimited
+  // matcher would read the shorter prefix as also covering `POST /monitoring/scan` — an
+  // on-demand health scan, i.e. a run. The whole point of this key is read-only.
+  ['/api/admin/orchestration/health-report', 'orchestration_health'],
+  ['/api/admin/orchestration/health-snapshots/latest', 'orchestration_health'],
+  ['/api/admin/orchestration/monitoring/agents', 'orchestration_health'],
+  ['/api/admin/accelerator', 'program'], ['/api/admin/community', 'program'], ['/api/admin/orchestration', 'program'],
+  ['/api/admin/workforce', 'program'], ['/api/admin/brain', 'program'], ['/api/admin/projects', 'program'],
+  // AI Project Factory Command Center (Phase 3): a delivery contract is program-domain work, the
+  // same section as /api/admin/projects. Mapped the day the route landed; an unmapped path is a latent 403.
+  ['/api/admin/factory', 'program'],
+  // Agent Factory domain surfaces. UNMAPPED until 2026-10-16, which made them a latent 403 for
+  // every scoped role — the exact failure `mgmtSectionGate.unlistedPaths.test.ts` exists to
+  // catch, and it caught nobody here because these routes landed after that sweep.
+  //
+  // Found by walking all six interns through production with their own tokens for AF8.3: every
+  // one of them got 403 on the page AF2.1 built FOR THEM. Not inferable from the route file,
+  // which carries `requireSection('program')` and looks deliberate; the refusal happens earlier,
+  // in this table, because `pathToSection` returned null and a scoped role is deny-by-default.
+  //
+  // TWO ROWS, NOT ONE, and the split is the point:
+  //
+  //   -mine        is SELF-SCOPED. It resolves the caller's own identity from their verified
+  //                token and returns only the domains they own — an owner of nothing gets an
+  //                empty list. Its safety lives in the query, not in the gate, so gating it on
+  //                a section no intern holds protected nothing and blocked everyone. 'dashboard'
+  //                is the one section every mgmt role carries.
+  //
+  //   the rest     return ALL TEN domains regardless of caller, so they stay on 'program'.
+  //
+  // These are siblings separated by a hyphen, not a slash, and `matchesPrefix` requires an exact
+  // match or a '/' boundary — so the 'program' row below cannot swallow '-mine'.
+  ['/api/admin/agent-domains-mine', 'dashboard'],
+  ['/api/admin/agent-domains-provisioned', 'program'],
+  ['/api/admin/agent-domains', 'program'],
+  // AF4.2 change requests, classified in the same change that mounts the router, for the reason
+  // the rows above give: this gate is deny-by-default, so an unmapped prefix reaches the final
+  // 403 with nothing explaining why. Same hyphen-sibling shape as the pair above.
+  //
+  // The `-mine` half is `dashboard` because it is self-scoped: the service resolves the caller
+  // from their verified token and 403s on a domain they do not own. The broader half is `program`
+  // for the audience that reads the ten domains — but note the DECIDE route additionally carries
+  // `requireAdmin`, because `dashboard` is the one section every mgmt role holds and approving a
+  // platform change is not something a mentor or a support rep should be able to do.
+  ['/api/admin/agent-domain-change-requests-mine', 'dashboard'],
+  ['/api/admin/agent-domain-change-requests', 'program'],
+  // The dataset picker read by whoever is FILING a tool request, so it carries the same section as
+  // the `-mine` filing route above and not the `program` one the queue sits on. This gate is
+  // DENY-BY-DEFAULT, so an unmapped prefix would 403 with nothing in the response saying why —
+  // which, on a picker, reads to the builder as "there are no datasets".
+  ['/api/admin/agent-domain-datasets', 'dashboard'],
+  // AF11.11 — the people picker for `acts_on_output`, read by whoever is FILING. Same section as
+  // the dataset picker above and for the same reason: AF11.7 refuses an address that is not on
+  // this roster, so a filer who cannot read the roster cannot resolve the refusal.
+  ['/api/admin/agent-domain-actors', 'dashboard'],
+  // AF11.3 — the tool-request review console. `program`, and a hyphen sibling of neither row
+  // above (`-tool-requests` shares no `/` boundary with `-change-requests`), so declaration order
+  // is free here. Both routes under it additionally carry `requireAdmin`, and the service requires
+  // the decider to be a recorded human on the configured approver set: a section grant is what
+  // lets the page's data load, never what decides whose tool grant may stand.
+  // AF11.12 — the AI drafter, read by whoever is FILLING a request.
+  //
+  // THE NARROWER ROW IS FIRST, for the same reason `/ask` is first below: `pathToSection` returns
+  // the FIRST match in array order, so a `/draft` row placed after the broad `program` row would
+  // never be reached and this would 403 for its entire audience while the classification test
+  // stayed green. That is not hypothetical — it is what happened to AF11.9's front door.
+  //
+  // `dashboard`, beside the dataset picker and the actor roster above, because the three are read
+  // by the same person at the same moment: a builder with a half-filled form. No Agent Factory
+  // builder role carries `program`.
+  // AF12.1. The builders' own "Report a problem". On `dashboard` because that is what a
+  // builder role actually carries: the Marketing reporter sits under `campaigns`, which none
+  // of the seven can reach, so pointing them at it would have failed for everyone it is for.
+  ['/api/admin/agent-domain/bug-report', 'dashboard'],
+  // AF12.1 — the queue grouped into tasks. A projection of the admin-only queue two rows above,
+  // so it carries the same section: grouping rows must not make them reachable to more people.
+  ['/api/admin/agent-domain-tasks', 'program'],
+  ['/api/admin/agent-domain-tool-requests/draft', 'dashboard'],
+  ['/api/admin/agent-domain-tool-requests', 'program'],
+  // AF11.9. The front door: can the product already do this?
+  //
+  // THE NARROWER ROW IS FIRST, and that ordering is the fix rather than a style choice.
+  // `pathToSection` returns the FIRST match in array order, so `/ask` placed after the broad row
+  // would never be reached.
+  //
+  // `/ask` is `dashboard` because the builder FILLING a request is the only audience for it, and
+  // no Agent Factory builder role carries `program` — `mgmtRoles.ts` grants that to `curriculum`,
+  // `admin` and `owner` only. The first version mapped the whole prefix to `program`, which 403'd
+  // the front door for every builder it was built for; the component renders a failed lookup as a
+  // soft "could not check just now", so it looked like a hiccup rather than a permanent refusal.
+  ['/api/admin/agent-domain-product-features/ask', 'dashboard'],
+  // The BROWSE list stays `program`: it enumerates the whole curated catalog, which is a
+  // program-wide read, rather than answering one question about one candidate.
+  ['/api/admin/agent-domain-product-features', 'program'],
+  // AF11.10. The capability board: where every capability is and who is holding it up.
+  ['/api/admin/agent-domain-capability-board', 'program'],
+  // AF11.0. Recording that a Super Admin confirmed a capability by hand. `program`, matching the
+  // board it is read from and the grant it unblocks, so the ladder answers one section rather
+  // than 403ing on the middle rung. Distinct from the board prefix at the '/' boundary.
+  ['/api/admin/agent-domain-capability-confirmations', 'program'],
+  // AF3.5. The grant itself. Classified alongside the review console it follows, so the
+  // whole ladder answers the same section rather than one rung 403ing unexplained.
+  ['/api/admin/agent-tool-grants', 'program'],
+  // Agent Factory tab list (M2). Its OWN 'agents'-gated prefix so the Interns-hub Agents tab's data
+  // agrees with its nav gate; reusing '-provisioned' ('program') would 403 a future 'agents'-only
+  // builder who can see the tab. Distinct from the '-domains' prefixes (no '/'-boundary overlap), so
+  // declaration order is free. Per-domain scope (managed ∪ built) is a SECOND, in-service check.
+  ['/api/admin/agent-factory', 'agents'],
+  // ── FIVE AGENT PREFIXES THAT WERE MOUNTED WITHOUT BEING CLASSIFIED ────────────────────────
+  //
+  // Seven routes across the five prefixes below, found 2 Nov 2026, when four agent builders
+  // reported the same 403 on the same day. This gate
+  // runs BEFORE a route's own guard, and for a SCOPED role the final test is
+  // `if (section && allowed.includes(section)) return next();` — so an unclassified path fails on
+  // `section === null` and falls through to the 403 even when the route it guards says
+  // `requireSection('dashboard')` and the caller already holds `dashboard`.
+  //
+  // A `mgmt_role === 'admin'` caller takes the `isBroad` branch above, which denies only paths
+  // that ARE mapped. So an unmapped path passes for admin and is refused for every scoped role.
+  // That asymmetry is why none of this was visible from an owner or admin login, and it is the
+  // reason the rows above keep insisting a prefix is classified in the change that mounts it.
+  //
+  //   /api/admin/agents  'dashboard' — the agent naming save,
+  //       `PATCH /api/admin/agents/:agentId/display-name`, which already guards itself with
+  //       `requireSection('dashboard')`. A static prefix cannot express ':agentId/display-name',
+  //       so this classifies the whole subtree, and that is narrow in effect rather than broad:
+  //       every other '/api/admin/agents' route carries its own `requireAdmin` or
+  //       `requireAgentManagerOrAdmin()`, and the naming service re-checks ownership itself
+  //       (`AgentNotYoursError` -> 403). Coarse gate, fine route — the split this file's header
+  //       describes.
+  //   /api/admin/agent-domains-summary  'program' — a hyphen sibling of '-domains', so, exactly
+  //       as the '-mine' note above says, the 'program' row for '/api/admin/agent-domains'
+  //       cannot cover it. Declaration order is free for the same reason.
+  //   /api/admin/agent-nudges  'internship' — matches the nudge routes' own `requireSection`.
+  //   /api/admin/intern-nudges  'internship' — the per-intern briefs. A separate prefix from
+  //       '-nudges' above and not a subtree of it, so it needs its own row for the same reason
+  //       the hyphen siblings do. It carries strictly more than the agent nudges: the intern's
+  //       name, their address, their project, and the verbatim text of their own emails to us.
+  //   /api/admin/agent-domains-builders  'internship' — it serves intern NAMES, which are
+  //       applicant data, and `agentDomainRoutes.ts` says so where it sets that guard.
+  //   /api/admin/agent-domains-authorization  'program' — the ten-domain read, like '-domains'.
+  //
+  // The last two were missed by a hand-rolled sweep and caught by
+  // `mgmtSectionGate.guardedPathsAreClassified.test.ts`, which walks back from each
+  // `requireSection` to its router call and so reads multi-line route calls that a single regex
+  // over the call text had silently skipped. That test is the standing guard for this whole class.
+  ['/api/admin/agents', 'dashboard'],
+  ['/api/admin/agent-domains-summary', 'program'],
+  ['/api/admin/agent-nudges', 'internship'],
+  ['/api/admin/intern-nudges', 'internship'],
+  ['/api/admin/agent-domains-builders', 'internship'],
+  ['/api/admin/agent-domains-authorization', 'program'],
+  // The capability candidate list. `dashboard`, because every route under it is SELF-SCOPED:
+  // it resolves the caller's identity from their verified token and returns only the domains they
+  // manage or build, so a stranger who reaches it learns nothing. `program` would protect nothing
+  // and would 403 every builder the surface exists for, which is the failure AF8.3 measured on
+  // `agent-domains-mine` before it moved to this section.
+  //
+  // It needs its OWN row rather than riding the `-mine` one: `matchesPrefix` requires an exact
+  // match or a `/` boundary, and `/api/admin/agent-domain-candidates-mine` is neither for
+  // `/api/admin/agent-domains-mine` nor for `/api/admin/agent-domains`. Without this row the path
+  // falls through to the deny-by-default 403 at the bottom of this file with nothing in the
+  // response explaining why. Purely additive: before it, these paths were denied for every scoped
+  // role, so no role loses anything.
+  ['/api/admin/agent-domain-candidates-mine', 'dashboard'],
+  // The OWNER's cross-builder board. `program`, like the other programme-wide reads, and the
+  // route itself carries `requireAdmin` -- which is what actually decides, because this read
+  // returns all ten domains by design and its safety cannot come from the handler.
+  //
+  // It needs its own row for the same boundary reason the candidate row does:
+  // `/api/admin/builder-path-board` is not a prefix match for anything already listed, so
+  // without this it would 403 by default with nothing in the response saying why.
+  ['/api/admin/builder-path-board', 'program'],
+  ['/api/admin/cohorts', 'program'], ['/api/admin/curriculum', 'program'], ['/api/admin/components', 'program'],
+  ['/api/admin/composer', 'program'], ['/api/admin/capabilities', 'program'], ['/api/admin/recipes', 'program'],
+  ['/api/admin/feed-control', 'program'],
+  // Case Study OS (spec §20). Same section as '/api/admin/projects': a Case
+  // Study is the publishable projection of a platform Project, so the roles that
+  // manage Projects manage these. Without this row the gate is deny-by-default
+  // and every scoped mgmt token 403s here while legacy admin passes.
+  ['/api/admin/case-studies', 'program'],
+  // Cert Prep instructor/admin surface. Same section as '/api/admin/curriculum'
+  // and '/api/admin/cohorts': approving practice questions and verifying a
+  // student's build evidence is programme work, done by the roles that already
+  // manage curriculum. Registered here BEFORE the routes exist, for the reason
+  // the case-studies row above documents — an unmapped path is deny-by-default
+  // for every scoped mgmt token, failing with an error nothing explains.
+  ['/api/admin/cert-prep', 'program'],
+  // Milestone-ladder recompute (routes/admin/certificationAdminRoutes). Re-ranks
+  // students against curriculum + project + certification milestones — programme
+  // work, same section as cert-prep and projects. Registered with the route.
+  ['/api/admin/progression', 'program'],
+  // AI Internship application review. Its OWN section rather than 'program':
+  // the queue carries an applicant's resume, phone number and interview
+  // transcript, so reviewing an application is a materially wider grant than
+  // editing curriculum and the two should not travel together. Registered here
+  // with the routes, for the reason the case-studies row above documents — an
+  // unmapped path is deny-by-default for every scoped mgmt token, and
+  // 'admissions' (Dhee) is exactly such a token.
+  ['/api/admin/internship', 'internship'],
+  // Gov Contracts tab list (M1). Its OWN prefix + section so the Interns-hub tab's data agrees
+  // with its 'gov_contracts' nav gate; distinct from '/api/admin/factory' (which stays 'program'),
+  // so there is no ordering shadow. Per-project row scope is a SECOND, in-service check (membership),
+  // not expressible in this role-level table.
+  ['/api/admin/gov-contracts', 'gov_contracts'],
+  // Career Prep v27 (CP1.5): staff read of a student's prep. Classified the day it is mounted (deny-by-default).
+  ['/api/admin/placement', 'placement'],
+  // CAPE — the Architecture Skills taxonomy (skill definitions, evidence-band
+  // weights) and the Feed Control governance board built on it. Programme work:
+  // it defines what students are measured on, so it belongs with curriculum.
+  // This row was missing while BOTH /admin/cape-settings and
+  // /admin/feed-control-governance were live surfaces calling /api/admin/cape/*
+  // — exactly the latent 403 the two comments above describe, where the page
+  // renders for a scoped mgmt identity and then 403s on every call. Found when
+  // Feed Control Governance was folded into the Curriculum surface and its
+  // route lost its nav entry, which turned the gap from latent into live.
+  ['/api/admin/cape', 'program'],
+  // AI Ops. UNMAPPED until 2026-11-15, which made the whole surface a latent 403 of exactly the
+  // kind the rows above keep warning about — and a live one rather than a theoretical one, because
+  // the page that consumes it, /admin/intelligence, is ALREADY gated on 'intelligence'. So any
+  // identity granted that section could open the page and watch every AI Ops call 403 with
+  // nothing in the response explaining why. (/admin/ai-settings is the old path and redirects here.)
+  //
+  // 'intelligence' rather than a new key, deliberately. A new 'ai_ops' section would be a
+  // narrower API grant and a WORSE outcome: the page is gated on 'intelligence' on the frontend,
+  // so a reader would need two grants to make one surface work, and the second would exist only
+  // to paper over the first.
+  //
+  // THIS ROW ADMITS NOBODY NEW TODAY. No scoped role holds 'intelligence' (asserted in
+  // `mgmtSectionGate.aiOps.test.ts`), `owner` and `admin` derive it from ALL_SECTIONS, and legacy
+  // admins skip this gate. It is the condition `brandPaths.test.ts` names for adding a
+  // classification safely: nobody loses anything and nobody silently gains anything.
+  //
+  // WHAT MAKES IT SAFE TO GRANT is not this row. This gate is path-based and cannot separate
+  // `GET /ai-ops/overview` from `POST /ai-ops/emergency-stop`; `requireFullAdmin` on every
+  // non-GET route in `aiOpsRoutes.ts` is what does that. Classifying this prefix WITHOUT that
+  // guard would have handed the emergency stop and the kill switch to every holder of the
+  // section, because `requireAdmin` passes for every management role.
+  ['/api/admin/ai-ops', 'intelligence'],
+  ['/api/admin/ceo', 'intelligence'], ['/api/admin/cb-system', 'intelligence'], ['/api/admin/intelligence', 'intelligence'],
+  ['/api/admin/insights', 'intelligence'], ['/api/admin/governance', 'intelligence'],
+  ['/api/admin/tickets', 'system'], ['/api/admin/reports', 'system'], ['/api/admin/settings', 'system'],
+  ['/api/admin/students', 'students'], // Support role's read-only student-story surface
+
+  // ── Surfaces with no sidebar entry ──────────────────────────────────────
+  //
+  // Twelve admin routes had no nav entry, so the frontend's sectionForPath()
+  // returned null and ProtectedRoute admitted every mgmt-role identity, while
+  // this gate denied them by default. A mentor could open /admin/apollo and get
+  // a page that 403d on every call with nothing explaining why.
+  //
+  // These rows are the backend half of the fix; the frontend half is
+  // UNLISTED_PATH_SECTIONS in adminNav.ts, and a test asserts the two agree.
+  // As the explorer-growth row above already argues: an UNMAPPED path is a
+  // latent 403, and classified paths fail predictably.
+  ['/api/admin/apollo', 'lead_ingestion'],
+  ['/api/admin/import', 'lead_ingestion'],
+  ['/api/admin/tracking-estate', 'campaigns'],
+  ['/api/admin/executive-narrative', 'dashboard'],
+  // Unified project lifecycle (docs/project-lifecycle/architecture.md). A project's lifecycle is
+  // program-domain work, the same section as the delivery contracts and projects it governs.
+  //
+  // Mapped the day the routes landed, for the reason the rows above give: THIS GATE IS
+  // DENY-BY-DEFAULT, so an unmapped path reaches the final 403 with nothing explaining why. There
+  // is no frontend route yet (Phase 5 adds the review page), so there is deliberately no
+  // UNLISTED_PATH_SECTIONS twin — that list pairs FRONTEND routes lacking a sidebar entry with a
+  // section, and this is an API-only surface for now.
+  ['/api/admin/project-lifecycle', 'program'],
+  // Audit ledger — classified from what it returns (event_type, actor,
+  // entity_type, entity_id, payload), not from its name.
+  ['/api/admin/events', 'system'],
+  ['/api/admin/work-ledger-health', 'system'],
+  ['/api/admin/automation', 'system'],
+  // Platform Operations (/admin/system/operations). The gate runs BEFORE requireSection,
+  // so an unclassified path 403s every scoped identity before the route can admit them.
+  // The prefix is the exact one the page calls; matchesPrefix is '/'-delimited, so it
+  // cannot swallow '/api/admin/system-health', which is a different surface.
+  ['/api/admin/system/operations', 'system'],
+  ['/api/admin/agent-orphans', 'intelligence'],
+  ['/api/admin/knowledge-ops', 'intelligence'],
+];

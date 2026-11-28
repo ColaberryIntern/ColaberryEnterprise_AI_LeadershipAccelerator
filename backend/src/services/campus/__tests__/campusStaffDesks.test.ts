@@ -217,7 +217,9 @@ describe('C87: the places match the admin menu the tower is built from', () => {
   it('the office of Dara is the Curriculum page, inside the Program group (section program) of adminNav.ts', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { AGENT_PLACES } = require('../agentPlaces');
-    const src = fs.readFileSync(path.join(__dirname, '..', '..', '..', '..', '..', 'frontend', 'src', 'components', 'Layout', 'adminNav.ts'), 'utf8');
+    // The Program group moved to adminNavProgramGroups.ts (AO1.2); read both files so either home is found.
+    const layout = path.join(__dirname, '..', '..', '..', '..', '..', 'frontend', 'src', 'components', 'Layout');
+    const src = ['adminNav.ts', 'adminNavProgramGroups.ts'].map((f) => fs.readFileSync(path.join(layout, f), 'utf8')).join('\n');
     const start = src.indexOf("{ label: 'Program', section: 'program'");
     expect(start).toBeGreaterThan(-1);
     const end = src.indexOf("{ label: '", start + 10);
