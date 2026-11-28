@@ -3331,6 +3331,37 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
       + 'writes nothing. Bounded per tick, so one tick cannot become a stampede. No LLM.',
   },
   {
+    agent_name: 'ExplorerJourneySummarySync',
+    agent_type: 'scheduled_processor',
+    module: 'explorerGrowth',
+    source_file: 'backend/src/services/explorerGrowth/journeySummary/runJourneySummarySync.ts',
+    trigger_type: 'cron',
+    // Must stay IDENTICAL to this agent's DYNAMIC_SCHEDULE_REGISTRY row in
+    // aiOpsScheduler.ts; a disagreement between the two is exactly what the
+    // cron-registry ratchet reports.
+    schedule: '25 6 * * *',
+    category: 'reporting',
+    // Seeded DISABLED, on MarketingPublishingWorker's reasoning rather than
+    // YoutubeViewRefresh's: this one writes into an external CRM that two people
+    // read before phoning a stranger, so the blast radius is other people's
+    // conversations. It is also gated a second time by
+    // EXPLORER_JOURNEY_SUMMARY_ENABLED, because Kes has told Rose and Taiwo the
+    // field stays empty until she says otherwise and that timing is hers.
+    enabled: false,
+    description:
+      'Writes a short journey card onto each Explorer lead GoHighLevel contact, in the '
+      + 'ent_lead_journey_summary field, so Rose and Taiwo can see what enterprise has '
+      + 'already done with a lead before they call. 06:25 Central, ahead of the 06:37 call '
+      + 'queue build. Composes the WHOLE card every run and replaces the stored value, '
+      + 'rather than appending, so a run is idempotent in end state; if any part of a read '
+      + 'fails, it writes nothing for that lead rather than replacing a good card with a '
+      + 'thinner one. Says only what the data supports: sends and opens are recorded, so '
+      + 'they appear; replies are NOT tracked for these leads and are never mentioned in '
+      + 'either direction. Reads the first write of every run back out of GHL and aborts '
+      + 'the pass if it did not persist, because a GHL write to a field missing from the '
+      + 'destination sub-account returns success and stores nothing.',
+  },
+  {
     agent_name: 'YoutubeViewRefresh',
     agent_type: 'scheduled_processor',
     module: 'media',
