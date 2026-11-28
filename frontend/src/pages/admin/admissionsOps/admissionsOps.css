@@ -109,3 +109,5 @@
 .ops-dock-suggestion:hover, .ops-dock-suggestion:focus-visible { background: var(--neutral-800); }
 .ops-dock-open { color: var(--neutral-0); text-decoration: underline; min-height: 44px; display: inline-flex; align-items: center; }
 .ops-badge { display: inline-block; margin-left: 0.375rem; min-width: 1.25rem; padding: 0 0.375rem; border-radius: 999px; background: var(--red-600); color: var(--neutral-0); font-size: 0.75rem; font-weight: 700; text-align: center; }
+/* The "not connected yet" note must be readable on the dark dock (it is the only thing saying the agent is not live). */
+.ops-dock-ask .form-control:disabled::placeholder { color: var(--neutral-200); opacity: 1; }
