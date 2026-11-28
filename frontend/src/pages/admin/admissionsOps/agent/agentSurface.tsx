@@ -57,14 +57,16 @@ const RegistryContext = createContext<Registry | null>(null);
 /** Holds the manifests of the screens currently mounted. Lives in the workspace layout. */
 export function AgentSurfaceProvider({ children }: { children: React.ReactNode }): React.ReactElement {
   const live = useRef(new Map<string, ScreenManifest>());
-  const [version, setVersion] = useState(0);
+  const [manifests, setManifests] = useState<ScreenManifest[]>([]);
   const register = useCallback((m: ScreenManifest) => {
     live.current.set(m.id, m);
-    setVersion((v) => v + 1);
-    return () => { if (live.current.get(m.id) === m) live.current.delete(m.id); setVersion((v) => v + 1); };
+    setManifests([...live.current.values()]);
+    return () => {
+      if (live.current.get(m.id) === m) live.current.delete(m.id);
+      setManifests([...live.current.values()]);
+    };
   }, []);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const value = useMemo<Registry>(() => ({ manifests: [...live.current.values()], register }), [version, register]);
+  const value = useMemo<Registry>(() => ({ manifests, register }), [manifests, register]);
   return <RegistryContext.Provider value={value}>{children}</RegistryContext.Provider>;
 }
 
