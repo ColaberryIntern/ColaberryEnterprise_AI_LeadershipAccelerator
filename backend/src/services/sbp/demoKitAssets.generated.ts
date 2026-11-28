@@ -8,7 +8,7 @@
  * and adding a Dockerfile COPY is ESCALATE-tier in this run's execution contract.
  */
 
-/** Byte-for-byte `demoKitAssets/index.html`. */
+/** `demoKitAssets/index.html` with demoVisual/*.ts inlined at its marker. */
 export const DEMO_KIT_ENGINE_HTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -236,6 +236,135 @@ dl.facts dd { margin: 0; min-width: 0; }
   dl.facts dd { margin-bottom: 10px; overflow-wrap: anywhere; }
 }
 @media (prefers-reduced-motion: no-preference) { .tile, .nav a, .btn { transition: background-color .12s, border-color .12s; } }
+
+/* ---------------------------------------------------------------- the visual layer
+ *
+ * Series colours are SEPARATE from status colours on purpose: a bar coloured like a warning
+ * teaches the reader that length means danger. Status keeps the amber and red tones and always
+ * carries a word as well, so the meaning survives a colour-blind reader and a greyscale print.
+ */
+:root {
+  --series: color-mix(in srgb, var(--accent) 72%, #2F6FB5);
+  --series-soft: color-mix(in srgb, var(--accent) 18%, #FFFFFF);
+  --grid: color-mix(in srgb, var(--line) 70%, #FFFFFF);
+  --now: #B45309;
+  --chart-ink: var(--ink);
+  --chart-muted: var(--muted);
+}
+.chart { padding: 16px 18px 14px; }
+.chart-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 0 0 10px; }
+.chart-head h3 { font: 600 15px/1.3 var(--display); margin: 0; letter-spacing: -.01em; }
+.chart-head p { margin: 0; color: var(--chart-muted); font-size: 12.5px; }
+/* Charts scroll inside their own box so the PAGE never scrolls sideways at 380px. */
+.scroller { overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; }
+.scroller > svg { display: block; width: 100%; min-width: 520px; height: auto; }
+.cap-note { margin: 8px 0 0; font-size: 12px; color: var(--chart-muted); }
+
+/* timeline */
+.lane-label { font: 500 11.5px Inter, system-ui, sans-serif; fill: var(--chart-ink); }
+.lane .bar { stroke: var(--series); stroke-width: 7; stroke-linecap: round; opacity: .42; }
+.lane.bad .bar { stroke: var(--bad-ink); opacity: .34; }
+.mk circle { fill: var(--surface); stroke: var(--series); stroke-width: 2; }
+.mk.bad circle { stroke: var(--bad-ink); }
+.mk text { font: 600 9px Inter, system-ui, sans-serif; fill: var(--chart-ink); text-anchor: middle; }
+.tick line { stroke: var(--grid); stroke-width: 1; }
+.tick text { font: 10px Inter, system-ui, sans-serif; fill: var(--chart-muted); }
+.nowline line { stroke: var(--now); stroke-width: 1.5; }
+.nowline text { font: 600 10px Inter, system-ui, sans-serif; fill: var(--now); }
+
+/* a value against its target */
+.vbar { display: flex; align-items: center; gap: 8px; min-width: 150px; }
+.vbar .track { position: relative; flex: 1; height: 7px; border-radius: 4px; background: var(--wash); overflow: visible; }
+.vbar .fill { height: 100%; border-radius: 4px; background: var(--series); }
+.vbar.warn .fill { background: var(--att); }
+.vbar.over .fill { background: var(--bad-ink); }
+.vbar .limit { position: absolute; top: -3px; width: 2px; height: 13px; background: var(--chart-ink); opacity: .55; }
+.vbar .val { font-size: 12px; white-space: nowrap; color: var(--chart-ink); }
+.vbar .of { color: var(--chart-muted); }
+.vbar .flag { margin-left: 4px; font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--bad-ink); }
+
+/* comparison bars */
+.limit-key { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--chart-muted); margin-bottom: 8px; }
+.limit-key i { width: 2px; height: 12px; background: var(--chart-ink); opacity: .55; }
+.bars { display: grid; gap: 6px; }
+.brow { display: grid; grid-template-columns: minmax(90px, 30%) 1fr auto; align-items: center; gap: 10px; text-decoration: none; color: inherit; }
+.brow .lbl { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.brow .track { height: 14px; border-radius: 4px; background: var(--wash); }
+.brow .fill { display: block; height: 100%; border-radius: 4px; background: var(--series); }
+.brow.over .fill { background: var(--att); }
+.brow .val { font-size: 12.5px; font-variant-numeric: tabular-nums; color: var(--chart-ink); }
+.brow:hover .track { outline: 2px solid var(--series-soft); }
+
+/* funnel */
+.funnel { display: grid; gap: 6px; }
+.stage { display: grid; grid-template-columns: minmax(80px, 28%) 1fr auto; align-items: center; gap: 10px; }
+.stage .lbl { font-size: 12.5px; }
+.stage .track { height: 16px; border-radius: 4px; background: var(--wash); }
+.stage .fill { height: 100%; border-radius: 4px; background: var(--series); opacity: .85; }
+.stage .val { font-size: 12.5px; font-variant-numeric: tabular-nums; }
+
+/* path of steps */
+.steps-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+.steps-key { font: 600 11px Inter, system-ui, sans-serif; color: var(--chart-muted); min-width: 56px; }
+.steps { display: flex; align-items: center; gap: 6px; }
+.step { display: inline-flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; padding: 5px 9px; background: var(--surface); white-space: nowrap; }
+.step b { font-size: 12px; font-weight: 600; }
+.step small { font-size: 10.5px; color: var(--chart-muted); }
+.step.failed { border-color: var(--bad-ink); background: var(--bad-bg); }
+.step.executing { border-color: var(--att-line); background: var(--att-bg); }
+.gap { font-size: 10.5px; color: var(--chart-muted); white-space: nowrap; }
+
+/* decisions */
+.dcards { display: grid; gap: 10px; }
+.dcard { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: var(--surface); }
+.dhead { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.dhead h3 { font: 600 14px/1.3 var(--display); margin: 0 0 6px; }
+.dcard .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px 14px; margin: 6px 0 10px; }
+.dcard .fact dt { font-size: 11px; color: var(--chart-muted); margin: 0; }
+.dcard .fact dd { font-size: 12.5px; margin: 0; }
+.dact { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* who did what */
+.tierbar { display: flex; height: 18px; border-radius: 5px; overflow: hidden; margin-bottom: 10px; }
+.tierbar .seg { display: flex; align-items: center; justify-content: center; background: var(--series); opacity: .9; }
+.tierbar .seg + .seg { margin-left: 2px; }
+.tierbar .seg b { font: 600 10px Inter, system-ui, sans-serif; color: #fff; }
+.tierbar .tA0 { opacity: .35; } .tierbar .tA1 { opacity: .5; } .tierbar .tA2 { opacity: .68; }
+.tierbar .tA3 { opacity: .84; } .tierbar .tA4 { opacity: 1; }
+.actors { display: grid; gap: 6px; }
+.actor { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; }
+.actor .n { color: var(--chart-muted); }
+.chip-s { font-size: 11px; border-radius: 999px; padding: 1px 8px; background: var(--wash); }
+.chip-s.att { background: var(--att-bg); color: var(--att-ink); }
+.chip-s.bad { background: var(--bad-bg); color: var(--bad-ink); }
+
+@media (max-width: 420px) {
+  .brow, .stage { grid-template-columns: 1fr auto; }
+  .brow .lbl, .stage .lbl { grid-column: 1 / -1; }
+  .chart { padding: 14px; }
+}
+
+/*
+ * Dark, defined once over the same variables the light theme uses, so every surface and every
+ * chart moves together. The rail is already accent-derived and dark in both.
+ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --ground: #0D1413; --surface: #141D1B; --ink: #E8EFED; --muted: #9FB2AE;
+    --line: #26332F; --wash: #1B2522;
+    --ok-bg: color-mix(in srgb, var(--accent) 26%, #0D1413);
+    --ok-ink: color-mix(in srgb, var(--accent) 40%, #FFFFFF);
+    --att: #E59A3C; --att-bg: #2B1F0E; --att-ink: #F3C98B; --att-line: #4A361A;
+    --bad-bg: #2A1414; --bad-ink: #F2A6A0;
+    --live-bg: #121C33; --live-ink: #AFC4F5;
+    --grid: #223029; --now: #E59A3C;
+    --series: color-mix(in srgb, var(--accent) 52%, #7FB2E8);
+    --series-soft: color-mix(in srgb, var(--accent) 30%, #0D1413);
+  }
+  .step { background: var(--surface); }
+  .tierbar .seg b { color: #0D1413; }
+}
 </style>
 </head>
 <body>
@@ -254,7 +383,578 @@ dl.facts dd { margin: 0; min-width: 0; }
 <script>
 (function () {
   'use strict';
-  var SPEC = null, ROWS = {}, ROUTES = {}, FILTERS = {}, CURRENT = '';
+  var SPEC = null, ROWS = {}, ROUTES = {}, FILTERS = {}, CURRENT = '', PLAN = null;
+
+  /* The visual rules are inlined here at generate time from
+   * backend/src/services/sbp/demoVisual/*.ts, which is where they are written, typed and unit
+   * tested against six fixtures. They decide WHAT this engine draws; everything below only
+   * draws it. The marker is replaced by scripts/lib/inlineVisualRules.js, so this file on disk
+   * is the readable half and the shipped constant is the whole. */
+  /* GENERATED from backend/src/services/sbp/demoVisual/*.ts by
+   * scripts/lib/inlineVisualRules.js. Do not edit here: edit the TypeScript, which is unit
+   * tested, and regenerate with \`node scripts/generateDemoKitAssets.js\`. */
+  var VISUAL = (function () {
+    /**
+     * demoVisual/visualRules - the thresholds, caps and vocabulary the visual engine obeys. PURE.
+     *
+     * ## Why the numbers live here and not in the engine
+     *
+     * \`directives/demo-visual-rules.md\` is the standing reference a person reads. If the numbers in
+     * that document and the numbers in the code are typed twice, they drift, and the document becomes
+     * a description of what the engine used to do. These constants are the ones the engine uses and
+     * the ones the directive quotes, and \`visualPlan.rules.test.ts\` reads the directive off disk and
+     * fails when a number in it no longer matches the constant beside it.
+     *
+     * ## Why thresholds exist at all
+     *
+     * The platform generates demos for thousands of projects in domains nobody has seen. A chart
+     * drawn from two data points is not an analysis, it is decoration that implies one. Each minimum
+     * below is the point beneath which the picture says less than the table it would replace, so
+     * beneath it the engine keeps the table. Each cap is the point beyond which the picture stops
+     * being readable, so beyond it the engine shows the most attention-worthy items and a way to
+     * reach the rest.
+     *
+     * These are starting values, as the pack that specified them says. They are named so that tuning
+     * them is one edit with a test and a directive line attached, rather than a hunt through a 50 KB
+     * HTML file.
+     */
+    /** Minimum work items before a timeline beats a table. One lane is a date, not a timeline. */
+    const MIN_TIMELINE_LANES = 2;
+    /** Minimum timed events before a timeline is worth drawing, when lanes come from events. */
+    const MIN_TIMELINE_EVENTS = 4;
+    /** Minimum rows before a bar chart beats reading the numbers. */
+    const MIN_BAR_ROWS = 3;
+    /** Minimum stages before a funnel is a funnel rather than two numbers. */
+    const MIN_FUNNEL_STAGES = 2;
+    /** Minimum distinct tiers before a stacked tier bar carries information. */
+    const MIN_TIER_SEGMENTS = 2;
+    /** Minimum steps before a path of steps beats a sentence. */
+    const MIN_PATH_STEPS = 2;
+    /** At most this many headline tiles. Beyond six nobody reads the seventh. */
+    const MAX_HEADLINE_TILES = 6;
+    /** At most this many timeline lanes; the rest are reachable through the table. */
+    const MAX_TIMELINE_LANES = 8;
+    /** At most this many bars in one comparison. */
+    const MAX_BAR_ROWS = 12;
+    /** At most this many funnel stages. */
+    const MAX_FUNNEL_STAGES = 8;
+    /**
+     * A text field longer than this is quoted, never charted or truncated into a cell.
+     *
+     * Applies to the VALUE, not the field name: the same field can be short in one row and a
+     * paragraph in another, and the decision is about what is actually there.
+     */
+    const QUOTE_BLOCK_MIN_CHARS = 120;
+    /**
+     * Field types the contract defines. Mirrored here because \`screens\` and \`entities\` arrive as
+     * \`unknown\` from the Zod schema, so the reader has to decide what it is looking at from strings.
+     */
+    const FIELD_TYPES = [
+        'text', 'date', 'time', 'datetime', 'number', 'enum', 'ref', 'meter', 'bool', 'who', 'private',
+    ];
+    /** Field types that carry a moment in time, used to find a work item's start and end. */
+    const TIME_FIELD_TYPES = ['date', 'time', 'datetime'];
+    /**
+     * Every visual the plan can ask for. The engine implements exactly these and nothing else, so a
+     * new picture is a change here first, which is what keeps the directive able to list them all.
+     */
+    const VISUAL_KINDS = [
+        'timeline',
+        'target_bar',
+        'status_pills',
+        'funnel',
+        'step_path',
+        'comparison_bars',
+        'matrix',
+        'decision_cards',
+        'actor_summary',
+        'quote_block',
+    ];
+    /**
+     * Why a visual was NOT drawn. Carried in the plan rather than dropped, for two reasons: the tests
+     * assert the reason (so "no timeline" cannot pass for the wrong cause), and the engine needs to
+     * know which fallback to render in that block's place.
+     */
+    const SKIP_REASONS = [
+        'no_candidate_data',
+        'below_minimum',
+        'no_variation',
+        'private_field',
+    ];
+    /** What the engine draws instead when a visual is skipped. Never "nothing". */
+    const FALLBACKS = ['table', 'list', 'facts', 'none'];
+
+    /**
+     * demoVisual/specReaders - read the loosely-typed half of a demo spec without trusting it. PURE.
+     *
+     * ## Why this exists
+     *
+     * \`DemoSpecSchema\` types \`events\` precisely and then types \`screens\`, \`entities\` and \`nav\` as
+     * \`z.record(z.string(), z.unknown())\`. That is deliberate (the shapes are the engine's contract,
+     * not the persistence contract) but it means everything the visual rules need to inspect arrives
+     * as \`unknown\`, from a document an agent wrote and a student may have edited.
+     *
+     * So every reader here answers with a narrowed value or omits the thing entirely. None throws.
+     * A spec with a malformed entity must still produce a plan for the rest of the spec: refusing the
+     * whole demo because one field object is a string would turn a cosmetic flaw into a blank page,
+     * and the renderer already has a fallback for every block.
+     *
+     * ## What it does NOT do
+     *
+     * It makes no decisions. Nothing here knows what a timeline is or when one is worth drawing;
+     * \`visualPlan.ts\` owns that. Keeping the two apart is what lets the rules be tested against hand
+     * written shapes without a spec, and the readers against broken specs without a rule in sight.
+     */
+    function isRecord(value) {
+        return typeof value === 'object' && value !== null && !Array.isArray(value);
+    }
+    function str(value) {
+        return typeof value === 'string' && value.trim() !== '' ? value : null;
+    }
+    function num(value) {
+        return typeof value === 'number' && Number.isFinite(value) ? value : null;
+    }
+    function readField(key, raw) {
+        var _a;
+        const r = isRecord(raw) ? raw : {};
+        const type = str(r.type);
+        return {
+            key,
+            type: type || null,
+            unit: str(r.unit),
+            // \`target\` is not in the v1 contract. It is read here because phase 3 adds it as an optional
+            // field and a spec that already carries one should get its reference line today.
+            max: (_a = num(r.max)) !== null && _a !== void 0 ? _a : num(r.target),
+            warn: num(r.warn),
+            ref: str(r.ref),
+            labels: isRecord(r.labels) ? r.labels : null,
+            tones: isRecord(r.tones) ? r.tones : null,
+            shownAs: str(r.shown_as),
+        };
+    }
+    function readEntity(key, raw) {
+        if (!isRecord(raw))
+            return null;
+        const fieldsRaw = Array.isArray(raw.fields) ? raw.fields : [];
+        const fields = [];
+        for (const f of fieldsRaw) {
+            const fk = isRecord(f) ? str(f.key) : null;
+            if (fk)
+                fields.push(readField(fk, f));
+        }
+        const rows = Array.isArray(raw.rows) ? raw.rows.filter(isRecord) : [];
+        const actionsRaw = Array.isArray(raw.actions) ? raw.actions : [];
+        const actions = actionsRaw.filter(isRecord).map((a) => ({
+            label: str(a.label),
+            when: isRecord(a.when) ? a.when : null,
+        }));
+        return {
+            key,
+            label: str(raw.label),
+            plural: str(raw.plural),
+            statusField: str(raw.status),
+            columns: Array.isArray(raw.columns) ? raw.columns.filter((c) => typeof c === 'string') : [],
+            fields,
+            rows: rows,
+            actions,
+        };
+    }
+    function entitiesOf(spec) {
+        const raw = spec.entities;
+        if (!isRecord(raw))
+            return [];
+        const out = [];
+        for (const [key, value] of Object.entries(raw)) {
+            const entity = readEntity(key, value);
+            if (entity)
+                out.push(entity);
+        }
+        // Sorted by key so the plan is deterministic whatever order the JSONB column came back in.
+        return out.sort((a, b) => a.key.localeCompare(b.key));
+    }
+    function screensOf(spec) {
+        const raw = spec.screens;
+        if (!isRecord(raw))
+            return [];
+        const out = [];
+        for (const [id, value] of Object.entries(raw)) {
+            if (!isRecord(value))
+                continue;
+            out.push({
+                id,
+                type: str(value.type),
+                title: str(value.title),
+                entity: str(value.entity),
+                blocks: Array.isArray(value.blocks) ? value.blocks.filter(isRecord) : [],
+            });
+        }
+        return out.sort((a, b) => a.id.localeCompare(b.id));
+    }
+    /** A field a number can be measured against: a meter, or a number with a stated ceiling. */
+    function measuredFields(entity) {
+        return entity.fields.filter((f) => f.type !== 'private' && f.max !== null && (f.type === 'meter' || f.type === 'number'));
+    }
+    /** Numeric fields with no stated ceiling. Compared against each other rather than a target. */
+    function plainNumberFields(entity) {
+        return entity.fields.filter((f) => f.type === 'number' && f.max === null);
+    }
+    function enumFields(entity) {
+        return entity.fields.filter((f) => f.type === 'enum');
+    }
+    function refFields(entity) {
+        return entity.fields.filter((f) => f.type === 'ref' && f.ref !== null);
+    }
+    function timeFields(entity) {
+        return entity.fields.filter((f) => f.type !== null && TIME_FIELD_TYPES.includes(f.type));
+    }
+    /**
+     * How many rows actually carry a usable number for this field.
+     *
+     * Counted rather than assumed from \`rows.length\`, because a field declared on an entity is not a
+     * field every row fills, and a bar chart of nine rows where four are blank is a chart that lies
+     * about its own completeness.
+     */
+    function rowsWithNumber(entity, fieldKey) {
+        return entity.rows.filter((r) => num(r[fieldKey]) !== null).length;
+    }
+    /** Distinct non-empty values of a field across an entity's rows, in first-seen order. */
+    function distinctValues(entity, fieldKey) {
+        const seen = [];
+        for (const row of entity.rows) {
+            const v = row[fieldKey];
+            const key = typeof v === 'string' || typeof v === 'number' ? String(v) : null;
+            if (key !== null && key !== '' && !seen.includes(key))
+                seen.push(key);
+        }
+        return seen;
+    }
+
+    /* ------------------------------------------------------------------ small helpers */
+    const byCountDesc = (a, b) => b.n - a.n;
+    function latestEventTime(events) {
+        let best = null;
+        let bestMs = -Infinity;
+        for (const e of events) {
+            const ms = Date.parse(e.occurred_at);
+            // An unparseable timestamp is compared as a string rather than dropped: a spec using a
+            // display time is still ordered, just not arithmetically.
+            const value = Number.isNaN(ms) ? -Infinity : ms;
+            if (value > bestMs || (best === null && Number.isNaN(ms))) {
+                if (!Number.isNaN(ms) || best === null) {
+                    best = e.occurred_at;
+                    bestMs = value;
+                }
+            }
+        }
+        return best;
+    }
+    function cap(items, max) {
+        if (items.length <= max)
+            return { items, capped: null };
+        return { items: items.slice(0, max), capped: { shown: max, total: items.length } };
+    }
+    /**
+     * Which entity is the work the demo is about?
+     *
+     * Scored, not guessed: an entity earns points for every event whose \`work_id\` matches one of its
+     * row ids, and for every OTHER entity that points at it through a \`ref\` field. That is the
+     * structural definition of "the thing the work is about" and it holds in any domain. Ties break
+     * on the entity key so the answer is stable.
+     */
+    function primaryWorkEntity(entities, events) {
+        if (!entities.length)
+            return null;
+        const scores = entities.map((e) => {
+            const ids = new Set(e.rows.map((r) => String(r.id)));
+            const fromEvents = events.filter((ev) => ids.has(ev.work_id)).length;
+            const fromRefs = entities
+                .filter((other) => other.key !== e.key)
+                .reduce((n, other) => n + refFields(other).filter((f) => f.ref === e.key).length, 0);
+            return { key: e.key, n: fromEvents + fromRefs };
+        });
+        const ranked = [...scores].sort((a, b) => (b.n - a.n) || a.key.localeCompare(b.key));
+        return ranked[0] && ranked[0].n > 0 ? ranked[0].key : null;
+    }
+    /* ------------------------------------------------------------------ the detections */
+    function planTimeline(entities, events, primary) {
+        const entity = entities.find((e) => e.key === primary) || null;
+        // Route 1: work items that carry two or more times of their own.
+        if (entity) {
+            const times = timeFields(entity);
+            if (times.length >= 2) {
+                const lanes = entity.rows.filter((r) => times.filter((f) => typeof r[f.key] === 'string' && r[f.key] !== '').length >= 2);
+                if (lanes.length >= MIN_TIMELINE_LANES) {
+                    const { items, capped } = cap(lanes.map((r) => String(r.id)), MAX_TIMELINE_LANES);
+                    return {
+                        kind: 'timeline', entity: entity.key,
+                        fields: times.map((f) => f.key), items, capped,
+                    };
+                }
+            }
+        }
+        // Route 2: lanes from the events themselves, grouped by the work they belong to.
+        const workIds = Array.from(new Set(events.map((e) => e.work_id))).sort();
+        if (events.length >= MIN_TIMELINE_EVENTS && workIds.length >= MIN_TIMELINE_LANES) {
+            const { items, capped } = cap(workIds, MAX_TIMELINE_LANES);
+            return { kind: 'timeline', entity: primary, fields: ['work_id', 'occurred_at'], items, capped };
+        }
+        return {
+            kind: 'timeline', entity: primary, reason: 'below_minimum', fallback: 'table',
+            detail: \`\${workIds.length} work ids and \${events.length} events; needs \${MIN_TIMELINE_LANES} lanes or \${MIN_TIMELINE_EVENTS} events\`,
+        };
+    }
+    function planTargetBars(entity) {
+        const measured = measuredFields(entity);
+        if (!measured.length) {
+            return {
+                kind: 'target_bar', entity: entity.key, reason: 'no_candidate_data', fallback: 'table',
+                detail: 'no meter field and no number carrying a max or target',
+            };
+        }
+        return {
+            kind: 'target_bar', entity: entity.key,
+            fields: measured.map((f) => f.key),
+            items: entity.rows.map((r) => String(r.id)),
+            capped: null,
+        };
+    }
+    function planComparisonBars(entity) {
+        const candidates = plainNumberFields(entity)
+            .map((f) => ({ f, n: rowsWithNumber(entity, f.key) }))
+            .filter((c) => c.n >= MIN_BAR_ROWS)
+            .sort(byCountDesc);
+        if (!candidates.length) {
+            const best = plainNumberFields(entity)
+                .map((f) => rowsWithNumber(entity, f.key))
+                .reduce((m, n) => Math.max(m, n), 0);
+            return {
+                kind: 'comparison_bars', entity: entity.key, reason: 'below_minimum', fallback: 'table',
+                detail: \`best numeric field is filled on \${best} rows; needs \${MIN_BAR_ROWS}\`,
+            };
+        }
+        const field = candidates[0].f;
+        const rows = entity.rows.filter((r) => typeof r[field.key] === 'number').map((r) => String(r.id));
+        const { items, capped } = cap(rows, MAX_BAR_ROWS);
+        return { kind: 'comparison_bars', entity: entity.key, fields: [field.key], items, capped };
+    }
+    function planStatusPills(entity) {
+        const enums = enumFields(entity);
+        if (!enums.length) {
+            return {
+                kind: 'status_pills', entity: entity.key, reason: 'no_candidate_data', fallback: 'table',
+                detail: 'no enum field',
+            };
+        }
+        const field = enums.find((f) => f.key === entity.statusField) || enums[0];
+        const values = distinctValues(entity, field.key);
+        const { items, capped } = cap(values, MAX_HEADLINE_TILES);
+        return { kind: 'status_pills', entity: entity.key, fields: [field.key], items, capped };
+    }
+    /**
+     * A funnel is child rows narrowing through stages. Stages come from the DATA in order of
+     * narrowing count, never from a list somebody typed, and a stage set whose counts are all equal
+     * is not a funnel: it is a category breakdown wearing a funnel's shape.
+     */
+    function planFunnel(entity, workEntity) {
+        const pointsAtWork = refFields(entity).some((f) => f.ref === workEntity);
+        const enums = enumFields(entity);
+        if (!workEntity || !pointsAtWork || !enums.length) {
+            return {
+                kind: 'funnel', entity: entity.key, reason: 'no_candidate_data', fallback: 'table',
+                detail: 'not a child of the work entity, or carries no status enum',
+            };
+        }
+        const field = enums.find((f) => f.key === entity.statusField) || enums[0];
+        const counts = distinctValues(entity, field.key)
+            .map((v) => ({ v, n: entity.rows.filter((r) => String(r[field.key]) === v).length }))
+            .sort(byCountDesc);
+        if (counts.length < MIN_FUNNEL_STAGES) {
+            return {
+                kind: 'funnel', entity: entity.key, reason: 'below_minimum', fallback: 'table',
+                detail: \`\${counts.length} stages; needs \${MIN_FUNNEL_STAGES}\`,
+            };
+        }
+        if (counts[0].n === counts[counts.length - 1].n) {
+            return {
+                kind: 'funnel', entity: entity.key, reason: 'no_variation', fallback: 'table',
+                detail: \`every stage holds \${counts[0].n} rows, so nothing narrows\`,
+            };
+        }
+        const { items, capped } = cap(counts.map((c) => c.v), MAX_FUNNEL_STAGES);
+        return { kind: 'funnel', entity: entity.key, fields: [field.key], items, capped };
+    }
+    /** A path of steps is a causal chain: events linked by \`parent_event_id\` inside one \`work_id\`. */
+    function planStepPath(events) {
+        const byWork = new Map();
+        for (const e of events) {
+            const list = byWork.get(e.work_id) || [];
+            list.push(e);
+            byWork.set(e.work_id, list);
+        }
+        const chained = Array.from(byWork.entries())
+            .map(([work, list]) => ({ work, n: list.filter((e) => e.parent_event_id !== null).length + 1 }))
+            .filter((c) => c.n >= MIN_PATH_STEPS)
+            .sort((a, b) => (b.n - a.n) || a.work.localeCompare(b.work));
+        if (!chained.length) {
+            return {
+                kind: 'step_path', entity: null, reason: 'below_minimum', fallback: 'list',
+                detail: \`no work item has \${MIN_PATH_STEPS} causally linked events\`,
+            };
+        }
+        return {
+            kind: 'step_path', entity: null,
+            fields: ['parent_event_id', 'status', 'occurred_at'],
+            items: chained.map((c) => c.work), capped: null,
+        };
+    }
+    /** Rows a person must act on: an entity action with a \`when\`, and rows that match it. */
+    function planDecisionCards(entities) {
+        const pending = [];
+        const fields = new Set();
+        for (const entity of entities) {
+            for (const action of entity.actions) {
+                if (!action.when)
+                    continue;
+                for (const [k, v] of Object.entries(action.when)) {
+                    fields.add(k);
+                    for (const row of entity.rows) {
+                        const match = Array.isArray(v) ? v.map(String).includes(String(row[k])) : String(row[k]) === String(v);
+                        const id = \`\${entity.key}:\${String(row.id)}\`;
+                        if (match && !pending.includes(id))
+                            pending.push(id);
+                    }
+                }
+            }
+        }
+        if (!pending.length) {
+            return {
+                kind: 'decision_cards', entity: null, reason: 'no_candidate_data', fallback: 'none',
+                detail: 'no entity action declares a \`when\`, or no row matches one',
+            };
+        }
+        return { kind: 'decision_cards', entity: null, fields: [...fields].sort(), items: pending, capped: null };
+    }
+    /**
+     * Who did what, built from \`events\` rather than from the plan's roster.
+     *
+     * Guard 4 of the rules: never show an empty state the data contradicts. The old engine printed
+     * "the plan names no agents" on a screen whose own activity log named twelve, because it read
+     * \`agents\` and the scaffold had left it empty.
+     */
+    function planActorSummary(events) {
+        const actors = Array.from(new Set(events.map((e) => e.actor.id))).sort();
+        if (!actors.length) {
+            return {
+                kind: 'actor_summary', entity: null, reason: 'no_candidate_data', fallback: 'none',
+                detail: 'the spec records no events, so nobody has acted',
+            };
+        }
+        const tiers = Array.from(new Set(events.map((e) => e.autonomy_tier)));
+        return {
+            kind: 'actor_summary', entity: null,
+            // The tier bar is part of this block only when it would carry information.
+            fields: tiers.length >= MIN_TIER_SEGMENTS ? ['actor', 'autonomy_tier'] : ['actor'],
+            items: actors, capped: null,
+        };
+    }
+    /** Long text is quoted, never charted. Decided on the VALUES present, not on the field name. */
+    function planQuoteBlocks(entity) {
+        const keys = entity.fields
+            .filter((f) => f.type === 'text')
+            .filter((f) => entity.rows.some((r) => typeof r[f.key] === 'string' && r[f.key].length >= QUOTE_BLOCK_MIN_CHARS))
+            .map((f) => f.key);
+        if (!keys.length)
+            return null;
+        return { kind: 'quote_block', entity: entity.key, fields: keys, items: [], capped: null };
+    }
+    /* ------------------------------------------------------------------ assembly */
+    function isSkipped(b) {
+        return b.reason !== undefined;
+    }
+    /**
+     * Build the plan.
+     *
+     * Screens keep the order and types the spec declares; this decides what each one DRAWS, in the
+     * analysis order the rules set out (summary before detail on every screen).
+     */
+    function visualPlan(spec) {
+        const entities = entitiesOf(spec);
+        const events = spec.events || [];
+        const primary = primaryWorkEntity(entities, events);
+        const timeline = planTimeline(entities, events, primary);
+        const decisions = planDecisionCards(entities);
+        const actors = planActorSummary(events);
+        const steps = planStepPath(events);
+        const global = [];
+        const globalSkipped = [];
+        for (const b of [decisions, actors])
+            (isSkipped(b) ? globalSkipped : global).push(b);
+        const screens = screensOf(spec).map((screen) => {
+            const blocks = [];
+            const skipped = [];
+            const push = (b) => {
+                if (isSkipped(b))
+                    skipped.push(b);
+                else
+                    blocks.push(b);
+            };
+            const entity = entities.find((e) => e.key === screen.entity) || null;
+            if (screen.type === 'home') {
+                // Counts first, then measured-against-target, then the one picture of the whole, then what
+                // needs a person, and the feed last. That order is the analysis the reader wants.
+                const workEntity = entities.find((e) => e.key === primary);
+                if (workEntity)
+                    push(planStatusPills(workEntity));
+                if (workEntity)
+                    push(planTargetBars(workEntity));
+                push(timeline);
+                push(decisions);
+                for (const child of entities)
+                    push(planFunnel(child, primary));
+            }
+            else if (screen.type === 'list' && entity) {
+                push(planTargetBars(entity));
+                push(planComparisonBars(entity));
+                /*
+                 * Only on the screen showing the work the events are ABOUT. Events carry a \`work_id\`, so a
+                 * path of steps drawn on an unrelated entity's screen is a true picture of the wrong
+                 * thing: the people list showed how the shifts went, under a heading about the work.
+                 */
+                if (entity.key === primary)
+                    push(steps);
+                const matrixRefs = refFields(entity);
+                if (matrixRefs.length >= 2 && plainNumberFields(entity).length >= 1) {
+                    blocks.push({
+                        kind: 'matrix', entity: entity.key,
+                        fields: [...matrixRefs.slice(0, 2).map((f) => f.key), plainNumberFields(entity)[0].key],
+                        items: entity.rows.map((r) => String(r.id)), capped: null,
+                    });
+                }
+            }
+            else if (screen.type === 'queue') {
+                push(decisions);
+            }
+            else if (screen.type === 'roster') {
+                push(actors);
+            }
+            if (entity) {
+                const quote = planQuoteBlocks(entity);
+                if (quote)
+                    blocks.push(quote);
+            }
+            return { screen: screen.id, type: screen.type, blocks, skipped };
+        });
+        return {
+            version: 1,
+            now: latestEventTime(events),
+            primaryWorkEntity: primary,
+            screens,
+            global,
+            globalSkipped,
+        };
+    }
+    return { visualPlan: visualPlan, primaryWorkEntity: primaryWorkEntity };
+  })();
 
   var esc = function (v) {
     return v === null || v === undefined ? '' : String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -484,8 +1184,297 @@ dl.facts dd { margin: 0; min-width: 0; }
     }).join('') + '</ol>';
   }
 
+  /* ------------------------------------------------------------------ the visuals
+   *
+   * Everything below DRAWS. What to draw was already decided by VISUAL.visualPlan (inlined
+   * above from the TypeScript that is unit tested against six fixtures), so nothing here
+   * inspects the domain or re-decides anything. If a block is absent from the plan, the block
+   * is not drawn and whatever this screen did before stands: that is the fallback the rules
+   * promise, and it is why every call site below is guarded rather than assumed.
+   */
+  function planFor(sid) {
+    if (!PLAN || !PLAN.screens) return null;
+    for (var i = 0; i < PLAN.screens.length; i++) if (PLAN.screens[i].screen === sid) return PLAN.screens[i];
+    return null;
+  }
+  function blockOf(sp, kind) {
+    if (!sp) return null;
+    for (var i = 0; i < sp.blocks.length; i++) if (sp.blocks[i].kind === kind) return sp.blocks[i];
+    return null;
+  }
+  function globalBlock(kind) {
+    if (!PLAN) return null;
+    for (var i = 0; i < PLAN.global.length; i++) if (PLAN.global[i].kind === kind) return PLAN.global[i];
+    return null;
+  }
+  function msOf(v) { var t = Date.parse(v); return isNaN(t) ? null : t; }
+  function numOf(v) { return typeof v === 'number' && isFinite(v) ? v : null; }
+  /** A short clock label. The spec's own display strings are used where it has them. */
+  function clockLabel(ms) {
+    var d = new Date(ms);
+    var h = d.getUTCHours(), m = d.getUTCMinutes();
+    var ap = h < 12 ? 'AM' : 'PM', hh = h % 12; if (hh === 0) hh = 12;
+    return hh + ':' + (m < 10 ? '0' : '') + m + ' ' + ap;
+  }
+  /** \`{shown} of {total}\` plus a way to the rest, whenever a cap trimmed a block. */
+  function cappedNote(b, href) {
+    if (!b.capped) return '';
+    return '<p class="cap-note">Showing ' + b.capped.shown + ' of ' + b.capped.total +
+      (href ? '. <a href="#' + esc(href) + '">See all</a>' : '.') + '</p>';
+  }
+  function chartHead(t, takeaway) {
+    // Composed titles start from a field key or an entity label, which are lower case in most
+    // specs, so the heading read "hours by person". Sentence case is applied here rather than in
+    // CSS because text-transform would also shout an acronym the spec capitalised on purpose.
+    t = String(t || ''); t = t.charAt(0).toUpperCase() + t.slice(1);
+    return '<div class="chart-head"><h3>' + esc(t) + '</h3>' + (takeaway ? '<p>' + esc(takeaway) + '</p>' : '') + '</div>';
+  }
+
+  /** Headline tiles: one per status value, counted from the rows. */
+  function vStatusTiles(b) {
+    if (!b) return '';
+    var ekey = b.entity, fkey = b.fields[0], f = field(ekey, fkey), rows = rowsOf(ekey);
+    if (!f) return '';
+    var cells = b.items.map(function (v) {
+      var n = rows.filter(function (r) { return String(r[fkey]) === String(v); }).length;
+      var label = (f.labels || {})[v] || v;
+      var tone = (f.tones || {})[v] || '';
+      return '<div class="tile ' + (tone === 'attention' ? 'att' : '') + '"><span class="n">' + n + '</span>' +
+        '<span><strong>' + esc(label) + '</strong><span>' + esc(ent(ekey).plural || ekey) + '</span></span></div>';
+    }).join('');
+    return cells ? '<div class="tiles">' + cells + '</div>' + cappedNote(b) : '';
+  }
+
+  /**
+   * A number against the thing the spec says to measure it against.
+   *
+   * Never the number alone: "85" and "29" look alike until the target is beside them, which is
+   * the whole reason this block exists rather than a cell in a table.
+   */
+  function vTargetBar(ekey, fkey, row) {
+    var f = field(ekey, fkey);
+    if (!f) return '';
+    var v = numOf(row[fkey]), max = numOf(f.max);
+    if (v === null || max === null) return '';
+    var over = v > max, warn = f.warn !== undefined && f.warn !== null && v >= f.warn && !over;
+    var pct = Math.max(2, Math.min(100, (v / Math.max(max, v)) * 100));
+    var limitPct = (max / Math.max(max, v)) * 100;
+    return '<div class="vbar' + (over ? ' over' : warn ? ' warn' : '') + '">' +
+      '<div class="track"><div class="fill" style="width:' + pct.toFixed(1) + '%"></div>' +
+      '<i class="limit" style="left:' + limitPct.toFixed(1) + '%" aria-hidden="true"></i></div>' +
+      '<span class="val">' + esc(v) + (f.unit ? ' ' + esc(f.unit) : '') +
+      ' <span class="of">/ ' + esc(max) + (f.unit ? ' ' + esc(f.unit) : '') + '</span>' +
+      (over ? '<b class="flag">over</b>' : '') + '</span></div>';
+  }
+
+  /** The one picture of the whole: a lane per work item, event marks, and a now line. */
+  function vTimeline(b, sid) {
+    if (!b) return '';
+    var fromRows = b.entity && b.fields.length === 2 && b.fields[0] !== 'work_id';
+    var lanes = [];
+    if (fromRows) {
+      var ek = b.entity, f0 = b.fields[0], f1 = b.fields[1];
+      b.items.forEach(function (id) {
+        var row = find(ek, id); if (!row) return;
+        var a = msOf(row[f0]), z = msOf(row[f1]); if (a === null || z === null) return;
+        lanes.push({ id: id, label: title(ek, row), a: Math.min(a, z), z: Math.max(a, z), href: routeOf(ek, row) });
+      });
+    } else {
+      b.items.forEach(function (work) {
+        var evs = (SPEC.events || []).filter(function (e) { return e.work_id === work; });
+        var times = evs.map(function (e) { return msOf(e.occurred_at); }).filter(function (t) { return t !== null; });
+        if (!times.length) return;
+        var row = b.entity ? find(b.entity, work) : null;
+        lanes.push({
+          id: work, label: row ? title(b.entity, row) : work,
+          a: Math.min.apply(null, times), z: Math.max.apply(null, times),
+          href: row ? routeOf(b.entity, row) : ''
+        });
+      });
+    }
+    if (!lanes.length) return '';
+    var now = PLAN && PLAN.now ? msOf(PLAN.now) : null;
+    var lo = Math.min.apply(null, lanes.map(function (l) { return l.a; }));
+    var hi = Math.max.apply(null, lanes.map(function (l) { return l.z; }));
+    if (now !== null) { lo = Math.min(lo, now); hi = Math.max(hi, now); }
+    if (hi <= lo) hi = lo + 1;
+    var pad = (hi - lo) * 0.06; lo -= pad; hi += pad;
+    var W = 760, L = 150, R = 16, H = lanes.length * 34 + 60;
+    var x = function (t) { return L + ((t - lo) / (hi - lo)) * (W - L - R); };
+
+    var marks = '';
+    lanes.forEach(function (l, i) {
+      var y = 36 + i * 34;
+      // Events on this lane, merged when they would overlap, so a cluster reads as a count
+      // rather than as one mark hiding four.
+      var evs = (SPEC.events || []).filter(function (e) { return e.work_id === l.id; })
+        .map(function (e) { return { t: msOf(e.occurred_at), status: e.status }; })
+        .filter(function (e) { return e.t !== null; })
+        .sort(function (p, q) { return p.t - q.t; });
+      var groups = [];
+      evs.forEach(function (e) {
+        var last = groups[groups.length - 1];
+        if (last && Math.abs(x(e.t) - x(last.t)) < 9) { last.n += 1; if (e.status === 'failed') last.bad = true; }
+        else groups.push({ t: e.t, n: 1, bad: e.status === 'failed' });
+      });
+      var bad = evs.some(function (e) { return e.status === 'failed'; });
+      marks += '<g class="lane' + (bad ? ' bad' : '') + '">' +
+        '<text class="lane-label" x="0" y="' + (y + 4) + '">' + esc(l.label).slice(0, 30) + '</text>' +
+        '<line class="bar" x1="' + x(l.a).toFixed(1) + '" y1="' + y + '" x2="' + x(l.z).toFixed(1) + '" y2="' + y + '"/>' +
+        groups.map(function (g) {
+          return '<g class="mk' + (g.bad ? ' bad' : '') + '"><circle cx="' + x(g.t).toFixed(1) + '" cy="' + y + '" r="6"/>' +
+            (g.n > 1 ? '<text x="' + x(g.t).toFixed(1) + '" y="' + (y + 3.5) + '">' + g.n + '</text>' : '') +
+            '<title>' + esc(clockLabel(g.t)) + (g.n > 1 ? ' · ' + g.n + ' actions' : '') + '</title></g>';
+        }).join('') + '</g>';
+    });
+    // The now label sits at the FOOT, not beside the tick row: a line drawn near a tick put two
+    // labels in the same place, and the one that mattered was the one underneath.
+    var nowAnchor = (x(now) - L) / (W - L - R) > 0.82 ? 'end' : 'start';
+    var nowLine = now === null ? '' :
+      '<g class="nowline"><line x1="' + x(now).toFixed(1) + '" y1="20" x2="' + x(now).toFixed(1) + '" y2="' + (H - 20) + '"/>' +
+      '<text x="' + (x(now) + (nowAnchor === 'end' ? -5 : 5)).toFixed(1) + '" y="' + (H - 7) + '" text-anchor="' + nowAnchor + '">now ' + esc(clockLabel(now)) + '</text></g>';
+    var ticks = '';
+    for (var k = 0; k <= 4; k++) {
+      var t = lo + ((hi - lo) / 4) * k;
+      // Anchored inward at the edges. Centred labels at either end hang off the viewBox and the
+      // browser simply clips them, so the first and last times were unreadable.
+      var anchor = k === 0 ? 'start' : (k === 4 ? 'end' : 'middle');
+      ticks += '<g class="tick"><line x1="' + x(t).toFixed(1) + '" y1="20" x2="' + x(t).toFixed(1) + '" y2="' + (H - 20) + '"/>' +
+        '<text x="' + x(t).toFixed(1) + '" y="12" text-anchor="' + anchor + '">' + esc(clockLabel(t)) + '</text></g>';
+    }
+    return '<section class="card chart">' + chartHead('Work in progress, item by item', lanes.length + ' items, ' + (SPEC.events || []).length + ' actions') +
+      '<div class="scroller"><svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Timeline of work items">' +
+      ticks + marks + nowLine + '</svg></div>' + cappedNote(b, sid) + '</section>';
+  }
+
+  /** Child rows narrowing through stages. The sentence under it is computed, never written. */
+  function vFunnel(b) {
+    if (!b) return '';
+    var ekey = b.entity, fkey = b.fields[0], f = field(ekey, fkey), rows = rowsOf(ekey);
+    if (!f) return '';
+    var stages = b.items.map(function (v) {
+      return { v: v, label: (f.labels || {})[v] || v, n: rows.filter(function (r) { return String(r[fkey]) === String(v); }).length };
+    });
+    if (!stages.length) return '';
+    var top = stages[0].n, last = stages[stages.length - 1];
+    var bars = stages.map(function (s) {
+      var pct = top ? Math.max(3, (s.n / top) * 100) : 0;
+      return '<div class="stage"><span class="lbl">' + esc(s.label) + '</span>' +
+        '<div class="track"><div class="fill" style="width:' + pct.toFixed(1) + '%"></div></div>' +
+        '<span class="val">' + s.n + '</span></div>';
+    }).join('');
+    var takeaway = top ? last.n + ' of ' + top + ' reached ' + last.label.toLowerCase() + '.' : '';
+    return '<section class="card chart">' + chartHead(esc(ent(ekey).plural || ekey) + ' by stage', takeaway) +
+      '<div class="funnel">' + bars + '</div>' + cappedNote(b) + '</section>';
+  }
+
+  /** One number compared across rows, with the limit line when the spec states one. */
+  function vBars(b, sid) {
+    if (!b) return '';
+    var ekey = b.entity, fkey = b.fields[0], f = field(ekey, fkey);
+    if (!f) return '';
+    var items = b.items.map(function (id) { return find(ekey, id); }).filter(Boolean)
+      .map(function (r) { return { r: r, v: numOf(r[fkey]) }; })
+      .filter(function (it) { return it.v !== null; })
+      .sort(function (p, q) { return q.v - p.v; });
+    if (!items.length) return '';
+    var max = Math.max.apply(null, items.map(function (it) { return it.v; }));
+    var limit = numOf(f.max);
+    var rows = items.map(function (it) {
+      var pct = max ? Math.max(2, (it.v / max) * 100) : 0;
+      var over = limit !== null && it.v > limit;
+      return '<a class="brow' + (over ? ' over' : '') + '" href="#' + esc(routeOf(ekey, it.r)) + '">' +
+        '<span class="lbl">' + esc(title(ekey, it.r)) + '</span>' +
+        '<span class="track"><span class="fill" style="width:' + pct.toFixed(1) + '%"></span></span>' +
+        '<span class="val">' + esc(it.v) + (f.unit ? ' ' + esc(f.unit) : '') + '</span></a>';
+    }).join('');
+    var limitMark = limit === null ? '' :
+      '<div class="limit-key"><i></i>limit ' + esc(limit) + (f.unit ? ' ' + esc(f.unit) : '') + '</div>';
+    return '<section class="card chart">' + chartHead(esc(f.label || fkey) + ' by ' + esc((ent(ekey).label || ekey)).toLowerCase(), '') +
+      limitMark + '<div class="bars">' + rows + '</div>' + cappedNote(b, sid) + '</section>';
+  }
+
+  /** A causal chain: what followed what, and how long it waited. */
+  function vSteps(b) {
+    if (!b) return '';
+    var out = b.items.slice(0, 3).map(function (work) {
+      var evs = (SPEC.events || []).filter(function (e) { return e.work_id === work; })
+        .sort(function (p, q) { return (msOf(p.occurred_at) || 0) - (msOf(q.occurred_at) || 0); });
+      if (evs.length < 2) return '';
+      var steps = evs.map(function (e, i) {
+        var gap = '';
+        if (i > 0) {
+          var a = msOf(evs[i - 1].occurred_at), z = msOf(e.occurred_at);
+          if (a !== null && z !== null) gap = '<span class="gap">' + Math.round((z - a) / 60000) + ' min</span>';
+        }
+        return gap + '<span class="step ' + esc(e.status) + '"><b>' + esc(e.action) + '</b>' +
+          '<small>' + esc(e.status) + ' · ' + esc(clockLabel(msOf(e.occurred_at))) + '</small></span>';
+      }).join('');
+      return '<div class="steps-row"><span class="steps-key">' + esc(work) + '</span><div class="steps">' + steps + '</div></div>';
+    }).join('');
+    return out ? '<section class="card chart">' + chartHead('How the work actually went', '') + '<div class="scroller">' + out + '</div></section>' : '';
+  }
+
+  /**
+   * What is waiting on a person, merged into one place.
+   *
+   * The plan names the rows an action's \`when\` matches, across every entity, so approvals and
+   * exceptions that used to be three separate menu items arrive as one queue. The buttons are
+   * the entity's own actions and go through the same \`act()\` as everywhere else, so approving
+   * here moves the row, the counts, the charts and the log together.
+   */
+  function vDecisions(b) {
+    if (!b || !b.items.length) return '';
+    var cards = b.items.slice(0, 6).map(function (ref) {
+      var at = ref.indexOf(':'); if (at < 0) return '';
+      var ekey = ref.slice(0, at), id = ref.slice(at + 1);
+      var row = find(ekey, id); if (!row) return '';
+      var e = ent(ekey); if (!e) return '';
+      var acts = (e.actions || []).filter(function (a) { return a.when && matches(row, a.when); });
+      if (!acts.length) return '';
+      var facts = (b.fields || []).map(function (k) {
+        var f = field(ekey, k); if (!f || f.type === 'private') return '';
+        return '<div class="fact"><dt>' + esc(f.label || k) + '</dt><dd>' + show(ekey, k, row) + '</dd></div>';
+      }).join('');
+      return '<div class="dcard"><div class="dhead"><h3>' + title(ekey, row) + '</h3>' +
+        '<span class="chip-s att">Waiting on ' + esc(SPEC.app.persona.name) + '</span></div>' +
+        (facts ? '<dl class="facts">' + facts + '</dl>' : '') +
+        '<div class="dact">' + actionButtons(ekey, row, acts) + '</div></div>';
+    }).join('');
+    if (!cards) return '';
+    return '<section class="card chart">' + chartHead('Needs your decision', b.items.length + ' waiting') +
+      '<div class="dcards">' + cards + '</div>' + '</section>';
+  }
+
+  /** Actions by autonomy tier, plus who did them. Built from the events, never from a roster. */
+  function vActors(b) {
+    if (!b) return '';
+    var evs = SPEC.events || [];
+    if (!evs.length) return '';
+    var tiers = {};
+    evs.forEach(function (e) { tiers[e.autonomy_tier] = (tiers[e.autonomy_tier] || 0) + 1; });
+    var keys = Object.keys(tiers).sort();
+    var seg = keys.map(function (t) {
+      var pct = (tiers[t] / evs.length) * 100;
+      return '<span class="seg t' + esc(t) + '" style="width:' + pct.toFixed(1) + '%" title="' + esc(t) + ': ' + tiers[t] + '"><b>' + esc(t) + '</b></span>';
+    }).join('');
+    var rows = b.items.map(function (id) {
+      var mine = evs.filter(function (e) { return e.actor.id === id; });
+      if (!mine.length) return '';
+      var a = mine[0].actor;
+      var failed = mine.filter(function (e) { return e.status === 'failed'; }).length;
+      var held = mine.filter(function (e) { return e.approval && e.approval.status === 'pending'; }).length;
+      return '<div class="actor"><span class="who ' + (a.type === 'human' ? 'human' : '') + '">' + esc(a.type) + '</span>' +
+        '<b>' + esc(a.label) + '</b><span class="n">' + mine.length + ' actions</span>' +
+        (held ? '<span class="chip-s att">' + held + ' waiting on a person</span>' : '') +
+        (failed ? '<span class="chip-s bad">' + failed + ' failed</span>' : '') + '</div>';
+    }).join('');
+    return '<section class="card chart">' + chartHead('Who did what', evs.length + ' actions by ' + b.items.length + (b.items.length === 1 ? ' actor' : ' actors')) +
+      (keys.length > 1 ? '<div class="tierbar">' + seg + '</div>' : '') + '<div class="actors">' + rows + '</div></section>';
+  }
+
   var RENDER = {
-    home: function (s) {
+    home: function (s, sid) {
       var wide = '', narrow = '', top = '';
       (s.blocks || []).forEach(function (b) {
         if (b.type === 'counts') {
@@ -501,6 +1490,22 @@ dl.facts dd { margin: 0; min-width: 0; }
           narrow += '<section class="card pad"><div class="card-head" style="padding:0;border:0"><h2>' + esc(b.title) + '</h2>' + '<a href="#' + esc(b.feed) + '">Full log</a></div>' + feedList(b.feed, b.limit || 6) + (b.note ? '<p class="note" style="border-top:1px solid var(--line);padding-top:12px">' + esc(b.note) + '</p>' : '') + '</section>';
         }
       });
+      /*
+       * The plan's pictures, in the analysis order the rules set out: counts, then the one
+       * picture of the whole, then what needs a person beside how the work narrowed. They are
+       * ADDED to what the spec declared rather than replacing it, so a spec that already asks
+       * for a queue and a feed keeps both, and a spec that declares no blocks at all (which the
+       * fixtures do) still gets a readable screen.
+       */
+      var sp = planFor(sid);
+      if (sp) {
+        if (!top) top = vStatusTiles(blockOf(sp, 'status_pills'));
+        var pic = vTimeline(blockOf(sp, 'timeline'), sid);
+        var dec = wide ? '' : vDecisions(blockOf(sp, 'decision_cards'));
+        var fun = sp.blocks.filter(function (b) { return b.kind === 'funnel'; })
+          .map(function (b) { return vFunnel(b); }).join('');
+        wide = pic + wide + dec + fun;
+      }
       return head(s, s.clock === false ? '' : '<span class="pill">' + esc(SPEC.app.clock || '') + '</span>') + top + '<div class="cols"><div class="wide">' + wide + '</div>' + (narrow ? '<div class="narrow">' + narrow + '</div>' : '') + '</div>';
     },
     list: function (s, sid) {
@@ -511,7 +1516,17 @@ dl.facts dd { margin: 0; min-width: 0; }
         chips = '<div class="chips" role="group" aria-label="Filter by ' + esc(f.label) + '"><button type="button" class="chip" data-filter="" aria-pressed="' + (cur === '' ? 'true' : 'false') + '">All</button>' + vals.map(function (v) { return '<button type="button" class="chip" data-filter="' + esc(v[0]) + '" aria-pressed="' + (cur === String(v[0]) ? 'true' : 'false') + '">' + esc(v[1]) + '</button>'; }).join('') + '</div>';
         if (cur) rows = rows.filter(function (r) { return String(r[s.filter]) === cur; });
       }
-      return head(s) + chips + '<section class="card">' + table(s.entity, rows, s.columns || columnsOf(s.entity)) + '</section>' + (s.note ? '<p class="note">' + esc(s.note) + '</p>' : '');
+      /*
+       * The table stays, and the pictures sit under it. The rules' composition for a list screen
+       * is "keep the table, then show what it cannot": how the rows compare, and how the work
+       * actually went. Replacing the table would take away the one view where every value is
+       * readable and traceable.
+       */
+      var spL = planFor(sid), extra = '';
+      if (spL) {
+        extra = vBars(blockOf(spL, 'comparison_bars'), sid) + vSteps(blockOf(spL, 'step_path'));
+      }
+      return head(s) + chips + '<section class="card">' + table(s.entity, rows, s.columns || columnsOf(s.entity)) + '</section>' + extra + (s.note ? '<p class="note">' + esc(s.note) + '</p>' : '');
     },
     queue: function (s, sid) {
       var done = rowsOf(s.entity).filter(function (r) { return !matches(r, s.pending); });
@@ -531,7 +1546,19 @@ dl.facts dd { margin: 0; min-width: 0; }
       var people = (SPEC.people || []).map(function (p) {
         return '<div class="card agent"><div class="row"><h3>' + esc(p.role) + '</h3><span class="who human">Person</span></div><ul style="margin:0;padding-left:18px">' + (p.decides || []).map(function (d) { return '<li>' + esc(d) + '</li>'; }).join('') + '</ul>' + (p.screen ? '<a href="#' + esc(p.screen) + '">Where they do it</a>' : '') + '</div>';
       }).join('');
-      return head(s) + '<div class="split"><div class="stack"><h2>Done by agents</h2>' + (agents || '<div class="card"><div class="empty">The plan names no agents.</div></div>') + '</div><div class="stack"><h2>Decided by people</h2>' + (people || '<div class="card"><div class="empty">The plan names no human decisions.</div></div>') + '</div></div>';
+      /*
+       * Guard 4: never show an empty state the data contradicts.
+       *
+       * This screen used to print "The plan names no agents" whenever \`plan.agents\` was empty,
+       * on a page whose own activity log named twelve. The roster the events describe is drawn
+       * first, and the plan's lists only fill in behind it. The empty states now say what is
+       * actually missing, which is the plan's description of the agents and not the agents.
+       */
+      var actors = vActors(globalBlock('actor_summary'));
+      var noAgents = actors
+        ? '<div class="card"><div class="empty">The plan does not describe these agents yet. What they did is above.</div></div>'
+        : '<div class="card"><div class="empty">The plan names no agents.</div></div>';
+      return head(s) + actors + '<div class="split"><div class="stack"><h2>Done by agents</h2>' + (agents || noAgents) + '</div><div class="stack"><h2>Decided by people</h2>' + (people || '<div class="card"><div class="empty">The plan names no human decisions.</div></div>') + '</div></div>';
     },
     rules: function (s) {
       var g = (SPEC.guardrails || []).map(function (x) {
@@ -755,6 +1782,21 @@ dl.facts dd { margin: 0; min-width: 0; }
   function boot(spec) {
     SPEC = spec;
     if (!SPEC || !SPEC.screens || !SPEC.nav) throw new Error('demo-spec.json has no screens or nav.');
+
+    /*
+     * What this demo draws, decided once, here.
+     *
+     * Wrapped, and the wrapping is the point: the rules are the new part of this engine and the
+     * tables are the old part that works. If planning throws on some spec shape nobody has seen,
+     * the demo must come up as it did before, not go blank. PLAN stays null, every visual call
+     * site is already guarded on it, and the console says why for whoever is looking.
+     */
+    try {
+      PLAN = (typeof VISUAL !== 'undefined' && VISUAL && VISUAL.visualPlan) ? VISUAL.visualPlan(SPEC) : null;
+    } catch (err) {
+      PLAN = null;
+      if (window.console && console.warn) console.warn('demo: the visual rules did not run; falling back to tables.', err);
+    }
     if (SPEC.app.accent) document.documentElement.style.setProperty('--accent', SPEC.app.accent);
 
     /*

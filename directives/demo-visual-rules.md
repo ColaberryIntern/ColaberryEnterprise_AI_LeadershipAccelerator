@@ -10,9 +10,16 @@ function returning a plan. The engine draws that plan and makes no choices of it
 two apart is what lets the rules be tested against many specs without a browser, and what stops a
 layout change quietly changing which chart appears.
 
-**Status.** Phase 1 of three. The rules and the plan exist and are tested; the engine does not draw
-them yet. Phase 2 makes the engine a renderer of this plan. Phase 3 changes the scaffold and the
-platform-build brief so new specs reliably carry what these rules need.
+**Status.** Phases 1 and 2 are done: the rules exist, are tested, and the engine draws them. The
+rules are written once, in TypeScript, and inlined into the engine at generate time by
+`scripts/lib/inlineVisualRules.js`, because the engine also runs in a browser and in a student's
+repository where there is no server. `visualRulesInline.test.ts` evaluates the inlined copy and
+requires it to produce identical plans to the TypeScript for every fixture, so the two cannot
+drift. Phase 3 changes the scaffold and the platform-build brief so new specs reliably carry what
+these rules need.
+
+**Screenshots** of every fixture in each theme and width:
+`docs/screenshots/2026-11-28-visual-demo-engine/`.
 
 ---
 

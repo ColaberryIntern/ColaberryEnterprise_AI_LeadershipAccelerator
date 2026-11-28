@@ -24,6 +24,11 @@ import { isAllowedPath } from '../renderDocs';
 
 const ASSET_DIR = path.resolve(__dirname, '../demoKitAssets');
 
+/* eslint-disable @typescript-eslint/no-var-requires */
+const { composeEngineHtml } = require(
+  path.resolve(__dirname, '..', '..', '..', '..', '..', 'scripts', 'lib', 'inlineVisualRules.js'),
+) as { composeEngineHtml: (raw?: string) => string };
+
 /** Asset file on disk -> the kit path it is published at. */
 const PAIRS: ReadonlyArray<[string, string]> = [
   ['index.html', DEMO_KIT_ENGINE_PATH],
@@ -58,11 +63,28 @@ describe('demoKit: one copy, enforced', () => {
   const lf = (s: string) => s.split('\r\n').join('\n');
 
   it.each(PAIRS)('%s is identical to the shipped constant', (file, kitPath) => {
-    const onDisk = fs.readFileSync(path.join(ASSET_DIR, file), 'utf8');
+    /*
+     * The engine is the one asset that is COMPOSED rather than copied: `index.html` carries a
+     * marker where the visual rules are inlined from `demoVisual/*.ts`, their one source. So the
+     * comparison for it is against the composed value, through the SAME function the generator
+     * uses. Comparing it to the raw file instead would be a check that can only ever fail, and
+     * duplicating the composition here would be the second copy this whole file exists to stop.
+     */
+    const onDisk = file === 'index.html'
+      ? composeEngineHtml()
+      : fs.readFileSync(path.join(ASSET_DIR, file), 'utf8');
     const shipped = demoKitFiles().find((f) => f.path === kitPath);
     expect(shipped).toBeDefined();
     // Full equality, not a length or prefix check: a truncated engine would pass those.
     expect(lf(shipped!.content)).toBe(lf(onDisk));
+  });
+
+  it('the shipped engine carries the visual rules, not the marker', () => {
+    // The failure this guards is silent: an engine that loads and renders everything as text,
+    // with nothing in the output saying the rules were dropped on the way in.
+    const engine = demoKitFiles().find((f) => f.path === DEMO_KIT_ENGINE_PATH);
+    expect(engine!.content).toContain('var VISUAL = (function () {');
+    expect(engine!.content).not.toContain('/* __VISUAL_RULES__ */');
   });
 
   it('and the comparison still catches a real difference, not just a line-ending one', () => {

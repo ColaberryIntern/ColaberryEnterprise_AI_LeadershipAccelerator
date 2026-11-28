@@ -380,7 +380,12 @@ export function visualPlan(spec: DemoSpec): VisualPlanResult {
     } else if (screen.type === 'list' && entity) {
       push(planTargetBars(entity));
       push(planComparisonBars(entity));
-      push(steps);
+      /*
+       * Only on the screen showing the work the events are ABOUT. Events carry a `work_id`, so a
+       * path of steps drawn on an unrelated entity's screen is a true picture of the wrong
+       * thing: the people list showed how the shifts went, under a heading about the work.
+       */
+      if (entity.key === primary) push(steps);
       const matrixRefs = refFields(entity);
       if (matrixRefs.length >= 2 && plainNumberFields(entity).length >= 1) {
         blocks.push({
