@@ -8,6 +8,13 @@ import AdmissionsOpsLayout from '../AdmissionsOpsLayout';
 import { admissionsOpsChildRoutes } from '../admissionsOpsRoutes';
 import { SCREENS, screenHref, WORK_SECTIONS, TOOL_SECTIONS, OPS_BASE, type ScreenId } from '../screens';
 import { currentScreen } from '../currentScreen';
+import { TODAY_SAMPLE } from '../today/todaySample.fixture';
+import { getToday } from '../../../../services/admissionsOpsApi';
+
+// Today is a real screen (AO2.1); its data call is answered with the frontend sample. CRA resets mock
+// implementations before each test, so the answer is set in beforeEach rather than in the factory.
+jest.mock('../../../../services/admissionsOpsApi', () => ({ getToday: jest.fn() }));
+beforeEach(() => { (getToday as jest.Mock).mockResolvedValue(TODAY_SAMPLE); });
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -31,6 +38,8 @@ async function renderAt(path: string): Promise<void> {
   for (let i = 0; i < 20 && host.querySelector('[data-testid="loading"]'); i++) {
     await act(async () => { await new Promise((r) => setTimeout(r, 10)); });
   }
+  // Let Today's data call settle (lazy module, resolved promise, then the state update).
+  for (let i = 0; i < 5; i++) await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
 }
 const q = (testId: string) => host.querySelector(`[data-testid="${testId}"]`);
 const sectionBar = () => host.querySelector('nav[aria-label="Admissions and Ops sections"]');
@@ -39,7 +48,7 @@ const urlFor = (id: ScreenId) => (id === 'student360' ? `${OPS_BASE}/students/sa
 describe('AO1.4 the Admissions & Ops route tree', () => {
   it.each(SCREENS.map((s) => [s.id]))('resolves %s inside the layout, with the section bar', async (id) => {
     await renderAt(urlFor(id as ScreenId));
-    expect(q(`ops-placeholder-${id}`)).not.toBeNull();
+    expect(q(id === 'today' ? 'ops-today' : `ops-placeholder-${id}`)).not.toBeNull();
     expect(sectionBar()).not.toBeNull();
   });
 
@@ -89,7 +98,7 @@ describe('AO1.4 the Admissions & Ops route tree', () => {
   });
 
   it('no placeholder shows a figure of any kind', async () => {
-    for (const s of SCREENS) {
+    for (const s of SCREENS.filter((x) => x.id !== 'today')) {
       await renderAt(urlFor(s.id));
       // Screen names are not figures ("Student 360" is a name), nor is the ref this test put in the URL.
       let text = (q(`ops-placeholder-${s.id}`)?.textContent ?? '').replace(/sample-ref/g, '');
@@ -99,7 +108,7 @@ describe('AO1.4 the Admissions & Ops route tree', () => {
   });
 
   it('cross-links point where the demo links', async () => {
-    await renderAt(screenHref('today'));
+    await renderAt(screenHref('agent'));
     expect(q('ops-crosslink-tfcAudit')?.getAttribute('href')).toBe(`${OPS_BASE}/payments/tfc-audit`);
     expect(q('ops-crosslink-weeklyReport')?.getAttribute('href')).toBe(`${OPS_BASE}/reports/weekly-opportunity`);
   });

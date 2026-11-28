@@ -2,6 +2,7 @@ import React from 'react';
 import { Route } from 'react-router-dom';
 import { SCREENS } from './screens';
 import PlaceholderScreen from './PlaceholderScreen';
+import TodayScreen from './today/TodayScreen';
 
 /**
  * The Admissions & Ops child routes (AO1.4): one child route per screen, so a refresh keeps the screen.
@@ -14,7 +15,8 @@ export function admissionsOpsChildRoutes(): React.ReactElement[] {
   return [
     ...SCREENS.map((s) => (s.path
       ? <Route key={s.id} path={s.path} element={<PlaceholderScreen id={s.id} />} />
-      : <Route key={s.id} index element={<PlaceholderScreen id={s.id} />} />)),
+      // Today is built for real (AO2.1); it is the index screen.
+      : <Route key={s.id} index element={<TodayScreen />} />)),
     <Route key="not-found" path="*" element={<OpsNotFound />} />,
   ];
 }

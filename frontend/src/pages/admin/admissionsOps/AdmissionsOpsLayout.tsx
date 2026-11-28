@@ -3,6 +3,7 @@ import { Link, Outlet, useLocation } from 'react-router-dom';
 import { PageHeader } from '../../../components/admin/shell';
 import { TOOL_SECTIONS, WORK_SECTIONS, screenHref, type OpsScreen } from './screens';
 import { currentScreen } from './currentScreen';
+import { AgentSurfaceProvider } from './agent/agentSurface';
 import './admissionsOps.css';
 
 /**
@@ -32,6 +33,7 @@ export default function AdmissionsOpsLayout(): React.ReactElement {
   const activeId = here?.parent ?? null;
 
   return (
+    <AgentSurfaceProvider>
     <div className="admissions-ops">
       <PageHeader
         title="Admissions & Academic Ops"
@@ -48,5 +50,6 @@ export default function AdmissionsOpsLayout(): React.ReactElement {
       </nav>
       <Outlet />
     </div>
+    </AgentSurfaceProvider>
   );
 }

@@ -2,6 +2,7 @@ import React from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { SectionCard } from '../../../components/admin/shell';
 import { screenById, screenHref, type ScreenId } from './screens';
+import { useAgentSurface } from './agent/agentSurface';
 
 /** The record the placeholder cross-link opens. Plainly an example, with no digits. */
 export const EXAMPLE_REF = 'example';
@@ -15,6 +16,8 @@ const RELEASE_WORD: Record<1 | 2 | 3 | 4, string> = { 1: 'first', 2: 'second', 3
 export default function PlaceholderScreen({ id }: { id: ScreenId }): React.ReactElement {
   const s = screenById(id);
   const { ref } = useParams();
+  // Placeholders publish their manifest too: the agent sees the screen and its (mostly unavailable) actions.
+  useAgentSurface(id, () => ({ sources: [], ...(id === 'student360' && ref ? { subject: { type: 'student' as const, ref } } : {}) }));
   return (
     <SectionCard title={s.title} icon="time-line">
       <div data-testid={`ops-placeholder-${id}`}>
