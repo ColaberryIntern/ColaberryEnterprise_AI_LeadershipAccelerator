@@ -19,16 +19,25 @@ import { deckCss } from './deckStyles';
 export interface RenderInput { blueprint: SessionBlueprint; title: string; episode: string; dateLabel: string; siteUrl: string; }
 export interface RenderedDeck { html: string; guideHtml: string; photos: string[]; }
 
-/** Photos already served by the site (frontend/public), with honest alt text. Ali's portrait opens the deck. */
-export const HOST_PHOTO = { path: '/ali-muwwakkil.jpg', alt: 'Ali Muwwakkil' };
+/**
+ * Photos already served by the site (frontend/public), each looked at and described as it is. Left out
+ * on purpose: img/data-dashboard.jpg (a chart of percentages: no statistics on graphics),
+ * img/architect-plan.jpg (a screen capture with a person on video), img/certificate.jpg (same shoot as
+ * workshop.jpg), img/book-cover.jpg (too small). Ali's portrait opens the deck; the .png is the sharp one.
+ */
+export const HOST_PHOTO = { path: '/ali-muwwakkil.png', alt: 'Ali Muwwakkil' };
 export const PHOTO_SET: readonly { path: string; alt: string }[] = [
-  { path: '/img/team-collab.jpg', alt: 'A team working together' }, { path: '/img/developer-code.jpg', alt: 'Someone building on a laptop' },
-  { path: '/img/workshop.jpg', alt: 'A workshop in progress' }, { path: '/img/data-dashboard.jpg', alt: 'A dashboard on a screen' },
-  { path: '/img/mentor-coaching.jpg', alt: 'A mentor coaching a learner' }, { path: '/img/architect-plan.jpg', alt: 'Planning a system on paper' },
-  { path: '/img/online-presentation.jpg', alt: 'An online presentation' }, { path: '/img/ai-network.jpg', alt: 'A network of connected points' },
-  { path: '/img/handshake-deal.jpg', alt: 'Two people shaking hands' }, { path: '/img/presentation.jpg', alt: 'A presentation to a room' },
-  { path: '/img/outcome-builder.jpg', alt: 'Mapping outcomes on a board' }, { path: '/img/member-home.jpg', alt: 'Working from home' },
-  { path: '/hero-bg-team.jpg', alt: 'A team around a table' },
+  { path: '/img/team-collab.jpg', alt: 'Three people working together on laptops at a table' },
+  { path: '/img/developer-code.jpg', alt: 'Someone writing code on a laptop' },
+  { path: '/img/workshop.jpg', alt: 'A small team gathered around a laptop' },
+  { path: '/img/mentor-coaching.jpg', alt: 'A mentor going over work on a laptop with a group' },
+  { path: '/img/online-presentation.jpg', alt: 'A woman explaining something on a video call from home' },
+  { path: '/img/ai-network.jpg', alt: 'A close-up of a circuit board' },
+  { path: '/img/handshake-deal.jpg', alt: 'Two people shaking hands' },
+  { path: '/img/presentation.jpg', alt: 'A man speaking into a microphone' },
+  { path: '/img/outcome-builder.jpg', alt: 'A man working at his desk' },
+  { path: '/img/member-home.jpg', alt: 'A woman working at a laptop' },
+  { path: '/hero-bg-team.jpg', alt: 'Two colleagues looking at code on a laptop' },
 ];
 
 const seedOf = (bp: SessionBlueprint) => parseInt(createHash('sha256').update(bp.promise + bp.slides.map((s) => s.title).join('|')).digest('hex').slice(0, 8), 16);
