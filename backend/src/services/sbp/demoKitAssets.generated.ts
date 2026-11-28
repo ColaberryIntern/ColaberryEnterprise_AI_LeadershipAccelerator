@@ -8,7 +8,7 @@
  * and adding a Dockerfile COPY is ESCALATE-tier in this run's execution contract.
  */
 
-/** Byte-for-byte `demoKitAssets/index.html`. */
+/** `demoKitAssets/index.html` with demoVisual/*.ts inlined at its marker. */
 export const DEMO_KIT_ENGINE_HTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -254,7 +254,572 @@ dl.facts dd { margin: 0; min-width: 0; }
 <script>
 (function () {
   'use strict';
-  var SPEC = null, ROWS = {}, ROUTES = {}, FILTERS = {}, CURRENT = '';
+  var SPEC = null, ROWS = {}, ROUTES = {}, FILTERS = {}, CURRENT = '', PLAN = null;
+
+  /* The visual rules are inlined here at generate time from
+   * backend/src/services/sbp/demoVisual/*.ts, which is where they are written, typed and unit
+   * tested against six fixtures. They decide WHAT this engine draws; everything below only
+   * draws it. The marker is replaced by scripts/lib/inlineVisualRules.js, so this file on disk
+   * is the readable half and the shipped constant is the whole. */
+  /* GENERATED from backend/src/services/sbp/demoVisual/*.ts by
+   * scripts/lib/inlineVisualRules.js. Do not edit here: edit the TypeScript, which is unit
+   * tested, and regenerate with \`node scripts/generateDemoKitAssets.js\`. */
+  var VISUAL = (function () {
+    /**
+     * demoVisual/visualRules - the thresholds, caps and vocabulary the visual engine obeys. PURE.
+     *
+     * ## Why the numbers live here and not in the engine
+     *
+     * \`directives/demo-visual-rules.md\` is the standing reference a person reads. If the numbers in
+     * that document and the numbers in the code are typed twice, they drift, and the document becomes
+     * a description of what the engine used to do. These constants are the ones the engine uses and
+     * the ones the directive quotes, and \`visualPlan.rules.test.ts\` reads the directive off disk and
+     * fails when a number in it no longer matches the constant beside it.
+     *
+     * ## Why thresholds exist at all
+     *
+     * The platform generates demos for thousands of projects in domains nobody has seen. A chart
+     * drawn from two data points is not an analysis, it is decoration that implies one. Each minimum
+     * below is the point beneath which the picture says less than the table it would replace, so
+     * beneath it the engine keeps the table. Each cap is the point beyond which the picture stops
+     * being readable, so beyond it the engine shows the most attention-worthy items and a way to
+     * reach the rest.
+     *
+     * These are starting values, as the pack that specified them says. They are named so that tuning
+     * them is one edit with a test and a directive line attached, rather than a hunt through a 50 KB
+     * HTML file.
+     */
+    /** Minimum work items before a timeline beats a table. One lane is a date, not a timeline. */
+    const MIN_TIMELINE_LANES = 2;
+    /** Minimum timed events before a timeline is worth drawing, when lanes come from events. */
+    const MIN_TIMELINE_EVENTS = 4;
+    /** Minimum rows before a bar chart beats reading the numbers. */
+    const MIN_BAR_ROWS = 3;
+    /** Minimum stages before a funnel is a funnel rather than two numbers. */
+    const MIN_FUNNEL_STAGES = 2;
+    /** Minimum distinct tiers before a stacked tier bar carries information. */
+    const MIN_TIER_SEGMENTS = 2;
+    /** Minimum steps before a path of steps beats a sentence. */
+    const MIN_PATH_STEPS = 2;
+    /** At most this many headline tiles. Beyond six nobody reads the seventh. */
+    const MAX_HEADLINE_TILES = 6;
+    /** At most this many timeline lanes; the rest are reachable through the table. */
+    const MAX_TIMELINE_LANES = 8;
+    /** At most this many bars in one comparison. */
+    const MAX_BAR_ROWS = 12;
+    /** At most this many funnel stages. */
+    const MAX_FUNNEL_STAGES = 8;
+    /**
+     * A text field longer than this is quoted, never charted or truncated into a cell.
+     *
+     * Applies to the VALUE, not the field name: the same field can be short in one row and a
+     * paragraph in another, and the decision is about what is actually there.
+     */
+    const QUOTE_BLOCK_MIN_CHARS = 120;
+    /**
+     * Field types the contract defines. Mirrored here because \`screens\` and \`entities\` arrive as
+     * \`unknown\` from the Zod schema, so the reader has to decide what it is looking at from strings.
+     */
+    const FIELD_TYPES = [
+        'text', 'date', 'time', 'datetime', 'number', 'enum', 'ref', 'meter', 'bool', 'who', 'private',
+    ];
+    /** Field types that carry a moment in time, used to find a work item's start and end. */
+    const TIME_FIELD_TYPES = ['date', 'time', 'datetime'];
+    /**
+     * Every visual the plan can ask for. The engine implements exactly these and nothing else, so a
+     * new picture is a change here first, which is what keeps the directive able to list them all.
+     */
+    const VISUAL_KINDS = [
+        'timeline',
+        'target_bar',
+        'status_pills',
+        'funnel',
+        'step_path',
+        'comparison_bars',
+        'matrix',
+        'decision_cards',
+        'actor_summary',
+        'quote_block',
+    ];
+    /**
+     * Why a visual was NOT drawn. Carried in the plan rather than dropped, for two reasons: the tests
+     * assert the reason (so "no timeline" cannot pass for the wrong cause), and the engine needs to
+     * know which fallback to render in that block's place.
+     */
+    const SKIP_REASONS = [
+        'no_candidate_data',
+        'below_minimum',
+        'no_variation',
+        'private_field',
+    ];
+    /** What the engine draws instead when a visual is skipped. Never "nothing". */
+    const FALLBACKS = ['table', 'list', 'facts', 'none'];
+
+    /**
+     * demoVisual/specReaders - read the loosely-typed half of a demo spec without trusting it. PURE.
+     *
+     * ## Why this exists
+     *
+     * \`DemoSpecSchema\` types \`events\` precisely and then types \`screens\`, \`entities\` and \`nav\` as
+     * \`z.record(z.string(), z.unknown())\`. That is deliberate (the shapes are the engine's contract,
+     * not the persistence contract) but it means everything the visual rules need to inspect arrives
+     * as \`unknown\`, from a document an agent wrote and a student may have edited.
+     *
+     * So every reader here answers with a narrowed value or omits the thing entirely. None throws.
+     * A spec with a malformed entity must still produce a plan for the rest of the spec: refusing the
+     * whole demo because one field object is a string would turn a cosmetic flaw into a blank page,
+     * and the renderer already has a fallback for every block.
+     *
+     * ## What it does NOT do
+     *
+     * It makes no decisions. Nothing here knows what a timeline is or when one is worth drawing;
+     * \`visualPlan.ts\` owns that. Keeping the two apart is what lets the rules be tested against hand
+     * written shapes without a spec, and the readers against broken specs without a rule in sight.
+     */
+    function isRecord(value) {
+        return typeof value === 'object' && value !== null && !Array.isArray(value);
+    }
+    function str(value) {
+        return typeof value === 'string' && value.trim() !== '' ? value : null;
+    }
+    function num(value) {
+        return typeof value === 'number' && Number.isFinite(value) ? value : null;
+    }
+    function readField(key, raw) {
+        var _a;
+        const r = isRecord(raw) ? raw : {};
+        const type = str(r.type);
+        return {
+            key,
+            type: type || null,
+            unit: str(r.unit),
+            // \`target\` is not in the v1 contract. It is read here because phase 3 adds it as an optional
+            // field and a spec that already carries one should get its reference line today.
+            max: (_a = num(r.max)) !== null && _a !== void 0 ? _a : num(r.target),
+            warn: num(r.warn),
+            ref: str(r.ref),
+            labels: isRecord(r.labels) ? r.labels : null,
+            tones: isRecord(r.tones) ? r.tones : null,
+            shownAs: str(r.shown_as),
+        };
+    }
+    function readEntity(key, raw) {
+        if (!isRecord(raw))
+            return null;
+        const fieldsRaw = Array.isArray(raw.fields) ? raw.fields : [];
+        const fields = [];
+        for (const f of fieldsRaw) {
+            const fk = isRecord(f) ? str(f.key) : null;
+            if (fk)
+                fields.push(readField(fk, f));
+        }
+        const rows = Array.isArray(raw.rows) ? raw.rows.filter(isRecord) : [];
+        const actionsRaw = Array.isArray(raw.actions) ? raw.actions : [];
+        const actions = actionsRaw.filter(isRecord).map((a) => ({
+            label: str(a.label),
+            when: isRecord(a.when) ? a.when : null,
+        }));
+        return {
+            key,
+            label: str(raw.label),
+            plural: str(raw.plural),
+            statusField: str(raw.status),
+            columns: Array.isArray(raw.columns) ? raw.columns.filter((c) => typeof c === 'string') : [],
+            fields,
+            rows: rows,
+            actions,
+        };
+    }
+    function entitiesOf(spec) {
+        const raw = spec.entities;
+        if (!isRecord(raw))
+            return [];
+        const out = [];
+        for (const [key, value] of Object.entries(raw)) {
+            const entity = readEntity(key, value);
+            if (entity)
+                out.push(entity);
+        }
+        // Sorted by key so the plan is deterministic whatever order the JSONB column came back in.
+        return out.sort((a, b) => a.key.localeCompare(b.key));
+    }
+    function screensOf(spec) {
+        const raw = spec.screens;
+        if (!isRecord(raw))
+            return [];
+        const out = [];
+        for (const [id, value] of Object.entries(raw)) {
+            if (!isRecord(value))
+                continue;
+            out.push({
+                id,
+                type: str(value.type),
+                title: str(value.title),
+                entity: str(value.entity),
+                blocks: Array.isArray(value.blocks) ? value.blocks.filter(isRecord) : [],
+            });
+        }
+        return out.sort((a, b) => a.id.localeCompare(b.id));
+    }
+    /** A field a number can be measured against: a meter, or a number with a stated ceiling. */
+    function measuredFields(entity) {
+        return entity.fields.filter((f) => f.type !== 'private' && f.max !== null && (f.type === 'meter' || f.type === 'number'));
+    }
+    /** Numeric fields with no stated ceiling. Compared against each other rather than a target. */
+    function plainNumberFields(entity) {
+        return entity.fields.filter((f) => f.type === 'number' && f.max === null);
+    }
+    function enumFields(entity) {
+        return entity.fields.filter((f) => f.type === 'enum');
+    }
+    function refFields(entity) {
+        return entity.fields.filter((f) => f.type === 'ref' && f.ref !== null);
+    }
+    function timeFields(entity) {
+        return entity.fields.filter((f) => f.type !== null && TIME_FIELD_TYPES.includes(f.type));
+    }
+    /**
+     * How many rows actually carry a usable number for this field.
+     *
+     * Counted rather than assumed from \`rows.length\`, because a field declared on an entity is not a
+     * field every row fills, and a bar chart of nine rows where four are blank is a chart that lies
+     * about its own completeness.
+     */
+    function rowsWithNumber(entity, fieldKey) {
+        return entity.rows.filter((r) => num(r[fieldKey]) !== null).length;
+    }
+    /** Distinct non-empty values of a field across an entity's rows, in first-seen order. */
+    function distinctValues(entity, fieldKey) {
+        const seen = [];
+        for (const row of entity.rows) {
+            const v = row[fieldKey];
+            const key = typeof v === 'string' || typeof v === 'number' ? String(v) : null;
+            if (key !== null && key !== '' && !seen.includes(key))
+                seen.push(key);
+        }
+        return seen;
+    }
+
+    /* ------------------------------------------------------------------ small helpers */
+    const byCountDesc = (a, b) => b.n - a.n;
+    function latestEventTime(events) {
+        let best = null;
+        let bestMs = -Infinity;
+        for (const e of events) {
+            const ms = Date.parse(e.occurred_at);
+            // An unparseable timestamp is compared as a string rather than dropped: a spec using a
+            // display time is still ordered, just not arithmetically.
+            const value = Number.isNaN(ms) ? -Infinity : ms;
+            if (value > bestMs || (best === null && Number.isNaN(ms))) {
+                if (!Number.isNaN(ms) || best === null) {
+                    best = e.occurred_at;
+                    bestMs = value;
+                }
+            }
+        }
+        return best;
+    }
+    function cap(items, max) {
+        if (items.length <= max)
+            return { items, capped: null };
+        return { items: items.slice(0, max), capped: { shown: max, total: items.length } };
+    }
+    /**
+     * Which entity is the work the demo is about?
+     *
+     * Scored, not guessed: an entity earns points for every event whose \`work_id\` matches one of its
+     * row ids, and for every OTHER entity that points at it through a \`ref\` field. That is the
+     * structural definition of "the thing the work is about" and it holds in any domain. Ties break
+     * on the entity key so the answer is stable.
+     */
+    function primaryWorkEntity(entities, events) {
+        if (!entities.length)
+            return null;
+        const scores = entities.map((e) => {
+            const ids = new Set(e.rows.map((r) => String(r.id)));
+            const fromEvents = events.filter((ev) => ids.has(ev.work_id)).length;
+            const fromRefs = entities
+                .filter((other) => other.key !== e.key)
+                .reduce((n, other) => n + refFields(other).filter((f) => f.ref === e.key).length, 0);
+            return { key: e.key, n: fromEvents + fromRefs };
+        });
+        const ranked = [...scores].sort((a, b) => (b.n - a.n) || a.key.localeCompare(b.key));
+        return ranked[0] && ranked[0].n > 0 ? ranked[0].key : null;
+    }
+    /* ------------------------------------------------------------------ the detections */
+    function planTimeline(entities, events, primary) {
+        const entity = entities.find((e) => e.key === primary) || null;
+        // Route 1: work items that carry two or more times of their own.
+        if (entity) {
+            const times = timeFields(entity);
+            if (times.length >= 2) {
+                const lanes = entity.rows.filter((r) => times.filter((f) => typeof r[f.key] === 'string' && r[f.key] !== '').length >= 2);
+                if (lanes.length >= MIN_TIMELINE_LANES) {
+                    const { items, capped } = cap(lanes.map((r) => String(r.id)), MAX_TIMELINE_LANES);
+                    return {
+                        kind: 'timeline', entity: entity.key,
+                        fields: times.map((f) => f.key), items, capped,
+                    };
+                }
+            }
+        }
+        // Route 2: lanes from the events themselves, grouped by the work they belong to.
+        const workIds = Array.from(new Set(events.map((e) => e.work_id))).sort();
+        if (events.length >= MIN_TIMELINE_EVENTS && workIds.length >= MIN_TIMELINE_LANES) {
+            const { items, capped } = cap(workIds, MAX_TIMELINE_LANES);
+            return { kind: 'timeline', entity: primary, fields: ['work_id', 'occurred_at'], items, capped };
+        }
+        return {
+            kind: 'timeline', entity: primary, reason: 'below_minimum', fallback: 'table',
+            detail: \`\${workIds.length} work ids and \${events.length} events; needs \${MIN_TIMELINE_LANES} lanes or \${MIN_TIMELINE_EVENTS} events\`,
+        };
+    }
+    function planTargetBars(entity) {
+        const measured = measuredFields(entity);
+        if (!measured.length) {
+            return {
+                kind: 'target_bar', entity: entity.key, reason: 'no_candidate_data', fallback: 'table',
+                detail: 'no meter field and no number carrying a max or target',
+            };
+        }
+        return {
+            kind: 'target_bar', entity: entity.key,
+            fields: measured.map((f) => f.key),
+            items: entity.rows.map((r) => String(r.id)),
+            capped: null,
+        };
+    }
+    function planComparisonBars(entity) {
+        const candidates = plainNumberFields(entity)
+            .map((f) => ({ f, n: rowsWithNumber(entity, f.key) }))
+            .filter((c) => c.n >= MIN_BAR_ROWS)
+            .sort(byCountDesc);
+        if (!candidates.length) {
+            const best = plainNumberFields(entity)
+                .map((f) => rowsWithNumber(entity, f.key))
+                .reduce((m, n) => Math.max(m, n), 0);
+            return {
+                kind: 'comparison_bars', entity: entity.key, reason: 'below_minimum', fallback: 'table',
+                detail: \`best numeric field is filled on \${best} rows; needs \${MIN_BAR_ROWS}\`,
+            };
+        }
+        const field = candidates[0].f;
+        const rows = entity.rows.filter((r) => typeof r[field.key] === 'number').map((r) => String(r.id));
+        const { items, capped } = cap(rows, MAX_BAR_ROWS);
+        return { kind: 'comparison_bars', entity: entity.key, fields: [field.key], items, capped };
+    }
+    function planStatusPills(entity) {
+        const enums = enumFields(entity);
+        if (!enums.length) {
+            return {
+                kind: 'status_pills', entity: entity.key, reason: 'no_candidate_data', fallback: 'table',
+                detail: 'no enum field',
+            };
+        }
+        const field = enums.find((f) => f.key === entity.statusField) || enums[0];
+        const values = distinctValues(entity, field.key);
+        const { items, capped } = cap(values, MAX_HEADLINE_TILES);
+        return { kind: 'status_pills', entity: entity.key, fields: [field.key], items, capped };
+    }
+    /**
+     * A funnel is child rows narrowing through stages. Stages come from the DATA in order of
+     * narrowing count, never from a list somebody typed, and a stage set whose counts are all equal
+     * is not a funnel: it is a category breakdown wearing a funnel's shape.
+     */
+    function planFunnel(entity, workEntity) {
+        const pointsAtWork = refFields(entity).some((f) => f.ref === workEntity);
+        const enums = enumFields(entity);
+        if (!workEntity || !pointsAtWork || !enums.length) {
+            return {
+                kind: 'funnel', entity: entity.key, reason: 'no_candidate_data', fallback: 'table',
+                detail: 'not a child of the work entity, or carries no status enum',
+            };
+        }
+        const field = enums.find((f) => f.key === entity.statusField) || enums[0];
+        const counts = distinctValues(entity, field.key)
+            .map((v) => ({ v, n: entity.rows.filter((r) => String(r[field.key]) === v).length }))
+            .sort(byCountDesc);
+        if (counts.length < MIN_FUNNEL_STAGES) {
+            return {
+                kind: 'funnel', entity: entity.key, reason: 'below_minimum', fallback: 'table',
+                detail: \`\${counts.length} stages; needs \${MIN_FUNNEL_STAGES}\`,
+            };
+        }
+        if (counts[0].n === counts[counts.length - 1].n) {
+            return {
+                kind: 'funnel', entity: entity.key, reason: 'no_variation', fallback: 'table',
+                detail: \`every stage holds \${counts[0].n} rows, so nothing narrows\`,
+            };
+        }
+        const { items, capped } = cap(counts.map((c) => c.v), MAX_FUNNEL_STAGES);
+        return { kind: 'funnel', entity: entity.key, fields: [field.key], items, capped };
+    }
+    /** A path of steps is a causal chain: events linked by \`parent_event_id\` inside one \`work_id\`. */
+    function planStepPath(events) {
+        const byWork = new Map();
+        for (const e of events) {
+            const list = byWork.get(e.work_id) || [];
+            list.push(e);
+            byWork.set(e.work_id, list);
+        }
+        const chained = Array.from(byWork.entries())
+            .map(([work, list]) => ({ work, n: list.filter((e) => e.parent_event_id !== null).length + 1 }))
+            .filter((c) => c.n >= MIN_PATH_STEPS)
+            .sort((a, b) => (b.n - a.n) || a.work.localeCompare(b.work));
+        if (!chained.length) {
+            return {
+                kind: 'step_path', entity: null, reason: 'below_minimum', fallback: 'list',
+                detail: \`no work item has \${MIN_PATH_STEPS} causally linked events\`,
+            };
+        }
+        return {
+            kind: 'step_path', entity: null,
+            fields: ['parent_event_id', 'status', 'occurred_at'],
+            items: chained.map((c) => c.work), capped: null,
+        };
+    }
+    /** Rows a person must act on: an entity action with a \`when\`, and rows that match it. */
+    function planDecisionCards(entities) {
+        const pending = [];
+        const fields = new Set();
+        for (const entity of entities) {
+            for (const action of entity.actions) {
+                if (!action.when)
+                    continue;
+                for (const [k, v] of Object.entries(action.when)) {
+                    fields.add(k);
+                    for (const row of entity.rows) {
+                        const match = Array.isArray(v) ? v.map(String).includes(String(row[k])) : String(row[k]) === String(v);
+                        const id = \`\${entity.key}:\${String(row.id)}\`;
+                        if (match && !pending.includes(id))
+                            pending.push(id);
+                    }
+                }
+            }
+        }
+        if (!pending.length) {
+            return {
+                kind: 'decision_cards', entity: null, reason: 'no_candidate_data', fallback: 'none',
+                detail: 'no entity action declares a \`when\`, or no row matches one',
+            };
+        }
+        return { kind: 'decision_cards', entity: null, fields: [...fields].sort(), items: pending, capped: null };
+    }
+    /**
+     * Who did what, built from \`events\` rather than from the plan's roster.
+     *
+     * Guard 4 of the rules: never show an empty state the data contradicts. The old engine printed
+     * "the plan names no agents" on a screen whose own activity log named twelve, because it read
+     * \`agents\` and the scaffold had left it empty.
+     */
+    function planActorSummary(events) {
+        const actors = Array.from(new Set(events.map((e) => e.actor.id))).sort();
+        if (!actors.length) {
+            return {
+                kind: 'actor_summary', entity: null, reason: 'no_candidate_data', fallback: 'none',
+                detail: 'the spec records no events, so nobody has acted',
+            };
+        }
+        const tiers = Array.from(new Set(events.map((e) => e.autonomy_tier)));
+        return {
+            kind: 'actor_summary', entity: null,
+            // The tier bar is part of this block only when it would carry information.
+            fields: tiers.length >= MIN_TIER_SEGMENTS ? ['actor', 'autonomy_tier'] : ['actor'],
+            items: actors, capped: null,
+        };
+    }
+    /** Long text is quoted, never charted. Decided on the VALUES present, not on the field name. */
+    function planQuoteBlocks(entity) {
+        const keys = entity.fields
+            .filter((f) => f.type === 'text')
+            .filter((f) => entity.rows.some((r) => typeof r[f.key] === 'string' && r[f.key].length >= QUOTE_BLOCK_MIN_CHARS))
+            .map((f) => f.key);
+        if (!keys.length)
+            return null;
+        return { kind: 'quote_block', entity: entity.key, fields: keys, items: [], capped: null };
+    }
+    /* ------------------------------------------------------------------ assembly */
+    function isSkipped(b) {
+        return b.reason !== undefined;
+    }
+    /**
+     * Build the plan.
+     *
+     * Screens keep the order and types the spec declares; this decides what each one DRAWS, in the
+     * analysis order the rules set out (summary before detail on every screen).
+     */
+    function visualPlan(spec) {
+        const entities = entitiesOf(spec);
+        const events = spec.events || [];
+        const primary = primaryWorkEntity(entities, events);
+        const timeline = planTimeline(entities, events, primary);
+        const decisions = planDecisionCards(entities);
+        const actors = planActorSummary(events);
+        const steps = planStepPath(events);
+        const global = [];
+        const globalSkipped = [];
+        for (const b of [decisions, actors])
+            (isSkipped(b) ? globalSkipped : global).push(b);
+        const screens = screensOf(spec).map((screen) => {
+            const blocks = [];
+            const skipped = [];
+            const push = (b) => {
+                if (isSkipped(b))
+                    skipped.push(b);
+                else
+                    blocks.push(b);
+            };
+            const entity = entities.find((e) => e.key === screen.entity) || null;
+            if (screen.type === 'home') {
+                // Counts first, then measured-against-target, then the one picture of the whole, then what
+                // needs a person, and the feed last. That order is the analysis the reader wants.
+                const workEntity = entities.find((e) => e.key === primary);
+                if (workEntity)
+                    push(planStatusPills(workEntity));
+                if (workEntity)
+                    push(planTargetBars(workEntity));
+                push(timeline);
+                push(decisions);
+                for (const child of entities)
+                    push(planFunnel(child, primary));
+            }
+            else if (screen.type === 'list' && entity) {
+                push(planTargetBars(entity));
+                push(planComparisonBars(entity));
+                push(steps);
+                const matrixRefs = refFields(entity);
+                if (matrixRefs.length >= 2 && plainNumberFields(entity).length >= 1) {
+                    blocks.push({
+                        kind: 'matrix', entity: entity.key,
+                        fields: [...matrixRefs.slice(0, 2).map((f) => f.key), plainNumberFields(entity)[0].key],
+                        items: entity.rows.map((r) => String(r.id)), capped: null,
+                    });
+                }
+            }
+            else if (screen.type === 'queue') {
+                push(decisions);
+            }
+            else if (screen.type === 'roster') {
+                push(actors);
+            }
+            if (entity) {
+                const quote = planQuoteBlocks(entity);
+                if (quote)
+                    blocks.push(quote);
+            }
+            return { screen: screen.id, type: screen.type, blocks, skipped };
+        });
+        return {
+            version: 1,
+            now: latestEventTime(events),
+            primaryWorkEntity: primary,
+            screens,
+            global,
+            globalSkipped,
+        };
+    }
+    return { visualPlan: visualPlan, primaryWorkEntity: primaryWorkEntity };
+  })();
 
   var esc = function (v) {
     return v === null || v === undefined ? '' : String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');

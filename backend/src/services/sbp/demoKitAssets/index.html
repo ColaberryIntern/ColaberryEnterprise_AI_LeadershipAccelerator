@@ -243,7 +243,14 @@ dl.facts dd { margin: 0; min-width: 0; }
 <script>
 (function () {
   'use strict';
-  var SPEC = null, ROWS = {}, ROUTES = {}, FILTERS = {}, CURRENT = '';
+  var SPEC = null, ROWS = {}, ROUTES = {}, FILTERS = {}, CURRENT = '', PLAN = null;
+
+  /* The visual rules are inlined here at generate time from
+   * backend/src/services/sbp/demoVisual/*.ts, which is where they are written, typed and unit
+   * tested against six fixtures. They decide WHAT this engine draws; everything below only
+   * draws it. The marker is replaced by scripts/lib/inlineVisualRules.js, so this file on disk
+   * is the readable half and the shipped constant is the whole. */
+/* __VISUAL_RULES__ */
 
   var esc = function (v) {
     return v === null || v === undefined ? '' : String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');

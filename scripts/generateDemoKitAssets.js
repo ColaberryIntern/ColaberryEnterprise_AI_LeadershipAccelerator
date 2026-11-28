@@ -27,6 +27,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const { composeEngineHtml } = require('./lib/inlineVisualRules');
 
 const ASSET_DIR = path.resolve(__dirname, '../backend/src/services/sbp/demoKitAssets');
 const OUT = path.resolve(__dirname, '../backend/src/services/sbp/demoKitAssets.generated.ts');
@@ -64,8 +65,18 @@ function build() {
     '',
   ];
   for (const { file, konst } of ASSETS) {
-    const raw = fs.readFileSync(path.join(ASSET_DIR, file), 'utf8');
-    parts.push(`/** Byte-for-byte \`demoKitAssets/${file}\`. */`);
+    /*
+     * The engine is COMPOSED, not copied. `index.html` on disk carries a marker where the visual
+     * rules go, and they are inlined from the TypeScript that is their one source (see
+     * scripts/lib/inlineVisualRules.js). So the readable file is the readable half and this
+     * constant is the whole engine. Every other asset is still byte-for-byte.
+     */
+    const raw = file === 'index.html'
+      ? composeEngineHtml()
+      : fs.readFileSync(path.join(ASSET_DIR, file), 'utf8');
+    parts.push(file === 'index.html'
+      ? `/** \`demoKitAssets/index.html\` with demoVisual/*.ts inlined at its marker. */`
+      : `/** Byte-for-byte \`demoKitAssets/${file}\`. */`);
     parts.push(`export const ${konst} = \`${escapeForTemplate(raw)}\`;`);
     parts.push('');
   }
