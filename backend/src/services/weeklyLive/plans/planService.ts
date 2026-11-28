@@ -1,6 +1,7 @@
 import { WeeklyLiveSignal, WeeklyLiveTopic, type PlanInputs } from '../../../models/WeeklyLive';
 import { classifyError } from '../../../utils/errorClassifier';
 import { resolveBatch, type BatchResult } from '../batchResolver';
+import { chooseWithSession, type ChosenSession } from '../choose/chooseSession';
 import { batchSessions, centralDate, curriculumMap, type BatchSession, type CurriculumMap } from '../curriculumMap';
 import { latestDemand, runDemand } from '../demand/demandJob';
 import { MIN_VIRAL_FACTORS, TOPIC_GATE } from '../scoring';
@@ -84,7 +85,8 @@ export async function regenerate(planId: string, run: Background = inBackground)
   run(planId, runId, haveResearch);
 }
 
-export async function choose(planId: string, topicId: string, override: boolean): Promise<void> {
+/** Store the pick and plan its session in the month's batch (WL4.1). The batch is checked before anything is written. */
+export async function choose(planId: string, topicId: string, override: boolean): Promise<ChosenSession> {
   const plan = await store.getPlan(planId);
   if (!plan) throw new PlanError(404, 'Not found', 'not_found');
   const topic = await WeeklyLiveTopic.findOne({ where: { id: topicId, plan_id: planId } });
@@ -94,7 +96,10 @@ export async function choose(planId: string, topicId: string, override: boolean)
   if (!override && (few || Number(topic.topic_score) < TOPIC_GATE)) {
     throw new PlanError(409, few ? `This topic uses ${topic.factors.length} viral factors and needs ${MIN_VIRAL_FACTORS}.` : `This topic scores ${topic.topic_score}, under the ${TOPIC_GATE} needed.`, 'needs_override');
   }
-  if (!(await store.setChosen(planId, topicId))) throw new PlanError(409, 'The plan changed while you were choosing. Reload it.', 'changed');
+  const { cohortId } = batchOr(await resolveBatch(plan.air_date));
+  const session = await chooseWithSession(planId, topicId, cohortId, (t) => store.setChosen(planId, topicId, t));
+  if (!session) throw new PlanError(409, 'The plan changed while you were choosing. Reload it.', 'changed');
+  return session;
 }
 
 export interface DemandView { week: number; video_url: string | null; video_title: string | null; channel: string | null; views: number | null; multiple: number | null; score: number | null; thin_median: boolean; measured_at: string; failed: boolean; }

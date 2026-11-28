@@ -23,7 +23,7 @@ const DemandSchema = z.array(z.object({
 }).strict());
 const PlanViewSchema = z.object({
   plan: z.object({
-    id: Id, air_date: str, cohort_id: strOrNull, status: z.enum(['draft', 'researching', 'ready', 'chosen', 'failed']), stage: z.enum(STAGES), error: strOrNull, note: strOrNull, cost_usd: num, chosen_topic_id: strOrNull,
+    id: Id, air_date: str, cohort_id: strOrNull, status: z.enum(['draft', 'researching', 'ready', 'chosen', 'failed']), stage: z.enum(STAGES), error: strOrNull, note: strOrNull, cost_usd: num, chosen_topic_id: strOrNull, live_session_id: strOrNull, session_origin: z.enum(['created', 'adopted']).nullable(),
     inputs: z.object({ week: z.union([z.literal('auto'), week]), proof: str.optional(), forceNews: str.optional(), audience: str.optional(), avoid: str.optional(), notes: str.optional() }).strict(),
   }).strict(),
   demand: DemandSchema,
@@ -49,6 +49,7 @@ const PlanSetupSchema = z.object({
 
 /** The compiler refuses a service change the schemas do not follow, in either direction. */
 type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
+const ChooseResponseSchema = z.object({ ok: z.literal(true), chosenTopicId: Id, session: z.object({ id: Id, title: str, origin: z.enum(['created', 'adopted']), created: z.boolean() }).strict() }).strict();
 const inStep: [Same<z.infer<typeof PlanViewSchema>, PlanView>, Same<z.infer<typeof PlanSetupSchema>, PlanSetup>] = [true, true];
 void inStep;
 
@@ -104,5 +105,8 @@ export async function handleChoose(req: Request, res: Response) {
   if (!id.success) return res.status(404).json({ error: 'Not found' });
   const body = ChooseBody.safeParse(req.body);
   if (!body.success) return invalid(res, body.error);
-  try { await choose(id.data, body.data.topicId, body.data.override === true); return res.json({ ok: true, chosenTopicId: body.data.topicId }); } catch (e) { return fail(res, e); }
+  try {
+    const s = await choose(id.data, body.data.topicId, body.data.override === true);
+    return res.json(checked(ChooseResponseSchema, { ok: true as const, chosenTopicId: body.data.topicId, session: { id: s.sessionId, title: s.title, origin: s.origin, created: s.created } }));
+  } catch (e) { return fail(res, e); }
 }

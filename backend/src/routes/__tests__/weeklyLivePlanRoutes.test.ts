@@ -3,6 +3,7 @@ jest.mock('../../services/weeklyLive/batchResolver', () => ({ ...jest.requireAct
 jest.mock('../../services/weeklyLive/signals/signalsJob', () => ({ ...jest.requireActual('../../services/weeklyLive/signals/signalsJob'), runSignals: jest.fn() }));
 jest.mock('../../services/weeklyLive/demand/demandJob', () => ({ ...jest.requireActual('../../services/weeklyLive/demand/demandJob'), runDemand: jest.fn(), latestDemand: jest.fn() }));
 jest.mock('../../services/weeklyLive/topics/topicsJob', () => ({ runTopics: jest.fn() }));
+jest.mock('../../services/weeklyLive/choose/chooseSession', () => ({ chooseWithSession: jest.fn() }));
 
 import express from 'express';
 import jwt from 'jsonwebtoken';
@@ -11,6 +12,7 @@ import { env } from '../../config/env';
 import { WeeklyLiveSignal, WeeklyLiveTopic } from '../../models/WeeklyLive';
 import { MGMT_ROLES } from '../../services/access/mgmtRoles';
 import { resolveBatch } from '../../services/weeklyLive/batchResolver';
+import { chooseWithSession } from '../../services/weeklyLive/choose/chooseSession';
 import { latestDemand, runDemand } from '../../services/weeklyLive/demand/demandJob';
 import { executePlan } from '../../services/weeklyLive/plans/planService';
 import * as store from '../../services/weeklyLive/plans/planStore';
@@ -22,12 +24,14 @@ import router from '../weeklyLivePlanRoutes';
 const RUN = '7b8a95b7-1a88-42d5-b257-fd786d071f6e';
 const PID = '5b8a95b7-1a88-42d5-b257-fd786d071f6e'; const TID = '6b8a95b7-1a88-42d5-b257-fd786d071f6e';
 const s = store as jest.Mocked<typeof store>;
+const SID = '8b8a95b7-1a88-42d5-b257-fd786d071f6e';
+const SESSION = { sessionId: SID, title: 'T (Week 3 · Claude API)', origin: 'created', created: true };
 const signals = runSignals as jest.Mock; const demand = runDemand as jest.Mock; const topics = runTopics as jest.Mock;
 const app = express(); app.use(express.json()); app.use(router);
 const bearer = (claims: Record<string, unknown> = {}) => `Bearer ${jwt.sign({ sub: 'u', email: 'a@example.com', role: 'admin', ...claims }, env.jwtSecret)}`;
 type M = 'get' | 'post';
 const go = (m: M, p: string, body?: unknown, auth: string | null = bearer()) => { let r = request(app)[m](p); if (auth) r = r.set('Authorization', auth); return m === 'post' ? r.send((body ?? {}) as object) : r; };
-const plan = (over: Partial<store.PlanRow> = {}): store.PlanRow => ({ id: PID, air_date: '2099-11-30', cohort_id: 'c', inputs: { week: 'auto', forceNews: 'x' }, status: 'ready', chosen_topic_id: null, cost_usd: 0.2, stage: 'done', note: null, error: null, ...over });
+const plan = (over: Partial<store.PlanRow> = {}): store.PlanRow => ({ id: PID, air_date: '2099-11-30', cohort_id: 'c', inputs: { week: 'auto', forceNews: 'x' }, status: 'ready', chosen_topic_id: null, live_session_id: null, session_origin: null, cost_usd: 0.2, stage: 'done', note: null, error: null, ...over });
 const topic = (over: Record<string, unknown> = {}) => ({ id: TID, plan_id: PID, rank: 1, week: 3, title: 'T', spin: 's', parody: 'p', hooks: [{ text: 'h', viral: 80 }], package: {}, marketing: {}, signals_used: [], teach_lines: { proof: { score: 5, why: 'w' } }, teach: '88.0', viral: '85.0', convert: '91.0', topic_score: '87.4', factors: [1, 5, 9], warnings: [], ...over });
 const start = { airDate: '2099-11-30', inputs: { week: 'auto' } };
 const ROUTES: [M, string, unknown][] = [['get', '/api/admin/live/plan-setup?airDate=2099-11-30', undefined], ['post', '/api/admin/live/plans', start], ['get', `/api/admin/live/plans/${PID}`, undefined], ['post', `/api/admin/live/plans/${PID}/regenerate`, {}], ['post', `/api/admin/live/plans/${PID}/choose`, { topicId: TID }]];
@@ -37,6 +41,7 @@ beforeEach(() => {
   jest.spyOn(console, 'log').mockImplementation(() => undefined); jest.spyOn(console, 'error').mockImplementation(() => undefined);
   s.getPlan.mockResolvedValue(plan()); s.createOrJoin.mockResolvedValue({ id: PID, created: true, runId: RUN }); s.claimForRun.mockResolvedValue(RUN); s.setChosen.mockResolvedValue(true); s.setStage.mockResolvedValue(true); s.finish.mockResolvedValue();
   (resolveBatch as jest.Mock).mockResolvedValue({ ok: true, cohortId: 'c', cohortName: 'Cohort - November 2099' });
+  (chooseWithSession as jest.Mock).mockImplementation(async (_p: string, _t: string, _c: string, mark: (t: unknown) => Promise<boolean>) => ((await mark('TX')) ? SESSION : null));
   (latestDemand as jest.Mock).mockResolvedValue([{ week: 3, video_url: null, video_title: null, channel: null, views: null, multiple: '3.50', score: 4, thin_median: false, measured_at: '2026-11-25', error: null }]);
   signals.mockResolvedValue({ kept: 14, dropped: 2, short: false, failedGroups: [] }); demand.mockResolvedValue({}); topics.mockResolvedValue({});
   jest.spyOn(WeeklyLiveSignal, 'findAll').mockResolvedValue([] as never); jest.spyOn(WeeklyLiveSignal, 'count').mockResolvedValue(5 as never);
@@ -156,8 +161,19 @@ describe('regenerate', () => {
 describe('choose', () => {
   const pick = (body: object = {}) => go('post', `/api/admin/live/plans/${PID}/choose`, { topicId: TID, ...body });
   it('stores a topic that clears the gate', async () => {
-    expect((await pick()).body).toEqual({ ok: true, chosenTopicId: TID });
-    expect(s.setChosen).toHaveBeenCalledWith(PID, TID);
+    expect((await pick()).body).toEqual({ ok: true, chosenTopicId: TID, session: { id: SID, title: 'T (Week 3 · Claude API)', origin: 'created', created: true } });
+    expect(s.setChosen).toHaveBeenCalledWith(PID, TID, 'TX');
+    expect((chooseWithSession as jest.Mock).mock.calls[0].slice(0, 3)).toEqual([PID, TID, 'c']);
+  });
+  it('a month with no batch is a 409 and nothing is chosen', async () => {
+    (resolveBatch as jest.Mock).mockResolvedValue({ ok: false, status: 409, error: 'No cohort named "Cohort - November 2099".', cohortName: 'Cohort - November 2099' });
+    const r = await pick();
+    expect([r.status, r.body.code]).toEqual([409, 'no_batch']);
+    expect(s.setChosen).not.toHaveBeenCalled();
+  });
+  it('a malformed session in the answer fails outside production', async () => {
+    (chooseWithSession as jest.Mock).mockResolvedValue({ ...SESSION, origin: 'borrowed' });
+    expect((await pick()).status).toBe(500);
   });
   it('a failed run keeps its earlier topics choosable', async () => {
     s.getPlan.mockResolvedValue(plan({ status: 'failed', error: 'why' }));

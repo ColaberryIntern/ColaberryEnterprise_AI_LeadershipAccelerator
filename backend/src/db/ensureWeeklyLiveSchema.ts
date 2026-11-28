@@ -152,6 +152,9 @@ export const WEEKLY_LIVE_DDL: readonly string[] = [
      error VARCHAR(300),
      heartbeat_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
    )`,
+  // WL4.1: how the plan's session came to be. 'created' = Studio made the row and may retitle it on a
+  // re-choose; 'adopted' = a class already sat on that date and Studio only links it, never edits it.
+  `ALTER TABLE weekly_live_plans ADD COLUMN IF NOT EXISTS session_origin VARCHAR(16) CHECK (session_origin IN ('created', 'adopted'))`,
 ];
 
 /** Run every statement in order. Throws on the first failure: a half-made schema must not boot quietly. */

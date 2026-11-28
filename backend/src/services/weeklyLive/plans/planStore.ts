@@ -1,4 +1,4 @@
-import { QueryTypes } from 'sequelize';
+import { QueryTypes, type Transaction } from 'sequelize';
 import { sequelize } from '../../../config/database';
 import type { PlanInputs, PlanStatus } from '../../../models/WeeklyLive';
 
@@ -17,10 +17,11 @@ const LOCK_KEY = 4406002;
 
 export interface PlanRow {
   id: string; air_date: string; cohort_id: string | null; inputs: PlanInputs; status: PlanStatus; chosen_topic_id: string | null;
+  live_session_id: string | null; session_origin: 'created' | 'adopted' | null;
   cost_usd: number; stage: Stage; note: string | null; error: string | null;
 }
 
-const COLUMNS = `p.id, to_char(p.air_date, 'YYYY-MM-DD') AS air_date, p.cohort_id, p.inputs, p.chosen_topic_id, p.cost_usd::float AS cost_usd,
+const COLUMNS = `p.id, to_char(p.air_date, 'YYYY-MM-DD') AS air_date, p.cohort_id, p.inputs, p.chosen_topic_id, p.live_session_id, p.session_origin, p.cost_usd::float AS cost_usd,
   CASE WHEN p.status = 'researching' AND COALESCE(r.heartbeat_at, p.created_at) < NOW() - INTERVAL '${STALE_MINUTES} minutes' THEN 'failed' ELSE p.status END AS status,
   COALESCE(r.stage, 'queued') AS stage, r.note,
   CASE WHEN p.status = 'researching' AND COALESCE(r.heartbeat_at, p.created_at) < NOW() - INTERVAL '${STALE_MINUTES} minutes'
@@ -125,13 +126,14 @@ export async function finish(id: string, runId: string, ok: boolean, error: stri
  * Choose one of the plan's topics. A failed or stopped run keeps its earlier topics, so those can be
  * chosen too. Choosing again (the same or another topic) replaces the choice.
  */
-export async function setChosen(id: string, topicId: string): Promise<boolean> {
+/** Inside a caller's transaction when given one (WL4.1 chooses and makes the session atomically). */
+export async function setChosen(id: string, topicId: string, transaction?: Transaction): Promise<boolean> {
   const rows = await sequelize.query<{ id: string }>(
     `UPDATE weekly_live_plans p SET status = 'chosen', chosen_topic_id = :topicId, updated_at = NOW()
      WHERE p.id = :id AND (p.status IN ('ready', 'chosen', 'failed') OR (p.status = 'researching'
          AND COALESCE((SELECT r.heartbeat_at FROM weekly_live_plan_runs r WHERE r.plan_id = p.id), p.created_at) < NOW() - INTERVAL '${STALE_MINUTES} minutes'))
        AND EXISTS (SELECT 1 FROM weekly_live_topics t WHERE t.id = :topicId AND t.plan_id = :id) RETURNING p.id`,
-    { replacements: { id, topicId }, type: QueryTypes.SELECT },
+    { replacements: { id, topicId }, type: QueryTypes.SELECT, transaction },
   );
   return rows.length > 0;
 }
