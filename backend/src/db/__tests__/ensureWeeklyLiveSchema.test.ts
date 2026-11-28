@@ -6,14 +6,28 @@ import { WEEKLY_LIVE_DDL, WEEKLY_LIVE_TABLES, ensureWeeklyLiveSchema } from '../
  * must be re-runnable and additive: a phase that ships a DROP, RENAME or type change is not allowed
  * to deploy (WL2.5 precondition c).
  */
-it('every statement is CREATE ... IF NOT EXISTS, and nothing drops, renames or alters', () => {
+/** The one ALTER shape allowed: adding a column if it is missing (WL4.1). Never a drop, rename or type change. */
+const ADD_COLUMN = /^ALTER TABLE weekly_live_\w+ ADD COLUMN IF NOT EXISTS \w+ /;
+
+it('every statement is CREATE ... IF NOT EXISTS or ADD COLUMN IF NOT EXISTS, and nothing drops, renames or changes a type', () => {
   for (const ddl of WEEKLY_LIVE_DDL) {
-    expect(ddl).toMatch(/^CREATE (UNIQUE )?(TABLE|INDEX) IF NOT EXISTS /);
-    expect(ddl).not.toMatch(/\b(DROP|RENAME|ALTER)\b/i);
+    expect(ddl).toMatch(/^(CREATE (UNIQUE )?(TABLE|INDEX) IF NOT EXISTS |ALTER TABLE weekly_live_\w+ ADD COLUMN IF NOT EXISTS )/);
+    expect(ddl).not.toMatch(/\b(DROP|RENAME|TYPE|SET DATA)\b/i);
+    if (/\bALTER\b/i.test(ddl)) expect(ddl).toMatch(ADD_COLUMN);
   }
 });
 
-it('creates each of the nine tables exactly once', () => {
+it.each([
+  'ALTER TABLE weekly_live_plans DROP COLUMN status',
+  'ALTER TABLE weekly_live_plans ALTER COLUMN status TYPE TEXT',
+  'ALTER TABLE weekly_live_plans RENAME COLUMN status TO s',
+  'ALTER TABLE live_sessions ADD COLUMN IF NOT EXISTS x INT',
+])('the guard refuses %s', (ddl) => {
+  const ok = /^(CREATE (UNIQUE )?(TABLE|INDEX) IF NOT EXISTS |ALTER TABLE weekly_live_\w+ ADD COLUMN IF NOT EXISTS )/.test(ddl) && !/\b(DROP|RENAME|TYPE|SET DATA)\b/i.test(ddl);
+  expect(ok).toBe(false);
+});
+
+it('creates each of the eleven tables exactly once', () => {
   for (const t of WEEKLY_LIVE_TABLES) {
     expect(WEEKLY_LIVE_DDL.filter((d) => d.startsWith(`CREATE TABLE IF NOT EXISTS ${t} (`))).toHaveLength(1);
   }

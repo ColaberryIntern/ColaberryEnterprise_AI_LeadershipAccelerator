@@ -50,7 +50,7 @@ describeIfDb('weekly live schema against Postgres', () => {
     expect(await columns()).toEqual(cols);
     const n = (await sequelize.query(`SELECT COUNT(*)::int AS n FROM information_schema.tables
       WHERE table_schema = 'public' AND table_name IN (${schema.WEEKLY_LIVE_TABLES.map((t) => `'${t}'`).join(',')})`))[0] as { n: number }[];
-    expect(n[0].n).toBe(9);
+    expect(n[0].n).toBe(schema.WEEKLY_LIVE_TABLES.length);
   });
 
   it('rejects a duplicate content piece for the same session', async () => {
