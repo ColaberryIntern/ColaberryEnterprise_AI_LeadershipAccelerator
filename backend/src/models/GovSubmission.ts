@@ -35,6 +35,14 @@ export interface GovSubmissionAttributes {
   acknowledged_at: Date | null;
   outcome_note: string | null;
   outcome_recorded_at: Date | null;
+  /**
+   * The solicitation's close/due date for THIS bid (M5), as a calendar date (no time). Sourced ONLY from the
+   * solicitation (gov_qualifications requirements_json.manualDeadline.closeDate) when the submission receipt is
+   * recorded - NEVER fabricated. Nullable: a submitted bid whose solicitation carries no recorded close date
+   * leaves this null rather than inventing one. Travels with the submission so a value-pending potential-win
+   * (no priced gov_bid_values row) can still carry a close date in the Revenue Room.
+   */
+  close_date: string | null;
   /** PRIVATE case-study candidate (status 'candidate'); never a published case_studies row. */
   case_study_candidate: any | null;
   /** PRIVATE service-capability candidate (state 'suggested'); never a live service_offerings row. */
@@ -56,6 +64,7 @@ class GovSubmission extends Model<GovSubmissionAttributes> implements GovSubmiss
   declare acknowledged_at: Date | null;
   declare outcome_note: string | null;
   declare outcome_recorded_at: Date | null;
+  declare close_date: string | null;
   declare case_study_candidate: any | null;
   declare service_capability_candidate: any | null;
   declare created_at: Date;
@@ -76,6 +85,7 @@ GovSubmission.init(
     acknowledged_at: { type: DataTypes.DATE, allowNull: true },
     outcome_note: { type: DataTypes.TEXT, allowNull: true },
     outcome_recorded_at: { type: DataTypes.DATE, allowNull: true },
+    close_date: { type: DataTypes.DATEONLY, allowNull: true },
     case_study_candidate: { type: DataTypes.JSONB, allowNull: true },
     service_capability_candidate: { type: DataTypes.JSONB, allowNull: true },
     created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },

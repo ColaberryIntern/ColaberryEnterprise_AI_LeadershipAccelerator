@@ -38,12 +38,22 @@ const state = (over: Partial<ConnectedDemoShareState> = {}): ConnectedDemoShareS
   url: null,
   has_spec: false,
   event_count: 0,
+  // Explicit rather than omitted: the default case is a student-built project that does need the
+  // file, and leaving the field out would also exercise the stale-bundle path by accident.
+  can_publish_without_data_model: false,
+  platform_demo_version: null,
   ...over,
 });
 
 const PUBLISHED = state({ enabled: true, url: '/api/public/demo/tok-abc', has_spec: true, event_count: 5 });
 const GENERATED = state({ enabled: false, url: null, has_spec: true, event_count: 5 });
 const NOTHING = state();
+/**
+ * A platform-built project: nothing stored on the project row yet, and a demo in the artifact
+ * store that publishing adopts. The combination `has_spec: false` with
+ * `can_publish_without_data_model: true` is what only this case produces.
+ */
+const ADOPTABLE = state({ can_publish_without_data_model: true, platform_demo_version: 4 });
 
 let container: HTMLDivElement;
 let root: Root;
@@ -71,11 +81,57 @@ afterEach(() => {
 });
 
 describe('whether it renders at all', () => {
-  it('renders nothing for a build with no Connected Demo story, and asks the server nothing', async () => {
-    // A control for a story the student does not have would be a promise the board cannot keep.
+  it('renders nothing for a build with no story AND no demo of any kind', async () => {
+    // Still the governing negative: a control for a demo that does not exist would be a promise
+    // nothing can keep. What changed is WHY it is known to be absent. The panel now asks, because
+    // a platform-built project has no STORY-900 row and does have a demo, and only the server can
+    // tell those two apart. So the card is withheld on the answer rather than on the prop.
+    api.getConnectedDemoShare.mockResolvedValue(NOTHING);
     await render(false);
     expect(container.textContent).toBe('');
-    expect(api.getConnectedDemoShare).not.toHaveBeenCalled();
+    expect(api.getConnectedDemoShare).toHaveBeenCalledWith(PROJECT);
+  });
+
+  it('renders for a PLATFORM-built project: no story on the board, but a demo to publish', async () => {
+    // The case that had no control at all. Without this the projects the platform builds are
+    // exactly the projects that can never get a permanent public link.
+    api.getConnectedDemoShare.mockResolvedValue(ADOPTABLE);
+    await render(false);
+    expect(container.textContent).toContain('Your demo link');
+    expect(buttonSaying('Publish my demo')).toBeDefined();
+    // And it does NOT ask for a file the student has no repository to take it from.
+    expect(container.querySelectorAll('input[type="file"]')).toHaveLength(0);
+  });
+
+  it('publishes a platform-built demo without sending a data model', async () => {
+    api.getConnectedDemoShare.mockResolvedValue(ADOPTABLE);
+    api.setConnectedDemoShare.mockResolvedValue(
+      state({ enabled: true, url: '/api/public/demo/tok-xyz', has_spec: true, event_count: 16, can_publish_without_data_model: true }),
+    );
+    await render(false);
+    await act(async () => { buttonSaying('Publish my demo')!.click(); });
+    expect(api.setConnectedDemoShare).toHaveBeenCalledWith(PROJECT, true, undefined);
+    expect(links().map((a) => a.getAttribute('href'))).toContain('/api/public/demo/tok-xyz');
+  });
+
+  it('still asks a student-built project for the data model, so the two cases stay distinct', async () => {
+    // The other direction. If `can_publish_without_data_model` were read as "true unless stated",
+    // this project would get a publish button that can only refuse.
+    api.getConnectedDemoShare.mockResolvedValue(NOTHING);
+    await render(true);
+    expect(container.querySelectorAll('input[type="file"]')).toHaveLength(1);
+    // The build-and-publish button, not the adopt one. Matched on the word the two do not share,
+    // because `buttonSaying` is a substring match and "Build and publish my demo" contains
+    // "publish my demo" - an earlier version of this assertion passed for the wrong reason.
+    expect(buttonSaying('Build and publish')).toBeDefined();
+  });
+
+  it('treats a response with the field ABSENT as needing the file (stale bundle, new backend)', async () => {
+    const legacy = { ...NOTHING };
+    delete (legacy as { can_publish_without_data_model?: boolean }).can_publish_without_data_model;
+    api.getConnectedDemoShare.mockResolvedValue(legacy);
+    await render(true);
+    expect(container.querySelectorAll('input[type="file"]')).toHaveLength(1);
   });
 
   it('renders and reads the state for a build that has the story', async () => {

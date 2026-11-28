@@ -138,7 +138,7 @@ export const WEEK_BLUEPRINTS: WeekBlueprintContent[] = [
   {
     week: 1,
     title: 'Claude Code Foundations + Workspace',
-    anthropic_course_minutes: 90, // Claude Code 101 — 1.5 hrs of video (Skilljar, verified 2026-07-18)
+    anthropic_course_minutes: 90, // Claude Code 101 — 12 lessons, 1 quiz, 1.5 hr published (Claude Academy, measured 2026-11-25; unchanged from the Skilljar measurement of 2026-07-18)
     difficulty: 'core',
     estimated_hours: 7,
     purpose:
@@ -186,7 +186,7 @@ export const WEEK_BLUEPRINTS: WeekBlueprintContent[] = [
   {
     week: 2,
     title: 'Agent Skills (build 3 skills)',
-    anthropic_course_minutes: 45, // Introduction to Agent Skills — 6 lessons; Skilljar publishes no video-hours for this course (lesson-based), so this is a lesson-count estimate (enrolled + verified 2026-07-18)
+    anthropic_course_minutes: 60, // Introduction to Agent Skills — 6 lessons, 1 hr published (Claude Academy, measured 2026-11-25). Was 45: a lesson-count estimate made because Skilljar published no hours for it. Academy does, so the estimate is gone.
     difficulty: 'core',
     estimated_hours: 7,
     purpose:
@@ -233,15 +233,20 @@ export const WEEK_BLUEPRINTS: WeekBlueprintContent[] = [
   {
     week: 3,
     title: 'Claude API + Workflow Assistant',
-    anthropic_course_minutes: 486, // Building with the Claude API — 8.1 hrs of video (Skilljar, verified 2026-07-18)
-    // Course SPLIT across wk3+wk4, BALANCED by lesson count: Part 1 = 3 sections
-    // (35 of 75 lessons ≈ 227 min) — the "build the Workflow Assistant" core.
+    anthropic_course_minutes: 540, // Building with the Claude API — 67 lessons, 8 quizzes, 9 hr published (Claude Academy, measured 2026-11-25). Was 486 (8.1 hrs, Skilljar 2026-07-18, when it had 75 lessons): the course was restructured, not just rehosted.
+    // Course SPLIT across wk3+wk4. Part 1 = 3 sections, the "build the Workflow
+    // Assistant" core. The 252/288 minute split is the OLD 227/259 ratio scaled to
+    // the new 540-minute total - it is INHERITED, NOT RE-MEASURED. Academy does not
+    // publish per-section lengths, and the lesson count moved from 75 to 67, so the
+    // section boundary may no longer fall where it did. Re-splitting needs someone
+    // to open the course and count; scaling at least keeps the two parts summing to
+    // the real total instead of to a total that is 54 minutes short.
     // Certificate is whole-course-only, so Part 1 completes via a PROGRESS screenshot;
     // the certificate is the wk4 Part 2 task. The two parts sum to 486 (the full course).
     anthropic_course_card: {
       title: 'Building with the Claude API · Part 1',
       url: 'https://academy.claude.com/courses/building-with-the-claude-api',
-      minutes: 227,
+      minutes: 252,
       completion: 'progress',
       sections: 'Getting Started, Tool Use, Agents & Workflows',
     },
@@ -292,13 +297,14 @@ export const WEEK_BLUEPRINTS: WeekBlueprintContent[] = [
     week: 4,
     title: 'Prompt Engineering + Prompt Library',
     // Part 2 of the split "Building with the Claude API" course (BALANCED): 4 sections
-    // (40 of 75 lessons ≈ 259 min). By now the whole course is finished, so completion
+    // (4 sections; 288 of 540 min, scaled from the old 259/486 - see wk3). By now the
+    // whole course is finished, so completion
     // = upload the Certificate. Week 4 stays Colaberry-original for its own Prompt Library
     // (this is an added card). MCP is previewed here and taught fully in weeks 5-6.
     anthropic_course_card: {
       title: 'Building with the Claude API · Part 2 (Prompt, Retrieval & Integration)',
       url: 'https://academy.claude.com/courses/building-with-the-claude-api',
-      minutes: 259,
+      minutes: 288,
       completion: 'certificate',
       sections: 'Prompt Engineering & Evaluation, RAG, Model Context Protocol, Claude Code & Computer Use',
     },
@@ -348,7 +354,7 @@ export const WEEK_BLUEPRINTS: WeekBlueprintContent[] = [
   {
     week: 5,
     title: 'MCP Foundations + First MCP Server',
-    anthropic_course_minutes: 60, // Introduction to MCP — 1 hr of video (Skilljar, verified 2026-07-18)
+    anthropic_course_minutes: 60, // Introduction to MCP — 10 lessons, 1 quiz, 1 hr published (Claude Academy, measured 2026-11-25; unchanged)
     difficulty: 'core',
     estimated_hours: 8,
     purpose:
@@ -395,7 +401,7 @@ export const WEEK_BLUEPRINTS: WeekBlueprintContent[] = [
   {
     week: 6,
     title: 'Advanced MCP + System Integration',
-    anthropic_course_minutes: 66, // MCP: Advanced Topics — 1.1 hrs of video (Skilljar, verified 2026-07-18)
+    anthropic_course_minutes: 90, // MCP: Advanced Topics — 11 lessons, 1 quiz, 1.5 hr published (Claude Academy, measured 2026-11-25). Was 66 (1.1 hrs, Skilljar). The week 6 CARD already said 90, so the card was right and this was wrong.
     difficulty: 'stretch',
     estimated_hours: 8,
     purpose:
@@ -443,7 +449,7 @@ export const WEEK_BLUEPRINTS: WeekBlueprintContent[] = [
   {
     week: 7,
     title: 'Subagents + Multi-Agent Team',
-    anthropic_course_minutes: 35, // Introduction to Subagents — 4 lessons; Skilljar publishes no video-hours (lesson-based), so this is a lesson-count estimate (enrolled + verified 2026-07-18)
+    anthropic_course_minutes: 35, // Introduction to Subagents — 4 lessons (Claude Academy, measured 2026-11-25). STILL AN ESTIMATE: Academy publishes a lesson count for this course but no duration, so there is nothing to replace the estimate with. The only one of the seven left unmeasured.
     difficulty: 'stretch',
     estimated_hours: 7,
     purpose:
@@ -490,7 +496,7 @@ export const WEEK_BLUEPRINTS: WeekBlueprintContent[] = [
   {
     week: 8,
     title: 'Claude Code Workflows + Automation',
-    anthropic_course_minutes: 60, // Claude Code in Action — 1 hr of video (Skilljar, verified 2026-07-18)
+    anthropic_course_minutes: 60, // Claude Code in Action — 9 lessons, 1 quiz, 1 hr published (Claude Academy, measured 2026-11-25; unchanged)
     difficulty: 'stretch',
     estimated_hours: 7,
     purpose:

@@ -38,6 +38,15 @@ async function renderPage(): Promise<void> {
 beforeEach(() => {
   (adminGovContractsApi.errorMessage as jest.Mock).mockReturnValue('err');
   (adminGovContractsApi.fetchGovContractCockpit as jest.Mock).mockResolvedValue(view());
+  // The page now also renders GovManagementPanel, which fetches the management view on mount. The module is
+  // auto-mocked, so stub it to resolve a minimal view - otherwise it returns undefined and the panel throws.
+  (adminGovContractsApi.fetchGovManagement as jest.Mock).mockResolvedValue({
+    deliveryProjectId: 'p1', studentProjectId: null, releases: [], rollup: null,
+    submission: { status: 'preparing', outcome: 'pending', externallySubmittedAt: null, closeDate: null },
+    potentialWin: { submitted: false, closeDate: null, valueCents: null, priced: false },
+    dossier: { tenantId: null, factCount: 0, referenceCount: 0, personnelCount: 0 },
+    openNeedCount: 0, exportReady: false,
+  });
 });
 afterEach(() => { act(() => { root.unmount(); }); container.remove(); jest.clearAllMocks(); });
 

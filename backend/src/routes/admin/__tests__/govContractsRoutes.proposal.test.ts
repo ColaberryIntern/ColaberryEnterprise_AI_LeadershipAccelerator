@@ -13,6 +13,7 @@ jest.mock('../../../middlewares/authMiddleware', () => ({
     if (sectionAllows) { req.admin = adminObj; next(); } else { res.status(403).json({ error: 'Forbidden' }); }
   },
   adminAllowedSections: () => ['program', 'gov_contracts'],
+  requireFullAdmin: (_req: any, _res: any, next: any) => next(),
 }));
 let actorResult: any = { platformIdentityId: 'admin-1', email: 'ali@colaberry.com' };
 jest.mock('../../../middlewares/govProjectAccess', () => ({ resolveGovProjectActor: async () => actorResult }));

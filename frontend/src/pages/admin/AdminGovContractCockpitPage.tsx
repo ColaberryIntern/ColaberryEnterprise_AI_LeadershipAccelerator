@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { PageHeader } from '../../components/admin/shell';
 import StudioShell from '../portal/projects/proposalStudio/StudioShell';
+import GovManagementPanel from '../../components/admin/GovManagementPanel';
 import { fetchGovContractCockpit, errorMessage, adminGovCockpitApi, adminGovReviewApi, adminGovStudioApi, adminReanalyzeGovBlueprint } from '../../services/adminGovContractsApi';
 import { getViewAsUrl } from '../../services/adminOrgApi';
 import type { StudentGovProjectView } from '../../services/govProjectPortalApi';
@@ -108,7 +109,13 @@ const AdminGovContractCockpitPage: React.FC = () => {
         const onOpenQualification = qualKey
           ? (step: string) => navigate(`/admin/gov-qualification?gws=${encodeURIComponent(qualKey)}&tab=${encodeURIComponent(step)}`)
           : undefined;
-        return <StudioShell view={state.view} projectId={projectId} onReload={load} cockpitApi={adminGovCockpitApi} studioApi={adminGovStudioApi} reviewApi={adminGovReviewApi} onReanalyze={onReanalyze} reanalyzing={reanalyzing} bugReportEndpoint={`/api/admin/gov-contracts/${encodeURIComponent(projectId)}/bug-report`} onOpenQualification={onOpenQualification} onOpenDossier={() => navigate('/admin/gov-services#dossier')} />;
+        return (
+          <>
+            {/* M5: admin-only live management window (releases + parked R2, potential-win, dossier, export + mark-submitted). */}
+            <GovManagementPanel projectId={projectId} />
+            <StudioShell view={state.view} projectId={projectId} onReload={load} cockpitApi={adminGovCockpitApi} studioApi={adminGovStudioApi} reviewApi={adminGovReviewApi} onReanalyze={onReanalyze} reanalyzing={reanalyzing} bugReportEndpoint={`/api/admin/gov-contracts/${encodeURIComponent(projectId)}/bug-report`} onOpenQualification={onOpenQualification} onOpenDossier={() => navigate('/admin/gov-services#dossier')} />
+          </>
+        );
       })()}
     </div>
   );

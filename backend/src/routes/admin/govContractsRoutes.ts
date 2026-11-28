@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { requireSection, adminAllowedSections } from '../../middlewares/authMiddleware';
+import { requireSection, adminAllowedSections, requireFullAdmin } from '../../middlewares/authMiddleware';
 import { signedDocumentUpload } from '../../config/upload';
 import { resolveGovProjectActor } from '../../middlewares/govProjectAccess';
 import type { StudentGovProjectView } from '../../services/factory/govProjectProjection';
@@ -93,6 +93,50 @@ router.get('/api/admin/gov-contracts/:projectId/cockpit', requireSection('gov_co
   } catch (err: unknown) {
     logFail('gov_contract_cockpit_failed', err, { projectId });
     res.status(500).json({ error: 'Could not load the government contract.' });
+  }
+});
+
+/**
+ * GET /api/admin/gov-contracts/:projectId/management — Ali's live management view (M5): releases with their parked
+ * state (R2 Full build-out hidden/gated until the bid is won), the submission + its close date, the potential-win
+ * (priced value when a human recorded one, else value-pending), the global dossier summary, and the open-need count
+ * for the collection form. Section-gated read (gov_contracts); composed from existing projections, nothing written.
+ */
+router.get('/api/admin/gov-contracts/:projectId/management', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const ctx = await adminGovContext(req, res); if (!ctx) return;
+  try {
+    const { getGovManagementView } = await import('../../services/factory/proposal/govManagementView');
+    res.json({ management: await getGovManagementView(req.params.projectId as string) });
+  } catch (err: unknown) {
+    logFail('gov_contract_management_failed', err, { projectId: req.params.projectId });
+    res.status(500).json({ error: 'Could not load the management view.' });
+  }
+});
+
+/**
+ * POST /api/admin/gov-contracts/:projectId/management/mark-submitted — record the MANUAL external-submission receipt
+ * from the management screen (M5). This is a financial act: the bid becomes a potential-win in the Revenue Room with
+ * its solicitation close date, so it stacks requireFullAdmin on top of the section gate (the aiOps money precedent) -
+ * a scoped gov_contracts-only role may READ the management view but may NOT record a submission. recordSubmissionReceipt
+ * keeps the EXPORTED != SUBMITTED rail (refuses unless the package was exported) and stamps the close date honestly.
+ */
+router.post('/api/admin/gov-contracts/:projectId/management/mark-submitted', requireSection('gov_contracts'), requireFullAdmin, async (req: Request, res: Response) => {
+  const ctx = await adminGovContext(req, res); if (!ctx) return;
+  const projectId = req.params.projectId as string;
+  const externalRef = String((req.body ?? {}).externalRef ?? '').trim();
+  try {
+    const { recordSubmissionReceipt } = await import('../../services/factory/govSubmission');
+    await recordSubmissionReceipt(projectId, externalRef);
+    const { getGovManagementView } = await import('../../services/factory/proposal/govManagementView');
+    res.json({ ok: true, management: await getGovManagementView(projectId) });
+  } catch (err: unknown) {
+    const reason = (err as { reason?: string })?.reason;
+    if (reason === 'no_ref' || reason === 'not_exported' || reason === 'bad_input') {
+      res.status(400).json({ error: (err as Error).message, reason });
+      return;
+    }
+    logFail('gov_contract_mark_submitted_failed', err, { projectId });
+    res.status(500).json({ error: 'Could not record the submission.' });
   }
 });
 

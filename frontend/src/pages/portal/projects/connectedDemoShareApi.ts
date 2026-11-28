@@ -26,6 +26,17 @@ export interface ConnectedDemoShareState {
   url: string | null;
   has_spec: boolean;
   event_count: number;
+  /**
+   * True when publishing needs no file from the student: either a spec is already stored, or the
+   * platform built this project's demo and publishing adopts it. False only for a student-built
+   * project with nothing generated yet, which is the one case that needs the upload below.
+   *
+   * Optional on the wire so a page served from a stale bundle against a new backend, or the
+   * reverse, degrades to asking for the file rather than rendering a button that refuses.
+   */
+  can_publish_without_data_model?: boolean;
+  /** The platform-built demo's version, when the platform built one. */
+  platform_demo_version?: number | null;
 }
 
 /** The refusals this control can legitimately produce, each one a different thing to tell a person. */

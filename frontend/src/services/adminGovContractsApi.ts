@@ -317,3 +317,34 @@ export const adminGovStudioApi: GovStudioApi = {
   fetchRepoFile: adminFetchGovRepoFile,
   fetchBuildArtifact: adminFetchGovBuildArtifact,
 };
+
+// ── M5: the live management view + the mark-submitted financial action ────────────────────────────────────────────
+// GET .../management is section-gated (a scoped gov_contracts role may read it); POST .../management/mark-submitted
+// is full-admin only (it writes a potential-win into the Revenue Room). Shapes mirror services/factory/proposal/govManagementView.ts.
+
+export interface GovManagementRelease { key: string; name: string; status: string; parked: boolean; stories: { storyId: string; title: string; status: string; verified: boolean }[]; }
+export interface GovManagementPotentialWin { submitted: boolean; closeDate: string | null; valueCents: number | null; priced: boolean; }
+export interface GovManagementDossierSummary { tenantId: string | null; factCount: number; referenceCount: number; personnelCount: number; }
+export interface GovManagementRollup { total: number; verified: number; complete: number; inProgress: number; blocked: number; notStarted: number; pct: number; }
+export interface GovManagementView {
+  deliveryProjectId: string;
+  studentProjectId: string | null;
+  releases: GovManagementRelease[];
+  rollup: GovManagementRollup | null;
+  submission: { status: string; outcome: string; externallySubmittedAt: string | null; closeDate: string | null };
+  potentialWin: GovManagementPotentialWin;
+  dossier: GovManagementDossierSummary;
+  openNeedCount: number;
+  exportReady: boolean;
+}
+
+export async function fetchGovManagement(projectId: string): Promise<GovManagementView> {
+  const { data } = await api.get<{ management: GovManagementView }>(`${adminBase(projectId)}/management`);
+  return data.management;
+}
+
+/** Record the external-submission receipt from the management screen (full-admin). Returns the refreshed view. */
+export async function markGovSubmitted(projectId: string, externalRef: string): Promise<GovManagementView> {
+  const { data } = await api.post<{ ok: boolean; management: GovManagementView }>(`${adminBase(projectId)}/management/mark-submitted`, { externalRef });
+  return data.management;
+}

@@ -17,7 +17,7 @@ const section = (title, items) => {
 
 function runLine(spec, t) {
   return `In a Claude Code session in the repo: \`/loop-architect Execute Basecamp ticket ${t.id} "${t.title}" `
-    + `(Ali Personal, list "${spec.list.name}"). The full spec is this ticket's description; also read the Build Contract doc.\``;
+    + `(${spec.place || 'Ali Personal'}, list "${spec.list.name}"). The full spec is this ticket's description; also read the Build Contract doc.\``;
 }
 
 function ticketHtml(spec, t, links) {

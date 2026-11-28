@@ -13,9 +13,9 @@
  *
  * THE BUG THIS FIXES for dialing: Synthflow forwards the number to Twilio as-is,
  * prepending only a bare '+' when there is none. A 10-digit US number typed on a
- * form ('6825975784') therefore reached Twilio as '+6825975784' — country code
- * +682, Cook Islands — and was rejected with 32205 "No International Permission".
- * Normalizing to '+16825975784' first is what lets a US applicant's call connect.
+ * form ('2025550123') therefore reached Twilio as '+2025550123' — country code
+ * +20, Egypt, for this example — and was rejected with 32205 "No International Permission".
+ * Normalizing to '+12025550123' first is what lets a US applicant's call connect.
  *
  * The rules, in order:
  *  - the caller wrote '+', so they stated the country code: trust it

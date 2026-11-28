@@ -79,15 +79,15 @@ describe('contact details must never reach a shareable artifact', () => {
   });
 
   it('catches a phone number even when it is formatted differently', () => {
-    // "(682) 597-5784" and "+16825975784" are the same number; only one would ever be
+    // "(202) 555-0123" and "+12025550123" are the same number; only one would ever be
     // caught by a literal search.
-    const html = goodHtml + '<p>Call (682) 597-5784</p>';
-    expect(contactLeakViolation(html, { phone: '+16825975784' })).toContain('phone number');
+    const html = goodHtml + '<p>Call (202) 555-0123</p>';
+    expect(contactLeakViolation(html, { phone: '+12025550123' })).toContain('phone number');
   });
 
   it('allows a first name — that is domain vocabulary, not contact data', () => {
     // The whole point of §20 is a screen that names the person who keeps the spreadsheet.
-    expect(contactLeakViolation(goodHtml, { email: 'ali@colaberry.com', phone: '+16825975784' })).toBeNull();
+    expect(contactLeakViolation(goodHtml, { email: 'ali@colaberry.com', phone: '+12025550123' })).toBeNull();
   });
 
   it('does nothing when there is no contact data to leak', () => {

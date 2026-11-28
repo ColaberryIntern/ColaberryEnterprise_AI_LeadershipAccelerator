@@ -424,7 +424,7 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
   // the right-side detail panel, where content/quiz/reflection render and the
   // SkillsJar course + certificate upload happen.
   const metaText = isSkillsJar
-    ? 'External course · certificate required'
+    ? 'External course · completion badge required'
     : metaLine || (v.kind === 'video' ? 'video' : '');
 
   // Skills Course (skills_jar) adds a second action beside ▶: "Open" jumps

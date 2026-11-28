@@ -146,6 +146,40 @@ describe('verifyCertificate — image path', () => {
       await fs.unlink(imgPath).catch(() => {});
     }
   });
+
+  it('tells the classifier some Academy courses award NO badge, so a "Course complete" page is valid proof', async () => {
+    // Swati measured this both ways round on 2026-11-25. "Introduction to Agent
+    // Skills", finished on Skilljar and imported, carries a badge. "Introduction
+    // to Subagents", finished on Claude Academy, says on the page: "This course
+    // doesn't award a completion badge." Weeks 2 and 7 therefore contain students
+    // whose ONLY possible artifact is the Course complete page - and the strict
+    // credential check above would have refused every one of them, for uploading
+    // the one thing the course actually gives out.
+    mockChatCreate.mockResolvedValue({
+      choices: [{ message: { content: JSON.stringify({ is_certificate: true, matches_course: true, reason: 'Course complete page.' }) } }],
+    });
+    const imgPath = path.join(os.tmpdir(), `cert-test-nobadge-${Date.now()}.png`);
+    await fs.writeFile(imgPath, await sharp({ create: { width: 20, height: 20, channels: 3, background: { r: 4, g: 5, b: 6 } } }).png().toBuffer());
+
+    try {
+      await verifyCertificate(imgPath, 'image/png', 'Introduction to Subagents');
+
+      const sent = mockChatCreate.mock.calls[0][0].messages;
+      const systemText = sent[0].content as string;
+      const promptText = (sent[1].content as any[]).find((c: any) => c.type === 'text').text as string;
+
+      // The system prompt must permit it, or the strict line above overrides the
+      // guidance in the user turn.
+      expect(systemText).toMatch(/awards\s+no badge at all/i);
+      expect(systemText).toMatch(/Course complete/);
+      // And the user turn must say which artifact to accept, by name.
+      expect(promptText).toMatch(/award NO completion badge at all/);
+      expect(promptText).toContain('Course complete');
+      expect(promptText).toContain('Introduction to Subagents');
+    } finally {
+      await fs.unlink(imgPath).catch(() => {});
+    }
+  });
 });
 
 describe('verifyCertificate — PDF path', () => {

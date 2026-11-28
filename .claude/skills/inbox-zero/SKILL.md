@@ -225,6 +225,21 @@ these, each run inside the prod backend container (invocation in `references/dir
 | `scripts/familyBoard.js` | The family board: overdue, due in `DAYS`, undated, finished in `DONE_DAYS`, entity lists apart. Read-only |
 | `scripts/send.sh` + `scripts/sendAsAli.js` | The only send path; signature kit in `assets/` |
 
+## Running it from another computer
+
+Everything this skill needs is in the repo, so any machine that opens this project gets it. Three
+things are per machine, and the console says BLOCKED rather than empty when one is missing:
+
+1. **The checkout is on `main`, or a branch cut from it recently.** This folder only exists on
+   branches that contain it, so an old branch has no `/inbox-zero` at all.
+2. **That machine's ssh key is authorized on the prod host** (`95.216.199.47`). Every script runs
+   over ssh. Check with `ssh -o BatchMode=yes root@95.216.199.47 true`.
+3. **Claude Code is signed in to Ali's claude.ai account**, so the Gmail connector is available.
+   The scripts here work without it.
+
+Claude's per-machine memory does not travel. Any standing rule belongs in this file or in
+`references/direct-ops.md`, not only in memory.
+
 ## References
 
 | File | Contents |

@@ -73,6 +73,6 @@ describe('the one production row is unaffected', () => {
   it('leaves an already-correct +1########## key unchanged', () => {
     // consent_records has exactly ONE phone-keyed row, already in this shape.
     // If this changed, the fix would move an existing key and lose the row.
-    expect(normalizePhone('+16825975784')).toBe('+16825975784');
+    expect(normalizePhone('+12025550123')).toBe('+12025550123');
   });
 });

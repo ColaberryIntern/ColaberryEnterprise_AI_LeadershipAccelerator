@@ -375,6 +375,12 @@ export interface FlaggedBid {
   } | null;
   /** The recorded outcome, straight from gov_submission. 'pending' when no row exists. */
   outcome: string;
+  /**
+   * The solicitation close/due date (YYYY-MM-DD) once the bid is submitted (M5). Null until submitted, or when the
+   * solicitation recorded no close date. Sourced from the solicitation, never inferred - so a submitted potential-win
+   * shows when it closes next to its priced-or-value-pending amount.
+   */
+  closeDate?: string | null;
 }
 
 /**

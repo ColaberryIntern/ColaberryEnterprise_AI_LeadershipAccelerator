@@ -15,6 +15,23 @@
  *     are standing on all four rungs of is not a ladder, and it contradicts the instructions going
  *     out to the builders.
  *
+ * ## Re-measured 25 Nov 2026, before any of this ran
+ *
+ * The planner above was written on 17 Nov and never wired to a caller, so none of it had been
+ * applied. In the eight days since, the shape it was written against changed:
+ *
+ *   - **Ten boards, not seven.** `executive`, `learner_success` and `website` carry a ladder too.
+ *   - **Seven rungs, not four.** The three `L0-*` rungs now come first, so production holds 70
+ *     ladder stories. A four-rung planner would have lifted four and left three behind.
+ *   - **Still at the bottom**, on every board: marketing at 71 to 74 of 79, executive at 96 to 99
+ *     of 104. The defect is unchanged, only larger.
+ *   - **Positions now collide.** The `L0-*` rungs were inserted at positions the original four
+ *     already held, so 32 positions across the ten boards are shared by two stories and the
+ *     render order within each pair is whatever the database returns. See `boardOrder`.
+ *   - **Two boards carry real progress now, not one.** Kalkidan's admissions rungs 1 and 2 are
+ *     both complete and verified, and Quincy's platform board has four verified rungs. The
+ *     guarantee below therefore protects six verified rungs rather than Kalkidan's single one.
+ *
  * ## Why this is not a new field on the reconciler
  *
  * `agentDomainBoardReconciler.changedFields` deliberately excludes `position`, and the reason
@@ -38,9 +55,37 @@
 /** The statuses a story can hold. Mirrors `StudentTaskStatus`. */
 export type StoryStatus = 'not_started' | 'in_progress' | 'complete' | 'blocked';
 
-/** The four rungs, in the order they must be climbed. */
-export const RUNG_ORDER = ['L1-BY-HAND', 'L2-IN-THE-APP', 'L3-TOOL-REQUEST', 'L4-AGENT-WATCHED'] as const;
+/**
+ * The rungs, in the order they must be climbed.
+ *
+ * **This list went stale once and the staleness is the reason the ticket sat unshipped.** It was
+ * written on 17 Nov with four rungs, which is what the boards held that day. The ladder has since
+ * grown three `L0-*` rungs in front of them, so production carries seven per board and a planner
+ * that knows four treats the other three as unrecognisable stories and leaves them where they are.
+ *
+ * `capabilityLadder.LADDER_STEPS` is the canonical list. It is not imported here because its
+ * `suffix` is typed `string`, which would collapse `Rung` to `string` and lose the literal union
+ * every signature below relies on. Instead the two lists are pinned equal, in order, by a test.
+ * Add a rung there and this file fails its test rather than silently skipping the new rung.
+ */
+export const RUNG_ORDER = [
+  'L0-CHOOSE', 'L0-SCOPE-SHEET', 'L0-ASK-FOR-A-SCREEN',
+  'L1-BY-HAND', 'L2-IN-THE-APP', 'L3-TOOL-REQUEST', 'L4-AGENT-WATCHED',
+] as const;
 export type Rung = typeof RUNG_ORDER[number];
+
+/**
+ * Story kinds that stay ABOVE the ladder.
+ *
+ * Every board's position 0 is its `command_center` story, `<domain>.STORY-000` — the front door,
+ * the one story explicitly numbered to be first. The ticket's acceptance says the ladder stories
+ * are "the first four on the board"; read literally that would push the front door to position 8.
+ * So the ladder goes directly BELOW the pinned stories and the builder still lands on STORY-000.
+ *
+ * This is the one judgement call in the operation, which is why it is a named constant with a
+ * test rather than an ordering buried in a sort.
+ */
+export const PINNED_KINDS: ReadonlySet<string> = new Set(['command_center']);
 
 export interface BoardStory {
   readonly id: string;
@@ -71,6 +116,25 @@ export interface LadderLiftPlan {
   readonly rungsFound: ReadonlyArray<Rung>;
   /** Stated rather than inferred, so a caller can refuse to write against an odd board. */
   readonly problems: ReadonlyArray<string>;
+}
+
+/**
+ * A board's reading order: by position, then by story id, then by row id.
+ *
+ * **The tie-breaks are not decoration.** Position is not unique in production: measured 25 Nov,
+ * 32 positions across the ten boards are held by two stories each, because the three `L0-*` rungs
+ * were inserted at positions the original four already occupied, and platform carries an older
+ * collision at position 8 between two implementation stories. Sorting on `position` alone leaves
+ * every tied pair in whatever order the database happened to return, so two runs of this planner
+ * could order them differently and the second would report changes — which would quietly break
+ * the idempotency this module's docblock promises.
+ *
+ * A total order makes the output a pure function of the row set, which is what idempotency needs.
+ */
+export function boardOrder(a: BoardStory, b: BoardStory): number {
+  return a.position - b.position
+    || (a.story_id ?? '').localeCompare(b.story_id ?? '')
+    || a.id.localeCompare(b.id);
 }
 
 /** A finished rung. Both forms count: a status of `complete`, or a recorded verification. */
@@ -135,16 +199,21 @@ export function planLadderLift(stories: ReadonlyArray<BoardStory>): LadderLiftPl
   }
 
   const ladderIds = new Set([...byRung.values()].map((s) => s.id));
-  const rest = stories
-    .filter((s) => !ladderIds.has(s.id))
-    .slice()
-    .sort((a, b) => a.position - b.position);
+  const others = stories.filter((s) => !ladderIds.has(s.id));
+  const pinned = others.filter((s) => PINNED_KINDS.has(s.story_kind ?? '')).slice().sort(boardOrder);
+  const rest = others.filter((s) => !PINNED_KINDS.has(s.story_kind ?? '')).slice().sort(boardOrder);
 
-  const ordered = [...rungsFound.map((r) => byRung.get(r)!), ...rest];
+  const ordered = [...pinned, ...rungsFound.map((r) => byRung.get(r)!), ...rest];
+
+  // Keep the board's OWN numbering base rather than forcing 1. Production numbers from 0, so
+  // renumbering from 1 would issue an UPDATE for all 598 rows across the ten boards to achieve
+  // nothing, and bury the seventy rows that actually matter in a diff nobody can read.
+  const lowest = stories.reduce((m, s) => Math.min(m, s.position), Number.POSITIVE_INFINITY);
+  const base = Number.isFinite(lowest) ? lowest : 0;
 
   const positions: PositionChange[] = [];
   ordered.forEach((s, i) => {
-    const to = i + 1;
+    const to = base + i;
     if (s.position !== to) positions.push({ id: s.id, from: s.position, to });
   });
 
