@@ -308,6 +308,37 @@ describe('nothing is invented, and private stays private', () => {
     expect(entitiesOf(documentReview).flatMap((e) => e.fields.filter((x) => x.type === 'private'))).toHaveLength(1);
   });
 
+  it('refuses a private field even when a spec wrongly puts a value in one', () => {
+    /*
+     * The case the fixture cannot cover, found by mutation: allowing `private` into quote blocks
+     * changed nothing, because a well-formed spec leaves those rows empty and the length check
+     * then rejects them anyway. So the guard was never exercised by the one spec that obeys the
+     * rule, which is the wrong way round. A spec is an agent-written document a student may have
+     * edited; "the contract says the value is absent" is not a reason the renderer may rely on.
+     */
+    const leaky = {
+      ...documentReview,
+      entities: {
+        doc: {
+          label: 'Document', plural: 'Documents', status: 'state',
+          fields: [
+            { key: 'state', type: 'enum', labels: { draft: 'Draft', reviewed: 'Reviewed' } },
+            { key: 'holder', type: 'private', shown_as: 'Held under the retention rule' },
+          ],
+          rows: [
+            { id: 'doc1', state: 'draft', holder: 'B'.repeat(300) },
+            { id: 'doc2', state: 'reviewed', holder: 'C'.repeat(300) },
+          ],
+        },
+      },
+    } as typeof documentReview;
+    expect(validateDemoSpecShape(leaky)).toEqual([]);
+
+    for (const block of allBlocks(visualPlan(leaky))) {
+      expect(block.fields).not.toContain('holder');
+    }
+  });
+
   it('quotes long text instead of charting it', () => {
     const block = visualPlan(documentReview).screens
       .find((s) => s.screen === 'docs')?.blocks.find((b) => b.kind === 'quote_block');
